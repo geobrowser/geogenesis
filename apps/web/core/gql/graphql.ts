@@ -1,6 +1,5 @@
 /* eslint-disable */
 import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
-
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -10,28 +9,28 @@ export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> =
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string };
-  String: { input: string; output: string };
-  Boolean: { input: boolean; output: boolean };
-  Int: { input: number; output: number };
-  Float: { input: number; output: number };
+  ID: { input: string; output: string; }
+  String: { input: string; output: string; }
+  Boolean: { input: boolean; output: boolean; }
+  Int: { input: number; output: number; }
+  Float: { input: number; output: number; }
   /** A floating point number that requires more precision than IEEE 754 binary 64 */
-  BigFloat: { input: any; output: any };
+  BigFloat: { input: any; output: any; }
   /**
    * A signed eight-byte integer. The upper big integer values are greater than the
    * max value for a JavaScript number. Therefore all big integers will be output as
    * strings and not numbers.
    */
-  BigInt: { input: any; output: any };
+  BigInt: { input: any; output: any; }
   /** A location in a connection that can be used for resuming pagination. */
-  Cursor: { input: any; output: any };
+  Cursor: { input: any; output: any; }
   /**
    * A point in time as described by the [ISO
    * 8601](https://en.wikipedia.org/wiki/ISO_8601) standard. May or may not include a timezone.
    */
-  Datetime: { input: any; output: any };
+  Datetime: { input: any; output: any; }
   /** A universally unique identifier as defined by [RFC 4122](https://tools.ietf.org/html/rfc4122). */
-  UUID: { input: any; output: any };
+  UUID: { input: any; output: any; }
 };
 
 /** A filter to be used against BigFloat fields. All fields are combined with a logical ‘and.’ */
@@ -118,7 +117,7 @@ export enum DataTypes {
   Point = 'POINT',
   Relation = 'RELATION',
   String = 'STRING',
-  Time = 'TIME',
+  Time = 'TIME'
 }
 
 /** A filter to be used against DataTypes fields. All fields are combined with a logical ‘and.’ */
@@ -237,7 +236,7 @@ export enum EditorsOrderBy {
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
+  SpaceIdDesc = 'SPACE_ID_DESC'
 }
 
 /** A connection to a list of `Entity` values. */
@@ -276,7 +275,7 @@ export enum EntitiesOrderBy {
   UpdatedAtAsc = 'UPDATED_AT_ASC',
   UpdatedAtBlockAsc = 'UPDATED_AT_BLOCK_ASC',
   UpdatedAtBlockDesc = 'UPDATED_AT_BLOCK_DESC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
 }
 
 export type Entity = Node & {
@@ -322,6 +321,7 @@ export type Entity = Node & {
   valuesList: Array<Value>;
 };
 
+
 export type EntityBacklinksArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
   before?: InputMaybe<Scalars['Cursor']['input']>;
@@ -333,6 +333,7 @@ export type EntityBacklinksArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type EntityBacklinksListArgs = {
   condition?: InputMaybe<RelationCondition>;
   filter?: InputMaybe<RelationFilter>;
@@ -341,12 +342,14 @@ export type EntityBacklinksListArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type EntityPropertiesArgs = {
   filter?: InputMaybe<PropertyFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 export type EntityPropertiesConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -357,6 +360,7 @@ export type EntityPropertiesConnectionArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 export type EntityRelationsArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -369,6 +373,7 @@ export type EntityRelationsArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type EntityRelationsListArgs = {
   condition?: InputMaybe<RelationCondition>;
   filter?: InputMaybe<RelationFilter>;
@@ -376,6 +381,7 @@ export type EntityRelationsListArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
+
 
 export type EntityRelationsWhereEntityArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -388,6 +394,7 @@ export type EntityRelationsWhereEntityArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type EntityRelationsWhereEntityListArgs = {
   condition?: InputMaybe<RelationCondition>;
   filter?: InputMaybe<RelationFilter>;
@@ -396,11 +403,13 @@ export type EntityRelationsWhereEntityListArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type EntitySpacesInArgs = {
   filter?: InputMaybe<SpaceFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type EntitySpacesInConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -411,11 +420,13 @@ export type EntitySpacesInConnectionArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type EntityTypesArgs = {
   filter?: InputMaybe<EntityFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type EntityTypesConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -425,6 +436,7 @@ export type EntityTypesConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type EntityValuesArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -436,6 +448,7 @@ export type EntityValuesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<ValuesOrderBy>>;
 };
+
 
 export type EntityValuesListArgs = {
   condition?: InputMaybe<ValueCondition>;
@@ -523,6 +536,79 @@ export type EntityToManyValueFilter = {
   some?: InputMaybe<ValueFilter>;
 };
 
+export type GlobalScore = Node & {
+  __typename?: 'GlobalScore';
+  entityId: Scalars['UUID']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  score: Scalars['BigFloat']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `GlobalScore` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type GlobalScoreCondition = {
+  /** Checks for equality with the object’s `entityId` field. */
+  entityId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `score` field. */
+  score?: InputMaybe<Scalars['BigFloat']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `GlobalScore` object types. All fields are combined with a logical ‘and.’ */
+export type GlobalScoreFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<GlobalScoreFilter>>;
+  /** Filter by the object’s `entityId` field. */
+  entityId?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<GlobalScoreFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<GlobalScoreFilter>>;
+  /** Filter by the object’s `score` field. */
+  score?: InputMaybe<BigFloatFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `GlobalScore` values. */
+export type GlobalScoresConnection = {
+  __typename?: 'GlobalScoresConnection';
+  /** A list of edges which contains the `GlobalScore` and cursor to aid in pagination. */
+  edges: Array<GlobalScoresEdge>;
+  /** A list of `GlobalScore` objects. */
+  nodes: Array<GlobalScore>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `GlobalScore` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `GlobalScore` edge in the connection. */
+export type GlobalScoresEdge = {
+  __typename?: 'GlobalScoresEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `GlobalScore` at the end of the edge. */
+  node: GlobalScore;
+};
+
+/** Methods to use when ordering `GlobalScore`. */
+export enum GlobalScoresOrderBy {
+  EntityIdAsc = 'ENTITY_ID_ASC',
+  EntityIdDesc = 'ENTITY_ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ScoreAsc = 'SCORE_ASC',
+  ScoreDesc = 'SCORE_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
+
 /** A filter to be used against Int fields. All fields are combined with a logical ‘and.’ */
 export type IntFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
@@ -548,6 +634,86 @@ export type IntFilter = {
   /** Not included in the specified list. */
   notIn?: InputMaybe<Array<Scalars['Int']['input']>>;
 };
+
+export type LocalScore = Node & {
+  __typename?: 'LocalScore';
+  entityId: Scalars['UUID']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  score: Scalars['BigFloat']['output'];
+  spaceId: Scalars['UUID']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `LocalScore` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type LocalScoreCondition = {
+  /** Checks for equality with the object’s `entityId` field. */
+  entityId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `score` field. */
+  score?: InputMaybe<Scalars['BigFloat']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `LocalScore` object types. All fields are combined with a logical ‘and.’ */
+export type LocalScoreFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<LocalScoreFilter>>;
+  /** Filter by the object’s `entityId` field. */
+  entityId?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<LocalScoreFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<LocalScoreFilter>>;
+  /** Filter by the object’s `score` field. */
+  score?: InputMaybe<BigFloatFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `LocalScore` values. */
+export type LocalScoresConnection = {
+  __typename?: 'LocalScoresConnection';
+  /** A list of edges which contains the `LocalScore` and cursor to aid in pagination. */
+  edges: Array<LocalScoresEdge>;
+  /** A list of `LocalScore` objects. */
+  nodes: Array<LocalScore>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `LocalScore` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `LocalScore` edge in the connection. */
+export type LocalScoresEdge = {
+  __typename?: 'LocalScoresEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `LocalScore` at the end of the edge. */
+  node: LocalScore;
+};
+
+/** Methods to use when ordering `LocalScore`. */
+export enum LocalScoresOrderBy {
+  EntityIdAsc = 'ENTITY_ID_ASC',
+  EntityIdDesc = 'ENTITY_ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ScoreAsc = 'SCORE_ASC',
+  ScoreDesc = 'SCORE_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
 
 export type Member = Node & {
   __typename?: 'Member';
@@ -613,7 +779,7 @@ export enum MembersOrderBy {
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
+  SpaceIdDesc = 'SPACE_ID_DESC'
 }
 
 export type Meta = Node & {
@@ -683,7 +849,7 @@ export enum MetasOrderBy {
   IdDesc = 'ID_DESC',
   Natural = 'NATURAL',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
 }
 
 /** An object with a globally unique `ID`. */
@@ -735,7 +901,7 @@ export enum PropertiesOrderBy {
   IdDesc = 'ID_DESC',
   Natural = 'NATURAL',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
 }
 
 export type Property = Node & {
@@ -756,11 +922,13 @@ export type Property = Node & {
   unit?: Maybe<Scalars['UUID']['output']>;
 };
 
+
 export type PropertyRelationValueTypesArgs = {
   filter?: InputMaybe<EntityFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type PropertyRelationValueTypesConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -836,6 +1004,487 @@ export type PropertyToManyValueFilter = {
   some?: InputMaybe<ValueFilter>;
 };
 
+export type Proposal = Node & {
+  __typename?: 'Proposal';
+  createdAt: Scalars['String']['output'];
+  createdAtBlock: Scalars['String']['output'];
+  endTime: Scalars['BigInt']['output'];
+  executedAt?: Maybe<Scalars['BigInt']['output']>;
+  id: Scalars['UUID']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  /** Reads and enables pagination through a set of `ProposalAction`. */
+  proposalActions: Array<ProposalAction>;
+  /** Reads and enables pagination through a set of `ProposalAction`. */
+  proposalActionsConnection: ProposalActionsConnection;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotes: Array<ProposalVote>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesConnection: ProposalVotesConnection;
+  proposedBy: Scalars['UUID']['output'];
+  quorum: Scalars['BigInt']['output'];
+  /** Reads a single `Space` that is related to this `Proposal`. */
+  space?: Maybe<Space>;
+  spaceId: Scalars['UUID']['output'];
+  startTime: Scalars['BigInt']['output'];
+  threshold: Scalars['BigInt']['output'];
+  votingMode: VotingMode;
+};
+
+
+export type ProposalProposalActionsArgs = {
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+export type ProposalProposalActionsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+export type ProposalProposalVotesArgs = {
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type ProposalProposalVotesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+export type ProposalAction = Node & {
+  __typename?: 'ProposalAction';
+  actionType: ProposalActionType;
+  contentId?: Maybe<Scalars['String']['output']>;
+  contentUri?: Maybe<Scalars['String']['output']>;
+  duration?: Maybe<Scalars['BigInt']['output']>;
+  fastThreshold?: Maybe<Scalars['BigInt']['output']>;
+  id: Scalars['UUID']['output'];
+  metadata?: Maybe<Scalars['String']['output']>;
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  /** Reads a single `Proposal` that is related to this `ProposalAction`. */
+  proposal?: Maybe<Proposal>;
+  proposalId: Scalars['UUID']['output'];
+  quorum?: Maybe<Scalars['BigInt']['output']>;
+  slowThreshold?: Maybe<Scalars['BigInt']['output']>;
+  targetAddress?: Maybe<Scalars['String']['output']>;
+};
+
+/**
+ * A condition to be used against `ProposalAction` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type ProposalActionCondition = {
+  /** Checks for equality with the object’s `actionType` field. */
+  actionType?: InputMaybe<ProposalActionType>;
+  /** Checks for equality with the object’s `contentId` field. */
+  contentId?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `contentUri` field. */
+  contentUri?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `duration` field. */
+  duration?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `fastThreshold` field. */
+  fastThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `metadata` field. */
+  metadata?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `proposalId` field. */
+  proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `quorum` field. */
+  quorum?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `slowThreshold` field. */
+  slowThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `targetAddress` field. */
+  targetAddress?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** A filter to be used against `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalActionFilter = {
+  /** Filter by the object’s `actionType` field. */
+  actionType?: InputMaybe<ProposalActionTypeFilter>;
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<ProposalActionFilter>>;
+  /** Filter by the object’s `contentUri` field. */
+  contentUri?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `duration` field. */
+  duration?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `fastThreshold` field. */
+  fastThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<ProposalActionFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<ProposalActionFilter>>;
+  /** Filter by the object’s `proposal` relation. */
+  proposal?: InputMaybe<ProposalFilter>;
+  /** Filter by the object’s `proposalId` field. */
+  proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `quorum` field. */
+  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `slowThreshold` field. */
+  slowThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `targetAddress` field. */
+  targetAddress?: InputMaybe<StringFilter>;
+};
+
+export enum ProposalActionType {
+  AddEditor = 'ADD_EDITOR',
+  AddMember = 'ADD_MEMBER',
+  Flag = 'FLAG',
+  Publish = 'PUBLISH',
+  RemoveEditor = 'REMOVE_EDITOR',
+  RemoveMember = 'REMOVE_MEMBER',
+  Unflag = 'UNFLAG',
+  UnflagEditor = 'UNFLAG_EDITOR',
+  Unknown = 'UNKNOWN',
+  UpdateVotingSettings = 'UPDATE_VOTING_SETTINGS'
+}
+
+/** A filter to be used against ProposalActionType fields. All fields are combined with a logical ‘and.’ */
+export type ProposalActionTypeFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<ProposalActionType>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<ProposalActionType>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<ProposalActionType>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<ProposalActionType>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<ProposalActionType>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<ProposalActionType>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<ProposalActionType>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<ProposalActionType>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<ProposalActionType>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<ProposalActionType>>;
+};
+
+/** A connection to a list of `ProposalAction` values. */
+export type ProposalActionsConnection = {
+  __typename?: 'ProposalActionsConnection';
+  /** A list of edges which contains the `ProposalAction` and cursor to aid in pagination. */
+  edges: Array<ProposalActionsEdge>;
+  /** A list of `ProposalAction` objects. */
+  nodes: Array<ProposalAction>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `ProposalAction` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `ProposalAction` edge in the connection. */
+export type ProposalActionsEdge = {
+  __typename?: 'ProposalActionsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `ProposalAction` at the end of the edge. */
+  node: ProposalAction;
+};
+
+/** Methods to use when ordering `ProposalAction`. */
+export enum ProposalActionsOrderBy {
+  ActionTypeAsc = 'ACTION_TYPE_ASC',
+  ActionTypeDesc = 'ACTION_TYPE_DESC',
+  ContentIdAsc = 'CONTENT_ID_ASC',
+  ContentIdDesc = 'CONTENT_ID_DESC',
+  ContentUriAsc = 'CONTENT_URI_ASC',
+  ContentUriDesc = 'CONTENT_URI_DESC',
+  DurationAsc = 'DURATION_ASC',
+  DurationDesc = 'DURATION_DESC',
+  FastThresholdAsc = 'FAST_THRESHOLD_ASC',
+  FastThresholdDesc = 'FAST_THRESHOLD_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  MetadataAsc = 'METADATA_ASC',
+  MetadataDesc = 'METADATA_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ProposalIdAsc = 'PROPOSAL_ID_ASC',
+  ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  QuorumAsc = 'QUORUM_ASC',
+  QuorumDesc = 'QUORUM_DESC',
+  SlowThresholdAsc = 'SLOW_THRESHOLD_ASC',
+  SlowThresholdDesc = 'SLOW_THRESHOLD_DESC',
+  TargetAddressAsc = 'TARGET_ADDRESS_ASC',
+  TargetAddressDesc = 'TARGET_ADDRESS_DESC'
+}
+
+/**
+ * A condition to be used against `Proposal` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type ProposalCondition = {
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `endTime` field. */
+  endTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executedAt` field. */
+  executedAt?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `proposedBy` field. */
+  proposedBy?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `quorum` field. */
+  quorum?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `startTime` field. */
+  startTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `threshold` field. */
+  threshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingMode>;
+};
+
+/** A filter to be used against `Proposal` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<ProposalFilter>>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `endTime` field. */
+  endTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executedAt` field. */
+  executedAt?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<ProposalFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<ProposalFilter>>;
+  /** Filter by the object’s `proposalActionsConnection` relation. */
+  proposalActionsConnection?: InputMaybe<ProposalToManyProposalActionFilter>;
+  /** Some related `proposalActionsConnection` exist. */
+  proposalActionsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposalVotesConnection` relation. */
+  proposalVotesConnection?: InputMaybe<ProposalToManyProposalVoteFilter>;
+  /** Some related `proposalVotesConnection` exist. */
+  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposedBy` field. */
+  proposedBy?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `quorum` field. */
+  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `startTime` field. */
+  startTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `threshold` field. */
+  threshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingModeFilter>;
+};
+
+/** A filter to be used against many `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalToManyProposalActionFilter = {
+  /** Every related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalActionFilter>;
+  /** No related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalActionFilter>;
+  /** Some related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalActionFilter>;
+};
+
+/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalToManyProposalVoteFilter = {
+  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalVoteFilter>;
+  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalVoteFilter>;
+  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalVoteFilter>;
+};
+
+export type ProposalVote = Node & {
+  __typename?: 'ProposalVote';
+  createdAt: Scalars['String']['output'];
+  createdAtBlock: Scalars['String']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  /** Reads a single `Proposal` that is related to this `ProposalVote`. */
+  proposal?: Maybe<Proposal>;
+  proposalId: Scalars['UUID']['output'];
+  /** Reads a single `Space` that is related to this `ProposalVote`. */
+  space?: Maybe<Space>;
+  spaceId: Scalars['UUID']['output'];
+  vote: VoteOption;
+  voterId: Scalars['UUID']['output'];
+};
+
+/**
+ * A condition to be used against `ProposalVote` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type ProposalVoteCondition = {
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `proposalId` field. */
+  proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `vote` field. */
+  vote?: InputMaybe<VoteOption>;
+  /** Checks for equality with the object’s `voterId` field. */
+  voterId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+/** A filter to be used against `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalVoteFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<ProposalVoteFilter>>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<StringFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<ProposalVoteFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<ProposalVoteFilter>>;
+  /** Filter by the object’s `proposal` relation. */
+  proposal?: InputMaybe<ProposalFilter>;
+  /** Filter by the object’s `proposalId` field. */
+  proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `vote` field. */
+  vote?: InputMaybe<VoteOptionFilter>;
+  /** Filter by the object’s `voterId` field. */
+  voterId?: InputMaybe<UuidFilter>;
+};
+
+/** A connection to a list of `ProposalVote` values. */
+export type ProposalVotesConnection = {
+  __typename?: 'ProposalVotesConnection';
+  /** A list of edges which contains the `ProposalVote` and cursor to aid in pagination. */
+  edges: Array<ProposalVotesEdge>;
+  /** A list of `ProposalVote` objects. */
+  nodes: Array<ProposalVote>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `ProposalVote` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `ProposalVote` edge in the connection. */
+export type ProposalVotesEdge = {
+  __typename?: 'ProposalVotesEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `ProposalVote` at the end of the edge. */
+  node: ProposalVote;
+};
+
+/** Methods to use when ordering `ProposalVote`. */
+export enum ProposalVotesOrderBy {
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
+  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ProposalIdAsc = 'PROPOSAL_ID_ASC',
+  ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  VoterIdAsc = 'VOTER_ID_ASC',
+  VoterIdDesc = 'VOTER_ID_DESC',
+  VoteAsc = 'VOTE_ASC',
+  VoteDesc = 'VOTE_DESC'
+}
+
+/** A connection to a list of `Proposal` values. */
+export type ProposalsConnection = {
+  __typename?: 'ProposalsConnection';
+  /** A list of edges which contains the `Proposal` and cursor to aid in pagination. */
+  edges: Array<ProposalsEdge>;
+  /** A list of `Proposal` objects. */
+  nodes: Array<Proposal>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `Proposal` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `Proposal` edge in the connection. */
+export type ProposalsEdge = {
+  __typename?: 'ProposalsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `Proposal` at the end of the edge. */
+  node: Proposal;
+};
+
+/** Methods to use when ordering `Proposal`. */
+export enum ProposalsOrderBy {
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
+  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  EndTimeAsc = 'END_TIME_ASC',
+  EndTimeDesc = 'END_TIME_DESC',
+  ExecutedAtAsc = 'EXECUTED_AT_ASC',
+  ExecutedAtDesc = 'EXECUTED_AT_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ProposedByAsc = 'PROPOSED_BY_ASC',
+  ProposedByDesc = 'PROPOSED_BY_DESC',
+  QuorumAsc = 'QUORUM_ASC',
+  QuorumDesc = 'QUORUM_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  StartTimeAsc = 'START_TIME_ASC',
+  StartTimeDesc = 'START_TIME_DESC',
+  ThresholdAsc = 'THRESHOLD_ASC',
+  ThresholdDesc = 'THRESHOLD_DESC',
+  VotingModeAsc = 'VOTING_MODE_ASC',
+  VotingModeDesc = 'VOTING_MODE_DESC'
+}
+
 /** The root query type which gives access points into the data universe. */
 export type Query = Node & {
   __typename?: 'Query';
@@ -856,6 +1505,20 @@ export type Query = Node & {
   entity?: Maybe<Entity>;
   /** Reads a single `Entity` using its globally unique `ID`. */
   entityByNodeId?: Maybe<Entity>;
+  globalScore?: Maybe<GlobalScore>;
+  /** Reads a single `GlobalScore` using its globally unique `ID`. */
+  globalScoreByNodeId?: Maybe<GlobalScore>;
+  /** Reads a set of `GlobalScore`. */
+  globalScores?: Maybe<Array<GlobalScore>>;
+  /** Reads and enables pagination through a set of `GlobalScore`. */
+  globalScoresConnection?: Maybe<GlobalScoresConnection>;
+  localScore?: Maybe<LocalScore>;
+  /** Reads a single `LocalScore` using its globally unique `ID`. */
+  localScoreByNodeId?: Maybe<LocalScore>;
+  /** Reads a set of `LocalScore`. */
+  localScores?: Maybe<Array<LocalScore>>;
+  /** Reads and enables pagination through a set of `LocalScore`. */
+  localScoresConnection?: Maybe<LocalScoresConnection>;
   /** Reads a single `Member` using its globally unique `ID`. */
   memberByNodeId?: Maybe<Member>;
   /** Reads a set of `Member`. */
@@ -880,6 +1543,27 @@ export type Query = Node & {
   property?: Maybe<Property>;
   /** Reads a single `Property` using its globally unique `ID`. */
   propertyByNodeId?: Maybe<Property>;
+  proposal?: Maybe<Proposal>;
+  proposalAction?: Maybe<ProposalAction>;
+  /** Reads a single `ProposalAction` using its globally unique `ID`. */
+  proposalActionByNodeId?: Maybe<ProposalAction>;
+  /** Reads a set of `ProposalAction`. */
+  proposalActions?: Maybe<Array<ProposalAction>>;
+  /** Reads and enables pagination through a set of `ProposalAction`. */
+  proposalActionsConnection?: Maybe<ProposalActionsConnection>;
+  /** Reads a single `Proposal` using its globally unique `ID`. */
+  proposalByNodeId?: Maybe<Proposal>;
+  proposalVote?: Maybe<ProposalVote>;
+  /** Reads a single `ProposalVote` using its globally unique `ID`. */
+  proposalVoteByNodeId?: Maybe<ProposalVote>;
+  /** Reads a set of `ProposalVote`. */
+  proposalVotes?: Maybe<Array<ProposalVote>>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesConnection?: Maybe<ProposalVotesConnection>;
+  /** Reads a set of `Proposal`. */
+  proposals?: Maybe<Array<Proposal>>;
+  /** Reads and enables pagination through a set of `Proposal`. */
+  proposalsConnection?: Maybe<ProposalsConnection>;
   /**
    * Exposes the root query type nested one level down. This is helpful for Relay 1
    * which can only query top level fields if they are in a particular form.
@@ -906,6 +1590,13 @@ export type Query = Node & {
   space?: Maybe<Space>;
   /** Reads a single `Space` using its globally unique `ID`. */
   spaceByNodeId?: Maybe<Space>;
+  spaceScore?: Maybe<SpaceScore>;
+  /** Reads a single `SpaceScore` using its globally unique `ID`. */
+  spaceScoreByNodeId?: Maybe<SpaceScore>;
+  /** Reads a set of `SpaceScore`. */
+  spaceScores?: Maybe<Array<SpaceScore>>;
+  /** Reads and enables pagination through a set of `SpaceScore`. */
+  spaceScoresConnection?: Maybe<SpaceScoresConnection>;
   /** Reads a set of `Space`. */
   spaces?: Maybe<Array<Space>>;
   /** Reads and enables pagination through a set of `Space`. */
@@ -925,7 +1616,7 @@ export type Query = Node & {
   userVote?: Maybe<UserVote>;
   /** Reads a single `UserVote` using its globally unique `ID`. */
   userVoteByNodeId?: Maybe<UserVote>;
-  userVoteByUserIdAndEntityIdAndSpaceId?: Maybe<UserVote>;
+  userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?: Maybe<UserVote>;
   /** Reads a set of `UserVote`. */
   userVotes?: Maybe<Array<UserVote>>;
   /** Reads and enables pagination through a set of `UserVote`. */
@@ -938,19 +1629,21 @@ export type Query = Node & {
   /** Reads and enables pagination through a set of `Value`. */
   valuesConnection?: Maybe<ValuesConnection>;
   votesCount?: Maybe<VotesCount>;
-  votesCountByEntityIdAndSpaceId?: Maybe<VotesCount>;
   /** Reads a single `VotesCount` using its globally unique `ID`. */
   votesCountByNodeId?: Maybe<VotesCount>;
+  votesCountByObjectIdAndObjectTypeAndSpaceId?: Maybe<VotesCount>;
   /** Reads a set of `VotesCount`. */
   votesCounts?: Maybe<Array<VotesCount>>;
   /** Reads and enables pagination through a set of `VotesCount`. */
   votesCountsConnection?: Maybe<VotesCountsConnection>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryEditorByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryEditorsArgs = {
@@ -960,6 +1653,7 @@ export type QueryEditorsArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<EditorsOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryEditorsConnectionArgs = {
@@ -973,6 +1667,7 @@ export type QueryEditorsConnectionArgs = {
   orderBy?: InputMaybe<Array<EditorsOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryEntitiesArgs = {
   condition?: InputMaybe<EntityCondition>;
@@ -981,6 +1676,7 @@ export type QueryEntitiesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<EntitiesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryEntitiesConnectionArgs = {
@@ -994,6 +1690,7 @@ export type QueryEntitiesConnectionArgs = {
   orderBy?: InputMaybe<Array<EntitiesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryEntitiesOrderedByPropertyArgs = {
   filter?: InputMaybe<EntityFilter>;
@@ -1003,6 +1700,7 @@ export type QueryEntitiesOrderedByPropertyArgs = {
   sortDirection?: InputMaybe<SortOrder>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryEntitiesOrderedByPropertyConnectionArgs = {
@@ -1017,20 +1715,95 @@ export type QueryEntitiesOrderedByPropertyConnectionArgs = {
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryEntityArgs = {
   id: Scalars['UUID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryEntityByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
 
+
+/** The root query type which gives access points into the data universe. */
+export type QueryGlobalScoreArgs = {
+  entityId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryGlobalScoreByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryGlobalScoresArgs = {
+  condition?: InputMaybe<GlobalScoreCondition>;
+  filter?: InputMaybe<GlobalScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<GlobalScoresOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryGlobalScoresConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<GlobalScoreCondition>;
+  filter?: InputMaybe<GlobalScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<GlobalScoresOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryLocalScoreArgs = {
+  entityId: Scalars['UUID']['input'];
+  spaceId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryLocalScoreByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryLocalScoresArgs = {
+  condition?: InputMaybe<LocalScoreCondition>;
+  filter?: InputMaybe<LocalScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<LocalScoresOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryLocalScoresConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<LocalScoreCondition>;
+  filter?: InputMaybe<LocalScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<LocalScoresOrderBy>>;
+};
+
+
 /** The root query type which gives access points into the data universe. */
 export type QueryMemberByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryMembersArgs = {
@@ -1040,6 +1813,7 @@ export type QueryMembersArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryMembersConnectionArgs = {
@@ -1053,15 +1827,18 @@ export type QueryMembersConnectionArgs = {
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryMetaArgs = {
   id: Scalars['String']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryMetaByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryMetasArgs = {
@@ -1071,6 +1848,7 @@ export type QueryMetasArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<MetasOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryMetasConnectionArgs = {
@@ -1084,10 +1862,12 @@ export type QueryMetasConnectionArgs = {
   orderBy?: InputMaybe<Array<MetasOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryNodeArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryPropertiesArgs = {
@@ -1097,6 +1877,7 @@ export type QueryPropertiesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<PropertiesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryPropertiesConnectionArgs = {
@@ -1110,25 +1891,136 @@ export type QueryPropertiesConnectionArgs = {
   orderBy?: InputMaybe<Array<PropertiesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryPropertyArgs = {
   id: Scalars['UUID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryPropertyByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
 
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalArgs = {
+  id: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalActionArgs = {
+  id: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalActionByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalActionsArgs = {
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalActionsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVoteArgs = {
+  proposalId: Scalars['UUID']['input'];
+  voterId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVoteByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVotesArgs = {
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVotesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalsArgs = {
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
+
 /** The root query type which gives access points into the data universe. */
 export type QueryRawActionArgs = {
   id: Scalars['Int']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryRawActionByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryRawActionsArgs = {
@@ -1138,6 +2030,7 @@ export type QueryRawActionsArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<RawActionsOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryRawActionsConnectionArgs = {
@@ -1151,15 +2044,18 @@ export type QueryRawActionsConnectionArgs = {
   orderBy?: InputMaybe<Array<RawActionsOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryRelationArgs = {
   id: Scalars['UUID']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryRelationByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryRelationsArgs = {
@@ -1169,6 +2065,7 @@ export type QueryRelationsArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryRelationsConnectionArgs = {
@@ -1182,6 +2079,7 @@ export type QueryRelationsConnectionArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QuerySearchArgs = {
   filter?: InputMaybe<EntityFilter>;
@@ -1191,6 +2089,7 @@ export type QuerySearchArgs = {
   similarityThreshold?: InputMaybe<Scalars['Float']['input']>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySearchConnectionArgs = {
@@ -1205,15 +2104,53 @@ export type QuerySearchConnectionArgs = {
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QuerySpaceArgs = {
   id: Scalars['UUID']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QuerySpaceByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceScoreArgs = {
+  spaceId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceScoreByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceScoresArgs = {
+  condition?: InputMaybe<SpaceScoreCondition>;
+  filter?: InputMaybe<SpaceScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceScoresOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceScoresConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SpaceScoreCondition>;
+  filter?: InputMaybe<SpaceScoreFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceScoresOrderBy>>;
+};
+
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySpacesArgs = {
@@ -1223,6 +2160,7 @@ export type QuerySpacesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SpacesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySpacesConnectionArgs = {
@@ -1236,16 +2174,19 @@ export type QuerySpacesConnectionArgs = {
   orderBy?: InputMaybe<Array<SpacesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QuerySubspaceArgs = {
   childSpaceId: Scalars['UUID']['input'];
   parentSpaceId: Scalars['UUID']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QuerySubspaceByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySubspacesArgs = {
@@ -1255,6 +2196,7 @@ export type QuerySubspacesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySubspacesConnectionArgs = {
@@ -1268,10 +2210,12 @@ export type QuerySubspacesConnectionArgs = {
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryTypeArgs = {
   id?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryTypesListArgs = {
@@ -1280,6 +2224,7 @@ export type QueryTypesListArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryTypesListConnectionArgs = {
@@ -1292,22 +2237,27 @@ export type QueryTypesListConnectionArgs = {
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryUserVoteArgs = {
   id: Scalars['Int']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryUserVoteByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
-export type QueryUserVoteByUserIdAndEntityIdAndSpaceIdArgs = {
-  entityId: Scalars['UUID']['input'];
+export type QueryUserVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdArgs = {
+  objectId: Scalars['UUID']['input'];
+  objectType: Scalars['Int']['input'];
   spaceId: Scalars['UUID']['input'];
   userId: Scalars['String']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryUserVotesArgs = {
@@ -1317,6 +2267,7 @@ export type QueryUserVotesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryUserVotesConnectionArgs = {
@@ -1330,15 +2281,18 @@ export type QueryUserVotesConnectionArgs = {
   orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryValueArgs = {
   id: Scalars['String']['input'];
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryValueByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryValuesArgs = {
@@ -1348,6 +2302,7 @@ export type QueryValuesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<ValuesOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryValuesConnectionArgs = {
@@ -1361,21 +2316,26 @@ export type QueryValuesConnectionArgs = {
   orderBy?: InputMaybe<Array<ValuesOrderBy>>;
 };
 
+
 /** The root query type which gives access points into the data universe. */
 export type QueryVotesCountArgs = {
   id: Scalars['Int']['input'];
 };
 
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountByEntityIdAndSpaceIdArgs = {
-  entityId: Scalars['UUID']['input'];
-  spaceId: Scalars['UUID']['input'];
-};
 
 /** The root query type which gives access points into the data universe. */
 export type QueryVotesCountByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
 };
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountByObjectIdAndObjectTypeAndSpaceIdArgs = {
+  objectId: Scalars['UUID']['input'];
+  objectType: Scalars['Int']['input'];
+  spaceId: Scalars['UUID']['input'];
+};
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryVotesCountsArgs = {
@@ -1385,6 +2345,7 @@ export type QueryVotesCountsArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<VotesCountsOrderBy>>;
 };
+
 
 /** The root query type which gives access points into the data universe. */
 export type QueryVotesCountsConnectionArgs = {
@@ -1404,12 +2365,13 @@ export type RawAction = Node & {
   actionVersion: Scalars['BigInt']['output'];
   blockNumber: Scalars['BigInt']['output'];
   blockTimestamp: Scalars['Datetime']['output'];
-  entity: Scalars['UUID']['output'];
   groupId?: Maybe<Scalars['UUID']['output']>;
   id: Scalars['Int']['output'];
   metadata?: Maybe<Scalars['String']['output']>;
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  objectId: Scalars['UUID']['output'];
+  objectType: Scalars['Int']['output'];
   sender: Scalars['String']['output'];
   spacePov: Scalars['UUID']['output'];
   txHash: Scalars['String']['output'];
@@ -1428,14 +2390,16 @@ export type RawActionCondition = {
   blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `blockTimestamp` field. */
   blockTimestamp?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `entity` field. */
-  entity?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `groupId` field. */
   groupId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `id` field. */
   id?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `metadata` field. */
   metadata?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `objectId` field. */
+  objectId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `objectType` field. */
+  objectType?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `sender` field. */
   sender?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `spacePov` field. */
@@ -1456,14 +2420,16 @@ export type RawActionFilter = {
   blockNumber?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `blockTimestamp` field. */
   blockTimestamp?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `entity` field. */
-  entity?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `groupId` field. */
   groupId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `id` field. */
   id?: InputMaybe<IntFilter>;
   /** Negates the expression. */
   not?: InputMaybe<RawActionFilter>;
+  /** Filter by the object’s `objectId` field. */
+  objectId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `objectType` field. */
+  objectType?: InputMaybe<IntFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<RawActionFilter>>;
   /** Filter by the object’s `sender` field. */
@@ -1506,8 +2472,6 @@ export enum RawActionsOrderBy {
   BlockNumberDesc = 'BLOCK_NUMBER_DESC',
   BlockTimestampAsc = 'BLOCK_TIMESTAMP_ASC',
   BlockTimestampDesc = 'BLOCK_TIMESTAMP_DESC',
-  EntityAsc = 'ENTITY_ASC',
-  EntityDesc = 'ENTITY_DESC',
   GroupIdAsc = 'GROUP_ID_ASC',
   GroupIdDesc = 'GROUP_ID_DESC',
   IdAsc = 'ID_ASC',
@@ -1515,6 +2479,10 @@ export enum RawActionsOrderBy {
   MetadataAsc = 'METADATA_ASC',
   MetadataDesc = 'METADATA_DESC',
   Natural = 'NATURAL',
+  ObjectIdAsc = 'OBJECT_ID_ASC',
+  ObjectIdDesc = 'OBJECT_ID_DESC',
+  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
+  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   SenderAsc = 'SENDER_ASC',
@@ -1522,7 +2490,7 @@ export enum RawActionsOrderBy {
   SpacePovAsc = 'SPACE_POV_ASC',
   SpacePovDesc = 'SPACE_POV_DESC',
   TxHashAsc = 'TX_HASH_ASC',
-  TxHashDesc = 'TX_HASH_DESC',
+  TxHashDesc = 'TX_HASH_DESC'
 }
 
 export type Relation = Node & {
@@ -1690,12 +2658,12 @@ export enum RelationsOrderBy {
   TypeIdAsc = 'TYPE_ID_ASC',
   TypeIdDesc = 'TYPE_ID_DESC',
   VerifiedAsc = 'VERIFIED_ASC',
-  VerifiedDesc = 'VERIFIED_DESC',
+  VerifiedDesc = 'VERIFIED_DESC'
 }
 
 export enum SortOrder {
   Asc = 'ASC',
-  Desc = 'DESC',
+  Desc = 'DESC'
 }
 
 export type Space = Node & {
@@ -1716,6 +2684,14 @@ export type Space = Node & {
   nodeId: Scalars['ID']['output'];
   page?: Maybe<Entity>;
   personalAddress?: Maybe<Scalars['String']['output']>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotes: Array<ProposalVote>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesConnection: ProposalVotesConnection;
+  /** Reads and enables pagination through a set of `Proposal`. */
+  proposals: Array<Proposal>;
+  /** Reads and enables pagination through a set of `Proposal`. */
+  proposalsConnection: ProposalsConnection;
   /** Reads and enables pagination through a set of `Relation`. */
   relations: Array<Relation>;
   /** Reads and enables pagination through a set of `Relation`. */
@@ -1744,6 +2720,7 @@ export type Space = Node & {
   valuesConnection: ValuesConnection;
 };
 
+
 export type SpaceEditorsArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
   before?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1755,6 +2732,7 @@ export type SpaceEditorsArgs = {
   orderBy?: InputMaybe<Array<EditorsOrderBy>>;
 };
 
+
 export type SpaceEditorsListArgs = {
   condition?: InputMaybe<EditorCondition>;
   filter?: InputMaybe<EditorFilter>;
@@ -1762,6 +2740,7 @@ export type SpaceEditorsListArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<EditorsOrderBy>>;
 };
+
 
 export type SpaceMembersArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1774,6 +2753,7 @@ export type SpaceMembersArgs = {
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
 };
 
+
 export type SpaceMembersListArgs = {
   condition?: InputMaybe<MemberCondition>;
   filter?: InputMaybe<MemberFilter>;
@@ -1781,6 +2761,49 @@ export type SpaceMembersListArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
 };
+
+
+export type SpaceProposalVotesArgs = {
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type SpaceProposalVotesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type SpaceProposalsArgs = {
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
+
+export type SpaceProposalsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
 
 export type SpaceRelationsArgs = {
   condition?: InputMaybe<RelationCondition>;
@@ -1790,6 +2813,7 @@ export type SpaceRelationsArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type SpaceRelationsByFromSpaceIdArgs = {
   condition?: InputMaybe<RelationCondition>;
   filter?: InputMaybe<RelationFilter>;
@@ -1797,6 +2821,7 @@ export type SpaceRelationsByFromSpaceIdArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
+
 
 export type SpaceRelationsByFromSpaceIdConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1809,6 +2834,7 @@ export type SpaceRelationsByFromSpaceIdConnectionArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type SpaceRelationsByToSpaceIdArgs = {
   condition?: InputMaybe<RelationCondition>;
   filter?: InputMaybe<RelationFilter>;
@@ -1816,6 +2842,7 @@ export type SpaceRelationsByToSpaceIdArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
+
 
 export type SpaceRelationsByToSpaceIdConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1828,6 +2855,7 @@ export type SpaceRelationsByToSpaceIdConnectionArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type SpaceRelationsConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
   before?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1839,6 +2867,7 @@ export type SpaceRelationsConnectionArgs = {
   orderBy?: InputMaybe<Array<RelationsOrderBy>>;
 };
 
+
 export type SpaceSubspacesByChildSpaceIdArgs = {
   condition?: InputMaybe<SubspaceCondition>;
   filter?: InputMaybe<SubspaceFilter>;
@@ -1846,6 +2875,7 @@ export type SpaceSubspacesByChildSpaceIdArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
+
 
 export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1858,6 +2888,7 @@ export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
 
+
 export type SpaceSubspacesByParentSpaceIdArgs = {
   condition?: InputMaybe<SubspaceCondition>;
   filter?: InputMaybe<SubspaceFilter>;
@@ -1865,6 +2896,7 @@ export type SpaceSubspacesByParentSpaceIdArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
+
 
 export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1877,6 +2909,7 @@ export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
   orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
 
+
 export type SpaceValuesArgs = {
   condition?: InputMaybe<ValueCondition>;
   filter?: InputMaybe<ValueFilter>;
@@ -1884,6 +2917,7 @@ export type SpaceValuesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<ValuesOrderBy>>;
 };
+
 
 export type SpaceValuesConnectionArgs = {
   after?: InputMaybe<Scalars['Cursor']['input']>;
@@ -1940,6 +2974,14 @@ export type SpaceFilter = {
   or?: InputMaybe<Array<SpaceFilter>>;
   /** Filter by the object’s `personalAddress` field. */
   personalAddress?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `proposalVotesConnection` relation. */
+  proposalVotesConnection?: InputMaybe<SpaceToManyProposalVoteFilter>;
+  /** Some related `proposalVotesConnection` exist. */
+  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposalsConnection` relation. */
+  proposalsConnection?: InputMaybe<SpaceToManyProposalFilter>;
+  /** Some related `proposalsConnection` exist. */
+  proposalsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `relationsByFromSpaceIdConnection` relation. */
   relationsByFromSpaceIdConnection?: InputMaybe<SpaceToManyRelationFilter>;
   /** Some related `relationsByFromSpaceIdConnection` exist. */
@@ -1970,6 +3012,79 @@ export type SpaceFilter = {
   valuesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
+export type SpaceScore = Node & {
+  __typename?: 'SpaceScore';
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  score: Scalars['BigFloat']['output'];
+  spaceId: Scalars['UUID']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `SpaceScore` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type SpaceScoreCondition = {
+  /** Checks for equality with the object’s `score` field. */
+  score?: InputMaybe<Scalars['BigFloat']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `SpaceScore` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceScoreFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<SpaceScoreFilter>>;
+  /** Negates the expression. */
+  not?: InputMaybe<SpaceScoreFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<SpaceScoreFilter>>;
+  /** Filter by the object’s `score` field. */
+  score?: InputMaybe<BigFloatFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `SpaceScore` values. */
+export type SpaceScoresConnection = {
+  __typename?: 'SpaceScoresConnection';
+  /** A list of edges which contains the `SpaceScore` and cursor to aid in pagination. */
+  edges: Array<SpaceScoresEdge>;
+  /** A list of `SpaceScore` objects. */
+  nodes: Array<SpaceScore>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `SpaceScore` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `SpaceScore` edge in the connection. */
+export type SpaceScoresEdge = {
+  __typename?: 'SpaceScoresEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `SpaceScore` at the end of the edge. */
+  node: SpaceScore;
+};
+
+/** Methods to use when ordering `SpaceScore`. */
+export enum SpaceScoresOrderBy {
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ScoreAsc = 'SCORE_ASC',
+  ScoreDesc = 'SCORE_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
+
 /** A filter to be used against many `Editor` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyEditorFilter = {
   /** Every related `Editor` matches the filter criteria. All fields are combined with a logical ‘and.’ */
@@ -1988,6 +3103,26 @@ export type SpaceToManyMemberFilter = {
   none?: InputMaybe<MemberFilter>;
   /** Some related `Member` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<MemberFilter>;
+};
+
+/** A filter to be used against many `Proposal` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManyProposalFilter = {
+  /** Every related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalFilter>;
+  /** No related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalFilter>;
+  /** Some related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalFilter>;
+};
+
+/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManyProposalVoteFilter = {
+  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalVoteFilter>;
+  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalVoteFilter>;
+  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalVoteFilter>;
 };
 
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
@@ -2022,7 +3157,7 @@ export type SpaceToManyValueFilter = {
 
 export enum SpaceTypes {
   Personal = 'PERSONAL',
-  Public = 'PUBLIC',
+  Public = 'PUBLIC'
 }
 
 /** A filter to be used against SpaceTypes fields. All fields are combined with a logical ‘and.’ */
@@ -2091,7 +3226,7 @@ export enum SpacesOrderBy {
   SpaceAddressAsc = 'SPACE_ADDRESS_ASC',
   SpaceAddressDesc = 'SPACE_ADDRESS_DESC',
   TypeAsc = 'TYPE_ASC',
-  TypeDesc = 'TYPE_DESC',
+  TypeDesc = 'TYPE_DESC'
 }
 
 /** A filter to be used against String fields. All fields are combined with a logical ‘and.’ */
@@ -2243,7 +3378,7 @@ export enum SubspacesOrderBy {
   ParentSpaceIdAsc = 'PARENT_SPACE_ID_ASC',
   ParentSpaceIdDesc = 'PARENT_SPACE_ID_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
 }
 
 /** A filter to be used against UUID fields. All fields are combined with a logical ‘and.’ */
@@ -2314,10 +3449,11 @@ export type UuidListFilter = {
 
 export type UserVote = Node & {
   __typename?: 'UserVote';
-  entityId: Scalars['UUID']['output'];
   id: Scalars['Int']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  objectId: Scalars['UUID']['output'];
+  objectType: Scalars['Int']['output'];
   spaceId: Scalars['UUID']['output'];
   userId: Scalars['String']['output'];
   voteType: Scalars['Int']['output'];
@@ -2329,10 +3465,12 @@ export type UserVote = Node & {
  * for equality and combined with a logical ‘and.’
  */
 export type UserVoteCondition = {
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `id` field. */
   id?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `objectId` field. */
+  objectId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `objectType` field. */
+  objectType?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `spaceId` field. */
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `userId` field. */
@@ -2347,12 +3485,14 @@ export type UserVoteCondition = {
 export type UserVoteFilter = {
   /** Checks for all expressions in this list. */
   and?: InputMaybe<Array<UserVoteFilter>>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `id` field. */
   id?: InputMaybe<IntFilter>;
   /** Negates the expression. */
   not?: InputMaybe<UserVoteFilter>;
+  /** Filter by the object’s `objectId` field. */
+  objectId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `objectType` field. */
+  objectType?: InputMaybe<IntFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<UserVoteFilter>>;
   /** Filter by the object’s `spaceId` field. */
@@ -2389,11 +3529,13 @@ export type UserVotesEdge = {
 
 /** Methods to use when ordering `UserVote`. */
 export enum UserVotesOrderBy {
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
   IdAsc = 'ID_ASC',
   IdDesc = 'ID_DESC',
   Natural = 'NATURAL',
+  ObjectIdAsc = 'OBJECT_ID_ASC',
+  ObjectIdDesc = 'OBJECT_ID_DESC',
+  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
+  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
@@ -2403,7 +3545,7 @@ export enum UserVotesOrderBy {
   VotedAtAsc = 'VOTED_AT_ASC',
   VotedAtDesc = 'VOTED_AT_DESC',
   VoteTypeAsc = 'VOTE_TYPE_ASC',
-  VoteTypeDesc = 'VOTE_TYPE_DESC',
+  VoteTypeDesc = 'VOTE_TYPE_DESC'
 }
 
 export type Value = Node & {
@@ -2541,16 +3683,49 @@ export enum ValuesOrderBy {
   TimeAsc = 'TIME_ASC',
   TimeDesc = 'TIME_DESC',
   UnitAsc = 'UNIT_ASC',
-  UnitDesc = 'UNIT_DESC',
+  UnitDesc = 'UNIT_DESC'
 }
+
+export enum VoteOption {
+  Abstain = 'ABSTAIN',
+  No = 'NO',
+  Yes = 'YES'
+}
+
+/** A filter to be used against VoteOption fields. All fields are combined with a logical ‘and.’ */
+export type VoteOptionFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<VoteOption>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<VoteOption>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<VoteOption>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<VoteOption>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<VoteOption>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<VoteOption>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<VoteOption>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<VoteOption>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<VoteOption>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<VoteOption>>;
+};
 
 export type VotesCount = Node & {
   __typename?: 'VotesCount';
   downvotes: Scalars['BigInt']['output'];
-  entityId: Scalars['UUID']['output'];
   id: Scalars['Int']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  objectId: Scalars['UUID']['output'];
+  objectType: Scalars['Int']['output'];
   spaceId: Scalars['UUID']['output'];
   upvotes: Scalars['BigInt']['output'];
 };
@@ -2562,10 +3737,12 @@ export type VotesCount = Node & {
 export type VotesCountCondition = {
   /** Checks for equality with the object’s `downvotes` field. */
   downvotes?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `id` field. */
   id?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `objectId` field. */
+  objectId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `objectType` field. */
+  objectType?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `spaceId` field. */
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `upvotes` field. */
@@ -2578,12 +3755,14 @@ export type VotesCountFilter = {
   and?: InputMaybe<Array<VotesCountFilter>>;
   /** Filter by the object’s `downvotes` field. */
   downvotes?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `id` field. */
   id?: InputMaybe<IntFilter>;
   /** Negates the expression. */
   not?: InputMaybe<VotesCountFilter>;
+  /** Filter by the object’s `objectId` field. */
+  objectId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `objectType` field. */
+  objectType?: InputMaybe<IntFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<VotesCountFilter>>;
   /** Filter by the object’s `spaceId` field. */
@@ -2618,60 +3797,56 @@ export type VotesCountsEdge = {
 export enum VotesCountsOrderBy {
   DownvotesAsc = 'DOWNVOTES_ASC',
   DownvotesDesc = 'DOWNVOTES_DESC',
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
   IdAsc = 'ID_ASC',
   IdDesc = 'ID_DESC',
   Natural = 'NATURAL',
+  ObjectIdAsc = 'OBJECT_ID_ASC',
+  ObjectIdDesc = 'OBJECT_ID_DESC',
+  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
+  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
   SpaceIdDesc = 'SPACE_ID_DESC',
   UpvotesAsc = 'UPVOTES_ASC',
-  UpvotesDesc = 'UPVOTES_DESC',
+  UpvotesDesc = 'UPVOTES_DESC'
 }
 
-export type FullEntityFragment = {
-  __typename?: 'Entity';
-  id: any;
-  name?: string | null;
-  description?: string | null;
-  spaceIds?: Array<any | null> | null;
-  updatedAt: string;
-  types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-  valuesList: Array<{
-    __typename?: 'Value';
-    spaceId: any;
-    string?: string | null;
-    number?: any | null;
-    point?: string | null;
-    boolean?: boolean | null;
-    time?: string | null;
-    language?: string | null;
-    unit?: string | null;
-    property?:
-      | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-      | null;
-  }>;
-  relationsList: Array<{
-    __typename?: 'Relation';
-    id: any;
-    spaceId: any;
-    position?: string | null;
-    verified?: boolean | null;
-    entityId: any;
-    toSpaceId?: any | null;
-    fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-    toEntity?: {
-      __typename?: 'Entity';
-      id: any;
-      name?: string | null;
-      types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-      valuesList: Array<{ __typename?: 'Value'; propertyId: any; string?: string | null }>;
-    } | null;
-    type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-  }>;
-} & { ' $fragmentName'?: 'FullEntityFragment' };
+export enum VotingMode {
+  Fast = 'FAST',
+  Slow = 'SLOW'
+}
+
+/** A filter to be used against VotingMode fields. All fields are combined with a logical ‘and.’ */
+export type VotingModeFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<VotingMode>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<VotingMode>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<VotingMode>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<VotingMode>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<VotingMode>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<VotingMode>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<VotingMode>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<VotingMode>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<VotingMode>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<VotingMode>>;
+};
+
+export type FullEntityFragment = { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+      { __typename?: 'Property' }
+      & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+    ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> } & { ' $fragmentName'?: 'FullEntityFragment' };
 
 export type AllEntitiesQueryVariables = Exact<{
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
@@ -2681,330 +3856,105 @@ export type AllEntitiesQueryVariables = Exact<{
   orderBy?: InputMaybe<Array<EntitiesOrderBy> | EntitiesOrderBy>;
 }>;
 
-export type AllEntitiesQuery = {
-  __typename?: 'Query';
-  entities?: Array<{
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    updatedAt: string;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-    valuesList: Array<{
-      __typename?: 'Value';
-      spaceId: any;
-      string?: string | null;
-      number?: any | null;
-      point?: string | null;
-      boolean?: boolean | null;
-      time?: string | null;
-      language?: string | null;
-      unit?: string | null;
-      property?:
-        | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-        | null;
-    }>;
-    relationsList: Array<{
-      __typename?: 'Relation';
-      id: any;
-      spaceId: any;
-      position?: string | null;
-      verified?: boolean | null;
-      entityId: any;
-      toSpaceId?: any | null;
-      fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-      toEntity?: {
-        __typename?: 'Entity';
-        id: any;
-        name?: string | null;
-        types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-        valuesList: Array<{
-          __typename?: 'Value';
-          propertyId: any;
-          string?: string | null;
-          number?: any | null;
-          point?: string | null;
-          boolean?: boolean | null;
-          time?: string | null;
-        }>;
-      } | null;
-      type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-    }>;
-  }> | null;
-};
+
+export type AllEntitiesQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+        { __typename?: 'Property' }
+        & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+      ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> }> | null };
+
+export type AllEntitiesWithCountQueryVariables = Exact<{
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  filter?: InputMaybe<EntityFilter>;
+  orderBy?: InputMaybe<Array<EntitiesOrderBy> | EntitiesOrderBy>;
+}>;
+
+
+export type AllEntitiesWithCountQuery = { __typename?: 'Query', entitiesConnection?: { __typename?: 'EntitiesConnection', totalCount: number } | null, entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+        { __typename?: 'Property' }
+        & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+      ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> }> | null };
 
 export type EntitiesBatchQueryVariables = Exact<{
   filter?: InputMaybe<EntityFilter>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type EntitiesBatchQuery = {
-  __typename?: 'Query';
-  entities?: Array<{
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-    valuesList: Array<{
-      __typename?: 'Value';
-      spaceId: any;
-      string?: string | null;
-      number?: any | null;
-      point?: string | null;
-      boolean?: boolean | null;
-      time?: string | null;
-      language?: string | null;
-      unit?: string | null;
-      property?:
-        | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-        | null;
-    }>;
-    relationsList: Array<{
-      __typename?: 'Relation';
-      id: any;
-      spaceId: any;
-      position?: string | null;
-      verified?: boolean | null;
-      entityId: any;
-      toSpaceId?: any | null;
-      fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-      toEntity?: {
-        __typename?: 'Entity';
-        id: any;
-        name?: string | null;
-        types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-        valuesList: Array<{
-          __typename?: 'Value';
-          propertyId: any;
-          string?: string | null;
-          number?: any | null;
-          point?: string | null;
-          boolean?: boolean | null;
-          time?: string | null;
-        }>;
-      } | null;
-      type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-    }>;
-  }> | null;
-};
+
+export type EntitiesBatchQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+        { __typename?: 'Property' }
+        & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+      ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> }> | null };
 
 export type EntityQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type EntityQuery = {
-  __typename?: 'Query';
-  entity?: {
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-    valuesList: Array<{
-      __typename?: 'Value';
-      spaceId: any;
-      string?: string | null;
-      number?: any | null;
-      point?: string | null;
-      boolean?: boolean | null;
-      time?: string | null;
-      language?: string | null;
-      unit?: string | null;
-      property?:
-        | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-        | null;
-    }>;
-    relationsList: Array<{
-      __typename?: 'Relation';
-      id: any;
-      spaceId: any;
-      position?: string | null;
-      verified?: boolean | null;
-      entityId: any;
-      toSpaceId?: any | null;
-      fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-      toEntity?: {
-        __typename?: 'Entity';
-        id: any;
-        name?: string | null;
-        types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-        valuesList: Array<{
-          __typename?: 'Value';
-          propertyId: any;
-          string?: string | null;
-          number?: any | null;
-          point?: string | null;
-          boolean?: boolean | null;
-          time?: string | null;
-        }>;
-      } | null;
-      type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-    }>;
-  } | null;
-};
 
-export type FullRelationFragment = {
-  __typename?: 'Relation';
-  id: any;
-  spaceId: any;
-  position?: string | null;
-  verified?: boolean | null;
-  entityId: any;
-  toSpaceId?: any | null;
-  entity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-  fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-  toEntity?: {
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-    valuesList: Array<{
-      __typename?: 'Value';
-      propertyId: any;
-      string?: string | null;
-      number?: any | null;
-      point?: string | null;
-      boolean?: boolean | null;
-      time?: string | null;
-    }>;
-  } | null;
-  type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-} & { ' $fragmentName'?: 'FullRelationFragment' };
+export type EntityQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+        { __typename?: 'Property' }
+        & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+      ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> } | null };
+
+export type FullRelationFragment = { __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, entity?: { __typename?: 'Entity', id: any, name?: string | null } | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null } & { ' $fragmentName'?: 'FullRelationFragment' };
 
 export type RelationEntityRelationsQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type RelationEntityRelationsQuery = {
-  __typename?: 'Query';
-  relations?: Array<
-    { __typename?: 'Relation' } & { ' $fragmentRefs'?: { FullRelationFragment: FullRelationFragment } }
-  > | null;
-};
+
+export type RelationEntityRelationsQuery = { __typename?: 'Query', relations?: Array<(
+    { __typename?: 'Relation' }
+    & { ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }
+  )> | null };
 
 export type EntityPageQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type EntityPageQuery = {
-  __typename?: 'Query';
-  entity?: {
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-    valuesList: Array<{
-      __typename?: 'Value';
-      spaceId: any;
-      string?: string | null;
-      number?: any | null;
-      point?: string | null;
-      boolean?: boolean | null;
-      time?: string | null;
-      language?: string | null;
-      unit?: string | null;
-      property?:
-        | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-        | null;
-    }>;
-    relationsList: Array<{
-      __typename?: 'Relation';
-      id: any;
-      spaceId: any;
-      position?: string | null;
-      verified?: boolean | null;
-      entityId: any;
-      toSpaceId?: any | null;
-      fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-      toEntity?: {
-        __typename?: 'Entity';
-        id: any;
-        name?: string | null;
-        types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-        valuesList: Array<{
-          __typename?: 'Value';
-          propertyId: any;
-          string?: string | null;
-          number?: any | null;
-          point?: string | null;
-          boolean?: boolean | null;
-          time?: string | null;
-        }>;
-      } | null;
-      type?: { __typename?: 'Property'; id: any; name?: string | null; renderableType?: any | null } | null;
-    }>;
-  } | null;
-  relations?: Array<
-    { __typename?: 'Relation' } & { ' $fragmentRefs'?: { FullRelationFragment: FullRelationFragment } }
-  > | null;
-};
+
+export type EntityPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
+        { __typename?: 'Property' }
+        & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+      ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, renderableType?: any | null } | null }> } | null, relations?: Array<(
+    { __typename?: 'Relation' }
+    & { ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }
+  )> | null };
 
 export type EntityTypesQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type EntityTypesQuery = {
-  __typename?: 'Query';
-  entity?: {
-    __typename?: 'Entity';
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-  } | null;
-};
+
+export type EntityTypesQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null };
 
 export type EntityBacklinksPageQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type EntityBacklinksPageQuery = {
-  __typename?: 'Query';
-  entity?: {
-    __typename?: 'Entity';
-    backlinksList: Array<{
-      __typename?: 'Relation';
-      fromEntity?: {
-        __typename?: 'Entity';
-        id: any;
-        name?: string | null;
-        spaceIds?: Array<any | null> | null;
-        types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-      } | null;
-    }>;
-  } | null;
-};
 
-export type FullSpaceFragment = {
-  __typename?: 'Space';
-  id: any;
-  type: SpaceTypes;
-  daoAddress: string;
-  spaceAddress: string;
-  mainVotingAddress?: string | null;
-  membershipAddress?: string | null;
-  personalAddress?: string | null;
-  membersList: Array<{ __typename?: 'Member'; address: string }>;
-  editorsList: Array<{ __typename?: 'Editor'; address: string }>;
-  page?: ({ __typename?: 'Entity' } & { ' $fragmentRefs'?: { FullEntityFragment: FullEntityFragment } }) | null;
-} & { ' $fragmentName'?: 'FullSpaceFragment' };
+export type EntityBacklinksPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', backlinksList: Array<{ __typename?: 'Relation', fromEntity?: { __typename?: 'Entity', id: any, name?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null }> } | null };
+
+export type FullSpaceFragment = { __typename?: 'Space', id: any, type: SpaceTypes, daoAddress: string, spaceAddress: string, mainVotingAddress?: string | null, membershipAddress?: string | null, personalAddress?: string | null, membersList: Array<{ __typename?: 'Member', address: string }>, editorsList: Array<{ __typename?: 'Editor', address: string }>, page?: (
+    { __typename?: 'Entity' }
+    & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
+  ) | null } & { ' $fragmentName'?: 'FullSpaceFragment' };
 
 export type SpaceQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
 }>;
 
-export type SpaceQuery = {
-  __typename?: 'Query';
-  space?: ({ __typename?: 'Space' } & { ' $fragmentRefs'?: { FullSpaceFragment: FullSpaceFragment } }) | null;
-};
+
+export type SpaceQuery = { __typename?: 'Query', space?: (
+    { __typename?: 'Space' }
+    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
+  ) | null };
 
 export type SpacesQueryVariables = Exact<{
   filter?: InputMaybe<SpaceFilter>;
@@ -3012,68 +3962,50 @@ export type SpacesQueryVariables = Exact<{
   offset?: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type SpacesQuery = {
-  __typename?: 'Query';
-  spaces?: Array<{ __typename?: 'Space' } & { ' $fragmentRefs'?: { FullSpaceFragment: FullSpaceFragment } }> | null;
-};
+
+export type SpacesQuery = { __typename?: 'Query', spaces?: Array<(
+    { __typename?: 'Space' }
+    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
+  )> | null };
 
 export type SpacesWhereMemberQueryVariables = Exact<{
   address: Scalars['String']['input'];
 }>;
 
-export type SpacesWhereMemberQuery = {
-  __typename?: 'Query';
-  spaces?: Array<{ __typename?: 'Space' } & { ' $fragmentRefs'?: { FullSpaceFragment: FullSpaceFragment } }> | null;
-};
 
-export type PropertyFragmentFragment = {
-  __typename?: 'Property';
-  id: any;
-  name?: string | null;
-  dataType: DataTypes;
-  renderableType?: any | null;
-  format?: string | null;
-  unit?: any | null;
-  relationValueTypes?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-} & { ' $fragmentName'?: 'PropertyFragmentFragment' };
+export type SpacesWhereMemberQuery = { __typename?: 'Query', spaces?: Array<(
+    { __typename?: 'Space' }
+    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
+  )> | null };
+
+export type PropertyFragmentFragment = { __typename?: 'Property', id: any, name?: string | null, dataType: DataTypes, renderableType?: any | null, format?: string | null, unit?: any | null, relationValueTypes?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
 
 export type PropertyQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
 }>;
 
-export type PropertyQuery = {
-  __typename?: 'Query';
-  property?:
-    | ({ __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } })
-    | null;
-};
+
+export type PropertyQuery = { __typename?: 'Query', property?: (
+    { __typename?: 'Property' }
+    & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+  ) | null };
 
 export type PropertiesBatchQueryVariables = Exact<{
   ids: Array<Scalars['UUID']['input']> | Scalars['UUID']['input'];
 }>;
 
-export type PropertiesBatchQuery = {
-  __typename?: 'Query';
-  properties?: Array<
-    { __typename?: 'Property' } & { ' $fragmentRefs'?: { PropertyFragmentFragment: PropertyFragmentFragment } }
-  > | null;
-};
+
+export type PropertiesBatchQuery = { __typename?: 'Query', properties?: Array<(
+    { __typename?: 'Property' }
+    & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
+  )> | null };
 
 export type ResultQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
 }>;
 
-export type ResultQuery = {
-  __typename?: 'Query';
-  entity?: {
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-  } | null;
-};
+
+export type ResultQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null };
 
 export type ResultsQueryVariables = Exact<{
   query: Scalars['String']['input'];
@@ -3083,3259 +4015,34 @@ export type ResultsQueryVariables = Exact<{
   offset?: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type ResultsQuery = {
-  __typename?: 'Query';
-  search?: Array<{
-    __typename?: 'Entity';
-    id: any;
-    name?: string | null;
-    description?: string | null;
-    spaceIds?: Array<any | null> | null;
-    types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-  }> | null;
-};
+
+export type ResultsQuery = { __typename?: 'Query', search?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null }> | null };
 
 export type RelationEntityMinimalQueryVariables = Exact<{
   id: Scalars['UUID']['input'];
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
-export type RelationEntityMinimalQuery = {
-  __typename?: 'Query';
-  relation?: {
-    __typename?: 'Relation';
-    id: any;
-    entity?: {
-      __typename?: 'Entity';
-      id: any;
-      name?: string | null;
-      description?: string | null;
-      spaceIds?: Array<any | null> | null;
-      types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-      valuesList: Array<{
-        __typename?: 'Value';
-        spaceId: any;
-        string?: string | null;
-        number?: any | null;
-        point?: string | null;
-        boolean?: boolean | null;
-        time?: string | null;
-        language?: string | null;
-        unit?: string | null;
-        property?: {
-          __typename?: 'Property';
-          id: any;
-          name?: string | null;
-          dataType: DataTypes;
-          renderableType?: any | null;
-          relationValueTypes?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-        } | null;
-      }>;
-      relationsList: Array<{
-        __typename?: 'Relation';
-        verified?: boolean | null;
-        toSpaceId?: any | null;
-        position?: string | null;
-        spaceId: any;
-        id: any;
-        entityId: any;
-        fromEntity?: { __typename?: 'Entity'; id: any; name?: string | null } | null;
-        toEntity?: {
-          __typename?: 'Entity';
-          id: any;
-          name?: string | null;
-          types?: Array<{ __typename?: 'Entity'; id: any; name?: string | null }> | null;
-          valuesList: Array<{
-            __typename?: 'Value';
-            propertyId: any;
-            string?: string | null;
-            number?: any | null;
-            point?: string | null;
-            boolean?: boolean | null;
-            time?: string | null;
-          }>;
-        } | null;
-        type?: {
-          __typename?: 'Property';
-          id: any;
-          name?: string | null;
-          description?: string | null;
-          renderableType?: any | null;
-        } | null;
-      }>;
-    } | null;
-  } | null;
-};
 
-export const FullRelationFragmentDoc = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullRelation' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Relation' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'fromEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'toEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'type' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<FullRelationFragment, unknown>;
-export const PropertyFragmentFragmentDoc = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<PropertyFragmentFragment, unknown>;
-export const FullEntityFragmentDoc = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullEntity' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Entity' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'types' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'valuesList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'property' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'fromEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'toEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'type' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<FullEntityFragment, unknown>;
-export const FullSpaceFragmentDoc = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullSpace' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Space' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'type' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'daoAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'mainVotingAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'membershipAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'personalAddress' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'membersList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'editorsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'page' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullEntity' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullEntity' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Entity' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'types' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'valuesList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'property' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'fromEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'toEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'type' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<FullSpaceFragment, unknown>;
-export const AllEntitiesDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'AllEntities' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'EntityFilter' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'orderBy' } },
-          type: {
-            kind: 'ListType',
-            type: {
-              kind: 'NonNullType',
-              type: { kind: 'NamedType', name: { kind: 'Name', value: 'EntitiesOrderBy' } },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entities' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'first' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'orderBy' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'orderBy' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'property' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'relationsList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'fromEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'toEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'types' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'valuesList' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'type' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AllEntitiesQuery, AllEntitiesQueryVariables>;
-export const EntitiesBatchDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'EntitiesBatch' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'EntityFilter' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entities' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'property' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'relationsList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'fromEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'toEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'types' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'valuesList' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'type' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EntitiesBatchQuery, EntitiesBatchQueryVariables>;
-export const EntityDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Entity' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'property' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'relationsList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'fromEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'toEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'types' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'valuesList' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'type' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EntityQuery, EntityQueryVariables>;
-export const RelationEntityRelationsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'RelationEntityRelations' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relations' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'entityId' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'is' },
-                            value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-                          },
-                        ],
-                      },
-                    },
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'spaceId' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'is' },
-                            value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullRelation' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullRelation' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Relation' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'fromEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'toEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'type' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<RelationEntityRelationsQuery, RelationEntityRelationsQueryVariables>;
-export const EntityPageDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'EntityPage' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'property' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'relationsList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'fromEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'toEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'types' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'valuesList' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'type' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relations' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'entityId' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'is' },
-                            value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-                          },
-                        ],
-                      },
-                    },
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'spaceId' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'is' },
-                            value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullRelation' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullRelation' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Relation' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'fromEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'toEntity' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'valuesList' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'type' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EntityPageQuery, EntityPageQueryVariables>;
-export const EntityTypesDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'EntityTypes' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceIds' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'in' },
-                                  value: {
-                                    kind: 'ListValue',
-                                    values: [{ kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } }],
-                                  },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EntityTypesQuery, EntityTypesQueryVariables>;
-export const EntityBacklinksPageDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'EntityBacklinksPage' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'backlinksList' },
-                  arguments: [
-                    {
-                      kind: 'Argument',
-                      name: { kind: 'Name', value: 'filter' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'spaceId' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'is' },
-                                  value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'fromEntity' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'types' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EntityBacklinksPageQuery, EntityBacklinksPageQueryVariables>;
-export const SpaceDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Space' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'space' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullSpace' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullEntity' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Entity' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'types' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'valuesList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'property' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'fromEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'toEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'type' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullSpace' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Space' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'type' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'daoAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'mainVotingAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'membershipAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'personalAddress' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'membersList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'editorsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'page' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullEntity' } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SpaceQuery, SpaceQueryVariables>;
-export const SpacesDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Spaces' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'SpaceFilter' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'spaces' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'first' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullSpace' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullEntity' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Entity' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'types' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'valuesList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'property' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'fromEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'toEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'type' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullSpace' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Space' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'type' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'daoAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'mainVotingAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'membershipAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'personalAddress' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'membersList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'editorsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'page' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullEntity' } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SpacesQuery, SpacesQueryVariables>;
-export const SpacesWhereMemberDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'SpacesWhereMember' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'address' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'spaces' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'members' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'some' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'address' },
-                                  value: {
-                                    kind: 'ObjectValue',
-                                    fields: [
-                                      {
-                                        kind: 'ObjectField',
-                                        name: { kind: 'Name', value: 'is' },
-                                        value: { kind: 'Variable', name: { kind: 'Name', value: 'address' } },
-                                      },
-                                    ],
-                                  },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullSpace' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullEntity' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Entity' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'types' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'valuesList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'property' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-              ],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'fromEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'toEntity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'type' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'FullSpace' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Space' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'type' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'daoAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'spaceAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'mainVotingAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'membershipAddress' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'personalAddress' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'membersList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'editorsList' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'Field', name: { kind: 'Name', value: 'address' } }],
-            },
-          },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'page' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'FullEntity' } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SpacesWhereMemberQuery, SpacesWhereMemberQueryVariables>;
-export const PropertyDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Property' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'property' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<PropertyQuery, PropertyQueryVariables>;
-export const PropertiesBatchDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'PropertiesBatch' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'ids' } },
-          type: {
-            kind: 'NonNullType',
-            type: {
-              kind: 'ListType',
-              type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'properties' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'id' },
-                      value: {
-                        kind: 'ObjectValue',
-                        fields: [
-                          {
-                            kind: 'ObjectField',
-                            name: { kind: 'Name', value: 'in' },
-                            value: { kind: 'Variable', name: { kind: 'Name', value: 'ids' } },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PropertyFragment' } }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: 'FragmentDefinition',
-      name: { kind: 'Name', value: 'PropertyFragment' },
-      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Property' } },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'format' } },
-          { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relationValueTypes' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<PropertiesBatchQuery, PropertiesBatchQueryVariables>;
-export const ResultDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Result' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'entity' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ResultQuery, ResultQueryVariables>;
-export const ResultsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Results' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'query' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'EntityFilter' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'search' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'query' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'query' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'filter' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'spaceId' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'first' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'types' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ResultsQuery, ResultsQueryVariables>;
-export const RelationEntityMinimalDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'RelationEntityMinimal' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'relation' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'entity' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'spaceIds' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'types' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'valuesList' },
-                        arguments: [
-                          {
-                            kind: 'Argument',
-                            name: { kind: 'Name', value: 'filter' },
-                            value: {
-                              kind: 'ObjectValue',
-                              fields: [
-                                {
-                                  kind: 'ObjectField',
-                                  name: { kind: 'Name', value: 'spaceId' },
-                                  value: {
-                                    kind: 'ObjectValue',
-                                    fields: [
-                                      {
-                                        kind: 'ObjectField',
-                                        name: { kind: 'Name', value: 'is' },
-                                        value: { kind: 'Variable', name: { kind: 'Name', value: 'spaceId' } },
-                                      },
-                                    ],
-                                  },
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'property' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'dataType' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'relationValueTypes' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'language' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'unit' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'relationsList' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'toSpaceId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'position' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'spaceId' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'entityId' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'fromEntity' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'toEntity' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'types' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'valuesList' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'propertyId' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'string' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'number' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'point' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'boolean' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'time' } },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'type' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'description' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'renderableType' } },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<RelationEntityMinimalQuery, RelationEntityMinimalQueryVariables>;
+export type RelationEntityMinimalQuery = { __typename?: 'Query', relation?: { __typename?: 'Relation', id: any, entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: { __typename?: 'Property', id: any, name?: string | null, dataType: DataTypes, renderableType?: any | null, relationValueTypes?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null }>, relationsList: Array<{ __typename?: 'Relation', verified?: boolean | null, toSpaceId?: any | null, position?: string | null, spaceId: any, id: any, entityId: any, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', propertyId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null }> } | null, type?: { __typename?: 'Property', id: any, name?: string | null, description?: string | null, renderableType?: any | null } | null }> } | null } | null };
+
+export const FullRelationFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullRelation"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]} as unknown as DocumentNode<FullRelationFragment, unknown>;
+export const PropertyFragmentFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<PropertyFragmentFragment, unknown>;
+export const FullEntityFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<FullEntityFragment, unknown>;
+export const FullSpaceFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]} as unknown as DocumentNode<FullSpaceFragment, unknown>;
+export const AllEntitiesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AllEntities"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"EntitiesOrderBy"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<AllEntitiesQuery, AllEntitiesQueryVariables>;
+export const AllEntitiesWithCountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AllEntitiesWithCount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"EntitiesOrderBy"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entitiesConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<AllEntitiesWithCountQuery, AllEntitiesWithCountQueryVariables>;
+export const EntitiesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitiesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<EntitiesBatchQuery, EntitiesBatchQueryVariables>;
+export const EntityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Entity"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<EntityQuery, EntityQueryVariables>;
+export const RelationEntityRelationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RelationEntityRelations"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"relations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entityId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullRelation"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullRelation"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]} as unknown as DocumentNode<RelationEntityRelationsQuery, RelationEntityRelationsQueryVariables>;
+export const EntityPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"relations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entityId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullRelation"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullRelation"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]} as unknown as DocumentNode<EntityPageQuery, EntityPageQueryVariables>;
+export const EntityTypesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityTypes"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"types"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceIds"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"in"},"value":{"kind":"ListValue","values":[{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<EntityTypesQuery, EntityTypesQueryVariables>;
+export const EntityBacklinksPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityBacklinksPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"backlinksList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<EntityBacklinksPageQuery, EntityBacklinksPageQueryVariables>;
+export const SpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Space"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpaceQuery, SpaceQueryVariables>;
+export const SpacesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Spaces"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"SpaceFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesQuery, SpacesQueryVariables>;
+export const SpacesWhereMemberDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SpacesWhereMember"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"address"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"members"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"some"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"address"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"address"}}}]}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesWhereMemberQuery, SpacesWhereMemberQueryVariables>;
+export const PropertyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Property"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"property"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<PropertyQuery, PropertyQueryVariables>;
+export const PropertiesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PropertiesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"ids"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"properties"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"in"},"value":{"kind":"Variable","name":{"kind":"Name","value":"ids"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<PropertiesBatchQuery, PropertiesBatchQueryVariables>;
+export const ResultDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Result"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<ResultQuery, ResultQueryVariables>;
+export const ResultsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Results"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"query"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"search"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"query"},"value":{"kind":"Variable","name":{"kind":"Name","value":"query"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<ResultsQuery, ResultsQueryVariables>;
+export const RelationEntityMinimalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RelationEntityMinimal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"relation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<RelationEntityMinimalQuery, RelationEntityMinimalQueryVariables>;

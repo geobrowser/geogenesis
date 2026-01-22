@@ -9,6 +9,7 @@ import * as React from 'react';
 import { getProperties, getProperty } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Properties } from '../utils/property';
+import { createPaginationKey } from '../utils/utils';
 import { Values } from '../utils/value';
 import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
@@ -224,6 +225,82 @@ export function useQueryEntities({
   return {
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
+  };
+}
+
+export function useQueryEntitiesWithCount({
+  where,
+  first = 9,
+  skip = 0,
+  enabled = true,
+  placeholderData = undefined,
+}: QueryEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+  const [totalCount, setTotalCount] = React.useState(0);
+
+  const paginationKey = createPaginationKey(where, first, skip);
+
+  /**
+   * This query runs behind the scenes to sync any remote entities that match
+   * the filter condition and merge into the local store. It only runs once,
+   * or if the filter changes.
+   *
+   * In the future we can decide that we want to sync more often, so we can
+   * use RQ's refetch function or add a polling/refetch interval.
+   *
+   * The placeholderData parameter allows controlling what happens during a refetch:
+   * - When set to keepPreviousData: previous data will be shown while new data is being
+   *   fetched, preventing flickering and UI jumps
+   * - When set to undefined (default): standard loading behavior applies
+   *
+   * To prevent flicker when adding new items to collections, callers should explicitly
+   * pass keepPreviousData when they want to maintain the previous data during refetches.
+   */
+  const { isFetched, isLoading, data } = useQuery({
+    enabled,
+    placeholderData,
+    queryKey: GeoStore.queryKeys(where, first, skip),
+    queryFn: async () => {
+      const data = await E.findManyWithCount({ store, cache, where, first, skip });
+      const entities = data.entities;
+      stream.emit({
+        type: GeoEventStream.ENTITIES_SYNCED,
+        entities,
+        paginationKey,
+      });
+      return data;
+    },
+  });
+
+  React.useEffect(() => {
+    if (data) {
+      setTotalCount(data?.totalCount ?? 0);
+    }
+  }, [data?.totalCount]);
+
+  const results = useSelector(
+    reactive,
+    () => {
+      if (!enabled) {
+        return [];
+      }
+
+      // const result = new EntityQuery(store.getEntities())
+      const result = new EntityQuery(store.getPaginatedEntities(paginationKey))
+        .where(where)
+        .sortBy({ field: 'updatedAt', direction: 'desc' })
+        .execute();
+
+      return result;
+    },
+    equal
+  );
+
+  return {
+    entities: results,
+    isLoading: !isFetched && enabled && isLoading,
+    totalCount: totalCount,
   };
 }
 

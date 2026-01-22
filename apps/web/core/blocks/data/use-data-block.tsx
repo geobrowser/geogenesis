@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntitiesWithCount, useQueryEntity } from '~/core/sync/use-store';
 import { sortRows } from '~/core/utils/utils';
 import { Cell, Property, Relation, Row } from '~/core/v2.types';
 
@@ -82,7 +82,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     };
   }, [collectionItems, collectionRelations, collectionLength]);
 
-  const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryEntitiesLoading,
+    totalCount,
+  } = useQueryEntitiesWithCount({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
@@ -191,7 +195,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     return [];
   })();
 
-  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil((source.type === 'COLLECTION' ? collectionData.totalCount : totalCount) / PAGE_SIZE);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -217,9 +221,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // For collections, check if there are more items beyond the current page
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
+      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
       : rows
-        ? rows.length > PAGE_SIZE
+        ? pageNumber + 1 < totalPages
         : false;
 
   const result = {

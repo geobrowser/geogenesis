@@ -12,6 +12,7 @@ import { useValues } from '~/core/sync/use-store';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
+import { WhereCondition } from '../sync/experimental_query-layer';
 import { Entity, Relation, Row } from '../v2.types';
 import { Entities } from './entity';
 
@@ -650,4 +651,8 @@ export function sortRelations(relations: Relation[]) {
 
 export function sortRows(rows: Row[]) {
   return [...rows].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+export function createPaginationKey(where: WhereCondition, first: number, skip: number): string {
+  return JSON.stringify({ where, first, skip });
 }

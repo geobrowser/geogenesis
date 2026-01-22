@@ -46,6 +46,7 @@ export class GeoStore {
    */
   private dataTypes: Map<string, DataType> = new Map();
   private pendingDataTypes: Map<string, DataType> = new Map();
+  private pagination: Map<string, string[]> = new Map();
 
   private stream: GeoEventStream;
 
@@ -58,11 +59,18 @@ export class GeoStore {
      * complete it emits an event to the event stream to notify consumers that
      * syncing is complete.
      */
-    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities));
+    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities, event.paginationKey));
   }
 
-  private syncEntities(entities: Entity[]) {
+  private syncEntities(entities: Entity[], paginationKey?: string) {
     this.hydrateWith(entities);
+
+    if (paginationKey) {
+      this.pagination.set(
+        paginationKey,
+        entities.map(e => e.id)
+      );
+    }
 
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
       console.log(`
@@ -191,6 +199,16 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     resolvedEntity.relations = resolvedRelations;
 
     return resolvedEntity;
+  }
+
+  /**
+   * Get multiple entities by paginationKey
+   */
+  getPaginatedEntities(paginationKey: string) {
+    const page = this.pagination.get(paginationKey);
+    if (!page) return [];
+
+    return page.map(id => this.getEntity(id)!);
   }
 
   /**

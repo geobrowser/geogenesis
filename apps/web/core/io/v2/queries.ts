@@ -12,6 +12,7 @@ import { SpaceDecoder } from './decoders/space';
 import {
   entitiesBatchQuery,
   entitiesQuery,
+  entitiesQueryWithCount,
   entityBacklinksQuery,
   entityPageQuery,
   entityQuery,
@@ -58,6 +59,23 @@ export function getAllEntities(
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    variables: { limit, offset, spaceId, filter, orderBy },
+    signal,
+  });
+}
+
+export function getAllEntitiesWithCount(
+  { limit, offset, spaceId, filter, orderBy }: GetAllEntitiesOptions,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entitiesQueryWithCount,
+    decoder: data => {
+      return {
+        entities: data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+        totalCount: data.entitiesConnection?.totalCount,
+      };
+    },
     variables: { limit, offset, spaceId, filter, orderBy },
     signal,
   });

@@ -124,6 +124,81 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entitiesQueryWithCount = graphql(/* GraphQL */ `
+  query AllEntitiesWithCount(
+    $spaceId: UUID
+    $limit: Int
+    $offset: Int
+    $filter: EntityFilter
+    $orderBy: [EntitiesOrderBy!]
+  ) {
+    entitiesConnection(filter: $filter) {
+      totalCount
+    }
+
+    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy) {
+      id
+      name
+      description
+      spaceIds
+      updatedAt
+
+      types {
+        id
+        name
+      }
+
+      valuesList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        string
+        number
+        point
+        boolean
+        time
+        language
+        unit
+      }
+
+      relationsList(filter: { spaceId: { is: $spaceId } }) {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            propertyId
+            string
+            number
+            point
+            boolean
+            time
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+          renderableType
+        }
+      }
+    }
+  }
+`);
+
 export const entitiesBatchQuery = graphql(/* GraphQL */ `
   query EntitiesBatch($filter: EntityFilter, $spaceId: UUID) {
     entities(filter: $filter) {
