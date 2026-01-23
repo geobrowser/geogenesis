@@ -19,6 +19,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
@@ -382,47 +383,66 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               placeholder={isType ? 'Find or create type...' : undefined}
               relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
               onCreateEntity={result => {
-                storage.values.set({
-                  id: ID.createValueId({
-                    entityId: result.id,
-                    propertyId: SystemIds.NAME_PROPERTY,
-                    spaceId,
-                  }),
-                  entity: {
-                    id: result.id,
-                    name: result.name,
-                  },
-                  property: {
-                    id: SystemIds.NAME_PROPERTY,
-                    name: 'Name',
-                    dataType: 'TEXT',
-                  },
-                  spaceId,
-                  value: result.name ?? '',
-                });
+                // Check if we're creating a Property entity
+                const isCreatingProperty = valueType?.id === SystemIds.PROPERTY;
 
-                if (valueType) {
-                  storage.relations.set({
-                    id: IdUtils.generate(),
-                    entityId: IdUtils.generate(),
+                if (isCreatingProperty) {
+                  // Use the proper property creation flow which sets dataType correctly
+                  const renderableType = result.renderableType || 'TEXT';
+                  const { baseDataType, renderableTypeId } = mapPropertyType(renderableType);
+                  storage.properties.create({
+                    entityId: result.id,
                     spaceId,
-                    renderableType: 'RELATION',
+                    name: result.name ?? '',
+                    dataType: baseDataType,
+                    renderableTypeId,
                     verified: result.verified,
                     toSpaceId: result.space,
-                    type: {
-                      id: SystemIds.TYPES_PROPERTY,
-                      name: 'Types',
-                    },
-                    fromEntity: {
+                  });
+                } else {
+                  // Standard entity creation
+                  storage.values.set({
+                    id: ID.createValueId({
+                      entityId: result.id,
+                      propertyId: SystemIds.NAME_PROPERTY,
+                      spaceId,
+                    }),
+                    entity: {
                       id: result.id,
                       name: result.name,
                     },
-                    toEntity: {
-                      id: valueType.id,
-                      name: valueType.name,
-                      value: valueType.id,
+                    property: {
+                      id: SystemIds.NAME_PROPERTY,
+                      name: 'Name',
+                      dataType: 'TEXT',
                     },
+                    spaceId,
+                    value: result.name ?? '',
                   });
+
+                  if (valueType) {
+                    storage.relations.set({
+                      id: IdUtils.generate(),
+                      entityId: IdUtils.generate(),
+                      spaceId,
+                      renderableType: 'RELATION',
+                      verified: result.verified,
+                      toSpaceId: result.space,
+                      type: {
+                        id: SystemIds.TYPES_PROPERTY,
+                        name: 'Types',
+                      },
+                      fromEntity: {
+                        id: result.id,
+                        name: result.name,
+                      },
+                      toEntity: {
+                        id: valueType.id,
+                        name: valueType.name,
+                        value: valueType.id,
+                      },
+                    });
+                  }
                 }
               }}
               onDone={async result => {
@@ -561,46 +581,65 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             placeholder={isType ? 'Find or create type...' : undefined}
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
-              storage.values.set({
-                id: ID.createValueId({
-                  entityId: result.id,
-                  propertyId: SystemIds.NAME_PROPERTY,
-                  spaceId,
-                }),
-                entity: {
-                  id: result.id,
-                  name: result.name,
-                },
-                property: {
-                  id: SystemIds.NAME_PROPERTY,
-                  name: 'Name',
-                  dataType: 'TEXT',
-                },
-                spaceId,
-                value: result.name ?? '',
-              });
+              // Check if we're creating a Property entity
+              const isCreatingProperty = valueType?.id === SystemIds.PROPERTY;
 
-              if (valueType) {
-                storage.relations.set({
-                  id: IdUtils.generate(),
-                  entityId: IdUtils.generate(),
+              if (isCreatingProperty) {
+                // Use the proper property creation flow which sets dataType correctly
+                const renderableType = result.renderableType || 'TEXT';
+                const { baseDataType, renderableTypeId } = mapPropertyType(renderableType);
+                storage.properties.create({
+                  entityId: result.id,
                   spaceId,
-                  renderableType: 'RELATION',
+                  name: result.name ?? '',
+                  dataType: baseDataType,
+                  renderableTypeId,
+                  verified: result.verified,
                   toSpaceId: result.space,
-                  type: {
-                    id: SystemIds.TYPES_PROPERTY,
-                    name: 'Types',
-                  },
-                  fromEntity: {
+                });
+              } else {
+                // Standard entity creation
+                storage.values.set({
+                  id: ID.createValueId({
+                    entityId: result.id,
+                    propertyId: SystemIds.NAME_PROPERTY,
+                    spaceId,
+                  }),
+                  entity: {
                     id: result.id,
                     name: result.name,
                   },
-                  toEntity: {
-                    id: valueType.id,
-                    name: valueType.name,
-                    value: valueType.id,
+                  property: {
+                    id: SystemIds.NAME_PROPERTY,
+                    name: 'Name',
+                    dataType: 'TEXT',
                   },
+                  spaceId,
+                  value: result.name ?? '',
                 });
+
+                if (valueType) {
+                  storage.relations.set({
+                    id: IdUtils.generate(),
+                    entityId: IdUtils.generate(),
+                    spaceId,
+                    renderableType: 'RELATION',
+                    toSpaceId: result.space,
+                    type: {
+                      id: SystemIds.TYPES_PROPERTY,
+                      name: 'Types',
+                    },
+                    fromEntity: {
+                      id: result.id,
+                      name: result.name,
+                    },
+                    toEntity: {
+                      id: valueType.id,
+                      name: valueType.name,
+                      value: valueType.id,
+                    },
+                  });
+                }
               }
             }}
             onDone={async result => {
