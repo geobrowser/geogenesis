@@ -94,9 +94,11 @@ export function PageStringField({ shouldDebounce, onChange, onEnterKey, ...props
       ref={textareaRef}
       value={localValue}
       onChange={e => {
-        if (shouldDebounce) {
-          setLocalValue(e.currentTarget.value);
-        } else {
+        // Always update local state to maintain cursor position and prevent
+        // the sync effect from resetting the value while typing
+        setLocalValue(e.currentTarget.value);
+        if (!shouldDebounce) {
+          // Also call parent onChange immediately when not debouncing
           onChange(e.currentTarget.value);
         }
       }}
