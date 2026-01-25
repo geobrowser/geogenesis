@@ -39,7 +39,7 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} entityName={entityName} />
+          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} entityName={entityName} isEditing={isEditing} />
         </div>
       );
     }
@@ -98,7 +98,7 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
         </div>
       </div>
       {isRelation ? (
-        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
+        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} isEditing={false} />
       ) : (
         <EditableValueGroup entityId={entityId} property={property} isEditing={false} />
       )}
@@ -112,9 +112,10 @@ type EditableRelationsGroupProps = {
   property: Property;
   disableLink?: boolean;
   entityName?: string | null;
+  isEditing: boolean;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false, entityName }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false, entityName, isEditing }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
@@ -143,6 +144,9 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
   }
 
   if (isEmpty) {
+    if (!isEditing) {
+      return null;
+    }
     return (
       <div data-testid="select-entity" className="w-full">
         <SelectEntity
@@ -212,7 +216,7 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
         return (
           <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
             <LinkableRelationChip
-              isEditing
+              isEditing={isEditing}
               onDelete={() => {
                 storage.relations.delete(r);
               }}
@@ -236,7 +240,7 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
           </div>
         );
       })}
-      {!isEmpty && (
+      {!isEmpty && isEditing && (
         <div className="mt-2">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
