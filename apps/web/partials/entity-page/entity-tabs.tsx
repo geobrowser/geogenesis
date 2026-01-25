@@ -29,10 +29,11 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
   const sortedTabRelations = sortRelations(mergedTabRelations);
 
   // Map sorted relations to tab entities, maintaining order
+  // For new local tabs (not yet published), use the relation's toEntity data as fallback
   const tabEntityMap = new Map(tabEntities.map(e => [e.id, e]));
-  const sortedTabEntities = sortedTabRelations
-    .map(r => tabEntityMap.get(r.toEntity.id))
-    .filter((e): e is TabEntity => e != null);
+  const sortedTabEntities = sortedTabRelations.map(r =>
+    tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name }
+  );
 
   // Build tabs in the correct order
   const tabs = sortedTabEntities.map(entity => ({
