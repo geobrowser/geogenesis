@@ -14,6 +14,7 @@ vi.mock('~/core/constants', () => ({
   FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
   VIDEO_RENDERABLE_TYPE: 'VIDEO_RENDERABLE_TYPE_ID',
+  PLACE: 'PLACE_ID',
 }));
 
 describe('Properties', () => {
