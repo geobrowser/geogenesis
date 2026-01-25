@@ -979,7 +979,7 @@ function RenderedValue({
           spaceId={spaceId}
           iconOnly={true}
         />
-        {rawValue && value && <SquareButton icon={<Trash />} onClick={onDelete} />}
+        {rawValue && <SquareButton icon={<Trash />} onClick={onDelete} />}
       </div>
     </div>
   );

@@ -104,9 +104,16 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
     return null;
   }
 
+  // Filter out empty values - don't show properties with no content in browse mode
+  const nonEmptyValues = values.filter(v => v.value);
+
+  if (nonEmptyValues.length === 0) {
+    return null;
+  }
+
   return (
     <>
-      {values.map((t, index) => {
+      {nonEmptyValues.map((t, index) => {
         // hide name property, it is already rendered in the header
         // @TODO: filter ahead of time rather than returning null here
         if (propertyId === SystemIds.NAME_PROPERTY) {
@@ -309,6 +316,11 @@ function RenderedValue({
   const options = valueData?.options;
 
   if (propertyId === SystemIds.NAME_PROPERTY) {
+    return null;
+  }
+
+  // Don't render empty values in browse mode
+  if (!value) {
     return null;
   }
 
