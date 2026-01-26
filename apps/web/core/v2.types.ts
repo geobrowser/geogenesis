@@ -1,5 +1,5 @@
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION'; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
 export type Property = {
@@ -123,7 +123,8 @@ export type FlattenedRenderType =
   | 'GEO_LOCATION'
   | 'RELATION'
   | 'IMAGE'
-  | 'VIDEO';
+  | 'VIDEO'
+  | 'PLACE';
 
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
