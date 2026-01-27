@@ -180,6 +180,11 @@ function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }:
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
+  // Get the value entry for this property (created when property was added to entity)
+  const propertyValue = useValue({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
+  });
+
   return (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
@@ -196,14 +201,17 @@ function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }:
           spaceId={spaceId}
           iconOnly={true}
         />
-        {propertyRelations.length > 0 && (
-          <SquareButton
-            icon={<Trash />}
-            onClick={() => {
-              propertyRelations.forEach(relation => storage.relations.delete(relation));
-            }}
-          />
-        )}
+        <SquareButton
+          icon={<Trash />}
+          onClick={() => {
+            // Delete all relations for this property
+            propertyRelations.forEach(relation => storage.relations.delete(relation));
+            // Also delete the value entry to fully remove the property from the entity
+            if (propertyValue) {
+              storage.values.delete(propertyValue);
+            }
+          }}
+        />
       </div>
     </div>
   );

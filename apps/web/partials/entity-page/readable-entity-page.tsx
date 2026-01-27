@@ -5,7 +5,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
-import { useRenderedProperties } from '~/core/hooks/use-renderables';
+import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -52,7 +52,7 @@ function countRenderableProperty(renderedProperties: string[]): number {
 }
 
 export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
-  const renderedProperties = useRenderedProperties(entityId, spaceId);
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
 
   if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;

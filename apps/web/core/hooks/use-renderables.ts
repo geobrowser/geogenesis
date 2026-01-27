@@ -27,6 +27,29 @@ export function useRenderedProperties(entityId: string, spaceId: string) {
   return useProperties([...uniqueProperties.values()]) ?? {};
 }
 
+/**
+ * Returns only properties that have actual non-empty content (non-empty values or relations).
+ * Use this for view/browse mode where empty properties should not be displayed.
+ */
+export function useRenderedPropertiesWithContent(entityId: string, spaceId: string) {
+  const values = useValues({
+    selector: v => v.spaceId === spaceId && v.entity.id === entityId,
+  });
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  });
+
+  // Filter out empty values - only include properties with actual content
+  const nonEmptyValues = values.filter(v => v.value);
+
+  const uniqueProperties = new Set(
+    [...nonEmptyValues.map(v => v.property.id), ...relations.map(r => r.type.id)].filter(p => !SKIPPED_PROPERTIES.includes(p))
+  );
+
+  return useProperties([...uniqueProperties.values()]) ?? {};
+}
+
 export function usePlaceholderProperties(entityId: string, spaceId: string) {
   const schema = useEntitySchema(entityId, spaceId);
   const map: Record<string, Property> = {};
