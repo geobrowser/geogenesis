@@ -2,15 +2,15 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 import { useState } from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
+import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
-
-import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 
 import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
@@ -24,6 +24,10 @@ import { VideoSmall as VideoSmallIcon } from '~/design-system/icons/video-small'
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
+
+const PdfZoom = dynamic(() => import('./editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 type LinkableChipProps = {
   href: string;
@@ -319,7 +323,7 @@ function RelationDots({ color }: RelationDotsProps) {
 
 type LinkableMediaChipProps = {
   isEditing: boolean;
-  mediaType: 'IMAGE' | 'VIDEO';
+  mediaType: 'IMAGE' | 'VIDEO' | 'PDF';
   mediaSrc?: string;
   isUploading?: boolean;
 
@@ -384,9 +388,7 @@ export function LinkableMediaChip({
   const { space } = useSpace(spaceId);
 
   // For videos, use the video fallback hook to get the correct URL
-  const { src: videoSrc, onError: onVideoError } = useVideoWithFallback(
-    mediaType === 'VIDEO' ? mediaSrc : undefined
-  );
+  const { src: videoSrc, onError: onVideoError } = useVideoWithFallback(mediaType === 'VIDEO' ? mediaSrc : undefined);
 
   return (
     <div
@@ -405,7 +407,7 @@ export function LinkableMediaChip({
         href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
         className="block"
       >
-        <div className="relative h-20 w-20">
+        <div className={`relative ${mediaType === 'PDF' ? 'h-[200px] w-[173px]' : 'h-20 w-20'}`}>
           {mediaType === 'VIDEO' ? (
             videoSrc ? (
               <video
@@ -421,8 +423,10 @@ export function LinkableMediaChip({
                 <VideoSmallIcon color="grey-04" />
               </div>
             )
-          ) : mediaSrc ? (
+          ) : mediaSrc && mediaType === 'IMAGE' ? (
             <GeoImage fill value={mediaSrc} alt="" className="object-cover" />
+          ) : mediaSrc && mediaType === 'PDF' ? (
+            <PdfZoom pdfSrc={mediaSrc} isEditing />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-grey-01">
               <ImageIcon color="grey-04" />
@@ -432,13 +436,13 @@ export function LinkableMediaChip({
       </Link>
 
       {/* Upload button overlay - only in edit mode */}
-      {isEditing && onUpload && !isUploading && (
+      {isEditing && mediaType !== 'PDF' && onUpload && !isUploading && (
         <button
           onClick={e => {
             e.stopPropagation();
             onUpload();
           }}
-          className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 shadow-sm transition-colors hover:bg-white"
+          className="shadow-sm absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 transition-colors hover:bg-white"
         >
           <CreateIcon color="grey-04" className="h-3 w-3" />
         </button>
@@ -463,7 +467,7 @@ export function LinkableMediaChip({
         <Popover.Trigger asChild>
           <button
             onMouseEnter={() => setIsPopoverOpen(true)}
-            className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+            className="shadow-sm absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 transition-opacity group-hover:opacity-100"
           >
             <RelationDots color="grey-04" />
           </button>
@@ -532,4 +536,3 @@ export function LinkableMediaChip({
     </div>
   );
 }
-
