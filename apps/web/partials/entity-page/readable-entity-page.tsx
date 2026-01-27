@@ -3,7 +3,7 @@ import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
-import { useRenderedProperties } from '~/core/hooks/use-renderables';
+import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import { useHydrateEntity, useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
 import { sortRelations } from '~/core/utils/utils';
@@ -43,7 +43,7 @@ function countRenderableProperty(renderedProperties: string[]): number {
 }
 
 export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
-  const renderedProperties = useRenderedProperties(entityId, spaceId);
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
 
   if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
@@ -95,9 +95,16 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
     return null;
   }
 
+  // Filter out empty values - don't show properties with no content in browse mode
+  const nonEmptyValues = values.filter(v => v.value);
+
+  if (nonEmptyValues.length === 0) {
+    return null;
+  }
+
   return (
     <>
-      {values.map((t, index) => {
+      {nonEmptyValues.map((t, index) => {
         // hide name property, it is already rendered in the header
         // @TODO: filter ahead of time rather than returning null here
         if (propertyId === SystemIds.NAME_PROPERTY) {
@@ -287,6 +294,11 @@ function RenderedValue({
   const options = valueData?.options;
 
   if (propertyId === SystemIds.NAME_PROPERTY) {
+    return null;
+  }
+
+  // Don't render empty values in browse mode
+  if (!value) {
     return null;
   }
 
