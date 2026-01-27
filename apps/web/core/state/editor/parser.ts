@@ -285,6 +285,14 @@ export function markdownToHtml(markdown: string): string {
       continue;
     }
 
+    // Handle link
+    const linkRegex = /\[([^\]]+)\]\(graph:\/\/([a-f0-9\-]+)\)/g;
+    if (linkRegex.test(line)) {
+      output.push(processInlineFormatting(line));
+      i++;
+      continue;
+    }
+
     // Handle blockquotes
     if (line.startsWith('> ')) {
       const content = processInlineFormatting(line.substring(2));

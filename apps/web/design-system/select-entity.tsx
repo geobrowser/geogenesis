@@ -18,12 +18,10 @@ import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
 import { detectWeb2URLs } from '~/core/utils/url-detection';
-import { getImagePath } from '~/core/utils/utils';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { ResultsList } from '~/design-system/autocomplete/results-list';
-import { ResultItem } from '~/design-system/autocomplete/results-list';
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -39,13 +37,13 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
+import { showingIdsAtom } from '~/atoms';
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
-import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
@@ -181,13 +179,15 @@ export const SelectEntity = ({
         onCreateEntity({
           id: newEntityId,
           name: query,
+          space: spaceId,
           renderableType: isCreatingProperty ? renderableType : undefined,
         }) ?? newEntityId;
-    } else {
-      // Create new entity with name and types using internal id
-      storage.entities.name.set(newEntityId, spaceId, query);
     }
-    onDone?.({ id: newEntityId, name: query }, true);
+
+    // Create new entity with name and types using internal id
+    storage.entities.name.set(newEntityId, spaceId, query);
+
+    onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);

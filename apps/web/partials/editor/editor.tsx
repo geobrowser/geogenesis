@@ -1,7 +1,8 @@
 'use client';
 
 import { GraphUrl } from '@graphprotocol/grc-20';
-import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import type { EditorView } from '@tiptap/pm/view';
+import { EditorContent, Editor as TiptapEditor, useEditor, JSONContent } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +20,8 @@ import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
+import { createEntityMentionExtension } from './entity-mention-extension';
+import { createCommandExtension } from './command-extension';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -51,90 +54,145 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     return () => clearTimeout(timer);
   }, [editable]);
 
+  // Debounced save handler 
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Track upsertEditorState with a ref to avoid stale closures
+  const upsertEditorStateRef = React.useRef(upsertEditorState);
+
+  React.useLayoutEffect(() => {
+    upsertEditorStateRef.current = upsertEditorState;
+  }, [upsertEditorState]);
+
+  const debouncedSave = React.useCallback((json: JSONContent) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      // We check the ref here to ensure we don't save if unmounted or if logic changes
+      upsertEditorStateRef.current(json);
+    }, 1000);
+  }, []);
+
+  // Clean up timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Track editable state with a ref to avoid stale closures in callbacks
+  const editableRef = React.useRef(editable);
+
+  React.useLayoutEffect(() => {
+    editableRef.current = editable;
+  }, [editable]);
+
+
   const extensions = React.useMemo(
-    () => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)],
+    () => [
+      ...tiptapExtensions,
+      createIdExtension(spaceId),
+      createGraphLinkHoverExtension(spaceId),
+      createEntityMentionExtension(spaceId),
+      createCommandExtension(spaceId),
+    ],
     [spaceId]
   );
 
   useInterceptEditorLinks(spaceId);
 
-  const onBlur = (params: { editor: TiptapEditor }) => {
-    if (editable) {
-      // Responsible for converting all editor blocks to Geo knowledge graph state
-      upsertEditorState(params.editor.getJSON());
-    }
-  };
+  const onBlur = React.useCallback(
+    (params: { editor: TiptapEditor }) => {
+      if (editableRef.current) {
+        // Responsible for converting all editor blocks to Geo knowledge graph state
+        upsertEditorStateRef.current(params.editor.getJSON());
+      }
+    },
+    []
+  );
+
+  const editorProps = React.useMemo(
+    () => ({
+      transformPastedHTML: (html: string) => {
+        // Remove id attributes and prevent emoji conversion to images
+        let cleanHtml = removeIdAttributes(html);
+
+        // Apply all patterns to convert emoji images back to Unicode
+        EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
+          cleanHtml = cleanHtml.replace(pattern, '$1');
+        });
+
+        return cleanHtml;
+      },
+      // Handle emoji conversion on paste
+      handleDOMEvents: {
+        paste: (view: EditorView, event: ClipboardEvent) => {
+          // Get pasted content
+          const clipboardData = event.clipboardData;
+          if (clipboardData) {
+            const htmlData = clipboardData.getData('text/html');
+            const textData = clipboardData.getData('text/plain');
+            // If there's HTML data that might contain emoji images, prevent default and handle manually
+            if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
+              event.preventDefault();
+
+              // Insert as plain text to avoid emoji image conversion
+              if (textData) {
+                view.dispatch(view.state.tr.insertText(textData));
+              }
+              return true;
+            }
+            // For plain text or HTML without emoji images, let TipTap handle normally
+            // This allows lists and other formatted content to be processed correctly
+            return false;
+          }
+          return false;
+        },
+      },
+    }),
+    []
+  );
 
   const editor = useEditor(
     {
       extensions,
       editable: true, // Keep editor always editable to prevent recreation
       content: editorJson,
-      editorProps: {
-        transformPastedHTML: html => {
-          // Remove id attributes and prevent emoji conversion to images
-          let cleanHtml = removeIdAttributes(html);
-
-          // Apply all patterns to convert emoji images back to Unicode
-          EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
-            cleanHtml = cleanHtml.replace(pattern, '$1');
-          });
-
-          return cleanHtml;
-        },
-        // Handle emoji conversion on paste
-        handleDOMEvents: {
-          paste: (view, event) => {
-            // Get pasted content
-            const clipboardData = event.clipboardData;
-            if (clipboardData) {
-              const htmlData = clipboardData.getData('text/html');
-              const textData = clipboardData.getData('text/plain');
-              // If there's HTML data that might contain emoji images, prevent default and handle manually
-              if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
-                event.preventDefault();
-
-                // Insert as plain text to avoid emoji image conversion
-                if (textData) {
-                  view.dispatch(view.state.tr.insertText(textData));
-                }
-                return true;
-              }
-              // For plain text or HTML without emoji images, let TipTap handle normally
-              // This allows lists and other formatted content to be processed correctly
-              return false;
-            }
-            return false;
-          },
-        },
-      },
+      editorProps,
       immediatelyRender: false,
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
-        if (editable) {
+        if (editableRef.current) {
           const hasContent =
             editor.getText().trim().length > 0 ||
             (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
+
+          // Trigger debounced save
+          debouncedSave(editor.getJSON());
         }
       },
     },
-    [editorJson, editable]
+    [extensions, editorProps, onBlur]
   );
 
   // Update editor editable state without recreating the editor
   React.useEffect(() => {
     if (editor && !isTransitioning) {
-      // Use microtask to defer the editable state change completely outside React's render cycle
-      // queueMicrotask(() => {
-      //   if (editor && !editor.isDestroyed) {
       editor.setEditable(editable);
-      // }
-      // });
+
+      // Force save when switching to view mode to ensure latest state is persisted
+      if (!editable) {
+        upsertEditorState(editor.getJSON());
+      }
     }
-  }, [editor, editable, isTransitioning]);
+  }, [editor, editable, isTransitioning, upsertEditorState]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -243,6 +301,14 @@ function useInterceptEditorLinks(spaceId: string) {
         const originalUrl = link.href;
 
         if (originalUrl.startsWith('graph://')) {
+          // Check if we're in edit mode - if so, don't redirect, allow text editing
+          const isInEditMode = link.closest('.editable') !== null;
+
+          if (isInEditMode) {
+            // In edit mode, don't prevent default - allow normal text selection/editing
+            return;
+          }
+
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();

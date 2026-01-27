@@ -43,23 +43,20 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
         spaceId: currentSpaceId,
         editor: editor,
         command: (entityId: string, entityName: string) => {
-          // Create link with selected text or entity name
+          // Create link with selected text or entity name as markdown format
           const linkText = selectedText || entityName || entityId;
           const linkUrl = `graph://${entityId}`;
 
-          // Use TipTap's Link extension to create proper link node
+          // Insert as raw markdown format [name](graph://id)
           if (selectedText) {
-            // If there's selected text, convert it to a link
-            editor.chain().focus().setTextSelection({ from, to }).setLink({ href: linkUrl }).run();
+            // If there's selected text, replace it with markdown link using the original text as label
+            // The issue was that we were appending the link text to the existing text
+            editor.chain().focus().setTextSelection({ from, to }).deleteSelection().insertContent(`[${selectedText}](${linkUrl})`).run();
           } else {
-            // If no selection, insert new link text
-            editor.chain().focus().insertContent({
-              type: 'text',
-              text: linkText,
-              marks: [{ type: 'link', attrs: { href: linkUrl } }]
-            }).run();
+            // If no selection, insert new markdown link
+            editor.chain().focus().insertContent(`[${linkText}](${linkUrl})`).run();
           }
-          
+
           // Hide the tippy
           tippyInstance.hide();
         },
@@ -81,12 +78,15 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
       arrow: false,
       appendTo: document.body,
       zIndex: 9999,
+      offset: [0, 0],
+      // Allow mouse to move between element and tooltip
+      interactiveBorder: 10,
       getReferenceClientRect: () => {
         // Position the tippy near the current selection
         const { view } = editor;
         const { from } = view.state.selection;
         const start = view.coordsAtPos(from);
-        
+
         return {
           width: 0,
           height: 0,

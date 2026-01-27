@@ -32,8 +32,17 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(({ space
     },
   }));
 
-  const handleEntitySelection = (result: { id: string; name: string | null }) => {
+    const handleEntitySelection = (result: { id: string; name: string | null }) => {
+    // When creating a new entity, we want to ensure we use the name from the result
+    // as it might be a newly created entity with a name that hasn't been propagated yet
     command(result.id, result.name || result.id);
+  };
+
+  const handleCreateEntity = (result: { id: string; name: string | null }) => {
+    // For new entities, we pass the ID. The name is handled by the SelectEntity component's
+    // internal storage updates (which we fixed in the previous step).
+    // We return the ID so SelectEntity knows which ID to use.
+    return result.id;
   };
 
   // Handle ESC key globally for this component
@@ -56,7 +65,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(({ space
       withSearchIcon={true}
       placeholder="Link to Geo entity..."
       onDone={handleEntitySelection}
-      onCreateEntity={handleEntitySelection}
+      onCreateEntity={handleCreateEntity}
       variant="floating"
       width="full"
       advanced={false}

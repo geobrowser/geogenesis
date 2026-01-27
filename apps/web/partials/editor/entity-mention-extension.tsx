@@ -34,46 +34,47 @@ const EntityMentionSuggestion = Extension.create<{
   },
 });
 
-export const ConfiguredEntityMentionExtension = EntityMentionSuggestion.configure({
-  suggestion: {
-    items: () => {
-      // Return empty array - MentionList handles the search
-      return [];
-    },
-    render() {
-      let reactRenderer: ReactRenderer<any, any>;
-      let popup: Instance | null = null;
+export const createEntityMentionExtension = (spaceId: string) =>
+  EntityMentionSuggestion.configure({
+    suggestion: {
+      items: () => {
+        // Return empty array - MentionList handles the search
+        return [];
+      },
+      render() {
+        let reactRenderer: ReactRenderer<any, any>;
+        let popup: Instance | null = null;
 
-      return {
-        onStart: props => {
-          // Get current space ID from editor context or use default
-          const currentSpaceId = props.editor.storage?.currentSpace?.id || 'default';
+        return {
+          onStart: props => {
+            // Use passed spaceId
+            const currentSpaceId = spaceId;
 
-          reactRenderer = new ReactRenderer(MentionList, {
-            props: {
-              ...props,
-              spaceId: currentSpaceId,
-              command: (entityId: string, entityName: string) => {
-                // Insert entity mention as a link (same format as command links)
-                const linkText = entityName || entityId;
-                const linkUrl = `graph://${entityId}`;
-                
-                // Use same pattern as command-items.tsx for consistency
-                props.editor
-                  .chain()
-                  .focus()
-                  .deleteRange(props.range)
-                  .insertContent(`[${linkText}](${linkUrl})`)
-                  .run();
+            reactRenderer = new ReactRenderer(MentionList, {
+              props: {
+                ...props,
+                spaceId: currentSpaceId,
+                command: (entityId: string, entityName: string) => {
+                  // Insert entity mention as markdown link format [name](graph://id)
+                  const linkText = entityName || entityId;
+                  const linkUrl = `graph://${entityId}`;
+
+                  // Insert as HTML anchor tag to ensure reliable link rendering
+                  props.editor
+                    .chain()
+                    .focus()
+                    .deleteRange(props.range)
+                    .insertContent(`<a href="${linkUrl}">${linkText}</a>`)
+                    .run();
+                },
+                onEscape: () => {
+                  if (popup) {
+                    popup.hide();
+                  }
+                },
               },
-              onEscape: () => {
-                if (popup) {
-                  popup.hide();
-                }
-              },
-            },
-            editor: props.editor,
-          });
+              editor: props.editor,
+            });
 
           if (!props.clientRect) {
             console.warn('EntityMention: No clientRect available, skipping popup creation');
@@ -136,5 +137,5 @@ export const ConfiguredEntityMentionExtension = EntityMentionSuggestion.configur
   },
 });
 
-// Export both for backward compatibility
-export const EntityMentionExtension = ConfiguredEntityMentionExtension;
+// Export for backward compatibility if needed, but prefer createEntityMentionExtension
+// export const EntityMentionExtension = createEntityMentionExtension('default');

@@ -6,40 +6,24 @@ import HardBreak from '@tiptap/extension-hard-break';
 import History from '@tiptap/extension-history';
 import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
-import Link from '@tiptap/extension-link';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 import Underline from '@tiptap/extension-underline';
 
-import { ConfiguredCommandExtension } from './command-extension';
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
 import { Web2URLExtension } from './web2-url-extension';
-import { EntityMentionExtension } from './entity-mention-extension';
-import { FloatingToolbarExtension } from './floating-toolbar-extension';
-import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
+import { GraphLinkExtension, MarkdownLinkExtension } from './graph-link-extension';
 
 export const tiptapExtensions = [
   Document,
   Text,
   Web2URLExtension, // Process web2 URLs BEFORE Link extension
-  Link.configure({
-    defaultProtocol: 'graph',
-    protocols: ['graph'],
-    HTMLAttributes: {
-      rel: null,
-      target: null,
-      class: 'entity-link-valid'
-    },
-    openOnClick: false,
-    validate: (url) => {
-      // Only allow graph:// URLs, exclude web2 URLs (http/https/www)
-      return url.startsWith('graph://');
-    },
-  }),
+  GraphLinkExtension,
+  MarkdownLinkExtension,
   Bold,
   Italic,
   Underline,
@@ -56,7 +40,6 @@ export const tiptapExtensions = [
   // }),
   ParagraphNode,
   HeadingNode,
-  ConfiguredCommandExtension,
   HardBreak,
   Gapcursor,
   TrailingNode,
@@ -71,6 +54,4 @@ export const tiptapExtensions = [
     },
   }),
   History,
-  EntityMentionExtension,
-  FloatingToolbarExtension,
 ];

@@ -5,10 +5,14 @@ import tippy, { Instance } from 'tippy.js';
 
 import React, { useEffect, useRef } from 'react';
 
+import { useToast } from '~/core/hooks/use-toast';
+import { useEntity } from '~/core/database/entities';
+
 import { SquareButton } from '~/design-system/button';
 import { CheckClose } from '~/design-system/icons/check-close';
 import { Copy } from '~/design-system/icons/copy';
 import { Link } from '~/design-system/icons/link';
+import { Unlink } from '~/design-system/icons/unlink';
 
 // Component for hover buttons
 const LinkTextHoverButtons: React.FC<{
@@ -30,6 +34,7 @@ const LinkTextHoverButtons: React.FC<{
 interface GraphLinkTooltipProps {
   linkText: string;
   linkUrl: string;
+  spaceId?: string;
   onShowConnection: () => void;
   onRemoveLink: () => void;
   onCopy: () => void;
@@ -40,6 +45,8 @@ interface GraphLinkTooltipProps {
 
 export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   linkText,
+  linkUrl,
+  spaceId,
   onShowConnection,
   onRemoveLink,
   onCopy,
@@ -47,6 +54,12 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   parentTippy,
   editor,
 }) => {
+  const entityId = linkUrl.replace('graph://', '');
+  const { name: entityName } = useEntity({ id: entityId, spaceId });
+  const [, setToast] = useToast();
+
+  const displayName = entityName || linkText;
+
   const linkTextRef = useRef<HTMLDivElement>(null);
   const hoverTippyRef = useRef<Instance | null>(null);
   const hoverRendererRef = useRef<ReactRenderer | null>(null);
@@ -56,14 +69,14 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
     if (hoverTippyRef.current) {
       hoverTippyRef.current.destroy();
       hoverTippyRef.current = null;
-    }
+          }
     if (hoverRendererRef.current) {
       hoverRendererRef.current.destroy();
       hoverRendererRef.current = null;
     }
 
     if (linkTextRef.current && editor) {
-      // Create ReactRenderer with LinkTextHoverButtons component
+      // Create nested Card Hover
       hoverRendererRef.current = new ReactRenderer(LinkTextHoverButtons, {
         props: {
           onShowConnection: () => {
@@ -82,14 +95,13 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
       hoverTippyRef.current = tippy(linkTextRef.current, {
         content: hoverRendererRef.current.element,
         interactive: true,
-        interactiveBorder: 30, // Add border to keep both tooltips open
+        interactiveBorder: 10, // Add border to keep both tooltips open
         placement: 'top',
         theme: 'light',
         arrow: false,
         offset: [0, 0],
         trigger: 'mouseenter',
-        delay: [300, 100],
-        duration: [200, 150],
+        delay: [0, 100],
         zIndex: 10000,
         appendTo: document.body,
         hideOnClick: false,
@@ -120,18 +132,26 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
     };
   }, [onShowConnection, onRemoveLink, onClose, parentTippy, editor]);
 
+  const copyHandler = () => {
+    onCopy();
+    setToast(<div className="text-button">Link copied</div>);
+    onClose?.();
+  };
+
+  const removeLinkHandler = () => {
+    onRemoveLink();
+  };
+
   return (
-    <div className="shadow-xl border-grey-02 z-50 flex min-w-14 gap-x-2.5 rounded-lg border bg-white p-2">
-      <p ref={linkTextRef} className="text-gray-900 flex-1 rounded border px-1.5 border-grey-02">
-        {linkText} :
+    <div className="shadow-xl z-50 flex min-w-14 gap-x-1 rounded-lg border border-grey-02 bg-white p-2">
+      <p ref={linkTextRef} className="flex-1 rounded border border-grey-02 px-1.5 text-text">
+        {displayName}
       </p>
-      <SquareButton
-        onClick={() => {
-          onCopy();
-          onClose?.();
-        }}
-      >
-        <Copy />
+      <SquareButton onClick={removeLinkHandler}>
+        <Unlink color="grey-04" />
+      </SquareButton>
+      <SquareButton onClick={copyHandler}>
+        <Copy color="grey-04" />
       </SquareButton>
     </div>
   );

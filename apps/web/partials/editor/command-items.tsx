@@ -131,7 +131,7 @@ const textCommandItem: CommandSuggestionItem = {
   },
 };
 
-export const commandItems: CommandSuggestionItem[] = [
+export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
   // {
   //   icon: <EditorText />,
   //   title: 'Text',
@@ -194,8 +194,8 @@ export const commandItems: CommandSuggestionItem[] = [
       // Delete the "/" trigger first
       editor.chain().focus().deleteRange(range).run();
 
-      // Get current space ID from editor context or use default
-      const currentSpaceId = editor.storage?.currentSpace?.id || 'default';
+      // Use passed spaceId
+      const currentSpaceId = spaceId;
 
       // Show MentionList for link selection
       showLinkMentionList(editor, (entityId: string, entityName: string) => {
@@ -206,10 +206,13 @@ export const commandItems: CommandSuggestionItem[] = [
         editor
           .chain()
           .focus()
-          .insertContent(`[${linkText}](${linkUrl})`)
+          .insertContent(`<a href="${linkUrl}">${linkText}</a>`)
           .run();
       }, currentSpaceId);
     },
   },
   tableCommandItem,
 ];
+
+// For backward compatibility if needed
+export const commandItems = getCommandItems('default');
