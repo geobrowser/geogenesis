@@ -220,20 +220,17 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
   );
 
-  // Create property data when Property type is added
+  // Create property data when Property type is manually added to an existing entity
   React.useEffect(() => {
-    // Check if there's already a Property type relation to avoid duplicates
     const existingPropertyTypeRelation = relations.find(
       r =>
         r.fromEntity.id === entityId && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY
     );
 
-    // Only create property if:
+    // Only create default property data if:
     // 1. Entity has Property type relation
-    // 2. No property data exists from backend
+    // 2. No property data exists yet (not created via storage.properties.create())
     if (existingPropertyTypeRelation && !propertyData && entityId && spaceId) {
-      // Create the property with a default dataType of TEXT
-      // Skip creating the Property type relation since it already exists
       storage.properties.create({
         entityId,
         spaceId,
