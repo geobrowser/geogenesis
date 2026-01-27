@@ -60,14 +60,17 @@ const Web2URLMark = Mark.create({
         0,
       ];
     } else {
-      // VIEW MODE: Full invalid link styling
+      // VIEW MODE: Normal text
       return [
         'span',
         {
           ...HTMLAttributes,
-          class: 'entity-link-invalid web2-url-mark',
+          // Keep data attributes for persistence and re-parsing
           'data-web2-url': 'true',
           'data-url': mark.attrs.url,
+          // Explicitly clear class and style to ensure normal text appearance
+          class: '',
+          style: 'color: inherit; text-decoration: none; background-color: transparent; cursor: inherit;',
         },
         0,
       ];
@@ -175,6 +178,8 @@ export const Web2URLExtension = Extension.create({
           };
 
           const handleMouseEnter = (event: Event) => {
+            // Disable hover card in View Mode
+            if (!editorView.editable) return;
 
             const target = event.target as Element;
             const web2Span = target.closest('span[data-web2-url]');
@@ -340,6 +345,49 @@ export const Web2URLExtension = Extension.create({
                         return;
                       }
 
+                      // Check for web2URL marks that need reversion to Markdown in Edit Mode
+                      if (editorView.editable) {
+                        let relativePosTracker = 0;
+                        node.content.forEach((child) => {
+                          const childSize = child.nodeSize;
+                          if (child.isText && child.marks) {
+                            const web2Mark = child.marks.find(m => m.type.name === 'web2URL');
+                            if (web2Mark) {
+                              const url = web2Mark.attrs.url;
+                              const text = child.text || '';
+
+                              // Check if already markdown
+                              const isMarkdown = /^\[.*\]\(.*\)$/.test(text);
+
+                              // Check if standalone URL (heuristic)
+                              // If text looks like the URL
+                              const isStandalone =
+                                text === url ||
+                                (url.endsWith(text) && (url === `https://${text}` || url === `http://${text}`));
+
+                              if (!isMarkdown && !isStandalone) {
+                                const originalStart = pos + 1 + relativePosTracker;
+                                const originalEnd = originalStart + childSize;
+
+                                // Map positions to account for changes made in this transaction
+                                const from = newTr.mapping.map(originalStart);
+                                const to = newTr.mapping.map(originalEnd);
+
+                                const markdownText = `[${text}](${url})`;
+                                const newMark = schema.marks.web2URL.create({
+                                  url: url,
+                                  editMode: true,
+                                });
+
+                                newTr.replaceWith(from, to, schema.text(markdownText, [newMark]));
+                                hasChanges = true;
+                              }
+                            }
+                          }
+                          relativePosTracker += childSize;
+                        });
+                      }
+
                       // Collect all text content from the paragraph
                       let paragraphText = '';
                       const textNodePositions: Array<{ node: any; startPos: number; endPos: number }> = [];
@@ -392,18 +440,18 @@ export const Web2URLExtension = Extension.create({
                             }
 
                             if (fromPos !== -1 && toPos !== -1) {
-                              const from = fromPos;
-                              const to = toPos;
+                              const from = newTr.mapping.map(fromPos);
+                              const to = newTr.mapping.map(toPos);
 
                               // Validate position bounds
-                              if (from < 0 || to > state.doc.content.size || from >= to) {
+                              if (from < 0 || to > newTr.doc.content.size || from >= to) {
                                 continue;
                               }
 
                               // Check if this range already has a web2URL mark
                               const hasWeb2Mark =
-                                schema.marks.web2URL && state.doc.rangeHasMark(from, to, schema.marks.web2URL);
-                              const hasLinkMark = state.doc.rangeHasMark(from, to, schema.marks.link);
+                                schema.marks.web2URL && newTr.doc.rangeHasMark(from, to, schema.marks.web2URL);
+                              const hasLinkMark = newTr.doc.rangeHasMark(from, to, schema.marks.link);
 
                               // Process if no mark exists or if mode doesn't match current state
                               let needsProcessing = !hasWeb2Mark;
@@ -412,7 +460,7 @@ export const Web2URLExtension = Extension.create({
                               if (hasWeb2Mark) {
                                 // Get existing mark to check its mode
                                 let existingMark: any = null;
-                                state.doc.nodesBetween(from, to, node => {
+                                newTr.doc.nodesBetween(from, to, node => {
                                   if (node.isText) {
                                     node.marks.forEach(mark => {
                                       if (mark.type.name === 'web2URL') {
@@ -479,10 +527,10 @@ export const Web2URLExtension = Extension.create({
                                       hasChanges = true;
                                     }
                                   } else {
-                                    // STANDALONE URL: Always convert to invalid link (no mode-aware behavior)
+                                    // STANDALONE URL: Mode-aware rendering
                                     const web2Mark = schema.marks.web2URL.create({
                                       url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
-                                      editMode: false, // Always use view mode styling for standalone URLs
+                                      editMode: editorView.editable,
                                     });
 
                                     // Replace standalone URL with styled text
