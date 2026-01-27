@@ -7,6 +7,7 @@ import { DataType, FlattenedRenderType, RawRenderableType } from '~/core/v2.type
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
@@ -42,8 +43,7 @@ const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: Col
   IMAGE: Image,
   VIDEO: VideoSmall,
   GEO_LOCATION: GeoLocation,
-  // TODO update icon
-  PDF: Date,
+  PDF: PdfFile,
 };
 
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {

@@ -8,6 +8,8 @@ import { useState } from 'react';
 
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 
+import { PdfFile } from '../icons/file-pdf';
+
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export default function PdfZoom({ pdfSrc, isEditing = false }: { pdfSrc: string; isEditing?: boolean }) {
@@ -38,8 +40,7 @@ export default function PdfZoom({ pdfSrc, isEditing = false }: { pdfSrc: string;
         <div className="flex flex-grow flex-col justify-between p-3">
           <span className="clamp-2 text-[16px] font-medium leading-[17px] text-[#35363A]">{fileName}</span>
           <div className="flex items-center gap-[5px]">
-            {/* TODO Update PDF icon*/}
-            <div className="h-3 w-3 bg-grey-03"></div>
+            <PdfFile className="h-3 w-3" />
             <span className="text-[11px] font-medium leading-[13px] text-grey-04">
               {numPages} page{numPages && numPages > 1 && 's'}
             </span>

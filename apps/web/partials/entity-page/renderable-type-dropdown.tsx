@@ -11,6 +11,7 @@ import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { Date } from '~/design-system/icons/date';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
@@ -38,8 +39,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,
-  // TODO update icon for PDF
-  PDF: Date,
+  PDF: PdfFile,
 };
 
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
