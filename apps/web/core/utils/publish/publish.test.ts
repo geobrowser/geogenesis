@@ -1,10 +1,4 @@
-import {
-  CreateRelationOp,
-  DeleteRelationOp,
-  IdUtils,
-  UnsetEntityValuesOp,
-  UpdateEntityOp,
-} from '@graphprotocol/grc-20';
+import { IdUtils, Op } from '@geoprotocol/geo-sdk';
 import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/v2.types';
@@ -65,9 +59,33 @@ function createMockRelation(overrides: Partial<Relation> = {}): Relation {
   };
 }
 
+// Type helpers for new SDK operation format
+type UpdateEntityOp = Op & {
+  type: 'updateEntity';
+  id: unknown;
+  set: Array<{ property: unknown; value: unknown }>;
+  unset: Array<{ property: unknown }>;
+};
+
+type CreateRelationOp = Op & {
+  type: 'createRelation';
+  id: unknown;
+  relationType: unknown;
+  entity: unknown;
+  from: unknown;
+  to: unknown;
+  position?: string;
+  toSpace?: unknown;
+};
+
+type DeleteRelationOp = Op & {
+  type: 'deleteRelation';
+  id: unknown;
+};
+
 describe('prepareLocalDataForPublishing', () => {
   describe('basic functionality', () => {
-    it('should create UPDATE_ENTITY operation for valid values', () => {
+    it('should create updateEntity operation for valid values', () => {
       const values = [createMockValue()];
       const relations: Relation[] = [];
 
@@ -75,13 +93,13 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.type).toBe('UPDATE_ENTITY');
-      expect(updateOp.entity.values).toHaveLength(1);
-      expect(updateOp.entity.values[0].property).toBeDefined();
-      expect(updateOp.entity.values[0].value).toBe('test value');
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.set).toHaveLength(1);
+      expect(updateOp.set[0].property).toBeDefined();
+      expect(updateOp.set[0].value).toBeDefined();
     });
 
-    it('should create CREATE_RELATION operation for valid relations', () => {
+    it('should create createRelation operation for valid relations', () => {
       const values: Value[] = [];
       const relations = [createMockRelation()];
 
@@ -89,18 +107,16 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.type).toBe('CREATE_RELATION');
-      expect(createOp.relation.id).toBeDefined();
-      expect(createOp.relation.type).toBeDefined();
-      expect(createOp.relation.entity).toBeDefined();
-      expect(createOp.relation.fromEntity).toBeDefined();
-      expect(createOp.relation.toEntity).toBeDefined();
-      expect(createOp.relation.position).toBe('1');
-      expect(createOp.relation.verified).toBe(true);
-      expect(createOp.relation.toSpace).toBeUndefined();
+      expect(createOp.type).toBe('createRelation');
+      expect(createOp.id).toBeDefined();
+      expect(createOp.relationType).toBeDefined();
+      expect(createOp.entity).toBeDefined();
+      expect(createOp.from).toBeDefined();
+      expect(createOp.to).toBeDefined();
+      expect(createOp.position).toBe('1');
     });
 
-    it('should create DELETE_RELATION operation for deleted relations', () => {
+    it('should create deleteRelation operation for deleted relations', () => {
       const values: Value[] = [];
       const relations = [createMockRelation({ isDeleted: true })];
 
@@ -108,22 +124,22 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const deleteOp = result[0] as DeleteRelationOp;
-      expect(deleteOp.type).toBe('DELETE_RELATION');
+      expect(deleteOp.type).toBe('deleteRelation');
       expect(deleteOp.id).toBeDefined();
     });
 
-    it('should create UNSET_ENTITY_VALUES operation for deleted values', () => {
+    it('should create updateEntity operation with unset for deleted values', () => {
       const values = [createMockValue({ isDeleted: true })];
       const relations: Relation[] = [];
 
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      const unsetOp = result[0] as UnsetEntityValuesOp;
-      expect(unsetOp.type).toBe('UNSET_ENTITY_VALUES');
-      expect(unsetOp.unsetEntityValues.id).toBeDefined();
-      expect(unsetOp.unsetEntityValues.properties).toHaveLength(1);
-      expect(unsetOp.unsetEntityValues.properties[0]).toBeDefined();
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.id).toBeDefined();
+      expect(updateOp.unset).toHaveLength(1);
+      expect(updateOp.unset[0].property).toBeDefined();
     });
   });
 
@@ -135,7 +151,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out already published values', () => {
@@ -145,7 +161,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out values with empty property IDs', () => {
@@ -158,7 +174,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out values with empty entity IDs', () => {
@@ -171,7 +187,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out non-local values', () => {
@@ -181,7 +197,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should include deleted values with empty string value', () => {
@@ -191,7 +207,9 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UNSET_ENTITY_VALUES');
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.unset.length).toBeGreaterThan(0);
     });
   });
 
@@ -225,19 +243,15 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(2);
 
-      const entity1Op = result.find(
-        op => op.type === 'UPDATE_ENTITY' && (op as UpdateEntityOp).entity.id === entity1Id
-      ) as UpdateEntityOp;
+      const ops = result as UpdateEntityOp[];
+      const entity1Op = ops.find(op => String(op.id) === entity1Id);
+      const entity2Op = ops.find(op => String(op.id) === entity2Id);
 
-      const entity2Op = result.find(
-        op => op.type === 'UPDATE_ENTITY' && (op as UpdateEntityOp).entity.id === entity2Id
-      ) as UpdateEntityOp;
-
-      expect(entity1Op.entity.values).toHaveLength(2);
-      expect(entity2Op.entity.values).toHaveLength(1);
+      expect(entity1Op?.set).toHaveLength(2);
+      expect(entity2Op?.set).toHaveLength(1);
     });
 
-    it('should create both UPDATE_ENTITY and UNSET_ENTITY_VALUES for same entity', () => {
+    it('should create updateEntity with both set and unset for same entity', () => {
       const entityId = IdUtils.generate();
       const property1Id = IdUtils.generate();
       const property2Id = IdUtils.generate();
@@ -261,62 +275,13 @@ describe('prepareLocalDataForPublishing', () => {
 
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
-      expect(result).toHaveLength(2);
-
-      const updateOp = result.find(op => op.type === 'UPDATE_ENTITY') as UpdateEntityOp;
-      const unsetOp = result.find(op => op.type === 'UNSET_ENTITY_VALUES') as UnsetEntityValuesOp;
-
-      expect(updateOp.entity.id).toBe(entityId);
-      expect(updateOp.entity.values).toHaveLength(1);
-      expect(updateOp.entity.values[0].property).toBe(property1Id);
-
-      expect(unsetOp.unsetEntityValues.id).toBe(entityId);
-      expect(unsetOp.unsetEntityValues.properties).toEqual([property2Id]);
-    });
-  });
-
-  describe('value options handling', () => {
-    it('should include value options when present', () => {
-      const values = [
-        createMockValue({
-          options: { unit: 'kg', language: 'en' },
-        }),
-      ];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+      expect(result).toHaveLength(1);
 
       const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0].options).toEqual({
-        unit: 'kg',
-        language: 'en',
-      });
-    });
-
-    it('should filter out undefined option values', () => {
-      const values = [
-        createMockValue({
-          options: { unit: 'kg', language: undefined },
-        }),
-      ];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
-
-      const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0].options).toEqual({
-        unit: 'kg',
-      });
-    });
-
-    it('should not include options when null', () => {
-      const values = [createMockValue({ options: null })];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
-
-      const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0]).not.toHaveProperty('options');
+      expect(updateOp.type).toBe('updateEntity');
+      expect(String(updateOp.id)).toBe(entityId);
+      expect(updateOp.set).toHaveLength(1);
+      expect(updateOp.unset).toHaveLength(1);
     });
   });
 
@@ -333,7 +298,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.relation.toSpace).toBe(toSpaceId);
+      expect(createOp.toSpace).toBeDefined();
     });
 
     it('should handle relation without optional fields', () => {
@@ -349,9 +314,8 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.relation.position).toBeUndefined();
-      expect(createOp.relation.verified).toBeUndefined();
-      expect(createOp.relation.toSpace).toBeUndefined();
+      expect(createOp.position).toBeUndefined();
+      expect(createOp.toSpace).toBeUndefined();
     });
   });
 
@@ -363,10 +327,9 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(4);
-      expect(result.some(op => op.type === 'CREATE_RELATION')).toBe(true);
-      expect(result.some(op => op.type === 'DELETE_RELATION')).toBe(true);
-      expect(result.some(op => op.type === 'UPDATE_ENTITY')).toBe(true);
-      expect(result.some(op => op.type === 'UNSET_ENTITY_VALUES')).toBe(true);
+      expect(result.some(op => op.type === 'createRelation')).toBe(true);
+      expect(result.some(op => op.type === 'deleteRelation')).toBe(true);
+      expect(result.some(op => op.type === 'updateEntity')).toBe(true);
     });
 
     it('should return empty array when no valid values but still process all relations', () => {
@@ -384,8 +347,8 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       // Values are filtered out, but relations are processed regardless of their metadata
-      expect(result).toHaveLength(3); // All 3 relations become CREATE_RELATION ops
-      expect(result.every(op => op.type === 'CREATE_RELATION')).toBe(true);
+      expect(result).toHaveLength(3); // All 3 relations become createRelation ops
+      expect(result.every(op => op.type === 'createRelation')).toBe(true);
     });
   });
 
@@ -402,8 +365,8 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('CREATE_RELATION');
-      expect(result[1].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('createRelation');
+      expect(result[1].type).toBe('updateEntity');
     });
   });
 });

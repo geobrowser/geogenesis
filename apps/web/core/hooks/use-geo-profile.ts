@@ -1,3 +1,5 @@
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
 
 import { fetchProfile } from '../io/subgraph';
@@ -19,7 +21,7 @@ export function useGeoProfile(account?: `0x${string}`): {
       if (!account) return null;
 
       return await fetchProfile({
-        address: account,
+        walletAddress: account,
       });
     },
   });

@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useAtom } from 'jotai';
@@ -257,9 +257,7 @@ export function useEditorStore() {
         // Local values from markdownValues take precedence since they reflect user edits.
         const markdownValueForBlockId =
           markdownValues.find(v => v.entity.id === block.block.id) ??
-          initialBlockValues.find(
-            v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT
-          );
+          initialBlockValues.find(v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT);
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;

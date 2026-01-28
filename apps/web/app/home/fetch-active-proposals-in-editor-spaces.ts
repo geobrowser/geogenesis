@@ -1,11 +1,11 @@
-import { getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
 import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { ProposalDto } from '~/core/io/dto/proposals';
 import { SubstreamProposal } from '~/core/io/schema';
-import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
@@ -137,14 +137,18 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   const result = await Effect.runPromise(proposalsInSpacesWhereEditor);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
+
+  const creatorIds = proposals.map(p => p.createdById);
+  const uniqueCreatorIds = [...new Set(creatorIds)];
+  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueCreatorIds);
+  const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   return {
     totalCount: result.proposals.totalCount,
     proposals: proposals
       .map(p => {
         const decodedProposal = Schema.decodeEither(SubstreamProposal)(p);
-        const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
+        const maybeProfile = profilesBySpaceId.get(p.createdById);
 
         const proposal = Either.match(decodedProposal, {
           onLeft: error => {

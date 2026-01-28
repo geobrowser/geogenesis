@@ -1,6 +1,7 @@
-import { Op } from '@graphprotocol/grc-20';
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
-import { EditProposal } from '@graphprotocol/grc-20/proto';
+'use client';
+
+import { Op } from '@geoprotocol/geo-sdk';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -206,8 +207,7 @@ interface MakeProposalArgs {
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, onChangePublishState } = args;
 
-  const proposal = EditProposal.encode({ name, ops, author: smartAccount.account.address });
-
+  // @TODO(grc-20-v2-migration): Publishing will be handled via the SDK
   const writeTxEffect = Effect.gen(function* () {
     if (ops.length === 0) {
       return;
@@ -224,7 +224,8 @@ function makeProposal(args: MakeProposalArgs) {
     }
 
     onChangePublishState('publishing-ipfs');
-    const cid = yield* IpfsEffectClient.upload(proposal);
+    // @TODO(grc-20-v2-migration): Replace with SDK publish call
+    const cid = yield* IpfsEffectClient.upload(new Uint8Array());
     onChangePublishState('publishing-contract');
 
     const callData = getCalldataForSpaceGovernanceType({

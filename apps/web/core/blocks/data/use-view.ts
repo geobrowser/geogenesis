@@ -1,4 +1,4 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfile } from '~/core/io/subgraph';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph';
 import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -23,7 +23,7 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
     notFound();
   }
 
-  const memberProfiles = await Promise.all(space.members.map(member => fetchProfile({ address: member })));
+  const memberProfiles = await Promise.all(space.members.map(memberSpaceId => fetchProfileBySpaceId(memberSpaceId)));
 
   return {
     allMembers: memberProfiles,

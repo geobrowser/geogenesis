@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -106,16 +106,19 @@ export function CreateSpaceDialog() {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger
-        onClick={() => {
-          setName('');
-          setImage('');
-          setEntityId('');
-          setGovernanceType(null);
-          setStep('select-type');
-        }}
-      >
-        New space
+      <Dialog.Trigger asChild>
+        <span
+          role="button"
+          onClick={() => {
+            setName('');
+            setImage('');
+            setEntityId('');
+            setGovernanceType(null);
+            setStep('select-type');
+          }}
+        >
+          New space
+        </span>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Content

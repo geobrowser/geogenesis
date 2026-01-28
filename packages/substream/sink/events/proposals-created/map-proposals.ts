@@ -1,4 +1,4 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@geoprotocol/geo-sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
@@ -335,7 +335,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SystemIds.RELATION_TYPE_ATTRIBUTE,
+          attribute: SystemIds.RELATION_TYPE_PROPERTY,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.type),
@@ -347,7 +347,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SystemIds.TYPES_ATTRIBUTE,
+          attribute: SystemIds.TYPES_PROPERTY,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(SystemIds.RELATION_TYPE),
@@ -359,7 +359,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SystemIds.RELATION_FROM_ATTRIBUTE,
+          attribute: SystemIds.RELATION_FROM_PROPERTY,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.fromEntity),
@@ -371,7 +371,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SystemIds.RELATION_TO_ATTRIBUTE,
+          attribute: SystemIds.RELATION_TO_PROPERTY,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.toEntity),
@@ -399,7 +399,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SystemIds.RELATION_TYPE_ATTRIBUTE,
+        attribute: SystemIds.RELATION_TYPE_PROPERTY,
         value: {},
       },
     },
@@ -408,7 +408,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SystemIds.TYPES_ATTRIBUTE,
+        attribute: SystemIds.TYPES_PROPERTY,
         value: {},
       },
     },
@@ -417,7 +417,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SystemIds.RELATION_FROM_ATTRIBUTE,
+        attribute: SystemIds.RELATION_FROM_PROPERTY,
         value: {},
       },
     },
@@ -426,7 +426,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SystemIds.RELATION_TO_ATTRIBUTE,
+        attribute: SystemIds.RELATION_TO_PROPERTY,
         value: {},
       },
     },

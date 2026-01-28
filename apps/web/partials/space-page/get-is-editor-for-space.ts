@@ -1,6 +1,6 @@
-import { notFound } from 'next/navigation';
-
 import { cache } from 'react';
+
+import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -8,10 +8,18 @@ export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddres
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
-    console.error(`Space does not exist: ${spaceId}`);
-    notFound();
+    return false;
   }
 
-  // @HACK to get around incorrect checksum addresses in substream
-  return connectedAddress ? space.editors.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
+  if (!connectedAddress) {
+    return false;
+  }
+
+  const personalSpaceId = await getPersonalSpaceId(connectedAddress);
+
+  if (!personalSpaceId) {
+    return false;
+  }
+
+  return space.editors.map(e => e.toLowerCase()).includes(personalSpaceId.toLowerCase());
 });

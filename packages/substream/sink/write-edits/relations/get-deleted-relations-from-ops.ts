@@ -1,4 +1,4 @@
-import { type DeleteRelationOp } from '@graphprotocol/grc-20';
+import { type DeleteRelationOp } from '~/sink/utils/sdk-compat';
 import { Effect } from 'effect';
 
 import { Relations } from '~/sink/db/relations';

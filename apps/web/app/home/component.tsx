@@ -117,7 +117,7 @@ type PendingProposalsProps = {
 async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
   const [activeProposals, profile] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
-    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
+    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
   ]);
 
   if (activeProposals.proposals.length === 0) {
@@ -229,7 +229,7 @@ async function getMembershipProposalName(
   proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number]
 ) {
   const profile = await (type === 'ADD_EDITOR' || type === 'ADD_MEMBER'
-    ? fetchProfile({ address: proposal.createdBy.address })
+    ? fetchProfile({ walletAddress: proposal.createdBy.address })
     : fetchProposedEditorForProposal(proposal.id));
 
   switch (type) {

@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';

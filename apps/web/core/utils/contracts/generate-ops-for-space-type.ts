@@ -1,4 +1,4 @@
-import { Account, ContentIds, Graph, Op, SystemIds } from '@graphprotocol/grc-20';
+import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -15,6 +15,18 @@ type DeployArgs = {
   entityId?: string;
 };
 
+// Space types that use templates - don't create entity first, let cloneEntity handle it
+const TEMPLATE_BASED_TYPES: SpaceType[] = [
+  'personal',
+  'company',
+  'academic-field',
+  'dao',
+  'industry',
+  'interest',
+  'protocol',
+  'region',
+];
+
 export const generateOpsForSpaceType = async ({
   type,
   spaceName,
@@ -26,13 +38,15 @@ export const generateOpsForSpaceType = async ({
   const ops: Op[] = [];
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
 
-  const newEntity = Graph.createEntity({
-    id: newEntityId,
-    name: spaceName,
-    types: [], // Graph.createSpace() already adds Space type
-  });
+  if (!TEMPLATE_BASED_TYPES.includes(type)) {
+    const newEntity = Graph.createEntity({
+      id: newEntityId,
+      name: spaceName,
+      types: [], // Graph.createSpace() already adds Space type
+    });
 
-  ops.push(...newEntity.ops);
+    ops.push(...newEntity.ops);
+  }
 
   // Add space type-specific ops
   switch (type) {

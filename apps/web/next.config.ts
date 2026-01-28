@@ -1,14 +1,9 @@
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-// const analyzer = require('@next/bundle-analyzer');
+import type { NextConfig } from 'next';
 
-// const withBundleAnalyzer = analyzer({
-//   enabled: process.env.ANALYZE === 'true',
-// });
-
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: true,
+  allowedDevOrigins: ['localhost', '127.0.0.1'],
   // Exclude test files from node_modules that reference dev dependencies
   webpack: config => {
     config.module.rules.push({
@@ -23,7 +18,7 @@ const nextConfig = {
       'effect',
       'viem',
       'wagmi',
-      '@graphprotocol/grc-20',
+      '@geoprotocol/geo-sdk',
       'mapbox-gl',
       '@tiptap/core',
       '@tiptap/react',
@@ -142,4 +137,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

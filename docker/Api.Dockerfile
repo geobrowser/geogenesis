@@ -1,22 +1,19 @@
-FROM node:18-alpine AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+FROM oven/bun:1.3.6-alpine AS base
 WORKDIR /app
 
 COPY . .
-RUN pnpm install --filter sdk
+RUN bun install --filter sdk
 
 FROM base AS builder
 WORKDIR /app
-RUN pnpm install --filter api
-RUN pnpm run --filter api build
+RUN bun install --filter api
+RUN bun run --filter api build
 
-FROM node:18-alpine
+FROM oven/bun:1.3.6-alpine
 WORKDIR /app
 
 COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/packages/api/dist /app/packages/api/dist
 COPY --from=builder /app/packages/api/node_modules /app/packages/api/node_modules
 
-CMD ["node", "/app/packages/api/dist/server.js"]
+CMD ["bun", "/app/packages/api/dist/server.js"]

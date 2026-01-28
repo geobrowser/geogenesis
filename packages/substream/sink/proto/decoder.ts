@@ -1,3 +1,5 @@
+// Using @graphprotocol/grc-20 for proto classes with fromBinary() methods
+// The new geo-sdk only exports types, not the actual protobuf class implementations
 import { Edit, Import, ImportEdit, IpfsMetadata } from '@graphprotocol/grc-20/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';

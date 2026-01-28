@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 

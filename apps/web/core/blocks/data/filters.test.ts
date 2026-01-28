@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 

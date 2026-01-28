@@ -1,4 +1,6 @@
-import { Base58, getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
+
+import { Base58 } from './sdk-compat';
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 

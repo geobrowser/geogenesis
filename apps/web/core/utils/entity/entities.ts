@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Relation, Value } from '~/core/v2.types';

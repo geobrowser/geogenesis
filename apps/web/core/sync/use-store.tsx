@@ -1,3 +1,5 @@
+'use client';
+
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';

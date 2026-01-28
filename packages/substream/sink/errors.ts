@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
 import { Data } from 'effect';
 
 export class CouldNotWriteSpacesError extends Data.TaggedError('CouldNotWriteSpacesError')<{

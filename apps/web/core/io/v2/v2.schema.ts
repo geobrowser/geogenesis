@@ -1,93 +1,104 @@
 import { Brand, Schema } from 'effect';
 
+// Custom ID schema that accepts both UUID format (with hyphens) and hex format (without hyphens)
+// The v2 API returns IDs without hyphens (32 hex chars)
+const HexId = Schema.String.pipe(
+  Schema.pattern(/^[0-9a-f]{32}$/i, {
+    message: () => 'Expected 32-character hex string ID',
+  })
+);
+
 export const DataType = Schema.Union(
-  Schema.Literal('STRING'),
-  Schema.Literal('NUMBER'),
-  Schema.Literal('BOOLEAN'),
-  Schema.Literal('TIME'),
+  Schema.Literal('TEXT'),
+  Schema.Literal('INT64'),
+  Schema.Literal('FLOAT64'),
+  Schema.Literal('DECIMAL'),
+  Schema.Literal('BOOL'),
+  Schema.Literal('DATE'),
+  Schema.Literal('DATETIME'),
   Schema.Literal('POINT'),
-  Schema.Literal('RELATION')
+  Schema.Literal('RELATION'),
+  Schema.Literal('BYTES'),
+  Schema.Literal('SCHEDULE'),
+  Schema.Literal('EMBEDDING')
 );
 
 export type DataType = Schema.Schema.Type<typeof DataType>;
 
 export const Property = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   name: Schema.NullOr(Schema.String),
-  dataType: DataType,
-  renderableType: Schema.NullOr(Schema.UUID),
-  format: Schema.NullOr(Schema.String),
-  unit: Schema.NullOr(Schema.UUID),
-  relationValueTypes: Schema.Array(
-    Schema.Struct({
-      id: Schema.String,
-      name: Schema.NullOr(Schema.String),
-    })
-  ),
+  dataTypeName: Schema.NullOr(Schema.String),
 });
 
 export type RemoteProperty = Schema.Schema.Type<typeof Property>;
 
 export const Type = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   name: Schema.NullOr(Schema.String),
   properties: Schema.Array(Property),
 });
 
 export const Value = Schema.Struct({
-  spaceId: Schema.UUID,
+  spaceId: HexId,
   property: Property,
-  string: Schema.NullOr(Schema.String),
-  number: Schema.NullOr(Schema.String),
+  text: Schema.NullOr(Schema.String),
+  integer: Schema.NullOr(Schema.String),
+  float: Schema.NullOr(Schema.Number),
   boolean: Schema.NullOr(Schema.Boolean),
   point: Schema.NullOr(Schema.String),
   time: Schema.NullOr(Schema.String),
   language: Schema.NullOr(Schema.String),
   unit: Schema.NullOr(Schema.String),
+  datetime: Schema.NullOr(Schema.String),
+  date: Schema.NullOr(Schema.String),
+  decimal: Schema.NullOr(Schema.String),
+  bytes: Schema.NullOr(Schema.String),
+  schedule: Schema.NullOr(Schema.Unknown),
+  embedding: Schema.NullOr(Schema.Unknown),
 });
 
 export type RemoteValue = Schema.Schema.Type<typeof Value>;
 
 export const EntityType = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   name: Schema.NullOr(Schema.String),
 });
 
 export type RemoteEntityType = Schema.Schema.Type<typeof EntityType>;
 
 export const Relation = Schema.Struct({
-  id: Schema.UUID,
-  spaceId: Schema.UUID,
+  id: HexId,
+  spaceId: HexId,
   position: Schema.NullOr(Schema.String),
   verified: Schema.NullOr(Schema.Boolean),
   fromEntity: Schema.Struct({
-    id: Schema.UUID,
+    id: HexId,
     name: Schema.NullOr(Schema.String),
   }),
   toEntity: Schema.Struct({
-    id: Schema.UUID,
+    id: HexId,
     name: Schema.NullOr(Schema.String),
     types: Schema.Array(EntityType),
     valuesList: Schema.Array(
       Schema.Struct({
-        propertyId: Schema.UUID,
-        string: Schema.NullOr(Schema.String),
+        propertyId: HexId,
+        text: Schema.NullOr(Schema.String),
       })
     ),
   }),
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
-    id: Schema.UUID,
+    id: HexId,
     name: Schema.NullOr(Schema.String),
-    renderableType: Schema.NullOr(Schema.UUID),
   }),
-  entityId: Schema.UUID,
+  entityId: HexId,
 });
 
 export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
 
 export const Entity = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   types: Schema.Array(EntityType),
@@ -110,26 +121,22 @@ export const AddressWithValidation = Schema.String.pipe(
   Schema.fromBrand(Address)
 );
 
-const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));
+const SpaceGovernanceType = Schema.Union(Schema.Literal('DAO'), Schema.Literal('PERSONAL'));
 type SpaceGovernanceType = Schema.Schema.Type<typeof SpaceGovernanceType>;
 
 export const Space = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   type: SpaceGovernanceType,
-  daoAddress: AddressWithValidation,
-  spaceAddress: AddressWithValidation,
-  mainVotingAddress: Schema.NullOr(AddressWithValidation),
-  membershipAddress: Schema.NullOr(AddressWithValidation),
-  personalAddress: Schema.NullOr(AddressWithValidation),
+  address: AddressWithValidation,
 
   membersList: Schema.Array(
     Schema.Struct({
-      address: AddressWithValidation,
+      memberSpaceId: HexId,
     })
   ),
   editorsList: Schema.Array(
     Schema.Struct({
-      address: AddressWithValidation,
+      memberSpaceId: HexId,
     })
   ),
 
@@ -139,10 +146,10 @@ export const Space = Schema.Struct({
 export type RemoteSpace = Schema.Schema.Type<typeof Space>;
 
 export const SearchResult = Schema.Struct({
-  id: Schema.UUID,
+  id: HexId,
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
-  spaceIds: Schema.Array(Schema.UUID),
+  spaceIds: Schema.Array(HexId),
   types: Schema.Array(EntityType),
 });
 

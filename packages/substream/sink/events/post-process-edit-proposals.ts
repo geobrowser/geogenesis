@@ -1,4 +1,6 @@
-import { type CsvMetadata, Id, SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
+
+import { type CsvMetadata, Id } from '~/sink/utils/sdk-compat';
 import * as Csv from '@std/csv';
 import { Effect } from 'effect';
 import { Duration, Either, Schedule } from 'effect';

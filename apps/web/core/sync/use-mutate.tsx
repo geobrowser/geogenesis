@@ -1,9 +1,10 @@
-import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
+import { extractValueString } from '../utils/value';
 import { DataType, Relation, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
@@ -272,51 +273,49 @@ function createMutator(store: GeoStore): Mutator {
           network: 'TESTNET',
         });
 
-        // Process the operations returned by Graph.createImage
         for (const op of createImageOps) {
-          if (op.type === 'CREATE_RELATION') {
+          if (op.type === 'createRelation') {
             store.setRelation({
-              id: op.relation.id,
-              entityId: op.relation.entity,
+              id: String(op.id),
+              entityId: op.entity ? String(op.entity) : String(op.from),
               fromEntity: {
-                id: op.relation.fromEntity,
+                id: String(op.from),
                 name: null,
               },
               type: {
-                id: op.relation.type,
+                id: String(op.relationType),
                 name: 'Image',
               },
               toEntity: {
-                id: op.relation.toEntity,
+                id: String(op.to),
                 name: 'Image',
-                value: op.relation.toEntity,
+                value: String(op.to),
               },
               spaceId,
               position: Position.generate(),
               verified: false,
               renderableType: 'RELATION',
             });
-          } else if (op.type === 'UPDATE_ENTITY') {
-            // Create values for each property in the entity update
-            for (const value of op.entity.values) {
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
               store.setValue({
                 id: ID.createValueId({
-                  entityId: op.entity.id,
-                  propertyId: value.property,
+                  entityId: String(op.id),
+                  propertyId: String(pv.property),
                   spaceId,
                 }),
                 entity: {
-                  id: op.entity.id,
+                  id: String(op.id),
                   name: null,
                 },
                 property: {
-                  id: value.property,
+                  id: String(pv.property),
                   name: 'Image Property',
                   dataType: 'TEXT',
                   renderableType: 'URL',
                 },
                 spaceId,
-                value: value.value,
+                value: extractValueString(pv.value),
               });
             }
           }
@@ -365,28 +364,31 @@ function createMutator(store: GeoStore): Mutator {
           network: 'TESTNET',
         });
 
-        // Extract the IPFS URL from the ops
         let ipfsUrl: string | undefined;
         for (const op of createVideoOps) {
-          if (op.type === 'UPDATE_ENTITY') {
-            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find(pv => {
+              const valStr = extractValueString(pv.value);
+              return valStr.startsWith('ipfs://');
+            });
             if (ipfsValue) {
-              ipfsUrl = ipfsValue.value;
+              ipfsUrl = extractValueString(ipfsValue.value);
               break;
             }
           }
         }
 
         // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
+        const videoIdStr = String(videoId);
         if (ipfsUrl) {
           store.setValue({
             id: ID.createValueId({
-              entityId: videoId,
+              entityId: videoIdStr,
               propertyId: VIDEO_URL_PROPERTY,
               spaceId,
             }),
             entity: {
-              id: videoId,
+              id: videoIdStr,
               name: null,
             },
             property: {

@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -260,7 +260,7 @@ function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) 
     const typeId = relation.type_of_id.toString();
     const toEntityId = relation.to_entity_id.toString();
 
-    if (typeId === SystemIds.TYPES_ATTRIBUTE && toEntityId === SystemIds.SPACE_TYPE) {
+    if (typeId === SystemIds.TYPES_PROPERTY && toEntityId === SystemIds.SPACE_TYPE) {
       spaceMetadatas.push({
         space_id: relation.space_id,
         version_id: relation.from_version_id.toString(),

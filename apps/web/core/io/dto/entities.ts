@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
 import { Entities } from '~/core/utils/entity';

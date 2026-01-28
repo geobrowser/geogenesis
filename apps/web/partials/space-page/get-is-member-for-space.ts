@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
+import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
+
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
@@ -12,6 +14,15 @@ export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddres
     notFound();
   }
 
-  // @HACK to get around incorrect checksum addresses in substream
-  return connectedAddress ? space.members.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
+  if (!connectedAddress) {
+    return false;
+  }
+
+  const personalSpaceId = await getPersonalSpaceId(connectedAddress);
+
+  if (!personalSpaceId) {
+    return false;
+  }
+
+  return space.members.map(m => m.toLowerCase()).includes(personalSpaceId.toLowerCase());
 });

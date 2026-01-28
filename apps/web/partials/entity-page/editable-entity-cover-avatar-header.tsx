@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';

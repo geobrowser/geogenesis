@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
+import { useImageUrlFromEntity } from './use-entity-media';
 import {
   GeoDate,
   GeoNumber,
@@ -12,7 +13,6 @@ import {
   getImagePath,
   getOpenGraphImageUrl,
   getPaginationPages,
-  useImageUrlFromEntity,
 } from './utils';
 
 describe('GeoNumber', () => {

@@ -1,4 +1,6 @@
-import { IdUtils } from '@graphprotocol/grc-20';
+'use client';
+
+import { IdUtils } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 

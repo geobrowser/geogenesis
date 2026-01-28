@@ -1,4 +1,4 @@
-import { Id } from '@graphprotocol/grc-20';
+import { Id } from '~/sink/utils/sdk-compat';
 import { describe, expect, it } from 'vitest';
 
 import type { SinkEditProposal } from '../types';

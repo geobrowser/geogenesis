@@ -1,4 +1,6 @@
-import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import { useState } from 'react';
@@ -39,7 +41,14 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} entityName={entityName} isEditing={isEditing} />
+          <EditableRelationsGroup
+            entityId={entityId}
+            spaceId={spaceId}
+            property={property}
+            disableLink={disableLink}
+            entityName={entityName}
+            isEditing={isEditing}
+          />
         </div>
       );
     }
@@ -98,7 +107,13 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
         </div>
       </div>
       {isRelation ? (
-        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} isEditing={false} />
+        <EditableRelationsGroup
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          disableLink={disableLink}
+          isEditing={false}
+        />
       ) : (
         <EditableValueGroup entityId={entityId} property={property} isEditing={false} />
       )}
@@ -115,7 +130,14 @@ type EditableRelationsGroupProps = {
   isEditing: boolean;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false, entityName, isEditing }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({
+  entityId,
+  spaceId,
+  property,
+  disableLink = false,
+  entityName,
+  isEditing,
+}: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;

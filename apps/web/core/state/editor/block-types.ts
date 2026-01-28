@@ -1,10 +1,14 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { VIDEO_BLOCK_TYPE } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
 import { Relation } from '~/core/v2.types';
 
-type BlockTypeId = typeof SystemIds.TEXT_BLOCK | typeof SystemIds.IMAGE_TYPE | typeof SystemIds.DATA_BLOCK | typeof VIDEO_BLOCK_TYPE;
+type BlockTypeId =
+  | typeof SystemIds.TEXT_BLOCK
+  | typeof SystemIds.IMAGE_TYPE
+  | typeof SystemIds.DATA_BLOCK
+  | typeof VIDEO_BLOCK_TYPE;
 
 export function getRelationForBlockType(
   fromBlockEntityId: string,

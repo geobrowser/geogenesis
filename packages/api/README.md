@@ -6,9 +6,9 @@ Provide the runtime environment with the keys from `.env.example`. If running lo
 
 ```bash
 # Run from within the root of the monorepo
-pnpm install
+bun install
 
 # Run from within /packages/substream
-pnpm build
-pnpm start
+bun build
+bun start
 ```

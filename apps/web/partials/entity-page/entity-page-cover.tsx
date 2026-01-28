@@ -1,13 +1,13 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useRelations } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { useImageUrlFromEntity } from '~/core/utils/utils';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { EditableCoverAvatarHeader } from './editable-entity-cover-avatar-header';
 

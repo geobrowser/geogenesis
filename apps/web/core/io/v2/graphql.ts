@@ -4,6 +4,32 @@ import { GraphQLClient } from 'graphql-request';
 
 import { getConfig } from '~/core/environment/environment';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUUID(str: string): boolean {
+  return UUID_PATTERN.test(str);
+}
+
+function transformVariables<T extends Record<string, unknown>>(variables: T | undefined): T | undefined {
+  if (!variables) return variables;
+
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(variables)) {
+    if (typeof value === 'string' && isUUID(value)) {
+      result[key] = value.replace(/-/g, '');
+    } else if (Array.isArray(value)) {
+      result[key] = value.map(v => (typeof v === 'string' && isUUID(v) ? v.replace(/-/g, '') : v));
+    } else if (value !== null && typeof value === 'object') {
+      result[key] = transformVariables(value as Record<string, unknown>);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result as T;
+}
+
 class GraphqlRequestError extends Error {
   readonly _tag = 'GraphqlRequestError';
   readonly status?: number;
@@ -35,16 +61,16 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
   signal?: AbortController['signal'];
 }) {
   return Effect.gen(function* () {
-    const apiUrl = getConfig().api;
-
-    const client = new GraphQLClient(apiUrl, {
+    const client = new GraphQLClient(getConfig().api, {
       signal,
     });
 
-    // This could be an effect that returns a generic error type
-    // that should get handled by callers
+    const transformedVariables = transformVariables(variables as Record<string, unknown> | undefined);
+
     const run = Effect.tryPromise({
-      try: () => client.request<QueryResult<TDocument>>(query, variables),
+      try: async () => {
+        return await client.request<QueryResult<TDocument>>(query, transformedVariables);
+      },
       catch: error => {
         const errorDetails: any = {};
 

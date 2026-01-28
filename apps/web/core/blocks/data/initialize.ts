@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { EntityId } from '~/core/io/schema';

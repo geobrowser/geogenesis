@@ -8,7 +8,7 @@ export interface FetchAccountOptions {
 }
 
 export async function fetchAccount(options: FetchAccountOptions): Promise<{ address: string; profile: Profile }> {
-  const profile = await fetchProfile({ address: options.address });
+  const profile = await fetchProfile({ walletAddress: options.address });
 
   return {
     address: options.address,

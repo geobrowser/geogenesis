@@ -1,10 +1,12 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { useImageUrlFromEntity } from '~/core/utils/utils';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -108,7 +110,14 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
-      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} directImageUrl={relation.toEntity.value} spaceId={spaceId} />;
+      return (
+        <ImageRelation
+          key={relation.id}
+          linkedEntityId={relation.toEntity.id}
+          directImageUrl={relation.toEntity.value}
+          spaceId={spaceId}
+        />
+      );
     }
 
     const value = relation.toEntity.value;
@@ -131,7 +140,15 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   });
 }
 
-function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEntityId: string; directImageUrl?: string | null; spaceId: string }) {
+function ImageRelation({
+  linkedEntityId,
+  directImageUrl,
+  spaceId,
+}: {
+  linkedEntityId: string;
+  directImageUrl?: string | null;
+  spaceId: string;
+}) {
   // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
   // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
   // We need to check if it's a valid image URL before using it
@@ -160,15 +177,15 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
     return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
   }
 
-  if (renderableType === 'TIME') {
+  if (renderableType === 'DATE' || renderableType === 'DATETIME' || renderableType === 'TIME') {
     return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
   }
 
-  if (renderableType === 'CHECKBOX') {
+  if (renderableType === 'BOOL') {
     return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
   }
 
-  if (renderableType === 'NUMBER') {
+  if (renderableType === 'INT64' || renderableType === 'FLOAT64' || renderableType === 'DECIMAL') {
     return (
       <NumberField
         variant="tableCell"
