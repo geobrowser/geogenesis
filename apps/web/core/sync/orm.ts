@@ -8,7 +8,8 @@ import { readTypes } from '../database/entities';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
-import { Values } from '../utils/value';
+// @TODO replace with Values.merge()
+import { merge } from '../utils/value/values';
 import { Entity, Relation, SearchResult } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
@@ -69,7 +70,7 @@ export class E {
       return remoteEntity;
     }
 
-    const mergedValues = Values.merge(localEntity.values, remoteEntity.values);
+    const mergedValues = merge(localEntity.values, remoteEntity.values);
 
     const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
 

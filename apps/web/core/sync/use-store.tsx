@@ -11,7 +11,8 @@ import * as React from 'react';
 import { getProperties, getProperty } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Properties } from '../utils/property';
-import { Values } from '../utils/value';
+// @TODO replace with Values.merge()
+import { merge } from '../utils/value/values';
 import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
@@ -400,7 +401,7 @@ export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {
       .filter(v => (selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true));
   }
 
-  return Values.merge(reactiveValues.get(), mergeWith).filter(v =>
+  return merge(reactiveValues.get(), mergeWith).filter(v =>
     selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true
   );
 }
@@ -436,7 +437,7 @@ export function useValue(options: UseValueParams) {
 export function getValue(options: UseValueParams & { mergeWith?: Value[] }) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
-  const values = mergeWith.length === 0 ? reactiveValues.get() : Values.merge(reactiveValues.get(), mergeWith);
+  const values = mergeWith.length === 0 ? reactiveValues.get() : merge(reactiveValues.get(), mergeWith);
 
   if (id) {
     return values.find(v => v.id === id && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;
