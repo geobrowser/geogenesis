@@ -28,8 +28,8 @@
   },
   "devDependencies": {
     "@graphql-codegen/client-preset": "^5.2.2",
-    "eslint": "^8.15.0",
-    "eslint-config-turbo": "^0.0.3",
+    "eslint": "^9.39.2",
+    "eslint-config-turbo": "^2.8.0",
     "prettier": "^3.7.4",
     "rimraf": "^3.0.2",
     "turbo": "^2.5.6",
