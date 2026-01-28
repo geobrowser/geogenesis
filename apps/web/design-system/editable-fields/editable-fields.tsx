@@ -1,3 +1,5 @@
+'use client';
+
 import { cva, cx } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
@@ -10,7 +12,7 @@ import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-val
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useImageUrlFromEntity } from '~/core/utils/utils';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { Relation } from '~/core/v2.types';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -373,7 +375,7 @@ export function TableImageField({
       )}
 
       {imageSrc && (
-        <div className="flex justify-center gap-2 pt-2 ml-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="ml-1 flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
           <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
           <SquareButton onClick={handleImageRemove} icon={<Trash />} />
         </div>
@@ -477,7 +479,14 @@ export function PageVideoField({ videoSrc, onFileChange, onVideoRemove, variant 
         {videoSrc && <SquareButton onClick={onVideoRemove} icon={<Trash />} />}
       </div>
 
-      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
+      <input
+        ref={fileInputRef}
+        accept={VIDEO_ACCEPT}
+        id="video-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
     </div>
   );
 }
@@ -522,7 +531,14 @@ export function TableVideoField({ videoSrc, onFileChange, onVideoRemove, variant
         </div>
       )}
 
-      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
+      <input
+        ref={fileInputRef}
+        accept={VIDEO_ACCEPT}
+        id="video-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
     </div>
   );
 }
@@ -580,9 +596,7 @@ export function VideoThumbnailWithPlay({ videoSrc, variant = 'default' }: VideoT
       </button>
 
       {/* Fullscreen video viewer modal */}
-      {isFullscreenOpen && (
-        <FullScreenVideoViewer videoSrc={src} onClose={() => setIsFullscreenOpen(false)} />
-      )}
+      {isFullscreenOpen && <FullScreenVideoViewer videoSrc={src} onClose={() => setIsFullscreenOpen(false)} />}
     </>
   );
 }
@@ -614,10 +628,7 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90" onClick={onClose}>
       {/* Close button */}
       <button
         onClick={onClose}
@@ -630,16 +641,8 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
       </button>
 
       {/* Video player */}
-      <div
-        className="relative max-h-[90vh] max-w-[90vw]"
-        onClick={e => e.stopPropagation()}
-      >
-        <video
-          src={videoSrc}
-          controls
-          autoPlay
-          className="max-h-[90vh] max-w-[90vw] rounded-lg"
-        />
+      <div className="relative max-h-[90vh] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+        <video src={videoSrc} controls autoPlay className="max-h-[90vh] max-w-[90vw] rounded-lg" />
       </div>
     </div>
   );

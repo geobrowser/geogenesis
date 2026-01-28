@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';

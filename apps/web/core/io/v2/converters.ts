@@ -2,7 +2,6 @@ import {
   EntityFilter,
   EntityToManyRelationFilter,
   EntityToManyValueFilter,
-  PropertyFilter,
   RelationFilter,
   StringFilter,
   UuidFilter,
@@ -110,7 +109,7 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
       typeof condition.value.equals === 'boolean'
     ) {
       // Boolean condition - convert to string filter
-      filter.string = { is: String(condition.value.equals) };
+      filter.text = { is: String(condition.value.equals) };
     } else if (
       typeof condition.value === 'object' &&
       ('gt' in condition.value ||
@@ -122,13 +121,13 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
       // Number condition - convert to string filter (GraphQL treats as string)
       const numCondition = condition.value as NumberCondition;
       if (numCondition.equals !== undefined) {
-        filter.string = { is: String(numCondition.equals) };
+        filter.text = { is: String(numCondition.equals) };
       }
       // Note: GraphQL StringFilter doesn't support numeric comparisons directly
       // You may need to handle this differently based on your GraphQL schema
     } else {
       // String condition
-      filter.string = convertStringConditionToStringFilter(condition.value as StringCondition);
+      filter.text = convertStringConditionToStringFilter(condition.value as StringCondition);
     }
   }
 
@@ -146,9 +145,9 @@ function convertRelationConditionToRelationFilter(condition: RelationCondition):
   }
 
   if (condition.typeOf?.name) {
-    filter.type = {
+    filter.typeEntity = {
       name: convertStringConditionToStringFilter(condition.typeOf.name),
-    } as PropertyFilter;
+    } as EntityFilter;
   }
 
   if (condition.toEntity?.id) {
@@ -189,9 +188,9 @@ function convertBacklinkConditionToRelationFilter(condition: BacklinkCondition):
   }
 
   if (condition.typeOf?.name) {
-    filter.type = {
+    filter.typeEntity = {
       name: convertStringConditionToStringFilter(condition.typeOf.name),
-    } as PropertyFilter;
+    } as EntityFilter;
   }
 
   if (condition.space) {

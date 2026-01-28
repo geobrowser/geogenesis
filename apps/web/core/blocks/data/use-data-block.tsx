@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
@@ -322,6 +322,18 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
     if (filter.valueType === 'RELATION') {
       if (filter.columnId === SystemIds.SPACE_FILTER) {
         where['spaces'] = [{ equals: filter.value }];
+        continue;
+      }
+
+      if (filter.columnId === SystemIds.TYPES_PROPERTY) {
+        if (!where.types) {
+          where.types = [];
+        }
+        where['types'].push({
+          id: {
+            equals: filter.value,
+          },
+        });
         continue;
       }
 

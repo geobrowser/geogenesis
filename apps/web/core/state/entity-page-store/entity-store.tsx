@@ -1,12 +1,12 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { useImageUrlFromEntity } from '~/core/utils/utils';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 export function useEntityTypes(entityId: string, spaceId?: string) {
   const types = useRelations({

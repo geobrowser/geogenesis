@@ -7,8 +7,8 @@ import { Environment } from '~/core/environment';
 
 import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
-import { fetchProfile } from './fetch-profile';
-import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
+import { fetchProfileBySpaceId } from './fetch-profile';
+import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -110,9 +110,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
+  // In v2, createdById and accountId are memberSpaceIds (personal space IDs)
   const [profile, voterProfiles] = await Promise.all([
-    fetchProfile({ address: proposal.createdById }),
-    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.accountId)),
+    fetchProfileBySpaceId(proposal.createdById),
+    fetchProfilesBySpaceIds(proposal.proposalVotes.nodes.map(v => v.accountId)),
   ]);
 
   const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);

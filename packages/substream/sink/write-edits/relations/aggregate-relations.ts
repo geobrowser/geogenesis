@@ -1,4 +1,4 @@
-import { Id } from '@graphprotocol/grc-20';
+import { Id } from '~/sink/utils/sdk-compat';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 

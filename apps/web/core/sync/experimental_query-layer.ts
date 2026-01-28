@@ -349,18 +349,24 @@ export class EntityQuery {
 
         // Check value
         if (cond.value) {
-          if (value.property.dataType === 'NUMBER') {
+          // GRC-20 v2 numeric types
+          if (
+            value.property.dataType === 'INT64' ||
+            value.property.dataType === 'FLOAT64' ||
+            value.property.dataType === 'DECIMAL'
+          ) {
             const numValue = parseFloat(value.value);
             if (isNaN(numValue) || !this.matchesNumberCondition(numValue, cond.value as NumberCondition)) {
               return false;
             }
-          } else if (value.property.dataType === 'CHECKBOX') {
-            const boolValue = value.value.toLowerCase() === 'true';
+          } else if (value.property.dataType === 'BOOL') {
+            // GRC-20 v2 boolean type
+            const boolValue = value.value === '1' || value.value.toLowerCase() === 'true';
             if (!this.matchesBooleanCondition(boolValue, cond.value as BooleanCondition)) {
               return false;
             }
           } else {
-            // TEXT, URL, TIME
+            // TEXT, URL, DATE, DATETIME, TIME, etc.
             if (!this.matchesStringCondition(value.value, cond.value as StringCondition)) {
               return false;
             }

@@ -9,11 +9,7 @@ interface Props {
 
 export function VideoSmall({ color, variant = 'outline' }: Props) {
   // Check if it's a theme color name or a raw color string
-  const themeColor = color
-    ? color in colors.light
-      ? colors.light[color as ColorName]
-      : color
-    : 'currentColor';
+  const themeColor = color ? (color in colors.light ? colors.light[color as ColorName] : color) : 'currentColor';
 
   // Use expanded viewBox for outline variant to prevent stroke clipping
   const viewBox = variant === 'outline' ? '-1 -1 18 18' : '0 0 16 16';

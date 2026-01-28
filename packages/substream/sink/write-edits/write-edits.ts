@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -102,9 +102,9 @@ export function writeEdits(args: PopulateContentArgs) {
       triplesWithCreatedBy.push(...triplesForVersion);
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
-      const nameTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.NAME_ATTRIBUTE);
+      const nameTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.NAME_PROPERTY);
 
-      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.DESCRIPTION_ATTRIBUTE);
+      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.DESCRIPTION_PROPERTY);
 
       const name = nameTriple?.triple.text_value?.toString();
       const description = descriptionTriple?.triple.text_value?.toString();
@@ -215,7 +215,7 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
     const fromVersionId = relation.from_version_id.toString();
     const toVersionId = relation.to_version_id.toString();
 
-    if (relation.type_of_id.toString() === SystemIds.TYPES_ATTRIBUTE) {
+    if (relation.type_of_id.toString() === SystemIds.TYPES_PROPERTY) {
       const alreadyFoundTypes = types.get(fromVersionId) ?? [];
       types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
     }

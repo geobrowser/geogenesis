@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfile } from '~/core/io/subgraph';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph';
 import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -27,7 +27,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
 
   const editorProfiles = await Promise.all(
     space.editors.map(async (editor): Promise<EditorProfile> => {
-      const profile = await fetchProfile({ address: editor });
+      const profile = await fetchProfileBySpaceId(editor);
 
       if (!profile) {
         return {

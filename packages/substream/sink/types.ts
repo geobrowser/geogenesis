@@ -77,7 +77,7 @@ export type DeleteRelationOp = {
 };
 
 // @TODO: Use type from grc-20 lib
-type CsvMetadata = {
+export type CsvMetadata = {
   type: 'CSV';
   columns: {
     id: string;

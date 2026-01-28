@@ -1,3 +1,5 @@
+'use client';
+
 import { useAccountEffect, usePrivy } from '@geogenesis/auth';
 import { atom, useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';

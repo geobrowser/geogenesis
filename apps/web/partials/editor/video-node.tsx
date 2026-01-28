@@ -1,13 +1,19 @@
 'use client';
 
+import { Graph, SystemIds } from '@geoprotocol/geo-sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { Graph, SystemIds } from '@graphprotocol/grc-20';
 import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT, VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
+import {
+  MAX_VIDEO_SIZE_BYTES,
+  VALID_VIDEO_TYPES,
+  VIDEO_ACCEPT,
+  VIDEO_BLOCK_TYPE,
+  VIDEO_URL_PROPERTY,
+} from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -195,13 +201,18 @@ function VideoNodeChildren({
 
       setUploadProgress(100);
 
-      // Extract the IPFS URL from the ops
+      // Extract the IPFS URL from the ops (new SDK format)
       let ipfsUrl: string | undefined;
       for (const op of ops) {
-        if (op.type === 'UPDATE_ENTITY') {
-          const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+        if (op.type === 'createEntity') {
+          // Type assertion for new SDK format
+          const values = (op as unknown as { values: Array<{ value: { type: string; value?: string } }> }).values;
+          const ipfsValue = values?.find(pv => {
+            const val = pv.value?.value;
+            return typeof val === 'string' && val.startsWith('ipfs://');
+          });
           if (ipfsValue) {
-            ipfsUrl = ipfsValue.value;
+            ipfsUrl = ipfsValue.value?.value;
             break;
           }
         }
@@ -379,13 +390,7 @@ function VideoNodeChildren({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={VIDEO_ACCEPT}
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept={VIDEO_ACCEPT} onChange={handleFileSelect} className="hidden" />
 
           {isUploading ? (
             <div className="flex w-full max-w-md flex-col items-center">
@@ -411,14 +416,20 @@ function VideoNodeChildren({
             </div>
           ) : isDragging ? (
             <div className="flex flex-col items-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
+              <div
+                className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
+                style={{ backgroundColor: '#002FD924' }}
+              >
                 <VideoSmall color="#002FD9" />
               </div>
               <p className="text-lg font-medium text-ctaPrimary">Drop video here</p>
             </div>
           ) : (
             <>
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
+              <div
+                className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
+                style={{ backgroundColor: '#002FD924' }}
+              >
                 <VideoSmall color="#002FD9" />
               </div>
               <p
@@ -427,10 +438,7 @@ function VideoNodeChildren({
               >
                 Drag & drop or select a file
               </p>
-              <p
-                className="mb-4 text-grey-04"
-                style={{ fontSize: '14px', lineHeight: '12px', letterSpacing: '0px' }}
-              >
+              <p className="mb-4 text-grey-04" style={{ fontSize: '14px', lineHeight: '12px', letterSpacing: '0px' }}>
                 Max 100mb · MP4, MOV, AVI, WMV, WebM, or FLV
               </p>
               <button
@@ -440,7 +448,7 @@ function VideoNodeChildren({
                 <Upload />
                 Select file
               </button>
-              {uploadError && <p className="mt-4 text-sm text-red-500">{uploadError}</p>}
+              {uploadError && <p className="text-red-500 mt-4 text-sm">{uploadError}</p>}
             </>
           )}
         </div>

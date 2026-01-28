@@ -18,13 +18,18 @@ export const entityFragment = graphql(/* GraphQL */ `
       property {
         ...PropertyFragment
       }
-      string
-      number
+      text
+      integer
+      float
       point
       boolean
       time
       language
       unit
+      datetime
+      date
+      decimal
+      bytes
     }
 
     relationsList {
@@ -46,14 +51,22 @@ export const entityFragment = graphql(/* GraphQL */ `
         }
         valuesList {
           propertyId
-          string
+          text
+          integer
+          float
+          point
+          boolean
+          time
+          datetime
+          date
+          decimal
+          bytes
         }
       }
       toSpaceId
       type {
         id
         name
-        renderableType
       }
     }
   }
@@ -78,13 +91,18 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        string
-        number
+        text
+        integer
+        float
         point
         boolean
         time
         language
         unit
+        datetime
+        date
+        decimal
+        bytes
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -106,18 +124,22 @@ export const entitiesQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            string
-            number
+            text
+            integer
+            float
             point
             boolean
             time
+            datetime
+            date
+            decimal
+            bytes
           }
         }
         toSpaceId
         type {
           id
           name
-          renderableType
         }
       }
     }
@@ -142,13 +164,18 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        string
-        number
+        text
+        integer
+        float
         point
         boolean
         time
         language
         unit
+        datetime
+        date
+        decimal
+        bytes
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -170,18 +197,22 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            string
-            number
+            text
+            integer
+            float
             point
             boolean
             time
+            datetime
+            date
+            decimal
+            bytes
           }
         }
         toSpaceId
         type {
           id
           name
-          renderableType
         }
       }
     }
@@ -206,13 +237,18 @@ export const entityQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        string
-        number
+        text
+        integer
+        float
         point
         boolean
         time
         language
         unit
+        datetime
+        date
+        decimal
+        bytes
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -234,18 +270,22 @@ export const entityQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            string
-            number
+            text
+            integer
+            float
             point
             boolean
             time
+            datetime
+            date
+            decimal
+            bytes
           }
         }
         toSpaceId
         type {
           id
           name
-          renderableType
         }
       }
     }
@@ -276,18 +316,22 @@ export const relationFragment = graphql(/* GraphQL */ `
       }
       valuesList {
         propertyId
-        string
-        number
+        text
+        integer
+        float
         point
         boolean
         time
+        datetime
+        date
+        decimal
+        bytes
       }
     }
     toSpaceId
     type {
       id
       name
-      renderableType
     }
   }
 `);
@@ -318,13 +362,18 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        string
-        number
+        text
+        integer
+        float
         point
         boolean
         time
         language
         unit
+        datetime
+        date
+        decimal
+        bytes
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -346,18 +395,22 @@ export const entityPageQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            string
-            number
+            text
+            integer
+            float
             point
             boolean
             time
+            datetime
+            date
+            decimal
+            bytes
           }
         }
         toSpaceId
         type {
           id
           name
-          renderableType
         }
       }
     }
@@ -400,18 +453,14 @@ export const spaceFragment = graphql(/* GraphQL */ `
   fragment FullSpace on Space {
     id
     type
-    daoAddress
-    spaceAddress
-    mainVotingAddress
-    membershipAddress
-    personalAddress
+    address
 
     membersList {
-      address
+      memberSpaceId
     }
 
     editorsList {
-      address
+      memberSpaceId
     }
 
     page {
@@ -437,25 +486,18 @@ export const spacesQuery = graphql(/* GraphQL */ `
 `);
 
 export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
-  query SpacesWhereMember($address: String!) {
-    spaces(filter: { members: { some: { address: { is: $address } } } }) {
+  query SpacesWhereMember($memberSpaceId: UUID!) {
+    spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {
       ...FullSpace
     }
   }
 `);
 
 export const propertyFragment = graphql(/* GraphQL */ `
-  fragment PropertyFragment on Property {
+  fragment PropertyFragment on PropertyInfo {
     id
     name
-    dataType
-    renderableType
-    format
-    unit
-    relationValueTypes {
-      id
-      name
-    }
+    dataTypeName
   }
 `);
 
@@ -525,20 +567,20 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           property {
             id
             name
-            dataType
-            renderableType
-            relationValueTypes {
-              id
-              name
-            }
+            dataTypeName
           }
-          string
-          number
+          text
+          integer
+          float
           point
           boolean
           time
           language
           unit
+          datetime
+          date
+          decimal
+          bytes
         }
         relationsList {
           verified
@@ -560,18 +602,22 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
             }
             valuesList {
               propertyId
-              string
-              number
+              text
+              integer
+              float
               point
               boolean
               time
+              datetime
+              date
+              decimal
+              bytes
             }
           }
           type {
             id
             name
             description
-            renderableType
           }
         }
       }

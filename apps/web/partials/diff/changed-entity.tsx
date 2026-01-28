@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -288,7 +288,9 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
         const name = attributeName ?? attributeId;
 
         switch (changeType) {
-          case 'NUMBER': {
+          case 'INT64':
+          case 'FLOAT64':
+          case 'DECIMAL': {
             return (
               <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
@@ -371,7 +373,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               </div>
             );
           }
-          case 'CHECKBOX': {
+          case 'BOOL': {
             return (
               <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
@@ -471,6 +473,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               </div>
             );
           }
+          case 'DATE':
+          case 'DATETIME':
           case 'TIME': {
             return (
               <div key={index} className="-mt-px flex gap-16">

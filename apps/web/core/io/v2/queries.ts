@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/v2.types';
@@ -159,11 +159,11 @@ export function getSpaces(
   });
 }
 
-export function getSpacesWhereMember(address: string, signal?: AbortController['signal']) {
+export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: spacesWhereMemberQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
-    variables: { address },
+    variables: { memberSpaceId },
     signal,
   });
 }

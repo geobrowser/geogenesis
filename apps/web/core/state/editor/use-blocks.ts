@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { useRelations } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType } from '~/core/v2.types';

@@ -1,22 +1,16 @@
-import {
-  CreatePropertyOp,
-  CreateRelationOp,
-  DataType,
-  DeleteRelationOp,
-  Id,
-  SystemIds,
-  UnsetEntityValuesOp,
-  UpdateEntityOp,
-} from '@graphprotocol/grc-20';
+import { Id, Op, SystemIds } from '@geoprotocol/geo-sdk';
 
-import { DATA_TYPE_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/v2.types';
 
 /**
  * Maps the local Geo Genesis data model for data to the GRC-20 compliant
  * Ops representation.
+ *
+ * Note: Updated for new GRC-20 SDK (0.32.x) which uses:
+ * - Lowercase type names: 'createRelation', 'deleteRelation', 'updateEntity', etc.
+ * - Different operation structures
  */
-export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string) {
+export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
   const validValues = values.filter(
     // Deleted ops have a value of ''. Make sure we don't filter those out
     v =>
@@ -31,27 +25,25 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
     }
   });
 
-  const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
+  // Create relation operations using new SDK format
+  const relationOps: Op[] = relations.map(r => {
     if (r.isDeleted) {
       return {
-        type: 'DELETE_RELATION',
+        type: 'deleteRelation',
         id: Id(r.id),
-      };
+      } as unknown as Op;
     }
 
     return {
-      type: 'CREATE_RELATION',
-      relation: {
-        id: Id(r.id),
-        type: Id(r.type.id),
-        entity: Id(r.entityId),
-        fromEntity: Id(r.fromEntity.id),
-        toEntity: Id(r.toEntity.id),
-        position: r.position ?? undefined,
-        verified: r.verified ?? undefined,
-        toSpace: r.toSpaceId ? Id(r.toSpaceId) : undefined,
-      },
-    };
+      type: 'createRelation',
+      id: Id(r.id),
+      relationType: Id(r.type.id),
+      entity: Id(r.entityId),
+      from: Id(r.fromEntity.id),
+      to: Id(r.toEntity.id),
+      position: r.position ?? undefined,
+      toSpace: r.toSpaceId ? Id(r.toSpaceId) : undefined,
+    } as unknown as Op;
   });
 
   // Group values by entity ID and partition deleted vs non-deleted values
@@ -74,8 +66,8 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
     {} as Record<string, { deleted: Value[]; set: Value[] }>
   );
 
-  // Create entity operations
-  const entityOps: (UpdateEntityOp | UnsetEntityValuesOp)[] = [];
+  // Create entity operations using new SDK format
+  const entityOps: Op[] = [];
 
   /**
    * The ordering of set/unset for a given entity should be safe
@@ -85,77 +77,119 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
    * same time.
    */
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    if (set.length > 0) {
-      const values = set.map(value => ({
+    // Create updateEntity operation for set values
+    if (set.length > 0 || deleted.length > 0) {
+      const setValues = set.map(value => ({
         property: Id(value.property.id),
-        value: value.value,
-        ...(value.options && {
-          options: Object.fromEntries(Object.entries(value.options).filter(([, v]) => v !== undefined)),
-        }),
+        value: convertToSdkValue(value),
+      }));
+
+      const unsetValues = deleted.map(value => ({
+        property: Id(value.property.id),
+        language: { type: 'all' as const },
       }));
 
       entityOps.push({
-        type: 'UPDATE_ENTITY',
-        entity: {
-          id: Id(entityId),
-          values,
-        },
-      });
-    }
-
-    // Create UnsetEntityValuesOp for deleted values
-    if (deleted.length > 0) {
-      entityOps.push({
-        type: 'UNSET_ENTITY_VALUES',
-        unsetEntityValues: {
-          id: Id(entityId),
-          properties: deleted.map(value => Id(value.property.id)),
-        },
-      });
+        type: 'updateEntity',
+        id: Id(entityId),
+        set: setValues,
+        unset: unsetValues,
+      } as unknown as Op);
     }
   }
 
-  // Create property operations for identified property entities
-  const propertyOps: CreatePropertyOp[] = [];
+  // Note: Property creation is now handled differently in the new SDK
+  // The dataType is specified when creating entity values with Graph.createProperty
 
-  propertyEntityIds.forEach(propertyId => {
-    // Find the dataType value for this property entity
-    const dataTypeValue = validValues.find(v => v.entity.id === propertyId && v.property.id === DATA_TYPE_PROPERTY);
-
-    if (dataTypeValue && dataTypeValue.value) {
-      const remoteDataType = getRemoteDataTypeFromAppDataType(dataTypeValue.value);
-
-      if (remoteDataType) {
-        propertyOps.push({
-          type: 'CREATE_PROPERTY',
-          property: {
-            id: Id(propertyId),
-            dataType: remoteDataType,
-          },
-        });
-      }
-    }
-  });
-
-  return [...relationOps, ...entityOps, ...propertyOps];
+  return [...relationOps, ...entityOps];
 }
 
-function getRemoteDataTypeFromAppDataType(dataType: string): DataType | null {
+/**
+ * SDK Value type for typed values
+ */
+// GRC-20 v2 SDK value types
+type SdkValue =
+  | { type: 'text'; value: string; language?: ReturnType<typeof Id> }
+  | { type: 'bool'; value: boolean }
+  | { type: 'int64'; value: number; unit?: ReturnType<typeof Id> }
+  | { type: 'float64'; value: number; unit?: ReturnType<typeof Id> }
+  | { type: 'decimal'; value: string; unit?: ReturnType<typeof Id> }
+  | { type: 'date'; value: string }
+  | { type: 'datetime'; value: string }
+  | { type: 'time'; value: string }
+  | { type: 'point'; lon: number; lat: number };
+
+/**
+ * Convert app value to new SDK value format.
+ * The new SDK uses typed values like { type: 'text', value: 'string' }
+ */
+function convertToSdkValue(value: Value): SdkValue {
+  const dataType = value.property.dataType;
+  const val = value.value;
+
   switch (dataType) {
     case 'TEXT':
-      return 'STRING';
-    case 'CHECKBOX':
-      return 'BOOLEAN';
-    case 'POINT':
-      return 'POINT';
-    case 'NUMBER':
-      return 'NUMBER';
+      return {
+        type: 'text',
+        value: val,
+        ...(value.options?.language && { language: Id(value.options.language) }),
+      };
+    case 'BOOL':
+      return {
+        type: 'bool',
+        value: val === '1' || val === 'true',
+      };
+    case 'INT64':
+      return {
+        type: 'int64',
+        value: parseInt(val, 10) || 0,
+        ...(value.options?.unit && { unit: Id(value.options.unit) }),
+      };
+    case 'FLOAT64':
+      return {
+        type: 'float64',
+        value: parseFloat(val) || 0,
+        ...(value.options?.unit && { unit: Id(value.options.unit) }),
+      };
+    case 'DECIMAL':
+      return {
+        type: 'decimal',
+        value: val,
+        ...(value.options?.unit && { unit: Id(value.options.unit) }),
+      };
+    case 'DATE':
+      return {
+        type: 'date',
+        value: val,
+      };
+    case 'DATETIME':
+      return {
+        type: 'datetime',
+        value: val,
+      };
     case 'TIME':
-      return 'TIME';
-    case 'RELATION':
-      return 'RELATION';
-
+      return {
+        type: 'time',
+        value: val,
+      };
+    case 'POINT': {
+      try {
+        const point = JSON.parse(val);
+        return {
+          type: 'point',
+          lon: point.lon ?? point.x ?? 0,
+          lat: point.lat ?? point.y ?? 0,
+        };
+      } catch {
+        return { type: 'point', lon: 0, lat: 0 };
+      }
+    }
     default:
-      return null;
+      // Default to text for unknown types (BYTES, SCHEDULE, EMBEDDING)
+      return { type: 'text', value: val };
   }
 }
+
+export const Publish = {
+  prepareLocalDataForPublishing,
+};

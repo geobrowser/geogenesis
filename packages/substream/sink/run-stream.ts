@@ -1,6 +1,8 @@
 import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { Id, NetworkIds, getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
+
+import { Id, NetworkIds } from './utils/sdk-compat';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';

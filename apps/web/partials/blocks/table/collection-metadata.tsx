@@ -1,3 +1,5 @@
+'use client';
+
 import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';

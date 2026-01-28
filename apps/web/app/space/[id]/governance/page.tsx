@@ -100,49 +100,36 @@ interface NetworkResult {
 }
 
 async function getProposalsCount({ id }: Awaited<Props['params']>) {
+  const nowSeconds = Math.floor(Date.now() / 1000).toString();
+
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: `
     query {
-      activeProposals: proposals(
+      activeProposals: proposalsConnection(
         filter: {
-          spaceId: { equalToInsensitive: "${id}" }
-          status: { equalTo: PROPOSED }
-          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
-          or: [
-            { type: { equalTo: ADD_EDIT } }
-            { type: { equalTo: ADD_SUBSPACE } }
-            { type: { equalTo: REMOVE_SUBSPACE } }
-          ]
+          spaceId: { is: "${id}" }
+          endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
+          executedAt: { isNull: true }
         }
       ) {
         totalCount
       }
 
-      acceptedProposals: proposals(
+      acceptedProposals: proposalsConnection(
         filter: {
-          spaceId: { equalToInsensitive: "${id}" }
-          status: { equalTo: ACCEPTED }
-          or: [
-            { type: { equalTo: ADD_EDIT } }
-            { type: { equalTo: ADD_SUBSPACE } }
-            { type: { equalTo: REMOVE_SUBSPACE } }
-          ]
+          spaceId: { is: "${id}" }
+          executedAt: { isNull: false }
         }
       ) {
         totalCount
       }
 
-      rejectedProposals: proposals(
+      rejectedProposals: proposalsConnection(
         filter: {
-          spaceId: { equalToInsensitive: "${id}" }
-          status: { in: [REJECTED, PROPOSED] }
-          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
-          or: [
-            { type: { equalTo: ADD_EDIT } }
-            { type: { equalTo: ADD_SUBSPACE } }
-            { type: { equalTo: REMOVE_SUBSPACE } }
-          ]
+          spaceId: { is: "${id}" }
+          endTime: { lessThan: "${nowSeconds}" }
+          executedAt: { isNull: true }
         }
       ) {
         totalCount

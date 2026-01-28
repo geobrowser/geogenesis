@@ -1,3 +1,5 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
@@ -27,14 +29,18 @@ interface Props {
 }
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
-  TIME: Date,
   TEXT: Text,
   URL: Url,
   RELATION: Relation,
   IMAGE: Image,
   VIDEO: VideoSmall,
-  CHECKBOX: CheckboxChecked,
-  NUMBER: Number,
+  BOOL: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  DATE: Date,
+  DATETIME: Date,
+  TIME: Date,
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,

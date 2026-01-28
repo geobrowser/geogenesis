@@ -1,4 +1,4 @@
-import { NetworkIds } from '@graphprotocol/grc-20';
+import { NetworkIds } from '~/sink/utils/sdk-compat';
 import { Effect } from 'effect';
 
 import { mapGovernanceToSpaces, mapPersonalToSpaces, mapSpaces } from './map-spaces';

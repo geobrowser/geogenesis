@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';

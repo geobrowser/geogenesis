@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi } from '@graphprotocol/grc-20/abis';
+import { MainVotingAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData, getAddress } from 'viem';

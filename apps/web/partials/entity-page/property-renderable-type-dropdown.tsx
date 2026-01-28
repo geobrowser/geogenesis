@@ -1,3 +1,5 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
@@ -26,14 +28,18 @@ interface Props {
 }
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
-  TIME: Date,
   TEXT: Text,
   URL: Url,
   RELATION: Relation,
   IMAGE: Image,
   VIDEO: VideoSmall,
-  CHECKBOX: CheckboxChecked,
-  NUMBER: Number,
+  BOOL: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  DATE: Date,
+  DATETIME: Date,
+  TIME: Date,
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,
@@ -50,7 +56,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       return [];
     }
 
-    // Based on the dataType, determine which renderable types are valid
+    // Based on the GRC-20 v2 dataType, determine which renderable types are valid
     switch (dataType) {
       case 'TEXT':
         // TEXT dataType can be rendered as TEXT, URL, or GEO_LOCATION
@@ -58,10 +64,18 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       case 'RELATION':
         // RELATION dataType can be rendered as RELATION, IMAGE, or VIDEO
         return ['RELATION', 'IMAGE', 'VIDEO'] as SwitchableRenderableType[];
-      case 'NUMBER':
-        return ['NUMBER'] as SwitchableRenderableType[];
-      case 'CHECKBOX':
-        return ['CHECKBOX'] as SwitchableRenderableType[];
+      case 'INT64':
+        return ['INT64'] as SwitchableRenderableType[];
+      case 'FLOAT64':
+        return ['FLOAT64'] as SwitchableRenderableType[];
+      case 'DECIMAL':
+        return ['DECIMAL'] as SwitchableRenderableType[];
+      case 'BOOL':
+        return ['BOOL'] as SwitchableRenderableType[];
+      case 'DATE':
+        return ['DATE'] as SwitchableRenderableType[];
+      case 'DATETIME':
+        return ['DATETIME'] as SwitchableRenderableType[];
       case 'TIME':
         return ['TIME'] as SwitchableRenderableType[];
       case 'POINT':

@@ -1,4 +1,6 @@
-import { NetworkIds, getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
+
+import { NetworkIds } from '~/sink/utils/sdk-compat';
 import type * as S from 'zapatos/schema';
 
 import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreatedWithSpaceId } from './parser';

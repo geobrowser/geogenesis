@@ -33,8 +33,12 @@ type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
 // Icon mapping for data types and renderable types
 const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
-  NUMBER: Number,
-  CHECKBOX: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  BOOL: CheckboxChecked,
+  DATE: Date,
+  DATETIME: Date,
   TIME: Date,
   POINT: GeoLocation,
   RELATION: Relation,

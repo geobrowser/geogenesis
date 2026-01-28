@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position, SystemIds } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import React from 'react';

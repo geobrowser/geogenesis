@@ -7,7 +7,7 @@ import { encodeBase58 } from './core/base58.js';
  *
  * @example
  * ```
- * import { ID } from '@graphprotocol/grc-20'
+ * import { ID } from '@geoprotocol/geo-sdk'
  *
  * const id = ID.make();
  * console.log(id) // Gw9uTVTnJdhtczyuzBkL3X

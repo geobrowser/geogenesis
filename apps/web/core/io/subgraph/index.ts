@@ -1,6 +1,6 @@
 export type { ISubgraph } from './subgraph-interface';
 
-export { fetchProfile } from './fetch-profile';
+export { fetchProfile, fetchProfileBySpaceId } from './fetch-profile';
 export type { FetchProfileOptions } from './fetch-profile';
 
 export { fetchProposals } from './fetch-proposals';

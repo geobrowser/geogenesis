@@ -1,4 +1,4 @@
-import { Position, SystemIds } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData } from '@tanstack/react-query';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';

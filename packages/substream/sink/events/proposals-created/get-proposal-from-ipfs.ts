@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@graphprotocol/grc-20';
+import { getChecksumAddress } from '@geoprotocol/geo-sdk';
 import { Effect, Either } from 'effect';
 
 import { postProcessProposalOps } from '../post-process-edit-proposals';

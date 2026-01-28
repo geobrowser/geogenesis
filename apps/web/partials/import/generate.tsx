@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';

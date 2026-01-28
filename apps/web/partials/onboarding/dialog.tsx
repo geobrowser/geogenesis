@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
