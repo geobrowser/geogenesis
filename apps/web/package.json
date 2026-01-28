@@ -103,6 +103,7 @@
     "@babel/core": "^7.28.6",
     "@graphql-codegen/cli": "^5.0.7",
     "@next/bundle-analyzer": "16.1.5",
+    "@next/eslint-plugin-next": "^16.1.6",
     "@playwright/test": "^1.58.0",
     "@testing-library/dom": "^8.19.1",
     "@testing-library/jest-dom": "^5.16.5",
