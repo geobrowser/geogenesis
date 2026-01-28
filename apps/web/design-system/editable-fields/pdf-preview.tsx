@@ -12,7 +12,17 @@ import { PdfFile } from '../icons/file-pdf';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export default function PdfZoom({ pdfSrc, isEditing = false }: { pdfSrc: string; isEditing?: boolean }) {
+export default function PdfZoom({
+  pdfSrc,
+  isEditing = false,
+  className,
+  width,
+}: {
+  pdfSrc: string;
+  isEditing?: boolean;
+  className?: string;
+  width?: number;
+}) {
   const { src } = useImageWithFallback(pdfSrc);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -20,7 +30,7 @@ export default function PdfZoom({ pdfSrc, isEditing = false }: { pdfSrc: string;
   return (
     <div className="flex h-full flex-col">
       <div
-        className={`h-[120px] min-h-[120px] w-[173px] overflow-hidden ${isEditing ? 'border-b border-b-[#D9D9D9]' : 'rounded-lg'}`}
+        className={`${className ? className : 'h-[120px] min-h-[120px] w-[173px] overflow-hidden'} ${isEditing ? 'border-b border-b-[#D9D9D9]' : 'rounded-lg'}`}
       >
         <Document
           file={src}
@@ -33,7 +43,7 @@ export default function PdfZoom({ pdfSrc, isEditing = false }: { pdfSrc: string;
             setFileName(metadata?.info?.Title ?? 'Document.pdf');
           }}
         >
-          <Page width={173} pageNumber={1} />
+          <Page width={width ?? 173} pageNumber={1} />
         </Document>
       </div>
       {isEditing && (

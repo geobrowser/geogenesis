@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
+import { PDF_TYPE, VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getValues } from '~/core/sync/use-store';
 import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
@@ -100,6 +100,8 @@ function makeNewBlockRelation({
         return 'IMAGE';
       case 'video':
         return 'VIDEO';
+      case 'pdf':
+        return 'PDF';
     }
   })();
 
@@ -274,6 +276,20 @@ export function useEditorStore() {
           };
         }
 
+        if (toEntity?.type === 'PDF') {
+          return {
+            type: 'pdf',
+            attrs: {
+              id: block.block.id,
+              src: getImagePath(toEntity.value),
+              relationId: block.relationId,
+              spaceId,
+              alt: '',
+              title: '',
+            },
+          };
+        }
+
         if (toEntity?.type === 'VIDEO') {
           // Read video URL from Values using VIDEO_URL_PROPERTY
           const videoUrlValues = getValues({
@@ -404,6 +420,8 @@ export function useEditorStore() {
               return SystemIds.IMAGE_TYPE;
             case 'video':
               return VIDEO_BLOCK_TYPE;
+            case 'pdf':
+              return PDF_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }
@@ -471,7 +489,7 @@ export function useEditorStore() {
         addedBlocks: addedBlocks.map(block => {
           // For image blocks, store the ipfs URL in toEntity.value
           // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
-          if (block.type === 'image') {
+          if (block.type === 'image' || block.type === 'pdf') {
             const imageHash = getImageHash(block.attrs?.src ?? '');
             const imageUrl = `ipfs://${imageHash}`;
             return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
@@ -483,7 +501,7 @@ export function useEditorStore() {
         movedBlocks: movedBlocks.map(block => {
           // For image blocks, store the ipfs URL in toEntity.value
           // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
-          if (block.type === 'image') {
+          if (block.type === 'image' || block.type === 'pdf') {
             const imageHash = getImageHash(block.attrs?.src ?? '');
             const imageUrl = `ipfs://${imageHash}`;
             return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
@@ -513,6 +531,7 @@ export function useEditorStore() {
 
             break;
           }
+          case 'pdf':
           case 'image': {
             // Update the relation if the image src has changed
             const existingRelation = blockRelations.find(r => r.block.id === node.attrs?.id);

@@ -1,4 +1,4 @@
-export function PdfFile({ className }: { className?: string }) {
+export function PdfFile({ className, color }: { className?: string; color?: string }) {
   return (
     <svg
       className={className ? className : ''}
