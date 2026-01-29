@@ -22,6 +22,15 @@ export function useAccessControl(spaceId: string) {
     };
   }
 
+  // For personal spaces, the owner is the editor
+  if (space.type === 'PERSONAL') {
+    const isOwner = personalSpaceId === spaceId;
+    return {
+      isEditor: isOwner,
+      isMember: isOwner,
+    };
+  }
+
   return {
     isMember: space.members.map(s => s.toLowerCase()).includes(personalSpaceId.toLowerCase()),
     isEditor: space.editors.map(s => s.toLowerCase()).includes(personalSpaceId.toLowerCase()),

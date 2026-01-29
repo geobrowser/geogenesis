@@ -21,5 +21,10 @@ export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddres
     return false;
   }
 
+  // For personal spaces, the owner is the editor
+  if (space.type === 'PERSONAL') {
+    return personalSpaceId === spaceId;
+  }
+
   return space.editors.map(e => e.toLowerCase()).includes(personalSpaceId.toLowerCase());
 });
