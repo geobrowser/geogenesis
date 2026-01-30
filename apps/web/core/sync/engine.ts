@@ -8,6 +8,9 @@ import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';
 
+/** TTL for synced entities cache in milliseconds (5 minutes) */
+const SYNC_TTL_MS = 5 * 60 * 1000;
+
 export class SyncEngine {
   private stream: GeoEventStream;
   private cache: QueryClient;
@@ -22,8 +25,12 @@ export class SyncEngine {
    * manage the cache for an array of entities to sync. It's simpler
    * to just manage them outside of the cache and avoid fetching
    * them at all.
+   *
+   * Uses a Map with timestamps to support TTL-based invalidation,
+   * allowing entities to be re-synced after SYNC_TTL_MS to pick up
+   * remote changes from other users.
    */
-  private syncedEntities: Set<string> = new Set();
+  private syncedEntities: Map<string, number> = new Map();
 
   private subs: (() => void)[] = [];
   private env = process.env.NODE_ENV;
@@ -57,8 +64,9 @@ export class SyncEngine {
            * Otherwise we can get in a state where an entity failed syncing in the past,
            * and now can no longer be synced in the future.
            */
+          const now = Date.now();
           for (const entity of result) {
-            this.syncedEntities.add(entity.id);
+            this.syncedEntities.set(entity.id, now);
           }
 
           this.stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: result });
@@ -181,8 +189,17 @@ export class SyncEngine {
       return [];
     }
 
-    // Don't resync an entity if it already has been synced
-    const uniqueEntityIds = [...new Set(entityIds.filter(e => !this.syncedEntities.has(e)))];
+    // Don't resync an entity if it was recently synced (within TTL)
+    const now = Date.now();
+    const uniqueEntityIds = [
+      ...new Set(
+        entityIds.filter(id => {
+          const lastSynced = this.syncedEntities.get(id);
+          // Sync if never synced or TTL has expired
+          return lastSynced === undefined || now - lastSynced > SYNC_TTL_MS;
+        })
+      ),
+    ];
 
     if (uniqueEntityIds.length === 0) {
       return [];
