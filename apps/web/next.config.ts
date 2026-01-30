@@ -18,7 +18,6 @@ const nextConfig: NextConfig = {
       'effect',
       'viem',
       'wagmi',
-      '@geoprotocol/geo-sdk',
       'mapbox-gl',
       '@tiptap/core',
       '@tiptap/react',

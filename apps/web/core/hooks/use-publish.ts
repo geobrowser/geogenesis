@@ -1,17 +1,15 @@
 'use client';
 
-import { Op } from '@geoprotocol/geo-sdk';
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
+import { daoSpace, Op, personalSpace } from '@geoprotocol/geo-sdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
-import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
 import { Relation, Value } from '~/core/v2.types';
 
 import { TransactionWriteFailedError } from '../errors';
-import { IpfsEffectClient } from '../io/ipfs-client';
 import { getSpace } from '../io/v2/queries';
+import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { ReviewState, SpaceGovernanceType } from '../types';
@@ -71,10 +69,8 @@ export function usePublish() {
           smartAccount,
           space: {
             id: space.id,
-            spacePluginAddress: space.spaceAddress,
-            mainVotingPluginAddress: space.mainVotingAddress,
-            personalSpaceAdminPluginAddress: space.personalAddress,
             type: space.type,
+            address: space.address,
           },
         });
 
@@ -136,7 +132,7 @@ export function useBulkPublish() {
       const space = await Effect.runPromise(getSpace(spaceId));
 
       const publish = Effect.gen(function* () {
-        if (!space || !space.mainVotingAddress) {
+        if (!space) {
           return;
         }
 
@@ -151,10 +147,8 @@ export function useBulkPublish() {
           smartAccount,
           space: {
             id: space.id,
-            spacePluginAddress: space.spaceAddress,
-            mainVotingPluginAddress: space.mainVotingAddress,
-            personalSpaceAdminPluginAddress: space.personalAddress,
             type: space.type,
+            address: space.address,
           },
         });
       });
@@ -196,10 +190,8 @@ interface MakeProposalArgs {
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
-    spacePluginAddress: string;
-    mainVotingPluginAddress: string | null;
-    personalSpaceAdminPluginAddress: string | null;
     type: SpaceGovernanceType;
+    address: string;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -207,52 +199,73 @@ interface MakeProposalArgs {
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, onChangePublishState } = args;
 
-  // @TODO(grc-20-v2-migration): Publishing will be handled via the SDK
-  const writeTxEffect = Effect.gen(function* () {
+  return Effect.gen(function* () {
     if (ops.length === 0) {
       return;
     }
 
-    if (space.type === 'PUBLIC' && !space.mainVotingPluginAddress) {
-      console.error('public space does not have main voting plugin address');
-      return;
-    }
-
-    if (space.type === 'PERSONAL' && !space.personalSpaceAdminPluginAddress) {
-      console.error('personal space does not have member access plugin address');
-      return;
-    }
-
     onChangePublishState('publishing-ipfs');
-    // @TODO(grc-20-v2-migration): Replace with SDK publish call
-    const cid = yield* IpfsEffectClient.upload(new Uint8Array());
+
+    let to: `0x${string}`;
+    let calldata: `0x${string}`;
+
+    if (space.type === 'PUBLIC') {
+      // DAO spaces: use daoSpace.proposeEdit()
+      // Get the caller's personal space ID (required for DAO proposals)
+      const callerSpaceId = yield* Effect.tryPromise({
+        try: () => getPersonalSpaceId(smartAccount.account.address),
+        catch: error => new TransactionWriteFailedError(`Failed to get personal space ID: ${error}`),
+      });
+
+      if (!callerSpaceId) {
+        throw new TransactionWriteFailedError('You need a personal space to propose edits to a DAO space');
+      }
+
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          daoSpace.proposeEdit({
+            name,
+            ops,
+            author: smartAccount.account.address,
+            daoSpaceAddress: space.address as `0x${string}`,
+            callerSpaceId: `0x${callerSpaceId}`,
+            daoSpaceId: `0x${space.id}`,
+            network: 'TESTNET',
+          }),
+        catch: error => new TransactionWriteFailedError(`IPFS upload failed: ${error}`),
+      });
+
+      to = result.to as `0x${string}`;
+      calldata = result.calldata as `0x${string}`;
+    } else {
+      // Personal spaces: use personalSpace.publishEdit()
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          personalSpace.publishEdit({
+            name,
+            spaceId: space.id,
+            ops,
+            author: smartAccount.account.address,
+            network: 'TESTNET',
+          }),
+        catch: error => new TransactionWriteFailedError(`IPFS upload failed: ${error}`),
+      });
+
+      to = result.to;
+      calldata = result.calldata;
+    }
+
     onChangePublishState('publishing-contract');
 
-    const callData = getCalldataForSpaceGovernanceType({
-      type: space.type,
-      cid,
-      spacePluginAddress: space.spacePluginAddress,
-    });
-
     const execute = Effect.tryPromise({
-      try: async () => {
-        return await smartAccount.sendUserOperation({
-          calls: [
-            {
-              to:
-                space.type === 'PUBLIC'
-                  ? (space.mainVotingPluginAddress as `0x${string}`)
-                  : (space.personalSpaceAdminPluginAddress as `0x${string}`),
-              value: 0n,
-              data: callData,
-            },
-          ],
-        });
-      },
+      try: () =>
+        smartAccount.sendUserOperation({
+          calls: [{ to, value: 0n, data: calldata }],
+        }),
       catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
     });
 
-    return yield* Effect.retry(
+    const result = yield* Effect.retry(
       execute,
       Schedule.exponential('100 millis').pipe(
         Schedule.jittered,
@@ -261,36 +274,8 @@ function makeProposal(args: MakeProposalArgs) {
         Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(10)))
       )
     );
+
+    console.log('Transaction hash: ', result);
+    return result;
   });
-
-  const publishProgram = Effect.gen(function* () {
-    const writeTxHash = yield* writeTxEffect;
-    console.log('Transaction hash: ', writeTxHash);
-    return writeTxHash;
-  });
-
-  return publishProgram;
-}
-
-type GovernanceTypeCalldataArgs = {
-  type: SpaceGovernanceType;
-  cid: string;
-  spacePluginAddress: string;
-};
-
-function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
-  switch (args.type) {
-    case 'PUBLIC':
-      return encodeFunctionData({
-        functionName: 'proposeEdits',
-        abi: MainVotingAbi,
-        args: [stringToHex(args.cid), args.cid, '0x', args.spacePluginAddress as `0x${string}`],
-      });
-    case 'PERSONAL':
-      return encodeFunctionData({
-        functionName: 'submitEdits',
-        abi: PersonalSpaceAdminAbi,
-        args: [args.cid, '0x', args.spacePluginAddress as `0x${string}`],
-      });
-  }
 }
