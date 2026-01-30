@@ -7,15 +7,14 @@ import { Pending } from '~/design-system/pending';
 
 type SpaceMembersJoinButtonProps = {
   spaceId: string;
-  votingPluginAddress: string | null;
   hasRequestedSpaceMembership: boolean;
 };
 
 export function SpaceMembersJoinButton({
-  votingPluginAddress,
+  spaceId,
   hasRequestedSpaceMembership,
 }: SpaceMembersJoinButtonProps) {
-  const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
+  const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
 
   const { shouldShowElement } = useOnboardGuard();
 

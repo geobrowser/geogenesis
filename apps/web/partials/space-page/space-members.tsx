@@ -79,11 +79,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
 
       {isPublicSpace ? (
-        <SpaceMembersJoinButton
-          spaceId={spaceId}
-          votingPluginAddress={space.mainVotingAddress}
-          hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-        />
+        <SpaceMembersJoinButton spaceId={spaceId} hasRequestedSpaceMembership={hasRequestedSpaceMembership} />
       ) : null}
     </div>
   );

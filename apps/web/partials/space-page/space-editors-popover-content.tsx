@@ -18,13 +18,12 @@ interface Props {
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
-  const [{ allEditors, totalEditors, votingPluginAddress }, isEditor, isMember, hasRequestedSpaceEditorship] =
-    await Promise.all([
-      getEditorsForSpace(spaceId),
-      getIsEditorForSpace(spaceId, connectedAddress),
-      getIsMemberForSpace(spaceId, connectedAddress),
-      getHasRequestedSpaceEditorship(spaceId, connectedAddress),
-    ]);
+  const [{ allEditors, totalEditors }, isEditor, isMember, hasRequestedSpaceEditorship] = await Promise.all([
+    getEditorsForSpace(spaceId),
+    getIsEditorForSpace(spaceId, connectedAddress),
+    getIsMemberForSpace(spaceId, connectedAddress),
+    getHasRequestedSpaceEditorship(spaceId, connectedAddress),
+  ]);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
@@ -46,7 +45,7 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
           <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
             {connectedAddress ? (
               <SpaceEditorsPopoverEditorRequestButton
-                votingContractAddress={votingPluginAddress}
+                spaceId={spaceId}
                 isMember={isMember}
                 hasRequestedSpaceEditorship={hasRequestedSpaceEditorship}
               />
