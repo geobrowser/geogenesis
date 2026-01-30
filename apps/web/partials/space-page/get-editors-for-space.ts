@@ -12,9 +12,6 @@ type EditorProfile = OmitStrict<Profile, 'coverUrl'>;
 type EditorsForSpace = {
   allEditors: EditorProfile[];
   totalEditors: number;
-  votingPluginAddress: string | null;
-  spacePluginAddress: string | null;
-  memberPluginAddress: string | null;
 };
 
 export const getEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
@@ -52,8 +49,5 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   return {
     allEditors: editorProfiles,
     totalEditors: space.editors.length,
-    votingPluginAddress: space.mainVotingAddress,
-    spacePluginAddress: space.spaceAddress,
-    memberPluginAddress: space.membershipAddress,
   };
 });

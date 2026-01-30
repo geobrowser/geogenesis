@@ -10,9 +10,6 @@ import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 type MembersForSpace = {
   allMembers: Profile[];
   totalMembers: number;
-  votingPluginAddress: string | null;
-  spacePluginAddress: string | null;
-  memberPluginAddress: string | null;
 };
 
 export const getMembersForSpace = cache(async (spaceId: string): Promise<MembersForSpace> => {
@@ -28,8 +25,5 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
   return {
     allMembers: memberProfiles,
     totalMembers: space.members.length,
-    votingPluginAddress: space.mainVotingAddress,
-    spacePluginAddress: space.spaceAddress,
-    memberPluginAddress: space.membershipAddress,
   };
 });
