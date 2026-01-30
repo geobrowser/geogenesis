@@ -6,17 +6,17 @@ import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 import { Pending } from '~/design-system/pending';
 
 type SpaceEditorsPopoverEditorRequestButtonProps = {
-  votingContractAddress: string | null;
+  spaceId: string;
   isMember: boolean;
   hasRequestedSpaceEditorship: boolean;
 };
 
 export function SpaceEditorsPopoverEditorRequestButton({
-  votingContractAddress,
+  spaceId,
   isMember,
   hasRequestedSpaceEditorship,
 }: SpaceEditorsPopoverEditorRequestButtonProps) {
-  const { requestToBeEditor, status } = useRequestToBeEditor(votingContractAddress);
+  const { requestToBeEditor, status } = useRequestToBeEditor({ spaceId });
 
   const { shouldShowElement } = useOnboardGuard();
 
