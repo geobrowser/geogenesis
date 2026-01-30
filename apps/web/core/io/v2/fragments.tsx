@@ -73,8 +73,15 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter, $orderBy: [EntitiesOrderBy!]) {
-    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy) {
+  query AllEntities(
+    $spaceId: UUID
+    $typeIds: UUIDFilter
+    $limit: Int
+    $offset: Int
+    $filter: EntityFilter
+    $orderBy: [EntitiesOrderBy!]
+  ) {
+    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy, spaceId: $spaceId, typeIds: $typeIds) {
       id
       name
       description
@@ -148,7 +155,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
 
 export const entitiesBatchQuery = graphql(/* GraphQL */ `
   query EntitiesBatch($filter: EntityFilter, $spaceId: UUID) {
-    entities(filter: $filter) {
+    entities(filter: $filter, spaceId: $spaceId) {
       id
       name
       description
@@ -423,7 +430,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
 export const entityTypesQuery = graphql(/* GraphQL */ `
   query EntityTypes($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
-      types(filter: { spaceIds: { in: [$spaceId] } }) {
+      types(filter: { spaceIds: { anyEqualTo: $spaceId } }) {
         id
         name
       }

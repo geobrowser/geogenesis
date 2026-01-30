@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
+import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/v2/converters';
 
 import { readTypes } from '../database/entities';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
@@ -180,12 +180,14 @@ export class E {
     const limit = first;
     const offset = skip;
     const filter = convertWhereConditionToEntityFilter(where);
+    const typeIds = extractTypeIdsFromWhere(where);
 
     const remoteEntities = await Effect.runPromise(
       getAllEntities({
         limit,
         offset,
         filter,
+        typeIds,
       })
     );
 

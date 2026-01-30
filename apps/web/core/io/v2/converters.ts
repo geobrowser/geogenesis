@@ -232,20 +232,8 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
     filter.description = convertStringConditionToStringFilter(where.description);
   }
 
-  // Handle types - convert to typeIds
-  if (where.types && where.types.length > 0) {
-    const typeIds: string[] = [];
-    where.types.forEach(typeCondition => {
-      if (typeCondition.id?.equals) {
-        typeIds.push(typeCondition.id.equals);
-      }
-    });
-    if (typeIds.length > 0) {
-      filter.typeIds = { anyEqualTo: typeIds[0] } as UuidListFilter;
-      // For multiple types, you might want to use a different operator
-      // or handle this case differently based on your needs
-    }
-  }
+  // NOTE: typeIds are now handled via extractTypeIdsFromWhere() and passed as a
+  // top-level query parameter for better performance. Do not add to filter here.
 
   // @TODO restore once space ids are updated in filters
   // Handle spaces - convert to spaceIds
@@ -330,4 +318,31 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
   }
 
   return filter;
+}
+
+/**
+ * Extracts typeIds from a WhereCondition for use as a top-level query parameter.
+ * This is more efficient than using filter.typeIds.
+ */
+export function extractTypeIdsFromWhere(where: WhereCondition): UuidFilter | undefined {
+  if (!where.types || where.types.length === 0) {
+    return undefined;
+  }
+
+  const typeIds: string[] = [];
+  where.types.forEach(typeCondition => {
+    if (typeCondition.id?.equals) {
+      typeIds.push(typeCondition.id.equals);
+    }
+  });
+
+  if (typeIds.length === 0) {
+    return undefined;
+  }
+
+  if (typeIds.length === 1) {
+    return { is: typeIds[0] } as UuidFilter;
+  }
+
+  return { in: typeIds } as UuidFilter;
 }
