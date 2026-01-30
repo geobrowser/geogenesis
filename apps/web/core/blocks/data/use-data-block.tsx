@@ -26,10 +26,11 @@ import { useView } from './use-view';
 export const PAGE_SIZE = 9;
 
 interface RenderablesQueryKey {
-  source: Source;
-  mapping: Mapping;
+  sourceType: Source['type'];
+  sourceKey: string;
+  mappingKey: string;
   spaceId: string;
-  sourceEntityRelations: Relation[];
+  relationIdsKey: string;
 }
 
 const queryKeys = {
@@ -42,6 +43,7 @@ interface UseDataBlockOptions {
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
+  useRenderCounter('useDataBlock');
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
 
@@ -58,7 +60,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
 
-  const where = filterStateToWhere(effectiveFilterState);
+  const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
+  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [filterStateKey]);
 
   // Fetch collection data with server-side filtering
   const {
@@ -94,6 +97,35 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
 
+  const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
+  const sourceKey = React.useMemo(() => {
+    if (source.type === 'SPACES') {
+      return source.value.slice().sort().join(',');
+    }
+
+    if (source.type === 'GEO') {
+      return 'GEO';
+    }
+
+    return source.value;
+  }, [source]);
+  const relationIdsKey = React.useMemo(
+    () => relationBlockSourceRelations.map(relation => relation.id).sort().join(','),
+    [relationBlockSourceRelations]
+  );
+
+  const relationQueryKey = React.useMemo(
+    () =>
+      queryKeys.relationQuery({
+        sourceType: source.type,
+        sourceKey,
+        mappingKey,
+        spaceId,
+        relationIdsKey,
+      }),
+    [mappingKey, relationIdsKey, source.type, sourceKey, spaceId]
+  );
+
   const {
     data: relationsMapping,
     isLoading: isRelationDataLoading,
@@ -102,12 +134,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     enabled: source.type === 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
-    queryKey: queryKeys.relationQuery({
-      source,
-      mapping,
-      spaceId,
-      sourceEntityRelations: relationBlockSourceRelations,
-    }),
+    queryKey: relationQueryKey,
     queryFn: async () => {
       const run = Effect.gen(function* () {
         if (source.type === 'RELATIONS') {
@@ -168,7 +195,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
    * an entity. Selectors live on the "Properties" relation pointing from the Blocks
    * relation pointing to the data block.
    */
-  const rows = (() => {
+  const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
       return mappingToRows(collectionData.items, shownColumnIds, collectionData.relations);
     }
@@ -190,9 +217,18 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     }
 
     return [];
-  })();
+  }, [
+    collectionData.items,
+    collectionData.relations,
+    queriedEntities,
+    relationsMapping,
+    shownColumnIds,
+    source.type,
+  ]);
 
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
+  const sortedRows = React.useMemo(() => sortRows(rows)?.slice(0, PAGE_SIZE) ?? [], [rows]);
+  const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -229,8 +265,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     relationId,
 
     blockEntity: entity,
-    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
-    properties: propertiesSchema ? Object.values(propertiesSchema) : [],
+    rows: sortedRows,
+    properties,
     propertiesSchema,
 
     pageNumber,
@@ -249,6 +285,31 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
   };
+
+  useDebugChanges('useDataBlock', {
+    sourceType: source.type,
+    sourceValue: source.type === 'COLLECTION' ? source.value : null,
+    pageNumber,
+    filterCount: effectiveFilterState.length,
+    shownColumnsCount: shownColumnIds.length,
+    mappingRef: mapping,
+    whereRef: where,
+    collectionItemsCount: collectionItems.length,
+    collectionRelationsCount: collectionRelations.length,
+    collectionLength,
+    queriedEntitiesCount: queriedEntities.length,
+    relationsMappingCount: relationsMapping?.length ?? 0,
+    isBlockEntityLoading,
+    isLoadingFilterState,
+    isFilterStateFetched,
+    isViewLoading,
+    isViewFetched,
+    isCollectionLoading,
+    isCollectionFetched,
+    isQueryEntitiesLoading,
+    isRelationDataLoading,
+    isRelationDataFetched,
+  });
 
   return result;
 }
@@ -377,4 +438,164 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   }
 
   return where;
+}
+
+function useRenderCounter(label: string) {
+  const renderCount = React.useRef(0);
+  renderCount.current += 1;
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[render] ${label} #${renderCount.current}`);
+  }
+}
+
+function useDebugChanges(label: string, values: Record<string, unknown>) {
+  const prevRef = React.useRef<Record<string, unknown> | null>(null);
+
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+
+    const prev = prevRef.current;
+    if (!prev) {
+      prevRef.current = values;
+      console.log(`[render] ${label} initial ${stringifyDebug(formatDebugValues(values))}`);
+      return;
+    }
+
+    const changed: Record<string, { from: unknown; to: unknown }> = {};
+    let hasChanges = false;
+
+    for (const key of Object.keys(values)) {
+      const prevValue = prev[key];
+      const nextValue = values[key];
+
+      if (!Object.is(prevValue, nextValue)) {
+        changed[key] = { from: prevValue, to: nextValue };
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      console.log(`[render] ${label} changes ${stringifyDebug(formatDebugDiff(changed))}`);
+    }
+
+    prevRef.current = values;
+  }, [label, values]);
+}
+
+function formatDebugValues(values: Record<string, unknown>) {
+  const formatted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    formatted[key] = formatDebugValue(value);
+  }
+  return formatted;
+}
+
+function formatDebugDiff(diff: Record<string, { from: unknown; to: unknown }>) {
+  const formatted: Record<string, { from: unknown; to: unknown }> = {};
+  for (const [key, value] of Object.entries(diff)) {
+    formatted[key] = { from: formatDebugValue(value.from), to: formatDebugValue(value.to) };
+  }
+  return formatted;
+}
+
+function formatDebugValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return {
+      __type: 'array',
+      length: value.length,
+      preview: sanitizeDebugValue(value, 1, 10),
+    };
+  }
+  if (value === null) {
+    return 'null';
+  }
+  const valueType = typeof value;
+  if (valueType === 'object') {
+    return sanitizeDebugValue(value, 2, 20);
+  }
+  if (valueType === 'function') {
+    return 'function';
+  }
+  return value;
+}
+
+function stringifyDebug(value: unknown) {
+  try {
+    return JSON.stringify(value);
+  } catch (_err) {
+    return '"[unstringifiable]"';
+  }
+}
+
+function sanitizeDebugValue(value: unknown, depth: number, maxArray: number) {
+  const seen = new WeakSet<object>();
+
+  const walk = (input: unknown, remainingDepth: number): unknown => {
+    if (input === null || typeof input !== 'object') {
+      if (typeof input === 'function') {
+        return '[Function]';
+      }
+      return input;
+    }
+
+    if (seen.has(input)) {
+      return '[Circular]';
+    }
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+      const preview = input.slice(0, maxArray).map(item => walk(item, remainingDepth - 1));
+      return {
+        __type: 'array',
+        length: input.length,
+        preview,
+      };
+    }
+
+    if (remainingDepth <= 0) {
+      return '[Object]';
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(input)) {
+      result[key] = walk(val, remainingDepth - 1);
+    }
+    return result;
+  };
+
+  return walk(value, depth);
+}
+
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+
+  const walk = (input: unknown): unknown => {
+    if (input === null || typeof input !== 'object') {
+      return input;
+    }
+
+    if (seen.has(input)) {
+      return '[Circular]';
+    }
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+      return input.map(item => walk(item));
+    }
+
+    const entries = Object.entries(input).sort(([a], [b]) => a.localeCompare(b));
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of entries) {
+      result[key] = walk(val);
+    }
+    return result;
+  };
+
+  try {
+    return JSON.stringify(walk(value));
+  } catch (_err) {
+    return '"[unstringifiable]"';
+  }
 }
