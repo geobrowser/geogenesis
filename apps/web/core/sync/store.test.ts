@@ -676,7 +676,18 @@ describe('GeoStore', () => {
         const where = { id: { equals: 'entity-1' } };
         const keys = GeoStore.queryKeys(where, 10, 0);
 
-        expect(keys).toEqual(['store', 'entities', JSON.stringify(where), 10, 0]);
+        // Uses stableStringify for deterministic key order
+        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, 0]);
+      });
+
+      it('should produce consistent keys regardless of object key order', () => {
+        const where1 = { name: { equals: 'test' }, id: { equals: 'entity-1' } };
+        const where2 = { id: { equals: 'entity-1' }, name: { equals: 'test' } };
+
+        const keys1 = GeoStore.queryKeys(where1, 10, 0);
+        const keys2 = GeoStore.queryKeys(where2, 10, 0);
+
+        expect(keys1).toEqual(keys2);
       });
     });
   });
