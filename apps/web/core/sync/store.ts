@@ -116,6 +116,39 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
   }
 
+  /**
+   * Clear all local (unpublished) changes for a specific space.
+   * This removes local values and relations, then re-hydrates the affected entities.
+   */
+  clearLocalChangesForSpace(spaceId: string) {
+    const localValues = reactiveValues.get().filter(v => v.spaceId === spaceId && v.isLocal === true);
+    const localRelations = reactiveRelations.get().filter(r => r.spaceId === spaceId && r.isLocal === true);
+
+    const affectedEntityIds = new Set<string>();
+
+    // Collect affected entity IDs before removing
+    for (const value of localValues) {
+      affectedEntityIds.add(value.entity.id);
+    }
+    for (const relation of localRelations) {
+      affectedEntityIds.add(relation.fromEntity.id);
+    }
+
+    const localValueIds = new Set(localValues.map(v => v.id));
+    const localRelationIds = new Set(localRelations.map(r => r.id));
+
+    // Remove local values for this space
+    reactiveValues.set(prev => prev.filter(v => !localValueIds.has(v.id)));
+
+    // Remove local relations for this space
+    reactiveRelations.set(prev => prev.filter(r => !localRelationIds.has(r.id)));
+
+    // Re-hydrate affected entities to restore their server state
+    if (affectedEntityIds.size > 0) {
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
+    }
+  }
+
   public hydrateWith(entities: Entity[]) {
     /**
      * We set the synced entities before we update values and relations
