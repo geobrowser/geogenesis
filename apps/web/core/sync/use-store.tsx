@@ -150,6 +150,12 @@ type QueryEntitiesOptions = {
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+  /**
+   * When true, returns an empty array until the initial fetch completes.
+   * This prevents the selector from returning partial/stale results from
+   * the reactive store while the remote query is still in flight.
+   */
+  deferUntilFetched?: boolean;
 
   /**
    * By default we query the local store for the entity without
@@ -174,6 +180,7 @@ export function useQueryEntities({
   skip = 0,
   enabled = true,
   placeholderData = undefined,
+  deferUntilFetched = false,
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -209,6 +216,10 @@ export function useQueryEntities({
     reactive,
     () => {
       if (!enabled) {
+        return [];
+      }
+
+      if (deferUntilFetched && !isFetched) {
         return [];
       }
 

@@ -26,10 +26,11 @@ import { useView } from './use-view';
 export const PAGE_SIZE = 9;
 
 interface RenderablesQueryKey {
-  source: Source;
-  mapping: Mapping;
+  sourceType: Source['type'];
+  sourceKey: string;
+  mappingKey: string;
   spaceId: string;
-  sourceEntityRelations: Relation[];
+  relationIdsKey: string;
 }
 
 const queryKeys = {
@@ -58,7 +59,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
 
-  const where = filterStateToWhere(effectiveFilterState);
+  const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
+  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [filterStateKey]);
 
   // Fetch collection data with server-side filtering
   const {
@@ -89,10 +91,40 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
     placeholderData: keepPreviousData,
+    deferUntilFetched: true,
   });
 
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
+
+  const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
+  const sourceKey = React.useMemo(() => {
+    if (source.type === 'SPACES') {
+      return source.value.slice().sort().join(',');
+    }
+
+    if (source.type === 'GEO') {
+      return 'GEO';
+    }
+
+    return source.value;
+  }, [source]);
+  const relationIdsKey = React.useMemo(
+    () => relationBlockSourceRelations.map(relation => relation.id).sort().join(','),
+    [relationBlockSourceRelations]
+  );
+
+  const relationQueryKey = React.useMemo(
+    () =>
+      queryKeys.relationQuery({
+        sourceType: source.type,
+        sourceKey,
+        mappingKey,
+        spaceId,
+        relationIdsKey,
+      }),
+    [mappingKey, relationIdsKey, source.type, sourceKey, spaceId]
+  );
 
   const {
     data: relationsMapping,
@@ -102,12 +134,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     enabled: source.type === 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
-    queryKey: queryKeys.relationQuery({
-      source,
-      mapping,
-      spaceId,
-      sourceEntityRelations: relationBlockSourceRelations,
-    }),
+    queryKey: relationQueryKey,
     queryFn: async () => {
       const run = Effect.gen(function* () {
         if (source.type === 'RELATIONS') {
@@ -168,7 +195,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
    * an entity. Selectors live on the "Properties" relation pointing from the Blocks
    * relation pointing to the data block.
    */
-  const rows = (() => {
+  const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
       return mappingToRows(collectionData.items, shownColumnIds, collectionData.relations);
     }
@@ -190,9 +217,18 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     }
 
     return [];
-  })();
+  }, [
+    collectionData.items,
+    collectionData.relations,
+    queriedEntities,
+    relationsMapping,
+    shownColumnIds,
+    source.type,
+  ]);
 
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
+  const sortedRows = React.useMemo(() => sortRows(rows)?.slice(0, PAGE_SIZE) ?? [], [rows]);
+  const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -229,8 +265,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     relationId,
 
     blockEntity: entity,
-    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
-    properties: propertiesSchema ? Object.values(propertiesSchema) : [],
+    rows: sortedRows,
+    properties,
     propertiesSchema,
 
     pageNumber,
@@ -377,4 +413,36 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   }
 
   return where;
+}
+
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+
+  const walk = (input: unknown): unknown => {
+    if (input === null || typeof input !== 'object') {
+      return input;
+    }
+
+    if (seen.has(input)) {
+      return '[Circular]';
+    }
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+      return input.map(item => walk(item));
+    }
+
+    const entries = Object.entries(input).sort(([a], [b]) => a.localeCompare(b));
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of entries) {
+      result[key] = walk(val);
+    }
+    return result;
+  };
+
+  try {
+    return JSON.stringify(walk(value));
+  } catch (_err) {
+    return '"[unstringifiable]"';
+  }
 }

@@ -66,26 +66,23 @@ export function useFilters(canEdit?: boolean) {
     },
   });
 
-  // Local state for temporary filters when user cannot edit
-  const [temporaryFilters, setTemporaryFilters] = React.useState<Filter[]>([]);
+  // Local state for temporary filter overrides when user cannot edit
+  // null means "use database filters", an array means "user has modified filters locally"
+  const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
 
-  // Track if temporary filters have been initialized
-  const temporaryFiltersInitialized = React.useRef(false);
+  // For non-editors: use their local override if they've modified filters, otherwise use database filters
+  // This avoids the race condition of trying to initialize state from an async query
+  const temporaryFilters = temporaryFilterOverride ?? filterState ?? [];
 
-  // Initialize temporary filters with database filters when user cannot edit
-  // Only initialize once to avoid overwriting user changes
-  React.useEffect(() => {
-    // Only use temporary filters if canEdit is explicitly false (not undefined)
-    if (canEdit === false && filterState !== undefined && !temporaryFiltersInitialized.current) {
-      setTemporaryFilters(filterState);
-      temporaryFiltersInitialized.current = true;
-    }
-  }, [canEdit, filterState]);
+  // Wrapper that sets the override
+  const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
+    setTemporaryFilterOverride(filters);
+  }, []);
 
-  // Reset initialization when canEdit changes to true (user gains edit access)
+  // Reset override when canEdit changes to true (user gains edit access)
   React.useEffect(() => {
     if (canEdit === true) {
-      temporaryFiltersInitialized.current = false;
+      setTemporaryFilterOverride(null);
     }
   }, [canEdit]);
 
