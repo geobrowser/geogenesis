@@ -16,6 +16,7 @@ import {
   spaceIdToBytes16,
 } from '~/core/utils/contracts/governance';
 import {
+  EMPTY_SIGNATURE,
   EMPTY_TOPIC_HEX,
   GOVERNANCE_ACTIONS,
   SPACE_REGISTRY_ADDRESS,
@@ -83,7 +84,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
           GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, // _action
           EMPTY_TOPIC_HEX, // _topic (not used for membership requests)
           data, // _data: encoded (proposalId, newMemberSpaceId)
-          '0x', // _signature (empty for now, smart accounts don't need it)
+          EMPTY_SIGNATURE, // _signature (empty for smart accounts)
         ],
       });
 

@@ -18,6 +18,7 @@ import {
 } from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
+  EMPTY_SIGNATURE,
   EMPTY_TOPIC_HEX,
   GOVERNANCE_ACTIONS,
   SPACE_REGISTRY_ADDRESS,
@@ -111,7 +112,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
           GOVERNANCE_ACTIONS.PROPOSAL_CREATED, // _action
           EMPTY_TOPIC_HEX, // _topic (not used)
           data, // _data: encoded (proposalId, votingMode, actions)
-          '0x', // _signature (empty for smart accounts)
+          EMPTY_SIGNATURE, // _signature (empty for smart accounts)
         ],
       });
 

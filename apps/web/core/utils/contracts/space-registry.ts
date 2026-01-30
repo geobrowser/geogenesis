@@ -16,6 +16,8 @@ export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
 export const EMPTY_TOPIC = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 export const EMPTY_TOPIC_HEX = EMPTY_TOPIC as Hex;
 
+export const EMPTY_SIGNATURE = '0x' as Hex;
+
 /**
  * DAOSpace governance action constants (bytes32)
  *
@@ -24,9 +26,9 @@ export const EMPTY_TOPIC_HEX = EMPTY_TOPIC as Hex;
  */
 export const GOVERNANCE_ACTIONS = {
   /** keccak256('GOVERNANCE.MEMBERSHIP_REQUESTED') - creates a fast-path proposal */
-  MEMBERSHIP_REQUESTED: '0xe048e0dc301b1bb4e2446608d8858ecf95c326d7241c9943b14f647fd3a78d9a',
+  MEMBERSHIP_REQUESTED: '0xe048e0dc301b1bb4e2446608d8858ecf95c326d7241c9943b14f647fd3a78d9a' as Hex,
   /** keccak256('GOVERNANCE.PROPOSAL_CREATED') - creates a slow-path proposal */
-  PROPOSAL_CREATED: '0xcf4356ed126c00d2e547ace2f69991a972d322b45371d61ce5478b1cb9acb4c2',
+  PROPOSAL_CREATED: '0xcf4356ed126c00d2e547ace2f69991a972d322b45371d61ce5478b1cb9acb4c2' as Hex,
 } as const;
 
 /**
