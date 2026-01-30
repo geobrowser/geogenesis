@@ -72,12 +72,10 @@ export class E {
 
     const mergedValues = merge(localEntity.values, remoteEntity.values);
 
-    const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
+    const values = mergedValues.filter(v => !v.isDeleted && (spaceId ? v.spaceId === spaceId : true));
 
     const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
-    const relations = mergedRelations.filter(r =>
-      Boolean(r.isDeleted) === false && spaceId ? r.spaceId === spaceId : true
-    );
+    const relations = mergedRelations.filter(r => !r.isDeleted && (spaceId ? r.spaceId === spaceId : true));
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.

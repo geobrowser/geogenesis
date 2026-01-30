@@ -13,6 +13,34 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
+/**
+ * Stable JSON stringify that produces consistent output regardless of object key order.
+ * This ensures query keys are deterministic for TanStack Query cache hits.
+ *
+ * Particularly important for WhereCondition objects where key order may vary
+ * depending on how the object was constructed.
+ */
+export function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return '[' + value.map(stableStringify).join(',') + ']';
+  }
+
+  if (typeof value === 'object') {
+    const sortedKeys = Object.keys(value as object).sort();
+    const pairs = sortedKeys.map(key => {
+      const v = (value as Record<string, unknown>)[key];
+      return JSON.stringify(key) + ':' + stableStringify(v);
+    });
+    return '{' + pairs.join(',') + '}';
+  }
+
+  return JSON.stringify(value);
+}
+
 export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
@@ -76,7 +104,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', JSON.stringify(where), first, skip];
+    return ['store', 'entities', stableStringify(where), first, skip];
   }
 
   clear() {
@@ -165,9 +193,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(t => (options.spaceId ? t.spaceId === options.spaceId : true)),
-      relations: relations.filter(r =>
-        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
+      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      relations: relations.filter(
+        r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),
     };
 
