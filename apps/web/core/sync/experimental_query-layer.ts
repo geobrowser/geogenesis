@@ -85,30 +85,6 @@ type SortByField = 'id' | 'name' | 'description' | 'createdAt' | 'updatedAt';
 type SortBy = SortByField | { field: SortByField; direction: SortDirection };
 
 /**
- * Get the earliest timestamp from an entity's values and relations.
- * Used to approximate createdAt when the field doesn't exist on Entity.
- */
-function getEarliestTimestamp(entity: Entity): number {
-  let earliest = Infinity;
-
-  for (const value of entity.values) {
-    if (value.timestamp) {
-      const ts = new Date(value.timestamp).getTime();
-      if (ts < earliest) earliest = ts;
-    }
-  }
-
-  for (const relation of entity.relations) {
-    if (relation.timestamp) {
-      const ts = new Date(relation.timestamp).getTime();
-      if (ts < earliest) earliest = ts;
-    }
-  }
-
-  return earliest === Infinity ? 0 : earliest;
-}
-
-/**
  * EntityQuery class for building and executing entity queries
  */
 export class EntityQuery {
@@ -626,17 +602,6 @@ export class EntityQuery {
           case 'description':
             valueA = a.description || '';
             valueB = b.description || '';
-            break;
-          case 'updatedAt':
-            // updatedAt is a UNIX timestamp in seconds (string)
-            valueA = a.updatedAt ? Number(a.updatedAt) : 0;
-            valueB = b.updatedAt ? Number(b.updatedAt) : 0;
-            break;
-          case 'createdAt':
-            // createdAt doesn't exist on Entity, derive from earliest value/relation timestamp
-            // or fall back to 0 (sorts to beginning)
-            valueA = getEarliestTimestamp(a);
-            valueB = getEarliestTimestamp(b);
             break;
           default:
             valueA = '';
