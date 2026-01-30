@@ -1,11 +1,13 @@
+import { ID } from '~/core/id';
+
 import { Entity, Relation, Value } from '../v2.types';
 
 const compareOperators = {
   string: {
-    equals: (a: string, b: string) => a === b,
-    contains: (a: string, b: string) => a.toLowerCase().includes(b.toLowerCase()),
-    startsWith: (a: string, b: string) => a.toLowerCase().startsWith(b.toLowerCase()),
-    endsWith: (a: string, b: string) => a.toLowerCase().endsWith(b.toLowerCase()),
+    equals: (a: string, b: string) => ID.uuidToHex(a) === ID.uuidToHex(b),
+    contains: (a: string, b: string) => ID.uuidToHex(a).includes(ID.uuidToHex(b)),
+    startsWith: (a: string, b: string) => ID.uuidToHex(a).startsWith(ID.uuidToHex(b)),
+    endsWith: (a: string, b: string) => ID.uuidToHex(a).endsWith(ID.uuidToHex(b)),
   },
   number: {
     equals: (a: number, b: number) => a === b,

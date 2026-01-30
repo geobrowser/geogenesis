@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
+import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -299,7 +300,7 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
       // For NAME_PROPERTY, filter on the entity name field directly
-      if (filter.columnId === SystemIds.NAME_PROPERTY) {
+      if (ID.equals(filter.columnId, SystemIds.NAME_PROPERTY)) {
         where['name'] = {
           contains: filter.value,
         };
@@ -320,12 +321,12 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
     }
 
     if (filter.valueType === 'RELATION') {
-      if (filter.columnId === SystemIds.SPACE_FILTER) {
+      if (ID.equals(filter.columnId, SystemIds.SPACE_FILTER)) {
         where['spaces'] = [{ equals: filter.value }];
         continue;
       }
 
-      if (filter.columnId === SystemIds.TYPES_PROPERTY) {
+      if (ID.equals(filter.columnId, SystemIds.TYPES_PROPERTY)) {
         if (!where.types) {
           where.types = [];
         }

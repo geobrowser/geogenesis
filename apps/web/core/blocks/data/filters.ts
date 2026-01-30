@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
+import { ID } from '~/core/id';
 import { getProperty, getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
@@ -104,12 +105,12 @@ const FilterMap = Schema.mutable(
 type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): string {
-  const spaces = filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+  const spaces = filters.filter(f => ID.equals(f.columnId, SystemIds.SPACE_FILTER)).map(f => f.value);
 
   const filterMap: FilterMap = {};
 
   filters
-    .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+    .filter(f => !ID.equals(f.columnId, SystemIds.SPACE_FILTER))
     .forEach(f => {
       if (f.columnName === 'Backlink') {
         filterMap['_relation'] = {
