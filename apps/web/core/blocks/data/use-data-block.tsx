@@ -92,6 +92,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
     placeholderData: keepPreviousData,
+    deferUntilFetched: true,
   });
 
   // Use the mapping to get the potential renderable properties.

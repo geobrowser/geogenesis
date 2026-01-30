@@ -150,6 +150,7 @@ type QueryEntitiesOptions = {
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+  deferUntilFetched?: boolean;
 
   /**
    * By default we query the local store for the entity without
@@ -174,6 +175,7 @@ export function useQueryEntities({
   skip = 0,
   enabled = true,
   placeholderData = undefined,
+  deferUntilFetched = false,
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -205,11 +207,19 @@ export function useQueryEntities({
     },
   });
 
+  const lastResultsRef = React.useRef<Entity[]>([]);
+  const isFetchedRef = React.useRef(false);
+  isFetchedRef.current = isFetched && enabled;
+
   const results = useSelector(
     reactive,
     () => {
       if (!enabled) {
         return [];
+      }
+
+      if (deferUntilFetched && !isFetchedRef.current) {
+        return lastResultsRef.current;
       }
 
       const result = new EntityQuery(store.getEntities())
@@ -223,6 +233,16 @@ export function useQueryEntities({
     },
     equal
   );
+
+  React.useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    if (isFetched) {
+      lastResultsRef.current = results;
+    }
+  }, [enabled, isFetched, results]);
 
   return {
     entities: results,
