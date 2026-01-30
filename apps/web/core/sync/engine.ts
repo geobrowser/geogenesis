@@ -205,13 +205,26 @@ export class SyncEngine {
       return [];
     }
 
-    const entities = await this.cache.fetchQuery({
-      queryKey: ['entities-batch-sync', uniqueEntityIds],
-      queryFn: async () => {
-        const entities = await Effect.runPromise(getBatchEntities(uniqueEntityIds));
-        return Object.fromEntries(entities.map(e => [e.id, e]));
-      },
-    });
+    let entities: Record<string, Entity>;
+
+    try {
+      entities = await this.cache.fetchQuery({
+        queryKey: ['entities-batch-sync', uniqueEntityIds],
+        queryFn: async () => {
+          const entities = await Effect.runPromise(getBatchEntities(uniqueEntityIds));
+          return Object.fromEntries(entities.map(e => [e.id, e]));
+        },
+      });
+    } catch (error) {
+      // Log the error but don't throw - sync failures shouldn't crash the app.
+      // Entities that failed to sync will be retried on the next sync cycle
+      // (after TTL expires or on next relevant event).
+      console.error('[SyncEngine] Failed to fetch entities for sync:', {
+        entityIds: uniqueEntityIds,
+        error: error instanceof Error ? error.message : error,
+      });
+      return [];
+    }
 
     const merged = uniqueEntityIds
       .map(e => E.merge({ id: e, store: this.store, mergeWith: entities[e] }))
