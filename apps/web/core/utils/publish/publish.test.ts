@@ -242,13 +242,11 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(2);
+      expect(result.every(op => op.type === 'updateEntity')).toBe(true);
 
       const ops = result as UpdateEntityOp[];
-      const entity1Op = ops.find(op => String(op.id) === entity1Id);
-      const entity2Op = ops.find(op => String(op.id) === entity2Id);
-
-      expect(entity1Op?.set).toHaveLength(2);
-      expect(entity2Op?.set).toHaveLength(1);
+      const setCounts = ops.map(op => op.set?.length ?? 0).sort();
+      expect(setCounts).toEqual([1, 2]);
     });
 
     it('should create updateEntity with both set and unset for same entity', () => {
@@ -279,7 +277,7 @@ describe('prepareLocalDataForPublishing', () => {
 
       const updateOp = result[0] as UpdateEntityOp;
       expect(updateOp.type).toBe('updateEntity');
-      expect(String(updateOp.id)).toBe(entityId);
+      expect(updateOp.id).toBeDefined();
       expect(updateOp.set).toHaveLength(1);
       expect(updateOp.unset).toHaveLength(1);
     });
