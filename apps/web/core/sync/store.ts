@@ -165,9 +165,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(t => (options.spaceId ? t.spaceId === options.spaceId : true)),
-      relations: relations.filter(r =>
-        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
+      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      relations: relations.filter(
+        r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),
     };
 
