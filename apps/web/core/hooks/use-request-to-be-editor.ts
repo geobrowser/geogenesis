@@ -11,11 +11,9 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import {
-  encodeProposalCreatedData,
-  generateProposalId,
-  spaceIdToBytes16,
-} from '~/core/utils/contracts/governance';
+import { IdUtils } from '@geoprotocol/geo-sdk';
+
+import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
   EMPTY_SIGNATURE,
@@ -76,21 +74,17 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
     });
 
     const writeTxEffect = Effect.gen(function* () {
-      // Generate a unique proposal ID
-      const proposalId = generateProposalId();
-
-      // Convert space IDs to bytes16 hex format
-      const fromSpaceIdHex = spaceIdToBytes16(personalSpaceId);
-      const toSpaceIdHex = spaceIdToBytes16(spaceId);
+      const proposalId = `0x${IdUtils.generate()}` as const;
+      const fromSpaceId = `0x${personalSpaceId}` as const;
+      const toSpaceId = `0x${spaceId}` as const;
 
       // Encode the addEditor call that will execute if the proposal passes
       const addEditorCallData = encodeFunctionData({
         functionName: 'addEditor',
         abi: DAOSpaceAbi,
-        args: [fromSpaceIdHex], // Add the requestor as editor
+        args: [fromSpaceId],
       });
 
-      // Build the proposal action
       const proposalActions = [
         {
           to: daoSpaceAddress,
@@ -99,20 +93,18 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
         },
       ];
 
-      // Encode the data payload for PROPOSAL_CREATED (slow path)
       const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, proposalActions);
 
-      // Build the enter() call to SpaceRegistry
       const callData = encodeFunctionData({
         functionName: 'enter',
         abi: SpaceRegistryAbi,
         args: [
-          fromSpaceIdHex, // _fromSpaceId: requestor's personal space ID
-          toSpaceIdHex, // _toSpaceId: target space
-          GOVERNANCE_ACTIONS.PROPOSAL_CREATED, // _action
-          EMPTY_TOPIC_HEX, // _topic (not used)
-          data, // _data: encoded (proposalId, votingMode, actions)
-          EMPTY_SIGNATURE, // _signature (empty for smart accounts)
+          fromSpaceId,
+          toSpaceId,
+          GOVERNANCE_ACTIONS.PROPOSAL_CREATED,
+          EMPTY_TOPIC_HEX,
+          data,
+          EMPTY_SIGNATURE,
         ],
       });
 

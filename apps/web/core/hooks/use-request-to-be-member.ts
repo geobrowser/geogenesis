@@ -10,11 +10,9 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import {
-  encodeMembershipRequestData,
-  generateProposalId,
-  spaceIdToBytes16,
-} from '~/core/utils/contracts/governance';
+import { IdUtils } from '@geoprotocol/geo-sdk';
+
+import { encodeMembershipRequestData } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
   EMPTY_TOPIC_HEX,
@@ -64,27 +62,23 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
     });
 
     const writeTxEffect = Effect.gen(function* () {
-      // Generate a unique proposal ID
-      const proposalId = generateProposalId();
-
-      // Convert space IDs to bytes16 hex format
-      const fromSpaceIdHex = spaceIdToBytes16(personalSpaceId);
-      const toSpaceIdHex = spaceIdToBytes16(spaceId);
+      const proposalId = `0x${IdUtils.generate()}` as const;
+      const fromSpaceId = `0x${personalSpaceId}` as const;
+      const toSpaceId = `0x${spaceId}` as const;
 
       // Encode the data payload: (proposalId, newMemberSpaceId)
-      const data = encodeMembershipRequestData(proposalId, fromSpaceIdHex);
+      const data = encodeMembershipRequestData(proposalId, fromSpaceId);
 
-      // Build the enter() call to SpaceRegistry
       const callData = encodeFunctionData({
         functionName: 'enter',
         abi: SpaceRegistryAbi,
         args: [
-          fromSpaceIdHex, // _fromSpaceId: requestor's personal space ID
-          toSpaceIdHex, // _toSpaceId: target space to join
-          GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, // _action
-          EMPTY_TOPIC_HEX, // _topic (not used for membership requests)
-          data, // _data: encoded (proposalId, newMemberSpaceId)
-          EMPTY_SIGNATURE, // _signature (empty for smart accounts)
+          fromSpaceId,
+          toSpaceId,
+          GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED,
+          EMPTY_TOPIC_HEX,
+          data,
+          EMPTY_SIGNATURE,
         ],
       });
 
