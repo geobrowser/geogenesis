@@ -13,7 +13,7 @@ import { OmitStrict } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { Entity, Property, Relation, Value } from '../v2.types';
+import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
@@ -150,6 +150,11 @@ type QueryEntitiesOptions = {
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+  /**
+   * When true, returns an empty array until the initial fetch completes.
+   * This prevents the selector from returning partial/stale results from
+   * the reactive store while the remote query is still in flight.
+   */
   deferUntilFetched?: boolean;
 
   /**
@@ -207,10 +212,6 @@ export function useQueryEntities({
     },
   });
 
-  const lastResultsRef = React.useRef<Entity[]>([]);
-  const isFetchedRef = React.useRef(false);
-  isFetchedRef.current = isFetched && enabled;
-
   const results = useSelector(
     reactive,
     () => {
@@ -218,8 +219,8 @@ export function useQueryEntities({
         return [];
       }
 
-      if (deferUntilFetched && !isFetchedRef.current) {
-        return lastResultsRef.current;
+      if (deferUntilFetched && !isFetched) {
+        return [];
       }
 
       const result = new EntityQuery(store.getEntities())
@@ -233,16 +234,6 @@ export function useQueryEntities({
     },
     equal
   );
-
-  React.useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    if (isFetched) {
-      lastResultsRef.current = results;
-    }
-  }, [enabled, isFetched, results]);
 
   return {
     entities: results,
