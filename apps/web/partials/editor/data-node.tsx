@@ -47,7 +47,6 @@ export const DataNode = Node.create({
 });
 
 function DataNodeComponent({ node }: NodeViewRendererProps) {
-  useRenderCounter('DataNodeComponent');
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
@@ -72,7 +71,6 @@ function DataNodeChildren({
   entityId: string;
   relationId: string;
 }) {
-  useRenderCounter('DataNodeChildren');
   return (
     <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
       <DataBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
@@ -80,12 +78,4 @@ function DataNodeChildren({
       </DataBlockProvider>
     </ErrorBoundary>
   );
-}
-
-function useRenderCounter(label: string) {
-  const renderCount = React.useRef(0);
-  renderCount.current += 1;
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[render] ${label} #${renderCount.current}`);
-  }
 }

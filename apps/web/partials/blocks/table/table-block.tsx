@@ -296,7 +296,6 @@ function useEntries(
 }
 
 export const TableBlock = ({ spaceId }: Props) => {
-  useRenderCounter('TableBlock');
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
@@ -346,24 +345,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations);
-
-  useDebugChanges('TableBlock', {
-    isEditing,
-    canEdit,
-    isFilterOpen,
-    activeFilterCount: activeFilters.length,
-    view,
-    sourceType: source.type,
-    rowsCount: rows.length,
-    entriesCount: entries.length,
-    propertiesCount: properties.length,
-    shownColumnsCount: shownColumnIds.length,
-    isLoading,
-    hasNextPage,
-    hasPreviousPage,
-    pageNumber,
-    totalPages,
-  });
 
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
@@ -711,132 +692,4 @@ export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId
       </div>
     </div>
   );
-}
-
-function useRenderCounter(label: string) {
-  const renderCount = React.useRef(0);
-  renderCount.current += 1;
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[render] ${label} #${renderCount.current}`);
-  }
-}
-
-function useDebugChanges(label: string, values: Record<string, unknown>) {
-  const prevRef = React.useRef<Record<string, unknown> | null>(null);
-
-  React.useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
-      return;
-    }
-
-    const prev = prevRef.current;
-    if (!prev) {
-      prevRef.current = values;
-      console.log(`[render] ${label} initial ${stringifyDebug(formatDebugValues(values))}`);
-      return;
-    }
-
-    const changed: Record<string, { from: unknown; to: unknown }> = {};
-    let hasChanges = false;
-
-    for (const key of Object.keys(values)) {
-      const prevValue = prev[key];
-      const nextValue = values[key];
-
-      if (!Object.is(prevValue, nextValue)) {
-        changed[key] = { from: prevValue, to: nextValue };
-        hasChanges = true;
-      }
-    }
-
-    if (hasChanges) {
-      console.log(`[render] ${label} changes ${stringifyDebug(formatDebugDiff(changed))}`);
-    }
-
-    prevRef.current = values;
-  }, [label, values]);
-}
-
-function formatDebugValues(values: Record<string, unknown>) {
-  const formatted: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(values)) {
-    formatted[key] = formatDebugValue(value);
-  }
-  return formatted;
-}
-
-function formatDebugDiff(diff: Record<string, { from: unknown; to: unknown }>) {
-  const formatted: Record<string, { from: unknown; to: unknown }> = {};
-  for (const [key, value] of Object.entries(diff)) {
-    formatted[key] = { from: formatDebugValue(value.from), to: formatDebugValue(value.to) };
-  }
-  return formatted;
-}
-
-function formatDebugValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return {
-      __type: 'array',
-      length: value.length,
-      preview: sanitizeDebugValue(value, 1, 10),
-    };
-  }
-  if (value === null) {
-    return 'null';
-  }
-  const valueType = typeof value;
-  if (valueType === 'object') {
-    return sanitizeDebugValue(value, 2, 20);
-  }
-  if (valueType === 'function') {
-    return 'function';
-  }
-  return value;
-}
-
-function stringifyDebug(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch (_err) {
-    return '"[unstringifiable]"';
-  }
-}
-
-function sanitizeDebugValue(value: unknown, depth: number, maxArray: number) {
-  const seen = new WeakSet<object>();
-
-  const walk = (input: unknown, remainingDepth: number): unknown => {
-    if (input === null || typeof input !== 'object') {
-      if (typeof input === 'function') {
-        return '[Function]';
-      }
-      return input;
-    }
-
-    if (seen.has(input)) {
-      return '[Circular]';
-    }
-    seen.add(input);
-
-    if (Array.isArray(input)) {
-      const preview = input.slice(0, maxArray).map(item => walk(item, remainingDepth - 1));
-      return {
-        __type: 'array',
-        length: input.length,
-        preview,
-      };
-    }
-
-    if (remainingDepth <= 0) {
-      return '[Object]';
-    }
-
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(input)) {
-      result[key] = walk(val, remainingDepth - 1);
-    }
-    return result;
-  };
-
-  return walk(value, depth);
 }

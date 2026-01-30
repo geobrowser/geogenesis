@@ -43,7 +43,6 @@ interface UseDataBlockOptions {
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
-  useRenderCounter('useDataBlock');
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
 
@@ -287,31 +286,6 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
   };
 
-  useDebugChanges('useDataBlock', {
-    sourceType: source.type,
-    sourceValue: source.type === 'COLLECTION' ? source.value : null,
-    pageNumber,
-    filterCount: effectiveFilterState.length,
-    shownColumnsCount: shownColumnIds.length,
-    mappingRef: mapping,
-    whereRef: where,
-    collectionItemsCount: collectionItems.length,
-    collectionRelationsCount: collectionRelations.length,
-    collectionLength,
-    queriedEntitiesCount: queriedEntities.length,
-    relationsMappingCount: relationsMapping?.length ?? 0,
-    isBlockEntityLoading,
-    isLoadingFilterState,
-    isFilterStateFetched,
-    isViewLoading,
-    isViewFetched,
-    isCollectionLoading,
-    isCollectionFetched,
-    isQueryEntitiesLoading,
-    isRelationDataLoading,
-    isRelationDataFetched,
-  });
-
   return result;
 }
 
@@ -439,134 +413,6 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   }
 
   return where;
-}
-
-function useRenderCounter(label: string) {
-  const renderCount = React.useRef(0);
-  renderCount.current += 1;
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[render] ${label} #${renderCount.current}`);
-  }
-}
-
-function useDebugChanges(label: string, values: Record<string, unknown>) {
-  const prevRef = React.useRef<Record<string, unknown> | null>(null);
-
-  React.useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
-      return;
-    }
-
-    const prev = prevRef.current;
-    if (!prev) {
-      prevRef.current = values;
-      console.log(`[render] ${label} initial ${stringifyDebug(formatDebugValues(values))}`);
-      return;
-    }
-
-    const changed: Record<string, { from: unknown; to: unknown }> = {};
-    let hasChanges = false;
-
-    for (const key of Object.keys(values)) {
-      const prevValue = prev[key];
-      const nextValue = values[key];
-
-      if (!Object.is(prevValue, nextValue)) {
-        changed[key] = { from: prevValue, to: nextValue };
-        hasChanges = true;
-      }
-    }
-
-    if (hasChanges) {
-      console.log(`[render] ${label} changes ${stringifyDebug(formatDebugDiff(changed))}`);
-    }
-
-    prevRef.current = values;
-  }, [label, values]);
-}
-
-function formatDebugValues(values: Record<string, unknown>) {
-  const formatted: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(values)) {
-    formatted[key] = formatDebugValue(value);
-  }
-  return formatted;
-}
-
-function formatDebugDiff(diff: Record<string, { from: unknown; to: unknown }>) {
-  const formatted: Record<string, { from: unknown; to: unknown }> = {};
-  for (const [key, value] of Object.entries(diff)) {
-    formatted[key] = { from: formatDebugValue(value.from), to: formatDebugValue(value.to) };
-  }
-  return formatted;
-}
-
-function formatDebugValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return {
-      __type: 'array',
-      length: value.length,
-      preview: sanitizeDebugValue(value, 1, 10),
-    };
-  }
-  if (value === null) {
-    return 'null';
-  }
-  const valueType = typeof value;
-  if (valueType === 'object') {
-    return sanitizeDebugValue(value, 2, 20);
-  }
-  if (valueType === 'function') {
-    return 'function';
-  }
-  return value;
-}
-
-function stringifyDebug(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch (_err) {
-    return '"[unstringifiable]"';
-  }
-}
-
-function sanitizeDebugValue(value: unknown, depth: number, maxArray: number) {
-  const seen = new WeakSet<object>();
-
-  const walk = (input: unknown, remainingDepth: number): unknown => {
-    if (input === null || typeof input !== 'object') {
-      if (typeof input === 'function') {
-        return '[Function]';
-      }
-      return input;
-    }
-
-    if (seen.has(input)) {
-      return '[Circular]';
-    }
-    seen.add(input);
-
-    if (Array.isArray(input)) {
-      const preview = input.slice(0, maxArray).map(item => walk(item, remainingDepth - 1));
-      return {
-        __type: 'array',
-        length: input.length,
-        preview,
-      };
-    }
-
-    if (remainingDepth <= 0) {
-      return '[Object]';
-    }
-
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(input)) {
-      result[key] = walk(val, remainingDepth - 1);
-    }
-    return result;
-  };
-
-  return walk(value, depth);
 }
 
 function stableStringify(value: unknown): string {
