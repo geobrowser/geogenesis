@@ -16,6 +16,7 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
+import { queryClient } from '~/core/query-client';
 import { useMutate } from '~/core/sync/use-mutate';
 import { detectWeb2URLs } from '~/core/utils/url-detection';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
@@ -37,13 +38,13 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
-import { showingIdsAtom } from '~/atoms';
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
+import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (

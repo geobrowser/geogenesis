@@ -5,6 +5,7 @@ import type { SuggestionOptions } from '@tiptap/suggestion';
 import tippy from 'tippy.js';
 import type { Instance } from 'tippy.js';
 
+import { insertGraphLink } from './insert-graph-link';
 import { MentionList } from './mention-list';
 
 const EntityMentionSuggestion = Extension.create<{
@@ -47,25 +48,34 @@ export const createEntityMentionExtension = (spaceId: string) =>
 
         return {
           onStart: props => {
-            // Use passed spaceId
-            const currentSpaceId = spaceId;
-
             reactRenderer = new ReactRenderer(MentionList, {
               props: {
                 ...props,
-                spaceId: currentSpaceId,
-                command: (entityId: string, entityName: string) => {
-                  // Insert entity mention as markdown link format [name](graph://id)
-                  const linkText = entityName || entityId;
-                  const linkUrl = `graph://${entityId}`;
+                spaceId,
+                command: (entityId: string, entityName: string, entitySpaceId: string) => {
+                  // Hide and destroy popup first to restore focus to editor
+                  if (popup) {
+                    popup.destroy();
+                    popup = null;
+                  }
+                  if (reactRenderer) {
+                    reactRenderer.destroy();
+                  }
 
-                  // Insert as HTML anchor tag to ensure reliable link rendering
-                  props.editor
-                    .chain()
-                    .focus()
-                    .deleteRange(props.range)
-                    .insertContent(`<a href="${linkUrl}">${linkText}</a>`)
-                    .run();
+                  // The range from the suggestion plugin should include the @ character
+                  // We need to make sure we're deleting from the @ character position
+                  const from = props.range.from;
+                  const to = props.range.to;
+
+                  // Use shared function to insert graph link
+                  insertGraphLink({
+                    editor: props.editor,
+                    entityId,
+                    linkText: entityName,
+                    spaceId: entitySpaceId,
+                    from,
+                    to,
+                  });
                 },
                 onEscape: () => {
                   if (popup) {
@@ -76,66 +86,63 @@ export const createEntityMentionExtension = (spaceId: string) =>
               editor: props.editor,
             });
 
-          if (!props.clientRect) {
-            console.warn('EntityMention: No clientRect available, skipping popup creation');
-            return;
-          }
-
-          // Create single popup instance
-          const instances = tippy('body', {
-            getReferenceClientRect: props.clientRect as any,
-            appendTo: () => document.body,
-            content: reactRenderer.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: 'manual',
-            placement: 'bottom-start',
-            theme: 'light',
-            arrow: false,
-            offset: [0, 8],
-            maxWidth: 420,
-            zIndex: 9999,
-          });
-
-          popup = instances[0];
-        },
-
-        onUpdate(props) {
-          if (reactRenderer) {
-            reactRenderer.updateProps(props);
-          }
-
-          if (popup && props.clientRect) {
-            popup.setProps({
-              getReferenceClientRect: props.clientRect as any,
-            });
-          }
-        },
-
-        onKeyDown(props) {
-          if (props.event.key === 'Escape') {
-            if (popup) {
-              popup.hide();
+            if (!props.clientRect) {
+              console.warn('EntityMention: No clientRect available, skipping popup creation');
+              return;
             }
-            return true;
-          }
 
-          return reactRenderer?.ref?.onKeyDown(props) ?? false;
-        },
+            // Create single popup instance
+            const instances = tippy('body', {
+              getReferenceClientRect: props.clientRect as any,
+              appendTo: () => document.body,
+              content: reactRenderer.element,
+              showOnCreate: true,
+              interactive: true,
+              trigger: 'manual',
+              placement: 'bottom-start',
+              theme: 'light',
+              arrow: false,
+              offset: [0, 8],
+              maxWidth: 420,
+              zIndex: 9999,
+            });
 
-        onExit() {
-          if (popup) {
-            popup.destroy();
-            popup = null;
-          }
-          if (reactRenderer) {
-            reactRenderer.destroy();
-          }
-        },
-      };
+            popup = instances[0];
+          },
+
+          onUpdate(props) {
+            if (reactRenderer) {
+              reactRenderer.updateProps(props);
+            }
+
+            if (popup && props.clientRect) {
+              popup.setProps({
+                getReferenceClientRect: props.clientRect as any,
+              });
+            }
+          },
+
+          onKeyDown(props) {
+            if (props.event.key === 'Escape') {
+              if (popup) {
+                popup.hide();
+              }
+              return true;
+            }
+
+            return reactRenderer?.ref?.onKeyDown(props) ?? false;
+          },
+
+          onExit() {
+            if (popup) {
+              popup.destroy();
+              popup = null;
+            }
+            if (reactRenderer) {
+              reactRenderer.destroy();
+            }
+          },
+        };
+      },
     },
-  },
-});
-
-// Export for backward compatibility if needed, but prefer createEntityMentionExtension
-// export const EntityMentionExtension = createEntityMentionExtension('default');
+  });

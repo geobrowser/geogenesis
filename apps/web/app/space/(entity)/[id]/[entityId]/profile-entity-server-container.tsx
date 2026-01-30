@@ -44,7 +44,6 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   if (person && spaces.length > 0 && !spaces.includes(spaceId)) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(person);
-    console.log(`🔄 REDIRECTING from invalid space ${spaceId} to valid space ${newSpaceId}`);
 
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }

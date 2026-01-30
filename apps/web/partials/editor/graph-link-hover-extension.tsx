@@ -1,11 +1,15 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import tippy, { Instance } from 'tippy.js';
+
+import { useEntity } from '~/core/database/entities';
+import { NavUtils } from '~/core/utils/utils';
 
 import { GraphLinkTooltip } from './graph-link-tooltip';
 
-export const createGraphLinkHoverExtension = (spaceId: string) => {
+export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouterInstance) => {
   return Extension.create({
     name: 'graphLinkHover',
 
@@ -22,7 +26,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
             let lastHoverId: string | null = null;
             let isDestroyed = false;
             let showTimeout: ReturnType<typeof setTimeout> | null = null;
-            console.log('GraphLinkHoverExtension initialized for spaceId:', spaceId);
 
             const shouldShow = (target: Element): HTMLAnchorElement | null => {
               // Check if we're hovering over a graph:// link
@@ -65,38 +68,52 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                 }
 
                 const linkText = linkElement.textContent || '';
+                const entityId = linkUrl.replace('graph://', '');
+
+                // Read cached entity data from data attributes (avoids fetching)
+                const cachedEntityName = linkElement.getAttribute('data-entity-name');
+                const cachedEntitySpaceId = linkElement.getAttribute('data-space-id');
 
                 try {
                   component = new ReactRenderer(GraphLinkTooltip, {
-                      props: {
-                        linkText,
-                        linkUrl,
-                        parentTippy: null, // Will be set after popup creation
-                        editor: editor, // Pass editor instance
-                        onShowConnection: () => {
-                          // Extract entity ID from URL
-                          const entityId = linkUrl.replace('graph://', '');
+                    props: {
+                      linkText,
+                      linkUrl,
+                      spaceId,
+                      entityId,
+                      entityName: cachedEntityName || undefined,
+                      entitySpaceId: cachedEntitySpaceId || undefined,
+                      onShowConnection: () => {
+                        // Validate entity ID before navigation
+                        if (!entityId) {
+                          console.error('Invalid graph link: empty entity ID');
+                          return;
+                        }
 
-                          // Use the spaceId passed to the extension
-                          const currentSpaceId = spaceId;
+                        try {
+                          router.push(NavUtils.toEntity(spaceId, entityId));
+                        } catch (error) {
+                          console.error('Navigation failed:', error);
+                        }
 
-                          // Navigate to entity connection view
-                          const entityUrl = `/space/${currentSpaceId}/${entityId}`;
+                        hide();
+                      },
+                      onRemoveLink: () => {
+                        // Remove the link from the editor
+                        const { state, dispatch } = editorView;
+                        let transaction = state.tr;
 
-                          // Open in new tab
-                          window.open(entityUrl, '_blank');
+                        try {
+                          // Find the position of the current link element
+                          if (currentLinkElement) {
+                            const pos = editorView.posAtDOM(currentLinkElement, 0);
 
-                          hide();
-                        },
-                        onRemoveLink: () => {
-                          // Remove the link from the editor
-                          const { state, dispatch } = editorView;
-                          let transaction = state.tr;
+                            if (pos !== null) {
+                              // Get the node at this position
+                              const node = state.doc.nodeAt(pos);
 
-                          try {
-                            // Find all positions of this link in the document
-                            state.doc.descendants((node: any, pos: number) => {
-                              if (node.isText) {
+                              if (node && node.isText) {
+                                // Find and remove the link mark from this specific node
                                 node.marks.forEach((mark: any) => {
                                   if (mark.type.name === 'link' && mark.attrs.href === linkUrl) {
                                     // Remove the link mark but keep the text
@@ -106,45 +123,46 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                                   }
                                 });
                               }
-                            });
-
-                            // Apply the transaction
-                            dispatch(transaction);
-                          } catch (error) {
-                            console.error('Error removing link:', error);
+                            }
                           }
 
-                          hide();
-                        },
-                        onCopy: () => {
-                          // Copy link URL to clipboard
-                          if (navigator.clipboard) {
-                            navigator.clipboard.writeText(linkUrl).catch(err => {
-                              console.error('Failed to copy link:', err);
-                            });
-                          } else {
-                            // Fallback for older browsers
-                            const textArea = document.createElement('textarea');
-                            textArea.value = linkUrl;
-                            document.body.appendChild(textArea);
-                            textArea.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(textArea);
-                          }
-                          hide();
-                        },
-                        onClose: () => {
-                          hide();
-                        },
+                          // Apply the transaction
+                          dispatch(transaction);
+                        } catch (error) {
+                          console.error('Error removing link:', error);
+                        }
+
+                        hide();
                       },
-                      editor,
-                    });
+                      onCopy: () => {
+                        // Copy link URL to clipboard
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(linkUrl).catch(err => {
+                            console.error('Failed to copy link:', err);
+                          });
+                        } else {
+                          // Fallback for older browsers
+                          const textArea = document.createElement('textarea');
+                          textArea.value = linkUrl;
+                          document.body.appendChild(textArea);
+                          textArea.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(textArea);
+                        }
+                        hide();
+                      },
+                      onClose: () => {
+                        hide();
+                      },
+                    },
+                    editor,
+                  });
 
                   if (!popup && component?.element) {
                     popup = tippy(linkElement, {
                       content: component.element,
                       interactive: true,
-                      interactiveBorder: 30, // Larger border for nested tooltip navigation
+                      interactiveBorder: 10,
                       placement: 'top',
                       theme: 'light',
                       arrow: false,
@@ -152,10 +170,10 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                       maxWidth: 300,
                       zIndex: 9999,
                       appendTo: document.body,
-                      delay: [0, 0], // longer hide delay for nested tooltip UX
-                      duration: [100, 150], // animation duration
+                      delay: [0, 0],
+                      duration: [100, 150],
                       trigger: 'mouseenter',
-                      hideOnClick: false, // Don't hide on click
+                      hideOnClick: false,
                       onHide: () => {
                         if (
                           popup &&
@@ -168,14 +186,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
 
                     // Set data attribute to identify the popup
                     popup.popper.setAttribute('data-link-href', linkUrl);
-
-                    // Update component with parentTippy reference
-                    if (component && popup) {
-                      component.updateProps({
-                        ...component.props,
-                        parentTippy: popup,
-                      });
-                    }
                   }
 
                   if (popup) {

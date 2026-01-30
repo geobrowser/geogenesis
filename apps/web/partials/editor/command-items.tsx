@@ -16,6 +16,7 @@ import { EditorText } from '~/design-system/icons/editor-text';
 import { Link } from '~/design-system/icons/link';
 
 import { MentionList } from './mention-list';
+import { insertGraphLink } from './insert-graph-link';
 
 // Function to show MentionList for link selection
 const showLinkMentionList = (
@@ -199,15 +200,13 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
 
       // Show MentionList for link selection
       showLinkMentionList(editor, (entityId: string, entityName: string) => {
-        // Insert entity link using graph protocol
-        const linkText = entityName || entityId;
-        const linkUrl = `graph://${entityId}`;
-
-        editor
-          .chain()
-          .focus()
-          .insertContent(`<a href="${linkUrl}">${linkText}</a>`)
-          .run();
+        // Insert entity link using shared function with data attributes
+        insertGraphLink({
+          editor,
+          entityId,
+          linkText: entityName,
+          spaceId: currentSpaceId,
+        });
       }, currentSpaceId);
     },
   },

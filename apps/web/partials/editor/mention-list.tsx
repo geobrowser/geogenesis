@@ -2,8 +2,7 @@
 
 import { Editor } from '@tiptap/react';
 
-import * as React from 'react';
-import { forwardRef, useImperativeHandle, useEffect } from 'react';
+import { forwardRef, useEffect, useImperativeHandle } from 'react';
 
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -14,7 +13,7 @@ interface MentionListRef {
 interface MentionListProps {
   spaceId: string;
   editor: Editor;
-  command: (entityId: string, entityName: string) => void;
+  command: (entityId: string, entityName: string, entitySpaceId: string) => void;
   onEscape?: () => void;
 }
 
@@ -32,17 +31,9 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(({ space
     },
   }));
 
-    const handleEntitySelection = (result: { id: string; name: string | null }) => {
-    // When creating a new entity, we want to ensure we use the name from the result
-    // as it might be a newly created entity with a name that hasn't been propagated yet
-    command(result.id, result.name || result.id);
-  };
-
-  const handleCreateEntity = (result: { id: string; name: string | null }) => {
-    // For new entities, we pass the ID. The name is handled by the SelectEntity component's
-    // internal storage updates (which we fixed in the previous step).
-    // We return the ID so SelectEntity knows which ID to use.
-    return result.id;
+  const handleEntitySelection = (result: { id: string; name: string | null; primarySpace?: string }) => {
+    // When selecting an existing entity, use the name from the result
+    command(result.id, result.name || result.id, result.primarySpace || spaceId);
   };
 
   // Handle ESC key globally for this component
@@ -65,10 +56,9 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(({ space
       withSearchIcon={true}
       placeholder="Link to Geo entity..."
       onDone={handleEntitySelection}
-      onCreateEntity={handleCreateEntity}
       variant="floating"
       width="full"
-      advanced={false}
+      advanced={true}
       autoFocus={true}
       showUrlWarning={true}
     />

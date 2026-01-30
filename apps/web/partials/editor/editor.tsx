@@ -22,6 +22,7 @@ import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
 import { createEntityMentionExtension } from './entity-mention-extension';
 import { createCommandExtension } from './command-extension';
+import { FloatingToolbarExtension } from './floating-toolbar-extension';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -43,6 +44,7 @@ interface Props {
 }
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+  const router = useRouter();
   const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const [isTransitioning, setIsTransitioning] = React.useState(false);
@@ -91,16 +93,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     editableRef.current = editable;
   }, [editable]);
 
-
   const extensions = React.useMemo(
     () => [
       ...tiptapExtensions,
       createIdExtension(spaceId),
-      createGraphLinkHoverExtension(spaceId),
+      createGraphLinkHoverExtension(spaceId, router),
       createEntityMentionExtension(spaceId),
       createCommandExtension(spaceId),
+      FloatingToolbarExtension,
     ],
-    [spaceId]
+    [spaceId, router]
   );
 
   useInterceptEditorLinks(spaceId);

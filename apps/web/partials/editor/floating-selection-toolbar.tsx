@@ -6,8 +6,10 @@ import React from 'react';
 
 import { SquareButton } from '~/design-system/button';
 import { Link } from '~/design-system/icons/link';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { MentionList } from './mention-list';
 import { useSelectionFormatting } from './use-selection-formatting';
+import { insertGraphLink } from './insert-graph-link';
 
 // Toolbar component
 interface FloatingToolbarProps {
@@ -17,6 +19,9 @@ interface FloatingToolbarProps {
 export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ editor }) => {
   // Use custom hook to get formatting state based on selection
   const { isBold, isItalic, isUnderline, isLink } = useSelectionFormatting(editor);
+  // Get spaceId from EditorProvider context
+  const { spaceId } = useEditorInstance();
+
   const handleBold = () => {
     editor.chain().focus().toggleBold().run();
   };
@@ -30,39 +35,41 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
   };
 
   const handleLink = () => {
-    // Get current space ID from editor context
-    const currentSpaceId = editor.storage?.currentSpace?.id || 'default';
+    // Use spaceId from EditorProvider context
+    const currentSpaceId = spaceId;
+
+    if (!currentSpaceId) {
+      console.error('No spaceId available for link creation');
+      return;
+    }
 
     // Store the current selection
     const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
+
+    // Extract selected text if there is a selection
+    const selectedText = from !== to ? editor.state.doc.textBetween(from, to) : '';
 
     // Create ReactRenderer for MentionList
     const reactRenderer = new ReactRenderer(MentionList, {
       props: {
         spaceId: currentSpaceId,
         editor: editor,
-        command: (entityId: string, entityName: string) => {
-          // Create link with selected text or entity name as markdown format
-          const linkText = selectedText || entityName || entityId;
-          const linkUrl = `graph://${entityId}`;
-
-          // Insert as raw markdown format [name](graph://id)
-          if (selectedText) {
-            // If there's selected text, replace it with markdown link using the original text as label
-            // The issue was that we were appending the link text to the existing text
-            editor.chain().focus().setTextSelection({ from, to }).deleteSelection().insertContent(`[${selectedText}](${linkUrl})`).run();
-          } else {
-            // If no selection, insert new markdown link
-            editor.chain().focus().insertContent(`[${linkText}](${linkUrl})`).run();
-          }
+        command: (entityId: string, entityName: string, entitySpaceId: string) => {
+          // Use selected text as linkText if available, otherwise use entityName
+          const linkText = selectedText;
+          // Use shared function to insert graph link with spaceId for data attributes
+          insertGraphLink({ editor, entityId, linkText, entityName, spaceId: entitySpaceId ?? currentSpaceId, from, to });
 
           // Hide the tippy
-          tippyInstance.hide();
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
         },
         onEscape: () => {
           // Hide the tippy when escape is pressed
-          tippyInstance.hide();
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
         },
       },
       editor,
@@ -110,7 +117,7 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
   };
 
   // Don't render if editor is not ready
-  if (!editor || !editor.isActive) {
+  if (!editor || editor.isDestroyed) {
     return null;
   }
 
@@ -153,3 +160,4 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
     </div>
   );
 };
+
