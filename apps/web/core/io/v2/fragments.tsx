@@ -73,8 +73,15 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter, $orderBy: [EntitiesOrderBy!]) {
-    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy, spaceId: $spaceId) {
+  query AllEntities(
+    $spaceId: UUID
+    $typeIds: UUIDFilter
+    $limit: Int
+    $offset: Int
+    $filter: EntityFilter
+    $orderBy: [EntitiesOrderBy!]
+  ) {
+    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy, spaceId: $spaceId, typeIds: $typeIds) {
       id
       name
       description
