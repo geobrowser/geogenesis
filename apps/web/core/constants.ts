@@ -31,7 +31,7 @@ export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
 export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
-export const ROOT_SPACE = '655d6077dc49e1f90e8574dd57c3164e';
+export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
 export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
