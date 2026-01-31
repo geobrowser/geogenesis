@@ -9,6 +9,25 @@ import { DataType, Relation, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
+/** Convert a Uint8Array or string ID to a hex string. */
+function toHexId(id: unknown): string {
+  if (typeof id === 'string') {
+    return id;
+  }
+  if (id instanceof Uint8Array) {
+    return Array.from(id)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  // Fallback for other array-like types
+  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
+    return Array.from(id as ArrayLike<number>)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return String(id);
+}
+
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
 
@@ -276,20 +295,20 @@ function createMutator(store: GeoStore): Mutator {
         for (const op of createImageOps) {
           if (op.type === 'createRelation') {
             store.setRelation({
-              id: String(op.id),
-              entityId: op.entity ? String(op.entity) : String(op.from),
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
               fromEntity: {
-                id: String(op.from),
+                id: toHexId(op.from),
                 name: null,
               },
               type: {
-                id: String(op.relationType),
+                id: toHexId(op.relationType),
                 name: 'Image',
               },
               toEntity: {
-                id: String(op.to),
+                id: toHexId(op.to),
                 name: 'Image',
-                value: String(op.to),
+                value: toHexId(op.to),
               },
               spaceId,
               position: Position.generate(),
@@ -300,16 +319,16 @@ function createMutator(store: GeoStore): Mutator {
             for (const pv of op.values) {
               store.setValue({
                 id: ID.createValueId({
-                  entityId: String(op.id),
-                  propertyId: String(pv.property),
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
                   spaceId,
                 }),
                 entity: {
-                  id: String(op.id),
+                  id: toHexId(op.id),
                   name: null,
                 },
                 property: {
-                  id: String(pv.property),
+                  id: toHexId(pv.property),
                   name: 'Image Property',
                   dataType: 'TEXT',
                   renderableType: 'URL',
@@ -323,6 +342,7 @@ function createMutator(store: GeoStore): Mutator {
 
         // Create relation from parent entity to image entity
         const relationId = ID.createEntityId();
+        const imageIdStr = toHexId(imageId);
         store.setRelation({
           id: relationId,
           entityId: ID.createEntityId(),
@@ -335,9 +355,9 @@ function createMutator(store: GeoStore): Mutator {
             name: relationPropertyName || '',
           },
           toEntity: {
-            id: imageId,
+            id: imageIdStr,
             name: null,
-            value: imageId,
+            value: imageIdStr,
           },
           spaceId,
           position: Position.generate(),
@@ -345,7 +365,7 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'IMAGE',
         });
 
-        return { imageId, relationId };
+        return { imageId: imageIdStr, relationId };
       },
     },
     videos: {
@@ -379,7 +399,7 @@ function createMutator(store: GeoStore): Mutator {
         }
 
         // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
-        const videoIdStr = String(videoId);
+        const videoIdStr = toHexId(videoId);
         if (ipfsUrl) {
           store.setValue({
             id: ID.createValueId({
@@ -407,7 +427,7 @@ function createMutator(store: GeoStore): Mutator {
           id: ID.createEntityId(),
           entityId: ID.createEntityId(),
           fromEntity: {
-            id: videoId,
+            id: videoIdStr,
             name: null,
           },
           type: {
@@ -439,9 +459,9 @@ function createMutator(store: GeoStore): Mutator {
             name: relationPropertyName || '',
           },
           toEntity: {
-            id: videoId,
+            id: videoIdStr,
             name: null,
-            value: videoId,
+            value: videoIdStr,
           },
           spaceId,
           position: Position.generate(),
@@ -449,7 +469,7 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'VIDEO',
         });
 
-        return { videoId, relationId };
+        return { videoId: videoIdStr, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {
