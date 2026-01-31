@@ -127,8 +127,8 @@ export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: 
     decoder: data =>
       data.entity?.backlinksList
         ? (data.entity.backlinksList
-            .map((e: any) => e?.fromEntity)
-            .filter((e): e is { id: string; name?: string | null; spaceIds: string[]; types: Array<{ id: string; name: string }> } => e !== null) ?? [])
+            .map((e: any) => e?.fromEntity ? { ...e.fromEntity, backlinkSpaceId: e.spaceId } : null)
+            .filter((e): e is { id: string; name?: string | null; spaceIds: string[]; types: Array<{ id: string; name: string; spaceIds?: string[] }>; backlinkSpaceId: string } => e !== null) ?? [])
         : [],
     variables: { id: entityId, spaceId },
     signal,
