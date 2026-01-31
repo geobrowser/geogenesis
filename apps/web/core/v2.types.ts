@@ -16,6 +16,17 @@ export type DataType =
 
 // Legacy type aliases for backwards compatibility during migration
 export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
+
+/**
+ * Maps legacy GRC-20 data type names from older API responses to current v2 types.
+ *
+ * Background: Some older data in the knowledge graph uses 'BOOLEAN' as the data type
+ * string, but GRC-20 v2 standardized on 'BOOL'. This mapping ensures backwards
+ * compatibility when reading data from the API or reconstructing entities from storage.
+ */
+export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
+  BOOLEAN: 'BOOL',
+} as const;
 export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
