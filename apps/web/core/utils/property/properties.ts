@@ -10,7 +10,15 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/v2.types';
+import {
+  DataType,
+  Entity,
+  LEGACY_DATA_TYPE_MAPPING,
+  Property,
+  Relation,
+  SwitchableRenderableType,
+  Value,
+} from '~/core/v2.types';
 
 /**
  * Interface for property type mapping configuration
@@ -209,9 +217,16 @@ export function reconstructFromStore(
     'EMBEDDING',
   ];
   const dataTypeString = String(dataTypeValue.value).toUpperCase();
-  const dataType: DataType = validDataTypes.includes(dataTypeString as DataType)
-    ? (dataTypeString as DataType)
-    : 'TEXT';
+
+  // Check for legacy type mapping first, then validate against current types
+  let dataType: DataType;
+  if (dataTypeString in LEGACY_DATA_TYPE_MAPPING) {
+    dataType = LEGACY_DATA_TYPE_MAPPING[dataTypeString]!;
+  } else if (validDataTypes.includes(dataTypeString as DataType)) {
+    dataType = dataTypeString as DataType;
+  } else {
+    dataType = 'TEXT';
+  }
 
   // Get relation value types
   const relationValueTypes = getRelations({

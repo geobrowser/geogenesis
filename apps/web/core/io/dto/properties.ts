@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
-import { DataType as AppDataType, Property, RenderableType } from '~/core/v2.types';
+import { DataType as AppDataType, LEGACY_DATA_TYPE_MAPPING, Property, RenderableType } from '~/core/v2.types';
 
 import { RemoteProperty } from '../v2/v2.schema';
 
@@ -50,6 +50,11 @@ export function getStrictRenderableType(renderableType: string | null): Renderab
 export function getAppDataTypeFromRemoteDataType(dataType: string | null): AppDataType {
   // Normalize to uppercase for case-insensitive matching
   const normalizedType = dataType?.toUpperCase() ?? null;
+
+  // Check for legacy type mapping first
+  if (normalizedType && normalizedType in LEGACY_DATA_TYPE_MAPPING) {
+    return LEGACY_DATA_TYPE_MAPPING[normalizedType]!;
+  }
 
   // Valid GRC-20 v2 types - pass through directly
   const validTypes: AppDataType[] = [

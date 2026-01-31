@@ -1024,7 +1024,6 @@ const SYSTEM_PROPERTIES = [
   DATA_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
-  IS_TYPE_PROPERTY,
 ];
 
 /**
@@ -1044,7 +1043,10 @@ function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string
   const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
 
   const visibleEntries = propertiesEntries.filter(([propertyId]) => {
-    return !SYSTEM_PROPERTIES.includes(propertyId) && !(propertyId === IS_TYPE_PROPERTY && isNonRelationProperty);
+    // Hide system properties and IS_TYPE_PROPERTY for non-relation properties
+    if (SYSTEM_PROPERTIES.includes(propertyId)) return false;
+    if (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty) return false;
+    return true;
   });
 
   return visibleEntries;
