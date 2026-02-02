@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { getSpaces } from '../io/v2/queries';
+import { getSpaces } from '../io/queries';
 
 export const useSpaces = () => {
   const { data: spaces } = useQuery({

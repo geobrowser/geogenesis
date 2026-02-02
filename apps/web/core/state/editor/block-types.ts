@@ -1,8 +1,8 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { VIDEO_BLOCK_TYPE } from '~/core/constants';
-import { EntityId } from '~/core/io/schema';
-import { Relation } from '~/core/v2.types';
+import { EntityId } from '~/core/io/substream-schema';
+import { Relation } from '~/core/types';
 
 type BlockTypeId =
   | typeof SystemIds.TEXT_BLOCK

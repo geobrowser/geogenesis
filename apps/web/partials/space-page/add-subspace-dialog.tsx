@@ -12,7 +12,7 @@ import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
 import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
-import { SubstreamSubspace } from '~/core/io/schema';
+import { SubstreamSubspace } from '~/core/io/substream-schema';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { getSpaceMetadataFragment } from '~/core/io/subgraph/fragments';

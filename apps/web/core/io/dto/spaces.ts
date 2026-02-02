@@ -1,9 +1,9 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { SpaceEntity } from '~/core/v2.types';
+import { SpaceEntity } from '~/core/types';
 
-import { type Address, RemoteEntity, RemoteSpace } from '../v2/v2.schema';
+import { type Address, RemoteEntity, RemoteSpace } from '../schema';
 import { EntityDtoLive } from './entities';
 
 export type Space = {

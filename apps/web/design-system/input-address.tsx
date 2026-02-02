@@ -13,7 +13,7 @@ import { startTransition, useState } from 'react';
 import { Feature } from '~/core/hooks/use-place-search';
 import { usePlaceSearch } from '~/core/hooks/use-place-search';
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import {
   ADDRESS_PROPERTY,
@@ -26,7 +26,7 @@ import {
   SOURCE_DATABASE_IDENTIFIER_PROPERTY,
 } from '~/core/system-ids';
 import { GeoPoint } from '~/core/utils/utils';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Tag } from '~/design-system/tag';

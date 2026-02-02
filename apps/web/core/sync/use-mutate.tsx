@@ -5,7 +5,7 @@ import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PRO
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { extractValueString } from '../utils/value';
-import { DataType, Relation, Value } from '../v2.types';
+import { DataType, Relation, Value } from '../types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 

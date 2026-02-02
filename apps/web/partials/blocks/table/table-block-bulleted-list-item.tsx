@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Source } from '~/core/blocks/data/source';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
-import { Cell, Property } from '~/core/v2.types';
+import { Cell, Property } from '~/core/types';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';

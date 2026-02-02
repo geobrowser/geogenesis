@@ -8,7 +8,7 @@ import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
-import { getSpace } from '../io/v2/queries';
+import { getSpace } from '../io/queries';
 
 interface AddSubspaceArgs {
   spaceId: string;

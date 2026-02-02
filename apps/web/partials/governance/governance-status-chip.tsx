@@ -1,4 +1,4 @@
-import { ProposalStatus } from '~/core/io/schema';
+import { ProposalStatus } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';

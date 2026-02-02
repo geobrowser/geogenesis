@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { produce } from 'immer';
 
 import { ID } from '~/core/id';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 

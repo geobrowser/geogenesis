@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { cache } from 'react';
 
-import { getSpace } from '~/core/io/v2/queries';
+import { getSpace } from '~/core/io/queries';
 
 import { Telemetry } from '~/app/api/telemetry';
 

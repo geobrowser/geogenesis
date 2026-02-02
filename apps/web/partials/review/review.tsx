@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
-import { getSpaces } from '~/core/io/v2/queries';
+import { getSpaces } from '~/core/io/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';

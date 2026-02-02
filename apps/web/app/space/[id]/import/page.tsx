@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { Suspense } from 'react';
 
-import { getSpace } from '~/core/io/v2/queries';
+import { getSpace } from '~/core/io/queries';
 
 import { Dots } from '~/design-system/dots';
 

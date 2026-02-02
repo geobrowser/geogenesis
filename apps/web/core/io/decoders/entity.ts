@@ -1,9 +1,9 @@
 import { Either, Schema } from 'effect';
 
-import { Entity as EntityType } from '~/core/v2.types';
+import { Entity as EntityType } from '~/core/types';
 
-import { EntityDtoLive } from '../../dto/entities';
-import { Entity as EntitySchema, EntityType as EntityTypeSchema } from '../v2.schema';
+import { EntityDtoLive } from '../dto/entities';
+import { Entity as EntitySchema, EntityType as EntityTypeSchema } from '../schema';
 
 export class EntityDecoder {
   static decode(data: unknown): EntityType | null {

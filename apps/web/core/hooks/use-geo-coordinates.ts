@@ -3,7 +3,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { useEntity } from '../database/entities';
-import { EntityId } from '../io/schema';
+import { EntityId } from '../io/substream-schema';
 import { useQueryEntity } from '../sync/use-store';
 import { ADDRESS_PROPERTY } from '../system-ids';
 

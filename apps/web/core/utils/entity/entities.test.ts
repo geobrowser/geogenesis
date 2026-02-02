@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Value } from '~/core/v2.types';
+import { Value } from '~/core/types';
 
 import { description, descriptionTriple, name, nameValue } from './entities';
 

@@ -6,7 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';
 
-import { SubstreamVote } from '../io/schema';
+import { SubstreamVote } from '../io/substream-schema';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 interface Args {

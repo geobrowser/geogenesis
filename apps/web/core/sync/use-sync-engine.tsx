@@ -5,7 +5,7 @@ import { Atom } from '@xstate/store';
 import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
-import { Entity, Relation, Value } from '../v2.types';
+import { Entity, Relation, Value } from '../types';
 import { SyncEngine } from './engine';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';

@@ -16,7 +16,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { getProperties } from '~/core/io/v2/queries';
+import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
 
 import { Checkbox } from '~/design-system/checkbox';

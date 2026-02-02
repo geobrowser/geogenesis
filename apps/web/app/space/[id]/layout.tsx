@@ -2,7 +2,7 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';

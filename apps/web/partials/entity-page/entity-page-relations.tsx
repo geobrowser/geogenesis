@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
-import type { Relation } from '~/core/v2.types';
+import type { Relation } from '~/core/types';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';

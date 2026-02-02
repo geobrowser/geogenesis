@@ -1,9 +1,9 @@
 import { Either, Schema } from 'effect';
 
 import { RelationDtoLive } from '~/core/io/dto/relations';
-import { Relation as RelationType } from '~/core/v2.types';
+import { Relation as RelationType } from '~/core/types';
 
-import { Relation as RelationSchema } from '../v2.schema';
+import { Relation as RelationSchema } from '../schema';
 
 export class RelationDecoder {
   static decode(data: unknown): RelationType | null {
