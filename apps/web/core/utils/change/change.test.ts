@@ -1,7 +1,7 @@
 // @TODO(grc-20-v2-migration): Update EntityChange and diff types to use v2 schema
 import { describe, expect, it } from 'vitest';
 
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { aggregateChanges } from './change';
 

@@ -1,7 +1,5 @@
 import { type Hex } from 'viem';
 
-export const EMPTY_SPACE_ID = '0x00000000000000000000000000000000' as const;
-
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 /**
@@ -9,7 +7,6 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as cons
  */
 export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
 
-export const EMPTY_SPACE_ID_HEX = EMPTY_SPACE_ID as Hex;
 export const ZERO_ADDRESS_HEX = ZERO_ADDRESS as Hex;
 export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
 
@@ -68,13 +65,6 @@ export const DAOSpaceAbi = [
  * Minimal SpaceRegistry ABI - only includes functions used by this app.
  */
 export const SpaceRegistryAbi = [
-  {
-    inputs: [{ internalType: 'address', name: '_account', type: 'address' }],
-    name: 'addressToSpaceId',
-    outputs: [{ internalType: 'bytes16', name: '_spaceId', type: 'bytes16' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
   {
     inputs: [
       { internalType: 'bytes16', name: '_fromSpaceId', type: 'bytes16' },

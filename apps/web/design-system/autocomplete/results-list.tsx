@@ -5,7 +5,7 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { SearchResult, SpaceEntity } from '~/core/v2.types';
+import { SearchResult, SpaceEntity } from '~/core/types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { NativeGeoImage } from '~/design-system/geo-image';

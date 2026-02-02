@@ -29,7 +29,7 @@ export async function SpaceMembers({ spaceId }: Props) {
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
 
-  const isPublicSpace = space?.type === 'PUBLIC';
+  const isPublicSpace = space?.type === 'DAO';
 
   if (!space) {
     return null;
@@ -57,7 +57,7 @@ export async function SpaceMembers({ spaceId }: Props) {
               <SpaceMembersDialogServerContainer
                 spaceType={space.type}
                 spaceId={spaceId}
-                votingPluginAddress={space.mainVotingAddress}
+                votingPluginAddress={space.address}
               />
             </React.Suspense>
           }

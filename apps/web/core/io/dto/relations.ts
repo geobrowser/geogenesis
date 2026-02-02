@@ -1,10 +1,10 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { VIDEO_BLOCK_TYPE, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
-import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
-import { Relation, RenderableEntityType } from '~/core/v2.types';
+import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
+import { Relation, RenderableEntityType } from '~/core/types';
 
-import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../schema';
+import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../substream-schema';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const imageUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');

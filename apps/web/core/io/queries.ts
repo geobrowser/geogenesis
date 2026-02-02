@@ -1,9 +1,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
-import { Entity, SearchResult } from '~/core/v2.types';
+import { Entity, SearchResult } from '~/core/types';
 
-import { Space } from '../dto/spaces';
+import { Space } from './dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -25,8 +25,8 @@ import {
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
-} from './fragments';
-import { graphql } from './graphql';
+} from './query-fragments';
+import { graphql } from './graphql-client';
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
@@ -165,6 +165,21 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
     query: spacesWhereMemberQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
     variables: { memberSpaceId },
+    signal,
+  });
+}
+
+/** Get a personal space by wallet address. Returns the space owned by this address, or null if none exists. */
+export function getSpaceByAddress(address: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesQuery,
+    decoder: data => {
+      const firstSpace = data.spaces?.[0];
+      if (!firstSpace) return null;
+      return SpaceDecoder.decode(firstSpace);
+    },
+    // Use case-insensitive matching since Ethereum addresses can be checksummed or lowercase
+    variables: { filter: { address: { isInsensitive: address } }, limit: 1 },
     signal,
   });
 }

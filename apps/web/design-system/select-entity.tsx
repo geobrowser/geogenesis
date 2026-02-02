@@ -19,7 +19,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
-import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';

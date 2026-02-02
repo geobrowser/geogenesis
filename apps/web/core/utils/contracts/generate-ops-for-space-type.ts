@@ -1,7 +1,7 @@
 import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import type { SpaceType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { validateEntityId } from '~/core/utils/utils';

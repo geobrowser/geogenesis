@@ -1,7 +1,7 @@
 'use client';
 
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
-import type { Relation } from '~/core/v2.types';
+import type { Relation } from '~/core/types';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';

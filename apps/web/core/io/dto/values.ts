@@ -1,7 +1,7 @@
 import { ID } from '~/core/id';
-import { DataType, Value } from '~/core/v2.types';
+import { DataType, Value } from '~/core/types';
 
-import { RemoteValue } from '../v2/v2.schema';
+import { RemoteValue } from '../schema';
 import { getAppDataTypeFromRemoteDataType } from './properties';
 
 /** Checks if a remote value has actual data (not just null fields). */

@@ -83,10 +83,9 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           status={proposal.status}
           userVote={userVote}
           // We know that the space isn't null here, so casting is safe. If the space
-          // doesn't exist we redirect the user. Eventually every space with governance
-          // will have a main voting plugin address
-          // @TODO(migration): This address will be different for the personal space plugin
-          votingContractAddress={space?.mainVotingAddress as `0x${string}`}
+          // We know that the space isn't null here, so casting is safe. If the space
+          // doesn't exist we redirect the user.
+          votingContractAddress={space?.address as `0x${string}`}
         />
       </div>
       <div className="relative overflow-y-auto overflow-x-clip overscroll-contain">

@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
-import { SubstreamVersionHistorical } from '../schema';
+import { SubstreamVersionHistorical } from '../substream-schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 

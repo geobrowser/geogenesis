@@ -16,7 +16,7 @@ import cx from 'classnames';
 import React from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { Property, Relation, Row } from '~/core/v2.types';
+import { Property, Relation, Row } from '~/core/types';
 
 import { PositionBox } from '~/design-system/position-box';
 

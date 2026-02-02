@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { OmitStrict } from '~/core/types';
-import { Entity, Relation } from '~/core/v2.types';
+import { Entity, Relation } from '~/core/types';
 
 const EditorContext = React.createContext<OmitStrict<EditorProviderProps, 'children'> | null>(null);
 

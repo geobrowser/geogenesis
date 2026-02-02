@@ -23,7 +23,7 @@ import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
-import { Property, Relation, ValueOptions } from '~/core/v2.types';
+import { Property, Relation, ValueOptions } from '~/core/types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';

@@ -1,9 +1,9 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { SpaceEntity } from '~/core/v2.types';
+import { SpaceEntity } from '~/core/types';
 
-import { type Address, RemoteEntity, RemoteSpace } from '../v2/v2.schema';
+import { type Address, RemoteEntity, RemoteSpace } from '../schema';
 import { EntityDtoLive } from './entities';
 
 export type Space = {
@@ -11,21 +11,11 @@ export type Space = {
   type: SpaceGovernanceType;
   entity: SpaceEntity;
   address: Address;
-  daoAddress: Address;
-  spaceAddress: Address;
-  mainVotingAddress: Address | null;
-  membershipAddress: Address | null;
-  personalAddress: Address | null;
 
   // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
   members: string[];
 };
-
-// @TODO(grc-20-v2-migration): Update app to use 'DAO' | 'PERSONAL' and remove this mapping
-function mapGovernanceType(apiType: 'DAO' | 'PERSONAL'): SpaceGovernanceType {
-  return apiType === 'DAO' ? 'PUBLIC' : 'PERSONAL';
-}
 
 export function SpaceDto(space: RemoteSpace): Space {
   const spaceId = space.id;
@@ -33,18 +23,11 @@ export function SpaceDto(space: RemoteSpace): Space {
 
   return {
     id: spaceId,
-    type: mapGovernanceType(space.type),
+    type: space.type,
     entity: spaceEntity,
-
+    address: space.address,
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
-
-    address: space.address,
-    daoAddress: space.address,
-    spaceAddress: space.address,
-    mainVotingAddress: null,
-    membershipAddress: null,
-    personalAddress: null,
   };
 }
 

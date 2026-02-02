@@ -5,10 +5,10 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
 
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
-import { getSpace } from '../io/v2/queries';
+import { getSpace } from '../io/queries';
 import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
@@ -209,7 +209,7 @@ function makeProposal(args: MakeProposalArgs) {
     let to: `0x${string}`;
     let calldata: `0x${string}`;
 
-    if (space.type === 'PUBLIC') {
+    if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
       // Get the caller's personal space ID (required for DAO proposals)
       const callerSpaceId = yield* Effect.tryPromise({

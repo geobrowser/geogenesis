@@ -1,4 +1,4 @@
-import { DataType, ValueOptions } from '~/core/v2.types';
+import { DataType, ValueOptions } from '~/core/types';
 
 export type BlockId = string;
 

@@ -60,17 +60,17 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       return null;
     }
 
-    if (!space?.daoAddress) {
-      console.error('No DAOSpace address found for space');
+    if (!space?.address) {
+      console.error('No space address found');
       return null;
     }
 
-    const daoSpaceAddress = space.daoAddress as Hex;
+    const spaceAddress = space.address as Hex;
 
     console.log('Requesting to be editor', {
       fromSpaceId: personalSpaceId,
       toSpaceId: spaceId,
-      daoSpaceAddress,
+      spaceAddress,
     });
 
     const writeTxEffect = Effect.gen(function* () {
@@ -87,7 +87,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
       const proposalActions = [
         {
-          to: daoSpaceAddress,
+          to: spaceAddress,
           value: 0n,
           data: addEditorCallData,
         },

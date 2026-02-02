@@ -18,7 +18,7 @@ import {
   Relation,
   SwitchableRenderableType,
   Value,
-} from '~/core/v2.types';
+} from '~/core/types';
 
 /**
  * Interface for property type mapping configuration

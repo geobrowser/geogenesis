@@ -3,7 +3,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';

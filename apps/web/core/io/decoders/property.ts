@@ -1,9 +1,9 @@
 import { Either, Schema } from 'effect';
 
-import { Property } from '~/core/v2.types';
+import { Property } from '~/core/types';
 
-import { PropertyDto } from '../../dto/properties';
-import { Property as PropertySchema } from '../v2.schema';
+import { PropertyDto } from '../dto/properties';
+import { Property as PropertySchema } from '../schema';
 
 export class PropertyDecoder {
   static decode(data: unknown): Property | null {

@@ -4,15 +4,6 @@ const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: true,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
-  // Exclude test files from node_modules that reference dev dependencies
-  webpack: config => {
-    config.module.rules.push({
-      test: /\.test\.(js|ts)$/,
-      include: /node_modules/,
-      use: 'ignore-loader',
-    });
-    return config;
-  },
   experimental: {
     optimizePackageImports: [
       'effect',

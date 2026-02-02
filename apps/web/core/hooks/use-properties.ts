@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { useQueryProperties } from '~/core/sync/use-store';
 
-import { Property } from '../v2.types';
+import { Property } from '../types';
 
 export function useProperties(propertyIds: string[]): Record<string, Property> {
   const { properties } = useQueryProperties({ ids: propertyIds });
