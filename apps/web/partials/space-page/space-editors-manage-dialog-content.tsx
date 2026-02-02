@@ -45,24 +45,30 @@ interface CurrentEditorProps {
 function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
   const { proposeRemoveEditor, status } = useProposeRemoveEditor({ spaceId });
 
-  if (status === 'success') {
-    return null;
-  }
-
-  const removeEditorText =
-    status === 'idle' ? 'Remove editor' : status === 'pending' ? 'Proposing removal...' : 'Remove editor';
+  const buttonText = (() => {
+    switch (status) {
+      case 'pending':
+        return 'Proposing removal...';
+      case 'success':
+        return 'Proposal created';
+      case 'error':
+        return 'Try again';
+      default:
+        return 'Remove editor';
+    }
+  })();
 
   return (
     <div key={editor.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={editor} />
       <SmallButton
-        disabled={status === 'pending'}
+        disabled={status === 'pending' || status === 'success'}
         onClick={event => {
           event.preventDefault();
           proposeRemoveEditor({ targetEditorSpaceId: editor.spaceId });
         }}
       >
-        {removeEditorText}
+        {buttonText}
       </SmallButton>
     </div>
   );

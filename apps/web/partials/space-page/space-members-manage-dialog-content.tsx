@@ -45,24 +45,30 @@ interface CurrentMemberProps {
 function CurrentMember({ member, spaceId }: CurrentMemberProps) {
   const { proposeRemoveMember, status } = useProposeRemoveMember({ spaceId });
 
-  if (status === 'success') {
-    return null;
-  }
-
-  const removeMemberText =
-    status === 'idle' ? 'Remove member' : status === 'pending' ? 'Proposing removal...' : 'Remove member';
+  const buttonText = (() => {
+    switch (status) {
+      case 'pending':
+        return 'Proposing removal...';
+      case 'success':
+        return 'Proposal created';
+      case 'error':
+        return 'Try again';
+      default:
+        return 'Remove member';
+    }
+  })();
 
   return (
     <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={member} />
       <SmallButton
-        disabled={status === 'pending'}
+        disabled={status === 'pending' || status === 'success'}
         onClick={event => {
           event.preventDefault();
           proposeRemoveMember({ targetMemberSpaceId: member.spaceId });
         }}
       >
-        {removeMemberText}
+        {buttonText}
       </SmallButton>
     </div>
   );

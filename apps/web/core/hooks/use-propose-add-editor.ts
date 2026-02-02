@@ -54,32 +54,38 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
   const handleProposeAddEditor = useCallback(
     async ({ targetEditorSpaceId }: ProposeAddEditorParams) => {
       if (!smartAccount) {
+        const message = 'Please connect your wallet to propose adding an editor';
         console.error('No smart account available');
-        return null;
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
       }
 
       if (!personalSpaceId || !isRegistered) {
+        const message = 'You need a registered personal space to propose adding an editor';
         console.error('User does not have a registered personal space ID');
-        dispatch({
-          type: 'ERROR',
-          payload: 'You need a registered personal space ID to propose adding an editor',
-        });
-        return null;
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
       }
 
       if (!spaceId) {
+        const message = 'Unable to identify the space. Please try again.';
         console.error('No target space ID provided');
-        return null;
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
       }
 
       if (!space?.address) {
+        const message = 'Space information is still loading. Please try again.';
         console.error('No space address found');
-        return null;
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
       }
 
       if (!targetEditorSpaceId) {
+        const message = 'Unable to identify the editor to add. Please try again.';
         console.error('No target editor space ID provided');
-        return null;
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
       }
 
       const spaceAddress = space.address as Hex;
@@ -140,7 +146,7 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
           console.error(error);
           dispatch({
             type: 'ERROR',
-            payload: `${error}`,
+            payload: String(error),
             retry: () => handleProposeAddEditor({ targetEditorSpaceId }),
           });
           // Necessary to propagate error status to useMutation
