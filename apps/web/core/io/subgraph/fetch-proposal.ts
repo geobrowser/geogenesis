@@ -1,3 +1,4 @@
+// @TODO complete v2 migration
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -10,7 +11,6 @@ import { fetchProfileBySpaceId } from './fetch-profile';
 import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
 import { graphql } from './graphql';
 
-// v2 API proposal fields
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
@@ -41,7 +41,6 @@ export interface FetchProposalOptions {
   signal?: AbortController['signal'];
 }
 
-// v2 API response types
 interface V2Proposal {
   id: string;
   createdAt: string;
@@ -69,7 +68,6 @@ interface NetworkResult {
   proposal: V2Proposal | null;
 }
 
-// Map v2 actionType to ProposalType
 function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
     case 'PUBLISH':
@@ -91,12 +89,10 @@ function mapActionTypeToProposalType(actionType: string): ProposalType {
   }
 }
 
-// Convert v2 vote to v1 format
 function convertVoteOption(vote: 'YES' | 'NO' | 'ABSTAIN'): 'ACCEPT' | 'REJECT' {
   return vote === 'YES' ? 'ACCEPT' : 'REJECT';
 }
 
-// Get proposal status from v2 data
 function getProposalStatus(proposal: V2Proposal): ProposalStatus {
   const now = Math.floor(Date.now() / 1000);
   const endTime = Number(proposal.endTime);
@@ -159,25 +155,21 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  // In v2, proposedBy and voterId are memberSpaceIds (personal space IDs)
   const voterIds = proposal.proposalVotesConnection.nodes.map(v => v.voterId);
   const [creatorProfile, voterProfiles] = await Promise.all([
     fetchProfileBySpaceId(proposal.proposedBy),
     fetchProfilesBySpaceIds(voterIds),
   ]);
 
-  // Get proposal name from metadata or action type
   const firstAction = proposal.proposalActions[0];
   const name = firstAction?.metadata ?? firstAction?.actionType ?? null;
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
 
-  // Convert v2 votes to v1 format
   const votes: SubstreamVote[] = proposal.proposalVotesConnection.nodes.map(v => ({
     vote: convertVoteOption(v.vote),
     accountId: Address(v.voterId),
   }));
 
-  // Build profile for creator
   const profile = creatorProfile ?? {
     id: proposal.proposedBy,
     name: null,
@@ -187,7 +179,6 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     profileLink: null,
   };
 
-  // Build votes with profiles
   const votesWithProfiles = votes.map((v, i) => {
     const maybeProfile = voterProfiles[i];
     const voter = maybeProfile ?? {
@@ -203,10 +194,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     id: proposal.id,
-    editId: '', // v2 doesn't have separate edit ID
+    editId: '',
     name,
     type: proposalType,
-    onchainProposalId: proposal.id, // In v2, the proposal ID is the onchain ID
+    onchainProposalId: proposal.id,
     createdAt: Number(proposal.createdAt) || 0,
     createdAtBlock: proposal.createdAtBlock,
     startTime: Number(proposal.startTime),
@@ -214,8 +205,8 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     status: getProposalStatus(proposal),
     space: {
       id: proposal.spaceId,
-      name: null, // Space name should be fetched by caller
-      image: '', // Space image should be fetched by caller
+      name: null,
+      image: '',
     },
     createdBy: profile,
     proposalVotes: {
