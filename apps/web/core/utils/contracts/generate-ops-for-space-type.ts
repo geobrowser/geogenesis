@@ -39,10 +39,11 @@ export const generateOpsForSpaceType = async ({
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
 
   if (!TEMPLATE_BASED_TYPES.includes(type)) {
+    // For non-template types (default, nonprofit, government-org), create the entity with SPACE_TYPE
     const newEntity = Graph.createEntity({
       id: newEntityId,
       name: spaceName,
-      types: [], // Graph.createSpace() already adds Space type
+      types: [SystemIds.SPACE_TYPE],
     });
 
     ops.push(...newEntity.ops);

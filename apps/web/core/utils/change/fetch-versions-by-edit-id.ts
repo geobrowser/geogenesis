@@ -4,9 +4,9 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { HistoryVersionDto } from '~/core/io/dto/versions';
-import { SubstreamVersionHistorical } from '~/core/io/substream-schema';
 import { getEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamVersionHistorical } from '~/core/io/substream-schema';
 
 interface FetchVersionsArgs {
   editId: string;
@@ -15,18 +15,16 @@ interface FetchVersionsArgs {
 
 const query = (editId: string, spaceId: string) => {
   return `query {
-    versions(filter: { editId: {equalTo: ${JSON.stringify(editId)}}} first: 50) {
-      nodes {
-        ${getEntityFragment({ spaceId, useHistorical: true })}
-        edit {
-          id
-          name
-          createdAt
-          createdById
-          proposals {
-            nodes {
-              id
-            }
+    editVersions(filter: { editId: {is: ${JSON.stringify(editId)}}} first: 50) {
+      ${getEntityFragment({ spaceId, useHistorical: true })}
+      edit {
+        id
+        name
+        createdAt
+        createdById
+        proposals {
+          nodes {
+            id
           }
         }
       }
@@ -35,10 +33,15 @@ const query = (editId: string, spaceId: string) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersionHistorical[] };
+  editVersions: SubstreamVersionHistorical[];
 }
 
 export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
+  // v2 API proposals don't have editId, return early to avoid invalid UUID error
+  if (!args.editId) {
+    return [];
+  }
+
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -75,7 +78,7 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
         }
       },
       onRight: result => {
-        return result.versions.nodes;
+        return result.editVersions;
       },
     });
   });
