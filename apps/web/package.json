@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -127,7 +127,6 @@
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.5",
     "fake-indexeddb": "^4.0.2",
-    "ignore-loader": "^0.1.2",
     "jsdom": "^20.0.0",
     "pino": "^10.2.1",
     "postcss": "^8.4.21",
