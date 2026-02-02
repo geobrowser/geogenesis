@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
+import { Value } from '../v2.types';
 import { useImageUrlFromEntity } from './use-entity-media';
 import {
   GeoDate,
@@ -351,9 +352,21 @@ describe('useImageUrlFromEntity', () => {
   });
 
   it('should return the first IPFS URL when found', () => {
-    const mockValues = [
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-other-value' },
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'ipfs://QmHash123' },
+    const mockValues: Value[] = [
+      {
+        id: 'value-1',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'some-other-value',
+      },
+      {
+        id: 'value-2',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-2', name: 'IPFS URL', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'ipfs://QmHash123',
+      },
     ];
 
     vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
@@ -364,9 +377,21 @@ describe('useImageUrlFromEntity', () => {
   });
 
   it('should return undefined when values exist but none are IPFS URLs', () => {
-    const mockValues = [
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-string-value' },
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 123 },
+    const mockValues: Value[] = [
+      {
+        id: 'value-1',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-1', name: 'Text', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'some-string-value',
+      },
+      {
+        id: 'value-2',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-2', name: 'Number', dataType: 'INT64' },
+        spaceId: 'test-space',
+        value: '123',
+      },
     ];
 
     vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
@@ -381,11 +406,33 @@ describe('useImageUrlFromEntity', () => {
 
     renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
 
-    const selector = mockUseValues.mock.calls[0][0].selector;
+    const selector = mockUseValues.mock.calls[0]?.[0]?.selector;
 
     // Test that selector filters correctly
-    expect(selector({ entity: { id: 'image-123' }, spaceId: 'test-space' })).toBe(true);
-    expect(selector({ entity: { id: 'wrong-id' }, spaceId: 'test-space' })).toBe(false);
-    expect(selector({ entity: { id: 'image-123' }, spaceId: 'wrong-space' })).toBe(false);
+    const matchingValue: Value = {
+      id: 'value-1',
+      entity: { id: 'image-123', name: 'Image Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'test-space',
+      value: 'test',
+    };
+    const wrongEntityValue: Value = {
+      id: 'value-2',
+      entity: { id: 'wrong-id', name: 'Wrong Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'test-space',
+      value: 'test',
+    };
+    const wrongSpaceValue: Value = {
+      id: 'value-3',
+      entity: { id: 'image-123', name: 'Image Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'wrong-space',
+      value: 'test',
+    };
+
+    expect(selector?.(matchingValue)).toBe(true);
+    expect(selector?.(wrongEntityValue)).toBe(false);
+    expect(selector?.(wrongSpaceValue)).toBe(false);
   });
 });
