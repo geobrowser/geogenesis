@@ -233,16 +233,17 @@ async function getMembershipProposalName(
     ? Effect.runPromise(fetchProfile(proposal.createdBy.address))
     : fetchProposedEditorForProposal(proposal.id));
 
+  const displayName = profile?.name ?? profile?.address ?? 'Unknown';
+
   switch (type) {
-    case 'ADD_EDITOR': {
-      return `Add ${profile?.name ?? profile?.address} as editor`;
-    }
+    case 'ADD_EDITOR':
+      return `Add ${displayName} as editor`;
     case 'ADD_MEMBER':
-      return `Add ${profile?.name ?? profile?.address} as member`;
+      return `Add ${displayName} as member`;
     case 'REMOVE_EDITOR':
-      return `Remove ${profile?.name ?? profile?.address} as editor`;
+      return `Remove ${displayName} as editor`;
     case 'REMOVE_MEMBER':
-      return `Remove ${profile?.name ?? profile?.address} as member`;
+      return `Remove ${displayName} as member`;
   }
 }
 

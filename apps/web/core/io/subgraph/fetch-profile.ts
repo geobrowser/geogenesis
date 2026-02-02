@@ -68,12 +68,14 @@ export function fetchProfileBySpaceId(
  * Fetch multiple profiles by their space IDs in a single batch request.
  *
  * More efficient than calling fetchProfileBySpaceId multiple times.
+ * Returns profiles in the same order as the input array, preserving duplicates.
  */
 export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profile[], never, never> {
   if (spaceIds.length === 0) {
     return Effect.succeed([]);
   }
 
+  // Deduplicate for the API call, but preserve original order for return
   const uniqueSpaceIds = [...new Set(spaceIds)];
 
   return Effect.gen(function* () {
@@ -81,14 +83,14 @@ export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profi
 
     if (Either.isLeft(spaces)) {
       console.error(`Failed to fetch profiles for spaceIds:`, spaces.left);
-      return uniqueSpaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
+      return spaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
     }
 
     // Create a map for O(1) lookup
     const spaceMap = new Map(spaces.right.map(space => [space.id, space]));
 
-    // Return profiles in the same order as requested, with defaults for missing spaces
-    return uniqueSpaceIds.map(spaceId => {
+    // Return profiles in the original order (including duplicates)
+    return spaceIds.map(spaceId => {
       const space = spaceMap.get(spaceId);
       return space ? spaceToProfile(space) : defaultProfile(spaceId, spaceId);
     });
