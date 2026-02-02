@@ -1,4 +1,4 @@
-import { Entity } from '~/core/v2.types';
+import { Entity } from '~/core/types';
 
 export const getValidSpaceIdForEntity = (entity: Entity) => {
   const validSpaces = entity?.spaces ?? [];

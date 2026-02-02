@@ -9,7 +9,7 @@ import {
   RawRenderableType,
   SWITCHABLE_RENDERABLE_TYPE_LABELS,
   SwitchableRenderableType,
-} from '~/core/v2.types';
+} from '~/core/types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';

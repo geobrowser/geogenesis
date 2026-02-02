@@ -9,7 +9,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity, sortRelations } from '~/core/utils/utils';
-import { Entity, Relation } from '~/core/v2.types';
+import { Entity, Relation } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 

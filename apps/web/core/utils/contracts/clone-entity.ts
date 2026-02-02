@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { ID } from '~/core/id';
-import { getEntity } from '~/core/io/v2/queries';
+import { getEntity } from '~/core/io/queries';
 import { Ops } from '~/core/utils/ops';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 type Options = {
   oldEntityId: string;

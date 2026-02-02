@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 
 import { cache } from 'react';
 
-import { getBatchEntities, getEntity, getEntityPage } from '~/core/io/v2/queries';
-import { Entity, Relation } from '~/core/v2.types';
+import { getBatchEntities, getEntity, getEntityPage } from '~/core/io/queries';
+import { Entity, Relation } from '~/core/types';
 
 import { Telemetry } from '~/app/api/telemetry';
 

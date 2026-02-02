@@ -1,9 +1,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
-import { DataType as AppDataType, LEGACY_DATA_TYPE_MAPPING, Property, RenderableType } from '~/core/v2.types';
+import { DataType as AppDataType, LEGACY_DATA_TYPE_MAPPING, Property, RenderableType } from '~/core/types';
 
-import { RemoteProperty } from '../v2/v2.schema';
+import { RemoteProperty } from '../schema';
 
 export function PropertyDto(queryResult: RemoteProperty): Property {
   const mappedDataType = getAppDataTypeFromRemoteDataType(queryResult.dataTypeName);

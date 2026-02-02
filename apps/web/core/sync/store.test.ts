@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
-import { DataType, Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, Relation, Value } from '../types';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
 import { GeoEventStream } from './stream';
 

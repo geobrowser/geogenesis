@@ -3,12 +3,12 @@ import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
 import { ID } from '~/core/id';
-import { getProperty, getSpace } from '~/core/io/v2/queries';
+import { getProperty, getSpace } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
-import { Property } from '~/core/v2.types';
+import { Property } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 export type Filter = {

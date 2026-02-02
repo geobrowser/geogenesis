@@ -1,12 +1,12 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
-import { Entity, Relation } from '~/core/v2.types';
+import { Entity, Relation } from '~/core/types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';

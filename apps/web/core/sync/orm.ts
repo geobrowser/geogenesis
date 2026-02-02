@@ -2,15 +2,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/v2/converters';
+import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
-import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
+import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { Entity, Relation, SearchResult } from '../v2.types';
+import { Entity, Relation, SearchResult } from '../types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 

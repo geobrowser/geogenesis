@@ -29,7 +29,7 @@ export async function SpaceMembers({ spaceId }: Props) {
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
 
-  const isPublicSpace = space?.type === 'PUBLIC';
+  const isPublicSpace = space?.type === 'DAO';
 
   if (!space) {
     return null;

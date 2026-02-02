@@ -1,9 +1,9 @@
 import { Either, Schema } from 'effect';
 
-import { SearchResult } from '~/core/v2.types';
+import { SearchResult } from '~/core/types';
 
-import { SearchResultDto } from '../../dto/search';
-import { SearchResult as SearchResultSchema } from '../v2.schema';
+import { SearchResultDto } from '../dto/search';
+import { SearchResult as SearchResultSchema } from '../schema';
 
 export class ResultDecoder {
   static decode(data: unknown): SearchResult | null {

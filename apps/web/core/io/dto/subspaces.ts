@@ -1,6 +1,6 @@
-import { SpaceEntity } from '~/core/v2.types';
+import { SpaceEntity } from '~/core/types';
 
-import { Address, SpaceId, SubstreamSubspace } from '../schema';
+import { Address, SpaceId, SubstreamSubspace } from '../substream-schema';
 import { SpaceEntityDto } from './spaces';
 
 export type Subspace = {

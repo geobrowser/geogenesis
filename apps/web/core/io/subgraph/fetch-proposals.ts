@@ -6,7 +6,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
-import { SubstreamProposal } from '../schema';
+import { SubstreamProposal } from '../substream-schema';
 import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
 import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
-import { SubstreamVote } from '~/core/io/schema';
+import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';

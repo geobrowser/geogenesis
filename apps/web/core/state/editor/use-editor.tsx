@@ -12,13 +12,13 @@ import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getValues, useValues } from '~/core/sync/use-store';
 import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
-import { Relation, RenderableEntityType } from '~/core/v2.types';
+import { Relation, RenderableEntityType } from '~/core/types';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
-import { EntityId } from '../../io/schema';
+import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
 import { useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';

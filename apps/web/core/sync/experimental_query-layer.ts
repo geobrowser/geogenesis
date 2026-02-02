@@ -1,6 +1,6 @@
 import { ID } from '~/core/id';
 
-import { Entity, Relation, Value } from '../v2.types';
+import { Entity, Relation, Value } from '../types';
 
 const compareOperators = {
   string: {

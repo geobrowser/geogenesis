@@ -1,8 +1,8 @@
 import { Profile } from '~/core/types';
-import { Entity } from '~/core/v2.types';
+import { Entity } from '~/core/types';
 
-import { SubstreamVersion, SubstreamVersionHistorical } from '../schema';
-import { RemoteEntity } from '../v2/v2.schema';
+import { SubstreamVersion, SubstreamVersionHistorical } from '../substream-schema';
+import { RemoteEntity } from '../schema';
 import { EntityDtoHistorical, EntityDtoLive } from './entities';
 
 export type Version = Entity & {

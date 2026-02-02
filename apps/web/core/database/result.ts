@@ -1,9 +1,9 @@
 import { Duration, Effect } from 'effect';
 
-import { getResult, getSpaces } from '../io/v2/queries';
+import { getResult, getSpaces } from '../io/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
-import { SearchResult } from '../v2.types';
+import { SearchResult } from '../types';
 
 interface FetchResultOptions {
   id: string;

@@ -6,7 +6,7 @@ import cx from 'classnames';
 import * as React from 'react';
 import { Dispatch, SetStateAction, useState } from 'react';
 
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';

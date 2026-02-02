@@ -25,7 +25,7 @@ import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, Relation, Row, SearchResult, Value } from '~/core/v2.types';
+import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';

@@ -2,7 +2,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
+import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../substream-schema';
 import { VersionDto } from './versions';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };

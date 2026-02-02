@@ -4,10 +4,10 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { SpaceEntity } from '~/core/v2.types';
+import { SpaceEntity } from '~/core/types';
 
 import { SpaceEntityDto } from '../dto/spaces';
-import { SpaceId, SubstreamVersion } from '../schema';
+import { SpaceId, SubstreamVersion } from '../substream-schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 

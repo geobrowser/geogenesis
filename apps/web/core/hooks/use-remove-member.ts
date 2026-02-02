@@ -53,7 +53,7 @@ export function useRemoveMember(args: RemoveEditorArgs) {
 
 type CalldataForGovernanceTypeArgs =
   | {
-      type: 'PUBLIC';
+      type: 'DAO';
       memberAddress: string;
     }
   | {
@@ -63,7 +63,7 @@ type CalldataForGovernanceTypeArgs =
 
 function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x${string}` {
   switch (args.type) {
-    case 'PUBLIC':
+    case 'DAO':
       return encodeFunctionData({
         functionName: 'proposeRemoveMember',
         abi: MainVotingAbi,

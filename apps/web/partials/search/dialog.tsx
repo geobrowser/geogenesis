@@ -11,7 +11,7 @@ import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';

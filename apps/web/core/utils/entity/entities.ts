@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
-import { EntityId } from '~/core/io/schema';
-import { Relation, Value } from '~/core/v2.types';
+import { EntityId } from '~/core/io/substream-schema';
+import { Relation, Value } from '~/core/types';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the

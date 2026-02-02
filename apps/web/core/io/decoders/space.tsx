@@ -1,7 +1,7 @@
 import { Either, Schema } from 'effect';
 
-import { Space, SpaceDto } from '../../dto/spaces';
-import { Space as SpaceSchema } from '../v2.schema';
+import { Space, SpaceDto } from '../dto/spaces';
+import { Space as SpaceSchema } from '../schema';
 
 export class SpaceDecoder {
   static decode(data: unknown): Space | null {
