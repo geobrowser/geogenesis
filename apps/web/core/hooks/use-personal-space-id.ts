@@ -1,18 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { type Hex, createPublicClient, http } from 'viem';
+import { Effect } from 'effect';
 
-import {
-  EMPTY_SPACE_ID_HEX,
-  SPACE_REGISTRY_ADDRESS_HEX,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
-import { GEOGENESIS } from '~/core/wallet/geo-chain';
+import { getSpaceByAddress } from '~/core/io/v2/queries';
 
 import { useSmartAccount } from './use-smart-account';
 
-/** Hook to get the user's personal space ID from the SpaceRegistry contract. */
+/** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -22,27 +17,13 @@ export function usePersonalSpaceId() {
     queryFn: async () => {
       if (!address) return null;
 
-      const publicClient = createPublicClient({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        chain: GEOGENESIS as any,
-        transport: http(),
-      });
+      const space = await Effect.runPromise(getSpaceByAddress(address));
 
-      const spaceIdHex = (await publicClient.readContract({
-        address: SPACE_REGISTRY_ADDRESS_HEX,
-        abi: SpaceRegistryAbi,
-        functionName: 'addressToSpaceId',
-        args: [address as Hex],
-      })) as Hex;
-
-      if (spaceIdHex.toLowerCase() === EMPTY_SPACE_ID_HEX.toLowerCase()) {
+      if (!space) {
         return { isRegistered: false, personalSpaceId: null };
       }
 
-      // Remove 0x prefix and use hex format (no hyphens)
-      const personalSpaceId = spaceIdHex.slice(2).toLowerCase();
-
-      return { isRegistered: true, personalSpaceId };
+      return { isRegistered: true, personalSpaceId: space.id };
     },
     enabled: !!address,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes

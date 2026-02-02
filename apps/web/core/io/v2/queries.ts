@@ -169,6 +169,21 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
   });
 }
 
+/** Get a personal space by wallet address. Returns the space owned by this address, or null if none exists. */
+export function getSpaceByAddress(address: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesQuery,
+    decoder: data => {
+      const firstSpace = data.spaces?.[0];
+      if (!firstSpace) return null;
+      return SpaceDecoder.decode(firstSpace);
+    },
+    // Use case-insensitive matching since Ethereum addresses can be checksummed or lowercase
+    variables: { filter: { address: { isInsensitive: address } }, limit: 1 },
+    signal,
+  });
+}
+
 export function getResult(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: resultQuery,
