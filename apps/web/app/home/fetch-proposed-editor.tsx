@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
-import { defaultProfile } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
+import { defaultProfile } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 

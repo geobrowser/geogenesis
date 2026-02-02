@@ -5,7 +5,17 @@ import { getSpace, getSpaceByAddress, getSpaces } from '~/core/io/queries';
 import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { defaultProfile } from './fetch-profile-via-wallets-triple';
+export function defaultProfile(address: string, spaceId?: string): Profile {
+  return {
+    id: address,
+    spaceId: spaceId ?? address,
+    address: address as `0x${string}`,
+    avatarUrl: null,
+    coverUrl: null,
+    name: null,
+    profileLink: null,
+  };
+}
 
 /**
  * Fetch a user's profile from their wallet address.

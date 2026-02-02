@@ -15,7 +15,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { fetchProfile } from '~/core/io/subgraph';
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
@@ -523,7 +523,7 @@ async function fetchProposals({
   // In v2, proposedBy is a memberSpaceId (personal space ID)
   const proposedByIds = proposals.map(p => p.proposedBy);
   const uniqueProposedByIds = [...new Set(proposedByIds)];
-  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueProposedByIds);
+  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueProposedByIds));
 
   // Create a map of memberSpaceId -> profile for efficient lookup
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
