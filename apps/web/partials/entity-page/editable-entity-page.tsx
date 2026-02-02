@@ -17,7 +17,7 @@ import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
+import { useEntitySchema, useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { mapPropertyType } from '~/core/utils/property/properties';
@@ -68,6 +68,13 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const relationEntityRelations = useRelationEntityRelations(id, spaceId);
   const isRelationPage = relationEntityRelations.length > 0;
 
+  // Get schema properties from the entity's types - these are placeholders that can't be deleted
+  const schemaProperties = useEntitySchema(id, spaceId);
+  const schemaPropertyIds = React.useMemo(
+    () => new Set(schemaProperties.map(p => p.id)),
+    [schemaProperties]
+  );
+
   if (!shouldShowPanel && !isRelationPage) {
     return null;
   }
@@ -101,6 +108,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                   entityId={id}
                   spaceId={spaceId}
                   property={property}
+                  isSchemaProperty={schemaPropertyIds.has(propertyId)}
                 />
               ) : (
                 <RenderedValue
@@ -171,9 +179,10 @@ type RelationPropertyWithDeleteProps = {
   entityId: string;
   spaceId: string;
   property: Property;
+  isSchemaProperty: boolean;
 };
 
-function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }: RelationPropertyWithDeleteProps) {
+function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property, isSchemaProperty }: RelationPropertyWithDeleteProps) {
   const { storage } = useMutate();
 
   const propertyRelations = useRelations({
@@ -201,17 +210,20 @@ function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }:
           spaceId={spaceId}
           iconOnly={true}
         />
-        <SquareButton
-          icon={<Trash />}
-          onClick={() => {
-            // Delete all relations for this property
-            propertyRelations.forEach(relation => storage.relations.delete(relation));
-            // Also delete the value entry to fully remove the property from the entity
-            if (propertyValue) {
-              storage.values.delete(propertyValue);
-            }
-          }}
-        />
+        {/* Show delete button if: not a schema property, OR schema property with content to clear */}
+        {(!isSchemaProperty || propertyRelations.length > 0) && (
+          <SquareButton
+            icon={<Trash />}
+            onClick={() => {
+              // Delete all relations for this property
+              propertyRelations.forEach(relation => storage.relations.delete(relation));
+              // Also delete the value entry to fully remove the property from the entity
+              if (propertyValue) {
+                storage.values.delete(propertyValue);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
