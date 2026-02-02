@@ -1,75 +1,27 @@
 'use client';
 
-import { isAddress } from 'viem';
-
 import * as React from 'react';
 
-import { OmitStrict, Profile, SpaceGovernanceType, SpaceType } from '~/core/types';
+import { OmitStrict, Profile } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
-import { useAddMember } from '../../core/hooks/use-add-member';
-import { useRemoveMember } from '../../core/hooks/use-remove-member';
+import { useProposeRemoveMember } from '../../core/hooks/use-propose-remove-member';
 import { MemberRow } from './space-member-row';
 
 type Member = OmitStrict<Profile, 'coverUrl'>;
 
 interface Props {
-  spaceType: SpaceGovernanceType;
+  spaceId: string;
   members: Member[];
-  votingPluginAddress: string | null;
 }
 
-export function SpaceMembersManageDialogContent({ members, votingPluginAddress, spaceType }: Props) {
-  const { addMember, status } = useAddMember({
-    pluginAddress: votingPluginAddress,
-    shouldRefreshOnSuccess: true,
-  });
-
+export function SpaceMembersManageDialogContent({ spaceId, members }: Props) {
   const { setQuery, queriedMembers } = useQueriedMembers(members);
-
-  const [memberToAdd, setMemberToAdd] = React.useState('');
-
-  const onAddMember = () => {
-    addMember(memberToAdd);
-    setMemberToAdd('');
-  };
-
-  // Default to Add Member, and back to Add Member once mutation succeeds
-  // and we are idle again after 3 seconds
-  const addMemberText =
-    status === 'idle'
-      ? 'Add member'
-      : status === 'pending'
-        ? 'Adding member...'
-        : status === 'success'
-          ? 'Member added!'
-          : 'Add member';
 
   return (
     <div className="flex flex-col gap-4">
-      {spaceType === 'PERSONAL' ? (
-        <div className="space-y-2">
-          <h2 className="text-metadataMedium">Add space members</h2>
-          <div className="flex items-center gap-2">
-            <Input
-              disabled={status === 'pending'}
-              onChange={e => setMemberToAdd(e.currentTarget.value)}
-              placeholder="0x1234...890"
-            />
-            <SmallButton
-              className="min-w-max self-stretch"
-              variant="secondary"
-              disabled={!isAddress(memberToAdd) || status === 'pending'}
-              onClick={onAddMember}
-            >
-              {addMemberText}
-            </SmallButton>
-          </div>
-        </div>
-      ) : null}
-
       <div className="space-y-2">
         <h2 className="text-metadataMedium">{members.length} members</h2>
 
@@ -77,7 +29,7 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
 
         <div className="divide-y divide-grey-02">
           {queriedMembers.map(m => (
-            <CurrentMember key={m.id} member={m} votingPluginAddress={votingPluginAddress} spaceType={spaceType} />
+            <CurrentMember key={m.id} member={m} spaceId={spaceId} />
           ))}
         </div>
       </div>
@@ -87,19 +39,18 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
 
 interface CurrentMemberProps {
   member: Member;
-  votingPluginAddress: string | null;
-  spaceType: SpaceGovernanceType;
+  spaceId: string;
 }
 
-function CurrentMember({ member, votingPluginAddress, spaceType }: CurrentMemberProps) {
-  const { removeEditor, status } = useRemoveMember({ votingPluginAddress, spaceType });
+function CurrentMember({ member, spaceId }: CurrentMemberProps) {
+  const { proposeRemoveMember, status } = useProposeRemoveMember({ spaceId });
 
   if (status === 'success') {
     return null;
   }
 
-  // @TODO: Text might be different depending on the space type
-  const removeMemberText = status === 'idle' ? 'Remove member' : status === 'pending' ? 'Removing...' : 'Remove member';
+  const removeMemberText =
+    status === 'idle' ? 'Remove member' : status === 'pending' ? 'Proposing removal...' : 'Remove member';
 
   return (
     <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
@@ -108,7 +59,7 @@ function CurrentMember({ member, votingPluginAddress, spaceType }: CurrentMember
         disabled={status === 'pending'}
         onClick={event => {
           event.preventDefault();
-          removeEditor(member.address);
+          proposeRemoveMember({ targetMemberSpaceId: member.spaceId });
         }}
       >
         {removeMemberText}

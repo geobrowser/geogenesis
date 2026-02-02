@@ -27,14 +27,14 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<Profil
     const personalSpaceId = await getPersonalSpaceId(walletAddress);
 
     if (!personalSpaceId) {
-      // User doesn't have a registered personal space
-      return defaultProfile(walletAddress);
+      // User doesn't have a registered personal space - use wallet address as fallback spaceId
+      return defaultProfile(walletAddress, walletAddress);
     }
 
     return fetchProfileBySpaceId(personalSpaceId, walletAddress);
   } catch (error) {
     console.error(`Failed to fetch profile for wallet ${walletAddress}:`, error);
-    return defaultProfile(walletAddress);
+    return defaultProfile(walletAddress, walletAddress);
   }
 }
 
@@ -49,11 +49,12 @@ export async function fetchProfileBySpaceId(personalSpaceId: string, addressHint
     const space = await Effect.runPromise(getSpace(personalSpaceId));
 
     if (!space || !space.entity) {
-      return defaultProfile(addressHint ?? personalSpaceId);
+      return defaultProfile(addressHint ?? personalSpaceId, personalSpaceId);
     }
 
     return {
       id: space.entity.id || personalSpaceId,
+      spaceId: personalSpaceId,
       name: space.entity.name,
       avatarUrl: space.entity.image,
       coverUrl: null,
@@ -63,6 +64,6 @@ export async function fetchProfileBySpaceId(personalSpaceId: string, addressHint
     };
   } catch (error) {
     console.error(`Failed to fetch profile for spaceId ${personalSpaceId}:`, error);
-    return defaultProfile(addressHint ?? personalSpaceId);
+    return defaultProfile(addressHint ?? personalSpaceId, personalSpaceId);
   }
 }

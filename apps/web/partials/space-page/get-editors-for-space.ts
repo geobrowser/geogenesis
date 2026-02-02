@@ -29,6 +29,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
       if (!profile) {
         return {
           id: editor,
+          spaceId: editor,
           avatarUrl: null,
           name: null,
           address: editor as `0x${string}`,
@@ -38,6 +39,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
 
       return {
         id: profile.id,
+        spaceId: profile.spaceId,
         avatarUrl: profile.avatarUrl,
         name: profile.name,
         address: profile.address,

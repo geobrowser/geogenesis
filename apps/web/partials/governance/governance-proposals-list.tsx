@@ -212,6 +212,7 @@ function getProposalStatus(proposal: V2Proposal): ProposalStatus {
 function ActiveProposalsDto(proposal: V2Proposal, maybeProfile?: Profile): ActiveProposal {
   const profile = maybeProfile ?? {
     id: proposal.proposedBy,
+    spaceId: proposal.proposedBy,
     name: null,
     avatarUrl: null,
     coverUrl: null,

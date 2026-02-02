@@ -39,6 +39,7 @@ export function ProposalDto(
 ): Proposal {
   const profile = maybeCreatorProfile ?? {
     id: proposal.createdById,
+    spaceId: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
@@ -77,6 +78,7 @@ export function ProposalDto(
           ? maybeProfile
           : {
               id: v.accountId,
+              spaceId: v.accountId,
               address: v.accountId as `0x${string}`,
               name: null,
               avatarUrl: null,
@@ -102,6 +104,7 @@ export function ProposalWithoutVotersDto(
 ): ProposalWithoutVoters {
   const profile = maybeCreatorProfile ?? {
     id: proposal.createdById,
+    spaceId: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
