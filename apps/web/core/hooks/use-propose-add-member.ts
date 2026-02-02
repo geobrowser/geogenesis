@@ -23,6 +23,7 @@ import {
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseProposeAddMemberArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) to propose adding a member to */
@@ -63,9 +64,9 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
         throw new Error(message);
       }
 
-      if (!spaceId) {
-        const message = 'Unable to identify the space. Please try again.';
-        console.error('No target space ID provided');
+      if (!validateSpaceId(spaceId)) {
+        const message = 'Invalid space ID format. Please try again.';
+        console.error('Invalid target space ID:', spaceId);
         dispatch({ type: 'ERROR', payload: message });
         throw new Error(message);
       }
@@ -77,9 +78,9 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
         throw new Error(message);
       }
 
-      if (!targetMemberSpaceId) {
-        const message = 'Unable to identify the member to add. Please try again.';
-        console.error('No target member space ID provided');
+      if (!validateSpaceId(targetMemberSpaceId)) {
+        const message = 'Invalid member ID format. Please try again.';
+        console.error('Invalid target member space ID:', targetMemberSpaceId);
         dispatch({ type: 'ERROR', payload: message });
         throw new Error(message);
       }

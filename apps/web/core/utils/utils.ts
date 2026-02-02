@@ -549,6 +549,16 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
   return IdUtils.isValid(maybeEntityId);
 };
 
+/**
+ * Validates that a string is a valid space ID (bytes16 hex format).
+ * Space IDs are 32 hex characters without 0x prefix.
+ */
+export const validateSpaceId = (maybeSpaceId: string | null | undefined): maybeSpaceId is string => {
+  if (typeof maybeSpaceId !== 'string') return false;
+
+  return IdUtils.isValid(maybeSpaceId);
+};
+
 export const getTabSlug = (label: string) => {
   return label
     .replace(/[^a-zA-Z0-9\s]/g, '')

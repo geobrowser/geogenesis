@@ -23,6 +23,7 @@ import {
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseProposeAddEditorArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) to propose adding an editor to */
@@ -67,9 +68,9 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
         throw new Error(message);
       }
 
-      if (!spaceId) {
-        const message = 'Unable to identify the space. Please try again.';
-        console.error('No target space ID provided');
+      if (!validateSpaceId(spaceId)) {
+        const message = 'Invalid space ID format. Please try again.';
+        console.error('Invalid target space ID:', spaceId);
         dispatch({ type: 'ERROR', payload: message });
         throw new Error(message);
       }
@@ -81,9 +82,9 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
         throw new Error(message);
       }
 
-      if (!targetEditorSpaceId) {
-        const message = 'Unable to identify the editor to add. Please try again.';
-        console.error('No target editor space ID provided');
+      if (!validateSpaceId(targetEditorSpaceId)) {
+        const message = 'Invalid editor ID format. Please try again.';
+        console.error('Invalid target editor space ID:', targetEditorSpaceId);
         dispatch({ type: 'ERROR', payload: message });
         throw new Error(message);
       }
