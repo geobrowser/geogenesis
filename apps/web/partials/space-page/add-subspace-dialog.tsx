@@ -230,7 +230,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
               {queriedSpaces?.map(s => (
-                <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />
+                <SpaceQueryResult key={s.address} subspace={s} spaceId={spaceId} />
               ))}
             </motion.div>
           )}
@@ -285,7 +285,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
           <Divider type="horizontal" />
 
           {subspaces?.map(s => (
-            <CurrentSubspace key={s.daoAddress} subspace={s} spaceId={spaceId} spaceType={spaceType} />
+            <CurrentSubspace key={s.address} subspace={s} spaceId={spaceId} spaceType={spaceType} />
           ))}
         </div>
       )}
@@ -337,7 +337,7 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
       {/* @TODO: Actual states with animations */}
       {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
       {status === 'idle' && (
-        <SmallButton onClick={event => onAddSubspace(event, subspace.daoAddress)}>Propose to add</SmallButton>
+        <SmallButton onClick={event => onAddSubspace(event, subspace.address)}>Propose to add</SmallButton>
       )}
     </Link>
   );
@@ -395,7 +395,7 @@ function CurrentSubspace({
       {/* @TODO: Actual states with animations */}
       {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
       {status === 'idle' && (
-        <SmallButton onClick={event => onRemoveSubspace(event, subspace.daoAddress)}>
+        <SmallButton onClick={event => onRemoveSubspace(event, subspace.address)}>
           {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
         </SmallButton>
       )}

@@ -23,7 +23,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
   const { space } = useSpace(args.spaceId);
 
   const tx = useSmartAccountTransaction({
-    address: space?.type === 'PERSONAL' ? space?.personalAddress : (space?.mainVotingAddress ?? null),
+    address: space?.address ?? null,
   });
 
   const { mutate, status } = useMutation({
@@ -45,7 +45,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
       const writeTxEffect = Effect.gen(function* () {
         const calldata = getCalldataForGovernanceType({
           type: space.type,
-          spacePluginAddress: space.spaceAddress,
+          spacePluginAddress: space.address,
           subspaceAddress,
         });
 

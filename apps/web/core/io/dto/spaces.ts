@@ -11,11 +11,6 @@ export type Space = {
   type: SpaceGovernanceType;
   entity: SpaceEntity;
   address: Address;
-  daoAddress: Address;
-  spaceAddress: Address;
-  mainVotingAddress: Address | null;
-  membershipAddress: Address | null;
-  personalAddress: Address | null;
 
   // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
@@ -35,16 +30,9 @@ export function SpaceDto(space: RemoteSpace): Space {
     id: spaceId,
     type: mapGovernanceType(space.type),
     entity: spaceEntity,
-
+    address: space.address,
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
-
-    address: space.address,
-    daoAddress: space.address,
-    spaceAddress: space.address,
-    mainVotingAddress: null,
-    membershipAddress: null,
-    personalAddress: null,
   };
 }
 
