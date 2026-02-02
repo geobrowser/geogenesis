@@ -442,6 +442,7 @@ export const entityBacklinksQuery = graphql(/* GraphQL */ `
   query EntityBacklinksPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
       backlinksList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
         fromEntity {
           id
           name
@@ -449,6 +450,7 @@ export const entityBacklinksQuery = graphql(/* GraphQL */ `
           types {
             id
             name
+            spaceIds
           }
         }
       }

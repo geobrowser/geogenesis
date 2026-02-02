@@ -14,16 +14,16 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
 
   if (backlinksData.length === 0) return null;
 
-  const allSpaceIds = Array.from(new Set(backlinksData.flatMap(backlink => backlink.spaceIds)));
+  // Collect all backlink space IDs to fetch space data
+  const allSpaceIds = Array.from(new Set(backlinksData.map(backlink => backlink.backlinkSpaceId)));
 
   const spacesData: Space[] =
     allSpaceIds.length > 0 ? await Effect.runPromise(getSpaces({ spaceIds: allSpaceIds })) : [];
 
   const backlinks = backlinksData.flatMap(backlink => {
-    if (!backlink.name || !backlink.spaceIds || backlink.spaceIds.length === 0) return [];
+    if (!backlink.name || !backlink.backlinkSpaceId) return [];
 
-    const primarySpaceId = backlink.spaceIds[0];
-    const spaceData = spacesData.find(space => space.id === primarySpaceId);
+    const spaceData = spacesData.find(space => space.id === backlink.backlinkSpaceId);
 
     if (!spaceData) return [];
 
@@ -35,9 +35,14 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
       },
     };
 
+    // Filter types to only show those from the backlink's space, then deduplicate by id
+    const typesFromBacklinkSpace = backlink.types.filter(t => t.spaceIds?.includes(backlink.backlinkSpaceId));
+    const uniqueTypes = Array.from(new Map(typesFromBacklinkSpace.map(t => [t.id, t])).values());
+
     return [
       {
         ...backlink,
+        types: uniqueTypes,
         primarySpace,
       },
     ];
