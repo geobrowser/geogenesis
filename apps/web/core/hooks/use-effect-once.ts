@@ -1,4 +1,5 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+'use client';
+
 import { useEffect, useRef } from 'react';
 import type { EffectCallback } from 'react';
 

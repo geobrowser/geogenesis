@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';

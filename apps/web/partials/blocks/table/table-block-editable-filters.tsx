@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -91,7 +93,7 @@ export function TableBlockEditableFilters({ filterState, setFilterState }: Table
       {
         valueType,
         columnId,
-        columnName: null,
+        columnName,
         value,
         valueName,
       },

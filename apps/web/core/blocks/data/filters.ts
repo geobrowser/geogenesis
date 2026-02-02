@@ -1,7 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
+import { ID } from '~/core/id';
 import { getProperty, getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
@@ -41,8 +42,6 @@ const PropertyFilter = Schema.Struct({
 
 type PropertyFilter = Schema.Schema.Type<typeof PropertyFilter>;
 
-// const Property = Schema.Union(PropertyFilter);
-
 const FilterString = Schema.Struct({
   spaceId: Schema.optional(
     Schema.Struct({
@@ -62,6 +61,12 @@ const FilterString = Schema.Struct({
           fromEntity: Schema.Struct({
             is: Schema.String,
           }),
+          type: Schema.Struct({
+            is: Schema.String,
+          }),
+        }),
+        // Relation type filter
+        Schema.Struct({
           type: Schema.Struct({
             is: Schema.String,
           }),
@@ -87,6 +92,11 @@ const FilterMap = Schema.mutable(
         type: Schema.Struct({
           is: Schema.String,
         }),
+      }),
+      Schema.Struct({
+        type: Schema.Struct({
+          is: Schema.String,
+        }),
       })
     ),
   })
@@ -95,20 +105,18 @@ const FilterMap = Schema.mutable(
 type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): string {
-  const spaces = filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+  const spaces = filters.filter(f => ID.equals(f.columnId, SystemIds.SPACE_FILTER)).map(f => f.value);
 
   const filterMap: FilterMap = {};
 
   filters
-    .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+    .filter(f => !ID.equals(f.columnId, SystemIds.SPACE_FILTER))
     .forEach(f => {
-      // Entity filter
       if (f.columnName === 'Backlink') {
         filterMap['_relation'] = {
           fromEntity: { is: f.value },
           type: { is: f.columnId },
         };
-        // Property filter
       } else {
         filterMap[f.columnId] = { is: f.value };
       }
@@ -137,13 +145,12 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
     return [];
   }
 
-  // handle errors
   const where = JSON.parse(filterString);
   const decoded = Schema.decodeUnknownEither(FilterString)(where);
 
   const filtersFromString = Either.match(decoded, {
     onLeft: error => {
-      console.error('Error decoding filter string', error);
+      console.warn('Skipping invalid filter format, no filter will be applied:', error);
       return null;
     },
     onRight: value => {
@@ -158,6 +165,12 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
               fromEntity: filterValue.fromEntity.is,
               typeOf: filterValue.type.is,
             };
+            // Relation type filter
+          } else if (key === '_relation' && 'type' in filterValue && !('fromEntity' in filterValue)) {
+            filters.push({
+              property: filterValue.type.is,
+              is: filterValue.type.is,
+            });
             // Property filter
           } else if ('is' in filterValue) {
             filters.push({
@@ -256,17 +269,10 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
     console.warn('Failed to fetch remote property', filter.property, error);
   }
 
-  // Use the property's actual data type, or try to infer it if property not found
-  let valueType: FilterableValueType;
-  if (property?.dataType) {
-    valueType = property.dataType;
-  } else {
-    valueType = 'RELATION';
-  }
+  const valueType: FilterableValueType = property?.dataType ?? 'RELATION';
 
   const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
     E.findOne({ store, cache: queryClient, id: filter.property }),
-    // Only fetch value entity for RELATION types
     valueType === 'RELATION' ? E.findOne({ store, cache: queryClient, id: filter.is }) : undefined,
   ]);
 

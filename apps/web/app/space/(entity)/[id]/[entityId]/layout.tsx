@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -113,7 +113,10 @@ export default async function ProfileLayout(props: Props) {
   );
 }
 
-async function getProfilePage(entityId: string, spaceId: string): Promise<{
+async function getProfilePage(
+  entityId: string,
+  spaceId: string
+): Promise<{
   id: string;
   spaces: string[];
   types: string[];

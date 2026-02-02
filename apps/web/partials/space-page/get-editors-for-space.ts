@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfile } from '~/core/io/subgraph';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph';
 import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -12,9 +12,6 @@ type EditorProfile = OmitStrict<Profile, 'coverUrl'>;
 type EditorsForSpace = {
   allEditors: EditorProfile[];
   totalEditors: number;
-  votingPluginAddress: string | null;
-  spacePluginAddress: string | null;
-  memberPluginAddress: string | null;
 };
 
 export const getEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
@@ -27,7 +24,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
 
   const editorProfiles = await Promise.all(
     space.editors.map(async (editor): Promise<EditorProfile> => {
-      const profile = await fetchProfile({ address: editor });
+      const profile = await fetchProfileBySpaceId(editor);
 
       if (!profile) {
         return {
@@ -52,8 +49,5 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   return {
     allEditors: editorProfiles,
     totalEditors: space.editors.length,
-    votingPluginAddress: space.mainVotingAddress,
-    spacePluginAddress: space.spaceAddress,
-    memberPluginAddress: space.membershipAddress,
   };
 });

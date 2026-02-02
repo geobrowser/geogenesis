@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -31,8 +31,8 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
   // Map sorted relations to tab entities, maintaining order
   // For new local tabs (not yet published), use the relation's toEntity data as fallback
   const tabEntityMap = new Map(tabEntities.map(e => [e.id, e]));
-  const sortedTabEntities = sortedTabRelations.map(r =>
-    tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name }
+  const sortedTabEntities = sortedTabRelations.map(
+    r => tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name }
   );
 
   // Build tabs in the correct order

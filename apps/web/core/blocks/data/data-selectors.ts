@@ -1,4 +1,4 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';

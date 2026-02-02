@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -102,17 +102,19 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     (newType: SwitchableRenderableType) => {
       if (!entityId || !spaceId) return;
 
-      // Add format property if type is TIME or NUMBER
-      if (newType === 'TIME' || newType === 'NUMBER') {
+      // Add format property if type is temporal or numeric
+      const isTemporalType = newType === 'DATE' || newType === 'DATETIME' || newType === 'TIME';
+      const isNumericType = newType === 'INT64' || newType === 'FLOAT64' || newType === 'DECIMAL';
+      if (isTemporalType || isNumericType) {
         addPropertyToEntity({
           entityId,
           propertyId: FORMAT_PROPERTY,
           propertyName: 'Format',
           entityName: name ?? '',
-          defaultValue: newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
+          defaultValue: isTemporalType ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
         });
       } else if (formatValue) {
-        // Remove format property if type is not TIME or NUMBER and property exists
+        // Remove format property if type is not temporal or numeric and property exists
         storage.values.delete(formatValue);
       }
 

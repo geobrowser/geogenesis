@@ -1,4 +1,4 @@
-import { Graph } from '@graphprotocol/grc-20';
+import { Graph } from '@geoprotocol/geo-sdk';
 import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
@@ -110,13 +110,18 @@ export const commandItems: CommandSuggestionItem[] = [
           network: 'TESTNET',
         });
 
-        // Extract the image URL from the ops - look for UPDATE_ENTITY with ipfs:// value
+        // Extract the image URL from the ops - look for createEntity with ipfs:// value
         let ipfsUrl: string | undefined;
         for (const op of ops) {
-          if (op.type === 'UPDATE_ENTITY') {
-            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+          if (op.type === 'createEntity') {
+            // Type assertion for new SDK format
+            const values = (op as unknown as { values: Array<{ value: { type: string; value?: string } }> }).values;
+            const ipfsValue = values?.find(pv => {
+              const val = pv.value?.value;
+              return typeof val === 'string' && val.startsWith('ipfs://');
+            });
             if (ipfsValue) {
-              ipfsUrl = ipfsValue.value;
+              ipfsUrl = ipfsValue.value?.value;
               break;
             }
           }

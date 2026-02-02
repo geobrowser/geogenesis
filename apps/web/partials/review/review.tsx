@@ -257,7 +257,7 @@ const ReviewChanges = () => {
             </div>
           )}
         </div>
-        <div>
+        <div className="flex items-center gap-3">
           <Button onClick={handlePublish} disabled={!isReadyToPublish || isPublishing}>
             <Pending isPending={isPublishing}>Publish</Pending>
           </Button>
@@ -282,7 +282,7 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    store.clear();
+                    store.clearLocalChangesForSpace(activeSpace);
                   }}
                 >
                   Delete all

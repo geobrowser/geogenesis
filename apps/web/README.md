@@ -2,12 +2,12 @@
 
 ```sh
 # Run dev
-pnpm dev
+bun dev
 
 # Build web app
-pnpm build
+bun build
 
 # Run production version of web app
-pnpm build
-pnpm start
+bun build
+bun start
 ```

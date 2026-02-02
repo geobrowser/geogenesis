@@ -1,4 +1,4 @@
-import { getGeoChain } from '@geogenesis/auth';
+import { getGeoChain } from '@geogenesis/auth/server';
 
 import { Environment } from '../environment';
 

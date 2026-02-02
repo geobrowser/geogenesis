@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
@@ -12,6 +12,34 @@ import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
+
+/**
+ * Stable JSON stringify that produces consistent output regardless of object key order.
+ * This ensures query keys are deterministic for TanStack Query cache hits.
+ *
+ * Particularly important for WhereCondition objects where key order may vary
+ * depending on how the object was constructed.
+ */
+export function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return '[' + value.map(stableStringify).join(',') + ']';
+  }
+
+  if (typeof value === 'object') {
+    const sortedKeys = Object.keys(value as object).sort();
+    const pairs = sortedKeys.map(key => {
+      const v = (value as Record<string, unknown>)[key];
+      return JSON.stringify(key) + ':' + stableStringify(v);
+    });
+    return '{' + pairs.join(',') + '}';
+  }
+
+  return JSON.stringify(value);
+}
 
 export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
@@ -76,7 +104,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', JSON.stringify(where), first, skip];
+    return ['store', 'entities', stableStringify(where), first, skip];
   }
 
   clear() {
@@ -86,6 +114,39 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingDataTypes.clear();
 
     this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  /**
+   * Clear all local (unpublished) changes for a specific space.
+   * This removes local values and relations, then re-hydrates the affected entities.
+   */
+  clearLocalChangesForSpace(spaceId: string) {
+    const localValues = reactiveValues.get().filter(v => v.spaceId === spaceId && v.isLocal === true);
+    const localRelations = reactiveRelations.get().filter(r => r.spaceId === spaceId && r.isLocal === true);
+
+    const affectedEntityIds = new Set<string>();
+
+    // Collect affected entity IDs before removing
+    for (const value of localValues) {
+      affectedEntityIds.add(value.entity.id);
+    }
+    for (const relation of localRelations) {
+      affectedEntityIds.add(relation.fromEntity.id);
+    }
+
+    const localValueIds = new Set(localValues.map(v => v.id));
+    const localRelationIds = new Set(localRelations.map(r => r.id));
+
+    // Remove local values for this space
+    reactiveValues.set(prev => prev.filter(v => !localValueIds.has(v.id)));
+
+    // Remove local relations for this space
+    reactiveRelations.set(prev => prev.filter(r => !localRelationIds.has(r.id)));
+
+    // Re-hydrate affected entities to restore their server state
+    if (affectedEntityIds.size > 0) {
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
+    }
   }
 
   public hydrateWith(entities: Entity[]) {
@@ -165,9 +226,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(t => (options.spaceId ? t.spaceId === options.spaceId : true)),
-      relations: relations.filter(r =>
-        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
+      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      relations: relations.filter(
+        r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),
     };
 

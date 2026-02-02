@@ -1,7 +1,9 @@
 {
   "name": "geogenesis",
   "version": "1.0.0",
+  "private": true,
   "description": "",
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "test": "turbo run test",
     "build": "turbo run build",
@@ -14,7 +16,7 @@
     "docker:up": "docker compose up",
     "docker:down": "docker compose down -v --rmi all",
     "docker:clean": "rimraf build",
-    "docker": "pnpm docker:down && pnpm docker:clean && pnpm docker:build && pnpm docker:up",
+    "docker": "bun docker:down && bun docker:clean && bun docker:build && bun docker:up",
     "clean-node-modules": "rimraf \"**/node_modules\""
   },
   "author": "Byron Guina",
@@ -25,11 +27,13 @@
     "semi": false
   },
   "devDependencies": {
-    "eslint": "^8.15.0",
-    "eslint-config-turbo": "^0.0.3",
+    "@graphql-codegen/client-preset": "^5.2.2",
+    "eslint": "^9.39.2",
+    "eslint-config-turbo": "^2.8.0",
     "prettier": "^3.7.4",
     "rimraf": "^3.0.2",
-    "turbo": "^2.5.6"
+    "turbo": "^2.5.6",
+    "web": "workspace:*"
   },
-  "packageManager": "pnpm@9.15.7"
+  "packageManager": "bun@1.3.6"
 }

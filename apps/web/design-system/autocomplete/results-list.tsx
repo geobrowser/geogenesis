@@ -1,3 +1,5 @@
+'use client';
+
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -101,9 +103,11 @@ export const ResultContent = ({
               )}
               {result.types.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  {result.types.map(type => (
-                    <Tag key={type.id}>{type.name}</Tag>
-                  ))}
+                  {result.types
+                    .filter((type, index, self) => self.findIndex(t => t.id === type.id) === index)
+                    .map(type => (
+                      <Tag key={type.id}>{type.name}</Tag>
+                    ))}
                 </div>
               )}
             </div>
@@ -201,9 +205,11 @@ export const SpaceContent = ({
               )}
               {entity.types.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  {entity.types.map(type => (
-                    <Tag key={type.id}>{type.name}</Tag>
-                  ))}
+                  {entity.types
+                    .filter((type, index, self) => self.findIndex(t => t.id === type.id) === index)
+                    .map(type => (
+                      <Tag key={type.id}>{type.name}</Tag>
+                    ))}
                 </div>
               )}
             </div>

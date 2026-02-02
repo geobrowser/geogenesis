@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
-import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
 import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -115,7 +115,11 @@ export async function fetchProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
+
+  const creatorIds = proposals.map(p => p.createdById);
+  const uniqueCreatorIds = [...new Set(creatorIds)];
+  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueCreatorIds);
+  const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   return proposals
     .map(p => {
@@ -127,7 +131,7 @@ export async function fetchProposals({
           return null;
         },
         onRight: proposal => {
-          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
+          const maybeProfile = profilesBySpaceId.get(p.createdById);
           return ProposalWithoutVotersDto(proposal, maybeProfile);
         },
       });

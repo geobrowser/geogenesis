@@ -1,7 +1,8 @@
 'use client';
 
-import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { useAtom } from 'jotai';
+
 import * as React from 'react';
 
 import {
@@ -20,14 +21,21 @@ import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/stat
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { mapPropertyType } from '~/core/utils/property/properties';
-import { NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { NavUtils } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField, PageVideoField, VideoPlayer } from '~/design-system/editable-fields/editable-fields';
+import {
+  ImageZoom,
+  PageImageField,
+  PageStringField,
+  PageVideoField,
+  VideoPlayer,
+} from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -497,20 +505,15 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const firstRelation = relations[0];
 
   // Determine file accept type for upload
-  const fileAccept = property.renderableTypeStrict === 'VIDEO'
-    ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
-    : 'image/png,image/jpeg';
+  const fileAccept =
+    property.renderableTypeStrict === 'VIDEO'
+      ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
+      : 'image/png,image/jpeg';
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
       {/* Hidden file input for upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={fileAccept}
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
+      <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 
       {property.renderableTypeStrict === 'IMAGE' ? (
         relations.map(r => {
@@ -866,7 +869,9 @@ function RenderedValue({
           </>
         );
       }
-      case 'NUMBER':
+      case 'INT64':
+      case 'FLOAT64':
+      case 'DECIMAL':
         return (
           <NumberField
             key={propertyId}
@@ -877,7 +882,7 @@ function RenderedValue({
             onChange={onChange}
           />
         );
-      case 'CHECKBOX': {
+      case 'BOOL': {
         const checked = getChecked(value);
 
         return (
@@ -890,6 +895,8 @@ function RenderedValue({
           />
         );
       }
+      case 'DATE':
+      case 'DATETIME':
       case 'TIME': {
         return (
           <DateField
@@ -1017,7 +1024,6 @@ const SYSTEM_PROPERTIES = [
   DATA_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
-  IS_TYPE_PROPERTY,
 ];
 
 /**
@@ -1037,7 +1043,10 @@ function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string
   const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
 
   const visibleEntries = propertiesEntries.filter(([propertyId]) => {
-    return !SYSTEM_PROPERTIES.includes(propertyId) && !(propertyId === IS_TYPE_PROPERTY && isNonRelationProperty);
+    // Hide system properties and IS_TYPE_PROPERTY for non-relation properties
+    if (SYSTEM_PROPERTIES.includes(propertyId)) return false;
+    if (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty) return false;
+    return true;
   });
 
   return visibleEntries;

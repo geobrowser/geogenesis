@@ -14,7 +14,7 @@ const limit = process.env.NODE_ENV === 'development' ? 10 : 100;
 export const ActivityServerContainer = async ({ spaceId }: ActivityServerContainerProps) => {
   const entities = await Effect.runPromise(
     getAllEntities({
-      filter: { spaceIds: { in: [spaceId] } },
+      spaceId,
       limit,
       orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     })

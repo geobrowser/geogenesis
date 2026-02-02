@@ -58,7 +58,7 @@ async function upload(url: string, formData: FormData) {
  * used for uploading binary data to IPFS (e.g., edit proposals). All IPFS
  * interactions are done on the server as API routes.
  *
- * Note: For image uploads, use `Ipfs.uploadImage` from @graphprotocol/grc-20 instead.
+ * Note: For image uploads, use `Ipfs.uploadImage` from @geoprotocol/geo-sdk instead.
  */
 export class IpfsClient {
   /**
@@ -83,7 +83,7 @@ export class IpfsClient {
  * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary data to IPFS as effects (e.g., edit proposals).
  *
- * Note: For image uploads, use `Ipfs.uploadImage` from @graphprotocol/grc-20 instead.
+ * Note: For image uploads, use `Ipfs.uploadImage` from @geoprotocol/geo-sdk instead.
  */
 export class IpfsEffectClient {
   static upload(binary: Uint8Array): Effect.Effect<`ipfs://${string}`, IpfsUploadError> {

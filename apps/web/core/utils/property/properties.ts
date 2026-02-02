@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -10,7 +10,15 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/v2.types';
+import {
+  DataType,
+  Entity,
+  LEGACY_DATA_TYPE_MAPPING,
+  Property,
+  Relation,
+  SwitchableRenderableType,
+  Value,
+} from '~/core/v2.types';
 
 /**
  * Interface for property type mapping configuration
@@ -59,14 +67,37 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'RELATION',
         renderableTypeId: VIDEO_RENDERABLE_TYPE,
       };
-    case 'NUMBER':
+    // GRC-20 v2 numeric types
+    case 'INT64':
       return {
-        baseDataType: 'NUMBER',
+        baseDataType: 'INT64',
         renderableTypeId: null,
       };
-    case 'CHECKBOX':
+    case 'FLOAT64':
       return {
-        baseDataType: 'CHECKBOX',
+        baseDataType: 'FLOAT64',
+        renderableTypeId: null,
+      };
+    case 'DECIMAL':
+      return {
+        baseDataType: 'DECIMAL',
+        renderableTypeId: null,
+      };
+    // GRC-20 v2 boolean type
+    case 'BOOL':
+      return {
+        baseDataType: 'BOOL',
+        renderableTypeId: null,
+      };
+    // GRC-20 v2 temporal types
+    case 'DATE':
+      return {
+        baseDataType: 'DATE',
+        renderableTypeId: null,
+      };
+    case 'DATETIME':
+      return {
+        baseDataType: 'DATETIME',
         renderableTypeId: null,
       };
     case 'TIME':
@@ -97,7 +128,7 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
 }
 
 /**
- * Map of property types to their base data types for filtering purposes
+ * Map of property types to their base data types for filtering purposes (GRC-20 v2)
  */
 export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   TEXT: 'TEXT',
@@ -105,8 +136,15 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   RELATION: 'RELATION',
   IMAGE: 'RELATION',
   VIDEO: 'RELATION',
-  NUMBER: 'NUMBER',
-  CHECKBOX: 'CHECKBOX',
+  // GRC-20 v2 numeric types
+  INT64: 'INT64',
+  FLOAT64: 'FLOAT64',
+  DECIMAL: 'DECIMAL',
+  // GRC-20 v2 boolean type
+  BOOL: 'BOOL',
+  // GRC-20 v2 temporal types
+  DATE: 'DATE',
+  DATETIME: 'DATETIME',
   TIME: 'TIME',
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
@@ -162,12 +200,33 @@ export function reconstructFromStore(
     selector: r => r.fromEntity.id === id && r.type.id === UNIT_PROPERTY,
   })[0];
 
-  // Validate and cast dataType
-  const validDataTypes: DataType[] = ['TEXT', 'NUMBER', 'CHECKBOX', 'TIME', 'POINT', 'RELATION'];
-  const dataTypeString = String(dataTypeValue.value);
-  const dataType: DataType = validDataTypes.includes(dataTypeString as DataType)
-    ? (dataTypeString as DataType)
-    : 'TEXT';
+  // Validate and cast dataType (GRC-20 v2 types)
+  const validDataTypes: DataType[] = [
+    'TEXT',
+    'INT64',
+    'FLOAT64',
+    'DECIMAL',
+    'BOOL',
+    'DATE',
+    'DATETIME',
+    'TIME',
+    'POINT',
+    'RELATION',
+    'BYTES',
+    'SCHEDULE',
+    'EMBEDDING',
+  ];
+  const dataTypeString = String(dataTypeValue.value).toUpperCase();
+
+  // Check for legacy type mapping first, then validate against current types
+  let dataType: DataType;
+  if (dataTypeString in LEGACY_DATA_TYPE_MAPPING) {
+    dataType = LEGACY_DATA_TYPE_MAPPING[dataTypeString]!;
+  } else if (validDataTypes.includes(dataTypeString as DataType)) {
+    dataType = dataTypeString as DataType;
+  } else {
+    dataType = 'TEXT';
+  }
 
   // Get relation value types
   const relationValueTypes = getRelations({
@@ -242,7 +301,7 @@ export function getCurrentRenderableType(
 
   // If there's a renderableType, map it to the appropriate type
   if (propertyDataType.renderableType) {
-    return getStrictRenderableType(propertyDataType.renderableType.id) || 'TEXT'; // Default to TEXT if mapping fails
+    return getStrictRenderableType(propertyDataType.renderableType.id) || 'TEXT';
   }
 
   // Otherwise, default to the base dataType

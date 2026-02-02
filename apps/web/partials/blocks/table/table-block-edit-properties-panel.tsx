@@ -1,4 +1,6 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { Effect } from 'effect';

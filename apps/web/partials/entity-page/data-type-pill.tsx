@@ -3,7 +3,13 @@
 import * as React from 'react';
 
 import { NavUtils } from '~/core/utils/utils';
-import { DataType, FlattenedRenderType, RawRenderableType } from '~/core/v2.types';
+import {
+  DataType,
+  FlattenedRenderType,
+  RawRenderableType,
+  SWITCHABLE_RENDERABLE_TYPE_LABELS,
+  SwitchableRenderableType,
+} from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
@@ -33,8 +39,12 @@ type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
 // Icon mapping for data types and renderable types
 const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
-  NUMBER: Number,
-  CHECKBOX: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  BOOL: CheckboxChecked,
+  DATE: Date,
+  DATETIME: Date,
   TIME: Date,
   POINT: GeoLocation,
   RELATION: Relation,
@@ -66,12 +76,15 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
       ? TYPE_ICONS[iconKey]
       : TYPE_ICONS[dataType.toUpperCase() as UppercaseDisplayType] || TYPE_ICONS.TEXT;
 
-  // Format display type: capitalize first letter of each word
-  const formattedType = displayTypeName
-    .toLowerCase()
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  // Format display type: use SWITCHABLE_RENDERABLE_TYPE_LABELS if available, otherwise capitalize first letter of each word
+  const upperDisplayType = displayTypeName.toUpperCase() as SwitchableRenderableType;
+  const formattedType =
+    SWITCHABLE_RENDERABLE_TYPE_LABELS[upperDisplayType] ||
+    displayTypeName
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
 
   // Determine if the pill should be clickable
   // Clickable only if we have a valid target ID

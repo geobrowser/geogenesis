@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@graphprotocol/grc-20';
+import { GraphUrl } from '@geoprotocol/geo-sdk';
 import { cva } from 'class-variance-authority';
 
 import * as React from 'react';

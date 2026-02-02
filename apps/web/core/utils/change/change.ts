@@ -1,4 +1,4 @@
-import { GraphUrl, Id, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, Id, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect, Record } from 'effect';
 import equal from 'fast-deep-equal';
 

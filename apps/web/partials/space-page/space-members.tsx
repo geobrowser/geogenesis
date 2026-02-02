@@ -35,6 +35,10 @@ export async function SpaceMembers({ spaceId }: Props) {
     return null;
   }
 
+  if (space.type === 'PERSONAL') {
+    return null;
+  }
+
   if (isMember) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pl-1.5 pr-2 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
@@ -53,7 +57,7 @@ export async function SpaceMembers({ spaceId }: Props) {
               <SpaceMembersDialogServerContainer
                 spaceType={space.type}
                 spaceId={spaceId}
-                votingPluginAddress={space.type === 'PERSONAL' ? space.personalAddress : space.mainVotingAddress}
+                votingPluginAddress={space.mainVotingAddress}
               />
             </React.Suspense>
           }
@@ -75,11 +79,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
 
       {isPublicSpace ? (
-        <SpaceMembersJoinButton
-          spaceId={spaceId}
-          votingPluginAddress={space.mainVotingAddress}
-          hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-        />
+        <SpaceMembersJoinButton spaceId={spaceId} hasRequestedSpaceMembership={hasRequestedSpaceMembership} />
       ) : null}
     </div>
   );

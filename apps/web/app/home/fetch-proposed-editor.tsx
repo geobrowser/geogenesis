@@ -83,5 +83,5 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
 
   // There should only be one proposed member in a single proposal
   const proposedEditorAccount = proposedEditors[0].accountId;
-  return await fetchProfile({ address: proposedEditorAccount });
+  return await fetchProfile({ walletAddress: proposedEditorAccount });
 }

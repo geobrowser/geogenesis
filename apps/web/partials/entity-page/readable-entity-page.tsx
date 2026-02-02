@@ -1,12 +1,21 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useHydrateEntity, useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
-import { sortRelations } from '~/core/utils/utils';
+import {
+  useHydrateEntity,
+  useQueryEntity,
+  useQueryProperty,
+  useRelations,
+  useValue,
+  useValues,
+} from '~/core/sync/use-store';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -193,7 +202,12 @@ export function RelationsGroup({
 
             if (property.renderableTypeStrict === 'IMAGE') {
               return (
-                <ImageRelation key={`image-${relationId}-${linkedEntityId}`} linkedEntityId={linkedEntityId} directImageUrl={r.toEntity.value} spaceId={spaceId} />
+                <ImageRelation
+                  key={`image-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  directImageUrl={r.toEntity.value}
+                  spaceId={spaceId}
+                />
               );
             }
 
@@ -238,7 +252,15 @@ export function RelationsGroup({
   );
 }
 
-function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEntityId: string; directImageUrl?: string | null; spaceId: string }) {
+function ImageRelation({
+  linkedEntityId,
+  directImageUrl,
+  spaceId,
+}: {
+  linkedEntityId: string;
+  directImageUrl?: string | null;
+  spaceId: string;
+}) {
   // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
   // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
   // We need to check if it's a valid image URL before using it
@@ -318,7 +340,9 @@ function RenderedValue({
         </div>
       );
     }
-    case 'NUMBER':
+    case 'INT64':
+    case 'FLOAT64':
+    case 'DECIMAL':
       return (
         <ReadableNumberField
           key={`number-${propertyId}-${value}`}
@@ -327,11 +351,13 @@ function RenderedValue({
           unitId={options?.unit ?? undefined}
         />
       );
-    case 'CHECKBOX': {
+    case 'BOOL': {
       const checked = getChecked(value);
 
       return <Checkbox key={`checkbox-${propertyId}-${value}`} checked={checked} />;
     }
+    case 'DATE':
+    case 'DATETIME':
     case 'TIME': {
       return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} />;
     }

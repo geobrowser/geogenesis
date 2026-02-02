@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { produce } from 'immer';
 
 import { ID } from '~/core/id';

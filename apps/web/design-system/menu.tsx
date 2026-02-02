@@ -46,7 +46,7 @@ export function Menu({
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open} modal={modal}>
-      <Trigger asChild={asChild}>{trigger}</Trigger>
+      <Trigger asChild={asChild} suppressHydrationWarning>{trigger}</Trigger>
       <PopoverContent align={align} side={side} sideOffset={sideOffset} className={contentStyles({ align, className })}>
         {children}
       </PopoverContent>

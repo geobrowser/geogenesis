@@ -25,10 +25,8 @@ export const createGeoWalletConfig = ({
 		ssr: true,
 		connectors: [
 			coinbaseWallet({
-				chainId: 137,
 				appName: "Geo Genesis",
 				appLogoUrl: "https://geobrowser.io/static/favicon-64x64.png",
-				headlessMode: true,
 			}),
 			walletConnect({
 				showQrModal: true,

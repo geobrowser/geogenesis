@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { JSONContent } from '@tiptap/core';
 
 import { ID } from '~/core/id';

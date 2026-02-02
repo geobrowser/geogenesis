@@ -2,7 +2,6 @@ import {
   EntityFilter,
   EntityToManyRelationFilter,
   EntityToManyValueFilter,
-  PropertyFilter,
   RelationFilter,
   StringFilter,
   UuidFilter,
@@ -110,7 +109,7 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
       typeof condition.value.equals === 'boolean'
     ) {
       // Boolean condition - convert to string filter
-      filter.string = { is: String(condition.value.equals) };
+      filter.text = { is: String(condition.value.equals) };
     } else if (
       typeof condition.value === 'object' &&
       ('gt' in condition.value ||
@@ -122,13 +121,13 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
       // Number condition - convert to string filter (GraphQL treats as string)
       const numCondition = condition.value as NumberCondition;
       if (numCondition.equals !== undefined) {
-        filter.string = { is: String(numCondition.equals) };
+        filter.text = { is: String(numCondition.equals) };
       }
       // Note: GraphQL StringFilter doesn't support numeric comparisons directly
       // You may need to handle this differently based on your GraphQL schema
     } else {
       // String condition
-      filter.string = convertStringConditionToStringFilter(condition.value as StringCondition);
+      filter.text = convertStringConditionToStringFilter(condition.value as StringCondition);
     }
   }
 
@@ -146,9 +145,9 @@ function convertRelationConditionToRelationFilter(condition: RelationCondition):
   }
 
   if (condition.typeOf?.name) {
-    filter.type = {
+    filter.typeEntity = {
       name: convertStringConditionToStringFilter(condition.typeOf.name),
-    } as PropertyFilter;
+    } as EntityFilter;
   }
 
   if (condition.toEntity?.id) {
@@ -189,9 +188,9 @@ function convertBacklinkConditionToRelationFilter(condition: BacklinkCondition):
   }
 
   if (condition.typeOf?.name) {
-    filter.type = {
+    filter.typeEntity = {
       name: convertStringConditionToStringFilter(condition.typeOf.name),
-    } as PropertyFilter;
+    } as EntityFilter;
   }
 
   if (condition.space) {
@@ -233,20 +232,8 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
     filter.description = convertStringConditionToStringFilter(where.description);
   }
 
-  // Handle types - convert to typeIds
-  if (where.types && where.types.length > 0) {
-    const typeIds: string[] = [];
-    where.types.forEach(typeCondition => {
-      if (typeCondition.id?.equals) {
-        typeIds.push(typeCondition.id.equals);
-      }
-    });
-    if (typeIds.length > 0) {
-      filter.typeIds = { anyEqualTo: typeIds[0] } as UuidListFilter;
-      // For multiple types, you might want to use a different operator
-      // or handle this case differently based on your needs
-    }
-  }
+  // NOTE: typeIds are now handled via extractTypeIdsFromWhere() and passed as a
+  // top-level query parameter for better performance. Do not add to filter here.
 
   // @TODO restore once space ids are updated in filters
   // Handle spaces - convert to spaceIds
@@ -331,4 +318,31 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
   }
 
   return filter;
+}
+
+/**
+ * Extracts typeIds from a WhereCondition for use as a top-level query parameter.
+ * This is more efficient than using filter.typeIds.
+ */
+export function extractTypeIdsFromWhere(where: WhereCondition): UuidFilter | undefined {
+  if (!where.types || where.types.length === 0) {
+    return undefined;
+  }
+
+  const typeIds: string[] = [];
+  where.types.forEach(typeCondition => {
+    if (typeCondition.id?.equals) {
+      typeIds.push(typeCondition.id.equals);
+    }
+  });
+
+  if (typeIds.length === 0) {
+    return undefined;
+  }
+
+  if (typeIds.length === 1) {
+    return { is: typeIds[0] } as UuidFilter;
+  }
+
+  return { in: typeIds } as UuidFilter;
 }

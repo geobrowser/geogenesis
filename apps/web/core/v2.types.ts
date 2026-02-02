@@ -1,4 +1,32 @@
-export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
+// GRC-20 v2 data types
+export type DataType =
+  | 'TEXT'
+  | 'INT64'
+  | 'FLOAT64'
+  | 'DECIMAL'
+  | 'BOOL'
+  | 'DATE'
+  | 'DATETIME'
+  | 'TIME'
+  | 'POINT'
+  | 'RELATION'
+  | 'BYTES'
+  | 'SCHEDULE'
+  | 'EMBEDDING';
+
+// Legacy type aliases for backwards compatibility during migration
+export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
+
+/**
+ * Maps legacy GRC-20 data type names from older API responses to current v2 types.
+ *
+ * Background: Some older data in the knowledge graph uses 'BOOLEAN' as the data type
+ * string, but GRC-20 v2 standardized on 'BOOL'. This mapping ensures backwards
+ * compatibility when reading data from the API or reconstructing entities from storage.
+ */
+export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
+  BOOLEAN: 'BOOL',
+} as const;
 export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
@@ -112,11 +140,15 @@ export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TE
 // Editing these values mostly works the same way as ops, so we need the same
 // properties that ops mostly do in order to upsert or remove the renderable
 // fields.
-// All possible flattened render types
+// All possible flattened render types (GRC-20 v2)
 export type FlattenedRenderType =
   | 'TEXT'
-  | 'NUMBER'
-  | 'CHECKBOX'
+  | 'INT64'
+  | 'FLOAT64'
+  | 'DECIMAL'
+  | 'BOOL'
+  | 'DATE'
+  | 'DATETIME'
   | 'TIME'
   | 'POINT'
   | 'URL'
@@ -133,11 +165,15 @@ export type SwitchableRenderableType =
   | 'TEXT'
   | 'RELATION'
   | 'URL'
+  | 'DATE'
+  | 'DATETIME'
   | 'TIME'
   | 'IMAGE'
   | 'VIDEO'
-  | 'CHECKBOX'
-  | 'NUMBER'
+  | 'BOOL'
+  | 'INT64'
+  | 'FLOAT64'
+  | 'DECIMAL'
   | 'POINT'
   | 'GEO_LOCATION'
   | 'PLACE';
@@ -146,14 +182,18 @@ export type SwitchableRenderableType =
  * Human-readable labels for switchable renderable types
  */
 export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType, string> = {
-  TIME: 'Time',
   TEXT: 'Text',
   URL: 'Url',
   RELATION: 'Relation',
   IMAGE: 'Image',
   VIDEO: 'Video',
-  CHECKBOX: 'Checkbox',
-  NUMBER: 'Number',
+  BOOL: 'Checkbox',
+  INT64: 'Integer',
+  FLOAT64: 'Float',
+  DECIMAL: 'Decimal',
+  DATE: 'Date',
+  DATETIME: 'Date & Time',
+  TIME: 'Time',
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
   PLACE: 'Place',

@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useState } from 'react';
@@ -31,6 +30,7 @@ export function CreateEntityDropdown() {
     <Menu
       open={isMenuOpen}
       onOpenChange={setIsMenuOpen}
+      asChild
       trigger={
         <button className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider">
           <Create />

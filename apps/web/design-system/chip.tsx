@@ -7,10 +7,9 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
+import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
-
-import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 
 import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
@@ -384,9 +383,7 @@ export function LinkableMediaChip({
   const { space } = useSpace(spaceId);
 
   // For videos, use the video fallback hook to get the correct URL
-  const { src: videoSrc, onError: onVideoError } = useVideoWithFallback(
-    mediaType === 'VIDEO' ? mediaSrc : undefined
-  );
+  const { src: videoSrc, onError: onVideoError } = useVideoWithFallback(mediaType === 'VIDEO' ? mediaSrc : undefined);
 
   return (
     <div
@@ -438,7 +435,7 @@ export function LinkableMediaChip({
             e.stopPropagation();
             onUpload();
           }}
-          className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 shadow-sm transition-colors hover:bg-white"
+          className="shadow-sm absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 transition-colors hover:bg-white"
         >
           <CreateIcon color="grey-04" className="h-3 w-3" />
         </button>
@@ -463,7 +460,7 @@ export function LinkableMediaChip({
         <Popover.Trigger asChild>
           <button
             onMouseEnter={() => setIsPopoverOpen(true)}
-            className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+            className="shadow-sm absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 transition-opacity group-hover:opacity-100"
           >
             <RelationDots color="grey-04" />
           </button>
@@ -532,4 +529,3 @@ export function LinkableMediaChip({
     </div>
   );
 }
-

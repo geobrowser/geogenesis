@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -270,12 +272,13 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
   };
 
   const onEntitiesDone = () => {
+    const selectedOption = options.find(o => o.columnId === state.selectedColumn);
     onCreate({
       columnId: state.selectedColumn,
       value: getFilterValue(state.value),
-      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'TEXT',
+      valueType: selectedOption?.valueType ?? 'TEXT',
       valueName: getFilterValueName(state.value),
-      columnName: state.value.type,
+      columnName: selectedOption?.columnName ?? '',
     });
     dispatch({ type: 'done' });
   };

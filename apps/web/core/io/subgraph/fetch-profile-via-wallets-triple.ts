@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';

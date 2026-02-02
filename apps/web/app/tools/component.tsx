@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
 import { Effect } from 'effect';
