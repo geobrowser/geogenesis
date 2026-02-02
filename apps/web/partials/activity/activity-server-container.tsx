@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { getAllEntities } from '~/core/io/v2/queries';
+import { getAllEntities } from '~/core/io/queries';
 
 import { Activity } from '~/partials/activity/activity';
 

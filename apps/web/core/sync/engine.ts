@@ -2,8 +2,8 @@ import { AsyncBatcher } from '@tanstack/pacer';
 import { QueryClient } from '@tanstack/react-query';
 import { Duration, Effect } from 'effect';
 
-import { getBatchEntities } from '../io/v2/queries';
-import { Entity } from '../v2.types';
+import { getBatchEntities } from '../io/queries';
+import { Entity } from '../types';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';

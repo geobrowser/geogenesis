@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 import { Filter } from './filters';
 import { useFilters } from './use-filters';

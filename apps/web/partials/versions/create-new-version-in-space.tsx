@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';

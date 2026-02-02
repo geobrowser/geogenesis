@@ -1,7 +1,7 @@
 import { IdUtils, Op } from '@geoprotocol/geo-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
 import { prepareLocalDataForPublishing } from './publish';
 

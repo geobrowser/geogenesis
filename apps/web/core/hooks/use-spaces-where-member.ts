@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { Space } from '~/core/io/dto/spaces';
-import { getSpacesWhereMember } from '~/core/io/v2/queries';
+import { getSpacesWhereMember } from '~/core/io/queries';
 
 /**
  * Hook to get all spaces where the user is an editor or member.

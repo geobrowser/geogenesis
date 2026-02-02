@@ -1,6 +1,6 @@
 import { Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.

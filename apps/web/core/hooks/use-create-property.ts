@@ -5,7 +5,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk';
 import * as React from 'react';
 
 import { mapPropertyType, reconstructFromStore } from '~/core/utils/property/properties';
-import { DataType, SwitchableRenderableType } from '~/core/v2.types';
+import { DataType, SwitchableRenderableType } from '~/core/types';
 
 import { useMutate } from '../sync/use-mutate';
 import { getRelations, getValues } from '../sync/use-store';

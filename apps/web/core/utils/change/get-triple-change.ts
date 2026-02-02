@@ -1,6 +1,6 @@
 import equal from 'fast-deep-equal';
 
-import { Value } from '~/core/v2.types';
+import { Value } from '~/core/types';
 
 import { TripleChangeValue } from './types';
 

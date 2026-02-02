@@ -2,10 +2,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
 import { Entities } from '~/core/utils/entity';
-import { Entity } from '~/core/v2.types';
+import { Entity } from '~/core/types';
 
-import { EntityId, SubstreamEntityHistorical } from '../schema';
-import { RemoteEntity } from '../v2/v2.schema';
+import { EntityId, SubstreamEntityHistorical } from '../substream-schema';
+import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {

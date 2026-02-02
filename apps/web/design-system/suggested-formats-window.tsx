@@ -10,7 +10,7 @@ import {
   UNICODE_LINK,
 } from '~/core/constants';
 import { useValue } from '~/core/sync/use-store';
-import { ValueOptions } from '~/core/v2.types';
+import { ValueOptions } from '~/core/types';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { NewTab } from './icons/new-tab';

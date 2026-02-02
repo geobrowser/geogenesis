@@ -2,7 +2,7 @@ import { Op } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import { extractValueString } from '~/core/utils/value';
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
 type Options = {
   spaceId: string;

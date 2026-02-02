@@ -1,6 +1,6 @@
-import { SearchResult } from '~/core/v2.types';
-import { RenderableEntityType } from '~/core/v2.types';
-import { DataType } from '~/core/v2.types';
+import { SearchResult } from '~/core/types';
+import { RenderableEntityType } from '~/core/types';
+import { DataType } from '~/core/types';
 
 type EventPayload = {
   type: string;

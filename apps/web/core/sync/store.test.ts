@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
-import { DataType, Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, Relation, Value } from '../types';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
 import { GeoEventStream } from './stream';
 
@@ -17,7 +17,6 @@ const mockStream = {
 } as unknown as GeoEventStream;
 
 // Mock console.log for development environment tests
-const originalEnv = process.env.NODE_ENV;
 const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
 // Test data
@@ -63,7 +62,7 @@ const mockValue2: Value = {
   property: {
     id: 'prop-2',
     name: 'Another Property',
-    dataType: 'NUMBER',
+    dataType: 'INT64',
   },
   value: '42',
   spaceId: 'space-1',
@@ -123,7 +122,7 @@ describe('GeoStore', () => {
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   describe('constructor', () => {
@@ -132,31 +131,52 @@ describe('GeoStore', () => {
     });
   });
 
-  describe('syncEntities', () => {
-    it('should hydrate store with entities', () => {
+  describe('syncEntities (via ENTITIES_SYNCED event)', () => {
+    it('should hydrate store with entities when ENTITIES_SYNCED event is received', () => {
       const entities = [mockEntity1, mockEntity2];
 
-      store.syncEntities(entities);
+      // Get the callback that was registered for ENTITIES_SYNCED
+      const onCall = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => call[0] === GeoEventStream.ENTITIES_SYNCED
+      );
+      const syncCallback = onCall?.[1];
+
+      // Trigger the callback to simulate the event
+      syncCallback?.({ entities });
 
       expect(syncedEntities.get('entity-1')).toEqual(mockEntity1);
       expect(syncedEntities.get('entity-2')).toEqual(mockEntity2);
     });
 
     it('should log entity IDs in development environment', () => {
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       const entities = [mockEntity1, mockEntity2];
 
-      store.syncEntities(entities);
+      // Get the callback that was registered for ENTITIES_SYNCED
+      const onCall = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => call[0] === GeoEventStream.ENTITIES_SYNCED
+      );
+      const syncCallback = onCall?.[1];
+
+      // Trigger the callback to simulate the event
+      syncCallback?.({ entities });
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Finished syncing entities to store'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('entity-1, entity-2'));
     });
 
     it('should not log in production environment', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const entities = [mockEntity1];
 
-      store.syncEntities(entities);
+      // Get the callback that was registered for ENTITIES_SYNCED
+      const onCall = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => call[0] === GeoEventStream.ENTITIES_SYNCED
+      );
+      const syncCallback = onCall?.[1];
+
+      // Trigger the callback to simulate the event
+      syncCallback?.({ entities });
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
@@ -589,7 +609,7 @@ describe('GeoStore', () => {
       const testValue2: Value = {
         id: 'test-value-2',
         entity: { id: 'entity-2', name: 'Test Entity 2' },
-        property: { id: 'prop-2', name: 'Another Property', dataType: 'NUMBER' },
+        property: { id: 'prop-2', name: 'Another Property', dataType: 'INT64' },
         value: '42',
         spaceId: 'space-1',
         timestamp: '2023-01-02T00:00:00Z',

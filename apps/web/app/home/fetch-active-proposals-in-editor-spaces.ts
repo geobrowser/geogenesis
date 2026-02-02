@@ -4,7 +4,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { ProposalDto } from '~/core/io/dto/proposals';
-import { SubstreamProposal } from '~/core/io/schema';
+import { SubstreamProposal } from '~/core/io/substream-schema';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';

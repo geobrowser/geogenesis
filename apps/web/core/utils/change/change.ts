@@ -4,12 +4,12 @@ import equal from 'fast-deep-equal';
 
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
-import { getBatchEntities } from '~/core/io/v2/queries';
+import { getBatchEntities } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { Entities } from '~/core/utils/entity';
-import { Entity, Relation, Value } from '~/core/v2.types';
+import { Entity, Relation, Value } from '~/core/types';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';

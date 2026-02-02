@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { Space } from '~/core/io/dto/spaces';
-import { getEntityBacklinks, getSpaces } from '~/core/io/v2/queries';
+import { getEntityBacklinks, getSpaces } from '~/core/io/queries';
 
 import { Backlinks } from '~/partials/entity-page/backlinks';
 

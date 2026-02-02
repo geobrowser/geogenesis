@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { getSpace } from '~/core/io/v2/queries';
+import { getSpace } from '~/core/io/queries';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { getImagePath } from '~/core/utils/utils';

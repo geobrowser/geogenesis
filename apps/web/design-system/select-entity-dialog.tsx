@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { Property, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, SwitchableRenderableType } from '~/core/types';
 
 import { SelectEntity } from './select-entity';
 

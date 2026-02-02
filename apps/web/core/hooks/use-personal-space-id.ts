@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { getSpaceByAddress } from '~/core/io/v2/queries';
+import { getSpaceByAddress } from '~/core/io/queries';
 
 import { useSmartAccount } from './use-smart-account';
 

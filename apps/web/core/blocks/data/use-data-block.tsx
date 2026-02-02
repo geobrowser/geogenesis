@@ -9,7 +9,7 @@ import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { sortRows } from '~/core/utils/utils';
-import { Cell, Property, Relation, Row } from '~/core/v2.types';
+import { Cell, Property, Relation, Row } from '~/core/types';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';

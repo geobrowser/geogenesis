@@ -1,4 +1,4 @@
-import { DataType, Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, Relation, Value } from '../types';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;

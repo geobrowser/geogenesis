@@ -5,7 +5,7 @@ import { Environment } from '~/core/environment';
 import { GeoDate } from '~/core/utils/utils';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
-import { SubstreamSubspace } from '../schema';
+import { SubstreamSubspace } from '../substream-schema';
 import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 

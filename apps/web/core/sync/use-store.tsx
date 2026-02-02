@@ -8,12 +8,12 @@ import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
-import { getProperties, getProperty } from '../io/v2/queries';
+import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { Property, Relation, Value } from '../v2.types';
+import { Property, Relation, Value } from '../types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';

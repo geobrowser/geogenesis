@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
-import { Property, Relation, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
 import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
 

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { getSpace } from '~/core/io/v2/queries';
+import { getSpace } from '~/core/io/queries';
 import { Profile } from '~/core/types';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { NavUtils } from '~/core/utils/utils';

@@ -7,11 +7,11 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
-import { SubstreamVote } from '../io/schema';
-import { Entity, Relation, Row } from '../v2.types';
+import { SubstreamVote } from '../io/substream-schema';
+import { Entity, Relation, Row } from '../types';
 import { Entities } from './entity';
 
 export const NavUtils = {
