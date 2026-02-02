@@ -34,7 +34,7 @@ export type SpaceType =
   | 'dao'
   | 'government-org'
   | 'interest';
-export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
+export type SpaceGovernanceType = 'DAO' | 'PERSONAL';
 
 // ==============================================================================
 // UI State Types

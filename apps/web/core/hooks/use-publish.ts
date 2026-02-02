@@ -209,7 +209,7 @@ function makeProposal(args: MakeProposalArgs) {
     let to: `0x${string}`;
     let calldata: `0x${string}`;
 
-    if (space.type === 'PUBLIC') {
+    if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
       // Get the caller's personal space ID (required for DAO proposals)
       const callerSpaceId = yield* Effect.tryPromise({

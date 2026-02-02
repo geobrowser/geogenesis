@@ -268,7 +268,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
                   </div>
                 </div>
               </div>
-              {spaceType === 'PUBLIC' && (
+              {spaceType === 'DAO' && (
                 <Link href={`${NavUtils.toSpace(spaceId)}/governance`}>
                   <SmallButton>View proposal</SmallButton>
                 </Link>
@@ -396,7 +396,7 @@ function CurrentSubspace({
       {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
       {status === 'idle' && (
         <SmallButton onClick={event => onRemoveSubspace(event, subspace.address)}>
-          {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
+          {spaceType === 'DAO' ? 'Propose to remove' : 'Remove subspace'}
         </SmallButton>
       )}
     </Link>

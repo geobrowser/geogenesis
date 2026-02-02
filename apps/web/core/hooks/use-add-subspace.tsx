@@ -67,7 +67,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
 
 type CalldataForGovernanceTypeArgs =
   | {
-      type: 'PUBLIC';
+      type: 'DAO';
       subspaceAddress: string;
       spacePluginAddress: string;
     }
@@ -79,7 +79,7 @@ type CalldataForGovernanceTypeArgs =
 
 function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x${string}` {
   switch (args.type) {
-    case 'PUBLIC':
+    case 'DAO':
       return encodeFunctionData({
         functionName: 'proposeAcceptSubspace',
         abi: MainVotingAbi,
