@@ -36,7 +36,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const [proposals, profile, space] = await Promise.all([
     fetchProposals({ spaceId, first: 5, page, connectedAddress }),
-    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
+    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
     cachedFetchSpace(spaceId),
   ]);
 

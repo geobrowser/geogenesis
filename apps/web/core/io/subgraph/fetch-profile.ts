@@ -1,69 +1,115 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 
-import { getSpace } from '~/core/io/queries';
+import { Space } from '~/core/io/dto/spaces';
+import { getSpace, getSpaceByAddress, getSpaces } from '~/core/io/queries';
 import { Profile } from '~/core/types';
-import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { defaultProfile } from './fetch-profile-via-wallets-triple';
 
-export interface FetchProfileOptions {
-  /** Wallet address (0x...) - will be converted to personal space ID */
-  walletAddress: string;
-}
-
 /**
  * Fetch a user's profile from their wallet address.
  *
- * This function:
- * 1. Converts the wallet address to a personal space ID via SpaceRegistry contract
- * 2. Fetches the space entity to get profile data (name, avatar)
+ * Flow:
+ * 1. Look up the user's personal space ID via their wallet address
+ * 2. Fetch the space entity to get profile data (name, avatar)
+ *
+ * Returns a default profile if the user doesn't have a registered space or if fetching fails.
  */
-export async function fetchProfile(options: FetchProfileOptions): Promise<Profile> {
-  const { walletAddress } = options;
+export function fetchProfile(walletAddress: string): Effect.Effect<Profile, never, never> {
+  return Effect.gen(function* () {
+    const space = yield* Effect.either(getSpaceByAddress(walletAddress));
 
-  try {
-    // Convert wallet address to personal space ID
-    const personalSpaceId = await getPersonalSpaceId(walletAddress);
-
-    if (!personalSpaceId) {
-      // User doesn't have a registered personal space - use wallet address as fallback spaceId
+    if (Either.isLeft(space)) {
+      console.error(`Failed to fetch space for wallet ${walletAddress}:`, space.left);
       return defaultProfile(walletAddress, walletAddress);
     }
 
-    return fetchProfileBySpaceId(personalSpaceId, walletAddress);
-  } catch (error) {
-    console.error(`Failed to fetch profile for wallet ${walletAddress}:`, error);
-    return defaultProfile(walletAddress, walletAddress);
-  }
+    if (!space.right) {
+      // User doesn't have a registered personal space
+      return defaultProfile(walletAddress, walletAddress);
+    }
+
+    return spaceToProfile(space.right, walletAddress);
+  });
 }
 
 /**
  * Fetch a user's profile from their personal space ID.
  *
- * Use this when you already have the personal space ID (e.g., from space members/editors list).
+ * Use this when you already have the space ID (e.g., from space members/editors list).
  * For fetching from a wallet address, use fetchProfile() instead.
+ *
+ * @param spaceId - The user's personal space ID (bytes16 hex without 0x prefix)
+ * @param walletAddressHint - Optional wallet address to use if the space doesn't have an address.
+ *                            Useful when the caller already knows the wallet but needs profile data.
  */
-export async function fetchProfileBySpaceId(personalSpaceId: string, addressHint?: string): Promise<Profile> {
-  try {
-    const space = await Effect.runPromise(getSpace(personalSpaceId));
+export function fetchProfileBySpaceId(
+  spaceId: string,
+  walletAddressHint?: string
+): Effect.Effect<Profile, never, never> {
+  return Effect.gen(function* () {
+    const space = yield* Effect.either(getSpace(spaceId));
 
-    if (!space || !space.entity) {
-      return defaultProfile(addressHint ?? personalSpaceId, personalSpaceId);
+    if (Either.isLeft(space)) {
+      console.error(`Failed to fetch profile for spaceId ${spaceId}:`, space.left);
+      return defaultProfile(walletAddressHint ?? spaceId, spaceId);
     }
 
-    return {
-      id: space.entity.id || personalSpaceId,
-      spaceId: personalSpaceId,
-      name: space.entity.name,
-      avatarUrl: space.entity.image,
-      coverUrl: null,
-      // Use the space's actual address if available, otherwise use the hint or space ID
-      address: (space.address || addressHint || personalSpaceId) as `0x${string}`,
-      profileLink: NavUtils.toSpace(personalSpaceId),
-    };
-  } catch (error) {
-    console.error(`Failed to fetch profile for spaceId ${personalSpaceId}:`, error);
-    return defaultProfile(addressHint ?? personalSpaceId, personalSpaceId);
+    if (!space.right) {
+      return defaultProfile(walletAddressHint ?? spaceId, spaceId);
+    }
+
+    return spaceToProfile(space.right, walletAddressHint);
+  });
+}
+
+/**
+ * Fetch multiple profiles by their space IDs in a single batch request.
+ *
+ * More efficient than calling fetchProfileBySpaceId multiple times.
+ */
+export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profile[], never, never> {
+  if (spaceIds.length === 0) {
+    return Effect.succeed([]);
   }
+
+  const uniqueSpaceIds = [...new Set(spaceIds)];
+
+  return Effect.gen(function* () {
+    const spaces = yield* Effect.either(getSpaces({ spaceIds: uniqueSpaceIds }));
+
+    if (Either.isLeft(spaces)) {
+      console.error(`Failed to fetch profiles for spaceIds:`, spaces.left);
+      return uniqueSpaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
+    }
+
+    // Create a map for O(1) lookup
+    const spaceMap = new Map(spaces.right.map(space => [space.id, space]));
+
+    // Return profiles in the same order as requested, with defaults for missing spaces
+    return uniqueSpaceIds.map(spaceId => {
+      const space = spaceMap.get(spaceId);
+      return space ? spaceToProfile(space) : defaultProfile(spaceId, spaceId);
+    });
+  });
+}
+
+function spaceToProfile(space: Space, walletAddressHint?: string): Profile {
+  const spaceId = space.id;
+  const entity = space.entity;
+
+  if (!entity) {
+    return defaultProfile(walletAddressHint ?? spaceId, spaceId);
+  }
+
+  return {
+    id: entity.id || spaceId,
+    spaceId,
+    name: entity.name,
+    avatarUrl: entity.image,
+    coverUrl: null,
+    address: (space.address || walletAddressHint || spaceId) as `0x${string}`,
+    profileLink: NavUtils.toSpace(spaceId),
+  };
 }

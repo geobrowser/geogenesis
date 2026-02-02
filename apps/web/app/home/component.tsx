@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import * as React from 'react';
@@ -117,7 +118,7 @@ type PendingProposalsProps = {
 async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
   const [activeProposals, profile] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
-    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
+    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 
   if (activeProposals.proposals.length === 0) {
@@ -229,19 +230,19 @@ async function getMembershipProposalName(
   proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number]
 ) {
   const profile = await (type === 'ADD_EDITOR' || type === 'ADD_MEMBER'
-    ? fetchProfile({ walletAddress: proposal.createdBy.address })
+    ? Effect.runPromise(fetchProfile(proposal.createdBy.address))
     : fetchProposedEditorForProposal(proposal.id));
 
   switch (type) {
     case 'ADD_EDITOR': {
-      return `Add ${profile.name ?? profile.address} as editor`;
+      return `Add ${profile?.name ?? profile?.address} as editor`;
     }
     case 'ADD_MEMBER':
-      return `Add ${profile.name ?? profile.address} as member`;
+      return `Add ${profile?.name ?? profile?.address} as member`;
     case 'REMOVE_EDITOR':
-      return `Remove ${profile.name ?? profile.address} as editor`;
+      return `Remove ${profile?.name ?? profile?.address} as editor`;
     case 'REMOVE_MEMBER':
-      return `Remove ${profile.name ?? profile.address} as member`;
+      return `Remove ${profile?.name ?? profile?.address} as member`;
   }
 }
 

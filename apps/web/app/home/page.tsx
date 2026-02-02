@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
@@ -19,7 +20,7 @@ export default async function PersonalHomePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const [person, proposalsCount] = await Promise.all([
-    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
+    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
     connectedAddress
       ? fetchProposalCountByUser({
           userId: connectedAddress,
