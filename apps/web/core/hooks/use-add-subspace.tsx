@@ -24,7 +24,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
   });
 
   const tx = useSmartAccountTransaction({
-    address: space?.type === 'PERSONAL' ? space?.personalAddress : (space?.mainVotingAddress ?? null),
+    address: space?.address ?? null,
   });
 
   const { mutate, status } = useMutation({
@@ -46,7 +46,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
       const writeTxEffect = Effect.gen(function* () {
         const calldata = getCalldataForGovernanceType({
           type: space.type,
-          spacePluginAddress: space.spaceAddress,
+          spacePluginAddress: space.address,
           subspaceAddress,
         });
 

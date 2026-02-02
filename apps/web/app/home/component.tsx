@@ -217,7 +217,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 
         <AcceptOrRejectMember
           onchainProposalId={proposal.onchainProposalId}
-          membershipContractAddress={space.membershipAddress}
+          membershipContractAddress={space.address}
         />
       </div>
     </div>
@@ -333,7 +333,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
           <Execute
-            contractAddress={space?.mainVotingAddress as `0x${string}`}
+            contractAddress={space?.address as `0x${string}`}
             onchainProposalId={proposal.onchainProposalId}
           >
             Execute
@@ -348,10 +348,8 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
             status={proposal.status}
             userVote={userVote}
             // We know that the space isn't null here, so casting is safe. If the space
-            // doesn't exist we redirect the user. Eventually every space with governance
-            // will have a main voting plugin address
-            // @TODO(migration): This address will be different for the personal space plugin
-            votingContractAddress={space?.mainVotingAddress as `0x${string}`}
+            // doesn't exist we redirect the user.
+            votingContractAddress={space?.address as `0x${string}`}
           />
         )}
       </div>

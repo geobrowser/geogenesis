@@ -57,7 +57,7 @@ export async function SpaceMembers({ spaceId }: Props) {
               <SpaceMembersDialogServerContainer
                 spaceType={space.type}
                 spaceId={spaceId}
-                votingPluginAddress={space.mainVotingAddress}
+                votingPluginAddress={space.address}
               />
             </React.Suspense>
           }
