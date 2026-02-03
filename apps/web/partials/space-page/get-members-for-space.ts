@@ -1,8 +1,9 @@
+import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfileBySpaceId } from '~/core/io/subgraph';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -20,7 +21,7 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
     notFound();
   }
 
-  const memberProfiles = await Promise.all(space.members.map(memberSpaceId => fetchProfileBySpaceId(memberSpaceId)));
+  const memberProfiles = await Effect.runPromise(fetchProfilesBySpaceIds(space.members));
 
   return {
     allMembers: memberProfiles,

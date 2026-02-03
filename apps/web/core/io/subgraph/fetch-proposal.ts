@@ -7,8 +7,7 @@ import { Environment } from '~/core/environment';
 
 import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../substream-schema';
-import { fetchProfileBySpaceId } from './fetch-profile';
-import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from './fetch-profile';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -111,10 +110,13 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   }
 
   // In v2, createdById and accountId are memberSpaceIds (personal space IDs)
-  const [profile, voterProfiles] = await Promise.all([
-    fetchProfileBySpaceId(proposal.createdById),
-    fetchProfilesBySpaceIds(proposal.proposalVotes.nodes.map(v => v.accountId)),
-  ]);
+  // Batch fetch all profiles (creator + voters) in a single request
+  const voterSpaceIds = proposal.proposalVotes.nodes.map(v => v.accountId);
+  const allSpaceIds = [proposal.createdById, ...voterSpaceIds];
+  const allProfiles = await Effect.runPromise(fetchProfilesBySpaceIds(allSpaceIds));
+
+  const profile = allProfiles[0];
+  const voterProfiles = allProfiles.slice(1);
 
   const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
 

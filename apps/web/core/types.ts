@@ -11,6 +11,8 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type Profile = {
   id: string;
+  /** The user's personal space ID (bytes16 hex without 0x prefix) */
+  spaceId: string;
   name: string | null;
   avatarUrl: string | null;
   coverUrl: string | null;

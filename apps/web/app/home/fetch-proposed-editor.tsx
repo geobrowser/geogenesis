@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
-import { defaultProfile } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
+import { defaultProfile } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 
@@ -81,7 +81,7 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
     return defaultProfile('');
   }
 
-  // There should only be one proposed member in a single proposal
+  // There should only be one proposed editor in a single proposal
   const proposedEditorAccount = proposedEditors[0].accountId;
-  return await fetchProfile({ walletAddress: proposedEditorAccount });
+  return await Effect.runPromise(fetchProfile(proposedEditorAccount));
 }

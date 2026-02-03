@@ -46,15 +46,29 @@ export const VOTING_MODE = {
  */
 export const DAOSpaceAbi = [
   {
-    inputs: [{ internalType: 'bytes16', name: '_memberSpaceId', type: 'bytes16' }],
+    inputs: [{ internalType: 'bytes16', name: '_newMemberSpaceId', type: 'bytes16' }],
     name: 'addMember',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    inputs: [{ internalType: 'bytes16', name: '_editorSpaceId', type: 'bytes16' }],
+    inputs: [{ internalType: 'bytes16', name: '_oldMemberSpaceId', type: 'bytes16' }],
+    name: 'removeMember',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'bytes16', name: '_newEditorSpaceId', type: 'bytes16' }],
     name: 'addEditor',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'bytes16', name: '_oldEditorSpaceId', type: 'bytes16' }],
+    name: 'removeEditor',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
