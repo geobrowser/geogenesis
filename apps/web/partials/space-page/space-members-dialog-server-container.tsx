@@ -7,11 +7,9 @@ import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-c
 export async function SpaceMembersDialogServerContainer({
   spaceType,
   spaceId,
-  votingPluginAddress,
 }: {
   spaceType: SpaceGovernanceType;
   spaceId: string;
-  votingPluginAddress: string | null;
 }) {
   const { allMembers } = await getMembersForSpace(spaceId);
 
@@ -19,13 +17,7 @@ export async function SpaceMembersDialogServerContainer({
     <SpaceMembersManageDialog
       header={<h1 className="text-smallTitle">Manage members</h1>}
       trigger={<p>Manage members</p>}
-      content={
-        <SpaceMembersManageDialogContent
-          spaceType={spaceType}
-          members={allMembers}
-          votingPluginAddress={votingPluginAddress}
-        />
-      }
+      content={<SpaceMembersManageDialogContent spaceId={spaceId} members={allMembers} />}
     />
   );
 }
