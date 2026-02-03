@@ -334,10 +334,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
-          <Execute
-            contractAddress={space?.address as `0x${string}`}
-            onchainProposalId={proposal.onchainProposalId}
-          >
+          <Execute contractAddress={space?.address as `0x${string}`} onchainProposalId={proposal.onchainProposalId}>
             Execute
           </Execute>
         )}

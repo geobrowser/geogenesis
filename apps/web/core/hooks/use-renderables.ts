@@ -44,7 +44,9 @@ export function useRenderedPropertiesWithContent(entityId: string, spaceId: stri
   const nonEmptyValues = values.filter(v => v.value);
 
   const uniqueProperties = new Set(
-    [...nonEmptyValues.map(v => v.property.id), ...relations.map(r => r.type.id)].filter(p => !SKIPPED_PROPERTIES.includes(p))
+    [...nonEmptyValues.map(v => v.property.id), ...relations.map(r => r.type.id)].filter(
+      p => !SKIPPED_PROPERTIES.includes(p)
+    )
   );
 
   return useProperties([...uniqueProperties.values()]) ?? {};

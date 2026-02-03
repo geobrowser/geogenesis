@@ -17,13 +17,18 @@ import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useEntitySchema, useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
+import {
+  useEntitySchema,
+  useEntityTypes,
+  useName,
+  useRelationEntityRelations,
+} from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
-import { Property, Relation, ValueOptions } from '~/core/types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -70,10 +75,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
 
   // Get schema properties from the entity's types - these are placeholders that can't be deleted
   const schemaProperties = useEntitySchema(id, spaceId);
-  const schemaPropertyIds = React.useMemo(
-    () => new Set(schemaProperties.map(p => p.id)),
-    [schemaProperties]
-  );
+  const schemaPropertyIds = React.useMemo(() => new Set(schemaProperties.map(p => p.id)), [schemaProperties]);
 
   if (!shouldShowPanel && !isRelationPage) {
     return null;
@@ -182,7 +184,13 @@ type RelationPropertyWithDeleteProps = {
   isSchemaProperty: boolean;
 };
 
-function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property, isSchemaProperty }: RelationPropertyWithDeleteProps) {
+function RelationPropertyWithDelete({
+  propertyId,
+  entityId,
+  spaceId,
+  property,
+  isSchemaProperty,
+}: RelationPropertyWithDeleteProps) {
   const { storage } = useMutate();
 
   const propertyRelations = useRelations({

@@ -5,10 +5,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubspaceDto } from '~/core/io/dto/subspaces';
-import { SubstreamSubspace } from '~/core/io/substream-schema';
+import { getSpace } from '~/core/io/queries';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { getSpace } from '~/core/io/queries';
+import { SubstreamSubspace } from '~/core/io/substream-schema';
 
 import { GeoImage } from '~/design-system/geo-image';
 import { AddTo } from '~/design-system/icons/add-to';

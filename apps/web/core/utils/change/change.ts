@@ -8,8 +8,8 @@ import { getBatchEntities } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { Entities } from '~/core/utils/entity';
 import { Entity, Relation, Value } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
