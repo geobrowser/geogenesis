@@ -39,6 +39,7 @@ interface Props {
 }
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+  useSuppressFlushSyncWarning();
   const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
 
@@ -244,3 +245,22 @@ function useInterceptEditorLinks(spaceId: string) {
     };
   }, [router, spaceId]);
 }
+
+// Suppress TipTap's flushSync warning in dev - this is a known issue with TipTap + React 18
+// https://github.com/ueberdosis/tiptap/issues/3764
+const useSuppressFlushSyncWarning = () => {
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const originalError = console.error;
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
+        return;
+      }
+      originalError.apply(console, args);
+    };
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
+};
