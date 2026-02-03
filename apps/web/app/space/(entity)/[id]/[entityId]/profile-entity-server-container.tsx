@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/substream-schema';
+
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -29,6 +31,23 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   ]);
 
   const person = entityPage?.entity;
+  const spaces = person?.spaces ?? [];
+
+  /**
+   * This is temporary solution for redirecting from invalid space to valid one.
+   * because fetchOnchainProfileByEntityId(entityId) is not implemented yet.
+   *
+   * Redirect from an invalid space to a valid one.
+   *
+   * We need to check that spaces has data. We could be navigating
+   * to an entity with no data like a relation entity page.
+   */
+
+  if (person && spaces.length > 0 && !spaces.includes(spaceId)) {
+    const newSpaceId = Spaces.getValidSpaceIdForEntity(person);
+
+    return redirect(NavUtils.toEntity(newSpaceId, entityId));
+  }
 
   // @TODO: Real error handling
   if (!person) {

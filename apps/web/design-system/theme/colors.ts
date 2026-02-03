@@ -22,6 +22,7 @@ export const colors = {
     green: '#2ACE9D',
     'red-01': '#FF523A',
     'red-02': '#FFEEEB',
+    'red-03': '#FFDAD4',
   },
 } as const;
 
@@ -44,4 +45,5 @@ export const textColors: Record<ColorName, string> = {
   divider: 'text-divider',
   'red-01': 'text-red-01',
   'red-02': 'text-red-02',
+  'red-03': 'text-red-03',
 };

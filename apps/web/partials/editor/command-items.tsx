@@ -1,5 +1,6 @@
 import { Graph } from '@geoprotocol/geo-sdk';
-import { Editor, Range } from '@tiptap/core';
+import { Editor, Range, ReactRenderer } from '@tiptap/react';
+import tippy from 'tippy.js';
 
 import * as React from 'react';
 
@@ -13,12 +14,88 @@ import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorTable } from '~/design-system/icons/editor-table';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
+import { Link } from '~/design-system/icons/link';
+
+import { MentionList } from './mention-list';
+import { insertGraphLink } from './insert-graph-link';
+
+// Function to show MentionList for link selection
+const showLinkMentionList = (
+  editor: Editor,
+  onSelectEntity: (entityId: string, entityName: string) => void,
+  spaceId = 'default'
+) => {
+  // Get current cursor position
+  const { from } = editor.state.selection;
+
+  const reactRenderer = new ReactRenderer(MentionList, {
+    props: {
+      spaceId,
+      editor,
+      command: (entityId: string, entityName: string) => {
+        onSelectEntity(entityId, entityName);
+        popup.destroy();
+        reactRenderer.destroy();
+      },
+      onEscape: () => {
+        popup.destroy();
+        reactRenderer.destroy();
+      },
+    },
+    editor,
+  });
+
+  // Create popup at cursor position with fixed positioning
+  const popup = tippy(document.body, {
+    getReferenceClientRect: () => {
+      const start = editor.view.coordsAtPos(from);
+      return {
+        top: start.top,
+        left: start.left,
+        bottom: start.bottom,
+        right: start.left,
+        width: 0,
+        height: start.bottom - start.top,
+        x: start.left,
+        y: start.top,
+        toJSON: () => ({}),
+      } as DOMRect;
+    },
+    appendTo: () => document.body,
+    content: reactRenderer.element,
+    showOnCreate: true,
+    interactive: true,
+    trigger: 'manual',
+    placement: 'bottom-start',
+    theme: 'light',
+    arrow: false,
+    offset: [0, 8],
+    maxWidth: 420,
+    zIndex: 9999,
+  });
+};
 
 export interface CommandSuggestionItem {
   title: string;
   icon: React.ReactElement<any>;
   command: (props: { editor: Editor; range: Range }) => void;
 }
+
+
+
+// Backward compatibility functions for EntitySearchModal
+let globalEntitySelectCallback: ((entityId: string, entityName: string) => void) | null = null;
+const globalSpaceId: string = 'default';
+
+// Export function to be called from React components (backward compatibility)
+export const handleEntitySelect = (entityId: string, entityName: string) => {
+  if (globalEntitySelectCallback) {
+    globalEntitySelectCallback(entityId, entityName);
+    globalEntitySelectCallback = null;
+  }
+};
+
+export const getGlobalSpaceId = () => globalSpaceId;
 
 const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
@@ -56,7 +133,7 @@ const textCommandItem: CommandSuggestionItem = {
   },
 };
 
-export const commandItems: CommandSuggestionItem[] = [
+export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
   // {
   //   icon: <EditorText />,
   //   title: 'Text',
@@ -154,5 +231,30 @@ export const commandItems: CommandSuggestionItem[] = [
         .run();
     },
   },
+  {
+    icon: <Link />,
+    title: 'Link',
+    command: ({ editor, range }) => {
+      // Delete the "/" trigger first
+      editor.chain().focus().deleteRange(range).run();
+
+      // Use passed spaceId
+      const currentSpaceId = spaceId;
+
+      // Show MentionList for link selection
+      showLinkMentionList(editor, (entityId: string, entityName: string) => {
+        // Insert entity link using shared function with data attributes
+        insertGraphLink({
+          editor,
+          entityId,
+          linkText: entityName,
+          spaceId: currentSpaceId,
+        });
+      }, currentSpaceId);
+    },
+  },
   tableCommandItem,
 ];
+
+// For backward compatibility if needed
+export const commandItems = getCommandItems('default');

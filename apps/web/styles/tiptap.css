@@ -2,8 +2,9 @@
   padding-bottom: 0;
 }
 
-.ProseMirror > * {
-  margin-bottom: 0 !important; /* Override Tiptap's margin-bottom */
+.ProseMirror>* {
+  margin-bottom: 0 !important;
+  /* Override Tiptap's margin-bottom */
 }
 
 .ProseMirror .paragraph-node a {
@@ -76,9 +77,9 @@
   @apply mt-10;
 }
 
-.ProseMirror > h1:first-child,
-.ProseMirror > h2:first-child,
-.ProseMirror > h3:first-child {
+.ProseMirror>h1:first-child,
+.ProseMirror>h2:first-child,
+.ProseMirror>h3:first-child {
   @apply mt-0;
 }
 
@@ -114,6 +115,14 @@
   @apply my-4;
 }
 
+.ProseMirror video {
+  @apply h-auto w-full rounded-lg;
+}
+
+.ProseMirror .video-node {
+  @apply my-4;
+}
+
 .ProseMirror > * {
   margin-bottom: 16px;
 }
@@ -128,4 +137,26 @@
 
 .ProseMirror ul li {
   @apply ml-4 list-item list-disc;
+}
+
+/* Valid entity links */
+.ProseMirror a.entity-link-valid {
+  @apply text-grey-04 underline transition-colors duration-100;
+}
+
+/* External/Invalid link highlighting */
+.ProseMirror span.entity-link-invalid,
+.ProseMirror span[data-web2-url] {
+  @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted rounded px-0.5;
+}
+
+/* External/Invalid link and edit mode web2 URL hover */
+.ProseMirror span.entity-link-invalid:hover,
+.ProseMirror span.web2-url-edit-mode:hover {
+  @apply bg-red-03;
+}
+
+/* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
+.ProseMirror span.web2-url-edit-mode {
+  @apply underline decoration-dotted decoration-red-01;
 }

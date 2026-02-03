@@ -18,12 +18,13 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
+import { queryClient } from '~/core/query-client';
 import { useMutate } from '~/core/sync/use-mutate';
+import { detectWeb2URLs } from '~/core/utils/url-detection';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { ResultsList } from '~/design-system/autocomplete/results-list';
-import { ResultItem } from '~/design-system/autocomplete/results-list';
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -76,6 +77,7 @@ type SelectEntityProps = {
   withSearchIcon?: boolean;
   advanced?: boolean;
   autoFocus?: boolean;
+  showUrlWarning?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -94,11 +96,13 @@ export const SelectEntity = ({
   inputClassName = '',
   withSelectSpace = true,
   withSearchIcon = false,
-  advanced = true,
   autoFocus = false,
+  advanced = true,
+  showUrlWarning = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -127,6 +131,23 @@ export const SelectEntity = ({
     filterByTypes,
     filterBySpace,
   });
+
+  // Check if URL is detected
+  const isUrlDetected = showUrlWarning && query.trim() !== '' && detectWeb2URLs(query).length > 0;
+
+  // Auto focus input when component mounts
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      // Add small delay to ensure the component is fully rendered and visible
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus]);
 
   if (query === '' && result !== null) {
     startTransition(() => {
@@ -161,13 +182,15 @@ export const SelectEntity = ({
         onCreateEntity({
           id: newEntityId,
           name: query,
+          space: spaceId,
           renderableType: isCreatingProperty ? renderableType : undefined,
         }) ?? newEntityId;
-    } else {
-      // Create new entity with name and types using internal id
-      storage.entities.name.set(newEntityId, spaceId, query);
     }
-    onDone?.({ id: newEntityId, name: query }, true);
+
+    // Create new entity with name and types using internal id
+    storage.entities.name.set(newEntityId, spaceId, query);
+
+    onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
@@ -215,7 +238,7 @@ export const SelectEntity = ({
     if (element) {
       element.scrollIntoView({
         behavior: 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     }
   }, [hasResults, selectedIndex]);
@@ -251,6 +274,7 @@ export const SelectEntity = ({
       <Popover.Root open={!!query}>
         <Popover.Anchor asChild>
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={({ currentTarget: { value } }) => {
@@ -409,7 +433,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
