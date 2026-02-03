@@ -14,9 +14,9 @@ import {
   useValue,
   useValues,
 } from '~/core/sync/use-store';
+import { DataType, RenderableType } from '~/core/types';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
-import { DataType, RenderableType } from '~/core/types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';

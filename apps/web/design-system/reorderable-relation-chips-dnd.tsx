@@ -21,8 +21,8 @@ import { CSS } from '@dnd-kit/utilities';
 import React from 'react';
 
 import { useMutate } from '~/core/sync/use-mutate';
-import { sortRelations } from '~/core/utils/utils';
 import { Relation } from '~/core/types';
+import { sortRelations } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from './chip';
 

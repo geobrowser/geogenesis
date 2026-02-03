@@ -25,8 +25,8 @@ import {
   SOURCES_TYPE,
   SOURCE_DATABASE_IDENTIFIER_PROPERTY,
 } from '~/core/system-ids';
-import { GeoPoint } from '~/core/utils/utils';
 import { Relation } from '~/core/types';
+import { GeoPoint } from '~/core/utils/utils';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Tag } from '~/design-system/tag';

@@ -8,8 +8,8 @@ import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { sortRows } from '~/core/utils/utils';
 import { Cell, Property, Relation, Row } from '~/core/types';
+import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
@@ -110,7 +110,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     return source.value;
   }, [source]);
   const relationIdsKey = React.useMemo(
-    () => relationBlockSourceRelations.map(relation => relation.id).sort().join(','),
+    () =>
+      relationBlockSourceRelations
+        .map(relation => relation.id)
+        .sort()
+        .join(','),
     [relationBlockSourceRelations]
   );
 
@@ -217,14 +221,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     }
 
     return [];
-  }, [
-    collectionData.items,
-    collectionData.relations,
-    queriedEntities,
-    relationsMapping,
-    shownColumnIds,
-    source.type,
-  ]);
+  }, [collectionData.items, collectionData.relations, queriedEntities, relationsMapping, shownColumnIds, source.type]);
 
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
   const sortedRows = React.useMemo(() => sortRows(rows)?.slice(0, PAGE_SIZE) ?? [], [rows]);

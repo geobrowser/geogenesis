@@ -13,10 +13,10 @@ import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
 

@@ -37,11 +37,7 @@ export interface ProposalAction {
  * @param actions - Array of actions to execute if proposal passes
  * @returns Encoded bytes for use in SpaceRegistry.enter()
  */
-export function encodeProposalCreatedData(
-  proposalId: Hex,
-  votingMode: number,
-  actions: ProposalAction[]
-): Hex {
+export function encodeProposalCreatedData(proposalId: Hex, votingMode: number, actions: ProposalAction[]): Hex {
   return encodeAbiParameters(
     [
       { name: 'proposalId', type: 'bytes16' },

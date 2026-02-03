@@ -16,8 +16,8 @@ import { useState } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { NavUtils } from '~/core/utils/utils';
 import { Cell, Property, Row } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
