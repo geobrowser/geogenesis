@@ -1,50 +1,37 @@
-import { Schema } from 'effect';
+// @TODO complete v2 migration
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { Proposal, ProposalDto } from '../dto/proposals';
-import { SubstreamProposal } from '../substream-schema';
-import { fetchProfilesBySpaceIds } from './fetch-profile';
-import { spaceMetadataFragment } from './fragments';
+import { Proposal } from '../dto/proposals';
+import { Address, ProposalStatus, ProposalType, SubstreamVote } from '../substream-schema';
+import { fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
-    type
-    onchainProposalId
-
-    edit {
-      id
-      name
-      createdAt
-      createdAtBlock
-    }
-
+    createdAt
+    createdAtBlock
     startTime
     endTime
-    status
-
-    proposalVotes {
+    executedAt
+    proposedBy
+    spaceId
+    proposalVotesConnection {
       totalCount
       nodes {
         vote
-        accountId
+        voterId
       }
     }
-
-    space {
-      id
-      ${spaceMetadataFragment}
+    proposalActions {
+      actionType
+      contentUri
+      metadata
     }
-
-    createdById
-    startTime
-    endTime
-    status
   }
 }`;
 
@@ -53,8 +40,69 @@ export interface FetchProposalOptions {
   signal?: AbortController['signal'];
 }
 
+interface V2Proposal {
+  id: string;
+  createdAt: string;
+  createdAtBlock: string;
+  startTime: string;
+  endTime: string;
+  executedAt: string | null;
+  proposedBy: string;
+  spaceId: string;
+  proposalVotesConnection: {
+    totalCount: number;
+    nodes: Array<{
+      vote: 'YES' | 'NO' | 'ABSTAIN';
+      voterId: string;
+    }>;
+  };
+  proposalActions: Array<{
+    actionType: string;
+    contentUri: string | null;
+    metadata: string | null;
+  }>;
+}
+
 interface NetworkResult {
-  proposal: SubstreamProposal | null;
+  proposal: V2Proposal | null;
+}
+
+function mapActionTypeToProposalType(actionType: string): ProposalType {
+  switch (actionType) {
+    case 'PUBLISH':
+      return 'ADD_EDIT';
+    case 'ADD_EDITOR':
+      return 'ADD_EDITOR';
+    case 'REMOVE_EDITOR':
+      return 'REMOVE_EDITOR';
+    case 'ADD_MEMBER':
+      return 'ADD_MEMBER';
+    case 'REMOVE_MEMBER':
+      return 'REMOVE_MEMBER';
+    case 'ADD_SUBSPACE':
+      return 'ADD_SUBSPACE';
+    case 'REMOVE_SUBSPACE':
+      return 'REMOVE_SUBSPACE';
+    default:
+      return 'ADD_EDIT';
+  }
+}
+
+function convertVoteOption(vote: 'YES' | 'NO' | 'ABSTAIN'): 'ACCEPT' | 'REJECT' {
+  return vote === 'YES' ? 'ACCEPT' : 'REJECT';
+}
+
+function getProposalStatus(proposal: V2Proposal): ProposalStatus {
+  const now = Math.floor(Date.now() / 1000);
+  const endTime = Number(proposal.endTime);
+
+  if (proposal.executedAt) {
+    return 'ACCEPTED';
+  }
+  if (endTime < now) {
+    return 'REJECTED';
+  }
+  return 'PROPOSED';
 }
 
 export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
@@ -74,9 +122,6 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
       switch (error._tag) {
         case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
@@ -109,30 +154,63 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  // In v2, createdById and accountId are memberSpaceIds (personal space IDs)
-  // Batch fetch all profiles (creator + voters) in a single request
-  const voterSpaceIds = proposal.proposalVotes.nodes.map(v => v.accountId);
-  const allSpaceIds = [proposal.createdById, ...voterSpaceIds];
-  const allProfiles = await Effect.runPromise(fetchProfilesBySpaceIds(allSpaceIds));
+  const voterIds = proposal.proposalVotesConnection.nodes.map(v => v.voterId);
+  const [creatorProfile, voterProfiles] = await Promise.all([
+    Effect.runPromise(fetchProfileBySpaceId(proposal.proposedBy)),
+    Effect.runPromise(fetchProfilesBySpaceIds(voterIds)),
+  ]);
 
-  const profile = allProfiles[0];
-  const voterProfiles = allProfiles.slice(1);
+  const firstAction = proposal.proposalActions[0];
+  const name = firstAction?.metadata ?? firstAction?.actionType ?? null;
+  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
 
-  const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
+  const votes: SubstreamVote[] = proposal.proposalVotesConnection.nodes.map(v => ({
+    vote: convertVoteOption(v.vote),
+    accountId: Address(v.voterId),
+  }));
 
-  const decodedProposal = Either.match(proposalOrError, {
-    onLeft: error => {
-      console.error(`Unable to decode proposal ${proposal.id} with error ${error}`);
-      return null;
-    },
-    onRight: proposal => {
-      return proposal;
-    },
+  const profile = creatorProfile ?? {
+    id: proposal.proposedBy,
+    name: null,
+    avatarUrl: null,
+    coverUrl: null,
+    address: proposal.proposedBy as `0x${string}`,
+    profileLink: null,
+  };
+
+  const votesWithProfiles = votes.map((v, i) => {
+    const maybeProfile = voterProfiles[i];
+    const voter = maybeProfile ?? {
+      id: v.accountId,
+      address: v.accountId as `0x${string}`,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      profileLink: null,
+    };
+    return { ...v, voter };
   });
 
-  if (decodedProposal === null) {
-    return null;
-  }
-
-  return ProposalDto(proposal, profile, voterProfiles);
+  return {
+    id: proposal.id,
+    editId: '',
+    name,
+    type: proposalType,
+    onchainProposalId: proposal.id,
+    createdAt: Number(proposal.createdAt) || 0,
+    createdAtBlock: proposal.createdAtBlock,
+    startTime: Number(proposal.startTime),
+    endTime: Number(proposal.endTime),
+    status: getProposalStatus(proposal),
+    space: {
+      id: proposal.spaceId,
+      name: null,
+      image: '',
+    },
+    createdBy: profile,
+    proposalVotes: {
+      totalCount: proposal.proposalVotesConnection.totalCount,
+      nodes: votesWithProfiles,
+    },
+  };
 }
