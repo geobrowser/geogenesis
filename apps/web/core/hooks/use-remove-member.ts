@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, getAddress } from 'viem';
@@ -53,7 +53,7 @@ export function useRemoveMember(args: RemoveEditorArgs) {
 
 type CalldataForGovernanceTypeArgs =
   | {
-      type: 'PUBLIC';
+      type: 'DAO';
       memberAddress: string;
     }
   | {
@@ -63,7 +63,7 @@ type CalldataForGovernanceTypeArgs =
 
 function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x${string}` {
   switch (args.type) {
-    case 'PUBLIC':
+    case 'DAO':
       return encodeFunctionData({
         functionName: 'proposeRemoveMember',
         abi: MainVotingAbi,

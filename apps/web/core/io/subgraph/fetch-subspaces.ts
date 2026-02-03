@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 import { SpaceGovernanceType } from '~/core/types';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
-import { SubstreamSubspace, SubstreamVersion } from '../schema';
+import { SubstreamSubspace, SubstreamVersion } from '../substream-schema';
 import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
@@ -23,7 +23,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
   const { space } = useSpace(args.spaceId);
 
   const tx = useSmartAccountTransaction({
-    address: space?.type === 'PERSONAL' ? space?.personalAddress : (space?.mainVotingAddress ?? null),
+    address: space?.address ?? null,
   });
 
   const { mutate, status } = useMutation({
@@ -45,7 +45,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
       const writeTxEffect = Effect.gen(function* () {
         const calldata = getCalldataForGovernanceType({
           type: space.type,
-          spacePluginAddress: space.spaceAddress,
+          spacePluginAddress: space.address,
           subspaceAddress,
         });
 
@@ -66,7 +66,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
 
 type CalldataForGovernanceTypeArgs =
   | {
-      type: 'PUBLIC';
+      type: 'DAO';
       subspaceAddress: string;
       spacePluginAddress: string;
     }
@@ -78,7 +78,7 @@ type CalldataForGovernanceTypeArgs =
 
 function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x${string}` {
   switch (args.type) {
-    case 'PUBLIC':
+    case 'DAO':
       return encodeFunctionData({
         functionName: 'proposeRemoveSubspace',
         abi: MainVotingAbi,

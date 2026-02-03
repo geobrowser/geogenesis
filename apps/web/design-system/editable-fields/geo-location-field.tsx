@@ -1,3 +1,5 @@
+'use client';
+
 import { cva } from 'class-variance-authority';
 import Textarea from 'react-textarea-autosize';
 

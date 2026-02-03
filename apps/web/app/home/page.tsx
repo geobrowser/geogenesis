@@ -19,7 +19,7 @@ export default async function PersonalHomePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const [person, proposalsCount] = await Promise.all([
-    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
+    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
     connectedAddress
       ? fetchProposalCountByUser({
           userId: connectedAddress,

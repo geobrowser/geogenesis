@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -21,7 +21,7 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
   }
 
   const firstThreeMembers = space.members.slice(0, 3);
-  const firstThreeProfiles = await fetchProfilesByAddresses(firstThreeMembers);
+  const firstThreeProfiles = await fetchProfilesBySpaceIds(firstThreeMembers);
 
   return {
     firstThreeMembers: firstThreeProfiles,

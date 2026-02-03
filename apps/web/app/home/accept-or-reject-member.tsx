@@ -1,6 +1,6 @@
 'use client';
 
-import { MemberAccessAbi } from '@graphprotocol/grc-20/abis';
+import { MemberAccessAbi } from '@geoprotocol/geo-sdk/abis';
 import cx from 'classnames';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';

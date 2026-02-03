@@ -1,4 +1,6 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -6,8 +8,9 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
-import { Cell, Property } from '~/core/v2.types';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { NavUtils } from '~/core/utils/utils';
+import { Cell, Property } from '~/core/types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';
@@ -337,6 +340,7 @@ export function TableBlockListItem({
                     property={property}
                     onChangeEntry={onChangeEntry}
                     source={source}
+                    entityName={name}
                   />
                 </div>
               );
@@ -410,6 +414,7 @@ export function TableBlockListItem({
                 onChangeEntry={onChangeEntry}
                 source={source}
                 disableLink={true}
+                entityName={name}
               />
             </div>
           );

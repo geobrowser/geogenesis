@@ -1,10 +1,10 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 
-import { SubstreamEntityLive } from '../schema';
+import { SubstreamEntityLive } from '../substream-schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 

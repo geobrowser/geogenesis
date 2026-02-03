@@ -1,10 +1,12 @@
-import { VoteOption } from '@graphprotocol/grc-20';
-import { MainVotingAbi } from '@graphprotocol/grc-20/abis';
+'use client';
+
+import { VoteOption } from '@geoprotocol/geo-sdk';
+import { MainVotingAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';
 
-import { SubstreamVote } from '../io/schema';
+import { SubstreamVote } from '../io/substream-schema';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 interface Args {

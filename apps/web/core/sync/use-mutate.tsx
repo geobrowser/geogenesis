@@ -1,12 +1,32 @@
-import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { DataType, Relation, Value } from '../v2.types';
+import { extractValueString } from '../utils/value';
+import { DataType, Relation, Value } from '../types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
+
+/** Convert a Uint8Array or string ID to a hex string. */
+function toHexId(id: unknown): string {
+  if (typeof id === 'string') {
+    return id;
+  }
+  if (id instanceof Uint8Array) {
+    return Array.from(id)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  // Fallback for other array-like types
+  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
+    return Array.from(id as ArrayLike<number>)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return String(id);
+}
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
@@ -65,6 +85,16 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ imageId: string; relationId: string }>;
+  };
+  videos: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ videoId: string; relationId: string }>;
   };
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
@@ -262,57 +292,160 @@ function createMutator(store: GeoStore): Mutator {
           network: 'TESTNET',
         });
 
-        // Process the operations returned by Graph.createImage
         for (const op of createImageOps) {
-          if (op.type === 'CREATE_RELATION') {
+          if (op.type === 'createRelation') {
             store.setRelation({
-              id: op.relation.id,
-              entityId: op.relation.entity,
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
               fromEntity: {
-                id: op.relation.fromEntity,
+                id: toHexId(op.from),
                 name: null,
               },
               type: {
-                id: op.relation.type,
+                id: toHexId(op.relationType),
                 name: 'Image',
               },
               toEntity: {
-                id: op.relation.toEntity,
+                id: toHexId(op.to),
                 name: 'Image',
-                value: op.relation.toEntity,
+                value: toHexId(op.to),
               },
               spaceId,
               position: Position.generate(),
               verified: false,
               renderableType: 'RELATION',
             });
-          } else if (op.type === 'UPDATE_ENTITY') {
-            // Create values for each property in the entity update
-            for (const value of op.entity.values) {
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
               store.setValue({
                 id: ID.createValueId({
-                  entityId: op.entity.id,
-                  propertyId: value.property,
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
                   spaceId,
                 }),
                 entity: {
-                  id: op.entity.id,
+                  id: toHexId(op.id),
                   name: null,
                 },
                 property: {
-                  id: value.property,
+                  id: toHexId(pv.property),
                   name: 'Image Property',
                   dataType: 'TEXT',
                   renderableType: 'URL',
                 },
                 spaceId,
-                value: value.value,
+                value: extractValueString(pv.value),
               });
             }
           }
         }
 
         // Create relation from parent entity to image entity
+        const relationId = ID.createEntityId();
+        const imageIdStr = toHexId(imageId);
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: imageIdStr,
+            name: null,
+            value: imageIdStr,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'IMAGE',
+        });
+
+        return { imageId: imageIdStr, relationId };
+      },
+    },
+    videos: {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
+        // Create the video entity using the Graph API (uses same upload mechanism as images)
+        // Use TESTNET network to upload to Pinata via alternative gateway
+        const { id: videoId, ops: createVideoOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        let ipfsUrl: string | undefined;
+        for (const op of createVideoOps) {
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find(pv => {
+              const valStr = extractValueString(pv.value);
+              return valStr.startsWith('ipfs://');
+            });
+            if (ipfsValue) {
+              ipfsUrl = extractValueString(ipfsValue.value);
+              break;
+            }
+          }
+        }
+
+        // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
+        const videoIdStr = toHexId(videoId);
+        if (ipfsUrl) {
+          store.setValue({
+            id: ID.createValueId({
+              entityId: videoIdStr,
+              propertyId: VIDEO_URL_PROPERTY,
+              spaceId,
+            }),
+            entity: {
+              id: videoIdStr,
+              name: null,
+            },
+            property: {
+              id: VIDEO_URL_PROPERTY,
+              name: 'Video URL',
+              dataType: 'TEXT',
+              renderableType: 'URL',
+            },
+            spaceId,
+            value: ipfsUrl,
+          });
+        }
+
+        // Add Types relation to mark the video entity as a Video type
+        store.setRelation({
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: videoIdStr,
+            name: null,
+          },
+          type: {
+            id: SystemIds.TYPES_PROPERTY,
+            name: 'Types',
+          },
+          toEntity: {
+            id: VIDEO_TYPE,
+            name: 'Video',
+            value: VIDEO_TYPE,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
+
+        // Create relation from parent entity to video entity
         const relationId = ID.createEntityId();
         store.setRelation({
           id: relationId,
@@ -326,17 +459,17 @@ function createMutator(store: GeoStore): Mutator {
             name: relationPropertyName || '',
           },
           toEntity: {
-            id: imageId,
+            id: videoIdStr,
             name: null,
-            value: imageId,
+            value: videoIdStr,
           },
           spaceId,
           position: Position.generate(),
           verified: false,
-          renderableType: 'IMAGE',
+          renderableType: 'VIDEO',
         });
 
-        return { imageId, relationId };
+        return { videoId: videoIdStr, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {

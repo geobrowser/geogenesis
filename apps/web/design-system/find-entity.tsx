@@ -1,3 +1,5 @@
+'use client';
+
 import * as Popover from '@radix-ui/react-popover';
 import pluralize from 'pluralize';
 
@@ -7,7 +9,7 @@ import { startTransition, useState } from 'react';
 import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
 import { NavUtils } from '~/core/utils/utils';
-import { SearchResult } from '~/core/v2.types';
+import { SearchResult } from '~/core/types';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { NewTab } from '~/design-system/icons/new-tab';

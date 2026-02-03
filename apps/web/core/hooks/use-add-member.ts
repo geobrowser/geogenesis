@@ -1,6 +1,6 @@
 'use client';
 
-import { PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';

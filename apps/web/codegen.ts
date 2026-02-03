@@ -1,7 +1,7 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const config: CodegenConfig = {
-  schema: 'https://api-testnet.geobrowser.io/graphql',
+  schema: 'https://testnet-api.geobrowser.io/graphql',
   documents: ['./**/*.tsx'],
   generates: {
     './core/gql/': {

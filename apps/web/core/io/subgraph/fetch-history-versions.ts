@@ -5,8 +5,8 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
-import { SubstreamVersionHistorical } from '../schema';
-import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
+import { SubstreamVersionHistorical } from '../substream-schema';
+import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -85,7 +85,11 @@ export async function fetchHistoryVersions(args: FetchVersionsArgs) {
   });
 
   const networkVersions = await Effect.runPromise(withFallbacks);
-  const profilesForProposals = await fetchProfilesByAddresses(networkVersions.map(p => p.edit.createdById));
+
+  const creatorIds = networkVersions.map(p => p.edit.createdById);
+  const uniqueCreatorIds = [...new Set(creatorIds)];
+  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueCreatorIds);
+  const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   const versions = networkVersions
     .map(v => {
@@ -97,7 +101,7 @@ export async function fetchHistoryVersions(args: FetchVersionsArgs) {
           return null;
         },
         onRight: result => {
-          const maybeProfile = profilesForProposals.find(profile => profile.address === result.edit.createdById);
+          const maybeProfile = profilesBySpaceId.get(result.edit.createdById);
           return HistoryVersionDto(result, maybeProfile);
         },
       });

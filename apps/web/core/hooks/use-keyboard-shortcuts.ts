@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useMemo } from 'react';
 
 interface Shortcut {

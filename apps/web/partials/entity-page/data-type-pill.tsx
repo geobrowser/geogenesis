@@ -3,7 +3,13 @@
 import * as React from 'react';
 
 import { NavUtils } from '~/core/utils/utils';
-import { DataType, FlattenedRenderType, RawRenderableType } from '~/core/v2.types';
+import {
+  DataType,
+  FlattenedRenderType,
+  RawRenderableType,
+  SWITCHABLE_RENDERABLE_TYPE_LABELS,
+  SwitchableRenderableType,
+} from '~/core/types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
@@ -13,6 +19,7 @@ import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
+import { VideoSmall } from '~/design-system/icons/video-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ColorName } from '~/design-system/theme/colors';
 
@@ -32,14 +39,20 @@ type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
 // Icon mapping for data types and renderable types
 const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
-  NUMBER: Number,
-  CHECKBOX: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  BOOL: CheckboxChecked,
+  DATE: Date,
+  DATETIME: Date,
   TIME: Date,
   POINT: GeoLocation,
   RELATION: Relation,
   URL: Url,
   IMAGE: Image,
+  VIDEO: VideoSmall,
   GEO_LOCATION: GeoLocation,
+  PLACE: GeoLocation,
 };
 
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {
@@ -63,12 +76,15 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
       ? TYPE_ICONS[iconKey]
       : TYPE_ICONS[dataType.toUpperCase() as UppercaseDisplayType] || TYPE_ICONS.TEXT;
 
-  // Format display type: capitalize first letter of each word
-  const formattedType = displayTypeName
-    .toLowerCase()
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  // Format display type: use SWITCHABLE_RENDERABLE_TYPE_LABELS if available, otherwise capitalize first letter of each word
+  const upperDisplayType = displayTypeName.toUpperCase() as SwitchableRenderableType;
+  const formattedType =
+    SWITCHABLE_RENDERABLE_TYPE_LABELS[upperDisplayType] ||
+    displayTypeName
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
 
   // Determine if the pill should be clickable
   // Clickable only if we have a valid target ID

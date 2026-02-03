@@ -30,6 +30,10 @@ export async function SpaceEditors({ spaceId }: Props) {
     return null;
   }
 
+  if (space.type === 'PERSONAL') {
+    return null;
+  }
+
   if (isEditor) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pl-1.5 pr-2 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
@@ -50,7 +54,7 @@ export async function SpaceEditors({ spaceId }: Props) {
               <SpaceEditorsDialogServerContainer
                 spaceType={space.type}
                 spaceId={spaceId}
-                votingPluginAddress={space.type === 'PERSONAL' ? space.personalAddress : space.mainVotingAddress}
+                votingPluginAddress={space.address}
               />
             </React.Suspense>
           }

@@ -1,11 +1,13 @@
+'use client';
+
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -27,9 +29,8 @@ export const CreateNewVersionInSpace = ({
 }: CreateNewVersionInSpaceProps) => {
   const router = useRouter();
 
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const spaces = useSpacesWhereMember(address);
+  const { personalSpaceId } = usePersonalSpaceId();
+  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 

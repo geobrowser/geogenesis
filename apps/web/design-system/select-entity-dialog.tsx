@@ -1,10 +1,12 @@
+'use client';
+
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { Property, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, SwitchableRenderableType } from '~/core/types';
 
 import { SelectEntity } from './select-entity';
 
@@ -44,7 +46,7 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-30" collisionPadding={10} avoidCollisions={true}>
+        <Popover.Content sideOffset={4} align="start" className="z-[1001]" collisionPadding={10} avoidCollisions={true}>
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}

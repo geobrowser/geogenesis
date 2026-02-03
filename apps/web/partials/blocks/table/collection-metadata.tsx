@@ -1,3 +1,5 @@
+'use client';
+
 import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
@@ -9,7 +11,7 @@ import type { MouseEvent } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { useSpace } from '~/core/hooks/use-space';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 
 import { SquareButton } from '~/design-system/button';

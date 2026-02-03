@@ -1,4 +1,4 @@
-import { SubstreamVote } from '~/core/io/schema';
+import { SubstreamVote } from '~/core/io/substream-schema';
 import { getNoVotePercentage, getYesVotePercentage } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';

@@ -1,10 +1,11 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';

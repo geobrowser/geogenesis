@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
 import { Effect } from 'effect';
@@ -12,8 +12,8 @@ import { fromGeoFilterString } from '~/core/blocks/data/filters';
 import { filterStateToWhere } from '~/core/blocks/data/use-data-block';
 import { useEntity } from '~/core/database/entities';
 import { ID } from '~/core/id';
-import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
-import { getAllEntities, getEntity } from '~/core/io/v2/queries';
+import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
+import { getAllEntities, getEntity } from '~/core/io/queries';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 
 import { cloneOpsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';

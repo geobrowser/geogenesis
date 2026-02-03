@@ -1,10 +1,12 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import { useEntitySchema } from '../state/entity-page-store/entity-store';
 import { useRelations, useValues } from '../sync/use-store';
-import { DataType, Property, Relation, Value } from '../v2.types';
+import { DataType, Property, Relation, Value } from '../types';
 import { sortProperties, useProperties } from './use-properties';
 
 const SKIPPED_PROPERTIES: string[] = [SystemIds.BLOCKS];

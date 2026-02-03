@@ -10,13 +10,13 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position, SystemIds } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import React from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { Property, Relation, Row } from '~/core/v2.types';
+import { Property, Relation, Row } from '~/core/types';
 
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { PositionBox } from '~/design-system/position-box';

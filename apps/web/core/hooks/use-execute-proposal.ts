@@ -1,4 +1,6 @@
-import { MainVotingAbi } from '@graphprotocol/grc-20/abis';
+'use client';
+
+import { MainVotingAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';

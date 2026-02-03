@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 import { v4 } from 'uuid';
 
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Environment } from '../environment';

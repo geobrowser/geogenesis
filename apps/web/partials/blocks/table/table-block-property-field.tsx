@@ -1,4 +1,6 @@
-import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import { useState } from 'react';
@@ -7,13 +9,13 @@ import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { Property } from '~/core/v2.types';
+import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -28,8 +30,9 @@ export function TableBlockPropertyField(props: {
   onChangeEntry: onChangeEntryFn;
   source: Source;
   disableLink?: boolean;
+  entityName?: string | null;
 }) {
-  const { spaceId, entityId, property, source, disableLink = false } = props;
+  const { spaceId, entityId, property, source, disableLink = false, entityName } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
 
@@ -38,7 +41,14 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
+          <EditableRelationsGroup
+            entityId={entityId}
+            spaceId={spaceId}
+            property={property}
+            disableLink={disableLink}
+            entityName={entityName}
+            isEditing={isEditing}
+          />
         </div>
       );
     }
@@ -97,7 +107,13 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
         </div>
       </div>
       {isRelation ? (
-        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
+        <EditableRelationsGroup
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          disableLink={disableLink}
+          isEditing={false}
+        />
       ) : (
         <EditableValueGroup entityId={entityId} property={property} isEditing={false} />
       )}
@@ -110,9 +126,18 @@ type EditableRelationsGroupProps = {
   entityId: string;
   property: Property;
   disableLink?: boolean;
+  entityName?: string | null;
+  isEditing: boolean;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({
+  entityId,
+  spaceId,
+  property,
+  disableLink = false,
+  entityName,
+  isEditing,
+}: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
@@ -126,7 +151,24 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
 
   const isEmpty = relations.length === 0;
 
+  // For IMAGE type properties, show an image upload field
+  if (property.renderableTypeStrict === 'IMAGE') {
+    return (
+      <TableImageField
+        imageRelation={relations[0]}
+        spaceId={spaceId}
+        entityId={entityId}
+        entityName={entityName}
+        propertyId={property.id}
+        propertyName={property.name ?? 'Image'}
+      />
+    );
+  }
+
   if (isEmpty) {
+    if (!isEditing) {
+      return null;
+    }
     return (
       <div data-testid="select-entity" className="w-full">
         <SelectEntity
@@ -193,20 +235,10 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
         const relationName = r.toEntity.name;
         const relationValue = r.toEntity.value;
 
-        if (property.renderableTypeStrict === 'IMAGE') {
-          return (
-            <ImageZoom
-              variant="table-cell"
-              key={`image-${relationId}-${relationValue}`}
-              imageSrc={relationValue ?? ''}
-            />
-          );
-        }
-
         return (
           <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
             <LinkableRelationChip
-              isEditing
+              isEditing={isEditing}
               onDelete={() => {
                 storage.relations.delete(r);
               }}
@@ -230,7 +262,7 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
           </div>
         );
       })}
-      {!isEmpty && (
+      {!isEmpty && isEditing && (
         <div className="mt-2">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}

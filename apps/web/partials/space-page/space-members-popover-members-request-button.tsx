@@ -6,15 +6,15 @@ import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { Pending } from '~/design-system/pending';
 
 type SpaceMembersPopoverMemberRequestButtonProps = {
-  votingPluginAddress: string | null;
+  spaceId: string;
   hasRequestedSpaceMembership: boolean;
 };
 
 export function SpaceMembersPopoverMemberRequestButton({
-  votingPluginAddress,
+  spaceId,
   hasRequestedSpaceMembership,
 }: SpaceMembersPopoverMemberRequestButtonProps) {
-  const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
+  const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { shouldShowElement } = useOnboardGuard();
 
   if (!shouldShowElement) {

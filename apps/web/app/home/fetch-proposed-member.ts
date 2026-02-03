@@ -82,7 +82,7 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
 
   // There should only be one proposed member in a single proposal
   const proposedMemberAccount = proposedMembers[0].accountId;
-  return await fetchProfile({ address: proposedMemberAccount });
+  return await fetchProfile({ walletAddress: proposedMemberAccount });
 }
 
 const getProposedEditorInProposalQuery = (proposalId: string) => `query {
@@ -161,5 +161,5 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
 
   // There should only be one proposed member in a single proposal
   const proposedMemberAccount = proposedEditors[0].accountId;
-  return await fetchProfile({ address: proposedMemberAccount });
+  return await fetchProfile({ walletAddress: proposedMemberAccount });
 }

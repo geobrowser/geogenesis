@@ -1,18 +1,15 @@
-FROM node:18-alpine AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+FROM oven/bun:1.3.6-alpine AS base
 WORKDIR /app
 
 COPY . .
-RUN pnpm install --filter sdk
+RUN bun install --filter sdk
 
 FROM base AS builder
 WORKDIR /app
-RUN pnpm install --filter substream
-RUN pnpm run --filter substream build
+RUN bun install --filter substream
+RUN bun run --filter substream build
 
-FROM node:18-alpine
+FROM oven/bun:1.3.6-alpine
 WORKDIR /app
 
 COPY --from=builder /app/node_modules /app/node_modules
@@ -20,4 +17,4 @@ COPY --from=builder /app/packages/substream/dist /app/packages/substream/dist
 
 COPY packages/substream/geo-substream.spkg /app/
 
-CMD [ "node", "/app/packages/substream/dist/index.js" ]
+CMD [ "bun", "/app/packages/substream/dist/index.js" ]

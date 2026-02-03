@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -51,7 +51,7 @@ export const OnboardingDialog = () => {
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const entityId = useAtomValue(entityIdAtom);
-  const { deploy } = useDeploySpace();
+  const { createPersonalSpace } = useCreatePersonalSpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
 
   const [step, setStep] = useAtom(stepAtom);
@@ -67,10 +67,9 @@ export const OnboardingDialog = () => {
     if (!address) return;
 
     try {
-      const spaceId = await deploy({
-        spaceImage: avatar,
+      const spaceId = await createPersonalSpace({
         spaceName: name,
-        type: 'personal',
+        spaceImage: avatar,
         entityId,
       });
 

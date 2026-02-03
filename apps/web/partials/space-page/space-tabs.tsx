@@ -1,13 +1,13 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import { useRelations } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 import { TabGroup } from '~/design-system/tab-group';
 
@@ -30,10 +30,11 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   const sortedTabRelations = sortRelations(mergedTabRelations);
 
   // Map sorted relations to tab entities, maintaining order
+  // For new local tabs (not yet published), use the relation's toEntity data as fallback
   const tabEntityMap = new Map(tabEntities.map(e => [e.id, e]));
-  const sortedTabEntities = sortedTabRelations
-    .map(r => tabEntityMap.get(r.toEntity.id))
-    .filter((e): e is TabEntity => e != null);
+  const sortedTabEntities = sortedTabRelations.map(
+    r => tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name }
+  );
 
   // Build dynamic tabs in the correct order
   const dynamicTabs = sortedTabEntities.map(entity => ({

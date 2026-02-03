@@ -1,17 +1,17 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { getProperties } from '../io/v2/queries';
+import { getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
-import { EntityWithSchema, Property, Relation } from '../v2.types';
+import { EntityWithSchema, Property, Relation } from '../types';
 
 type UseEntityOptions = {
   spaceId?: string;

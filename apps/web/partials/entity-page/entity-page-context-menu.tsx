@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValues } from '~/core/sync/use-store';

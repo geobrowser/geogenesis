@@ -1,9 +1,9 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 /**
  * Returns the relations to create a data entity. Data entities require a type,

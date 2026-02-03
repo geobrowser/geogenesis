@@ -1,6 +1,8 @@
+'use client';
+
 import cx from 'classnames';
 
-import type { ComponentPropsWithoutRef, MouseEvent } from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
 
 import { Blank } from '~/design-system/icons/blank';
 import { Check } from '~/design-system/icons/check';
@@ -8,7 +10,7 @@ import { Minus } from '~/design-system/icons/minus';
 
 type CheckboxProps = {
   checked: boolean | null;
-  onChange?: (event: MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  onChange?: React.MouseEventHandler<HTMLButtonElement>;
   className?: string;
 } & ComponentPropsWithoutRef<'button'>;
 

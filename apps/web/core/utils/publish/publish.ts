@@ -1,159 +1,125 @@
-import {
-  CreatePropertyOp,
-  CreateRelationOp,
-  DataType,
-  DeleteRelationOp,
-  Id,
-  SystemIds,
-  UnsetEntityValuesOp,
-  UpdateEntityOp,
-} from '@graphprotocol/grc-20';
+import { Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 
-import { DATA_TYPE_PROPERTY } from '~/core/constants';
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
 /**
- * Maps the local Geo Genesis data model for data to the GRC-20 compliant
- * Ops representation.
+ * Converts local values and relations to GRC-20 Ops for publishing.
  */
-export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string) {
+export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
   const validValues = values.filter(
-    // Deleted ops have a value of ''. Make sure we don't filter those out
     v =>
       v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== '' && v.isLocal === true
   );
 
-  // Identify property entities by looking for entities that have a TYPES_PROPERTY relation to PROPERTY
-  const propertyEntityIds = new Set<string>();
-  relations.forEach(r => {
-    if (r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted) {
-      propertyEntityIds.add(r.fromEntity.id);
-    }
-  });
+  const ops: Op[] = [];
 
-  const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
+  for (const r of relations) {
     if (r.isDeleted) {
-      return {
-        type: 'DELETE_RELATION',
-        id: Id(r.id),
-      };
-    }
-
-    return {
-      type: 'CREATE_RELATION',
-      relation: {
-        id: Id(r.id),
-        type: Id(r.type.id),
-        entity: Id(r.entityId),
-        fromEntity: Id(r.fromEntity.id),
-        toEntity: Id(r.toEntity.id),
+      const { ops: deleteOps } = Graph.deleteRelation({ id: r.id });
+      ops.push(...deleteOps);
+    } else {
+      const { ops: createOps } = Graph.createRelation({
+        fromEntity: r.fromEntity.id,
+        toEntity: r.toEntity.id,
+        type: r.type.id,
+        id: r.id,
         position: r.position ?? undefined,
-        verified: r.verified ?? undefined,
-        toSpace: r.toSpaceId ? Id(r.toSpaceId) : undefined,
-      },
-    };
-  });
+        ...(r.toSpaceId && { toSpace: r.toSpaceId }),
+      });
+      ops.push(...createOps);
+    }
+  }
 
-  // Group values by entity ID and partition deleted vs non-deleted values
   const valuesByEntity = validValues.reduce(
     (acc, value) => {
       const entityId = value.entity.id;
       if (!acc[entityId]) {
         acc[entityId] = { deleted: [], set: [] };
       }
-
       if (value.isDeleted) {
         acc[entityId].deleted.push(value);
       } else {
         acc[entityId].set.push(value);
       }
-
       return acc;
     },
-    // entity id -> changed values
     {} as Record<string, { deleted: Value[]; set: Value[] }>
   );
 
-  // Create entity operations
-  const entityOps: (UpdateEntityOp | UnsetEntityValuesOp)[] = [];
-
-  /**
-   * The ordering of set/unset for a given entity should be safe
-   * since our local data model already ensures a single value
-   * only exists one time for a given entity. We can't end up
-   * in a situation where we create and delete a value at the
-   * same time.
-   */
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    if (set.length > 0) {
-      const values = set.map(value => ({
-        property: Id(value.property.id),
-        value: value.value,
-        ...(value.options && {
-          options: Object.fromEntries(Object.entries(value.options).filter(([, v]) => v !== undefined)),
-        }),
-      }));
+    const sdkValues = set.map(convertToSdkValue);
+    const sdkUnset = deleted.map(value => ({
+      property: value.property.id,
+      language: 'all' as const,
+    }));
 
-      entityOps.push({
-        type: 'UPDATE_ENTITY',
-        entity: {
-          id: Id(entityId),
-          values,
-        },
+    if (sdkValues.length > 0 || sdkUnset.length > 0) {
+      const { ops: updateOps } = Graph.updateEntity({
+        id: entityId,
+        values: sdkValues.length > 0 ? sdkValues : undefined,
+        unset: sdkUnset.length > 0 ? sdkUnset : undefined,
       });
-    }
-
-    // Create UnsetEntityValuesOp for deleted values
-    if (deleted.length > 0) {
-      entityOps.push({
-        type: 'UNSET_ENTITY_VALUES',
-        unsetEntityValues: {
-          id: Id(entityId),
-          properties: deleted.map(value => Id(value.property.id)),
-        },
-      });
+      ops.push(...updateOps);
     }
   }
 
-  // Create property operations for identified property entities
-  const propertyOps: CreatePropertyOp[] = [];
-
-  propertyEntityIds.forEach(propertyId => {
-    // Find the dataType value for this property entity
-    const dataTypeValue = validValues.find(v => v.entity.id === propertyId && v.property.id === DATA_TYPE_PROPERTY);
-
-    if (dataTypeValue && dataTypeValue.value) {
-      const remoteDataType = getRemoteDataTypeFromAppDataType(dataTypeValue.value);
-
-      if (remoteDataType) {
-        propertyOps.push({
-          type: 'CREATE_PROPERTY',
-          property: {
-            id: Id(propertyId),
-            dataType: remoteDataType,
-          },
-        });
-      }
-    }
-  });
-
-  return [...relationOps, ...entityOps, ...propertyOps];
+  return ops;
 }
 
-function getRemoteDataTypeFromAppDataType(dataType: string): DataType | null {
+function convertToSdkValue(value: Value): PropertyValueParam {
+  const { dataType } = value.property;
+  const val = value.value;
+  const property = value.property.id;
+
   switch (dataType) {
     case 'TEXT':
-      return 'STRING';
-    case 'CHECKBOX':
-      return 'BOOLEAN';
-    case 'POINT':
-      return 'POINT';
-    case 'NUMBER':
-      return 'NUMBER';
+      return {
+        property,
+        type: 'text',
+        value: val,
+        ...(value.options?.language && { language: value.options.language }),
+      } as PropertyValueParam;
+    case 'BOOL':
+      return { property, type: 'bool', value: val === '1' || val === 'true' } as PropertyValueParam;
+    case 'INT64':
+      return {
+        property,
+        type: 'int64',
+        value: parseInt(val, 10) || 0,
+        ...(value.options?.unit && { unit: value.options.unit }),
+      } as unknown as PropertyValueParam;
+    case 'FLOAT64':
+    case 'DECIMAL':
+      return {
+        property,
+        type: 'float64',
+        value: parseFloat(val) || 0,
+        ...(value.options?.unit && { unit: value.options.unit }),
+      } as PropertyValueParam;
+    case 'DATE':
+      return { property, type: 'date', value: val } as PropertyValueParam;
+    case 'DATETIME':
+      return { property, type: 'datetime', value: val } as PropertyValueParam;
     case 'TIME':
-      return 'TIME';
-
+      return { property, type: 'time', value: val } as PropertyValueParam;
+    case 'POINT': {
+      try {
+        const point = JSON.parse(val);
+        return {
+          property,
+          type: 'point',
+          lon: point.lon ?? point.x ?? 0,
+          lat: point.lat ?? point.y ?? 0,
+        } as PropertyValueParam;
+      } catch {
+        return { property, type: 'point', lon: 0, lat: 0 } as PropertyValueParam;
+      }
+    }
     default:
-      return null;
+      return { property, type: 'text', value: val } as PropertyValueParam;
   }
 }
+
+export const Publish = {
+  prepareLocalDataForPublishing,
+};

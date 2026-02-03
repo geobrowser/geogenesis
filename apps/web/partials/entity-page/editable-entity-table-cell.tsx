@@ -1,15 +1,17 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { Property } from '~/core/v2.types';
+import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField, TableImageField } from '~/design-system/editable-fields/editable-fields';
+import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -201,7 +203,15 @@ export function EditableEntityTableCell({
   const isRelation = property.dataType === 'RELATION';
 
   if (isRelation) {
-    return <RelationsGroup entityId={entityId} property={property} spaceId={spaceId} onLinkEntry={onLinkEntry} />;
+    return (
+      <RelationsGroup
+        entityId={entityId}
+        property={property}
+        spaceId={spaceId}
+        onLinkEntry={onLinkEntry}
+        entityName={name}
+      />
+    );
   }
 
   return (
@@ -216,15 +226,30 @@ interface RelationsGroupProps {
   spaceId: string;
   property: Property;
   onLinkEntry: onLinkEntryFn;
+  entityName?: string | null;
 }
 
-function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsGroupProps) {
+function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }: RelationsGroupProps) {
   const relations = useRelations({
     // We don't filter by space id as we want to render data from all spaces.
     selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
   });
 
   if (relations.length === 0) {
+    // For IMAGE type properties, show an image upload field instead of SelectEntity
+    if (property.renderableTypeStrict === 'IMAGE') {
+      return (
+        <TableImageField
+          imageRelation={undefined}
+          spaceId={spaceId}
+          entityId={entityId}
+          entityName={entityName}
+          propertyId={property.id}
+          propertyName={property.name ?? 'Image'}
+        />
+      );
+    }
+
     return (
       <div key={`${entityId}-${property.id}-empty`} data-testid="select-entity" className="w-full">
         <SelectEntity
@@ -259,13 +284,23 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
     );
   }
 
+  // For IMAGE type properties with existing relations, show editable image field
+  if (property.renderableTypeStrict === 'IMAGE') {
+    return (
+      <TableImageField
+        imageRelation={relations[0]}
+        spaceId={spaceId}
+        entityId={entityId}
+        entityName={entityName}
+        propertyId={property.id}
+        propertyName={property.name ?? 'Image'}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       {relations.map(r => {
-        if (property.renderableTypeStrict === 'IMAGE') {
-          return <ImageZoom variant="table-cell" key={`image-${r.id}`} imageSrc={r.toEntity.value ?? ''} />;
-        }
-
         return (
           <>
             <div key={`relation-${r.id}-${r.toEntity.value}`} className="mt-1">

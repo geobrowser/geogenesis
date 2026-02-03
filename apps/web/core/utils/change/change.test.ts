@@ -1,12 +1,38 @@
-import { PositionRange } from '@graphprotocol/grc-20';
+// @TODO(grc-20-v2-migration): Update EntityChange and diff types to use v2 schema
 import { describe, expect, it } from 'vitest';
 
-import { Entity } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
-import { Relation, Triple } from '~/core/types';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { aggregateChanges } from './change';
-import { EntityChange } from './types';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EntityChange = any;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Entity = any;
+
+type TripleValueType = 'TEXT' | 'URL' | 'TIME' | 'IMAGE' | 'NUMBER' | 'CHECKBOX' | 'RELATION';
+
+type Triple = {
+  attributeId: string;
+  attributeName: string;
+  entityId: string;
+  entityName: string;
+  id: string;
+  space: string;
+  value: { type: TripleValueType; value: string };
+};
+
+type Relation = {
+  id: string;
+  space: string;
+  index: string;
+  fromEntity: { id: string; name: string };
+  toEntity: { id: string; name: string; renderableType: string; value: string };
+  typeOf: { id: string; name: string };
+};
+
+const POSITION_FIRST = 'aaaaaaaaaaaaaaaaaaaa';
 
 function makeStubEntity(tripleFn?: () => Triple, relationFn?: () => Relation): Entity {
   return {
@@ -70,7 +96,7 @@ function makeStubRelation(value: string): Relation {
   return {
     id: EntityId('1-1'),
     space: 'relation-space-from-test',
-    index: PositionRange.FIRST,
+    index: POSITION_FIRST,
     fromEntity: {
       id: EntityId('1'),
       name: 'From Entity Name From Relation Test',

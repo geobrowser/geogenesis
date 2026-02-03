@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useAtom } from 'jotai';
@@ -8,16 +8,17 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
-import { getValues } from '~/core/sync/use-store';
-import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
-import { Relation, RenderableEntityType } from '~/core/v2.types';
+import { getValues, useValues } from '~/core/sync/use-store';
+import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
+import { Relation, RenderableEntityType } from '~/core/types';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
-import { EntityId } from '../../io/schema';
+import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
 import { useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -97,6 +98,8 @@ function makeNewBlockRelation({
         return 'DATA';
       case 'image':
         return 'IMAGE';
+      case 'video':
+        return 'VIDEO';
     }
   })();
 
@@ -235,6 +238,12 @@ export function useEditorStore() {
     return blocks.flatMap(b => b.values);
   }, [initialBlocks, initialTabs, isTab, tabId]);
 
+  // Subscribe to markdown content changes for all text blocks.
+  // This ensures editorJson re-computes when text content is edited.
+  const markdownValues = useValues({
+    selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
+  });
+
   /**
    * Tiptap expects a JSON representation of the editor state, but we store our block state
    * in a Knowledge Graph-specific data model. We need to map from our KG representation
@@ -244,15 +253,11 @@ export function useEditorStore() {
     const json = {
       type: 'doc',
       content: blockRelations.map(block => {
-        // @TODO(migration): We should be using the sync store to read all data for
-        // the app. We need to be able to pre-hydrate the store with values based
-        // on the data from the server or else the store won't have any data.
-        const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
-        });
-
-        const markdownValueForBlockId = markdownValuesForBlockId?.[0];
+        // Find the markdown value for this block. Prefer local (reactive) values over initial server values.
+        // Local values from markdownValues take precedence since they reflect user edits.
+        const markdownValueForBlockId =
+          markdownValues.find(v => v.entity.id === block.block.id) ??
+          initialBlockValues.find(v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT);
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
@@ -267,6 +272,33 @@ export function useEditorStore() {
               spaceId,
               alt: '',
               title: '',
+            },
+          };
+        }
+
+        if (toEntity?.type === 'VIDEO') {
+          // Read video URL from Values using VIDEO_URL_PROPERTY
+          const videoUrlValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === VIDEO_URL_PROPERTY,
+          });
+          const videoUrlValue = videoUrlValues?.[0]?.value || toEntity.value;
+
+          // Read video title from Values using NAME_PROPERTY
+          const titleValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
+          });
+          const titleValue = titleValues?.[0]?.value || '';
+
+          return {
+            type: 'video',
+            attrs: {
+              id: block.block.id,
+              src: getVideoPath(videoUrlValue),
+              title: titleValue,
+              relationId: block.relationId,
+              spaceId,
             },
           };
         }
@@ -308,7 +340,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, spaceId, initialBlockValues]);
+  }, [blockRelations, spaceId, initialBlockValues, markdownValues]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -372,6 +404,8 @@ export function useEditorStore() {
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
+            case 'video':
+              return VIDEO_BLOCK_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }
@@ -412,6 +446,12 @@ export function useEditorStore() {
 
             break;
           }
+          case VIDEO_BLOCK_TYPE: {
+            // Create a Types relation to mark this entity as a Video Block type
+            const relation = getRelationForBlockType(node.id, VIDEO_BLOCK_TYPE, spaceId);
+            storage.relations.set(relation);
+            break;
+          }
           case SystemIds.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
@@ -431,17 +471,27 @@ export function useEditorStore() {
       makeBlocksRelations({
         nextBlocks: newBlocks,
         addedBlocks: addedBlocks.map(block => {
-          const imageHash = getImageHash(block.attrs?.src ?? '');
-          const imageUrl = `ipfs://${imageHash}`;
-
-          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          // For image blocks, store the ipfs URL in toEntity.value
+          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
+          if (block.type === 'image') {
+            const imageHash = getImageHash(block.attrs?.src ?? '');
+            const imageUrl = `ipfs://${imageHash}`;
+            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          }
+          // Video blocks and other blocks use block ID as the value
+          return { id: block.id, value: block.id };
         }),
         removedBlockIds: removed,
         movedBlocks: movedBlocks.map(block => {
-          const imageHash = getImageHash(block.attrs?.src ?? '');
-          const imageUrl = `ipfs://${imageHash}`;
-
-          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          // For image blocks, store the ipfs URL in toEntity.value
+          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
+          if (block.type === 'image') {
+            const imageHash = getImageHash(block.attrs?.src ?? '');
+            const imageUrl = `ipfs://${imageHash}`;
+            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          }
+          // Video blocks and other blocks use block ID as the value
+          return { id: block.id, value: block.id };
         }),
         spaceId,
         blockRelations: blockRelations,
@@ -465,7 +515,29 @@ export function useEditorStore() {
 
             break;
           }
-          case 'image':
+          case 'image': {
+            // Update the relation if the image src has changed
+            const existingRelation = blockRelations.find(r => r.block.id === node.attrs?.id);
+            if (existingRelation && node.attrs?.src) {
+              const imageHash = getImageHash(node.attrs.src);
+              const imageUrl = `ipfs://${imageHash}`;
+              // Only update if the value has changed
+              if (existingRelation.toEntity.value !== imageUrl && imageHash !== '') {
+                const updatedRelation: Relation = {
+                  ...existingRelation,
+                  toEntity: {
+                    ...existingRelation.toEntity,
+                    value: imageUrl,
+                  },
+                };
+                storage.relations.set(updatedRelation);
+              }
+            }
+            break;
+          }
+          case 'video':
+            // Video block persistence is handled directly in video-node.tsx component
+            // using storage.entities.name.set() for title
             break;
           default:
             break;

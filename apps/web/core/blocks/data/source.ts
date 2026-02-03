@@ -1,9 +1,9 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { storage } from '~/core/sync/use-mutate';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 type EntitySource = {
   type: 'RELATIONS';

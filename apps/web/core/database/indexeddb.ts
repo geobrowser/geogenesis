@@ -1,6 +1,6 @@
 import Dexie, { Table } from 'dexie';
 
-import { Relation, Value } from '../v2.types';
+import { Relation, Value } from '../types';
 
 const DB_NAME = 'geogenesis';
 const VERSION = 2;

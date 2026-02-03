@@ -1,18 +1,27 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
-import { sortRelations } from '~/core/utils/utils';
-import { DataType, RenderableType } from '~/core/v2.types';
+import {
+  useHydrateEntity,
+  useQueryEntity,
+  useQueryProperty,
+  useRelations,
+  useValue,
+  useValues,
+} from '~/core/sync/use-store';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
+import { DataType, RenderableType } from '~/core/types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
@@ -196,6 +205,17 @@ export function RelationsGroup({
                 <ImageRelation
                   key={`image-${relationId}-${linkedEntityId}`}
                   linkedEntityId={linkedEntityId}
+                  directImageUrl={r.toEntity.value}
+                  spaceId={spaceId}
+                />
+              );
+            }
+
+            if (property.renderableTypeStrict === 'VIDEO') {
+              return (
+                <VideoRelation
+                  key={`video-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
                   relationId={relationId}
                   spaceId={spaceId}
                 />
@@ -232,11 +252,37 @@ export function RelationsGroup({
   );
 }
 
-function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
-  // Use the efficient hook to get only the image URL for this specific entity
-  const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+function ImageRelation({
+  linkedEntityId,
+  directImageUrl,
+  spaceId,
+}: {
+  linkedEntityId: string;
+  directImageUrl?: string | null;
+  spaceId: string;
+}) {
+  // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
+  // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
+  // We need to check if it's a valid image URL before using it
+  const isValidImageUrl = directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'));
+  const lookedUpImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+  const imageSrc = isValidImageUrl ? directImageUrl : lookedUpImageSrc;
 
-  return <ImageZoom imageSrc={actualImageSrc || ''} />;
+  return <ImageZoom imageSrc={imageSrc || ''} />;
+}
+
+function VideoRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Hydrate the video entity from remote to populate the reactive store
+  useHydrateEntity({ id: linkedEntityId });
+
+  // Use the efficient hook to get only the video URL for this specific entity
+  const actualVideoSrc = useVideoUrlFromEntity(linkedEntityId, spaceId);
+
+  if (!actualVideoSrc) {
+    return null;
+  }
+
+  return <VideoThumbnailWithPlay videoSrc={actualVideoSrc} />;
 }
 
 function RenderedValue({
@@ -294,7 +340,9 @@ function RenderedValue({
         </div>
       );
     }
-    case 'NUMBER':
+    case 'INT64':
+    case 'FLOAT64':
+    case 'DECIMAL':
       return (
         <ReadableNumberField
           key={`number-${propertyId}-${value}`}
@@ -303,11 +351,13 @@ function RenderedValue({
           unitId={options?.unit ?? undefined}
         />
       );
-    case 'CHECKBOX': {
+    case 'BOOL': {
       const checked = getChecked(value);
 
       return <Checkbox key={`checkbox-${propertyId}-${value}`} checked={checked} />;
     }
+    case 'DATE':
+    case 'DATETIME':
     case 'TIME': {
       return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} />;
     }

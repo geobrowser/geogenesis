@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
@@ -10,7 +10,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation } from '~/core/sync/use-store';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';

@@ -8,21 +8,40 @@ export const IPFS_GATEWAY_PATH = 'https://upload.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
 
-export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
-export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';
-export const VALUE_TYPE_PROPERTY = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8';
-export const IS_TYPE_PROPERTY = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
-export const ROOT_SPACE = '2a98e6b4-3728-44a4-9b8e-02e15f0677c8';
+export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
-export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
-export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
+// Video type IDs
+export const VIDEO_URL_PROPERTY = '33da2ef5bd554e91af973e082e431a13';
+export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
+export const VIDEO_TYPE = 'd7a4817c9795405b93e212df759c43f8';
+export const VIDEO_BLOCK_TYPE = '809bc406d0f34f3ca8a1aa265733c6ce';
 
-export const PLACE = '783bc688-e65f-4e54-b67f-a5643d78345e';
-export const ADDRESS = '5c6e72fb-8340-47c0-8281-8be159ecd495';
-export const VENUE_PROPERTY = 'f28bbb6b-f4e8-465d-9de7-a09085e224b9';
-export const ADDRESS_PROPERTY = '72ba2a0f-729d-4847-925d-f3b09d46bb66';
-export const MAPBOX_PROPERTY = 'f9d8ff4e-52f1-4e73-b8f2-bbb31dce5465';
-export const UNIT_PROPERTY = '11b06581-20d3-41ea-b570-2ef4ee0a4ffd';
+// Video file types and upload constraints
+export const VALID_VIDEO_TYPES = [
+  'video/mp4',
+  'video/quicktime',
+  'video/x-msvideo',
+  'video/x-ms-wmv',
+  'video/webm',
+  'video/x-flv',
+];
+export const VIDEO_ACCEPT = VALID_VIDEO_TYPES.join(',');
+export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
+
+export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
+export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
+export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+
+export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
+export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
+
+export const PLACE = '783bc688e65f4e54b67fa5643d78345e';
+export const ADDRESS = '5c6e72fb834047c082818be159ecd495';
+export const VENUE_PROPERTY = 'f28bbb6bf4e8465d9de7a09085e224b9';
+export const ADDRESS_PROPERTY = '72ba2a0f729d4847925df3b09d46bb66';
+export const MAPBOX_PROPERTY = 'f9d8ff4e52f14e73b8f2bbb31dce5465';
+export const UNIT_PROPERTY = '11b0658120d341eab5702ef4ee0a4ffd';
 export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
 export const DEFAULT_NUMBER_FORMAT = ',?';
 

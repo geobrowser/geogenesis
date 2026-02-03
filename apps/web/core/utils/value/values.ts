@@ -1,4 +1,4 @@
-import { Value } from '~/core/v2.types';
+import type { Value } from '~/core/types';
 
 export function merge(values: Value[], remoteValues: Value[]) {
   const localTripleIds = new Set(values.map(v => v.id));

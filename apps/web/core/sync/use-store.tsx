@@ -1,3 +1,5 @@
+'use client';
+
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
@@ -6,11 +8,12 @@ import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
-import { getProperties, getProperty } from '../io/v2/queries';
+import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Properties } from '../utils/property';
-import { Values } from '../utils/value';
-import { Property, Relation, Value } from '../v2.types';
+// @TODO replace with Values.merge()
+import { merge } from '../utils/value/values';
+import { Property, Relation, Value } from '../types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
@@ -147,6 +150,12 @@ type QueryEntitiesOptions = {
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+  /**
+   * When true, returns an empty array until the initial fetch completes.
+   * This prevents the selector from returning partial/stale results from
+   * the reactive store while the remote query is still in flight.
+   */
+  deferUntilFetched?: boolean;
 
   /**
    * By default we query the local store for the entity without
@@ -171,6 +180,7 @@ export function useQueryEntities({
   skip = 0,
   enabled = true,
   placeholderData = undefined,
+  deferUntilFetched = false,
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -206,6 +216,10 @@ export function useQueryEntities({
     reactive,
     () => {
       if (!enabled) {
+        return [];
+      }
+
+      if (deferUntilFetched && !isFetched) {
         return [];
       }
 
@@ -398,7 +412,7 @@ export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {
       .filter(v => (selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true));
   }
 
-  return Values.merge(reactiveValues.get(), mergeWith).filter(v =>
+  return merge(reactiveValues.get(), mergeWith).filter(v =>
     selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true
   );
 }
@@ -434,7 +448,7 @@ export function useValue(options: UseValueParams) {
 export function getValue(options: UseValueParams & { mergeWith?: Value[] }) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
-  const values = mergeWith.length === 0 ? reactiveValues.get() : Values.merge(reactiveValues.get(), mergeWith);
+  const values = mergeWith.length === 0 ? reactiveValues.get() : merge(reactiveValues.get(), mergeWith);
 
   if (id) {
     return values.find(v => v.id === id && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;

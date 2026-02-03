@@ -1,7 +1,7 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { storage } from '~/core/sync/use-mutate';
-import { Relation } from '~/core/v2.types';
+import { Relation } from '~/core/types';
 
 type CreateCollectionItemRelationArgs = {
   relationId?: string;

@@ -1,5 +1,5 @@
-import { IdUtils } from '@graphprotocol/grc-20';
-import { Position } from '@graphprotocol/grc-20';
+import { IdUtils } from '@geoprotocol/geo-sdk';
+import { Position } from '@geoprotocol/geo-sdk';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -7,12 +7,11 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
-import { EntityId } from '~/core/io/schema';
-import { useValues } from '~/core/sync/use-store';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
-import { SubstreamVote } from '../io/schema';
-import { Entity, Relation, Row } from '../v2.types';
+import { SubstreamVote } from '../io/substream-schema';
+import { Entity, Relation, Row } from '../types';
 import { Entities } from './entity';
 
 export const NavUtils = {
@@ -352,39 +351,27 @@ export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
 
 // Get the image hash from an image path
 // e.g., https://gateway.lighthouse.storage/ipfs/HASH
+// e.g., https://magenta-naval-crow-536.mypinata.cloud/files/HASH
 // e.g., ipfs://HASH -> HASH
 export const getImageHash = (value: string) => {
-  // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
+  // Handle Lighthouse gateway URLs
   if (value.startsWith(IPFS_GATEWAY_READ_PATH)) {
     const [, hash] = value.split(IPFS_GATEWAY_READ_PATH);
     return hash;
-  } else if (value.includes('://')) {
-    const [, hash] = value.split('://');
-    return hash;
-    // If the value does not contain an arg query parameter or protocol prefix, it already is a hash
-  } else {
-    return value;
   }
+  // Handle Pinata gateway URLs
+  if (value.startsWith(PINATA_GATEWAY_READ_PATH)) {
+    const [, hash] = value.split(PINATA_GATEWAY_READ_PATH);
+    return hash;
+  }
+  // Handle ipfs:// protocol
+  if (value.startsWith('ipfs://')) {
+    const [, hash] = value.split('ipfs://');
+    return hash;
+  }
+  // If the value does not contain a known gateway or protocol prefix, it already is a hash
+  return value;
 };
-
-/**
- * Hook to efficiently get image URL for a specific entity
- * @param imageEntityId The ID of the image entity
- * @param spaceId The space ID to query within
- * @returns The IPFS URL string or undefined if not found
- */
-export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
-  const imageValues = useValues({
-    selector: v => v.entity.id === imageEntityId && v.spaceId === spaceId,
-  });
-
-  if (!imageEntityId || imageValues.length === 0) return undefined;
-
-  // Find the first value that is a string starting with 'ipfs://'
-  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return imageUrlValue?.value;
-}
 
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
@@ -406,6 +393,37 @@ export const getImagePath = (value: string) => {
 export const getImagePathFallback = (value: string) => {
   if (value.startsWith('ipfs://')) {
     return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
+    return value;
+  }
+};
+
+// Get the video hash from a video path
+// Uses the same logic as image hash extraction
+export const getVideoHash = getImageHash;
+
+// Get the video URL from a video triple value
+// this allows us to render videos on the front-end based on a raw triple value
+// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
+export const getVideoPath = (value: string) => {
+  // Use Pinata gateway as the primary source for IPFS videos
+  if (value.startsWith('ipfs://')) {
+    return `${PINATA_GATEWAY_READ_PATH}${getVideoHash(value)}`;
+    // The video likely resolves to a video resource at some URL
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
+    // The video is likely a static, bundled path
+    return value;
+  }
+};
+
+// Get the fallback video URL (Lighthouse gateway) for when Pinata fails
+export const getVideoPathFallback = (value: string) => {
+  if (value.startsWith('ipfs://')) {
+    return `${IPFS_GATEWAY_READ_PATH}${getVideoHash(value)}`;
   } else if (value.startsWith('http')) {
     return value;
   } else {

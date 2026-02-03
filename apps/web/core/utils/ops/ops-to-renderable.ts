@@ -1,68 +1,89 @@
-import { Id, Op } from '@graphprotocol/grc-20';
+import { Op } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
-import { Relation, Value, ValueOptions } from '~/core/v2.types';
+import { extractValueString } from '~/core/utils/value';
+import { Relation, Value } from '~/core/types';
 
 type Options = {
   spaceId: string;
   entityName?: string | null;
 };
 
-/**
- * Converts stored GRC-20 operations to Value and Relation arrays.
- */
+/** Converts GRC-20 operations to Value and Relation arrays. */
 export function convertOpsToRenderables(ops: Op[], options: Options): { values: Value[]; relations: Relation[] } {
   const { spaceId, entityName } = options;
   const values: Value[] = [];
   const relations: Relation[] = [];
 
   for (const op of ops) {
-    if (op.type === 'UPDATE_ENTITY' && op.entity) {
-      const entityValues = op.entity.values || [];
-
-      for (const val of entityValues) {
+    if (op.type === 'createEntity') {
+      const entityValues = op.values || [];
+      for (const pv of entityValues) {
         values.push({
           id: ID.createValueId({
-            entityId: Id(op.entity.id),
-            propertyId: Id(val.property),
+            entityId: String(op.id),
+            propertyId: String(pv.property),
             spaceId,
           }),
           entity: {
-            id: Id(op.entity.id),
+            id: String(op.id),
             name: entityName ?? null,
           },
           property: {
-            id: Id(val.property),
+            id: String(pv.property),
             name: null,
             dataType: 'TEXT',
           },
           spaceId,
-          value: val.value,
-          options: val.options ? (val.options as ValueOptions) : null,
+          value: extractValueString(pv.value),
+          options: null,
         });
       }
-    } else if (op.type === 'CREATE_RELATION' && op.relation) {
+    } else if (op.type === 'updateEntity') {
+      const entityValues = op.set || [];
+      for (const pv of entityValues) {
+        values.push({
+          id: ID.createValueId({
+            entityId: String(op.id),
+            propertyId: String(pv.property),
+            spaceId,
+          }),
+          entity: {
+            id: String(op.id),
+            name: entityName ?? null,
+          },
+          property: {
+            id: String(pv.property),
+            name: null,
+            dataType: 'TEXT',
+          },
+          spaceId,
+          value: extractValueString(pv.value),
+          options: null,
+        });
+      }
+    } else if (op.type === 'createRelation') {
       relations.push({
-        id: ID.createEntityId(),
-        entityId: ID.createEntityId(),
+        id: String(op.id),
+        entityId: op.entity ? String(op.entity) : ID.createEntityId(),
         spaceId,
         renderableType: 'RELATION',
         type: {
-          id: Id(op.relation.type),
+          id: String(op.relationType),
           name: null,
         },
         fromEntity: {
-          id: Id(op.relation.fromEntity),
+          id: String(op.from),
           name: entityName ?? null,
         },
         toEntity: {
-          id: Id(op.relation.toEntity),
+          id: String(op.to),
           name: null,
-          value: Id(op.relation.toEntity),
+          value: String(op.to),
         },
-        position: op.relation.position ?? undefined,
-        verified: op.relation.verified ?? undefined,
-        toSpaceId: op.relation.toSpace ? Id(op.relation.toSpace) : undefined,
+        position: op.position ?? undefined,
+        verified: undefined,
+        toSpaceId: op.toSpace ? String(op.toSpace) : undefined,
       });
     }
   }

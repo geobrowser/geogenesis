@@ -1,3 +1,5 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
@@ -5,7 +7,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { Properties } from '~/core/utils/property';
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -17,6 +19,7 @@ import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
+import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
 interface Props {
@@ -26,13 +29,18 @@ interface Props {
 }
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
-  TIME: Date,
   TEXT: Text,
   URL: Url,
   RELATION: Relation,
   IMAGE: Image,
-  CHECKBOX: CheckboxChecked,
-  NUMBER: Number,
+  VIDEO: VideoSmall,
+  BOOL: CheckboxChecked,
+  INT64: Number,
+  FLOAT64: Number,
+  DECIMAL: Number,
+  DATE: Date,
+  DATETIME: Date,
+  TIME: Date,
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,

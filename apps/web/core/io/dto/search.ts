@@ -1,6 +1,6 @@
-import { SearchResult } from '~/core/v2.types';
+import { SearchResult } from '~/core/types';
 
-import { RemoteSearchResult } from '../v2/v2.schema';
+import { RemoteSearchResult } from '../schema';
 
 export function SearchResultDto(result: RemoteSearchResult): SearchResult {
   const spaces = [...result.spaceIds]; // @TODO(migration): Richer spaces

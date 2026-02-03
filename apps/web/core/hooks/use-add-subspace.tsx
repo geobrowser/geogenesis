@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,7 @@ import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
-import { getSpace } from '../io/v2/queries';
+import { getSpace } from '../io/queries';
 
 interface AddSubspaceArgs {
   spaceId: string;
@@ -24,7 +24,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
   });
 
   const tx = useSmartAccountTransaction({
-    address: space?.type === 'PERSONAL' ? space?.personalAddress : (space?.mainVotingAddress ?? null),
+    address: space?.address ?? null,
   });
 
   const { mutate, status } = useMutation({
@@ -46,7 +46,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
       const writeTxEffect = Effect.gen(function* () {
         const calldata = getCalldataForGovernanceType({
           type: space.type,
-          spacePluginAddress: space.spaceAddress,
+          spacePluginAddress: space.address,
           subspaceAddress,
         });
 
@@ -67,7 +67,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
 
 type CalldataForGovernanceTypeArgs =
   | {
-      type: 'PUBLIC';
+      type: 'DAO';
       subspaceAddress: string;
       spacePluginAddress: string;
     }
@@ -79,7 +79,7 @@ type CalldataForGovernanceTypeArgs =
 
 function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x${string}` {
   switch (args.type) {
-    case 'PUBLIC':
+    case 'DAO':
       return encodeFunctionData({
         functionName: 'proposeAcceptSubspace',
         abi: MainVotingAbi,

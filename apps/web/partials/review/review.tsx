@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
-import { getSpaces } from '~/core/io/v2/queries';
+import { getSpaces } from '~/core/io/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -257,7 +257,7 @@ const ReviewChanges = () => {
             </div>
           )}
         </div>
-        <div>
+        <div className="flex items-center gap-3">
           <Button onClick={handlePublish} disabled={!isReadyToPublish || isPublishing}>
             <Pending isPending={isPublishing}>Publish</Pending>
           </Button>
@@ -282,7 +282,7 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    store.clear();
+                    store.clearLocalChangesForSpace(activeSpace);
                   }}
                 >
                   Delete all

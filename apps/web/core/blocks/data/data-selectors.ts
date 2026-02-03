@@ -1,9 +1,9 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { Entity } from '~/core/v2.types';
+import { Entity } from '~/core/types';
 
 type TripleSegment = {
   type: 'TRIPLE';

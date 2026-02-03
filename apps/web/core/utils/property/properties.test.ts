@@ -1,8 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
-import { Property, Relation, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
 import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
 
@@ -13,6 +13,8 @@ vi.mock('~/core/constants', () => ({
   GEO_LOCATION: 'GEO_LOCATION_ID',
   FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
+  VIDEO_RENDERABLE_TYPE: 'VIDEO_RENDERABLE_TYPE_ID',
+  PLACE: 'PLACE_ID',
 }));
 
 describe('Properties', () => {
@@ -49,10 +51,10 @@ describe('Properties', () => {
       });
     });
 
-    it('should map NUMBER property type correctly', () => {
-      const result = mapPropertyType('NUMBER');
+    it('should map INT64 property type correctly', () => {
+      const result = mapPropertyType('INT64');
       expect(result).toEqual({
-        baseDataType: 'NUMBER',
+        baseDataType: 'INT64',
         renderableTypeId: null,
       });
     });
@@ -65,10 +67,10 @@ describe('Properties', () => {
       });
     });
 
-    it('should map CHECKBOX property type correctly', () => {
-      const result = mapPropertyType('CHECKBOX');
+    it('should map BOOL property type correctly', () => {
+      const result = mapPropertyType('BOOL');
       expect(result).toEqual({
-        baseDataType: 'CHECKBOX',
+        baseDataType: 'BOOL',
         renderableTypeId: null,
       });
     });
@@ -224,7 +226,7 @@ describe('Properties', () => {
         renderableType: 'URL',
       };
 
-      const result = constructDataType(mockPropertyData, null, null, 'prop-1', false);
+      const result = constructDataType(mockPropertyData, null, null);
 
       expect(result).toEqual({
         id: 'prop-1',
@@ -239,7 +241,7 @@ describe('Properties', () => {
         name: 'Url',
       };
 
-      const result = constructDataType(null, mockRenderableTypeEntity, null, 'prop-1');
+      const result = constructDataType(null, mockRenderableTypeEntity, null);
 
       expect(result).toBeNull();
     });
@@ -250,26 +252,26 @@ describe('Properties', () => {
         entityId: 'entity-1',
         fromEntity: { id: 'prop-1', name: 'Test Property' },
         type: { id: RENDERABLE_TYPE_PROPERTY, name: 'Renderable Type' },
-        toEntity: { id: SystemIds.IMAGE, name: 'Image' },
+        toEntity: { id: SystemIds.IMAGE, name: 'Image', value: SystemIds.IMAGE },
         spaceId: 'space-1',
-        position: { x: 0, y: 0 },
+        position: '0',
         verified: false,
         renderableType: 'RELATION',
       };
 
-      const result = constructDataType(null, null, mockRenderableTypeRelation, 'prop-1');
+      const result = constructDataType(null, null, mockRenderableTypeRelation);
 
       expect(result).toBeNull();
     });
 
     it('should return null when no data sources available', () => {
-      const result = constructDataType(null, null, null, 'prop-1');
+      const result = constructDataType(null, null, null);
       expect(result).toBeNull();
     });
   });
 
   describe('getCurrentRenderableType', () => {
-    it('should return renderableType from property data', () => {
+    it('should return URL when property has URL renderableType', () => {
       const mockPropertyDataType = {
         dataType: 'TEXT',
         renderableType: {
@@ -282,7 +284,7 @@ describe('Properties', () => {
       expect(result).toBe('URL');
     });
 
-    it('should map known renderableType to switchable type', () => {
+    it('should return IMAGE when property has IMAGE renderableType', () => {
       const mockPropertyDataType = {
         dataType: 'RELATION',
         renderableType: {

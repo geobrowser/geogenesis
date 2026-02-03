@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -19,7 +19,7 @@ import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-st
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
 import { Properties } from '~/core/utils/property';
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -102,17 +102,19 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     (newType: SwitchableRenderableType) => {
       if (!entityId || !spaceId) return;
 
-      // Add format property if type is TIME or NUMBER
-      if (newType === 'TIME' || newType === 'NUMBER') {
+      // Add format property if type is temporal or numeric
+      const isTemporalType = newType === 'DATE' || newType === 'DATETIME' || newType === 'TIME';
+      const isNumericType = newType === 'INT64' || newType === 'FLOAT64' || newType === 'DECIMAL';
+      if (isTemporalType || isNumericType) {
         addPropertyToEntity({
           entityId,
           propertyId: FORMAT_PROPERTY,
           propertyName: 'Format',
           entityName: name ?? '',
-          defaultValue: newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
+          defaultValue: isTemporalType ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
         });
       } else if (formatValue) {
-        // Remove format property if type is not TIME or NUMBER and property exists
+        // Remove format property if type is not temporal or numeric and property exists
         storage.values.delete(formatValue);
       }
 
@@ -220,20 +222,17 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
   );
 
-  // Create property data when Property type is added
+  // Create property data when Property type is manually added to an existing entity
   React.useEffect(() => {
-    // Check if there's already a Property type relation to avoid duplicates
     const existingPropertyTypeRelation = relations.find(
       r =>
         r.fromEntity.id === entityId && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY
     );
 
-    // Only create property if:
+    // Only create default property data if:
     // 1. Entity has Property type relation
-    // 2. No property data exists from backend
+    // 2. No property data exists yet (not created via storage.properties.create())
     if (existingPropertyTypeRelation && !propertyData && entityId && spaceId) {
-      // Create the property with a default dataType of TEXT
-      // Skip creating the Property type relation since it already exists
       storage.properties.create({
         entityId,
         spaceId,

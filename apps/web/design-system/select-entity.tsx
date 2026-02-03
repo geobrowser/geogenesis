@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -19,7 +21,7 @@ import { Space } from '~/core/io/dto/spaces';
 import { queryClient } from '~/core/query-client';
 import { useMutate } from '~/core/sync/use-mutate';
 import { detectWeb2URLs } from '~/core/utils/url-detection';
-import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';

@@ -1,9 +1,9 @@
-import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { Cell, Entity, Relation, Row } from '~/core/v2.types';
+import { Cell, Entity, Relation, Row } from '~/core/types';
 
 import { PathSegment } from './data-selectors';
 

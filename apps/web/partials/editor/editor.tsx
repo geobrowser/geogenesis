@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@graphprotocol/grc-20';
+import { GraphUrl } from '@geoprotocol/geo-sdk';
 import type { EditorView } from '@tiptap/pm/view';
 import { EditorContent, Editor as TiptapEditor, useEditor, JSONContent } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';

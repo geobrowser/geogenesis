@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -25,7 +25,7 @@ import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, Relation, Row, SearchResult, Value } from '~/core/v2.types';
+import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -101,12 +101,14 @@ function useEntries(
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
-  const entriesWithPosition = entries.map(row => {
-    return {
-      ...row,
-      position: relations?.find(relation => relation.toEntity.id === row.entityId)?.position,
-    };
-  });
+  const entriesWithPosition = React.useMemo(() => {
+    return entries.map(row => {
+      return {
+        ...row,
+        position: relations?.find(relation => relation.toEntity.id === row.entityId)?.position,
+      };
+    });
+  }, [entries, relations]);
 
   const onUpdateRelation = (relation: Relation, newPosition: string | null) => {
     storage.relations.update(relation, draft => {
@@ -361,17 +363,19 @@ export const TableBlock = ({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithPropertyName = activeFilters.map(f => {
-    if (f.columnId === SystemIds.SPACE_FILTER) {
-      return {
-        ...f,
-        columnName: 'Space',
-        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
-      };
-    }
+  const filtersWithPropertyName = React.useMemo(() => {
+    return activeFilters.map(f => {
+      if (f.columnId === SystemIds.SPACE_FILTER) {
+        return {
+          ...f,
+          columnName: 'Space',
+          value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
+        };
+      }
 
-    return f;
-  });
+      return f;
+    });
+  }, [activeFilters, spaces]);
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
