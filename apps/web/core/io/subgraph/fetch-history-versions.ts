@@ -6,7 +6,7 @@ import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
 import { SubstreamVersionHistorical } from '../substream-schema';
-import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from './fetch-profile';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -88,7 +88,7 @@ export async function fetchHistoryVersions(args: FetchVersionsArgs) {
 
   const creatorIds = networkVersions.map(p => p.edit.createdById);
   const uniqueCreatorIds = [...new Set(creatorIds)];
-  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueCreatorIds);
+  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   const versions = networkVersions

@@ -7,8 +7,7 @@ import { Environment } from '~/core/environment';
 
 import { Proposal } from '../dto/proposals';
 import { Address, ProposalStatus, ProposalType, SubstreamVote } from '../substream-schema';
-import { fetchProfileBySpaceId } from './fetch-profile';
-import { fetchProfilesBySpaceIds } from './fetch-profiles-by-ids';
+import { fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -157,8 +156,8 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const voterIds = proposal.proposalVotesConnection.nodes.map(v => v.voterId);
   const [creatorProfile, voterProfiles] = await Promise.all([
-    fetchProfileBySpaceId(proposal.proposedBy),
-    fetchProfilesBySpaceIds(voterIds),
+    Effect.runPromise(fetchProfileBySpaceId(proposal.proposedBy)),
+    Effect.runPromise(fetchProfilesBySpaceIds(voterIds)),
   ]);
 
   const firstAction = proposal.proposalActions[0];

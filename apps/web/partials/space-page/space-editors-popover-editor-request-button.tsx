@@ -27,7 +27,7 @@ export function SpaceEditorsPopoverEditorRequestButton({
   return (
     <Pending isPending={status === 'pending'} position="end">
       {!hasRequestedSpaceEditorship ? (
-        <button disabled={status !== 'idle'} onClick={() => requestToBeEditor()}>
+        <button type="button" disabled={!isMember || status !== 'idle'} onClick={() => requestToBeEditor()}>
           <RequestButtonText status={status} isMember={isMember} />
         </button>
       ) : (

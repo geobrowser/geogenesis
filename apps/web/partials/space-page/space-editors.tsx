@@ -51,11 +51,7 @@ export async function SpaceEditors({ spaceId }: Props) {
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
             <React.Suspense>
-              <SpaceEditorsDialogServerContainer
-                spaceType={space.type}
-                spaceId={spaceId}
-                votingPluginAddress={space.address}
-              />
+              <SpaceEditorsDialogServerContainer spaceId={spaceId} />
             </React.Suspense>
           }
         />
