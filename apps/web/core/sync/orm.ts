@@ -7,10 +7,10 @@ import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/
 import { readTypes } from '../database/entities';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
 import { OmitStrict } from '../types';
+import { Entity, Relation, SearchResult } from '../types';
 import { Entities } from '../utils/entity';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
-import { Entity, Relation, SearchResult } from '../types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 

@@ -4,9 +4,9 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { HistoryVersionDto } from '~/core/io/dto/versions';
-import { SubstreamVersionHistorical } from '~/core/io/substream-schema';
 import { getEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamVersionHistorical } from '~/core/io/substream-schema';
 
 interface FetchVersionsArgs {
   createdAt: number;

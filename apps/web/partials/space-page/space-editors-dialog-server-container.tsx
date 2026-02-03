@@ -1,14 +1,8 @@
-
-
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceEditorsManageDialogContent } from './space-editors-manage-dialog-content';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 
-export async function SpaceEditorsDialogServerContainer({
-  spaceId,
-}: {
-  spaceId: string;
-}) {
+export async function SpaceEditorsDialogServerContainer({ spaceId }: { spaceId: string }) {
   const { allEditors } = await getEditorsForSpace(spaceId);
 
   return (

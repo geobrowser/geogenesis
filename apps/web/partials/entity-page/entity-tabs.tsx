@@ -6,8 +6,8 @@ import * as React from 'react';
 
 import { useRelations } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
-import { NavUtils, sortRelations } from '~/core/utils/utils';
 import { Relation } from '~/core/types';
+import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
 

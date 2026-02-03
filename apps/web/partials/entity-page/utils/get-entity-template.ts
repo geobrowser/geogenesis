@@ -4,9 +4,9 @@ import { Effect } from 'effect';
 import { ROOT_SPACE } from '~/core/constants';
 import { getEntity } from '~/core/io/queries';
 import { getRelations, getValues } from '~/core/sync/use-store';
+import { Relation, Value } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { convertOpsToRenderables } from '~/core/utils/ops/ops-to-renderable';
-import { Relation, Value } from '~/core/types';
 
 const TEMPLATE_PROPERTY_ID = 'cf37cd59840c4daca22b9d9dde536ea7';
 

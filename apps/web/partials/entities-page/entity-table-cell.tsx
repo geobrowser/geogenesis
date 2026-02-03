@@ -6,8 +6,8 @@ import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { Property } from '~/core/types';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';

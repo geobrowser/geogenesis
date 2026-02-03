@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { NavUtils } from '~/core/utils/utils';
 import {
   DataType,
   FlattenedRenderType,
@@ -10,6 +9,7 @@ import {
   SWITCHABLE_RENDERABLE_TYPE_LABELS,
   SwitchableRenderableType,
 } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';

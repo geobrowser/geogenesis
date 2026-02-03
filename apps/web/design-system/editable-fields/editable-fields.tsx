@@ -12,8 +12,8 @@ import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-val
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { Relation } from '~/core/types';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
