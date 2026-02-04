@@ -1,6 +1,19 @@
 import { type Hex, encodeAbiParameters } from 'viem';
 
 /**
+ * DAOSpace VoteOption enum values matching the Solidity contract.
+ * Used for encoding votes in PROPOSAL_VOTED actions.
+ */
+export const VoteOption = {
+  None: 0,
+  Yes: 1,
+  No: 2,
+  Abstain: 3,
+} as const;
+
+export type VoteOptionType = (typeof VoteOption)[keyof typeof VoteOption];
+
+/**
  * Encodes the data payload for a MEMBERSHIP_REQUESTED action.
  *
  * @param proposalId - bytes16 proposal ID
@@ -54,4 +67,31 @@ export function encodeProposalCreatedData(proposalId: Hex, votingMode: number, a
     ],
     [proposalId, votingMode, actions]
   );
+}
+
+/**
+ * Encodes the data payload for a PROPOSAL_VOTED action.
+ *
+ * @param proposalId - bytes16 proposal ID
+ * @param voteOption - VoteOption enum value (1=Yes, 2=No, 3=Abstain)
+ * @returns Encoded bytes for use in SpaceRegistry.enter()
+ */
+export function encodeProposalVotedData(proposalId: Hex, voteOption: VoteOptionType): Hex {
+  return encodeAbiParameters(
+    [
+      { name: 'proposalId', type: 'bytes16' },
+      { name: 'voteOption', type: 'uint8' },
+    ],
+    [proposalId, voteOption]
+  );
+}
+
+/**
+ * Encodes the data payload for a PROPOSAL_EXECUTED action.
+ *
+ * @param proposalId - bytes16 proposal ID
+ * @returns Encoded bytes for use in SpaceRegistry.enter()
+ */
+export function encodeProposalExecutedData(proposalId: Hex): Hex {
+  return encodeAbiParameters([{ name: 'proposalId', type: 'bytes16' }], [proposalId]);
 }

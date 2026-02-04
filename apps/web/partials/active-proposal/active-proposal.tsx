@@ -25,7 +25,7 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { ContentProposal } from './content-proposal';
 import { SubspaceProposal } from './subspace-proposal';
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+
 
 interface Props {
   proposalId?: string;
@@ -49,7 +49,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
     return null;
   }
 
-  const [proposal, space] = await Promise.all([fetchProposal({ id: proposalId }), cachedFetchSpace(spaceId)]);
+  const proposal = await fetchProposal({ id: proposalId });
 
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
@@ -82,10 +82,6 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           isProposalExecutable={isProposalExecutable}
           status={proposal.status}
           userVote={userVote}
-          // We know that the space isn't null here, so casting is safe. If the space
-          // We know that the space isn't null here, so casting is safe. If the space
-          // doesn't exist we redirect the user.
-          votingContractAddress={space?.address as `0x${string}`}
         />
       </div>
       <div className="relative overflow-y-auto overflow-x-clip overscroll-contain">

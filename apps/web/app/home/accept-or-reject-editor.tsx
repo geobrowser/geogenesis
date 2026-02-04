@@ -13,6 +13,7 @@ import { Pending } from '~/design-system/pending';
 import { Execute } from '~/partials/active-proposal/execute';
 
 interface Props {
+  spaceId: string;
   isProposalEnded: boolean;
   // If the proposal is executable that means it's done and the
   // acceptance threshold has passed.
@@ -21,19 +22,18 @@ interface Props {
 
   userVote: SubstreamVote | undefined;
   onchainProposalId: string;
-  votingContractAddress: `0x${string}`;
 }
 
 export function AcceptOrRejectEditor({
+  spaceId,
   isProposalEnded,
   isProposalExecutable,
   status,
   userVote,
   onchainProposalId,
-  votingContractAddress,
 }: Props) {
   const { vote, status: voteStatus } = useVote({
-    address: votingContractAddress,
+    spaceId,
     onchainProposalId,
   });
 
@@ -58,7 +58,7 @@ export function AcceptOrRejectEditor({
 
   if (isProposalExecutable) {
     return (
-      <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
+      <Execute spaceId={spaceId} onchainProposalId={onchainProposalId}>
         Execute
       </Execute>
     );

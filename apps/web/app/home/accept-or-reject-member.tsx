@@ -1,98 +1,55 @@
 'use client';
 
-import { MemberAccessAbi } from '@geoprotocol/geo-sdk/abis';
 import cx from 'classnames';
-import { Effect, Either } from 'effect';
-import { encodeFunctionData } from 'viem';
 
 import { useState } from 'react';
 
-import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useVote } from '~/core/hooks/use-vote';
 
 import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
-function useApproveOrReject(membershipContractAddress: string | null) {
-  const tx = useSmartAccountTransaction({
-    address: membershipContractAddress,
+interface Props {
+  spaceId: string;
+  onchainProposalId: string;
+}
+
+/**
+ * Component for voting on membership proposals (ADD_MEMBER, REMOVE_MEMBER).
+ *
+ * In the new protocol, membership proposals use the same voting mechanism
+ * as all other proposals via SpaceRegistry.enter() with PROPOSAL_VOTED action.
+ */
+export function AcceptOrRejectMember({ spaceId, onchainProposalId }: Props) {
+  const [hasApproved, setHasApproved] = useState<boolean>(false);
+  const [hasRejected, setHasRejected] = useState<boolean>(false);
+
+  const { vote, status: voteStatus } = useVote({
+    spaceId,
+    onchainProposalId,
   });
 
-  const approveOrReject = async (calldata: `0x${string}`) => {
-    const txEffect = await tx(calldata);
-    const maybeHash = await Effect.runPromise(Effect.either(txEffect));
+  const hasVoted = voteStatus === 'success';
+  const isPendingApproval = hasApproved && voteStatus === 'pending';
+  const isPendingRejection = hasRejected && voteStatus === 'pending';
 
-    if (Either.isLeft(maybeHash)) {
-      console.error('Could not approve or reject', maybeHash.left);
-      return;
-    }
-
-    // @TODO: UI states/error states
-    console.log('Approve or reject successful!', maybeHash.right);
-    return maybeHash.right;
+  const onApprove = () => {
+    setHasApproved(true);
+    vote('ACCEPT');
   };
 
-  return approveOrReject;
-}
-
-interface Props {
-  onchainProposalId: string;
-  membershipContractAddress: string | null;
-}
-
-export function AcceptOrRejectMember(props: Props) {
-  const [isPendingApproval, setIsPendingApproval] = useState<boolean>(false);
-  const [isPendingRejection, setIsPendingRejection] = useState<boolean>(false);
-  const [hasVoted, setHasVoted] = useState<boolean>(false);
-
-  const approveOrReject = useApproveOrReject(props.membershipContractAddress);
-
-  const onApprove = async () => {
-    try {
-      setIsPendingApproval(true);
-      const hash = await approveOrReject(
-        encodeFunctionData({
-          abi: MemberAccessAbi,
-          functionName: 'approve',
-          args: [BigInt(props.onchainProposalId)],
-        })
-      );
-      console.log('transaction successful', hash);
-      setHasVoted(true);
-      setIsPendingApproval(false);
-    } catch (error) {
-      console.error(error);
-      setHasVoted(false);
-      setIsPendingApproval(false);
-    }
-  };
-
-  const onReject = async () => {
-    try {
-      setIsPendingRejection(true);
-      const hash = await approveOrReject(
-        encodeFunctionData({
-          abi: MemberAccessAbi,
-          functionName: 'reject',
-          args: [BigInt(props.onchainProposalId)],
-        })
-      );
-      console.log('transaction successful', hash);
-      setHasVoted(true);
-      setIsPendingRejection(false);
-    } catch (error) {
-      console.error(error);
-      setHasVoted(false);
-      setIsPendingRejection(false);
-    }
+  const onReject = () => {
+    setHasRejected(true);
+    vote('REJECT');
   };
 
   return (
     <div className="relative">
       <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
-        <SmallButton variant="secondary" onClick={onReject}>
+        <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
           <Pending isPending={isPendingRejection}>Reject</Pending>
         </SmallButton>
-        <SmallButton variant="secondary" onClick={onApprove}>
+        <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
           <Pending isPending={isPendingApproval}>Approve</Pending>
         </SmallButton>
       </div>

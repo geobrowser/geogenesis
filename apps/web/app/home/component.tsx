@@ -217,8 +217,8 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
         <p className="text-metadataMedium">1 vote required</p>
 
         <AcceptOrRejectMember
+          spaceId={proposal.space.id}
           onchainProposalId={proposal.onchainProposalId}
-          membershipContractAddress={space.address}
         />
       </div>
     </div>
@@ -334,21 +334,19 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
-          <Execute contractAddress={space?.address as `0x${string}`} onchainProposalId={proposal.onchainProposalId}>
+          <Execute spaceId={proposal.space.id} onchainProposalId={proposal.onchainProposalId}>
             Execute
           </Execute>
         )}
 
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor
+            spaceId={proposal.space.id}
             onchainProposalId={proposal.onchainProposalId}
             isProposalEnded={isProposalEnded}
             isProposalExecutable={isProposalExecutable}
             status={proposal.status}
             userVote={userVote}
-            // We know that the space isn't null here, so casting is safe. If the space
-            // doesn't exist we redirect the user.
-            votingContractAddress={space?.address as `0x${string}`}
           />
         )}
       </div>

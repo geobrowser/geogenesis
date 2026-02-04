@@ -24,7 +24,6 @@ interface Props {
 
   userVote: SubstreamVote | undefined;
   onchainProposalId: string;
-  votingContractAddress: `0x${string}`;
 }
 
 export function AcceptOrReject({
@@ -34,11 +33,10 @@ export function AcceptOrReject({
   status,
   userVote,
   onchainProposalId,
-  votingContractAddress,
 }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
-    address: votingContractAddress,
+    spaceId,
     onchainProposalId,
   });
 
@@ -62,7 +60,7 @@ export function AcceptOrReject({
 
   if (isProposalExecutable && smartAccount) {
     return (
-      <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
+      <Execute spaceId={spaceId} onchainProposalId={onchainProposalId}>
         Execute
       </Execute>
     );

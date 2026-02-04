@@ -8,13 +8,13 @@ import { Button } from '~/design-system/button';
 
 interface Props {
   onchainProposalId: string;
-  contractAddress: `0x${string}`;
+  spaceId: string;
   children: React.ReactNode;
 }
 
-export function Execute({ onchainProposalId, contractAddress, children }: Props) {
+export function Execute({ onchainProposalId, spaceId, children }: Props) {
   const { execute } = useExecuteProposal({
-    address: contractAddress,
+    spaceId,
     onchainProposalId,
   });
 
