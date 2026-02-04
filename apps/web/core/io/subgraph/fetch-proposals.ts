@@ -18,7 +18,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
     nodes {
       id
       type
-      onchainProposalId
 
       space {
         id

@@ -75,7 +75,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
       nodes {
         id
         type
-        onchainProposalId
 
         edit {
           id
