@@ -39,13 +39,20 @@ interface Props {
   page: number;
 }
 
-export async function GovernanceProposalsList({ spaceId, page }: Props) {
+export type GovernanceProposalsListResult = {
+  node: React.ReactNode;
+  hasMore: boolean;
+};
+
+export async function GovernanceProposalsList({ spaceId, page }: Props): Promise<GovernanceProposalsListResult> {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [proposals, profile, space] = await Promise.all([
+  const [result, profile, space] = await Promise.all([
     fetchGovernanceProposals({ spaceId, first: 5, page, connectedAddress }),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
     cachedFetchSpace(spaceId),
   ]);
+
+  const { proposals, hasMore } = result;
 
   const userVotesByProposalId = proposals.reduce((acc, p) => {
     if (p.userVotes.length === 0) return acc;
@@ -53,64 +60,74 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     return acc.set(p.id, p.userVotes[0].vote);
   }, new Map<string, SubstreamVote['vote']>());
 
-  return (
-    <div className="flex flex-col divide-y divide-grey-01">
-      {proposals.map(p => {
-        return (
-          <Link
-            key={p.id}
-            href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-            className="flex w-full flex-col gap-4 py-6"
-          >
-            <div className="flex flex-col gap-2">
-              <h3 className="text-smallTitle">
-                {getProposalName({
-                  ...p,
-                  name: p.name ?? p.id,
-                  space: {
-                    id: spaceId,
-                    name: space?.entity?.name ?? '',
-                    image: space?.entity?.image ?? '',
-                  },
-                })}
-              </h3>
-              <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
-                <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                  <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
+  if (proposals.length === 0) {
+    return {
+      node: <p className="py-6 text-body text-grey-04">No proposals yet</p>,
+      hasMore: false,
+    };
+  }
+
+  return {
+    node: (
+      <div className="flex flex-col divide-y divide-grey-01">
+        {proposals.map(p => {
+          return (
+            <Link
+              key={p.id}
+              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+              className="flex w-full flex-col gap-4 py-6"
+            >
+              <div className="flex flex-col gap-2">
+                <h3 className="text-smallTitle">
+                  {getProposalName({
+                    ...p,
+                    name: p.name ?? p.id,
+                    space: {
+                      id: spaceId,
+                      name: space?.entity?.name ?? '',
+                      image: space?.entity?.image ?? '',
+                    },
+                  })}
+                </h3>
+                <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
+                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                    <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
+                  </div>
+                  <p>{p.createdBy.name ?? p.createdBy.id}</p>
                 </div>
-                <p>{p.createdBy.name ?? p.createdBy.id}</p>
               </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="inline-flex flex-[3] items-center gap-8">
-                <GovernanceProposalVoteState
-                  votes={{
-                    totalCount: p.proposalVotes.totalCount,
-                    votes: p.proposalVotes.votes,
-                  }}
-                  userVote={userVotesByProposalId.get(p.id)}
-                  user={
-                    profile || connectedAddress
-                      ? {
-                          address: connectedAddress,
-                          avatarUrl: profile?.avatarUrl ?? null,
-                        }
-                      : undefined
-                  }
+              <div className="flex items-center justify-between">
+                <div className="inline-flex flex-[3] items-center gap-8">
+                  <GovernanceProposalVoteState
+                    votes={{
+                      totalCount: p.proposalVotes.totalCount,
+                      votes: p.proposalVotes.votes,
+                    }}
+                    userVote={userVotesByProposalId.get(p.id)}
+                    user={
+                      profile || connectedAddress
+                        ? {
+                            address: connectedAddress,
+                            avatarUrl: profile?.avatarUrl ?? null,
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+
+                <GovernanceStatusChip
+                  endTime={p.endTime}
+                  status={p.status}
+                  yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
                 />
               </div>
-
-              <GovernanceStatusChip
-                endTime={p.endTime}
-                status={p.status}
-                yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
-              />
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
+            </Link>
+          );
+        })}
+      </div>
+    ),
+    hasMore,
+  };
 }
 
 export interface FetchActiveProposalsOptions {
@@ -259,6 +276,11 @@ async function fetchProposalsByStatus({
  * 2. PROPOSED - active voting proposals (sorted by end_time asc, ending soonest first)
  * 3. ACCEPTED/REJECTED - completed proposals (sorted by end_time desc, most recent first)
  */
+type FetchGovernanceProposalsResult = {
+  proposals: GovernanceProposal[];
+  hasMore: boolean;
+};
+
 async function fetchGovernanceProposals({
   spaceId,
   connectedAddress,
@@ -269,13 +291,15 @@ async function fetchGovernanceProposals({
   first: number;
   page: number;
   connectedAddress: string | undefined;
-}): Promise<GovernanceProposal[]> {
+}): Promise<FetchGovernanceProposalsResult> {
   // We fetch proposals from each status category and combine them in priority order.
   // To handle pagination across combined results, we fetch enough from each category
   // to cover all items up to the requested page. This may over-fetch when one category
   // dominates, but ensures correctness. A future optimization could use cursor-based
   // pagination per category with cached cursors.
-  const itemsNeeded = (page + 1) * first;
+  //
+  // We fetch one extra item to determine if there are more results.
+  const itemsNeeded = (page + 1) * first + 1;
   const [executableProposals, activeProposals, completedProposals] = await Promise.all([
     // Executable proposals: ready to execute, oldest first
     fetchProposalsByStatus({
@@ -311,7 +335,11 @@ async function fetchGovernanceProposals({
 
   // Apply pagination
   const startIndex = page * first;
-  const paginatedProposals = allProposals.slice(startIndex, startIndex + first);
+  const endIndex = startIndex + first;
+  const paginatedProposals = allProposals.slice(startIndex, endIndex);
+  
+  // Check if there are more items beyond this page
+  const hasMore = allProposals.length > endIndex;
 
   // Fetch profiles for creators
   const proposedByIds = paginatedProposals.map(p => p.proposedBy);
@@ -321,8 +349,10 @@ async function fetchGovernanceProposals({
   // Create a map of memberSpaceId -> profile for efficient lookup
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
 
-  return paginatedProposals.map(p => {
+  const proposals = paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
     return apiProposalToGovernanceDto(p, connectedAddress, maybeProfile);
   });
+
+  return { proposals, hasMore };
 }

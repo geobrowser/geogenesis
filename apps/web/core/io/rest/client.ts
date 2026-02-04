@@ -24,7 +24,9 @@ export type RestError = AbortError | HttpError | JsonParseError | ApiError;
 
 export function restFetch<T>({ endpoint, path, method = 'GET', body, signal }: RestConfig) {
   return Effect.gen(function* () {
-    const url = `${endpoint}${path}`;
+    // Strip /graphql suffix if present - REST endpoints use the base URL
+    const baseUrl = endpoint.replace(/\/graphql$/, '');
+    const url = `${baseUrl}${path}`;
 
     const response = yield* Effect.tryPromise({
       try: () =>
