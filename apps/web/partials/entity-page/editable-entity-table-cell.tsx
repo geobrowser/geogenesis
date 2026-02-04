@@ -305,6 +305,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
           <>
             <div key={`relation-${r.id}-${r.toEntity.value}`} className="mt-1">
               <LinkableRelationChip
+                small
                 isEditing
                 onDelete={() => {
                   // onChangeEntry(

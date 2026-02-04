@@ -6,16 +6,19 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { Properties } from '~/core/utils/property';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { Properties } from '~/core/utils/property';
 
+import { Address } from '~/design-system/icons/address';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
+import { Place } from '~/design-system/icons/place';
+import { Point } from '~/design-system/icons/point';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -28,7 +31,7 @@ interface Props {
   baseDataType?: string;
 }
 
-const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
+const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName; className?: string }>> = {
   TEXT: Text,
   URL: Url,
   RELATION: Relation,
@@ -41,9 +44,10 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   DATE: Date,
   DATETIME: Date,
   TIME: Date,
-  POINT: GeoLocation,
+  POINT: Point,
   GEO_LOCATION: GeoLocation,
-  PLACE: GeoLocation,
+  PLACE: Place,
+  ADDRESS: Address,
 };
 
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
@@ -71,12 +75,12 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     Icon: icons[key],
   }));
 
-  let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName }>;
+  let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName; className?: string }>;
   if (value) {
     Icon = icons[value];
   }
 
-  let label = 'Set renderable type';
+  let label = 'Set property type';
   if (value) {
     label = SWITCHABLE_RENDERABLE_TYPE_LABELS[value];
   }
@@ -85,17 +89,17 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
-          className={`flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
+          className={`flex items-center gap-[6px] leading-4 rounded-[6px] border px-1.5 py-[3px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
         >
-          <Icon color={open ? 'text' : 'grey-04'} />
+          <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}
           <div className={`${open ? '-rotate-180' : ''} transition-transform duration-300 ease-in-out`}>
-            <ChevronDownSmall />
+            <ChevronDown />
           </div>
         </button>
       </DropdownPrimitive.Trigger>
       <DropdownPrimitive.Content
-        align="end"
+        align="start"
         sideOffset={4}
         collisionPadding={10}
         avoidCollisions={true}

@@ -231,6 +231,7 @@ export function RelationsGroup({
                   spaceId={linkedSpaceId}
                   relationEntityId={relationEntityId}
                   relationId={relationId}
+                  small
                 >
                   {relationName ?? linkedEntityId}
                 </LinkableRelationChip>

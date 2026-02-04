@@ -20,10 +20,10 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
-import { Property, Relation, ValueOptions } from '~/core/types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -150,6 +150,9 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               });
             }
           }}
+          placeholder="Find or create property..."
+          advanced={false}
+          showIDs={false}
         />
       </div>
     </div>

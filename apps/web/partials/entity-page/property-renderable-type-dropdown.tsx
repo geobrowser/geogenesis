@@ -8,6 +8,7 @@ import { Dispatch, SetStateAction, useState } from 'react';
 
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
+import { Address } from '~/design-system/icons/address';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
@@ -15,6 +16,8 @@ import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
+import { Place } from '~/design-system/icons/place';
+import { Point } from '~/design-system/icons/point';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -27,7 +30,7 @@ interface Props {
   dataType?: string;
 }
 
-const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
+const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName; className?: string }>> = {
   TEXT: Text,
   URL: Url,
   RELATION: Relation,
@@ -40,9 +43,10 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   DATE: Date,
   DATETIME: Date,
   TIME: Date,
-  POINT: GeoLocation,
+  POINT: Point,
   GEO_LOCATION: GeoLocation,
-  PLACE: GeoLocation,
+  PLACE: Place,
+  ADDRESS: Address,
 };
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {

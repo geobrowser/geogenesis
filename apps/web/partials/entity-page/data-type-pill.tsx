@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { NavUtils } from '~/core/utils/utils';
 import {
   DataType,
   FlattenedRenderType,
@@ -10,12 +9,16 @@ import {
   SWITCHABLE_RENDERABLE_TYPE_LABELS,
   SwitchableRenderableType,
 } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
+import { Address } from '~/design-system/icons/address';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
+import { Place } from '~/design-system/icons/place';
+import { Point } from '~/design-system/icons/point';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -37,7 +40,7 @@ interface DataTypePillProps {
 type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
 
 // Icon mapping for data types and renderable types
-const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName }>> = {
+const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName; className?: string }>> = {
   TEXT: Text,
   INT64: Number,
   FLOAT64: Number,
@@ -46,13 +49,14 @@ const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: Col
   DATE: Date,
   DATETIME: Date,
   TIME: Date,
-  POINT: GeoLocation,
+  POINT: Point,
   RELATION: Relation,
   URL: Url,
   IMAGE: Image,
   VIDEO: VideoSmall,
   GEO_LOCATION: GeoLocation,
-  PLACE: GeoLocation,
+  PLACE: Place,
+  ADDRESS: Address,
 };
 
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {
@@ -112,7 +116,7 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   return (
     <Link
       href={NavUtils.toEntity(spaceId, targetId!)}
-      className="group inline-flex items-center gap-1 rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
+      className="group inline-flex items-center gap-1 rounded border border-grey-02 bg-white py-px pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
     >
       {IconComponent && <IconComponent color="grey-04" />}
       <span className="pr-1.5">{formattedType}</span>
