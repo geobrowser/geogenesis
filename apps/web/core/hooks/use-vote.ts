@@ -62,7 +62,8 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
       const proposalIdHex = `0x${proposalId}` as Hex;
 
       // Map vote option to contract enum
-      const voteOption = option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No;
+      const voteOption =
+        option === 'ACCEPT' ? VoteOption.Yes : option === 'REJECT' ? VoteOption.No : VoteOption.Abstain;
 
       // Encode the vote data: (proposalId, voteOption)
       const data = encodeProposalVotedData(proposalIdHex, voteOption);
