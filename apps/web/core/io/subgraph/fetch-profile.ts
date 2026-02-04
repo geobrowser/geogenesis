@@ -4,29 +4,14 @@ import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { restFetch } from '../rest';
-
-/**
- * Schema for API profile response.
- * Matches the gaia API profile response format.
- */
-const ApiProfileSchema = Schema.Struct({
-  spaceId: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  avatarUrl: Schema.NullOr(Schema.String),
-  address: Schema.String,
-});
-
-type ApiProfile = Schema.Schema.Type<typeof ApiProfileSchema>;
-
-/**
- * Schema for batch profile endpoint response.
- */
-const ApiBatchProfileResponseSchema = Schema.Struct({
-  profiles: Schema.Array(ApiProfileSchema),
-});
-
-type ApiBatchProfileResponse = Schema.Schema.Type<typeof ApiBatchProfileResponseSchema>;
+import {
+  restFetch,
+  ApiProfileSchema,
+  ApiBatchProfileResponseSchema,
+  encodePathSegment,
+  validateWalletAddress,
+  type ApiProfile,
+} from '../rest';
 
 export function defaultProfile(address: string, spaceId?: string): Profile {
   return {
@@ -65,12 +50,18 @@ function apiProfileToProfile(apiProfile: ApiProfile): Profile {
 export function fetchProfile(walletAddress: string): Effect.Effect<Profile, never, never> {
   return Effect.gen(function* () {
     const config = Environment.getConfig();
-    const normalizedAddress = walletAddress.toLowerCase();
+
+    // Validate and normalize the wallet address
+    const normalizedAddress = validateWalletAddress(walletAddress);
+    if (!normalizedAddress) {
+      console.error(`Invalid wallet address format: ${walletAddress}`);
+      return defaultProfile(walletAddress, walletAddress);
+    }
 
     const result = yield* Effect.either(
       restFetch<unknown>({
         endpoint: config.api,
-        path: `/profile/address/${normalizedAddress}`,
+        path: `/profile/address/${encodePathSegment(normalizedAddress)}`,
       })
     );
 
@@ -120,7 +111,7 @@ export function fetchProfileBySpaceId(
     const result = yield* Effect.either(
       restFetch<unknown>({
         endpoint: config.api,
-        path: `/profile/space/${spaceId}`,
+        path: `/profile/space/${encodePathSegment(spaceId)}`,
       })
     );
 

@@ -11,8 +11,18 @@ import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import { fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
-import { restFetch } from '~/core/io/rest';
+import { fetchProfile, fetchProfilesBySpaceIds, defaultProfile } from '~/core/io/subgraph';
+import {
+  restFetch,
+  ApiProposalListResponseSchema,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  convertVoteOption,
+  encodePathSegment,
+  validateActionTypes,
+  isValidUUID,
+  type ApiProposalStatusResponse,
+} from '~/core/io/rest';
 import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
@@ -23,111 +33,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
-
-// ============================================================================
-// Effect Schema Definitions for API Response Validation
-// ============================================================================
-
-/**
- * Schema for API vote option.
- */
-const ApiVoteOptionSchema = Schema.Union(
-  Schema.Literal('YES'),
-  Schema.Literal('NO'),
-  Schema.Literal('ABSTAIN')
-);
-
-type ApiVoteOption = Schema.Schema.Type<typeof ApiVoteOptionSchema>;
-
-/**
- * Schema for API vote.
- */
-const ApiVoteSchema = Schema.Struct({
-  voterId: Schema.String,
-  vote: ApiVoteOptionSchema,
-});
-
-/**
- * Schema for API action type.
- */
-const ApiActionTypeSchema = Schema.Union(
-  Schema.Literal('ADD_MEMBER'),
-  Schema.Literal('REMOVE_MEMBER'),
-  Schema.Literal('ADD_EDITOR'),
-  Schema.Literal('REMOVE_EDITOR'),
-  Schema.Literal('UNFLAG_EDITOR'),
-  Schema.Literal('PUBLISH'),
-  Schema.Literal('FLAG'),
-  Schema.Literal('UNFLAG'),
-  Schema.Literal('UPDATE_VOTING_SETTINGS'),
-  Schema.Literal('UNKNOWN')
-);
-
-type ApiActionType = Schema.Schema.Type<typeof ApiActionTypeSchema>;
-
-/**
- * Schema for API action.
- */
-const ApiActionSchema = Schema.Struct({
-  actionType: ApiActionTypeSchema,
-  targetId: Schema.optional(Schema.String),
-  contentUri: Schema.optional(Schema.String),
-});
-
-/**
- * Schema for API proposal status response.
- */
-const ApiProposalStatusResponseSchema = Schema.Struct({
-  proposalId: Schema.String,
-  spaceId: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  proposedBy: Schema.String,
-  status: Schema.Union(
-    Schema.Literal('PROPOSED'),
-    Schema.Literal('EXECUTABLE'),
-    Schema.Literal('ACCEPTED'),
-    Schema.Literal('REJECTED')
-  ),
-  votingMode: Schema.Union(Schema.Literal('FAST'), Schema.Literal('SLOW')),
-  actions: Schema.Array(ApiActionSchema),
-  votes: Schema.Struct({
-    yes: Schema.Number,
-    no: Schema.Number,
-    abstain: Schema.Number,
-    total: Schema.Number,
-    voters: Schema.Array(ApiVoteSchema),
-  }),
-  userVote: Schema.NullOr(ApiVoteOptionSchema),
-  quorum: Schema.Struct({
-    required: Schema.Number,
-    current: Schema.Number,
-    progress: Schema.Number,
-    reached: Schema.Boolean,
-  }),
-  threshold: Schema.Struct({
-    required: Schema.String,
-    current: Schema.Number,
-    progress: Schema.Number,
-    reached: Schema.Boolean,
-  }),
-  timing: Schema.Struct({
-    startTime: Schema.Number,
-    endTime: Schema.Number,
-    timeRemaining: Schema.NullOr(Schema.Number),
-    isVotingEnded: Schema.Boolean,
-  }),
-  canExecute: Schema.Boolean,
-});
-
-type ApiProposalStatusResponse = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
-
-/**
- * Schema for API proposal list response.
- */
-const ApiProposalListResponseSchema = Schema.Struct({
-  proposals: Schema.Array(ApiProposalStatusResponseSchema),
-  nextCursor: Schema.NullOr(Schema.String),
-});
 
 interface Props {
   spaceId: string;
@@ -235,57 +140,12 @@ type GovernanceProposal = {
   userVotes: SubstreamVote[];
 };
 
-function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
-  switch (actionType) {
-    case 'PUBLISH':
-      return 'ADD_EDIT';
-    case 'ADD_EDITOR':
-      return 'ADD_EDITOR';
-    case 'REMOVE_EDITOR':
-      return 'REMOVE_EDITOR';
-    case 'ADD_MEMBER':
-      return 'ADD_MEMBER';
-    case 'REMOVE_MEMBER':
-      return 'REMOVE_MEMBER';
-    default:
-      // Default to ADD_EDIT for unknown action types
-      return 'ADD_EDIT';
-  }
-}
-
-// Convert API VoteOption to internal vote format
-function convertVoteOption(vote: ApiVoteOption): 'ACCEPT' | 'REJECT' {
-  return vote === 'YES' ? 'ACCEPT' : 'REJECT';
-}
-
-function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']): ProposalStatus {
-  switch (apiStatus) {
-    case 'PROPOSED':
-      return 'PROPOSED';
-    case 'EXECUTABLE':
-      return 'PROPOSED'; // Still in proposed state until executed
-    case 'ACCEPTED':
-      return 'ACCEPTED';
-    case 'REJECTED':
-      return 'REJECTED';
-    default:
-      return 'PROPOSED';
-  }
-}
-
 function apiProposalToGovernanceDto(
   proposal: ApiProposalStatusResponse,
+  connectedAddress: string | undefined,
   maybeProfile?: Profile
 ): GovernanceProposal {
-  const profile = maybeProfile ?? {
-    id: proposal.proposedBy,
-    spaceId: proposal.proposedBy,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: proposal.proposedBy as `0x${string}`,
-    profileLink: null,
-  };
+  const profile = maybeProfile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
   // Get proposal name from actions
   const firstAction = proposal.actions[0];
@@ -298,11 +158,12 @@ function apiProposalToGovernanceDto(
   }));
 
   // Build user votes from the API's userVote field
-  const userVotes: SubstreamVote[] = proposal.userVote
+  // Use the connected user's address as the accountId (since we passed voterId to the API)
+  const userVotes: SubstreamVote[] = proposal.userVote && connectedAddress
     ? [
         {
           vote: convertVoteOption(proposal.userVote),
-          accountId: Address(proposal.proposedBy), // Note: this is a placeholder, actual voter ID would need to be passed
+          accountId: Address(connectedAddress),
         },
       ]
     : [];
@@ -324,16 +185,6 @@ function apiProposalToGovernanceDto(
     },
   };
 }
-
-/**
- * Check if a string looks like a valid UUID (32 hex chars without dashes, or with dashes).
- */
-const isValidUUID = (id: string | undefined): boolean => {
-  if (!id) return false;
-  // Remove dashes and check if it's 32 hex characters
-  const noDashes = id.replace(/-/g, '');
-  return /^[0-9a-f]{32}$/i.test(noDashes);
-};
 
 /**
  * Fetch governance proposals for a space using the new REST API.
@@ -362,7 +213,8 @@ async function fetchGovernanceProposals({
   params.set('limit', String(first * 3)); // Fetch more to account for filtering
 
   // Exclude membership proposals - use action type filtering
-  params.set('excludeActionTypes', 'AddMember,RemoveMember,AddEditor,RemoveEditor');
+  const excludeTypes = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
+  params.set('excludeActionTypes', excludeTypes.join(','));
 
   // If we have the user's member space ID, pass it to get their votes
   if (connectedAddress && isValidUUID(connectedAddress)) {
@@ -371,7 +223,7 @@ async function fetchGovernanceProposals({
 
   // For page-based pagination, we fetch from the beginning and slice
   // This is a temporary solution - ideally we'd use cursor pagination
-  const path = `/proposals/space/${spaceId}/status?${params.toString()}`;
+  const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
 
   const result = await Effect.runPromise(
     Effect.either(
@@ -421,6 +273,6 @@ async function fetchGovernanceProposals({
 
   return paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    return apiProposalToGovernanceDto(p, maybeProfile);
+    return apiProposalToGovernanceDto(p, connectedAddress, maybeProfile);
   });
 }

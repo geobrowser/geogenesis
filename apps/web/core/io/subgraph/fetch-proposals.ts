@@ -5,114 +5,17 @@ import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ProposalWithoutVoters } from '../dto/proposals';
-import { restFetch } from '../rest';
-import { ProposalStatus, ProposalType } from '../substream-schema';
+import {
+  restFetch,
+  ApiProposalListResponseSchema,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  encodePathSegment,
+  validateActionTypes,
+  type ApiProposalStatusResponse,
+} from '../rest';
 import { AbortError } from './errors';
-import { fetchProfilesBySpaceIds } from './fetch-profile';
-
-/**
- * Schema for API vote option.
- */
-const ApiVoteOptionSchema = Schema.Union(
-  Schema.Literal('YES'),
-  Schema.Literal('NO'),
-  Schema.Literal('ABSTAIN')
-);
-
-/**
- * Schema for API vote.
- */
-const ApiVoteSchema = Schema.Struct({
-  voterId: Schema.String,
-  vote: ApiVoteOptionSchema,
-});
-
-/**
- * Schema for API action type.
- */
-const ApiActionTypeSchema = Schema.Union(
-  Schema.Literal('ADD_MEMBER'),
-  Schema.Literal('REMOVE_MEMBER'),
-  Schema.Literal('ADD_EDITOR'),
-  Schema.Literal('REMOVE_EDITOR'),
-  Schema.Literal('UNFLAG_EDITOR'),
-  Schema.Literal('PUBLISH'),
-  Schema.Literal('FLAG'),
-  Schema.Literal('UNFLAG'),
-  Schema.Literal('UPDATE_VOTING_SETTINGS'),
-  Schema.Literal('UNKNOWN')
-);
-
-type ApiActionType = Schema.Schema.Type<typeof ApiActionTypeSchema>;
-
-/**
- * Schema for API action.
- */
-const ApiActionSchema = Schema.Struct({
-  actionType: ApiActionTypeSchema,
-  targetId: Schema.optional(Schema.String),
-  contentUri: Schema.optional(Schema.String),
-  contentId: Schema.optional(Schema.String),
-  quorum: Schema.optional(Schema.Number),
-  fastThreshold: Schema.optional(Schema.Number),
-  slowThreshold: Schema.optional(Schema.Number),
-  duration: Schema.optional(Schema.Number),
-});
-
-/**
- * Schema for API proposal status response.
- */
-const ApiProposalStatusResponseSchema = Schema.Struct({
-  proposalId: Schema.String,
-  spaceId: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  proposedBy: Schema.String,
-  status: Schema.Union(
-    Schema.Literal('PROPOSED'),
-    Schema.Literal('EXECUTABLE'),
-    Schema.Literal('ACCEPTED'),
-    Schema.Literal('REJECTED')
-  ),
-  votingMode: Schema.Union(Schema.Literal('FAST'), Schema.Literal('SLOW')),
-  actions: Schema.Array(ApiActionSchema),
-  votes: Schema.Struct({
-    yes: Schema.Number,
-    no: Schema.Number,
-    abstain: Schema.Number,
-    total: Schema.Number,
-    voters: Schema.Array(ApiVoteSchema),
-  }),
-  userVote: Schema.NullOr(ApiVoteOptionSchema),
-  quorum: Schema.Struct({
-    required: Schema.Number,
-    current: Schema.Number,
-    progress: Schema.Number,
-    reached: Schema.Boolean,
-  }),
-  threshold: Schema.Struct({
-    required: Schema.String,
-    current: Schema.Number,
-    progress: Schema.Number,
-    reached: Schema.Boolean,
-  }),
-  timing: Schema.Struct({
-    startTime: Schema.Number,
-    endTime: Schema.Number,
-    timeRemaining: Schema.NullOr(Schema.Number),
-    isVotingEnded: Schema.Boolean,
-  }),
-  canExecute: Schema.Boolean,
-});
-
-type ApiProposalStatusResponse = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
-
-/**
- * Schema for API proposal list response.
- */
-const ApiProposalListResponseSchema = Schema.Struct({
-  proposals: Schema.Array(ApiProposalStatusResponseSchema),
-  nextCursor: Schema.NullOr(Schema.String),
-});
+import { defaultProfile, fetchProfilesBySpaceIds } from './fetch-profile';
 
 export interface FetchProposalsOptions {
   spaceId: string;
@@ -124,56 +27,10 @@ export interface FetchProposalsOptions {
 }
 
 /**
- * Map API action type to internal ProposalType.
- */
-function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
-  switch (actionType) {
-    case 'PUBLISH':
-      return 'ADD_EDIT';
-    case 'ADD_EDITOR':
-      return 'ADD_EDITOR';
-    case 'REMOVE_EDITOR':
-      return 'REMOVE_EDITOR';
-    case 'ADD_MEMBER':
-      return 'ADD_MEMBER';
-    case 'REMOVE_MEMBER':
-      return 'REMOVE_MEMBER';
-    default:
-      return 'ADD_EDIT';
-  }
-}
-
-/**
- * Map API proposal status to internal ProposalStatus.
- */
-function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']): ProposalStatus {
-  switch (apiStatus) {
-    case 'PROPOSED':
-      return 'PROPOSED';
-    case 'EXECUTABLE':
-      return 'PROPOSED';
-    case 'ACCEPTED':
-      return 'ACCEPTED';
-    case 'REJECTED':
-      return 'REJECTED';
-    default:
-      return 'PROPOSED';
-  }
-}
-
-/**
  * Convert API proposal response to ProposalWithoutVoters.
  */
 function apiProposalToDto(proposal: ApiProposalStatusResponse, profile?: Profile): ProposalWithoutVoters {
-  const profileData: Profile = profile ?? {
-    id: proposal.proposedBy,
-    spaceId: proposal.proposedBy,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: proposal.proposedBy as `0x${string}`,
-    profileLink: NavUtils.toSpace(proposal.proposedBy),
-  };
+  const profileData: Profile = profile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
   const firstAction = proposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
@@ -219,11 +76,18 @@ export async function fetchProposals({
   const params = new URLSearchParams();
   params.set('limit', String(first));
 
+  // Validate and set action type filters
   if (actionTypes?.length) {
-    params.set('actionTypes', actionTypes.join(','));
+    const validTypes = validateActionTypes(actionTypes);
+    if (validTypes.length > 0) {
+      params.set('actionTypes', validTypes.join(','));
+    }
   }
   if (excludeActionTypes?.length) {
-    params.set('excludeActionTypes', excludeActionTypes.join(','));
+    const validTypes = validateActionTypes(excludeActionTypes);
+    if (validTypes.length > 0) {
+      params.set('excludeActionTypes', validTypes.join(','));
+    }
   }
 
   // For page-based pagination, we need to fetch pages sequentially to get cursors
@@ -237,7 +101,7 @@ export async function fetchProposals({
       pageParams.set('cursor', cursor);
     }
 
-    const path = `/proposals/space/${spaceId}/status?${pageParams.toString()}`;
+    const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${pageParams.toString()}`;
 
     const result = await Effect.runPromise(
       Effect.either(
