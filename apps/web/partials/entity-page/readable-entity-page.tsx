@@ -371,7 +371,7 @@ function RenderedValue({
     case 'DATE':
     case 'DATETIME':
     case 'TIME': {
-      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} />;
+      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} dataType={renderableType} />;
     }
   }
 }
