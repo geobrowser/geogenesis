@@ -4,16 +4,18 @@ import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { type Hex, encodeFunctionData } from 'viem';
 
+import { useCallback } from 'react';
+
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { encodeProposalExecutedData } from '~/core/utils/contracts/governance';
+import { encodeProposalExecutedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
   GOVERNANCE_ACTIONS,
   SPACE_REGISTRY_ADDRESS,
   SpaceRegistryAbi,
 } from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseExecuteProposalArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */
@@ -35,50 +37,75 @@ interface UseExecuteProposalArgs {
  * Note: Anyone can execute a proposal once it has passed the support threshold.
  */
 export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecuteProposalArgs) {
-  const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
   });
 
-  const { mutate, status } = useMutation({
-    mutationFn: async () => {
-      if (!smartAccount) {
-        throw new Error('Please connect your wallet to execute the proposal');
-      }
+  const handleExecute = useCallback(async () => {
+    // Validate inputs
+    if (!validateSpaceId(spaceId)) {
+      throw new Error('Invalid space ID format. Cannot execute proposal.');
+    }
 
-      if (!personalSpaceId || !isRegistered) {
-        throw new Error('You need a registered personal space to execute proposals');
-      }
+    if (!validateSpaceId(onchainProposalId)) {
+      throw new Error('Invalid proposal ID format. Cannot execute proposal.');
+    }
 
-      const fromSpaceId = `0x${personalSpaceId}` as Hex;
-      const toSpaceId = `0x${spaceId}` as Hex;
-      const proposalId = `0x${onchainProposalId}` as Hex;
+    if (!personalSpaceId || !isRegistered) {
+      throw new Error('You need a registered personal space to execute proposals');
+    }
 
-      // Encode the execute data: (proposalId)
-      const data = encodeProposalExecutedData(proposalId);
+    const fromSpaceId = `0x${personalSpaceId}` as Hex;
+    const toSpaceId = `0x${spaceId}` as Hex;
+    const proposalId = `0x${onchainProposalId}` as Hex;
 
-      // The topic is the proposal ID (as bytes32)
-      const topic = `0x${onchainProposalId}${'0'.repeat(32)}`.slice(0, 66) as Hex;
+    // Encode the execute data: (proposalId)
+    const data = encodeProposalExecutedData(proposalId);
 
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_EXECUTED, topic, data, EMPTY_SIGNATURE],
+    // The topic is the proposal ID padded to bytes32
+    const topic = padBytes16ToBytes32(onchainProposalId);
+
+    const callData = encodeFunctionData({
+      functionName: 'enter',
+      abi: SpaceRegistryAbi,
+      args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_EXECUTED, topic, data, EMPTY_SIGNATURE],
+    });
+
+    // Log before transaction for debugging
+    console.log('Executing proposal', {
+      fromSpaceId,
+      toSpaceId,
+      proposalId: onchainProposalId,
+      action: 'PROPOSAL_EXECUTED',
+    });
+
+    const txEffect = tx(callData);
+    const result = await Effect.runPromise(Effect.either(txEffect));
+
+    if (Either.isLeft(result)) {
+      console.error('Execute failed', {
+        error: result.left,
+        fromSpaceId,
+        toSpaceId,
+        proposalId: onchainProposalId,
       });
+      throw result.left;
+    }
 
-      const txEffect = tx(callData);
-      const result = await Effect.runPromise(Effect.either(txEffect));
+    console.log('Execute successful', {
+      txHash: result.right,
+      fromSpaceId,
+      toSpaceId,
+      proposalId: onchainProposalId,
+    });
 
-      if (Either.isLeft(result)) {
-        console.error('Execute failed:', result.left);
-        throw result.left;
-      }
+    return result.right;
+  }, [personalSpaceId, isRegistered, spaceId, onchainProposalId, tx]);
 
-      console.log('Execute successful!', result.right);
-      return result.right;
-    },
+  const { mutate, status } = useMutation({
+    mutationFn: handleExecute,
   });
 
   return {

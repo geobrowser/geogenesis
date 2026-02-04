@@ -95,3 +95,35 @@ export function encodeProposalVotedData(proposalId: Hex, voteOption: VoteOptionT
 export function encodeProposalExecutedData(proposalId: Hex): Hex {
   return encodeAbiParameters([{ name: 'proposalId', type: 'bytes16' }], [proposalId]);
 }
+
+/**
+ * Pads a bytes16 hex string (32 hex chars) to bytes32 (64 hex chars) for use as topic.
+ *
+ * @param bytes16Hex - A hex string representing bytes16 (with or without 0x prefix)
+ * @returns A bytes32 hex string padded with trailing zeros
+ * @throws Error if input is not a valid bytes16 hex string
+ *
+ * @example
+ * padBytes16ToBytes32('0x1234567890abcdef1234567890abcdef')
+ * // Returns: '0x1234567890abcdef1234567890abcdef00000000000000000000000000000000'
+ */
+export function padBytes16ToBytes32(bytes16Hex: string): Hex {
+  const BYTES16_HEX_LENGTH = 32; // 16 bytes = 32 hex chars
+  const BYTES32_HEX_LENGTH = 64; // 32 bytes = 64 hex chars
+
+  const withoutPrefix = bytes16Hex.startsWith('0x') ? bytes16Hex.slice(2) : bytes16Hex;
+
+  if (withoutPrefix.length !== BYTES16_HEX_LENGTH) {
+    throw new Error(
+      `Invalid bytes16 hex string: expected ${BYTES16_HEX_LENGTH} hex characters, got ${withoutPrefix.length}`
+    );
+  }
+
+  // Validate hex characters
+  if (!/^[0-9a-fA-F]+$/.test(withoutPrefix)) {
+    throw new Error('Invalid bytes16 hex string: contains non-hex characters');
+  }
+
+  const paddingLength = BYTES32_HEX_LENGTH - BYTES16_HEX_LENGTH;
+  return `0x${withoutPrefix}${'0'.repeat(paddingLength)}` as Hex;
+}

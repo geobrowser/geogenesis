@@ -21,8 +21,8 @@ interface Props {
  * as all other proposals via SpaceRegistry.enter() with PROPOSAL_VOTED action.
  */
 export function AcceptOrRejectMember({ spaceId, onchainProposalId }: Props) {
-  const [hasApproved, setHasApproved] = useState<boolean>(false);
-  const [hasRejected, setHasRejected] = useState<boolean>(false);
+  // Use a single state variable to prevent race conditions where both could be true
+  const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
   const { vote, status: voteStatus } = useVote({
     spaceId,
@@ -30,16 +30,16 @@ export function AcceptOrRejectMember({ spaceId, onchainProposalId }: Props) {
   });
 
   const hasVoted = voteStatus === 'success';
-  const isPendingApproval = hasApproved && voteStatus === 'pending';
-  const isPendingRejection = hasRejected && voteStatus === 'pending';
+  const isPendingApproval = selectedVote === 'ACCEPT' && voteStatus === 'pending';
+  const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
   const onApprove = () => {
-    setHasApproved(true);
+    setSelectedVote('ACCEPT');
     vote('ACCEPT');
   };
 
   const onReject = () => {
-    setHasRejected(true);
+    setSelectedVote('REJECT');
     vote('REJECT');
   };
 
