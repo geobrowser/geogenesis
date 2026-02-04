@@ -21,7 +21,7 @@ interface Props {
   status: Proposal['status'];
 
   userVote: SubstreamVote | undefined;
-  onchainProposalId: string;
+  proposalId: string;
 }
 
 export function AcceptOrRejectEditor({
@@ -30,11 +30,11 @@ export function AcceptOrRejectEditor({
   isProposalExecutable,
   status,
   userVote,
-  onchainProposalId,
+  proposalId,
 }: Props) {
   const { vote, status: voteStatus } = useVote({
     spaceId,
-    onchainProposalId,
+    proposalId,
   });
 
   const [hasApproved, setHasApproved] = useState<boolean>(false);
@@ -58,7 +58,7 @@ export function AcceptOrRejectEditor({
 
   if (isProposalExecutable) {
     return (
-      <Execute spaceId={spaceId} onchainProposalId={onchainProposalId}>
+      <Execute spaceId={spaceId} proposalId={proposalId}>
         Execute
       </Execute>
     );

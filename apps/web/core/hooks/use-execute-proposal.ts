@@ -21,7 +21,7 @@ interface UseExecuteProposalArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */
   spaceId: string;
   /** The proposal ID (bytes16 hex without 0x prefix) */
-  onchainProposalId: string;
+  proposalId: string;
 }
 
 /**
@@ -36,7 +36,7 @@ interface UseExecuteProposalArgs {
  *
  * Note: Anyone can execute a proposal once it has passed the support threshold.
  */
-export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecuteProposalArgs) {
+export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
   const tx = useSmartAccountTransaction({
@@ -49,7 +49,7 @@ export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecutePro
       throw new Error('Invalid space ID format. Cannot execute proposal.');
     }
 
-    if (!validateSpaceId(onchainProposalId)) {
+    if (!validateSpaceId(proposalId)) {
       throw new Error('Invalid proposal ID format. Cannot execute proposal.');
     }
 
@@ -59,13 +59,13 @@ export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecutePro
 
     const fromSpaceId = `0x${personalSpaceId}` as Hex;
     const toSpaceId = `0x${spaceId}` as Hex;
-    const proposalId = `0x${onchainProposalId}` as Hex;
+    const proposalIdHex = `0x${proposalId}` as Hex;
 
     // Encode the execute data: (proposalId)
-    const data = encodeProposalExecutedData(proposalId);
+    const data = encodeProposalExecutedData(proposalIdHex);
 
     // The topic is the proposal ID padded to bytes32
-    const topic = padBytes16ToBytes32(onchainProposalId);
+    const topic = padBytes16ToBytes32(proposalId);
 
     const callData = encodeFunctionData({
       functionName: 'enter',
@@ -77,7 +77,7 @@ export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecutePro
     console.log('Executing proposal', {
       fromSpaceId,
       toSpaceId,
-      proposalId: onchainProposalId,
+      proposalId,
       action: 'PROPOSAL_EXECUTED',
     });
 
@@ -89,7 +89,7 @@ export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecutePro
         error: result.left,
         fromSpaceId,
         toSpaceId,
-        proposalId: onchainProposalId,
+        proposalId,
       });
       throw result.left;
     }
@@ -98,11 +98,11 @@ export function useExecuteProposal({ spaceId, onchainProposalId }: UseExecutePro
       txHash: result.right,
       fromSpaceId,
       toSpaceId,
-      proposalId: onchainProposalId,
+      proposalId,
     });
 
     return result.right;
-  }, [personalSpaceId, isRegistered, spaceId, onchainProposalId, tx]);
+  }, [personalSpaceId, isRegistered, spaceId, proposalId, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleExecute,

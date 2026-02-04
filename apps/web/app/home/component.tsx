@@ -218,7 +218,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 
         <AcceptOrRejectMember
           spaceId={proposal.space.id}
-          onchainProposalId={proposal.onchainProposalId}
+          proposalId={proposal.id}
         />
       </div>
     </div>
@@ -334,7 +334,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
-          <Execute spaceId={proposal.space.id} onchainProposalId={proposal.onchainProposalId}>
+          <Execute spaceId={proposal.space.id} proposalId={proposal.id}>
             Execute
           </Execute>
         )}
@@ -342,7 +342,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor
             spaceId={proposal.space.id}
-            onchainProposalId={proposal.onchainProposalId}
+            proposalId={proposal.id}
             isProposalEnded={isProposalEnded}
             isProposalExecutable={isProposalExecutable}
             status={proposal.status}

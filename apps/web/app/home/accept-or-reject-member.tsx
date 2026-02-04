@@ -11,7 +11,7 @@ import { Pending } from '~/design-system/pending';
 
 interface Props {
   spaceId: string;
-  onchainProposalId: string;
+  proposalId: string;
 }
 
 /**
@@ -20,13 +20,13 @@ interface Props {
  * In the new protocol, membership proposals use the same voting mechanism
  * as all other proposals via SpaceRegistry.enter() with PROPOSAL_VOTED action.
  */
-export function AcceptOrRejectMember({ spaceId, onchainProposalId }: Props) {
+export function AcceptOrRejectMember({ spaceId, proposalId }: Props) {
   // Use a single state variable to prevent race conditions where both could be true
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
   const { vote, status: voteStatus } = useVote({
     spaceId,
-    onchainProposalId,
+    proposalId,
   });
 
   const hasVoted = voteStatus === 'success';

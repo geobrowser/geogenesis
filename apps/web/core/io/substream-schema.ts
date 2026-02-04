@@ -503,7 +503,6 @@ export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
 export const SubstreamProposal = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   type: ProposalType,
-  onchainProposalId: Schema.String,
   createdById: AddressWithValidation,
   space: SubstreamSpaceEntityConfig,
   startTime: Schema.Number,
