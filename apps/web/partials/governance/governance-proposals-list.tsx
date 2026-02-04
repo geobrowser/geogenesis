@@ -187,42 +187,41 @@ function apiProposalToGovernanceDto(
 }
 
 /**
- * Fetch governance proposals for a space using the new REST API.
- *
- * Excludes membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR)
- * which are shown in the home feed instead.
- *
- * The API handles status computation server-side, so we can filter by canExecute
- * to find executable proposals.
+ * Fetch proposals by status using server-side filtering.
+ * Returns proposals filtered and sorted by the API.
  */
-async function fetchGovernanceProposals({
+async function fetchProposalsByStatus({
   spaceId,
   connectedAddress,
-  first = 5,
-  page = 0,
+  statuses,
+  limit,
+  orderBy = 'end_time',
+  orderDirection = 'asc',
 }: {
   spaceId: string;
-  first: number;
-  page: number;
   connectedAddress: string | undefined;
-}): Promise<GovernanceProposal[]> {
+  statuses: string[];
+  limit: number;
+  orderBy?: 'created_at' | 'end_time' | 'start_time';
+  orderDirection?: 'asc' | 'desc';
+}): Promise<readonly ApiProposalStatusResponse[]> {
   const config = Environment.getConfig();
 
-  // Build query parameters
   const params = new URLSearchParams();
-  params.set('limit', String(first * 3)); // Fetch more to account for filtering
+  params.set('limit', String(limit));
+  params.set('status', statuses.join(','));
+  params.set('orderBy', orderBy);
+  params.set('orderDirection', orderDirection);
 
-  // Exclude membership proposals - use action type filtering
+  // Exclude membership proposals
   const excludeTypes = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
   params.set('excludeActionTypes', excludeTypes.join(','));
 
-  // If we have the user's member space ID, pass it to get their votes
+  // If we have the user's address, pass it to get their votes
   if (connectedAddress && isValidUUID(connectedAddress)) {
     params.set('voterId', connectedAddress);
   }
 
-  // For page-based pagination, we fetch from the beginning and slice
-  // This is a temporary solution - ideally we'd use cursor pagination
   const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
 
   const result = await Effect.runPromise(
@@ -235,33 +234,84 @@ async function fetchGovernanceProposals({
   );
 
   if (Either.isLeft(result)) {
-    const error = result.left;
-    console.error(`Failed to fetch governance proposals for space ${spaceId}:`, error);
+    console.error(`Failed to fetch proposals for space ${spaceId}:`, result.left);
     return [];
   }
 
-  // Validate response with Effect Schema
   const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
 
   if (Either.isLeft(decoded)) {
-    console.error(`Failed to decode governance proposals for space ${spaceId}:`, decoded.left);
+    console.error(`Failed to decode proposals for space ${spaceId}:`, decoded.left);
     return [];
   }
 
-  const allProposals = decoded.right.proposals;
+  return decoded.right.proposals;
+}
 
-  // Separate proposals by status
-  // EXECUTABLE proposals come first, then PROPOSED (active), then ACCEPTED/REJECTED (completed)
-  const executableProposals = allProposals.filter(p => p.canExecute && p.status === 'EXECUTABLE');
-  const activeProposals = allProposals.filter(p => p.status === 'PROPOSED' && !p.canExecute);
-  const completedProposals = allProposals.filter(p => p.status === 'ACCEPTED' || p.status === 'REJECTED');
+/**
+ * Fetch governance proposals for a space using the new REST API.
+ *
+ * Excludes membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR)
+ * which are shown in the home feed instead.
+ *
+ * Uses server-side status filtering to fetch proposals in priority order:
+ * 1. EXECUTABLE - proposals ready to execute (sorted by end_time asc, oldest first)
+ * 2. PROPOSED - active voting proposals (sorted by end_time asc, ending soonest first)
+ * 3. ACCEPTED/REJECTED - completed proposals (sorted by end_time desc, most recent first)
+ */
+async function fetchGovernanceProposals({
+  spaceId,
+  connectedAddress,
+  first = 5,
+  page = 0,
+}: {
+  spaceId: string;
+  first: number;
+  page: number;
+  connectedAddress: string | undefined;
+}): Promise<GovernanceProposal[]> {
+  // We fetch proposals from each status category and combine them in priority order.
+  // To handle pagination across combined results, we fetch enough from each category
+  // to cover all items up to the requested page. This may over-fetch when one category
+  // dominates, but ensures correctness. A future optimization could use cursor-based
+  // pagination per category with cached cursors.
+  const itemsNeeded = (page + 1) * first;
+  const [executableProposals, activeProposals, completedProposals] = await Promise.all([
+    // Executable proposals: ready to execute, oldest first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['EXECUTABLE'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'asc',
+    }),
+    // Active proposals: currently voting, ending soonest first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['PROPOSED'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'asc',
+    }),
+    // Completed proposals: accepted/rejected, most recent first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['ACCEPTED', 'REJECTED'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'desc',
+    }),
+  ]);
 
-  // Combine in the desired order
-  const sortedProposals = [...executableProposals, ...activeProposals, ...completedProposals];
+  // Combine in priority order: executable > active > completed
+  const allProposals = [...executableProposals, ...activeProposals, ...completedProposals];
 
   // Apply pagination
   const startIndex = page * first;
-  const paginatedProposals = sortedProposals.slice(startIndex, startIndex + first);
+  const paginatedProposals = allProposals.slice(startIndex, startIndex + first);
 
   // Fetch profiles for creators
   const proposedByIds = paginatedProposals.map(p => p.proposedBy);
