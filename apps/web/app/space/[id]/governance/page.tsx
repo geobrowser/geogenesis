@@ -70,10 +70,8 @@ export default async function GovernancePage(props: Props) {
           All Proposals
         </SmallButton> */}
         <React.Suspense fallback="Loading initial...">
-          <GovernanceProposalsList page={0} spaceId={params.id} />
+          <InitialGovernanceProposals spaceId={params.id} />
         </React.Suspense>
-
-        <GovernanceProposalsListInfiniteScroll spaceId={params.id} page={0} />
       </div>
 
       <ActiveProposal connectedAddress={connectedAddress} spaceId={params.id} proposalId={searchParams.proposalId} />
@@ -84,6 +82,16 @@ export default async function GovernancePage(props: Props) {
 function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex w-full flex-col items-center gap-1 rounded-lg border border-grey-02 py-3">{children}</div>
+  );
+}
+
+async function InitialGovernanceProposals({ spaceId }: { spaceId: string }) {
+  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0 });
+  return (
+    <>
+      {node}
+      {hasMore && <GovernanceProposalsListInfiniteScroll spaceId={spaceId} page={0} initialHasMore={hasMore} />}
+    </>
   );
 }
 
