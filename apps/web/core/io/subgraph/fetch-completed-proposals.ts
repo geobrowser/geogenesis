@@ -1,5 +1,4 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
@@ -12,51 +11,70 @@ import { AbortError } from './errors';
 import { fetchProfilesBySpaceIds } from './fetch-profile';
 
 /**
- * API response types matching the gaia proposal list endpoint.
+ * Schema for API action type.
  */
-type ApiActionType =
-  | 'ADD_MEMBER'
-  | 'REMOVE_MEMBER'
-  | 'ADD_EDITOR'
-  | 'REMOVE_EDITOR'
-  | 'UNFLAG_EDITOR'
-  | 'PUBLISH'
-  | 'FLAG'
-  | 'UNFLAG'
-  | 'UPDATE_VOTING_SETTINGS'
-  | 'UNKNOWN';
+const ApiActionTypeSchema = Schema.Union(
+  Schema.Literal('ADD_MEMBER'),
+  Schema.Literal('REMOVE_MEMBER'),
+  Schema.Literal('ADD_EDITOR'),
+  Schema.Literal('REMOVE_EDITOR'),
+  Schema.Literal('UNFLAG_EDITOR'),
+  Schema.Literal('PUBLISH'),
+  Schema.Literal('FLAG'),
+  Schema.Literal('UNFLAG'),
+  Schema.Literal('UPDATE_VOTING_SETTINGS'),
+  Schema.Literal('UNKNOWN')
+);
 
-interface ApiAction {
-  actionType: ApiActionType;
-}
+type ApiActionType = Schema.Schema.Type<typeof ApiActionTypeSchema>;
 
-interface ApiProposalStatusResponse {
-  proposalId: string;
-  spaceId: string;
-  name: string | null;
-  proposedBy: string;
-  status: 'PROPOSED' | 'EXECUTABLE' | 'ACCEPTED' | 'REJECTED';
-  votingMode: 'FAST' | 'SLOW';
-  actions: ApiAction[];
-  votes: {
-    yes: number;
-    no: number;
-    abstain: number;
-    total: number;
-  };
-  timing: {
-    startTime: number;
-    endTime: number;
-    timeRemaining: number | null;
-    isVotingEnded: boolean;
-  };
-  canExecute: boolean;
-}
+/**
+ * Schema for API action.
+ */
+const ApiActionSchema = Schema.Struct({
+  actionType: ApiActionTypeSchema,
+});
 
-interface ApiProposalListResponse {
-  proposals: ApiProposalStatusResponse[];
-  nextCursor: string | null;
-}
+/**
+ * Schema for API proposal status response.
+ */
+const ApiProposalStatusResponseSchema = Schema.Struct({
+  proposalId: Schema.String,
+  spaceId: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  proposedBy: Schema.String,
+  status: Schema.Union(
+    Schema.Literal('PROPOSED'),
+    Schema.Literal('EXECUTABLE'),
+    Schema.Literal('ACCEPTED'),
+    Schema.Literal('REJECTED')
+  ),
+  votingMode: Schema.Union(Schema.Literal('FAST'), Schema.Literal('SLOW')),
+  actions: Schema.Array(ApiActionSchema),
+  votes: Schema.Struct({
+    yes: Schema.Number,
+    no: Schema.Number,
+    abstain: Schema.Number,
+    total: Schema.Number,
+  }),
+  timing: Schema.Struct({
+    startTime: Schema.Number,
+    endTime: Schema.Number,
+    timeRemaining: Schema.NullOr(Schema.Number),
+    isVotingEnded: Schema.Boolean,
+  }),
+  canExecute: Schema.Boolean,
+});
+
+type ApiProposalStatusResponse = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
+
+/**
+ * Schema for API proposal list response.
+ */
+const ApiProposalListResponseSchema = Schema.Struct({
+  proposals: Schema.Array(ApiProposalStatusResponseSchema),
+  nextCursor: Schema.NullOr(Schema.String),
+});
 
 export interface FetchProposalsOptions {
   spaceId: string;
@@ -162,7 +180,7 @@ export async function fetchCompletedProposals({
 
   // For page-based pagination, we need to fetch pages sequentially
   let cursor: string | undefined;
-  let proposals: ApiProposalStatusResponse[] = [];
+  let proposals: readonly ApiProposalStatusResponse[] = [];
 
   for (let i = 0; i <= page; i++) {
     const pageParams = new URLSearchParams(params);
@@ -174,7 +192,7 @@ export async function fetchCompletedProposals({
 
     const result = await Effect.runPromise(
       Effect.either(
-        restFetch<ApiProposalListResponse>({
+        restFetch<unknown>({
           endpoint: config.api,
           path,
           signal,
@@ -193,8 +211,15 @@ export async function fetchCompletedProposals({
       return [];
     }
 
-    proposals = result.right.proposals;
-    cursor = result.right.nextCursor ?? undefined;
+    const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+
+    if (Either.isLeft(decoded)) {
+      console.error(`Failed to decode completed proposals for space ${spaceId}:`, decoded.left);
+      return [];
+    }
+
+    proposals = decoded.right.proposals;
+    cursor = decoded.right.nextCursor ?? undefined;
 
     if (i === page) {
       break;

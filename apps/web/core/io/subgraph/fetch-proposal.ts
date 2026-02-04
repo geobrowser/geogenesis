@@ -1,5 +1,4 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
@@ -12,74 +11,102 @@ import { AbortError } from './errors';
 import { fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
 
 /**
- * API response types matching the gaia proposal status endpoint.
+ * Schema for API vote option.
  */
-type ApiVoteOption = 'YES' | 'NO' | 'ABSTAIN';
+const ApiVoteOptionSchema = Schema.Union(
+  Schema.Literal('YES'),
+  Schema.Literal('NO'),
+  Schema.Literal('ABSTAIN')
+);
 
-interface ApiVote {
-  voterId: string;
-  vote: ApiVoteOption;
-}
+type ApiVoteOption = Schema.Schema.Type<typeof ApiVoteOptionSchema>;
 
-type ApiActionType =
-  | 'ADD_MEMBER'
-  | 'REMOVE_MEMBER'
-  | 'ADD_EDITOR'
-  | 'REMOVE_EDITOR'
-  | 'UNFLAG_EDITOR'
-  | 'PUBLISH'
-  | 'FLAG'
-  | 'UNFLAG'
-  | 'UPDATE_VOTING_SETTINGS'
-  | 'UNKNOWN';
+/**
+ * Schema for API vote.
+ */
+const ApiVoteSchema = Schema.Struct({
+  voterId: Schema.String,
+  vote: ApiVoteOptionSchema,
+});
 
-interface ApiAction {
-  actionType: ApiActionType;
-  targetId?: string;
-  contentUri?: string;
-  contentId?: string;
-  quorum?: number;
-  fastThreshold?: number;
-  slowThreshold?: number;
-  duration?: number;
-}
+/**
+ * Schema for API action type.
+ */
+const ApiActionTypeSchema = Schema.Union(
+  Schema.Literal('ADD_MEMBER'),
+  Schema.Literal('REMOVE_MEMBER'),
+  Schema.Literal('ADD_EDITOR'),
+  Schema.Literal('REMOVE_EDITOR'),
+  Schema.Literal('UNFLAG_EDITOR'),
+  Schema.Literal('PUBLISH'),
+  Schema.Literal('FLAG'),
+  Schema.Literal('UNFLAG'),
+  Schema.Literal('UPDATE_VOTING_SETTINGS'),
+  Schema.Literal('UNKNOWN')
+);
 
-interface ApiProposalStatusResponse {
-  proposalId: string;
-  spaceId: string;
-  name: string | null;
-  proposedBy: string;
-  status: 'PROPOSED' | 'EXECUTABLE' | 'ACCEPTED' | 'REJECTED';
-  votingMode: 'FAST' | 'SLOW';
-  actions: ApiAction[];
-  votes: {
-    yes: number;
-    no: number;
-    abstain: number;
-    total: number;
-    voters: ApiVote[];
-  };
-  userVote: ApiVoteOption | null;
-  quorum: {
-    required: number;
-    current: number;
-    progress: number;
-    reached: boolean;
-  };
-  threshold: {
-    required: string;
-    current: number;
-    progress: number;
-    reached: boolean;
-  };
-  timing: {
-    startTime: number;
-    endTime: number;
-    timeRemaining: number | null;
-    isVotingEnded: boolean;
-  };
-  canExecute: boolean;
-}
+type ApiActionType = Schema.Schema.Type<typeof ApiActionTypeSchema>;
+
+/**
+ * Schema for API action.
+ */
+const ApiActionSchema = Schema.Struct({
+  actionType: ApiActionTypeSchema,
+  targetId: Schema.optional(Schema.String),
+  contentUri: Schema.optional(Schema.String),
+  contentId: Schema.optional(Schema.String),
+  quorum: Schema.optional(Schema.Number),
+  fastThreshold: Schema.optional(Schema.Number),
+  slowThreshold: Schema.optional(Schema.Number),
+  duration: Schema.optional(Schema.Number),
+});
+
+/**
+ * Schema for API proposal status response.
+ */
+const ApiProposalStatusResponseSchema = Schema.Struct({
+  proposalId: Schema.String,
+  spaceId: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  proposedBy: Schema.String,
+  status: Schema.Union(
+    Schema.Literal('PROPOSED'),
+    Schema.Literal('EXECUTABLE'),
+    Schema.Literal('ACCEPTED'),
+    Schema.Literal('REJECTED')
+  ),
+  votingMode: Schema.Union(Schema.Literal('FAST'), Schema.Literal('SLOW')),
+  actions: Schema.Array(ApiActionSchema),
+  votes: Schema.Struct({
+    yes: Schema.Number,
+    no: Schema.Number,
+    abstain: Schema.Number,
+    total: Schema.Number,
+    voters: Schema.Array(ApiVoteSchema),
+  }),
+  userVote: Schema.NullOr(ApiVoteOptionSchema),
+  quorum: Schema.Struct({
+    required: Schema.Number,
+    current: Schema.Number,
+    progress: Schema.Number,
+    reached: Schema.Boolean,
+  }),
+  threshold: Schema.Struct({
+    required: Schema.String,
+    current: Schema.Number,
+    progress: Schema.Number,
+    reached: Schema.Boolean,
+  }),
+  timing: Schema.Struct({
+    startTime: Schema.Number,
+    endTime: Schema.Number,
+    timeRemaining: Schema.NullOr(Schema.Number),
+    isVotingEnded: Schema.Boolean,
+  }),
+  canExecute: Schema.Boolean,
+});
+
+type ApiProposalStatusResponse = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
 
 export interface FetchProposalOptions {
   id: string;
@@ -147,7 +174,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const result = await Effect.runPromise(
     Effect.either(
-      restFetch<ApiProposalStatusResponse>({
+      restFetch<unknown>({
         endpoint: config.api,
         path,
         signal,
@@ -170,7 +197,14 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const apiProposal = result.right;
+  const decoded = Schema.decodeUnknownEither(ApiProposalStatusResponseSchema)(result.right);
+
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposal ${id}:`, decoded.left);
+    return null;
+  }
+
+  const apiProposal = decoded.right;
 
   // Fetch profiles for the creator and voters
   const voterIds = apiProposal.votes.voters.map(v => v.voterId);

@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
@@ -7,22 +7,26 @@ import { NavUtils } from '~/core/utils/utils';
 import { restFetch } from '../rest';
 
 /**
- * API response type for profile endpoints.
+ * Schema for API profile response.
  * Matches the gaia API profile response format.
  */
-interface ApiProfile {
-  spaceId: string;
-  name: string | null;
-  avatarUrl: string | null;
-  address: string;
-}
+const ApiProfileSchema = Schema.Struct({
+  spaceId: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  avatarUrl: Schema.NullOr(Schema.String),
+  address: Schema.String,
+});
+
+type ApiProfile = Schema.Schema.Type<typeof ApiProfileSchema>;
 
 /**
- * API response for batch profile endpoint.
+ * Schema for batch profile endpoint response.
  */
-interface ApiBatchProfileResponse {
-  profiles: ApiProfile[];
-}
+const ApiBatchProfileResponseSchema = Schema.Struct({
+  profiles: Schema.Array(ApiProfileSchema),
+});
+
+type ApiBatchProfileResponse = Schema.Schema.Type<typeof ApiBatchProfileResponseSchema>;
 
 export function defaultProfile(address: string, spaceId?: string): Profile {
   return {
@@ -64,7 +68,7 @@ export function fetchProfile(walletAddress: string): Effect.Effect<Profile, neve
     const normalizedAddress = walletAddress.toLowerCase();
 
     const result = yield* Effect.either(
-      restFetch<ApiProfile>({
+      restFetch<unknown>({
         endpoint: config.api,
         path: `/profile/address/${normalizedAddress}`,
       })
@@ -75,7 +79,14 @@ export function fetchProfile(walletAddress: string): Effect.Effect<Profile, neve
       return defaultProfile(walletAddress, walletAddress);
     }
 
-    const apiProfile = result.right;
+    const decoded = Schema.decodeUnknownEither(ApiProfileSchema)(result.right);
+
+    if (Either.isLeft(decoded)) {
+      console.error(`Failed to decode profile for wallet ${walletAddress}:`, decoded.left);
+      return defaultProfile(walletAddress, walletAddress);
+    }
+
+    const apiProfile = decoded.right;
 
     // API returns a profile with null fields if not found
     // Check if we have actual profile data
@@ -107,7 +118,7 @@ export function fetchProfileBySpaceId(
     const config = Environment.getConfig();
 
     const result = yield* Effect.either(
-      restFetch<ApiProfile>({
+      restFetch<unknown>({
         endpoint: config.api,
         path: `/profile/space/${spaceId}`,
       })
@@ -118,7 +129,14 @@ export function fetchProfileBySpaceId(
       return defaultProfile(walletAddressHint ?? spaceId, spaceId);
     }
 
-    const apiProfile = result.right;
+    const decoded = Schema.decodeUnknownEither(ApiProfileSchema)(result.right);
+
+    if (Either.isLeft(decoded)) {
+      console.error(`Failed to decode profile for spaceId ${spaceId}:`, decoded.left);
+      return defaultProfile(walletAddressHint ?? spaceId, spaceId);
+    }
+
+    const apiProfile = decoded.right;
 
     // API returns a profile with null fields if not found
     // Check if we have actual profile data or use the hint
@@ -156,7 +174,7 @@ export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profi
     const config = Environment.getConfig();
 
     const result = yield* Effect.either(
-      restFetch<ApiBatchProfileResponse>({
+      restFetch<unknown>({
         endpoint: config.api,
         path: '/profile/batch',
         method: 'POST',
@@ -169,8 +187,15 @@ export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profi
       return spaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
     }
 
+    const decoded = Schema.decodeUnknownEither(ApiBatchProfileResponseSchema)(result.right);
+
+    if (Either.isLeft(decoded)) {
+      console.error(`Failed to decode profiles for spaceIds:`, decoded.left);
+      return spaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
+    }
+
     // Create a map for O(1) lookup
-    const profileMap = new Map(result.right.profiles.map(p => [p.spaceId, apiProfileToProfile(p)]));
+    const profileMap = new Map(decoded.right.profiles.map(p => [p.spaceId, apiProfileToProfile(p)]));
 
     // Return profiles in the original order (including duplicates)
     return spaceIds.map(spaceId => {
