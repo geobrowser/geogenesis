@@ -196,7 +196,6 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     editId: '',
     name,
     type: proposalType,
-    onchainProposalId: proposal.id,
     createdAt: Number(proposal.createdAt) || 0,
     createdAtBlock: proposal.createdAtBlock,
     startTime: Number(proposal.startTime),

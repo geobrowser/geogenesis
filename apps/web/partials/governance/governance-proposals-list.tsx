@@ -263,6 +263,16 @@ const isValidUUID = (id: string | undefined): boolean => {
   return /^[0-9a-f]{32}$/i.test(noDashes);
 };
 
+// Filter to exclude membership proposals from the governance list
+// Membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR) are shown in the home feed instead
+const EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER = `
+  proposalActionsConnection: {
+    none: {
+      actionType: { in: [ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR] }
+    }
+  }
+`;
+
 // v2 proposal fields fragment
 // Note: userVotes filter only works with valid UUID (memberSpaceId), not wallet addresses
 const getProposalFields = (connectedMemberSpaceId: string | undefined) => {
@@ -326,6 +336,7 @@ const getFetchActiveProposalsQuery = (
       spaceId: { is: "${spaceId}" }
       endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
       executedAt: { isNull: true }
+      ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
     }
   ) {
     nodes {
@@ -352,6 +363,7 @@ const getFetchCompletedProposalsQuery = (
     orderBy: END_TIME_DESC
     filter: {
       spaceId: { is: "${spaceId}" }
+      ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
       or: [
         { executedAt: { isNull: false } }
         { and: [
@@ -393,6 +405,7 @@ const getFetchMaybeExecutableProposalsQuery = (
       spaceId: { is: "${spaceId}" }
       endTime: { lessThanOrEqualTo: "${nowSeconds}" }
       executedAt: { isNull: true }
+      ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
     }
   ) {
     nodes {

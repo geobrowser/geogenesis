@@ -33,7 +33,6 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
           createdAtBlock
         }
         type
-        onchainProposalId
         createdById
 
         startTime
