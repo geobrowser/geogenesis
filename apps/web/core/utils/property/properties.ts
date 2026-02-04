@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import {
+  ADDRESS,
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
@@ -115,6 +116,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'RELATION',
         renderableTypeId: PLACE,
       };
+    case 'ADDRESS':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: ADDRESS,
+      };
     default: {
       // This ensures exhaustive type checking
       const _exhaustiveCheck: never = type;
@@ -149,6 +155,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
   PLACE: 'RELATION',
+  ADDRESS: 'RELATION',
 } as const;
 
 /**
