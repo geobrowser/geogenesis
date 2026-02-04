@@ -1,9 +1,28 @@
 import { Effect, Either } from 'effect';
 
-import { Space } from '~/core/io/dto/spaces';
-import { getSpace, getSpaceByAddress, getSpaces } from '~/core/io/queries';
+import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+
+import { restFetch } from '../rest';
+
+/**
+ * API response type for profile endpoints.
+ * Matches the gaia API profile response format.
+ */
+interface ApiProfile {
+  spaceId: string;
+  name: string | null;
+  avatarUrl: string | null;
+  address: string;
+}
+
+/**
+ * API response for batch profile endpoint.
+ */
+interface ApiBatchProfileResponse {
+  profiles: ApiProfile[];
+}
 
 export function defaultProfile(address: string, spaceId?: string): Profile {
   return {
@@ -18,34 +37,60 @@ export function defaultProfile(address: string, spaceId?: string): Profile {
 }
 
 /**
+ * Convert API profile response to the app's Profile type.
+ */
+function apiProfileToProfile(apiProfile: ApiProfile): Profile {
+  return {
+    id: apiProfile.spaceId,
+    spaceId: apiProfile.spaceId,
+    name: apiProfile.name,
+    avatarUrl: apiProfile.avatarUrl,
+    coverUrl: null,
+    address: apiProfile.address as `0x${string}`,
+    profileLink: NavUtils.toSpace(apiProfile.spaceId),
+  };
+}
+
+/**
  * Fetch a user's profile from their wallet address.
  *
- * Flow:
- * 1. Look up the user's personal space ID via their wallet address
- * 2. Fetch the space entity to get profile data (name, avatar)
+ * Uses the REST endpoint: GET /profile/address/:address
  *
  * Returns a default profile if the user doesn't have a registered space or if fetching fails.
  */
 export function fetchProfile(walletAddress: string): Effect.Effect<Profile, never, never> {
   return Effect.gen(function* () {
-    const space = yield* Effect.either(getSpaceByAddress(walletAddress));
+    const config = Environment.getConfig();
+    const normalizedAddress = walletAddress.toLowerCase();
 
-    if (Either.isLeft(space)) {
-      console.error(`Failed to fetch space for wallet ${walletAddress}:`, space.left);
+    const result = yield* Effect.either(
+      restFetch<ApiProfile>({
+        endpoint: config.api,
+        path: `/profile/address/${normalizedAddress}`,
+      })
+    );
+
+    if (Either.isLeft(result)) {
+      console.error(`Failed to fetch profile for wallet ${walletAddress}:`, result.left);
       return defaultProfile(walletAddress, walletAddress);
     }
 
-    if (!space.right) {
-      // User doesn't have a registered personal space
-      return defaultProfile(walletAddress, walletAddress);
+    const apiProfile = result.right;
+
+    // API returns a profile with null fields if not found
+    // Check if we have actual profile data
+    if (!apiProfile.name && !apiProfile.avatarUrl) {
+      return defaultProfile(walletAddress, apiProfile.spaceId);
     }
 
-    return spaceToProfile(space.right, walletAddress);
+    return apiProfileToProfile(apiProfile);
   });
 }
 
 /**
  * Fetch a user's profile from their personal space ID.
+ *
+ * Uses the REST endpoint: GET /profile/space/:spaceId
  *
  * Use this when you already have the space ID (e.g., from space members/editors list).
  * For fetching from a wallet address, use fetchProfile() instead.
@@ -59,23 +104,42 @@ export function fetchProfileBySpaceId(
   walletAddressHint?: string
 ): Effect.Effect<Profile, never, never> {
   return Effect.gen(function* () {
-    const space = yield* Effect.either(getSpace(spaceId));
+    const config = Environment.getConfig();
 
-    if (Either.isLeft(space)) {
-      console.error(`Failed to fetch profile for spaceId ${spaceId}:`, space.left);
+    const result = yield* Effect.either(
+      restFetch<ApiProfile>({
+        endpoint: config.api,
+        path: `/profile/space/${spaceId}`,
+      })
+    );
+
+    if (Either.isLeft(result)) {
+      console.error(`Failed to fetch profile for spaceId ${spaceId}:`, result.left);
       return defaultProfile(walletAddressHint ?? spaceId, spaceId);
     }
 
-    if (!space.right) {
-      return defaultProfile(walletAddressHint ?? spaceId, spaceId);
+    const apiProfile = result.right;
+
+    // API returns a profile with null fields if not found
+    // Check if we have actual profile data or use the hint
+    if (!apiProfile.name && !apiProfile.avatarUrl) {
+      return defaultProfile(walletAddressHint ?? apiProfile.address, apiProfile.spaceId);
     }
 
-    return spaceToProfile(space.right, walletAddressHint);
+    // If we have a wallet address hint and the API didn't return one, use the hint
+    const profile = apiProfileToProfile(apiProfile);
+    if (walletAddressHint && profile.address === profile.spaceId) {
+      return { ...profile, address: walletAddressHint as `0x${string}` };
+    }
+
+    return profile;
   });
 }
 
 /**
  * Fetch multiple profiles by their space IDs in a single batch request.
+ *
+ * Uses the REST endpoint: POST /profile/batch
  *
  * More efficient than calling fetchProfileBySpaceId multiple times.
  * Returns profiles in the same order as the input array, preserving duplicates.
@@ -89,39 +153,29 @@ export function fetchProfilesBySpaceIds(spaceIds: string[]): Effect.Effect<Profi
   const uniqueSpaceIds = [...new Set(spaceIds)];
 
   return Effect.gen(function* () {
-    const spaces = yield* Effect.either(getSpaces({ spaceIds: uniqueSpaceIds }));
+    const config = Environment.getConfig();
 
-    if (Either.isLeft(spaces)) {
-      console.error(`Failed to fetch profiles for spaceIds:`, spaces.left);
+    const result = yield* Effect.either(
+      restFetch<ApiBatchProfileResponse>({
+        endpoint: config.api,
+        path: '/profile/batch',
+        method: 'POST',
+        body: { spaceIds: uniqueSpaceIds },
+      })
+    );
+
+    if (Either.isLeft(result)) {
+      console.error(`Failed to fetch profiles for spaceIds:`, result.left);
       return spaceIds.map(spaceId => defaultProfile(spaceId, spaceId));
     }
 
     // Create a map for O(1) lookup
-    const spaceMap = new Map(spaces.right.map(space => [space.id, space]));
+    const profileMap = new Map(result.right.profiles.map(p => [p.spaceId, apiProfileToProfile(p)]));
 
     // Return profiles in the original order (including duplicates)
     return spaceIds.map(spaceId => {
-      const space = spaceMap.get(spaceId);
-      return space ? spaceToProfile(space) : defaultProfile(spaceId, spaceId);
+      const profile = profileMap.get(spaceId);
+      return profile ?? defaultProfile(spaceId, spaceId);
     });
   });
-}
-
-function spaceToProfile(space: Space, walletAddressHint?: string): Profile {
-  const spaceId = space.id;
-  const entity = space.entity;
-
-  if (!entity) {
-    return defaultProfile(walletAddressHint ?? spaceId, spaceId);
-  }
-
-  return {
-    id: entity.id || spaceId,
-    spaceId,
-    name: entity.name,
-    avatarUrl: entity.image,
-    coverUrl: null,
-    address: (space.address || walletAddressHint || spaceId) as `0x${string}`,
-    profileLink: NavUtils.toSpace(spaceId),
-  };
 }

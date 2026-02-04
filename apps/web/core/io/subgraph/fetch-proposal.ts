@@ -1,73 +1,96 @@
-// @TODO complete v2 migration
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { Profile } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Proposal } from '../dto/proposals';
+import { ApiError, restFetch } from '../rest';
 import { Address, ProposalStatus, ProposalType, SubstreamVote } from '../substream-schema';
+import { AbortError } from './errors';
 import { fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
-import { graphql } from './graphql';
 
-export const getFetchProposalQuery = (id: string) => `query {
-  proposal(id: ${JSON.stringify(id)}) {
-    id
-    createdAt
-    createdAtBlock
-    startTime
-    endTime
-    executedAt
-    proposedBy
-    spaceId
-    proposalVotesConnection {
-      totalCount
-      nodes {
-        vote
-        voterId
-      }
-    }
-    proposalActions {
-      actionType
-      contentUri
-      metadata
-    }
-  }
-}`;
+/**
+ * API response types matching the gaia proposal status endpoint.
+ */
+type ApiVoteOption = 'YES' | 'NO' | 'ABSTAIN';
+
+interface ApiVote {
+  voterId: string;
+  vote: ApiVoteOption;
+}
+
+type ApiActionType =
+  | 'ADD_MEMBER'
+  | 'REMOVE_MEMBER'
+  | 'ADD_EDITOR'
+  | 'REMOVE_EDITOR'
+  | 'UNFLAG_EDITOR'
+  | 'PUBLISH'
+  | 'FLAG'
+  | 'UNFLAG'
+  | 'UPDATE_VOTING_SETTINGS'
+  | 'UNKNOWN';
+
+interface ApiAction {
+  actionType: ApiActionType;
+  targetId?: string;
+  contentUri?: string;
+  contentId?: string;
+  quorum?: number;
+  fastThreshold?: number;
+  slowThreshold?: number;
+  duration?: number;
+}
+
+interface ApiProposalStatusResponse {
+  proposalId: string;
+  spaceId: string;
+  name: string | null;
+  proposedBy: string;
+  status: 'PROPOSED' | 'EXECUTABLE' | 'ACCEPTED' | 'REJECTED';
+  votingMode: 'FAST' | 'SLOW';
+  actions: ApiAction[];
+  votes: {
+    yes: number;
+    no: number;
+    abstain: number;
+    total: number;
+    voters: ApiVote[];
+  };
+  userVote: ApiVoteOption | null;
+  quorum: {
+    required: number;
+    current: number;
+    progress: number;
+    reached: boolean;
+  };
+  threshold: {
+    required: string;
+    current: number;
+    progress: number;
+    reached: boolean;
+  };
+  timing: {
+    startTime: number;
+    endTime: number;
+    timeRemaining: number | null;
+    isVotingEnded: boolean;
+  };
+  canExecute: boolean;
+}
 
 export interface FetchProposalOptions {
   id: string;
   signal?: AbortController['signal'];
+  voterId?: string;
 }
 
-interface V2Proposal {
-  id: string;
-  createdAt: string;
-  createdAtBlock: string;
-  startTime: string;
-  endTime: string;
-  executedAt: string | null;
-  proposedBy: string;
-  spaceId: string;
-  proposalVotesConnection: {
-    totalCount: number;
-    nodes: Array<{
-      vote: 'YES' | 'NO' | 'ABSTAIN';
-      voterId: string;
-    }>;
-  };
-  proposalActions: Array<{
-    actionType: string;
-    contentUri: string | null;
-    metadata: string | null;
-  }>;
-}
-
-interface NetworkResult {
-  proposal: V2Proposal | null;
-}
-
-function mapActionTypeToProposalType(actionType: string): ProposalType {
+/**
+ * Map API action type to internal ProposalType.
+ */
+function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
   switch (actionType) {
     case 'PUBLISH':
       return 'ADD_EDIT';
@@ -79,109 +102,99 @@ function mapActionTypeToProposalType(actionType: string): ProposalType {
       return 'ADD_MEMBER';
     case 'REMOVE_MEMBER':
       return 'REMOVE_MEMBER';
-    case 'ADD_SUBSPACE':
-      return 'ADD_SUBSPACE';
-    case 'REMOVE_SUBSPACE':
-      return 'REMOVE_SUBSPACE';
     default:
       return 'ADD_EDIT';
   }
 }
 
-function convertVoteOption(vote: 'YES' | 'NO' | 'ABSTAIN'): 'ACCEPT' | 'REJECT' {
+/**
+ * Convert API vote option to internal vote format.
+ */
+function convertVoteOption(vote: ApiVoteOption): 'ACCEPT' | 'REJECT' {
   return vote === 'YES' ? 'ACCEPT' : 'REJECT';
 }
 
-function getProposalStatus(proposal: V2Proposal): ProposalStatus {
-  const now = Math.floor(Date.now() / 1000);
-  const endTime = Number(proposal.endTime);
-
-  if (proposal.executedAt) {
-    return 'ACCEPTED';
+/**
+ * Map API proposal status to internal ProposalStatus.
+ * The new API has richer status (EXECUTABLE), but we map it to existing types.
+ */
+function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']): ProposalStatus {
+  switch (apiStatus) {
+    case 'PROPOSED':
+      return 'PROPOSED';
+    case 'EXECUTABLE':
+      // EXECUTABLE means voting ended and ready to execute - treat as PROPOSED until executed
+      return 'PROPOSED';
+    case 'ACCEPTED':
+      return 'ACCEPTED';
+    case 'REJECTED':
+      return 'REJECTED';
+    default:
+      return 'PROPOSED';
   }
-  if (endTime < now) {
-    return 'REJECTED';
-  }
-  return 'PROPOSED';
 }
 
+/**
+ * Fetch a single proposal by ID using the new REST API.
+ *
+ * Uses the REST endpoint: GET /proposals/:id/status
+ */
 export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
-  const queryId = uuid();
+  const config = Environment.getConfig();
+  const { id, signal, voterId } = options;
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query: getFetchProposalQuery(options.id),
-    signal: options?.signal,
-  });
+  const path = voterId ? `/proposals/${id}/status?voterId=${voterId}` : `/proposals/${id}/status`;
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<ApiProposalStatusResponse>({
+        endpoint: config.api,
+        path,
+        signal,
+      })
+    )
+  );
 
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-      switch (error._tag) {
-        case 'AbortError':
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
-
-            queryString: ${getFetchProposalQuery(options.id)}
-            `,
-            error.message
-          );
-
-          return {
-            proposal: null,
-          };
-        default:
-          console.error(`${error._tag}: Unable to fetch proposal, queryId: ${queryId} id: ${options.id}`);
-          return {
-            proposal: null,
-          };
-      }
+    if (error instanceof AbortError) {
+      throw error;
     }
 
-    return resultOrError.right;
-  });
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
-  const proposal = result.proposal;
-
-  if (!proposal) {
+    console.error(`Failed to fetch proposal ${id}:`, error);
     return null;
   }
 
-  const voterIds = proposal.proposalVotesConnection.nodes.map(v => v.voterId);
+  const apiProposal = result.right;
+
+  // Fetch profiles for the creator and voters
+  const voterIds = apiProposal.votes.voters.map(v => v.voterId);
   const [creatorProfile, voterProfiles] = await Promise.all([
-    Effect.runPromise(fetchProfileBySpaceId(proposal.proposedBy)),
+    Effect.runPromise(fetchProfileBySpaceId(apiProposal.proposedBy)),
     Effect.runPromise(fetchProfilesBySpaceIds(voterIds)),
   ]);
 
-  const firstAction = proposal.proposalActions[0];
-  const name = firstAction?.metadata ?? firstAction?.actionType ?? null;
+  // Determine proposal type from the first action
+  const firstAction = apiProposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
 
-  const votes: SubstreamVote[] = proposal.proposalVotesConnection.nodes.map(v => ({
+  // Convert votes to internal format
+  const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
     vote: convertVoteOption(v.vote),
     accountId: Address(v.voterId),
   }));
 
-  const profile = creatorProfile ?? {
-    id: proposal.proposedBy,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: proposal.proposedBy as `0x${string}`,
-    profileLink: null,
-  };
-
+  // Build voter profiles map
   const votesWithProfiles = votes.map((v, i) => {
     const maybeProfile = voterProfiles[i];
     const voter = maybeProfile ?? {
       id: v.accountId,
+      spaceId: v.accountId,
       address: v.accountId as `0x${string}`,
       name: null,
       avatarUrl: null,
@@ -191,24 +204,34 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return { ...v, voter };
   });
 
+  const profile: Profile = creatorProfile ?? {
+    id: apiProposal.proposedBy,
+    spaceId: apiProposal.proposedBy,
+    name: null,
+    avatarUrl: null,
+    coverUrl: null,
+    address: apiProposal.proposedBy as `0x${string}`,
+    profileLink: NavUtils.toSpace(apiProposal.proposedBy),
+  };
+
   return {
-    id: proposal.id,
-    editId: '',
-    name,
+    id: apiProposal.proposalId,
+    editId: '', // Not provided by new API, will need to be fetched separately if needed
+    name: apiProposal.name,
     type: proposalType,
-    createdAt: Number(proposal.createdAt) || 0,
-    createdAtBlock: proposal.createdAtBlock,
-    startTime: Number(proposal.startTime),
-    endTime: Number(proposal.endTime),
-    status: getProposalStatus(proposal),
+    createdAt: 0, // Not directly provided, could be derived from startTime if needed
+    createdAtBlock: '0', // Not provided by new API
+    startTime: apiProposal.timing.startTime,
+    endTime: apiProposal.timing.endTime,
+    status: mapProposalStatus(apiProposal.status),
     space: {
-      id: proposal.spaceId,
-      name: null,
+      id: apiProposal.spaceId,
+      name: null, // Would need to fetch space metadata separately
       image: '',
     },
     createdBy: profile,
     proposalVotes: {
-      totalCount: proposal.proposalVotesConnection.totalCount,
+      totalCount: apiProposal.votes.total,
       nodes: votesWithProfiles,
     },
   };

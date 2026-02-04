@@ -1,139 +1,259 @@
-import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { Profile } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
-import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
-import { SubstreamProposal } from '../substream-schema';
+import { ProposalWithoutVoters } from '../dto/proposals';
+import { restFetch } from '../rest';
+import { ProposalStatus, ProposalType } from '../substream-schema';
+import { AbortError } from './errors';
 import { fetchProfilesBySpaceIds } from './fetch-profile';
-import { getSpaceMetadataFragment } from './fragments';
-import { graphql } from './graphql';
 
-const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
-  proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
-    spaceId
-  )}}}, orderBy: END_TIME_DESC, offset: ${skip}) {
-    nodes {
-      id
-      type
+/**
+ * API response types matching the gaia proposal list endpoint.
+ */
+type ApiVoteOption = 'YES' | 'NO' | 'ABSTAIN';
 
-      space {
-        id
-        ${getSpaceMetadataFragment(spaceId)}
-      }
+interface ApiVote {
+  voterId: string;
+  vote: ApiVoteOption;
+}
 
-      edit {
-        id
-        name
-        createdAt
-        createdAtBlock
-      }
+type ApiActionType =
+  | 'ADD_MEMBER'
+  | 'REMOVE_MEMBER'
+  | 'ADD_EDITOR'
+  | 'REMOVE_EDITOR'
+  | 'UNFLAG_EDITOR'
+  | 'PUBLISH'
+  | 'FLAG'
+  | 'UNFLAG'
+  | 'UPDATE_VOTING_SETTINGS'
+  | 'UNKNOWN';
 
-      createdById
-      startTime
-      endTime
-      status
+interface ApiAction {
+  actionType: ApiActionType;
+  targetId?: string;
+  contentUri?: string;
+  contentId?: string;
+  quorum?: number;
+  fastThreshold?: number;
+  slowThreshold?: number;
+  duration?: number;
+}
 
-      proposalVotes {
-        totalCount
-        nodes {
-          vote
-        }
-      }
-    }
-  }
-}`;
+interface ApiProposalStatusResponse {
+  proposalId: string;
+  spaceId: string;
+  name: string | null;
+  proposedBy: string;
+  status: 'PROPOSED' | 'EXECUTABLE' | 'ACCEPTED' | 'REJECTED';
+  votingMode: 'FAST' | 'SLOW';
+  actions: ApiAction[];
+  votes: {
+    yes: number;
+    no: number;
+    abstain: number;
+    total: number;
+    voters: ApiVote[];
+  };
+  userVote: ApiVoteOption | null;
+  quorum: {
+    required: number;
+    current: number;
+    progress: number;
+    reached: boolean;
+  };
+  threshold: {
+    required: string;
+    current: number;
+    progress: number;
+    reached: boolean;
+  };
+  timing: {
+    startTime: number;
+    endTime: number;
+    timeRemaining: number | null;
+    isVotingEnded: boolean;
+  };
+  canExecute: boolean;
+}
+
+interface ApiProposalListResponse {
+  proposals: ApiProposalStatusResponse[];
+  nextCursor: string | null;
+}
 
 export interface FetchProposalsOptions {
   spaceId: string;
   signal?: AbortController['signal'];
   page?: number;
   first?: number;
+  actionTypes?: string[];
+  excludeActionTypes?: string[];
 }
 
-interface NetworkResult {
-  proposals: { nodes: SubstreamProposal[] };
+/**
+ * Map API action type to internal ProposalType.
+ */
+function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
+  switch (actionType) {
+    case 'PUBLISH':
+      return 'ADD_EDIT';
+    case 'ADD_EDITOR':
+      return 'ADD_EDITOR';
+    case 'REMOVE_EDITOR':
+      return 'REMOVE_EDITOR';
+    case 'ADD_MEMBER':
+      return 'ADD_MEMBER';
+    case 'REMOVE_MEMBER':
+      return 'REMOVE_MEMBER';
+    default:
+      return 'ADD_EDIT';
+  }
 }
 
+/**
+ * Map API proposal status to internal ProposalStatus.
+ */
+function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']): ProposalStatus {
+  switch (apiStatus) {
+    case 'PROPOSED':
+      return 'PROPOSED';
+    case 'EXECUTABLE':
+      return 'PROPOSED';
+    case 'ACCEPTED':
+      return 'ACCEPTED';
+    case 'REJECTED':
+      return 'REJECTED';
+    default:
+      return 'PROPOSED';
+  }
+}
+
+/**
+ * Convert API proposal response to ProposalWithoutVoters.
+ */
+function apiProposalToDto(proposal: ApiProposalStatusResponse, profile?: Profile): ProposalWithoutVoters {
+  const profileData: Profile = profile ?? {
+    id: proposal.proposedBy,
+    spaceId: proposal.proposedBy,
+    name: null,
+    avatarUrl: null,
+    coverUrl: null,
+    address: proposal.proposedBy as `0x${string}`,
+    profileLink: NavUtils.toSpace(proposal.proposedBy),
+  };
+
+  const firstAction = proposal.actions[0];
+  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+
+  return {
+    id: proposal.proposalId,
+    editId: '', // Not provided by new API
+    name: proposal.name,
+    type: proposalType,
+    createdAt: 0, // Not directly provided
+    createdAtBlock: '0', // Not provided by new API
+    startTime: proposal.timing.startTime,
+    endTime: proposal.timing.endTime,
+    status: mapProposalStatus(proposal.status),
+    space: {
+      id: proposal.spaceId,
+      name: null,
+      image: '',
+    },
+    createdBy: profileData,
+  };
+}
+
+/**
+ * Fetch proposals for a space using the new REST API.
+ *
+ * Uses the REST endpoint: GET /proposals/space/:spaceId/status
+ *
+ * Note: The API uses cursor-based pagination, but this function maintains
+ * the existing page-based interface for backwards compatibility.
+ */
 export async function fetchProposals({
   spaceId,
   signal,
   page = 0,
   first = 5,
+  actionTypes,
+  excludeActionTypes,
 }: FetchProposalsOptions): Promise<ProposalWithoutVoters[]> {
-  const queryId = uuid();
-  const offset = page * first;
+  const config = Environment.getConfig();
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query: getFetchSpaceProposalsQuery(spaceId, first, offset),
-    signal,
-  });
+  // Build query parameters
+  const params = new URLSearchParams();
+  params.set('limit', String(first));
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  if (actionTypes?.length) {
+    params.set('actionTypes', actionTypes.join(','));
+  }
+  if (excludeActionTypes?.length) {
+    params.set('excludeActionTypes', excludeActionTypes.join(','));
+  }
 
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
+  // For page-based pagination, we need to fetch pages sequentially to get cursors
+  // This is a temporary solution - ideally callers should be updated to use cursor pagination
+  let cursor: string | undefined;
+  let proposals: ApiProposalStatusResponse[] = [];
 
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} page: ${page}
-
-            queryString: ${getFetchSpaceProposalsQuery(spaceId, first, offset)}
-            `,
-            error.message
-          );
-          return {
-            proposals: {
-              nodes: [],
-            },
-          };
-        default:
-          console.error(
-            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} spaceId: ${spaceId} page: ${page}`
-          );
-          return {
-            proposals: {
-              nodes: [],
-            },
-          };
-      }
+  for (let i = 0; i <= page; i++) {
+    const pageParams = new URLSearchParams(params);
+    if (cursor) {
+      pageParams.set('cursor', cursor);
     }
 
-    return resultOrError.right;
-  });
+    const path = `/proposals/space/${spaceId}/status?${pageParams.toString()}`;
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = result.proposals.nodes;
+    const result = await Effect.runPromise(
+      Effect.either(
+        restFetch<ApiProposalListResponse>({
+          endpoint: config.api,
+          path,
+          signal,
+        })
+      )
+    );
 
-  const creatorIds = proposals.map(p => p.createdById);
+    if (Either.isLeft(result)) {
+      const error = result.left;
+
+      if (error instanceof AbortError) {
+        throw error;
+      }
+
+      console.error(`Failed to fetch proposals for space ${spaceId}:`, error);
+      return [];
+    }
+
+    proposals = result.right.proposals;
+    cursor = result.right.nextCursor ?? undefined;
+
+    // If we've reached the requested page, stop
+    if (i === page) {
+      break;
+    }
+
+    // If there's no next cursor, we've reached the end
+    if (!cursor) {
+      return [];
+    }
+  }
+
+  // Fetch profiles for creators
+  const creatorIds = proposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
-  return proposals
-    .map(p => {
-      const proposalOrError = Schema.decodeEither(SubstreamProposal)(p);
-
-      return Either.match(proposalOrError, {
-        onLeft: error => {
-          console.error(`Unable to decode proposal ${p.id} with error ${error}`);
-          return null;
-        },
-        onRight: proposal => {
-          const maybeProfile = profilesBySpaceId.get(p.createdById);
-          return ProposalWithoutVotersDto(proposal, maybeProfile);
-        },
-      });
-    })
-    .filter(p => p !== null);
+  return proposals.map(p => {
+    const maybeProfile = profilesBySpaceId.get(p.proposedBy);
+    return apiProposalToDto(p, maybeProfile);
+  });
 }
