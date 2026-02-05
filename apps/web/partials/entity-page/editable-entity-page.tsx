@@ -908,6 +908,7 @@ function RenderedValue({
             format={property.format || undefined}
             unitId={options?.unit || property.unit || undefined}
             onChange={onChange}
+            dataType={property.dataType}
           />
         );
       case 'BOOL': {
@@ -936,6 +937,7 @@ function RenderedValue({
             isEditing={true}
             value={value}
             propertyId={propertyId}
+            dataType={property.dataType}
           />
         );
       }
