@@ -5,7 +5,7 @@ import { Profile } from '~/core/types';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersion } from '../dto/versions';
-import { fetchProfileBySpaceId } from './fetch-profile';
+import { defaultProfile, fetchProfileBySpaceId } from './fetch-profile';
 import { graphql } from './graphql';
 
 interface FetchVersionArgs {
@@ -46,11 +46,12 @@ export async function fetchHistoryVersion(args: FetchVersionArgs): Promise<Histo
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
-  // The versionId is the editId, which should match the proposal ID
+  // Assumption: editId == proposalId in this API/environment.
+  // If that invariant ever breaks, this lookup will return null.
   const proposal = await fetchProposal({ proposalId: args.versionId, signal: args.signal, endpoint, queryId });
 
   if (!proposal) {
-    return createFallbackHistoryVersion(args.versionId);
+    return null;
   }
 
   // Get creator profile
@@ -76,40 +77,7 @@ export async function fetchHistoryVersion(args: FetchVersionArgs): Promise<Histo
     editName: proposal.edit?.name ?? `Version ${proposal.id.slice(-8)}`,
     proposalId: proposal.id,
     createdAt: createdAtTimestamp,
-    createdBy: profile ?? {
-      id: createdById || proposal.id,
-      spaceId: createdById || proposal.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: (createdById || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-      profileLink: null,
-    },
-  };
-}
-
-function createFallbackHistoryVersion(versionId: string): HistoryVersion {
-  return {
-    id: versionId,
-    name: null,
-    description: null,
-    spaces: [],
-    types: [],
-    relations: [],
-    values: [],
-    versionId: versionId,
-    editName: `Version ${versionId.slice(-8)}`,
-    proposalId: versionId,
-    createdAt: 0,
-    createdBy: {
-      id: versionId,
-      spaceId: versionId,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-      profileLink: null,
-    },
+    createdBy: profile ?? defaultProfile(createdById || proposal.id, createdById || proposal.id),
   };
 }
 

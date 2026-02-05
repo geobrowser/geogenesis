@@ -5,7 +5,7 @@ import { Profile } from '~/core/types';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersion } from '../dto/versions';
-import { fetchProfilesBySpaceIds } from './fetch-profile';
+import { defaultProfile, fetchProfilesBySpaceIds } from './fetch-profile';
 import { graphql } from './graphql';
 
 interface FetchVersionsArgs {
@@ -125,15 +125,7 @@ export async function fetchHistoryVersions(args: FetchVersionsArgs): Promise<His
       editName: item.editName,
       proposalId: item.proposalId,
       createdAt: item.createdAt,
-      createdBy: profile ?? {
-        id: item.createdById || item.id,
-        spaceId: item.createdById || item.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: (item.createdById || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-        profileLink: null,
-      },
+      createdBy: profile ?? defaultProfile(item.createdById || item.id, item.createdById || item.id),
     };
   });
 }
