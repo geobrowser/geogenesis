@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
-import { Value } from '../v2.types';
+import { Value } from '../types';
 import { useImageUrlFromEntity } from './use-entity-media';
 import {
   GeoDate,
