@@ -24,12 +24,16 @@
 }
 
 /* Global styles */
-html {
-  @apply min-h-screen overflow-y-auto overflow-x-clip;
+* {
+  scrollbar-width: thin;
+}
+
+:root {
+  color-scheme: light;
 }
 
 body {
-  @apply min-h-screen overflow-x-clip bg-white;
+  @apply overflow-x-clip overflow-y-scroll bg-white;
   font-family: var(--font-calibre), sans-serif;
   text-rendering: optimizeLegibility;
 }

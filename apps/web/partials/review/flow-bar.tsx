@@ -1,8 +1,10 @@
 'use client';
 
-import { Array as A, Record as R, pipe } from 'effect';
+import cx from 'classnames';
+import { Array as A, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
+import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
@@ -47,15 +49,18 @@ export const FlowBar = () => {
 
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
-  // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
-  // or if the status bar is rendering in place.
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
     <AnimatePresence>
-      <div className="relative z-[1000] w-[355px]">
+      <>
         {!hideFlowbar && (
-          <div className="pointer-events-none fixed bottom-0 left-0 right-0 m-5 flex w-full justify-center text-button">
+          <div
+            className={cx(
+              'pointer-events-none fixed bottom-5 inset-x-0 z-10 flex justify-center text-button',
+              RemoveScroll.classNames.fullWidth
+            )}
+          >
             <motion.div
               variants={flowVariants}
               initial="hidden"
@@ -89,7 +94,7 @@ export const FlowBar = () => {
         )}
 
         {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
-      </div>
+      </>
     </AnimatePresence>
   );
 };
@@ -108,7 +113,7 @@ const StatusBar = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[1000] flex origin-center flex-col items-center">
+    <div className={cx('fixed bottom-0 inset-x-0 z-[1000] flex flex-col items-center', RemoveScroll.classNames.fullWidth)}>
       <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.2 }}>
         <div className="m-8 h-10 overflow-hidden rounded bg-text px-3 py-2.5 text-button text-white">
           <AnimatePresence mode="wait">
@@ -116,7 +121,6 @@ const StatusBar = () => {
               {state.reviewState === 'publish-error' && state.error ? (
                 <>
                   <Warning color="red-01" />
-                  {/* Negative top margin visually aligns the text. Programatically aligning it feels a bit off visually. */}
                   <motion.span
                     key={message[state.reviewState]}
                     initial={{ opacity: 0, filter: 'blur(2px)' }}
@@ -178,7 +182,6 @@ const StatusBar = () => {
                       🎉
                     </motion.span>
                   )}
-                  {/* Only show spinner if not the complete state */}
                   {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && (
                     <Spinner />
                   )}
