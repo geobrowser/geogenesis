@@ -105,6 +105,8 @@ export const DAOSpaceAbi = [
   },
 ] as const;
 
+export const ZERO_SPACE_ID = '0x00000000000000000000000000000000' as Hex;
+
 /**
  * Minimal SpaceRegistry ABI - only includes functions used by this app.
  */
@@ -121,6 +123,13 @@ export const SpaceRegistryAbi = [
     name: 'enter',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_account', type: 'address' }],
+    name: 'addressToSpaceId',
+    outputs: [{ internalType: 'bytes16', name: '_spaceId', type: 'bytes16' }],
+    stateMutability: 'view',
     type: 'function',
   },
 ] as const;

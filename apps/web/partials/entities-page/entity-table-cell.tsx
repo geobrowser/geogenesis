@@ -178,7 +178,7 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
   }
 
   if (renderableType === 'DATE' || renderableType === 'DATETIME' || renderableType === 'TIME') {
-    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
+    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} dataType={property.dataType} />;
   }
 
   if (renderableType === 'BOOL') {

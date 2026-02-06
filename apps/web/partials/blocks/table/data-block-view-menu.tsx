@@ -93,14 +93,14 @@ const ToggleView = ({ activeView, view, isLoading }: ToggleViewProps) => {
   }, [setView, view]);
 
   return (
-    <MenuItem active={isActive}>
-      <button onClick={onToggleView} className="flex w-full items-center justify-between gap-2" disabled={isActive}>
+    <MenuItem active={isActive} onClick={isActive ? undefined : onToggleView}>
+      <div className="flex w-full items-center justify-between gap-2">
         <div className="inline-flex items-center gap-2">
           <ViewIcon view={view.value} color="text" />
           <span className="whitespace-nowrap">{view.name}</span>
         </div>
         {isActive ? <Check /> : null}
-      </button>
+      </div>
     </MenuItem>
   );
 };
