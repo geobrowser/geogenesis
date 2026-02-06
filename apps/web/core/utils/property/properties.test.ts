@@ -6,10 +6,44 @@ import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
 import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
 
+// Mock the DTO module — use real SDK IDs so tests match actual usage
+vi.mock('~/core/io/dto/properties', () => ({
+  getStrictRenderableType: (renderableType: string | null) => {
+    switch (renderableType) {
+      case SystemIds.IMAGE:
+        return 'IMAGE';
+      case 'VIDEO_RENDERABLE_TYPE_ID':
+        return 'VIDEO';
+      case SystemIds.URL:
+        return 'URL';
+      case 'GEO_LOCATION_ID':
+        return 'GEO_LOCATION';
+      case 'PLACE_ID':
+        return 'PLACE';
+      default:
+        return undefined;
+    }
+  },
+}));
+
 // Mock the constants to ensure they're available in tests
 vi.mock('~/core/constants', () => ({
   RENDERABLE_TYPE_PROPERTY: 'RENDERABLE_TYPE_PROPERTY_ID',
   DATA_TYPE_PROPERTY: 'DATA_TYPE_PROPERTY_ID',
+  DATA_TYPE_ENTITY_IDS: {
+    TEXT: 'TEXT_ENTITY_ID',
+    INT64: 'INT64_ENTITY_ID',
+    FLOAT64: 'FLOAT64_ENTITY_ID',
+    DECIMAL: 'DECIMAL_ENTITY_ID',
+    BOOL: 'BOOL_ENTITY_ID',
+    BYTES: 'BYTES_ENTITY_ID',
+    DATE: 'DATE_ENTITY_ID',
+    TIME: 'TIME_ENTITY_ID',
+    DATETIME: 'DATETIME_ENTITY_ID',
+    SCHEDULE: 'SCHEDULE_ENTITY_ID',
+    POINT: 'POINT_ENTITY_ID',
+    EMBEDDING: 'EMBEDDING_ENTITY_ID',
+  },
   GEO_LOCATION: 'GEO_LOCATION_ID',
   FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
@@ -122,22 +156,22 @@ describe('Properties', () => {
             property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
             value: 'Test Property',
           },
-          {
-            entity: { id: propertyId, name: 'Test Property' },
-            property: { id: DATA_TYPE_PROPERTY, name: 'Data Type', dataType: 'TEXT' },
-            value: 'TEXT',
-          },
         ];
         return values.filter(selector);
       });
 
-      // Mock relations based on selector
+      // Mock relations based on selector — data type is now a relation
       mockGetRelations.mockImplementation(({ selector }) => {
         const relations = [
           {
             fromEntity: { id: propertyId, name: 'Test Property' },
             type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
             toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
+          },
+          {
+            fromEntity: { id: propertyId, name: 'Test Property' },
+            type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+            toEntity: { id: 'TEXT_ENTITY_ID', name: 'TEXT' },
           },
         ];
         return relations.filter(selector);
@@ -176,11 +210,6 @@ describe('Properties', () => {
             property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
             value: 'Test Property',
           },
-          {
-            entity: { id: propertyId, name: 'Test Property' },
-            property: { id: DATA_TYPE_PROPERTY, name: 'Data Type', dataType: 'TEXT' },
-            value: 'TEXT',
-          },
         ];
         return values.filter(selector);
       });
@@ -191,6 +220,11 @@ describe('Properties', () => {
             fromEntity: { id: propertyId, name: 'Test Property' },
             type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
             toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
+          },
+          {
+            fromEntity: { id: propertyId, name: 'Test Property' },
+            type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+            toEntity: { id: 'TEXT_ENTITY_ID', name: 'TEXT' },
           },
           {
             fromEntity: { id: propertyId, name: 'Test Property' },
