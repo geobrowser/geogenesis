@@ -29,6 +29,34 @@ export const VIDEO_ACCEPT = VALID_VIDEO_TYPES.join(',');
 export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
 
 export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
+
+/**
+ * Maps DataType strings to their corresponding entity IDs in the knowledge graph.
+ * The SDK creates data types as relations (from property → data type entity),
+ * NOT as text values. This mapping provides the entity IDs for those relations.
+ *
+ * Note: RELATION type properties do NOT get a data type relation in the SDK —
+ * the type is implicit from the property being a relation type.
+ */
+/**
+ * Maps DataType strings to their corresponding entity IDs in the knowledge graph.
+ * Every property gets an explicit Data Type relation, including RELATION.
+ */
+export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
+  TEXT: '9edb6fcce4544aa5861139d7f024c010',
+  RELATION: '4b6d9fc1fbfe474c861c83398e1b50d9',
+  BOOL: '7aa4792eeacd41868272fa7fc18298ac',
+  INT64: '149fd752d9d04f80820d1d942eea7841',
+  FLOAT64: '9b597aaec31c46c88565a370da0c2a65',
+  DECIMAL: 'a3288c22a0564f6fb409fbcccb2c118c',
+  BYTES: '66b433247667496899b48a89bd1de22b',
+  DATE: 'e661d10292794449a22367dbae1be05a',
+  TIME: 'ad75102b03c04d59903813ede9482742',
+  DATETIME: '167664f668f840e1976b20bd16ed8d47',
+  SCHEDULE: 'caf4dd12ba4844b99171aff6c1313b50',
+  POINT: 'df250d17e364413d97792ddaae841e34',
+  EMBEDDING: 'f732849378ba4577a33fac5f1c964f18',
+};
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';

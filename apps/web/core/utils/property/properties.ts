@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import {
+  DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
@@ -19,6 +20,20 @@ import {
   SwitchableRenderableType,
   Value,
 } from '~/core/types';
+
+/** Reverse mapping: data type entity ID → DataType string */
+const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
+  Object.entries(DATA_TYPE_ENTITY_IDS).map(([k, v]) => [v, k as DataType])
+);
+
+/**
+ * Resolves a data type entity ID to its DataType string.
+ * Returns 'RELATION' if the entity ID is not found (RELATION properties
+ * don't have a data type entity in the SDK).
+ */
+export function getDataTypeFromEntityId(entityId: string): DataType {
+  return ENTITY_ID_TO_DATA_TYPE[entityId] ?? 'RELATION';
+}
 
 /**
  * Interface for property type mapping configuration
@@ -171,13 +186,33 @@ export function reconstructFromStore(
     return null;
   }
 
-  // Get the dataType value
-  const dataTypeValue = getValues({
-    selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
+  // Get the data type relation (the SDK creates data types as relations, not values)
+  const dataTypeRelation = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === DATA_TYPE_PROPERTY,
   })[0];
 
-  if (!dataTypeValue) {
-    return null;
+  let dataType: DataType;
+
+  if (dataTypeRelation) {
+    dataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
+  } else {
+    // Fallback: read legacy value-based data type for properties created before the
+    // relation-based approach. Without this, older properties would disappear from the UI.
+    const dataTypeValue = getValues({
+      selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
+    })[0];
+
+    if (!dataTypeValue) {
+      return null;
+    }
+
+    const raw = String(dataTypeValue.value).toUpperCase();
+    const mapped = LEGACY_DATA_TYPE_MAPPING[raw] as DataType | undefined;
+    const VALID_DATA_TYPES: DataType[] = [
+      'TEXT', 'INT64', 'FLOAT64', 'DECIMAL', 'BOOL', 'DATE',
+      'DATETIME', 'TIME', 'POINT', 'RELATION', 'BYTES', 'SCHEDULE', 'EMBEDDING',
+    ];
+    dataType = mapped ?? (VALID_DATA_TYPES.includes(raw as DataType) ? (raw as DataType) : 'TEXT');
   }
 
   // Get the name value
@@ -199,34 +234,6 @@ export function reconstructFromStore(
   const unitRelation = getRelations({
     selector: r => r.fromEntity.id === id && r.type.id === UNIT_PROPERTY,
   })[0];
-
-  // Validate and cast dataType (GRC-20 v2 types)
-  const validDataTypes: DataType[] = [
-    'TEXT',
-    'INT64',
-    'FLOAT64',
-    'DECIMAL',
-    'BOOL',
-    'DATE',
-    'DATETIME',
-    'TIME',
-    'POINT',
-    'RELATION',
-    'BYTES',
-    'SCHEDULE',
-    'EMBEDDING',
-  ];
-  const dataTypeString = String(dataTypeValue.value).toUpperCase();
-
-  // Check for legacy type mapping first, then validate against current types
-  let dataType: DataType;
-  if (dataTypeString in LEGACY_DATA_TYPE_MAPPING) {
-    dataType = LEGACY_DATA_TYPE_MAPPING[dataTypeString]!;
-  } else if (validDataTypes.includes(dataTypeString as DataType)) {
-    dataType = dataTypeString as DataType;
-  } else {
-    dataType = 'TEXT';
-  }
 
   // Get relation value types
   const relationValueTypes = getRelations({
