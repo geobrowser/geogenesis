@@ -12,6 +12,7 @@ import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
@@ -60,6 +61,7 @@ export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
+  const { personalSpaceId } = usePersonalSpaceId();
 
   const { shouldShowElement } = useOnboardGuard();
   const resetOnboarding = useResetOnboarding();
@@ -99,7 +101,7 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {profile?.profileLink && (
+        {personalSpaceId && (
           <>
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
@@ -108,7 +110,7 @@ export function NavbarActions() {
                 </div>
                 <Link
                   prefetch={false}
-                  href={NavUtils.toSpace(profile?.profileLink.split('/')[2])}
+                  href={NavUtils.toSpace(personalSpaceId)}
                   className="text-button"
                 >
                   Personal space
