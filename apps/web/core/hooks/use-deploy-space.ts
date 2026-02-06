@@ -16,19 +16,9 @@ import {
 } from '~/core/utils/contracts/dao-space-factory';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
-import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
-
-const ExtendedSpaceRegistryAbi = [
-  {
-    inputs: [{ internalType: 'address', name: '_account', type: 'address' }],
-    name: 'addressToSpaceId',
-    outputs: [{ internalType: 'bytes16', name: '_spaceId', type: 'bytes16' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
 
 type DeployArgs = {
   type: SpaceType;
@@ -211,7 +201,7 @@ async function createDaoSpace({
 
   const newSpaceIdHex = (await publicClient.readContract({
     address: SPACE_REGISTRY_ADDRESS_HEX,
-    abi: ExtendedSpaceRegistryAbi,
+    abi: SpaceRegistryAbi,
     functionName: 'addressToSpaceId',
     args: [newDaoSpaceAddress],
   })) as Hex;
@@ -296,7 +286,7 @@ async function findNewDaoSpaceAddress(
       try {
         const spaceId = (await publicClient.readContract({
           address: SPACE_REGISTRY_ADDRESS_HEX,
-          abi: ExtendedSpaceRegistryAbi,
+          abi: SpaceRegistryAbi,
           functionName: 'addressToSpaceId',
           args: [log.address],
         })) as Hex;
