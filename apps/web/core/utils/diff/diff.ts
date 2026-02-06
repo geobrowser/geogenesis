@@ -115,6 +115,7 @@ const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
   const changes = diffWords(before, after);
+
   return changes.map(change => ({
     value: change.value,
     ...(change.added ? { added: true } : {}),
@@ -336,6 +337,7 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
 
   if (blockType === 'dataBlock') {
     const nameValue = entity.values.find(v => v.propertyId === NAME_PROPERTY);
+
     return {
       id: entity.entityId,
       type: 'dataBlock',
@@ -346,6 +348,7 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
 
   if (blockType === 'imageBlock') {
     const contentValue = entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ?? entity.values[0];
+
     return {
       id: entity.entityId,
       type: 'imageBlock',
@@ -532,6 +535,7 @@ function isMediaRelationType(typeId: string): boolean {
 function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
   if (!entity) return null;
   const imageValue = entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+
   return imageValue?.value ?? null;
 }
 

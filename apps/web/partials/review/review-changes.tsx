@@ -65,6 +65,7 @@ export const ReviewChanges = () => {
   const dedupedSpacesWithActions = React.useMemo(() => {
     const valueSpaceIds = valuesWithChanges.map(t => t.spaceId);
     const relationSpaceIds = relationsWithChanges.map(r => r.spaceId);
+
     return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
   }, [valuesWithChanges, relationsWithChanges]);
 
@@ -118,6 +119,7 @@ export const ReviewChanges = () => {
   const isReadyToPublish = React.useMemo(() => {
     if (!activeSpace || proposalName.length === 0) return false;
     const ops = Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace);
+
     return ops.length > 0;
   }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
 
@@ -641,6 +643,7 @@ const TextBlockCell = ({ block, side }: TextBlockCellProps) => {
 
   if (isNew || isDeleted) {
     const highlightClass = side === 'before' ? 'rounded bg-deleted line-through decoration-1' : 'rounded bg-added';
+
     return (
       <div className="ProseMirror text-body">
         <MarkdownDiffRenderer text={value} highlightClass={highlightClass} />

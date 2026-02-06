@@ -1,4 +1,4 @@
-export function BulletedListViewSkeleton() {
+export const BulletedListViewSkeleton = () => {
   const items = Array.from({ length: 6 });
 
   return (
@@ -11,4 +11,4 @@ export function BulletedListViewSkeleton() {
       ))}
     </div>
   );
-}
+};

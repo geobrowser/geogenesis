@@ -2,8 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import * as React from 'react';
-
 import { fetchEntityDiff } from '~/core/io/subgraph/fetch-entity-diff';
 
 import { SquareButton } from '~/design-system/button';

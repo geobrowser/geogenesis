@@ -68,5 +68,6 @@ export async function fetchEntityDiff({
   const entityDiff = Diff.mapApiEntityDiff(decoded.right);
 
   const processed = await Diff.postProcessDiffs([entityDiff], spaceId);
+
   return processed[0] ?? null;
 }
