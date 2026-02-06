@@ -14,7 +14,6 @@ import { getStrictRenderableType } from '~/core/io/dto/properties';
 import {
   DataType,
   Entity,
-  LEGACY_DATA_TYPE_MAPPING,
   Property,
   Relation,
   SwitchableRenderableType,
@@ -186,34 +185,16 @@ export function reconstructFromStore(
     return null;
   }
 
-  // Get the data type relation (the SDK creates data types as relations, not values)
+  // Get the data type relation
   const dataTypeRelation = getRelations({
     selector: r => r.fromEntity.id === id && r.type.id === DATA_TYPE_PROPERTY,
   })[0];
 
-  let dataType: DataType;
-
-  if (dataTypeRelation) {
-    dataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
-  } else {
-    // Fallback: read legacy value-based data type for properties created before the
-    // relation-based approach. Without this, older properties would disappear from the UI.
-    const dataTypeValue = getValues({
-      selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
-    })[0];
-
-    if (!dataTypeValue) {
-      return null;
-    }
-
-    const raw = String(dataTypeValue.value).toUpperCase();
-    const mapped = LEGACY_DATA_TYPE_MAPPING[raw] as DataType | undefined;
-    const VALID_DATA_TYPES: DataType[] = [
-      'TEXT', 'INT64', 'FLOAT64', 'DECIMAL', 'BOOL', 'DATE',
-      'DATETIME', 'TIME', 'POINT', 'RELATION', 'BYTES', 'SCHEDULE', 'EMBEDDING',
-    ];
-    dataType = mapped ?? (VALID_DATA_TYPES.includes(raw as DataType) ? (raw as DataType) : 'TEXT');
+  if (!dataTypeRelation) {
+    return null;
   }
+
+  const dataType: DataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
 
   // Get the name value
   const nameValue = getValues({
