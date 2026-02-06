@@ -15,7 +15,7 @@ import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { FlowBar } from '~/partials/review/flow-bar';
-import { Review } from '~/partials/review/review';
+import { ReviewChanges } from '~/partials/review/review-changes';
 import { SearchDialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {
@@ -23,10 +23,8 @@ export function App({ children }: { children: React.ReactNode }) {
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  // Ideally memoization happens in the useKeyboardShortcuts hook
   const memoizedShortcuts = React.useMemo(
     () => [
-      // Toggle the menu when ⌘ + / is pressed
       {
         key: '/',
         callback: () => setOpen(open => !open),
@@ -51,7 +49,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <OnboardingDialog />
         <Toast />
         <FlowBar />
-        <Review />
+        <ReviewChanges />
         {/* @TODO remove */}
         <Persistence />
       </ClientOnly>
