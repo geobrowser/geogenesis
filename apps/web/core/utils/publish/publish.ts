@@ -11,9 +11,13 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
       v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== '' && v.isLocal === true
   );
 
+  const validRelations = relations.filter(
+    r => r.spaceId === spaceId && !r.hasBeenPublished && r.isLocal === true
+  );
+
   const ops: Op[] = [];
 
-  for (const r of relations) {
+  for (const r of validRelations) {
     if (r.isDeleted) {
       const { ops: deleteOps } = Graph.deleteRelation({ id: r.id });
       ops.push(...deleteOps);
@@ -23,6 +27,7 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
         toEntity: r.toEntity.id,
         type: r.type.id,
         id: r.id,
+        entityId: r.entityId,
         position: r.position ?? undefined,
         ...(r.toSpaceId && { toSpace: r.toSpaceId }),
       });

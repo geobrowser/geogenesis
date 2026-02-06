@@ -211,6 +211,42 @@ describe('prepareLocalDataForPublishing', () => {
       expect(updateOp.type).toBe('updateEntity');
       expect(updateOp.unset.length).toBeGreaterThan(0);
     });
+
+    it('should filter out relations from different spaces', () => {
+      const values: Value[] = [];
+      const relations = [
+        createMockRelation({ spaceId: 'test-space' }),
+        createMockRelation({ spaceId: 'different-space' }),
+      ];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('createRelation');
+    });
+
+    it('should filter out already published relations', () => {
+      const values: Value[] = [];
+      const relations = [
+        createMockRelation({ hasBeenPublished: false }),
+        createMockRelation({ hasBeenPublished: true }),
+      ];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('createRelation');
+    });
+
+    it('should filter out non-local relations', () => {
+      const values: Value[] = [];
+      const relations = [createMockRelation({ isLocal: true }), createMockRelation({ isLocal: false })];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('createRelation');
+    });
   });
 
   describe('value grouping and operations', () => {
@@ -330,7 +366,7 @@ describe('prepareLocalDataForPublishing', () => {
       expect(result.some(op => op.type === 'updateEntity')).toBe(true);
     });
 
-    it('should return empty array when no valid values but still process all relations', () => {
+    it('should filter out relations that are already published, from different spaces, or not local', () => {
       const values = [
         createMockValue({ hasBeenPublished: true }),
         createMockValue({ spaceId: 'different-space' }),
@@ -344,9 +380,8 @@ describe('prepareLocalDataForPublishing', () => {
 
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
-      // Values are filtered out, but relations are processed regardless of their metadata
-      expect(result).toHaveLength(3); // All 3 relations become createRelation ops
-      expect(result.every(op => op.type === 'createRelation')).toBe(true);
+      // Both values and relations are filtered by spaceId, hasBeenPublished, and isLocal
+      expect(result).toHaveLength(0);
     });
   });
 
