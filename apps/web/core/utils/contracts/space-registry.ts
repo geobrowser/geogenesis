@@ -30,6 +30,20 @@ export const GOVERNANCE_ACTIONS = {
   PROPOSAL_VOTED: '0x4ebf5f29676cedf7e2e4d346a8433289278f95a9fda73691dc1ce24574d5819e' as Hex,
   /** keccak256('GOVERNANCE.PROPOSAL_EXECUTED') - executes a passed proposal */
   PROPOSAL_EXECUTED: '0x62a60c0a9681612871e0dafa0f24bb0c83cbdde8be5a6299979c88d382369e96' as Hex,
+
+  // Subspace management actions
+  /** keccak256('GOVERNANCE.SUBSPACE_VERIFIED') - marks a subspace as verified */
+  SUBSPACE_VERIFIED: '0xf78431edee20f4edc4766f7e4cd7ee37bf3d84514d93d8ff7e8d8b32dc8ccd39' as Hex,
+  /** keccak256('GOVERNANCE.SUBSPACE_UNVERIFIED') - removes verified status from a subspace */
+  SUBSPACE_UNVERIFIED: '0xbdcdbf5035c18cc3895457ce405cafbe8d62b8ca33d2a4e78db1e0b7897c9c34' as Hex,
+  /** keccak256('GOVERNANCE.SUBSPACE_RELATED') - marks a subspace as related */
+  SUBSPACE_RELATED: '0xe1dfc59a5ffb6192be6bd82457a48b1b675f4ff2886a6c1471f5c47631448de5' as Hex,
+  /** keccak256('GOVERNANCE.SUBSPACE_UNRELATED') - removes related status from a subspace */
+  SUBSPACE_UNRELATED: '0xa5ad9ae41010e3b9b1d8db394f518a795fcee6b8e4dacf924fd493f2fa8fa79c' as Hex,
+  /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_DECLARED') - declares a subtopic for a subspace using an entity UUID */
+  SUBSPACE_TOPIC_DECLARED: '0xf475121947612f07c138e5ac27aa31355aaea0da3096cea1b702daeb5e8477aa' as Hex,
+  /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_REMOVED') - removes a subtopic from a subspace */
+  SUBSPACE_TOPIC_REMOVED: '0x98ee515a05d2eb17f8e4c1e997a36ee6a8eca03af78d98943787935f9e39adda' as Hex,
 } as const;
 
 /**
@@ -46,7 +60,8 @@ export const VOTING_MODE = {
  * Minimal DAOSpace ABI for governance actions.
  *
  * The DAOSpace contract manages proposals, voting, and role-based access.
- * This partial ABI includes only the functions needed for membership operations.
+ * This partial ABI includes only the functions needed for governance operations
+ * (membership management, subspace management via ping).
  */
 export const DAOSpaceAbi = [
   {
@@ -77,7 +92,20 @@ export const DAOSpaceAbi = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  {
+    inputs: [
+      { internalType: 'bytes32', name: '_action', type: 'bytes32' },
+      { internalType: 'bytes32', name: '_topic', type: 'bytes32' },
+      { internalType: 'bytes', name: '_data', type: 'bytes' },
+    ],
+    name: 'ping',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;
+
+export const ZERO_SPACE_ID = '0x00000000000000000000000000000000' as Hex;
 
 /**
  * Minimal SpaceRegistry ABI - only includes functions used by this app.
@@ -95,6 +123,13 @@ export const SpaceRegistryAbi = [
     name: 'enter',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_account', type: 'address' }],
+    name: 'addressToSpaceId',
+    outputs: [{ internalType: 'bytes16', name: '_spaceId', type: 'bytes16' }],
+    stateMutability: 'view',
     type: 'function',
   },
 ] as const;

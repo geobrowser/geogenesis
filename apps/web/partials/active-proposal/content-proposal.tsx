@@ -1,24 +1,32 @@
-import * as React from 'react';
+import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
+import type { Proposal } from '~/core/io/dto/proposals';
 
-import { Proposal } from '~/core/io/dto/proposals';
-import { Change } from '~/core/utils/change';
-import { getIsProposalEnded } from '~/core/utils/utils';
+import { Text } from '~/design-system/text';
 
-import { ChangedEntity } from '../diff/changed-entity';
+import { ChangedEntity } from '~/partials/review/review-changes';
 
 export async function ContentProposal({ proposal, spaceId }: { proposal: Proposal; spaceId: string }) {
-  // Depending on whether the proposal is active or ended we need to compare against
-  // either the live versions of entities in the proposal or against the state of
-  // entities in the proposal as they existed at the time the proposal ended.
-  const changes = getIsProposalEnded(proposal.status, proposal.endTime)
-    ? await Change.fromEndedProposal(proposal, spaceId)
-    : await Change.fromActiveProposal(proposal, spaceId);
+  const changes = await fetchProposalDiffs(proposal.id, proposal.space.id);
+
+  if (changes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <Text variant="bodySemibold" color="grey-04">
+          No changes to display
+        </Text>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-16 divide-y divide-divider">
-      {changes.map(change => {
-        return <ChangedEntity key={change.id} change={change} />;
-      })}
+    <div className="flex flex-col gap-2">
+      {changes.map(entity => (
+        <div key={entity.entityId} className="rounded-xl bg-white p-4">
+          <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+            <ChangedEntity entity={entity} spaceId={spaceId} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

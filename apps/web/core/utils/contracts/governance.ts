@@ -97,6 +97,15 @@ export function encodeProposalExecutedData(proposalId: Hex): Hex {
 }
 
 /**
+ * The types of subspace relationships that can be set.
+ *
+ * - Verified: The parent space has verified the subspace
+ * - Related: The parent space considers the subspace related
+ * - Subtopic: The subspace is categorized under a specific topic entity (identified by UUID)
+ */
+export type SubspaceRelationType = 'verified' | 'related' | 'subtopic';
+
+/**
  * Pads a bytes16 hex string (32 hex chars) to bytes32 (64 hex chars) for use as topic.
  *
  * @param bytes16Hex - A hex string representing bytes16 (with or without 0x prefix)
