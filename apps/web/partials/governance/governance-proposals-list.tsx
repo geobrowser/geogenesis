@@ -21,11 +21,16 @@ import {
   encodePathSegment,
   validateActionTypes,
   isValidUUID,
-  type ApiProposalStatusResponse,
+  type ApiProposalListItem,
 } from '~/core/io/rest';
-import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
+import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
-import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
+import { getProposalName } from '~/core/utils/utils';
+
+function percentageFromCounts(count: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.floor((count / total) * 100);
+}
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -53,12 +58,6 @@ export async function GovernanceProposalsList({ spaceId, page }: Props): Promise
   ]);
 
   const { proposals, hasMore } = result;
-
-  const userVotesByProposalId = proposals.reduce((acc, p) => {
-    if (p.userVotes.length === 0) return acc;
-
-    return acc.set(p.id, p.userVotes[0].vote);
-  }, new Map<string, SubstreamVote['vote']>());
 
   if (proposals.length === 0) {
     return {
@@ -99,11 +98,9 @@ export async function GovernanceProposalsList({ spaceId, page }: Props): Promise
               <div className="flex items-center justify-between">
                 <div className="inline-flex flex-[3] items-center gap-8">
                   <GovernanceProposalVoteState
-                    votes={{
-                      totalCount: p.proposalVotes.totalCount,
-                      votes: p.proposalVotes.votes,
-                    }}
-                    userVote={userVotesByProposalId.get(p.id)}
+                    yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
+                    noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
+                    userVote={p.userVote}
                     user={
                       profile || connectedAddress
                         ? {
@@ -118,7 +115,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props): Promise
                 <GovernanceStatusChip
                   endTime={p.endTime}
                   status={p.status}
-                  yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
+                  yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
                 />
               </div>
             </Link>
@@ -152,53 +149,36 @@ type GovernanceProposal = {
   status: ProposalStatus;
   proposalVotes: {
     totalCount: number;
-    votes: SubstreamVote[];
+    yesCount: number;
+    noCount: number;
   };
-  userVotes: SubstreamVote[];
+  userVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
 };
 
 function apiProposalToGovernanceDto(
-  proposal: ApiProposalStatusResponse,
-  connectedAddress: string | undefined,
+  proposal: ApiProposalListItem,
   maybeProfile?: Profile
 ): GovernanceProposal {
   const profile = maybeProfile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
-  // Get proposal name from actions
   const firstAction = proposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
-
-  // Convert API votes to internal format
-  const votes: SubstreamVote[] = proposal.votes.voters.map(v => ({
-    vote: convertVoteOption(v.vote),
-    accountId: Address(v.voterId),
-  }));
-
-  // Build user votes from the API's userVote field
-  // Use the connected user's address as the accountId (since we passed voterId to the API)
-  const userVotes: SubstreamVote[] = proposal.userVote && connectedAddress
-    ? [
-        {
-          vote: convertVoteOption(proposal.userVote),
-          accountId: Address(connectedAddress),
-        },
-      ]
-    : [];
 
   return {
     id: proposal.proposalId,
     name: proposal.name,
     type: proposalType,
-    createdAt: proposal.timing.startTime, // Use startTime as createdAt approximation
+    createdAt: proposal.timing.startTime,
     createdAtBlock: '0',
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
     createdBy: profile,
-    userVotes,
+    userVote: proposal.userVote ? convertVoteOption(proposal.userVote) : undefined,
     proposalVotes: {
       totalCount: proposal.votes.total,
-      votes,
+      yesCount: proposal.votes.yes,
+      noCount: proposal.votes.no,
     },
   };
 }
@@ -221,7 +201,7 @@ async function fetchProposalsByStatus({
   limit: number;
   orderBy?: 'created_at' | 'end_time' | 'start_time';
   orderDirection?: 'asc' | 'desc';
-}): Promise<readonly ApiProposalStatusResponse[]> {
+}): Promise<readonly ApiProposalListItem[]> {
   const config = Environment.getConfig();
 
   const params = new URLSearchParams();
@@ -351,7 +331,7 @@ async function fetchGovernanceProposals({
 
   const proposals = paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    return apiProposalToGovernanceDto(p, connectedAddress, maybeProfile);
+    return apiProposalToGovernanceDto(p, maybeProfile);
   });
 
   return { proposals, hasMore };

@@ -10,7 +10,7 @@ import {
   mapActionTypeToProposalType,
   mapProposalStatus,
   encodePathSegment,
-  type ApiProposalStatusResponse,
+  type ApiProposalListItem,
 } from '../rest';
 import { AbortError } from './errors';
 import { defaultProfile, fetchProfilesBySpaceIds } from './fetch-profile';
@@ -25,7 +25,7 @@ export interface FetchProposalsOptions {
 /**
  * Convert API proposal response to ProposalWithoutVoters.
  */
-function apiProposalToDto(proposal: ApiProposalStatusResponse, profile?: Profile): ProposalWithoutVoters {
+function apiProposalToDto(proposal: ApiProposalListItem, profile?: Profile): ProposalWithoutVoters {
   const profileData: Profile = profile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
   const firstAction = proposal.actions[0];
@@ -73,7 +73,7 @@ export async function fetchCompletedProposals({
 
   // For page-based pagination, we need to fetch pages sequentially
   let cursor: string | undefined;
-  let proposals: readonly ApiProposalStatusResponse[] = [];
+  let proposals: readonly ApiProposalListItem[] = [];
 
   for (let i = 0; i <= page; i++) {
     const pageParams = new URLSearchParams(params);
