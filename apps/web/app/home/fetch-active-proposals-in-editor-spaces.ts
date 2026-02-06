@@ -4,10 +4,10 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { ProposalDto } from '~/core/io/dto/proposals';
-import { SubstreamProposal } from '~/core/io/substream-schema';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamProposal } from '~/core/io/substream-schema';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
@@ -75,7 +75,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
       nodes {
         id
         type
-        onchainProposalId
 
         edit {
           id

@@ -22,10 +22,10 @@ import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
 import { OmitStrict } from '~/core/types';
+import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';

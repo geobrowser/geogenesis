@@ -1,5 +1,6 @@
 'use client';
 
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { type Hex, encodeFunctionData } from 'viem';
@@ -11,8 +12,6 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { IdUtils } from '@geoprotocol/geo-sdk';
-
 import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
@@ -125,14 +124,7 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
         const callData = encodeFunctionData({
           functionName: 'enter',
           abi: SpaceRegistryAbi,
-          args: [
-            fromSpaceId,
-            toSpaceId,
-            GOVERNANCE_ACTIONS.PROPOSAL_CREATED,
-            EMPTY_TOPIC_HEX,
-            data,
-            EMPTY_SIGNATURE,
-          ],
+          args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
         });
 
         const hash = yield* tx(callData);

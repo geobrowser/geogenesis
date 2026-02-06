@@ -70,10 +70,8 @@ export default async function GovernancePage(props: Props) {
           All Proposals
         </SmallButton> */}
         <React.Suspense fallback="Loading initial...">
-          <GovernanceProposalsList page={0} spaceId={params.id} />
+          <InitialGovernanceProposals spaceId={params.id} />
         </React.Suspense>
-
-        <GovernanceProposalsListInfiniteScroll spaceId={params.id} page={0} />
       </div>
 
       <ActiveProposal connectedAddress={connectedAddress} spaceId={params.id} proposalId={searchParams.proposalId} />
@@ -84,6 +82,16 @@ export default async function GovernancePage(props: Props) {
 function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex w-full flex-col items-center gap-1 rounded-lg border border-grey-02 py-3">{children}</div>
+  );
+}
+
+async function InitialGovernanceProposals({ spaceId }: { spaceId: string }) {
+  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0 });
+  return (
+    <>
+      {node}
+      {hasMore && <GovernanceProposalsListInfiniteScroll spaceId={spaceId} page={0} initialHasMore={hasMore} />}
+    </>
   );
 }
 
@@ -99,6 +107,16 @@ interface NetworkResult {
   };
 }
 
+// Filter to exclude membership proposals from counts
+// Membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR) are shown in the home feed instead
+const EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER = `
+  proposalActionsConnection: {
+    none: {
+      actionType: { in: [ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR] }
+    }
+  }
+`;
+
 async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const nowSeconds = Math.floor(Date.now() / 1000).toString();
 
@@ -111,6 +129,7 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
           spaceId: { is: "${id}" }
           endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
           executedAt: { isNull: true }
+          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount
@@ -120,6 +139,7 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
         filter: {
           spaceId: { is: "${id}" }
           executedAt: { isNull: false }
+          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount
@@ -130,6 +150,7 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
           spaceId: { is: "${id}" }
           endTime: { lessThan: "${nowSeconds}" }
           executedAt: { isNull: true }
+          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount

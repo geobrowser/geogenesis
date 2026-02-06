@@ -5,14 +5,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   experimental: {
-    optimizePackageImports: [
-      'effect',
-      'viem',
-      'wagmi',
-      'mapbox-gl',
-      '@tiptap/core',
-      '@tiptap/react',
-    ],
+    optimizePackageImports: ['effect', 'viem', 'wagmi', 'mapbox-gl', '@tiptap/core', '@tiptap/react'],
   },
   images: {
     remotePatterns: [

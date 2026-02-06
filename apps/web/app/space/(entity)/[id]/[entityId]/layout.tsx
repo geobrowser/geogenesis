@@ -7,9 +7,9 @@ import { Metadata } from 'next';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TabEntity } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity, sortRelations } from '~/core/utils/utils';
-import { Entity, Relation } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 

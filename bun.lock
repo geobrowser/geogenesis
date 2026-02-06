@@ -22,7 +22,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@effect/opentelemetry": "^0.59.3",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.5.0",
+        "@geoprotocol/geo-sdk": "^0.6.0",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.208.0",
         "@opentelemetry/sdk-trace-base": "^2.4.0",
@@ -63,7 +63,7 @@
         "@vercel/analytics": "^1.4.1",
         "@vercel/og": "^0.6.4",
         "@xstate/store": "^3.15.0",
-        "babel-plugin-react-compiler": "19.1.0-rc.2",
+        "babel-plugin-react-compiler": "1.0.0",
         "boring-avatars": "^1.10.1",
         "class-variance-authority": "^0.7.0",
         "classnames": "^2.3.2",
@@ -378,7 +378,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.5.0", "", { "dependencies": { "@geoprotocol/grc-20": "^0.3.0", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-+zZYxyRc0Jn0uSL+MAFVjeJ1wFWtzDNTuK4VlqahHsxD8+tXwRVGm6+SAfi1sweXTRIfoo1xO6/+c/EAJUSY0Q=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.6.0", "", { "dependencies": { "@geoprotocol/grc-20": "^0.3.0", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-b+z2CeS4N7DVPLIfMagYjGKQQMEirAul7360bU6FnGF1mamHJdNCb4Asn30/xjrP2kcxE+iK/7KmPtCIbg8sOA=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.3.0", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-Nd8lge6lAZxOeNYxmMzoTC8cYCEwN1RDaLod3IQO1DQnMzu7Qhv7F/x9ZnbZryO1wkbSSRQ4Z62CL6xf+BNrVQ=="],
 
@@ -1408,7 +1408,7 @@
 
     "axobject-query": ["axobject-query@4.1.0", "", {}, "sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ=="],
 
-    "babel-plugin-react-compiler": ["babel-plugin-react-compiler@19.1.0-rc.2", "", { "dependencies": { "@babel/types": "^7.26.0" } }, "sha512-kSNA//p5fMO6ypG8EkEVPIqAjwIXm5tMjfD1XRPL/sRjYSbJ6UsvORfaeolNWnZ9n310aM0xJP7peW26BuCVzA=="],
+    "babel-plugin-react-compiler": ["babel-plugin-react-compiler@1.0.0", "", { "dependencies": { "@babel/types": "^7.26.0" } }, "sha512-Ixm8tFfoKKIPYdCCKYTsqv+Fd4IJ0DQqMyEimo+pxUOMUR9cVPlwTrFt9Avu+3cb6Zp3mAzl+t1MrG2fxxKsxw=="],
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
