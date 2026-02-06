@@ -28,7 +28,17 @@ type DeployArgs = {
   entityId?: string;
 };
 
-const PUBLIC_GOVERNANCE_TYPES: SpaceType[] = ['dao', 'academic-field', 'industry', 'interest', 'region', 'protocol'];
+const PUBLIC_GOVERNANCE_TYPES: SpaceType[] = [
+  'dao',
+  'academic-field',
+  'company',
+  'government-org',
+  'industry',
+  'interest',
+  'nonprofit',
+  'region',
+  'protocol',
+];
 
 export function useDeploySpace() {
   const { smartAccount } = useSmartAccount();
