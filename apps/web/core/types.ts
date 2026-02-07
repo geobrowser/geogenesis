@@ -87,6 +87,8 @@ export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' |
  */
 export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
   BOOLEAN: 'BOOL',
+  INTEGER: 'INT64',
+  CHECKBOX: 'BOOL',
 } as const;
 
 // ==============================================================================

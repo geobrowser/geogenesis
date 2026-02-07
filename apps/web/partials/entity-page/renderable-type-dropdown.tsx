@@ -9,46 +9,16 @@ import { useState } from 'react';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';
 
-import { Address } from '~/design-system/icons/address';
-import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
-import { Date } from '~/design-system/icons/date';
-import { GeoLocation } from '~/design-system/icons/geo-location';
-import { Image } from '~/design-system/icons/image';
-import { Number } from '~/design-system/icons/number';
-import { Place } from '~/design-system/icons/place';
-import { Point } from '~/design-system/icons/point';
-import { Relation } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
-import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
+import { TYPE_ICONS } from './type-icons';
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
   baseDataType?: string;
 }
-
-const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName; className?: string }>> = {
-  TEXT: Text,
-  URL: Url,
-  RELATION: Relation,
-  IMAGE: Image,
-  VIDEO: VideoSmall,
-  BOOL: CheckboxChecked,
-  INT64: Number,
-  FLOAT64: Number,
-  DECIMAL: Number,
-  DATE: Date,
-  DATETIME: Date,
-  TIME: Date,
-  POINT: Point,
-  GEO_LOCATION: GeoLocation,
-  PLACE: Place,
-  ADDRESS: Address,
-};
 
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
@@ -72,12 +42,12 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     onClick: (value: SwitchableRenderableType) => {
       onChange?.(value);
     },
-    Icon: icons[key],
+    Icon: TYPE_ICONS[key],
   }));
 
   let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName; className?: string }>;
   if (value) {
-    Icon = icons[value];
+    Icon = TYPE_ICONS[value];
   }
 
   let label = 'Set property type';

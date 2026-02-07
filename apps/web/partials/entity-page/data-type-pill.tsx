@@ -2,29 +2,12 @@
 
 import * as React from 'react';
 
-import {
-  DataType,
-  FlattenedRenderType,
-  RawRenderableType,
-  SWITCHABLE_RENDERABLE_TYPE_LABELS,
-  SwitchableRenderableType,
-} from '~/core/types';
+import { DataType, RawRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Address } from '~/design-system/icons/address';
-import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
-import { Date } from '~/design-system/icons/date';
-import { GeoLocation } from '~/design-system/icons/geo-location';
-import { Image } from '~/design-system/icons/image';
-import { Number } from '~/design-system/icons/number';
-import { Place } from '~/design-system/icons/place';
-import { Point } from '~/design-system/icons/point';
-import { Relation } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
-import { VideoSmall } from '~/design-system/icons/video-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { ColorName } from '~/design-system/theme/colors';
+
+import { resolveRenderableTypeKey, TYPE_ICONS, UppercaseDisplayType } from './type-icons';
 
 interface DataTypePillProps {
   dataType: DataType;
@@ -36,33 +19,12 @@ interface DataTypePillProps {
   iconOnly?: boolean;
 }
 
-// Type for all possible uppercase display types
-type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
-
-// Icon mapping for data types and renderable types
-const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName; className?: string }>> = {
-  TEXT: Text,
-  INT64: Number,
-  FLOAT64: Number,
-  DECIMAL: Number,
-  BOOL: CheckboxChecked,
-  DATE: Date,
-  DATETIME: Date,
-  TIME: Date,
-  POINT: Point,
-  RELATION: Relation,
-  URL: Url,
-  IMAGE: Image,
-  VIDEO: VideoSmall,
-  GEO_LOCATION: GeoLocation,
-  PLACE: Place,
-  ADDRESS: Address,
-};
-
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {
   // Determine what to display
   const hasRenderableType = !!renderableType;
   const displayTypeName = renderableType?.name?.toUpperCase() || dataType;
+
+  console.log('[DataTypePill] dataType:', dataType, 'renderableType:', renderableType); // Debug log
 
   // Get the appropriate entity ID for linking
   let targetId: string | null = null;
@@ -71,8 +33,8 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
     targetId = renderableType.id;
   }
 
-  // Get the appropriate icon - normalize the name to uppercase to match TYPE_ICONS keys
-  const iconKey = (renderableType?.name?.toUpperCase() || dataType) as UppercaseDisplayType;
+  const renderableTypeKey = resolveRenderableTypeKey(renderableType?.name, renderableType?.id);
+  const iconKey = ((renderableTypeKey || dataType) as UppercaseDisplayType) || 'TEXT';
 
   // Safe lookup with fallback
   const IconComponent =
@@ -81,14 +43,14 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
       : TYPE_ICONS[dataType.toUpperCase() as UppercaseDisplayType] || TYPE_ICONS.TEXT;
 
   // Format display type: use SWITCHABLE_RENDERABLE_TYPE_LABELS if available, otherwise capitalize first letter of each word
-  const upperDisplayType = displayTypeName.toUpperCase() as SwitchableRenderableType;
-  const formattedType =
-    SWITCHABLE_RENDERABLE_TYPE_LABELS[upperDisplayType] ||
-    displayTypeName
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  const formattedType = renderableTypeKey
+    ? SWITCHABLE_RENDERABLE_TYPE_LABELS[renderableTypeKey]
+    : SWITCHABLE_RENDERABLE_TYPE_LABELS[displayTypeName.toUpperCase() as SwitchableRenderableType] ||
+      displayTypeName
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
 
   // Determine if the pill should be clickable
   // Clickable only if we have a valid target ID
