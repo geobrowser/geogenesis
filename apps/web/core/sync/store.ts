@@ -147,6 +147,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
+
+    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
   }
 
   public hydrateWith(entities: Entity[]) {
@@ -490,5 +492,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
         }),
       ];
     });
+
+    this.stream.emit({ type: GeoEventStream.CHANGES_PUBLISHED, valueIds, relationIds });
   }
 }
