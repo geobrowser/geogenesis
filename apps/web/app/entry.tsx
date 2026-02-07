@@ -50,7 +50,6 @@ export function App({ children }: { children: React.ReactNode }) {
         <Toast />
         <FlowBar />
         <ReviewChanges />
-        {/* @TODO remove */}
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}
