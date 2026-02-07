@@ -215,7 +215,9 @@ export const ReviewChanges = () => {
             )}
           </div>
           <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-            <Pending isPending={isPublishing}>Propose edits</Pending>
+            <Pending isPending={isPublishing}>
+              {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
+            </Pending>
           </Button>
         </div>
         <div className="px-2">
