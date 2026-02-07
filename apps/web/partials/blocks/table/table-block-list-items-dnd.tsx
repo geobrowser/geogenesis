@@ -345,17 +345,17 @@ const SortableItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {hovered && isEditing && (
-        <PositionBox
-          handleMove={handleMove}
-          position={position + 1}
-          totalEntries={totalEntries}
-          pageSize={pageSize}
-          pageNumber={pageNumber}
-          className="-left-[152px] h-full items-center"
-        />
-      )}
       <div {...attributes} {...listeners} className="flex items-center">
+        {hovered && isEditing && (
+          <PositionBox
+            handleMove={handleMove}
+            position={position + 1}
+            totalEntries={totalEntries}
+            pageSize={pageSize}
+            pageNumber={pageNumber}
+            className="-left-[152px] h-full items-center"
+          />
+        )}
         <TableBlockListItem
           isEditing={isEditing}
           key={`${row.entityId}-grabbed`}

@@ -339,19 +339,18 @@ const SortableItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {hovered && isEditing && (
-        <PositionBox
-          handleMove={handleMove}
-          position={position + 1}
-          totalEntries={totalEntries}
-          pageSize={pageSize}
-          pageNumber={pageNumber}
-          className="-right-[58px] top-4 z-50 flex-col-reverse items-center"
-          iconClassName=" p-[6px] rounded bg-white"
-        />
-      )}
-
       <div {...attributes} {...listeners} className="">
+        {hovered && isEditing && (
+          <PositionBox
+            handleMove={handleMove}
+            position={position + 1}
+            totalEntries={totalEntries}
+            pageSize={pageSize}
+            pageNumber={pageNumber}
+            className="-right-[58px] top-4 z-50 flex-col-reverse items-center"
+            iconClassName=" p-[6px] rounded bg-white"
+          />
+        )}
         <TableBlockGalleryItem
           isEditing={isEditing}
           key={`${row.entityId}-grabbed`}
