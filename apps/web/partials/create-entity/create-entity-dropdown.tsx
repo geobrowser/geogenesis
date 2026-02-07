@@ -48,7 +48,7 @@ export function CreateEntityDropdown() {
           <MenuItem
             onClick={() => {
               const entityId = ID.createEntityId();
-              router.push(NavUtils.toEntity(spaceId, entityId));
+              router.push(`${NavUtils.toEntity(spaceId, entityId)}?edit=true`);
             }}
           >
             <p className="text-center text-button">New entity</p>
