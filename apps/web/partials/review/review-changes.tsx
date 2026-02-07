@@ -104,7 +104,8 @@ export const ReviewChanges = () => {
     }
   }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
 
-  const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
+  const rawProposalName = proposals[activeSpace]?.name ?? '';
+  const proposalName = rawProposalName.trim();
 
   const valuesFromSpace = useValues({
     selector: t => t.spaceId === activeSpace && t.isLocal === true,
@@ -226,7 +227,7 @@ export const ReviewChanges = () => {
               <div className="text-body">Proposal name</div>
               <input
                 type="text"
-                value={proposalName}
+                value={rawProposalName}
                 onChange={e => handleProposalNameChange(e.target.value)}
                 placeholder="Name your proposal..."
                 className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"

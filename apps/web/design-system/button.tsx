@@ -157,7 +157,7 @@ export const SmallButton = forwardRef(function SmallButton(
 });
 
 const defaultClassNameAddTypeButton =
-  'box-content flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-[7px] text-[1rem] font-normal text-grey-04';
+  'flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-[7px] text-[1rem] font-normal text-grey-04 box-border';
 
 export const AddTypeButton = forwardRef(function AddTypeButton(
   { icon, className = defaultClassNameAddTypeButton, style = {}, label, ...rest }: SquareButtonProps,

@@ -160,6 +160,9 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               });
             }
           }}
+          placeholder="Find or create property..."
+          advanced={false}
+          showIDs={false}
         />
       </div>
     </div>
