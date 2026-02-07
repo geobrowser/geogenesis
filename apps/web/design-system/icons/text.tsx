@@ -4,13 +4,21 @@ import { ColorName, colors } from '~/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;
+  className?: string;
 }
 
-export function Text({ color }: Props) {
+export function Text({ color, className }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <path
         d="M3.51811 4.51818L0 13.3561H1.56526L2.50441 10.9091H6.00761L6.94677 13.3561H8.52694L5.00883 4.51818H3.51811ZM4.24856 6.34621L5.50077 9.61364H2.99635L4.24856 6.34621Z"
         fill={themeColor}
