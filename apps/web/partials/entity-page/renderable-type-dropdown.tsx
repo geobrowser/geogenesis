@@ -13,7 +13,7 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { ColorName } from '~/design-system/theme/colors';
 
-import { TYPE_ICONS } from './type-icons';
+import { TypeIconComponent, TYPE_ICONS } from './type-icons';
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
@@ -45,7 +45,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     Icon: TYPE_ICONS[key],
   }));
 
-  let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName; className?: string }>;
+  let Icon = DashedCircle as TypeIconComponent;
   if (value) {
     Icon = TYPE_ICONS[value];
   }
