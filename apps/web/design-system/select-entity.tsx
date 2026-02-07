@@ -115,7 +115,7 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
-  const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>(undefined);
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 

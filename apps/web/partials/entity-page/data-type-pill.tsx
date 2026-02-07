@@ -7,7 +7,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { resolveRenderableTypeKey, TYPE_ICONS, UppercaseDisplayType } from './type-icons';
+import { resolveRenderableTypeKey, TYPE_ICONS } from './type-icons';
 
 interface DataTypePillProps {
   dataType: DataType;
@@ -24,7 +24,6 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   const hasRenderableType = !!renderableType;
   const displayTypeName = renderableType?.name?.toUpperCase() || dataType;
 
-  console.log('[DataTypePill] dataType:', dataType, 'renderableType:', renderableType); // Debug log
 
   // Get the appropriate entity ID for linking
   let targetId: string | null = null;
@@ -34,23 +33,20 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   }
 
   const renderableTypeKey = resolveRenderableTypeKey(renderableType?.name, renderableType?.id);
-  const iconKey = ((renderableTypeKey || dataType) as UppercaseDisplayType) || 'TEXT';
-
-  // Safe lookup with fallback
-  const IconComponent =
-    iconKey in TYPE_ICONS
-      ? TYPE_ICONS[iconKey]
-      : TYPE_ICONS[dataType.toUpperCase() as UppercaseDisplayType] || TYPE_ICONS.TEXT;
+  const dataTypeKey = dataType in TYPE_ICONS ? (dataType as SwitchableRenderableType) : undefined;
+  const iconKey = renderableTypeKey || dataTypeKey || 'TEXT';
+  const IconComponent = TYPE_ICONS[iconKey];
 
   // Format display type: use SWITCHABLE_RENDERABLE_TYPE_LABELS if available, otherwise capitalize first letter of each word
   const formattedType = renderableTypeKey
     ? SWITCHABLE_RENDERABLE_TYPE_LABELS[renderableTypeKey]
-    : SWITCHABLE_RENDERABLE_TYPE_LABELS[displayTypeName.toUpperCase() as SwitchableRenderableType] ||
-      displayTypeName
-        .toLowerCase()
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+    : dataTypeKey
+      ? SWITCHABLE_RENDERABLE_TYPE_LABELS[dataTypeKey]
+      : displayTypeName
+          .toLowerCase()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
 
   // Determine if the pill should be clickable
   // Clickable only if we have a valid target ID

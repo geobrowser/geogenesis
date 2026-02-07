@@ -1,9 +1,7 @@
-'use client';
-
 import * as React from 'react';
 
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import { FlattenedRenderType, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { Address } from '~/design-system/icons/address';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
@@ -19,13 +17,10 @@ import { Url } from '~/design-system/icons/url';
 import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
-// Type for all possible uppercase display types
-export type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
-
 export type TypeIconComponent = React.ComponentType<{ color?: ColorName; className?: string }>;
 
 // Icon mapping for data types and renderable types
-export const TYPE_ICONS: Record<UppercaseDisplayType, TypeIconComponent> = {
+export const TYPE_ICONS: Record<SwitchableRenderableType, TypeIconComponent> = {
   TEXT: Text,
   INT64: Number,
   FLOAT64: Number,
