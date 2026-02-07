@@ -24,7 +24,7 @@ export const EMPTY_SIGNATURE = '0x' as Hex;
 export const GOVERNANCE_ACTIONS = {
   /** keccak256('GOVERNANCE.MEMBERSHIP_REQUESTED') - creates a fast-path proposal */
   MEMBERSHIP_REQUESTED: '0xe048e0dc301b1bb4e2446608d8858ecf95c326d7241c9943b14f647fd3a78d9a' as Hex,
-  /** keccak256('GOVERNANCE.PROPOSAL_CREATED') - creates a slow-path proposal */
+  /** keccak256('GOVERNANCE.PROPOSAL_CREATED') - creates a proposal (slow or fast path depending on VotingMode) */
   PROPOSAL_CREATED: '0xcf4356ed126c00d2e547ace2f69991a972d322b45371d61ce5478b1cb9acb4c2' as Hex,
   /** keccak256('GOVERNANCE.PROPOSAL_VOTED') - votes on a proposal */
   PROPOSAL_VOTED: '0x4ebf5f29676cedf7e2e4d346a8433289278f95a9fda73691dc1ce24574d5819e' as Hex,
@@ -50,10 +50,10 @@ export const GOVERNANCE_ACTIONS = {
  * DAOSpace voting modes
  */
 export const VOTING_MODE = {
-  /** Fast path - flat count threshold, immediate execution */
-  FAST: 0,
   /** Slow path - percentage threshold, wait for voting period */
-  SLOW: 1,
+  SLOW: 0,
+  /** Fast path - flat count threshold, immediate execution */
+  FAST: 1,
 } as const;
 
 /**

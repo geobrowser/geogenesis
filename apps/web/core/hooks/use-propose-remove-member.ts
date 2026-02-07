@@ -32,7 +32,7 @@ interface UseProposeRemoveMemberArgs {
 interface ProposeRemoveMemberParams {
   /** The space ID (bytes16 hex without 0x prefix) of the member to remove */
   targetMemberSpaceId: string;
-  /** Voting mode: 'fast' (threshold-based) or 'slow' (duration-based). Defaults to 'slow'. */
+  /** Voting mode: 'fast' (threshold-based) or 'slow' (duration-based). Defaults to 'fast' since removeMember is fast-path-valid. */
   votingMode?: 'fast' | 'slow';
 }
 
@@ -48,7 +48,7 @@ export function useProposeRemoveMember({ spaceId }: UseProposeRemoveMemberArgs) 
   });
 
   const handleProposeRemoveMember = useCallback(
-    async ({ targetMemberSpaceId, votingMode = 'slow' }: ProposeRemoveMemberParams) => {
+    async ({ targetMemberSpaceId, votingMode = 'fast' }: ProposeRemoveMemberParams) => {
       if (!smartAccount) {
         const message = 'Please connect your wallet to propose removing a member';
         console.error('No smart account available');
