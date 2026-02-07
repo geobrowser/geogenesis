@@ -294,13 +294,13 @@ const spaceTypeOptions: { image: string; label: string; value: SpaceType; govern
     value: 'academic-field',
     governance: 'DAO',
   },
-  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'PERSONAL' },
+  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'DAO' },
   { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'DAO' },
   {
     image: '/images/onboarding/gov-org.png',
     label: 'Government org',
     value: 'government-org',
-    governance: 'PERSONAL',
+    governance: 'DAO',
   },
   { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'DAO' },
   {
@@ -310,7 +310,7 @@ const spaceTypeOptions: { image: string; label: string; value: SpaceType; govern
     governance: 'DAO',
   },
   { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'DAO' },
-  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'PERSONAL' },
+  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'DAO' },
   { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'DAO' },
 ];
 

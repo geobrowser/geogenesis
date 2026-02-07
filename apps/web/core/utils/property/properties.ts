@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import {
   ADDRESS,
+  DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
@@ -14,12 +15,25 @@ import { getStrictRenderableType } from '~/core/io/dto/properties';
 import {
   DataType,
   Entity,
-  LEGACY_DATA_TYPE_MAPPING,
   Property,
   Relation,
   SwitchableRenderableType,
   Value,
 } from '~/core/types';
+
+/** Reverse mapping: data type entity ID → DataType string */
+const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
+  Object.entries(DATA_TYPE_ENTITY_IDS).map(([k, v]) => [v, k as DataType])
+);
+
+/** Resolves a data type entity ID to its DataType string. */
+export function getDataTypeFromEntityId(entityId: string): DataType {
+  const dataType = ENTITY_ID_TO_DATA_TYPE[entityId];
+  if (!dataType) {
+    console.warn(`Unknown data type entity ID: ${entityId}, defaulting to TEXT`);
+  }
+  return dataType ?? 'TEXT';
+}
 
 /**
  * Interface for property type mapping configuration
@@ -178,14 +192,16 @@ export function reconstructFromStore(
     return null;
   }
 
-  // Get the dataType value
-  const dataTypeValue = getValues({
-    selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
+  // Get the data type relation
+  const dataTypeRelation = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === DATA_TYPE_PROPERTY,
   })[0];
 
-  if (!dataTypeValue) {
+  if (!dataTypeRelation) {
     return null;
   }
+
+  const dataType: DataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
 
   // Get the name value
   const nameValue = getValues({
@@ -206,34 +222,6 @@ export function reconstructFromStore(
   const unitRelation = getRelations({
     selector: r => r.fromEntity.id === id && r.type.id === UNIT_PROPERTY,
   })[0];
-
-  // Validate and cast dataType (GRC-20 v2 types)
-  const validDataTypes: DataType[] = [
-    'TEXT',
-    'INT64',
-    'FLOAT64',
-    'DECIMAL',
-    'BOOL',
-    'DATE',
-    'DATETIME',
-    'TIME',
-    'POINT',
-    'RELATION',
-    'BYTES',
-    'SCHEDULE',
-    'EMBEDDING',
-  ];
-  const dataTypeString = String(dataTypeValue.value).toUpperCase();
-
-  // Check for legacy type mapping first, then validate against current types
-  let dataType: DataType;
-  if (dataTypeString in LEGACY_DATA_TYPE_MAPPING) {
-    dataType = LEGACY_DATA_TYPE_MAPPING[dataTypeString]!;
-  } else if (validDataTypes.includes(dataTypeString as DataType)) {
-    dataType = dataTypeString as DataType;
-  } else {
-    dataType = 'TEXT';
-  }
 
   // Get relation value types
   const relationValueTypes = getRelations({

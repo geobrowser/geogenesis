@@ -89,6 +89,7 @@ export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
   BOOLEAN: 'BOOL',
   INTEGER: 'INT64',
   CHECKBOX: 'BOOL',
+  PLACE: 'RELATION',
 } as const;
 
 // ==============================================================================
