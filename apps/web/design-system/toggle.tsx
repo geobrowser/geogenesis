@@ -13,7 +13,7 @@ type ToggleProps = {
 export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
     <div
-      className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
+      className={cx('relative inline-flex h-2.5 w-4 items-center rounded-full p-px', className)}
       style={{
         // @ts-expect-error idk
         backgroundColor: checked ? colors.light.text : colors.light['grey-03'],

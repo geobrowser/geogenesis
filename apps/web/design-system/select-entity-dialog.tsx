@@ -23,6 +23,8 @@ type SelectEntityAsPopoverProps = {
   }) => void;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
+  advanced?: boolean;
+  showIDs?: boolean;
 };
 
 export function SelectEntityAsPopover({
@@ -32,6 +34,8 @@ export function SelectEntityAsPopover({
   spaceId,
   relationValueTypes,
   placeholder,
+  advanced = true,
+  showIDs = true,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -56,6 +60,8 @@ export function SelectEntityAsPopover({
             onDone={onDone}
             onCreateEntity={onCreateEntity}
             variant="floating"
+            advanced={advanced}
+            showIDs={showIDs}
           />
         </Popover.Content>
       </Popover.Portal>
