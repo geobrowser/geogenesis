@@ -16,22 +16,18 @@ interface Props {
 export function HistoryItem({ spaceId, proposalId, createdAt, createdBy, name }: Props) {
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
-  // e.g. Mar 12, 2023
   const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 
-  // e.g. 13:41
   const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
 
-  // Older versions from before we added proposal names may not have a name, so we fall back to
-  // an address – date format.
   const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
 
   return (
@@ -62,5 +58,45 @@ export function HistoryItem({ spaceId, proposalId, createdAt, createdBy, name }:
         </div>
       </div>
     </PrefetchLink>
+  );
+}
+
+type EntityVersionItemProps = {
+  createdAt: string;
+  onClick: () => void;
+  isFirst?: boolean;
+};
+
+export function EntityVersionItem({ createdAt, onClick, isFirst }: EntityVersionItemProps) {
+  const date = new Date(createdAt);
+
+  const formattedDate = date.toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const formattedTime = date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative z-10 block w-full bg-white px-2 py-3 text-left text-grey-04 hover:bg-bg hover:text-text"
+    >
+      <div className="flex items-center justify-between">
+        <Text as="span" variant="metadataMedium" className="mb-1 truncate text-ellipsis !text-sm">
+          {isFirst ? 'Latest version' : `Version from ${formattedDate}`}
+        </Text>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-smallButton">
+          {formattedDate} · {formattedTime}
+        </p>
+      </div>
+    </button>
   );
 }

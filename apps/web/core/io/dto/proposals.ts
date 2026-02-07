@@ -17,7 +17,6 @@ export type Proposal = {
   id: string;
   editId: string;
   type: ProposalType;
-  onchainProposalId: string;
   name: string | null;
   createdBy: Profile;
   createdAt: number;
@@ -63,7 +62,6 @@ export function ProposalDto(
     createdAt: proposal.edit?.createdAt ?? 0,
     createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
-    onchainProposalId: proposal.onchainProposalId,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -129,7 +127,6 @@ export function ProposalWithoutVotersDto(
     createdAt: proposal.edit?.createdAt ?? 0,
     createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
-    onchainProposalId: proposal.onchainProposalId,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,

@@ -486,8 +486,8 @@ export const SelectEntity = ({
                                           </div>
                                         )}
                                         <div className="flex items-center gap-1.5">
-                                          {result.types.slice(0, 3).map(type => (
-                                            <Tag key={type.id}>{type.name}</Tag>
+                                          {result.types.slice(0, 3).map((type, index) => (
+                                            <Tag key={`${type.id}-${index}`}>{type.name}</Tag>
                                           ))}
                                           {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
                                         </div>

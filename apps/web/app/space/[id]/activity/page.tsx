@@ -20,8 +20,8 @@ export default async function Activity(props: Props) {
 const ActivitySkeleton = () => {
   return (
     <div className="divide-y divide-divider">
-      {new Array(3).fill(0).map(i => (
-        <div key={i} className="flex items-center gap-5 py-4">
+      {new Array(3).fill(0).map((_, index) => (
+        <div key={index} className="flex items-center gap-5 py-4">
           <div>
             <Skeleton className="size-10 rounded-md" />
           </div>

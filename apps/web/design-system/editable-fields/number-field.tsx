@@ -6,6 +6,7 @@ import { cva } from 'class-variance-authority';
 import * as React from 'react';
 
 import { useQueryEntity } from '~/core/sync/use-store';
+import type { DataType } from '~/core/types';
 import { GeoNumber } from '~/core/utils/utils';
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
   isEditing?: boolean;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   className?: string;
+  dataType?: DataType;
 };
 
 const numberFieldStyles = cva('', {
@@ -41,6 +43,7 @@ export function NumberField({
   isEditing = false,
   variant,
   className = '',
+  dataType,
 }: Props) {
   const [localValue, setLocalValue] = React.useState(value || '');
 
@@ -71,8 +74,8 @@ export function NumberField({
       <input
         type="text"
         className="m-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-        onBlur={e => onChangeWithValidation(e.currentTarget.value, onChange!)}
-        onChange={e => onChangeWithValidation(e.currentTarget.value, setLocalValue)}
+        onBlur={e => onChangeWithValidation(e.currentTarget.value, onChange!, dataType)}
+        onChange={e => onChangeWithValidation(e.currentTarget.value, setLocalValue, dataType)}
         value={localValue}
         placeholder={placeholder}
       />
@@ -83,11 +86,16 @@ export function NumberField({
   );
 }
 
-const onChangeWithValidation = (value: string, onChange: (v: string) => void) => {
-  const floatingRegex = /^-?\d*\.?\d*$/;
-  const integerRegex = /^-?\d+$/;
-
-  if (floatingRegex.test(value) || integerRegex.test(value)) {
-    onChange(value);
+const onChangeWithValidation = (value: string, onChange: (v: string) => void, dataType?: DataType) => {
+  if (dataType === 'INT64') {
+    const integerRegex = /^-?\d*$/;
+    if (integerRegex.test(value)) {
+      onChange(value);
+    }
+  } else {
+    const floatingRegex = /^-?\d*\.?\d*$/;
+    if (floatingRegex.test(value)) {
+      onChange(value);
+    }
   }
 };

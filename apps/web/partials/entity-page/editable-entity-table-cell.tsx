@@ -408,6 +408,7 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           value={value}
           format={property.format || undefined}
           unitId={rawValue?.options?.unit || property.unit || undefined}
+          dataType={property.dataType}
           onChange={value =>
             // onChangeEntry(
             //   {
@@ -498,6 +499,7 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           isEditing={true}
           value={value}
           propertyId={property.id}
+          dataType={property.dataType}
           onBlur={value => {
             // onChangeEntry(
             //   {

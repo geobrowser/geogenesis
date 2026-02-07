@@ -346,6 +346,7 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
           format={property.format || undefined}
           unitId={rawValue?.options?.unit || property.unit || undefined}
           isEditing={isEditing}
+          dataType={property.dataType}
           onChange={value => {
             // onChangeEntry(
             //   {
@@ -440,6 +441,7 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
           isEditing={true}
           value={value}
           propertyId={property.id}
+          dataType={property.dataType}
           onBlur={value => {
             // onChangeEntry(
             //   {

@@ -26,7 +26,7 @@ type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
  * Tries Pinata gateway first, falls back to Lighthouse if that fails.
  * Wraps Next.js Image component to preserve optimization.
  */
-export function GeoImage({ value, alt = '', ...props }: GeoImageProps) {
+export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
   const [useFallback, setUseFallback] = useState(false);
 
   const handleError = useCallback(() => {
@@ -39,7 +39,7 @@ export function GeoImage({ value, alt = '', ...props }: GeoImageProps) {
   const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
   const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
 
-  return <Image {...imageProps} src={src} alt={alt} onError={handleError} />;
+  return <Image {...imageProps} src={src} alt={alt} onError={handleError} unoptimized={unoptimized} />;
 }
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   /** The raw image value (ipfs:// URI, http URL, or static path) */

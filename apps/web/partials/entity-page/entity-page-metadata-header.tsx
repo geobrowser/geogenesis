@@ -18,8 +18,8 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
-import { Properties } from '~/core/utils/property';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { Properties } from '~/core/utils/property';
 
 import { Divider } from '~/design-system/divider';
 

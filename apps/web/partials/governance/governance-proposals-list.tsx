@@ -1,22 +1,29 @@
 /**
- * @TODO finish v2 API migration for governance proposals
+ * Governance proposals list component.
  *
- * Known issues:
- * - User vote filtering doesn't work yet (v2 uses memberSpaceId, not wallet address)
- * - ABSTAIN votes are mapped to REJECT (may need different handling)
- * - Proposal names come from metadata/actionType (may need improvement)
+ * Fetches and displays proposals for a space using the new REST API.
+ * Separates proposals into categories: executable, active, and completed.
  */
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
 
 import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
+import { fetchProfile, fetchProfilesBySpaceIds, defaultProfile } from '~/core/io/subgraph';
+import {
+  restFetch,
+  ApiProposalListResponseSchema,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  convertVoteOption,
+  encodePathSegment,
+  validateActionTypes,
+  isValidUUID,
+  type ApiProposalStatusResponse,
+} from '~/core/io/rest';
 import { Address, ProposalStatus, ProposalType, SubstreamVote } from '~/core/io/substream-schema';
-import { fetchProfile } from '~/core/io/subgraph';
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
 
@@ -32,13 +39,20 @@ interface Props {
   page: number;
 }
 
-export async function GovernanceProposalsList({ spaceId, page }: Props) {
+export type GovernanceProposalsListResult = {
+  node: React.ReactNode;
+  hasMore: boolean;
+};
+
+export async function GovernanceProposalsList({ spaceId, page }: Props): Promise<GovernanceProposalsListResult> {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [proposals, profile, space] = await Promise.all([
-    fetchProposals({ spaceId, first: 5, page, connectedAddress }),
+  const [result, profile, space] = await Promise.all([
+    fetchGovernanceProposals({ spaceId, first: 5, page, connectedAddress }),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
     cachedFetchSpace(spaceId),
   ]);
+
+  const { proposals, hasMore } = result;
 
   const userVotesByProposalId = proposals.reduce((acc, p) => {
     if (p.userVotes.length === 0) return acc;
@@ -46,64 +60,74 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     return acc.set(p.id, p.userVotes[0].vote);
   }, new Map<string, SubstreamVote['vote']>());
 
-  return (
-    <div className="flex flex-col divide-y divide-grey-01">
-      {proposals.map(p => {
-        return (
-          <Link
-            key={p.id}
-            href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-            className="flex w-full flex-col gap-4 py-6"
-          >
-            <div className="flex flex-col gap-2">
-              <h3 className="text-smallTitle">
-                {getProposalName({
-                  ...p,
-                  name: p.name ?? p.id,
-                  space: {
-                    id: spaceId,
-                    name: space?.entity?.name ?? '',
-                    image: space?.entity?.image ?? '',
-                  },
-                })}
-              </h3>
-              <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
-                <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                  <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
+  if (proposals.length === 0) {
+    return {
+      node: <p className="py-6 text-body text-grey-04">No proposals yet</p>,
+      hasMore: false,
+    };
+  }
+
+  return {
+    node: (
+      <div className="flex flex-col divide-y divide-grey-01">
+        {proposals.map(p => {
+          return (
+            <Link
+              key={p.id}
+              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+              className="flex w-full flex-col gap-4 py-6"
+            >
+              <div className="flex flex-col gap-2">
+                <h3 className="text-smallTitle">
+                  {getProposalName({
+                    ...p,
+                    name: p.name ?? p.id,
+                    space: {
+                      id: spaceId,
+                      name: space?.entity?.name ?? '',
+                      image: space?.entity?.image ?? '',
+                    },
+                  })}
+                </h3>
+                <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
+                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                    <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
+                  </div>
+                  <p>{p.createdBy.name ?? p.createdBy.id}</p>
                 </div>
-                <p>{p.createdBy.name ?? p.createdBy.id}</p>
               </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="inline-flex flex-[3] items-center gap-8">
-                <GovernanceProposalVoteState
-                  votes={{
-                    totalCount: p.proposalVotes.totalCount,
-                    votes: p.proposalVotes.votes,
-                  }}
-                  userVote={userVotesByProposalId.get(p.id)}
-                  user={
-                    profile || connectedAddress
-                      ? {
-                          address: connectedAddress,
-                          avatarUrl: profile?.avatarUrl ?? null,
-                        }
-                      : undefined
-                  }
+              <div className="flex items-center justify-between">
+                <div className="inline-flex flex-[3] items-center gap-8">
+                  <GovernanceProposalVoteState
+                    votes={{
+                      totalCount: p.proposalVotes.totalCount,
+                      votes: p.proposalVotes.votes,
+                    }}
+                    userVote={userVotesByProposalId.get(p.id)}
+                    user={
+                      profile || connectedAddress
+                        ? {
+                            address: connectedAddress,
+                            avatarUrl: profile?.avatarUrl ?? null,
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+
+                <GovernanceStatusChip
+                  endTime={p.endTime}
+                  status={p.status}
+                  yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
                 />
               </div>
-
-              <GovernanceStatusChip
-                endTime={p.endTime}
-                status={p.status}
-                yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
-              />
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
+            </Link>
+          );
+        })}
+      </div>
+    ),
+    hasMore,
+  };
 }
 
 export interface FetchActiveProposalsOptions {
@@ -112,47 +136,11 @@ export interface FetchActiveProposalsOptions {
   first?: number;
 }
 
-interface V2Proposal {
-  id: string;
-  createdAt: string;
-  createdAtBlock: string;
-  startTime: string;
-  endTime: string;
-  executedAt: string | null;
-  proposedBy: string;
-  proposalVotesConnection: {
-    totalCount: number;
-    nodes: Array<{
-      vote: 'YES' | 'NO' | 'ABSTAIN';
-      voterId: string;
-    }>;
-  };
-  proposalActions: Array<{
-    actionType: string;
-    contentUri: string | null;
-    metadata: string | null;
-  }>;
-  userVotes: {
-    nodes: Array<{
-      vote: 'YES' | 'NO' | 'ABSTAIN';
-      voterId: string;
-    }>;
-  };
-}
+// ============================================================================
+// Internal Types
+// ============================================================================
 
-interface NetworkResult {
-  executableProposals: {
-    nodes: V2Proposal[];
-  };
-  activeProposals: {
-    nodes: V2Proposal[];
-  };
-  completedProposals: {
-    nodes: V2Proposal[];
-  };
-}
-
-type ActiveProposal = {
+type GovernanceProposal = {
   id: string;
   name: string | null;
   type: ProposalType;
@@ -169,255 +157,131 @@ type ActiveProposal = {
   userVotes: SubstreamVote[];
 };
 
-function mapActionTypeToProposalType(actionType: string): ProposalType {
-  switch (actionType) {
-    case 'PUBLISH':
-      return 'ADD_EDIT';
-    case 'ADD_EDITOR':
-      return 'ADD_EDITOR';
-    case 'REMOVE_EDITOR':
-      return 'REMOVE_EDITOR';
-    case 'ADD_MEMBER':
-      return 'ADD_MEMBER';
-    case 'REMOVE_MEMBER':
-      return 'REMOVE_MEMBER';
-    case 'ADD_SUBSPACE':
-      return 'ADD_SUBSPACE';
-    case 'REMOVE_SUBSPACE':
-      return 'REMOVE_SUBSPACE';
-    default:
-      // Default to ADD_EDIT for unknown action types
-      return 'ADD_EDIT';
-  }
-}
+function apiProposalToGovernanceDto(
+  proposal: ApiProposalStatusResponse,
+  connectedAddress: string | undefined,
+  maybeProfile?: Profile
+): GovernanceProposal {
+  const profile = maybeProfile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
-// Convert v2 VoteOption to v1 vote format
-function convertVoteOption(vote: 'YES' | 'NO' | 'ABSTAIN'): 'ACCEPT' | 'REJECT' {
-  return vote === 'YES' ? 'ACCEPT' : 'REJECT';
-}
-
-function getProposalStatus(proposal: V2Proposal): ProposalStatus {
-  const now = Math.floor(Date.now() / 1000);
-  const endTime = Number(proposal.endTime);
-
-  if (proposal.executedAt) {
-    return 'ACCEPTED';
-  }
-  if (endTime < now) {
-    return 'REJECTED'; // Expired without execution
-  }
-  return 'PROPOSED';
-}
-
-function ActiveProposalsDto(proposal: V2Proposal, maybeProfile?: Profile): ActiveProposal {
-  const profile = maybeProfile ?? {
-    id: proposal.proposedBy,
-    spaceId: proposal.proposedBy,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: proposal.proposedBy as `0x${string}`,
-    profileLink: null,
-  };
-
-  // Get proposal name from metadata or action type
-  const firstAction = proposal.proposalActions[0];
-  const name = firstAction?.metadata ?? firstAction?.actionType ?? null;
+  // Get proposal name from actions
+  const firstAction = proposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
 
-  // @TODO make v2 standard
-  // Convert v2 votes to v1 format
-  const votes: SubstreamVote[] = proposal.proposalVotesConnection.nodes.map(v => ({
+  // Convert API votes to internal format
+  const votes: SubstreamVote[] = proposal.votes.voters.map(v => ({
     vote: convertVoteOption(v.vote),
     accountId: Address(v.voterId),
   }));
 
-  const userVotes: SubstreamVote[] = proposal.userVotes.nodes.map(v => ({
-    vote: convertVoteOption(v.vote),
-    accountId: Address(v.voterId),
-  }));
+  // Build user votes from the API's userVote field
+  // Use the connected user's address as the accountId (since we passed voterId to the API)
+  const userVotes: SubstreamVote[] = proposal.userVote && connectedAddress
+    ? [
+        {
+          vote: convertVoteOption(proposal.userVote),
+          accountId: Address(connectedAddress),
+        },
+      ]
+    : [];
 
   return {
-    id: proposal.id,
-    name,
+    id: proposal.proposalId,
+    name: proposal.name,
     type: proposalType,
-    createdAt: Number(proposal.createdAt) || 0,
-    createdAtBlock: proposal.createdAtBlock,
-    startTime: Number(proposal.startTime),
-    endTime: Number(proposal.endTime),
-    status: getProposalStatus(proposal),
+    createdAt: proposal.timing.startTime, // Use startTime as createdAt approximation
+    createdAtBlock: '0',
+    startTime: proposal.timing.startTime,
+    endTime: proposal.timing.endTime,
+    status: mapProposalStatus(proposal.status),
     createdBy: profile,
     userVotes,
     proposalVotes: {
-      totalCount: proposal.proposalVotesConnection.totalCount,
+      totalCount: proposal.votes.total,
       votes,
     },
   };
 }
 
-// Check if a string looks like a valid UUID (32 hex chars without dashes, or with dashes)
-const isValidUUID = (id: string | undefined): boolean => {
-  if (!id) return false;
-  // Remove dashes and check if it's 32 hex characters
-  const noDashes = id.replace(/-/g, '');
-  return /^[0-9a-f]{32}$/i.test(noDashes);
-};
+/**
+ * Fetch proposals by status using server-side filtering.
+ * Returns proposals filtered and sorted by the API.
+ */
+async function fetchProposalsByStatus({
+  spaceId,
+  connectedAddress,
+  statuses,
+  limit,
+  orderBy = 'end_time',
+  orderDirection = 'asc',
+}: {
+  spaceId: string;
+  connectedAddress: string | undefined;
+  statuses: string[];
+  limit: number;
+  orderBy?: 'created_at' | 'end_time' | 'start_time';
+  orderDirection?: 'asc' | 'desc';
+}): Promise<readonly ApiProposalStatusResponse[]> {
+  const config = Environment.getConfig();
 
-// v2 proposal fields fragment
-// Note: userVotes filter only works with valid UUID (memberSpaceId), not wallet addresses
-const getProposalFields = (connectedMemberSpaceId: string | undefined) => {
-  const hasValidMemberSpaceId = isValidUUID(connectedMemberSpaceId);
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('status', statuses.join(','));
+  params.set('orderBy', orderBy);
+  params.set('orderDirection', orderDirection);
 
-  return `
-  id
-  createdAt
-  createdAtBlock
-  startTime
-  endTime
-  executedAt
-  proposedBy
-  proposalVotesConnection {
-    totalCount
-    nodes {
-      vote
-      voterId
-    }
-  }
-  proposalActions {
-    actionType
-    contentUri
-    metadata
-  }
-  ${
-    hasValidMemberSpaceId
-      ? `userVotes: proposalVotesConnection(
-    filter: {
-      voterId: { is: "${connectedMemberSpaceId}" }
-    }
-  ) {
-    nodes {
-      vote
-      voterId
-    }
-  }`
-      : `userVotes: proposalVotesConnection(first: 0) {
-    nodes {
-      vote
-      voterId
-    }
-  }`
-  }
-`;
-};
+  // Exclude membership proposals
+  const excludeTypes = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
+  params.set('excludeActionTypes', excludeTypes.join(','));
 
-const getFetchActiveProposalsQuery = (
-  spaceId: string,
-  first: number,
-  skip: number,
-  connectedMemberSpaceId: string | undefined
-) => {
-  const nowSeconds = Math.floor(Date.now() / 1000).toString();
-  return `
-  activeProposals: proposalsConnection(
-    first: ${first}
-    offset: ${skip}
-    orderBy: END_TIME_DESC
-    filter: {
-      spaceId: { is: "${spaceId}" }
-      endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
-      executedAt: { isNull: true }
-    }
-  ) {
-    nodes {
-      ${getProposalFields(connectedMemberSpaceId)}
-    }
+  // If we have the user's address, pass it to get their votes
+  if (connectedAddress && isValidUUID(connectedAddress)) {
+    params.set('voterId', connectedAddress);
   }
-`;
-};
 
-const getFetchCompletedProposalsQuery = (
-  spaceId: string,
-  first: number,
-  skip: number,
-  connectedMemberSpaceId: string | undefined
-) => {
-  const nowSeconds = Math.floor(Date.now() / 1000).toString();
-  // Completed = executed OR (expired AND not executed)
-  // We fetch both executed and expired separately and merge client-side
-  // For now, fetch executed proposals (accepted)
-  return `
-  completedProposals: proposalsConnection(
-    first: ${first}
-    offset: ${skip}
-    orderBy: END_TIME_DESC
-    filter: {
-      spaceId: { is: "${spaceId}" }
-      or: [
-        { executedAt: { isNull: false } }
-        { and: [
-          { endTime: { lessThan: "${nowSeconds}" } }
-          { executedAt: { isNull: true } }
-        ]}
-      ]
-    }
-  ) {
-    nodes {
-      ${getProposalFields(connectedMemberSpaceId)}
-    }
+  const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
+
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
+      })
+    )
+  );
+
+  if (Either.isLeft(result)) {
+    console.error(`Failed to fetch proposals for space ${spaceId}:`, result.left);
+    return [];
   }
-`;
-};
+
+  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposals for space ${spaceId}:`, decoded.left);
+    return [];
+  }
+
+  return decoded.right.proposals;
+}
 
 /**
- * Content proposals have reached quorum when at least one editor has voted, except
- * in cases where there is only one editor vote, and the vote is from the creator
- * of the proposal. Quorum requires at least one _additional_ editor vote.
+ * Fetch governance proposals for a space using the new REST API.
  *
- * Content proposals are "passed" when at least one editor has voted and the votes
- * for the proposal are > 50%.
+ * Excludes membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR)
+ * which are shown in the home feed instead.
+ *
+ * Uses server-side status filtering to fetch proposals in priority order:
+ * 1. EXECUTABLE - proposals ready to execute (sorted by end_time asc, oldest first)
+ * 2. PROPOSED - active voting proposals (sorted by end_time asc, ending soonest first)
+ * 3. ACCEPTED/REJECTED - completed proposals (sorted by end_time desc, most recent first)
  */
-const getFetchMaybeExecutableProposalsQuery = (
-  spaceId: string,
-  first: number,
-  skip: number,
-  connectedMemberSpaceId: string | undefined
-) => {
-  const nowSeconds = Math.floor(Date.now() / 1000).toString();
-  // Executable = voting period ended but not yet executed
-  return `
-  executableProposals: proposalsConnection(
-    first: ${first}
-    offset: ${skip}
-    orderBy: END_TIME_DESC
-    filter: {
-      spaceId: { is: "${spaceId}" }
-      endTime: { lessThanOrEqualTo: "${nowSeconds}" }
-      executedAt: { isNull: true }
-    }
-  ) {
-    nodes {
-      ${getProposalFields(connectedMemberSpaceId)}
-    }
-  }
-`;
+type FetchGovernanceProposalsResult = {
+  proposals: GovernanceProposal[];
+  hasMore: boolean;
 };
 
-// Note: connectedMemberSpaceId should be the user's personal space ID (memberSpaceId)
-// In v2, votes are filtered by memberSpaceId, not wallet address
-const allProposalsQuery = (
-  spaceId: string,
-  first: number,
-  skip: number,
-  connectedMemberSpaceId: string | undefined
-) => `
-  query {
-    ${getFetchMaybeExecutableProposalsQuery(spaceId, first, skip, connectedMemberSpaceId)}
-    ${getFetchActiveProposalsQuery(spaceId, first, skip, connectedMemberSpaceId)}
-    ${getFetchCompletedProposalsQuery(spaceId, first, skip, connectedMemberSpaceId)}
-  }
-`;
-
-async function fetchProposals({
+async function fetchGovernanceProposals({
   spaceId,
   connectedAddress,
   first = 5,
@@ -427,109 +291,68 @@ async function fetchProposals({
   first: number;
   page: number;
   connectedAddress: string | undefined;
-}) {
-  const offset = page * first;
+}): Promise<FetchGovernanceProposalsResult> {
+  // We fetch proposals from each status category and combine them in priority order.
+  // To handle pagination across combined results, we fetch enough from each category
+  // to cover all items up to the requested page. This may over-fetch when one category
+  // dominates, but ensures correctness. A future optimization could use cursor-based
+  // pagination per category with cached cursors.
+  //
+  // We fetch one extra item to determine if there are more results.
+  const itemsNeeded = (page + 1) * first + 1;
+  const [executableProposals, activeProposals, completedProposals] = await Promise.all([
+    // Executable proposals: ready to execute, oldest first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['EXECUTABLE'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'asc',
+    }),
+    // Active proposals: currently voting, ending soonest first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['PROPOSED'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'asc',
+    }),
+    // Completed proposals: accepted/rejected, most recent first
+    fetchProposalsByStatus({
+      spaceId,
+      connectedAddress,
+      statuses: ['ACCEPTED', 'REJECTED'],
+      limit: itemsNeeded,
+      orderBy: 'end_time',
+      orderDirection: 'desc',
+    }),
+  ]);
 
-  // TODO(v2-migration): connectedAddress is a wallet address, but v2 uses memberSpaceId for filtering votes
-  // For now, pass it through but the user vote filtering won't work correctly until we convert
-  // wallet address to memberSpaceId
-  const connectedMemberSpaceId = connectedAddress;
+  // Combine in priority order: executable > active > completed
+  const allProposals = [...executableProposals, ...activeProposals, ...completedProposals];
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query: allProposalsQuery(spaceId, first, offset, connectedMemberSpaceId),
-  });
+  // Apply pagination
+  const startIndex = page * first;
+  const endIndex = startIndex + first;
+  const paginatedProposals = allProposals.slice(startIndex, endIndex);
+  
+  // Check if there are more items beyond this page
+  const hasMore = allProposals.length > endIndex;
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
-
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
-
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in governance proposals list. spaceId: ${spaceId} page: ${page}
-
-            queryString: ${getFetchActiveProposalsQuery(spaceId, first, offset, connectedMemberSpaceId)}
-            `,
-            error.message
-          );
-          return {
-            executableProposals: {
-              nodes: [],
-            },
-            activeProposals: {
-              nodes: [],
-            },
-            completedProposals: {
-              nodes: [],
-            },
-          };
-        default:
-          console.error(`${error._tag}: Unable to fetch proposals, spaceId: ${spaceId} page: ${page}`);
-          return {
-            executableProposals: {
-              nodes: [],
-            },
-            activeProposals: {
-              nodes: [],
-            },
-            completedProposals: {
-              nodes: [],
-            },
-          };
-      }
-    }
-
-    return resultOrError.right;
-  });
-
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
-  // Only show executable proposals under the following conditions:
-  // 1. The proposal has reached quorum
-  // 2. The proposal has not been executed
-  // 3. The proposal has enough votes to pass
-  const executableProposals = result.executableProposals.nodes
-    // Votes should be >= 50%
-    .filter(p => {
-      const votes = p.proposalVotesConnection.nodes;
-      if (votes.length === 0) return false;
-      const votesFor = votes.filter(v => v.vote === 'YES');
-      const yesPercentage = Math.floor((votesFor.length / votes.length) * 100);
-      return yesPercentage > 50;
-    })
-    // Quorum
-    .filter(p => {
-      if (p.proposalVotesConnection.totalCount === 1 && p.proposedBy === p.proposalVotesConnection.nodes[0].voterId) {
-        return false;
-      }
-
-      return true;
-    });
-
-  const proposals = [
-    ...executableProposals.filter(p => p !== null),
-    ...result.activeProposals.nodes,
-    ...result.completedProposals.nodes,
-  ];
-
-  // In v2, proposedBy is a memberSpaceId (personal space ID)
-  const proposedByIds = proposals.map(p => p.proposedBy);
+  // Fetch profiles for creators
+  const proposedByIds = paginatedProposals.map(p => p.proposedBy);
   const uniqueProposedByIds = [...new Set(proposedByIds)];
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueProposedByIds));
 
   // Create a map of memberSpaceId -> profile for efficient lookup
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
 
-  return proposals.map(p => {
+  const proposals = paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    return ActiveProposalsDto(p, maybeProfile);
+    return apiProposalToGovernanceDto(p, connectedAddress, maybeProfile);
   });
+
+  return { proposals, hasMore };
 }

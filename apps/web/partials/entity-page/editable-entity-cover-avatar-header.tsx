@@ -196,6 +196,7 @@ const AvatarCoverInput = ({
           <GeoImage
             fill
             value={imgUrl}
+            unoptimized={true}
             alt=""
             className="h-full w-full rounded-lg border border-white bg-white object-cover"
           />

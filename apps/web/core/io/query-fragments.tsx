@@ -507,6 +507,7 @@ export const propertyFragment = graphql(/* GraphQL */ `
     id
     name
     dataTypeName
+    renderableTypeId
   }
 `);
 
@@ -577,6 +578,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
             id
             name
             dataTypeName
+            renderableTypeId
           }
           text
           integer

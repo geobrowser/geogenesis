@@ -8,8 +8,8 @@ import { startTransition, useState } from 'react';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
-import { NavUtils } from '~/core/utils/utils';
 import { SearchResult } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { NewTab } from '~/design-system/icons/new-tab';

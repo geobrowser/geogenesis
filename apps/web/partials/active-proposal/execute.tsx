@@ -7,15 +7,15 @@ import { useExecuteProposal } from '~/core/hooks/use-execute-proposal';
 import { Button } from '~/design-system/button';
 
 interface Props {
-  onchainProposalId: string;
-  contractAddress: `0x${string}`;
+  proposalId: string;
+  spaceId: string;
   children: React.ReactNode;
 }
 
-export function Execute({ onchainProposalId, contractAddress, children }: Props) {
+export function Execute({ proposalId, spaceId, children }: Props) {
   const { execute } = useExecuteProposal({
-    address: contractAddress,
-    onchainProposalId,
+    spaceId,
+    proposalId,
   });
 
   return (

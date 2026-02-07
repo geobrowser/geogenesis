@@ -10,8 +10,8 @@ import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { Entities } from '../utils/entity';
 import { EntityWithSchema, Property, Relation } from '../types';
+import { Entities } from '../utils/entity';
 
 type UseEntityOptions = {
   spaceId?: string;

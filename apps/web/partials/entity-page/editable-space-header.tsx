@@ -9,8 +9,8 @@ import * as React from 'react';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { fetchEntityVersions, type EntityVersion } from '~/core/io/subgraph/fetch-entity-versions';
 import { EntityId } from '~/core/io/substream-schema';
-import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
@@ -32,8 +32,11 @@ import { Truncate } from '~/design-system/truncate';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryEmpty } from '../history/history-empty';
-import { HistoryItem } from '../history/history-item';
+import { HistoryDiffSlideUp, type HistoryDiffSelection } from '../history/history-diff-slide-up';
+import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
+
+const PAGE_SIZE = 10;
 
 export function EditableSpaceHeading({
   spaceId,
@@ -53,30 +56,41 @@ export function EditableSpaceHeading({
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
   const [isCreatingNewVersion, setIsCreatingNewVersion] = React.useState<boolean>(false);
+  const [diffSelection, setDiffSelection] = React.useState<HistoryDiffSelection | null>(null);
 
   const {
-    data: proposals,
+    data: versionPages,
     isFetching,
     isFetchingNextPage,
     fetchNextPage,
+    hasNextPage,
   } = useInfiniteQuery({
     enabled: isHistoryOpen,
     initialPageParam: 0,
-    queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: ({ pageParam = 0 }) => fetchCompletedProposals({ spaceId, page: pageParam }),
-    getNextPageParam: (_lastPage, pages) => pages.length,
+    queryKey: [`space-versions-rest-${entityId}`],
+    queryFn: ({ signal, pageParam = 0 }) =>
+      fetchEntityVersions({ entityId, limit: PAGE_SIZE, offset: pageParam * PAGE_SIZE, signal }),
+    getNextPageParam: (lastPage, pages) => (lastPage.length === PAGE_SIZE ? pages.length : undefined),
   });
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
+  const allVersions = React.useMemo(() => versionPages?.pages.flat() ?? [], [versionPages]);
 
-  const isLastPage =
-    proposals?.pages &&
-    proposals.pages.length > 1 &&
-    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+  const onVersionClick = (version: EntityVersion, index: number) => {
+    const nextVersion = allVersions[index + 1];
+    if (!nextVersion) return;
 
-  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+    const date = new Date(version.createdAt);
+    const label = `Changes from ${date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
-  const showMore = !isOnePage && !isLastPage;
+    setDiffSelection({
+      entityId,
+      spaceId,
+      fromEditId: nextVersion.editId,
+      toEditId: version.editId,
+      label,
+    });
+    setIsHistoryOpen(false);
+  };
 
   const onCopySpaceId = async () => {
     try {
@@ -103,106 +117,110 @@ export function EditableSpaceHeading({
   };
 
   return (
-    <div className="relative flex items-center justify-between">
-      {isEditing ? (
-        <div className="flex-grow">
-          <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
-          {/*
-            This height differs from the readable page height due to how we're using an expandable textarea for editing
-            the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
-            have to manually adjust the spacing here to remove the layout shift.
-          */}
-          <Spacer height={3.5} />
-        </div>
-      ) : (
-        <div>
-          <div className="flex items-center justify-between">
-            <Truncate maxLines={3} shouldTruncate>
-              <Text as="h1" variant="mainPage">
-                {name ?? ZERO_WIDTH_SPACE}
-              </Text>
-            </Truncate>
+    <>
+      <div className="relative flex items-center justify-between">
+        {isEditing ? (
+          <div className="flex-grow">
+            <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
+            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
+            <Spacer height={3.5} />
           </div>
-          <Spacer height={12} />
-        </div>
-      )}
-      {isSpacePage && (
-        <div className="inline-flex items-center gap-4">
-          {isEditing && (
-            <Link
-              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-            >
-              <Create />
-            </Link>
-          )}
-          <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-            {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
-            {renderedProposals?.map((group, index) => (
-              <React.Fragment key={index}>
-                {group.map(p => (
-                  <HistoryItem
-                    key={p.id}
-                    spaceId={spaceId}
-                    proposalId={p.id}
-                    createdAt={p.createdAt}
-                    createdBy={p.createdBy}
-                    name={p.name}
-                  />
-                ))}
-              </React.Fragment>
-            ))}
-            {showMore && (
-              <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
-                {isFetching || isFetchingNextPage ? (
+        ) : (
+          <div>
+            <div className="flex items-center justify-between">
+              <Truncate maxLines={3} shouldTruncate>
+                <Text as="h1" variant="mainPage">
+                  {name ?? ZERO_WIDTH_SPACE}
+                </Text>
+              </Truncate>
+            </div>
+            <Spacer height={12} />
+          </div>
+        )}
+        {isSpacePage && (
+          <div className="inline-flex items-center gap-4">
+            {isEditing && (
+              <Link
+                href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+              >
+                <Create />
+              </Link>
+            )}
+            <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
+              {allVersions.length <= 1 && allVersions.length > 0 && !isFetching && <HistoryEmpty />}
+              {allVersions.length > 1 &&
+                allVersions.map((v, index) => {
+                  if (index === allVersions.length - 1) return null;
+                  return (
+                    <EntityVersionItem
+                      key={v.editId}
+                      createdAt={v.createdAt}
+                      isFirst={index === 0}
+                      onClick={() => onVersionClick(v, index)}
+                    />
+                  );
+                })}
+              {isFetching && allVersions.length === 0 && (
+                <div className="flex h-12 w-full items-center justify-center bg-white">
                   <Dots />
-                ) : (
-                  <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
-                    Show more
-                  </SmallButton>
-                )}
-              </div>
-            )}
-          </HistoryPanel>
-          <Menu
-            open={isContextMenuOpen}
-            onOpenChange={setIsContextMenuOpen}
-            align="end"
-            trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-            className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
-          >
-            {isCreatingNewVersion && (
-              <CreateNewVersionInSpace
-                entityId={entityId as EntityId}
-                entityName={name ?? ''}
-                setIsCreatingNewVersion={setIsCreatingNewVersion}
-                onDone={() => {
-                  setIsContextMenuOpen(false);
-                }}
-              />
-            )}
-            {!isCreatingNewVersion && (
-              <>
-                <MenuItem onClick={onCopySpaceId}>
-                  <Copy color="grey-04" />
-                  <p>Copy Space ID</p>
-                </MenuItem>
-                <MenuItem onClick={onCopyEntityId}>
-                  <Copy color="grey-04" />
-                  <p>Copy Entity ID</p>
-                </MenuItem>
-                <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
-                  <div className="shrink-0">
-                    <MoveSpace />
-                  </div>
-                  <p>Create in space</p>
-                </MenuItem>
-                {addSubspaceComponent}
-              </>
-            )}
-          </Menu>
-        </div>
-      )}
-    </div>
+                </div>
+              )}
+              {hasNextPage && (
+                <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+                  {isFetchingNextPage ? (
+                    <Dots />
+                  ) : (
+                    <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                      Show more
+                    </SmallButton>
+                  )}
+                </div>
+              )}
+            </HistoryPanel>
+            <Menu
+              open={isContextMenuOpen}
+              onOpenChange={setIsContextMenuOpen}
+              align="end"
+              trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
+              className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+            >
+              {isCreatingNewVersion && (
+                <CreateNewVersionInSpace
+                  entityId={entityId as EntityId}
+                  entityName={name ?? ''}
+                  setIsCreatingNewVersion={setIsCreatingNewVersion}
+                  onDone={() => {
+                    setIsContextMenuOpen(false);
+                  }}
+                />
+              )}
+              {!isCreatingNewVersion && (
+                <>
+                  <MenuItem onClick={onCopySpaceId}>
+                    <Copy color="grey-04" />
+                    <p>Copy Space ID</p>
+                  </MenuItem>
+                  <MenuItem onClick={onCopyEntityId}>
+                    <Copy color="grey-04" />
+                    <p>Copy Entity ID</p>
+                  </MenuItem>
+                  <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                    <div className="shrink-0">
+                      <MoveSpace />
+                    </div>
+                    <p>Create in space</p>
+                  </MenuItem>
+                  {addSubspaceComponent}
+                </>
+              )}
+            </Menu>
+          </div>
+        )}
+      </div>
+
+      <HistoryDiffSlideUp selection={diffSelection} onClose={() => setDiffSelection(null)} />
+    </>
   );
 }

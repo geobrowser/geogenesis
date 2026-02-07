@@ -1,5 +1,6 @@
 'use client';
 
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';
@@ -10,8 +11,6 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { IdUtils } from '@geoprotocol/geo-sdk';
-
 import { encodeMembershipRequestData } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
@@ -72,14 +71,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       const callData = encodeFunctionData({
         functionName: 'enter',
         abi: SpaceRegistryAbi,
-        args: [
-          fromSpaceId,
-          toSpaceId,
-          GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED,
-          EMPTY_TOPIC_HEX,
-          data,
-          EMPTY_SIGNATURE,
-        ],
+        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
       });
 
       const hash = yield* tx(callData);

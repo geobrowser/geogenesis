@@ -1,6 +1,6 @@
 'use client';
 
-import { daoSpace, Op, personalSpace } from '@geoprotocol/geo-sdk';
+import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
@@ -9,10 +9,10 @@ import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
-import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { ReviewState, SpaceGovernanceType } from '../types';
+import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { useSmartAccount } from './use-smart-account';

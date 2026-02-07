@@ -11,8 +11,8 @@ import * as React from 'react';
 import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getValues, useValues } from '~/core/sync/use-store';
-import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/types';
+import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 

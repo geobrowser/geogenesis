@@ -5,8 +5,8 @@ import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
 import { Entity, Relation } from '~/core/types';
+import { getImagePath } from '~/core/utils/utils';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
