@@ -106,6 +106,8 @@ export class E {
     store: GeoStore;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
@@ -123,6 +125,8 @@ export class E {
     spaceId?: string;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'relation', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
@@ -145,7 +149,7 @@ export class E {
     skip: number;
   }) {
     if (where?.id?.in) {
-      const entityIds = where.id.in;
+      const entityIds = where.id.in.filter(id => id !== '');
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds],
