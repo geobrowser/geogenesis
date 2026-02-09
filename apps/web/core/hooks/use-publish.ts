@@ -73,6 +73,7 @@ export function usePublish() {
             id: space.id,
             type: space.type,
             address: space.address,
+            editors: space.editors,
           },
         });
 
@@ -148,6 +149,7 @@ export function useBulkPublish() {
             id: space.id,
             type: space.type,
             address: space.address,
+            editors: space.editors,
           },
         });
       });
@@ -204,6 +206,7 @@ interface MakeProposalArgs {
     id: string;
     type: SpaceGovernanceType;
     address: string;
+    editors: string[];
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -257,6 +260,11 @@ function makeProposal(args: MakeProposalArgs) {
         return;
       }
 
+      // Editors can use the fast path for immediate execution.
+      // Members must use the slow path which requires a voting period.
+      const isEditor = space.editors.map(s => s.toLowerCase()).includes(callerSpaceId.toLowerCase());
+      const votingMode = isEditor ? 'FAST' : 'SLOW';
+
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
@@ -267,6 +275,7 @@ function makeProposal(args: MakeProposalArgs) {
               daoSpaceAddress: space.address as `0x${string}`,
               callerSpaceId: `0x${callerSpaceId}`,
               daoSpaceId: `0x${space.id}`,
+              votingMode,
               network: 'TESTNET',
             }),
           catch: error => {
