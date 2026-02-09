@@ -1,5 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
+import { VIDEO_BLOCK_TYPE } from '~/core/constants';
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
@@ -204,7 +205,7 @@ interface ResultsArgs {
 }
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
-  const filter: EntityFilter | undefined = args.typeIds
+  const filter: EntityFilter | undefined = args.typeIds?.length
     ? { typeIds: { in: args.typeIds } }
     : { and: BLOCK_TYPE_EXCLUSION_FILTERS };
 
@@ -250,7 +251,13 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-const EXCLUDED_BLOCK_TYPES = [SystemIds.TEXT_BLOCK, SystemIds.IMAGE_BLOCK, SystemIds.DATA_BLOCK, SystemIds.IMAGE_TYPE];
+const EXCLUDED_BLOCK_TYPES = [
+  SystemIds.TEXT_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_TYPE,
+  VIDEO_BLOCK_TYPE,
+];
 
 const BLOCK_TYPE_EXCLUSION_FILTERS = EXCLUDED_BLOCK_TYPES.map(typeId => ({
   typeIds: { anyNotEqualTo: typeId },
