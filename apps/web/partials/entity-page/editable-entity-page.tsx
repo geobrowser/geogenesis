@@ -28,6 +28,7 @@ import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync
 import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { usePropertyFormat } from '~/core/hooks/use-property-format';
 import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
@@ -883,6 +884,8 @@ function RenderedValue({
   const renderField = () => {
     switch (property.dataType) {
       case 'TEXT': {
+        const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
+        const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
         return (
           <>
             <PageStringField
@@ -896,6 +899,9 @@ function RenderedValue({
             />
             {property.id === FORMAT_PROPERTY && (
               <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
+            )}
+            {hasUrlTemplate && value && (
+              <span className="text-sm text-grey-04">Resolved URL · {resolvedUrl}</span>
             )}
           </>
         );
