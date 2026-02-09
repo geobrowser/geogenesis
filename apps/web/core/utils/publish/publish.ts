@@ -48,6 +48,7 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
         toEntity: r.toEntity.id,
         type: r.type.id,
         id: r.id,
+        entityId: r.entityId,
         position: r.position ?? undefined,
         ...(r.toSpaceId && { toSpace: r.toSpaceId }),
       });
