@@ -46,18 +46,16 @@ export function usePublish() {
 
       const space = await Effect.runPromise(getSpace(spaceId));
 
+      if (!space) return;
+
+      const ops = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+
+      if (ops.length === 0) {
+        console.error('resulting ops are empty, cancelling publish', { values: valuesToPublish, relations, spaceId });
+        return;
+      }
+
       const publish = Effect.gen(function* () {
-        if (!space) {
-          return;
-        }
-
-        const ops = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
-
-        if (ops.length === 0) {
-          console.error('resulting ops are empty, cancelling publish');
-          return;
-        }
-
         yield* makeProposal({
           name,
           onChangePublishState: (newState: ReviewState) =>
@@ -83,6 +81,7 @@ export function usePublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
+        console.error('[PUBLISH] failed with ops:', ops);
         onError?.();
 
         if (isUserRejection(result.left)) {
@@ -128,11 +127,11 @@ export function useBulkPublish() {
       // something we need for all of them.
       const space = await Effect.runPromise(getSpace(spaceId));
 
-      const publish = Effect.gen(function* () {
-        if (!space) {
-          return;
-        }
+      if (!space) return;
 
+      const ops = Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
+
+      const publish = Effect.gen(function* () {
         yield* makeProposal({
           name,
           onChangePublishState: (newState: ReviewState) =>
@@ -140,7 +139,7 @@ export function useBulkPublish() {
               type: 'SET_REVIEW_STATE',
               payload: newState,
             }),
-          ops: Publish.prepareLocalDataForPublishing(triples, relations, spaceId),
+          ops,
           smartAccount,
           space: {
             id: space.id,
@@ -153,6 +152,7 @@ export function useBulkPublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
+        console.error('[PUBLISH] bulk failed with ops:', ops);
         onError?.();
 
         if (isUserRejection(result.left)) {
@@ -227,8 +227,6 @@ function makeProposal(args: MakeProposalArgs) {
     if (ops.length === 0) {
       return;
     }
-
-    console.log('[PUBLISH] ops:', ops);
 
     onChangePublishState('publishing-ipfs');
 
