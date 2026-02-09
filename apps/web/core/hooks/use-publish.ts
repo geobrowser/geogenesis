@@ -84,6 +84,12 @@ export function usePublish() {
 
       if (Either.isLeft(result)) {
         onError?.();
+
+        if (isUserRejection(result.left)) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
+
         dispatch({ type: 'ERROR', payload: result.left.message });
         return;
       }
@@ -148,6 +154,12 @@ export function useBulkPublish() {
 
       if (Either.isLeft(result)) {
         onError?.();
+
+        if (isUserRejection(result.left)) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
+
         dispatch({ type: 'ERROR', payload: result.left.message });
         return;
       }
@@ -164,6 +176,22 @@ export function useBulkPublish() {
   return {
     makeBulkProposal,
   };
+}
+
+/**
+ * Check whether an error (or any error in its cause chain) is a wallet
+ * user-rejection. Walks the cause chain since we now nest the original
+ * error via `{ cause }` rather than string interpolation.
+ */
+function isUserRejection(error: unknown): boolean {
+  let current = error instanceof Error ? error : undefined;
+  while (current) {
+    if (current.message.includes('User rejected the request') || current.name === 'UserRejectedRequestError') {
+      return true;
+    }
+    current = current.cause instanceof Error ? current.cause : undefined;
+  }
+  return false;
 }
 
 interface MakeProposalArgs {
