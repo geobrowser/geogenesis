@@ -119,9 +119,14 @@ export const ReviewChanges = () => {
 
   const isReadyToPublish = React.useMemo(() => {
     if (!activeSpace || proposalName.length === 0) return false;
-    const ops = Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace);
 
-    return ops.length > 0;
+    const result = Effect.runSyncExit(
+      Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
+    );
+
+    if (result._tag === 'Failure') return false;
+
+    return result.value.length > 0;
   }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace);
