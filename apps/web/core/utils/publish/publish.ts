@@ -1,11 +1,36 @@
 import { Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 
+import { PrepareOpsError } from '../../errors';
+
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.
+ *
+ * Returns an Effect so that SDK validation errors (e.g. invalid IDs from
+ * assertValid) are captured with full context instead of throwing bare
+ * errors that surface as React render crashes with no logging.
  */
-export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
+export function prepareLocalDataForPublishing(
+  values: Value[],
+  relations: Relation[],
+  spaceId: string
+): Effect.Effect<Op[], PrepareOpsError> {
+  return Effect.try({
+    try: () => prepareOps(values, relations, spaceId),
+    catch: error => {
+      console.error('[PUBLISH] prepareLocalDataForPublishing failed:', error, {
+        values,
+        relations,
+        spaceId,
+      });
+      return new PrepareOpsError('Failed to prepare ops for publishing', { cause: error });
+    },
+  });
+}
+
+function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op[] {
   const validValues = values.filter(
     v =>
       v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== '' && v.isLocal === true

@@ -46,15 +46,17 @@ export function usePublish() {
 
       const space = await Effect.runPromise(getSpace(spaceId));
 
-      const publish = Effect.gen(function* () {
-        if (!space) {
-          return;
-        }
+      if (!space) return;
 
-        const ops = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+      const publish = Effect.gen(function* () {
+        const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
 
         if (ops.length === 0) {
-          console.error('resulting ops are empty, cancelling publish');
+          console.error('resulting ops are empty, cancelling publish', {
+            values: valuesToPublish,
+            relations,
+            spaceId,
+          });
           return;
         }
 
@@ -83,17 +85,14 @@ export function usePublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
-        const error = result.left;
         onError?.();
 
-        if (error instanceof Error) {
-          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
-            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-            return;
-          }
+        if (isUserRejection(result.left)) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
         }
 
-        dispatch({ type: 'ERROR', payload: error.message });
+        dispatch({ type: 'ERROR', payload: result.left.message });
         return;
       }
 
@@ -131,10 +130,10 @@ export function useBulkPublish() {
       // something we need for all of them.
       const space = await Effect.runPromise(getSpace(spaceId));
 
+      if (!space) return;
+
       const publish = Effect.gen(function* () {
-        if (!space) {
-          return;
-        }
+        const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
 
         yield* makeProposal({
           name,
@@ -143,7 +142,7 @@ export function useBulkPublish() {
               type: 'SET_REVIEW_STATE',
               payload: newState,
             }),
-          ops: Publish.prepareLocalDataForPublishing(triples, relations, spaceId),
+          ops,
           smartAccount,
           space: {
             id: space.id,
@@ -156,17 +155,14 @@ export function useBulkPublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
-        const error = result.left;
         onError?.();
 
-        if (error instanceof Error) {
-          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
-            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-            return;
-          }
+        if (isUserRejection(result.left)) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
         }
 
-        dispatch({ type: 'ERROR', payload: error.message });
+        dispatch({ type: 'ERROR', payload: result.left.message });
         return;
       }
 
@@ -184,6 +180,22 @@ export function useBulkPublish() {
   };
 }
 
+/**
+ * Check whether an error (or any error in its cause chain) is a wallet
+ * user-rejection. Walks the cause chain since we now nest the original
+ * error via `{ cause }` rather than string interpolation.
+ */
+function isUserRejection(error: unknown): boolean {
+  let current = error instanceof Error ? error : undefined;
+  while (current) {
+    if (current.message.includes('User rejected the request') || current.name === 'UserRejectedRequestError') {
+      return true;
+    }
+    current = current.cause instanceof Error ? current.cause : undefined;
+  }
+  return false;
+}
+
 interface MakeProposalArgs {
   name: string;
   ops: Op[];
@@ -194,6 +206,20 @@ interface MakeProposalArgs {
     address: string;
   };
   onChangePublishState: (newState: ReviewState) => void;
+}
+
+/**
+ * Retry schedule for network calls during publish.
+ * Exponential backoff starting at 100ms with jitter, retries for up to the
+ * given duration. Logs each retry attempt with a label for diagnostics.
+ */
+function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
+  return Schedule.exponential('100 millis').pipe(
+    Schedule.jittered,
+    Schedule.compose(Schedule.elapsed),
+    Schedule.tapInput(() => Effect.succeed(console.log(`[PUBLISH][${label}] Retrying`))),
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+  );
 }
 
 function makeProposal(args: MakeProposalArgs) {
@@ -212,44 +238,66 @@ function makeProposal(args: MakeProposalArgs) {
     if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
       // Get the caller's personal space ID (required for DAO proposals)
-      const callerSpaceId = yield* Effect.tryPromise({
-        try: () => getPersonalSpaceId(smartAccount.account.address),
-        catch: error => new TransactionWriteFailedError(`Failed to get personal space ID: ${error}`),
-      });
+      const callerSpaceId = yield* Effect.retry(
+        Effect.tryPromise({
+          try: () => getPersonalSpaceId(smartAccount.account.address),
+          catch: error => {
+            console.error('[PUBLISH] getPersonalSpaceId failed:', error);
+            return new TransactionWriteFailedError('Failed to get personal space ID', { cause: error });
+          },
+        }),
+        retrySchedule('getPersonalSpaceId', Duration.seconds(10))
+      );
 
       if (!callerSpaceId) {
-        throw new TransactionWriteFailedError('You need a personal space to propose edits to a DAO space');
+        yield* Effect.fail(
+          new TransactionWriteFailedError('You need a personal space to propose edits to a DAO space')
+        );
+        // Unreachable, but helps TypeScript narrow the type
+        return;
       }
 
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          daoSpace.proposeEdit({
-            name,
-            ops,
-            author: smartAccount.account.address,
-            daoSpaceAddress: space.address as `0x${string}`,
-            callerSpaceId: `0x${callerSpaceId}`,
-            daoSpaceId: `0x${space.id}`,
-            network: 'TESTNET',
-          }),
-        catch: error => new TransactionWriteFailedError(`IPFS upload failed: ${error}`),
-      });
+      const result = yield* Effect.retry(
+        Effect.tryPromise({
+          try: () =>
+            daoSpace.proposeEdit({
+              name,
+              ops,
+              author: smartAccount.account.address,
+              daoSpaceAddress: space.address as `0x${string}`,
+              callerSpaceId: `0x${callerSpaceId}`,
+              daoSpaceId: `0x${space.id}`,
+              network: 'TESTNET',
+            }),
+          catch: error => {
+            console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
+            return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
+          },
+        }),
+        retrySchedule('proposeEdit', Duration.minutes(1))
+      );
 
       to = result.to as `0x${string}`;
       calldata = result.calldata as `0x${string}`;
     } else {
       // Personal spaces: use personalSpace.publishEdit()
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          personalSpace.publishEdit({
-            name,
-            spaceId: space.id,
-            ops,
-            author: smartAccount.account.address,
-            network: 'TESTNET',
-          }),
-        catch: error => new TransactionWriteFailedError(`IPFS upload failed: ${error}`),
-      });
+      const result = yield* Effect.retry(
+        Effect.tryPromise({
+          try: () =>
+            personalSpace.publishEdit({
+              name,
+              spaceId: space.id,
+              ops,
+              author: smartAccount.account.address,
+              network: 'TESTNET',
+            }),
+          catch: error => {
+            console.error('[PUBLISH] personalSpace.publishEdit failed:', error);
+            return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
+          },
+        }),
+        retrySchedule('publishEdit', Duration.minutes(1))
+      );
 
       to = result.to;
       calldata = result.calldata;
@@ -257,22 +305,18 @@ function makeProposal(args: MakeProposalArgs) {
 
     onChangePublishState('publishing-contract');
 
-    const execute = Effect.tryPromise({
-      try: () =>
-        smartAccount.sendUserOperation({
-          calls: [{ to, value: 0n, data: calldata }],
-        }),
-      catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-    });
-
     const result = yield* Effect.retry(
-      execute,
-      Schedule.exponential('100 millis').pipe(
-        Schedule.jittered,
-        Schedule.compose(Schedule.elapsed),
-        Schedule.tapInput(() => Effect.succeed(console.log('[PUBLISH][makeProposal] Retrying'))),
-        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(10)))
-      )
+      Effect.tryPromise({
+        try: () =>
+          smartAccount.sendUserOperation({
+            calls: [{ to, value: 0n, data: calldata }],
+          }),
+        catch: error => {
+          console.error('[PUBLISH] sendUserOperation failed:', error);
+          return new TransactionWriteFailedError('Publish failed', { cause: error });
+        },
+      }),
+      retrySchedule('sendUserOperation', Duration.seconds(10))
     );
 
     console.log('Transaction hash: ', result);
