@@ -117,8 +117,8 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isReadyToPublish = React.useMemo(() => {
-    if (!activeSpace || proposalName.length === 0) return false;
+  const hasValidOps = React.useMemo(() => {
+    if (!activeSpace) return false;
 
     const result = Effect.runSyncExit(
       Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
@@ -127,7 +127,9 @@ export const ReviewChanges = () => {
     if (result._tag === 'Failure') return false;
 
     return result.value.length > 0;
-  }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
+  }, [activeSpace, valuesFromSpace, relationsFromSpace]);
+
+  const isReadyToPublish = hasValidOps && proposalName.length > 0;
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace);
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
