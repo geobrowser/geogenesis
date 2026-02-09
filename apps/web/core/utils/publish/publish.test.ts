@@ -1,9 +1,15 @@
 import { IdUtils, Op } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/types';
 
-import { prepareLocalDataForPublishing } from './publish';
+import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect } from './publish';
+
+/** Unwrap the Effect for test assertions */
+function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
+  return Effect.runSync(prepareLocalDataForPublishingEffect(values, relations, spaceId));
+}
 
 // Helper function to create a mock Value
 function createMockValue(overrides: Partial<Value> = {}): Value {

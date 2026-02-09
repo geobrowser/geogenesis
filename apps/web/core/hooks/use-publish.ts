@@ -48,14 +48,18 @@ export function usePublish() {
 
       if (!space) return;
 
-      const ops = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
-
-      if (ops.length === 0) {
-        console.error('resulting ops are empty, cancelling publish', { values: valuesToPublish, relations, spaceId });
-        return;
-      }
-
       const publish = Effect.gen(function* () {
+        const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+
+        if (ops.length === 0) {
+          console.error('resulting ops are empty, cancelling publish', {
+            values: valuesToPublish,
+            relations,
+            spaceId,
+          });
+          return;
+        }
+
         yield* makeProposal({
           name,
           onChangePublishState: (newState: ReviewState) =>
@@ -81,7 +85,6 @@ export function usePublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
-        console.error('[PUBLISH] failed with ops:', ops);
         onError?.();
 
         if (isUserRejection(result.left)) {
@@ -129,9 +132,9 @@ export function useBulkPublish() {
 
       if (!space) return;
 
-      const ops = Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
-
       const publish = Effect.gen(function* () {
+        const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
+
         yield* makeProposal({
           name,
           onChangePublishState: (newState: ReviewState) =>
@@ -152,7 +155,6 @@ export function useBulkPublish() {
       const result = await Effect.runPromise(Effect.either(publish));
 
       if (Either.isLeft(result)) {
-        console.error('[PUBLISH] bulk failed with ops:', ops);
         onError?.();
 
         if (isUserRejection(result.left)) {
