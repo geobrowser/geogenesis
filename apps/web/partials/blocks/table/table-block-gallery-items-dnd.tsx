@@ -165,28 +165,30 @@ const TableBlockGalleryItemsDnd = ({
   };
 
   if (entries.length <= 1) {
-    <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
-      {entries.map((row, index) => {
-        const isPlaceholder = Boolean(row.placeholder);
+    return (
+      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
+        {entries.map((row, index) => {
+          const isPlaceholder = Boolean(row.placeholder);
 
-        return (
-          <TableBlockGalleryItem
-            isEditing={isEditing}
-            key={`${row.entityId}-${index}`}
-            columns={row.columns}
-            currentSpaceId={spaceId}
-            rowEntityId={row.entityId}
-            isPlaceholder={isPlaceholder}
-            onChangeEntry={onChangeEntry}
-            onLinkEntry={onLinkEntry}
-            properties={propertiesSchema}
-            relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-            source={source}
-            autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
-          />
-        );
-      })}
-    </div>;
+          return (
+            <TableBlockGalleryItem
+              isEditing={isEditing}
+              key={`${row.entityId}-${index}`}
+              columns={row.columns}
+              currentSpaceId={spaceId}
+              rowEntityId={row.entityId}
+              isPlaceholder={isPlaceholder}
+              onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
+              properties={propertiesSchema}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
+              source={source}
+              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
+            />
+          );
+        })}
+      </div>
+    );
   }
   return (
     <DndContext
