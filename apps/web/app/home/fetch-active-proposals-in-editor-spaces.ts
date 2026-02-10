@@ -164,8 +164,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const gqlProposals = data.proposalsConnection.nodes.filter(
     p =>
       p.space.type !== 'PERSONAL' &&
-      Number(p.endTime) > nowSeconds &&
-      !p.proposalVotesConnection.nodes.some(v => v.voterId === memberSpaceId)
+      Number(p.endTime) > nowSeconds
   );
 
   const creatorIds = gqlProposals.map(p => p.proposedBy);

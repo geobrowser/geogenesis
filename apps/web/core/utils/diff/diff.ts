@@ -451,6 +451,26 @@ export async function fromLocal(
     }
   }
 
+  // Backfill TYPES_PROPERTY from remote so postProcessDiffs can group blocks.
+  for (const diff of diffs) {
+    if (diff.relations.some(r => r.typeId === TYPES_PROPERTY)) continue;
+
+    const remoteEntity = remoteEntities.get(diff.entityId);
+    if (!remoteEntity) continue;
+
+    const blockType = remoteEntity.types.find(t => BLOCK_TYPE_SET.has(t.id));
+    if (blockType) {
+      diff.relations.push({
+        relationId: `remote-type-${diff.entityId}`,
+        typeId: TYPES_PROPERTY,
+        spaceId,
+        changeType: 'ADD',
+        before: null,
+        after: { toEntityId: blockType.id, toSpaceId: null, position: null },
+      });
+    }
+  }
+
   return postProcessDiffs(diffs, spaceId);
 }
 

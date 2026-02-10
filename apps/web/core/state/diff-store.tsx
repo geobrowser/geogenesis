@@ -6,6 +6,8 @@ import { createContext, useContext, useState } from 'react';
 type DiffState = {
   isReviewOpen: boolean;
   setIsReviewOpen: (value: boolean) => void;
+  reviewVersion: number;
+  bumpReviewVersion: () => void;
   activeSpace: string;
   setActiveSpace: (value: string) => void;
   isReadyToPublish: boolean;
@@ -23,6 +25,8 @@ type DiffState = {
 const initialDiffState = {
   isReviewOpen: false,
   setIsReviewOpen: (value: boolean) => null,
+  reviewVersion: 0,
+  bumpReviewVersion: () => null,
   activeSpace: '',
   setActiveSpace: (value: string) => null,
   isReadyToPublish: false,
@@ -45,6 +49,8 @@ type DiffProviderProps = {
 
 export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
+  const [reviewVersion, setReviewVersion] = useState<number>(0);
+  const bumpReviewVersion = React.useCallback(() => setReviewVersion(v => v + 1), []);
   const [activeSpace, setActiveSpace] = useState<string>('');
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
@@ -57,6 +63,8 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
       value={{
         isReviewOpen,
         setIsReviewOpen,
+        reviewVersion,
+        bumpReviewVersion,
         activeSpace,
         setActiveSpace,
         isReadyToPublish,
