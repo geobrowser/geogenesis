@@ -19,13 +19,13 @@ const getProposedEditorInProposalQuery = (proposalId: string) => `query {
   }
 }`;
 
-interface NetworkResult {
+type NetworkResult = {
   proposalActionsConnection: {
     nodes: {
       targetId: string | null;
     }[];
   };
-}
+};
 
 export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile> {
   const endpoint = Environment.getConfig().api;

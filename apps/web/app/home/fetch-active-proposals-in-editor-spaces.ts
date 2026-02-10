@@ -11,16 +11,16 @@ import { deriveProposalStatus } from '~/core/utils/utils';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
-interface GqlProposalVote {
+type GqlProposalVote = {
   vote: 'YES' | 'NO' | 'ABSTAIN';
   voterId: string;
-}
+};
 
-interface GqlProposalAction {
+type GqlProposalAction = {
   actionType: string;
-}
+};
 
-interface GqlProposal {
+type GqlProposal = {
   id: string;
   name: string | null;
   proposedBy: string;
@@ -38,14 +38,14 @@ interface GqlProposal {
     totalCount: number;
     nodes: GqlProposalVote[];
   };
-}
+};
 
-interface NetworkResult {
+type NetworkResult = {
   proposalsConnection: {
     totalCount: number;
     nodes: GqlProposal[];
   };
-}
+};
 
 function mapVote(vote: string): 'ACCEPT' | 'REJECT' | 'ABSTAIN' {
   switch (vote) {

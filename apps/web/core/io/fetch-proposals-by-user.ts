@@ -10,11 +10,11 @@ import { mapActionTypeToProposalType } from './rest';
 import { fetchProfilesBySpaceIds } from './subgraph/fetch-profile';
 import { graphql } from './subgraph/graphql';
 
-interface GqlProposalAction {
+type GqlProposalAction = {
   actionType: string;
-}
+};
 
-interface GqlProposal {
+type GqlProposal = {
   id: string;
   name: string | null;
   proposedBy: string;
@@ -25,7 +25,7 @@ interface GqlProposal {
   createdAtBlock: string;
   executedAt: string | null;
   proposalActions: GqlProposalAction[];
-}
+};
 
 const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: string) => {
   const filters = [
@@ -62,16 +62,16 @@ const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: 
   }`;
 };
 
-export interface FetchUserProposalsOptions {
+export type FetchUserProposalsOptions = {
   spaceId?: string;
   proposerSpaceId: string;
   signal?: AbortController['signal'];
   page?: number;
-}
+};
 
-interface NetworkResult {
+type NetworkResult = {
   proposalsConnection: { nodes: GqlProposal[] };
-}
+};
 
 export async function fetchProposalsByUser({
   proposerSpaceId,

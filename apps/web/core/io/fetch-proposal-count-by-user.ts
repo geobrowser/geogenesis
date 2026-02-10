@@ -13,16 +13,16 @@ const getFetchUserProposalCountQuery = (spaceId: string) => {
   }`;
 };
 
-export interface FetchUserProposalCountOptions {
+export type FetchUserProposalCountOptions = {
   spaceId: string;
   signal?: AbortController['signal'];
-}
+};
 
-interface NetworkResult {
+type NetworkResult = {
   proposalsConnection: {
     totalCount: number;
   };
-}
+};
 
 export async function fetchProposalCountByUser({ spaceId, signal }: FetchUserProposalCountOptions): Promise<number> {
   const queryId = uuid();

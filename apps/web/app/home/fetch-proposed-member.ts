@@ -19,13 +19,13 @@ const getProposedMemberInProposalQuery = (proposalId: string) => `query {
   }
 }`;
 
-interface NetworkResult {
+type NetworkResult = {
   proposalActionsConnection: {
     nodes: {
       targetId: string | null;
     }[];
   };
-}
+};
 
 export async function fetchProposedMemberForProposal(proposalId: string): Promise<Profile | null> {
   const endpoint = Environment.getConfig().api;
