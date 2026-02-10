@@ -84,7 +84,7 @@ export const FlowBar = () => {
                 </p>
               </div>
               <button
-                onClick={() => { setIsReviewOpen(true); bumpReviewVersion(); }}
+                onClick={() => { bumpReviewVersion(); setIsReviewOpen(true); }}
                 className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
               >
                 Review edits
