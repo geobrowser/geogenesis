@@ -6,13 +6,19 @@ import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
 
-const getFetchProposedMembersQuery = (id: string, now: number) => `query {
-  space(id: "${id}") {
-    proposedMembers(
-      filter: {proposal: {status: {equalTo: PROPOSED}, endTime: {greaterThan: ${now}}}}
-    ) {
-      nodes {
-        accountId
+const getFetchProposedMembersQuery = (spaceId: string) => `query {
+  proposalsConnection(
+    filter: {
+      spaceId: { is: "${spaceId}" }
+      executedAt: { isNull: true }
+      proposalActionsConnection: {
+        some: { actionType: { in: [ADD_MEMBER] } }
+      }
+    }
+  ) {
+    nodes {
+      proposalActions {
+        targetId
       }
     }
   }
@@ -23,17 +29,20 @@ export interface FetchProposedMembersOptions {
 }
 
 type NetworkResult = {
-  space: { proposedMembers: { nodes: Array<{ accountId: string }> } } | null;
+  proposalsConnection: {
+    nodes: Array<{
+      proposalActions: Array<{ targetId: string | null }>;
+    }>;
+  };
 };
 
 export async function fetchProposedMembers(options: FetchProposedMembersOptions): Promise<string[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
-  const now = Math.floor(Date.now() / 1_000);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchProposedMembersQuery(options.id, now),
+    query: getFetchProposedMembersQuery(options.id),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -54,19 +63,19 @@ export async function fetchProposedMembers(options: FetchProposedMembersOptions)
               options.id
             } endpoint: ${endpoint}
 
-            queryString: ${getFetchProposedMembersQuery(options.id, now)}
+            queryString: ${getFetchProposedMembersQuery(options.id)}
             `,
             error.message
           );
 
-          return { space: null };
+          return { proposalsConnection: { nodes: [] } };
 
         default:
           console.error(
             `${error._tag}: Unable to fetch proposed members, queryId: ${queryId} spaceId: ${options.id} endpoint: ${endpoint}`
           );
 
-          return { space: null };
+          return { proposalsConnection: { nodes: [] } };
       }
     }
 
@@ -75,11 +84,9 @@ export async function fetchProposedMembers(options: FetchProposedMembersOptions)
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (!result.space) {
-    return [];
-  }
+  const targetIds = result.proposalsConnection.nodes.flatMap(node =>
+    node.proposalActions.map(action => action.targetId).filter((id): id is string => id != null)
+  );
 
-  const proposedMembers = result.space.proposedMembers.nodes.map(node => node.accountId);
-
-  return proposedMembers;
+  return targetIds;
 }

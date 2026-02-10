@@ -1,69 +1,80 @@
-import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
-import { ProposalWithoutVoters, ProposalWithoutVotersDto } from './dto/proposals';
+import { deriveProposalStatus } from '../utils/utils';
+import { ProposalWithoutVoters } from './dto/proposals';
+import { mapActionTypeToProposalType } from './rest';
 import { fetchProfilesBySpaceIds } from './subgraph/fetch-profile';
-import { getSpaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
-import { SubstreamProposal } from './substream-schema';
 
-const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
-  const filter = [
-    `createdById: { startsWithInsensitive: "${createdBy}" }`,
-    spaceId && `spaceId: { equalTo: "${spaceId}" }`,
+type NetworkProposalAction = {
+  actionType: string;
+};
+
+type NetworkProposal = {
+  id: string;
+  name: string | null;
+  proposedBy: string;
+  spaceId: string;
+  startTime: string;
+  endTime: string;
+  createdAt: string;
+  createdAtBlock: string;
+  executedAt: string | null;
+  proposalActions: NetworkProposalAction[];
+};
+
+const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: string) => {
+  const filters = [
+    `proposedBy: { is: "${proposedBy}" }`,
+    spaceId && `spaceId: { is: "${spaceId}" }`,
   ]
     .filter(Boolean)
-    .join(' ');
+    .join('\n        ');
 
   return `query {
-    proposals(first: 5, filter: {${filter}}, orderBy: END_TIME_DESC, offset: ${skip}) {
+    proposalsConnection(
+      first: 5
+      offset: ${skip}
+      orderBy: END_TIME_DESC
+      filter: {
+        ${filters}
+      }
+    ) {
       nodes {
         id
-        space {
-          id
-          ${getSpaceMetadataFragment(spaceId)}
-        }
-        edit {
-          id
-          name
-          createdAt
-          createdAtBlock
-        }
-        type
-        createdById
-
+        name
+        proposedBy
+        spaceId
         startTime
         endTime
-        status
-
-        proposalVotes {
-          totalCount
-          nodes {
-            vote
-            accountId
-          }
+        createdAt
+        createdAtBlock
+        executedAt
+        proposalActions {
+          actionType
         }
       }
     }
   }`;
 };
 
-export interface FetchUserProposalsOptions {
-  userId: string; // For now we use the address
-  signal?: AbortController['signal'];
+export type FetchUserProposalsOptions = {
   spaceId?: string;
+  proposerSpaceId: string;
+  signal?: AbortController['signal'];
   page?: number;
-}
+};
 
-interface NetworkResult {
-  proposals: { nodes: SubstreamProposal[] };
-}
+type NetworkResult = {
+  proposalsConnection: { nodes: NetworkProposal[] };
+};
 
 export async function fetchProposalsByUser({
-  userId,
+  proposerSpaceId,
   spaceId,
   signal,
   page = 0,
@@ -73,7 +84,7 @@ export async function fetchProposalsByUser({
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: getFetchUserProposalsQuery(userId, offset, spaceId),
+    query: getFetchUserProposalsQuery(proposerSpaceId, offset, spaceId),
     signal,
   });
 
@@ -85,29 +96,26 @@ export async function fetchProposalsByUser({
 
       switch (error._tag) {
         case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposalsByUser. queryId: ${queryId} userId: ${userId} page: ${page}
+            `Encountered runtime graphql error in fetchProposalsByUser. queryId: ${queryId} proposerSpaceId: ${proposerSpaceId} page: ${page}
 
-            queryString: ${getFetchUserProposalsQuery(userId, offset)}
+            queryString: ${getFetchUserProposalsQuery(proposerSpaceId, offset)}
             `,
             error.message
           );
           return {
-            proposals: {
+            proposalsConnection: {
               nodes: [],
             },
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} userId: ${userId} page: ${page}`
+            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} proposerSpaceId: ${proposerSpaceId} page: ${page}`
           );
           return {
-            proposals: {
+            proposalsConnection: {
               nodes: [],
             },
           };
@@ -118,29 +126,46 @@ export async function fetchProposalsByUser({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = result.proposals.nodes
-    .map(p => {
-      const decoded = Schema.decodeEither(SubstreamProposal)(p);
+  const proposals = result.proposalsConnection.nodes;
 
-      return Either.match(decoded, {
-        onLeft: error => {
-          console.error(`Unable to decode proposal ${p.id} with error ${error}`);
-          return null;
-        },
-        onRight: proposal => {
-          return proposal;
-        },
-      });
-    })
-    .filter(p => p !== null);
-
-  const creatorIds = proposals.map(p => p.createdById);
+  const creatorIds = proposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   return proposals.map(p => {
-    const maybeProfile = profilesBySpaceId.get(p.createdById);
-    return ProposalWithoutVotersDto(p, maybeProfile);
+    const maybeProfile = profilesBySpaceId.get(p.proposedBy);
+    const profile = maybeProfile ?? {
+      id: p.proposedBy,
+      spaceId: p.proposedBy,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      address: p.proposedBy as `0x${string}`,
+      profileLink: null,
+    };
+
+    const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
+    const type = mapActionTypeToProposalType(actionType);
+    const endTime = Number(p.endTime);
+    const status = deriveProposalStatus(p.executedAt, endTime);
+
+    return {
+      id: p.id,
+      editId: '',
+      name: p.name,
+      createdAt: 0,
+      createdAtBlock: p.createdAtBlock ?? '0',
+      type,
+      startTime: Number(p.startTime),
+      endTime,
+      status,
+      space: {
+        id: p.spaceId,
+        name: null,
+        image: PLACEHOLDER_SPACE_IMAGE,
+      },
+      createdBy: profile,
+    };
   });
 }

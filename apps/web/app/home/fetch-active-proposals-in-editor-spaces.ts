@@ -1,122 +1,146 @@
-import { getChecksumAddress } from '@geoprotocol/geo-sdk';
-import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { ProposalDto } from '~/core/io/dto/proposals';
+import { Proposal } from '~/core/io/dto/proposals';
+import { mapActionTypeToProposalType } from '~/core/io/rest';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamProposal } from '~/core/io/substream-schema';
+import { Address } from '~/core/io/substream-schema';
+import { deriveProposalStatus } from '~/core/utils/utils';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
-interface NetworkResult {
-  proposals: {
-    totalCount: number;
-    nodes: SubstreamProposal[];
+type NetworkProposalVote = {
+  vote: 'YES' | 'NO' | 'ABSTAIN';
+  voterId: string;
+};
+
+type NetworkProposalAction = {
+  actionType: string;
+};
+
+type NetworkProposal = {
+  id: string;
+  name: string | null;
+  proposedBy: string;
+  spaceId: string;
+  startTime: string;
+  endTime: string;
+  createdAt: string;
+  createdAtBlock: string;
+  executedAt: string | null;
+  proposalActions: NetworkProposalAction[];
+  space: {
+    type: string;
   };
+  proposalVotesConnection: {
+    totalCount: number;
+    nodes: NetworkProposalVote[];
+  };
+};
+
+type NetworkResult = {
+  proposalsConnection: {
+    totalCount: number;
+    nodes: NetworkProposal[];
+  };
+};
+
+function mapVote(vote: string): 'ACCEPT' | 'REJECT' | 'ABSTAIN' {
+  switch (vote) {
+    case 'YES':
+      return 'ACCEPT';
+    case 'NO':
+      return 'REJECT';
+    default:
+      return 'ABSTAIN';
+  }
 }
 
 export async function getActiveProposalsForSpacesWhereEditor(
-  address?: string,
+  memberSpaceId?: string,
   proposalType?: 'membership' | 'content'
 ) {
-  if (!address) {
+  if (!memberSpaceId) {
     return {
       totalCount: 0,
       proposals: [],
     };
   }
 
-  let proposalTypeFilter: string | null = null;
+  let proposalTypeFilter = '';
 
   if (proposalType === 'content') {
-    proposalTypeFilter = `or: [{
-      type: { equalTo: ADD_EDIT }
-    }, {
-      type: { equalTo: ADD_SUBSPACE }
-    }, {
-      type: { equalTo: REMOVE_SUBSPACE }
-    }]`;
+    proposalTypeFilter = `
+      proposalActionsConnection: {
+        some: { actionType: { in: [PUBLISH] } }
+      }
+    `;
   }
 
   if (proposalType === 'membership') {
-    proposalTypeFilter = `or: [{
-      type: { equalTo: ADD_EDITOR }
-    }, {
-      type: { equalTo: ADD_MEMBER }
-    }, {
-      type: { equalTo: REMOVE_EDITOR }
-    }, {
-      type: { equalTo: REMOVE_MEMBER }
-    }]`;
+    proposalTypeFilter = `
+      proposalActionsConnection: {
+        some: { actionType: { in: [ADD_EDITOR, ADD_MEMBER, REMOVE_EDITOR, REMOVE_MEMBER] } }
+      }
+    `;
   }
 
-  const substreamQuery = `query {
-    proposals(
+  const query = `query {
+    proposalsConnection(
       first: 10
       orderBy: END_TIME_DESC
       filter: {
-        ${proposalTypeFilter ?? ''}
-        status: { equalTo: PROPOSED }
-        # Show all the proposals for now so users can execute them manually
-        # endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+        executedAt: { isNull: true }
+        spaceId: { isNot: "${memberSpaceId}" }
         space: {
-          spaceEditors: {
+          editors: {
             some: {
-              accountId: { equalTo: "${getChecksumAddress(address)}" }
+              memberSpaceId: { is: "${memberSpaceId}" }
             }
           }
         }
+        ${proposalTypeFilter}
       }
     ) {
       totalCount
       nodes {
         id
-        type
-
-        edit {
-          id
-          name
-          createdAt
-          createdAtBlock
-        }
-
+        name
+        proposedBy
+        spaceId
         startTime
         endTime
-        status
-
+        createdAt
+        createdAtBlock
+        executedAt
+        proposalActions {
+          actionType
+        }
         space {
-          id
-          ${spaceMetadataFragment}
+          type
         }
-
-        createdById
-        startTime
-        endTime
-        status
-
-        proposalVotes {
+        proposalVotesConnection {
           totalCount
           nodes {
             vote
-            accountId
+            voterId
           }
         }
       }
     }
   }`;
 
-  const permissionlessSpacesEffect = graphql<NetworkResult>({
+  const fetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: substreamQuery,
+    query,
   });
 
-  const proposalsInSpacesWhereEditor = await Effect.runPromise(Effect.either(permissionlessSpacesEffect));
+  const result = await Effect.runPromise(Effect.either(fetchEffect));
 
-  if (Either.isLeft(proposalsInSpacesWhereEditor)) {
-    const error = proposalsInSpacesWhereEditor.left;
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
@@ -134,39 +158,76 @@ export async function getActiveProposalsForSpacesWhereEditor(
     };
   }
 
-  const result = await Effect.runPromise(proposalsInSpacesWhereEditor);
-  const proposals = result.proposals.nodes;
+  const data = await Effect.runPromise(result);
 
-  const creatorIds = proposals.map(p => p.createdById);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const gqlProposals = data.proposalsConnection.nodes.filter(
+    p =>
+      p.space.type !== 'PERSONAL' &&
+      Number(p.endTime) > nowSeconds &&
+      !p.proposalVotesConnection.nodes.some(v => v.voterId === memberSpaceId)
+  );
+
+  const creatorIds = gqlProposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
+  const proposals: Proposal[] = gqlProposals
+    .map(p => {
+      const maybeProfile = profilesBySpaceId.get(p.proposedBy);
+      const profile = maybeProfile ?? {
+        id: p.proposedBy,
+        spaceId: p.proposedBy,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: p.proposedBy as `0x${string}`,
+        profileLink: null,
+      };
+
+      const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
+      const type = mapActionTypeToProposalType(actionType);
+      const endTime = Number(p.endTime);
+      const status = deriveProposalStatus(p.executedAt, endTime);
+
+      return {
+        id: p.id,
+        editId: '',
+        name: p.name,
+        createdAt: 0,
+        createdAtBlock: p.createdAtBlock ?? '0',
+        type,
+        startTime: Number(p.startTime),
+        endTime,
+        status,
+        space: {
+          id: p.spaceId,
+          name: null,
+          image: PLACEHOLDER_SPACE_IMAGE,
+        },
+        createdBy: profile,
+        proposalVotes: {
+          totalCount: p.proposalVotesConnection.totalCount,
+          nodes: p.proposalVotesConnection.nodes.map(v => ({
+            vote: mapVote(v.vote),
+            accountId: Address(v.voterId),
+            voter: profilesBySpaceId.get(v.voterId) ?? {
+              id: v.voterId,
+              spaceId: v.voterId,
+              name: null,
+              avatarUrl: null,
+              coverUrl: null,
+              address: v.voterId as `0x${string}`,
+              profileLink: null,
+            },
+          })),
+        },
+      };
+    });
+
   return {
-    totalCount: result.proposals.totalCount,
-    proposals: proposals
-      .map(p => {
-        const decodedProposal = Schema.decodeEither(SubstreamProposal)(p);
-        const maybeProfile = profilesBySpaceId.get(p.createdById);
-
-        const proposal = Either.match(decodedProposal, {
-          onLeft: error => {
-            console.error(
-              `Encountered error decoding active proposal for editor space with id ${p.space.id} – error: ${error}`
-            );
-            return null;
-          },
-          onRight: space => {
-            return space;
-          },
-        });
-
-        if (proposal === null) {
-          return null;
-        }
-
-        return ProposalDto(proposal, maybeProfile, []);
-      })
-      .filter(p => p !== null),
+    totalCount: data.proposalsConnection.totalCount,
+    proposals,
   };
 }
