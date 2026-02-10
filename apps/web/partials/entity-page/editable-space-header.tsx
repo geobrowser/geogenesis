@@ -183,8 +183,9 @@ export function EditableSpaceHeading({
               open={isContextMenuOpen}
               onOpenChange={setIsContextMenuOpen}
               align="end"
+              asChild
               trigger={
-                <button type="button" className="rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01">
+                <button type="button" className="rounded p-1 transition-colors duration-75 hover:bg-grey-01">
                   {isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
                 </button>
               }
