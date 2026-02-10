@@ -8,6 +8,7 @@ import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { usePropertyFormat } from '~/core/hooks/use-property-format';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -173,8 +174,20 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
   const value = rawValue?.value ?? '';
   const renderableType = property.renderableTypeStrict ?? property.dataType;
 
+  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(property.id, spaceId);
+  const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
+
   if (renderableType === 'URL') {
-    return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
+    return (
+      <WebUrlField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        spaceId={spaceId}
+        value={value}
+        resolvedUrl={resolvedUrl}
+      />
+    );
   }
 
   if (renderableType === 'DATE' || renderableType === 'DATETIME' || renderableType === 'TIME') {
@@ -194,6 +207,19 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
         value={value}
         format={property.format || undefined}
         unitId={rawValue?.options?.unit || property.unit || undefined}
+      />
+    );
+  }
+
+  if (renderableType === 'TEXT' && hasUrlTemplate) {
+    return (
+      <WebUrlField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        spaceId={spaceId}
+        value={value}
+        resolvedUrl={resolvedUrl}
       />
     );
   }
