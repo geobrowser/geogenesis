@@ -261,7 +261,7 @@ export const TableBlockTable = ({
       <div className="overflow-x-scroll rounded-lg">
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
-            <tr>
+            <tr className="border-b border-grey-02">
               {properties.map((column, i) => {
                 const isShown = shownColumnIds.includes(column.id);
                 const headerClassNames = isShown
@@ -276,7 +276,7 @@ export const TableBlockTable = ({
                   <th
                     key={column.id}
                     className={cx(
-                      'group relative border-b border-grey-02 p-[10px] text-left',
+                      'group relative p-[10px] text-left',
                       headerClassNames,
                       !isEditingDateTime ? 'min-w-[250px]' : 'min-w-[300px]'
                     )}
