@@ -19,16 +19,11 @@ interface Props {
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
-  const [person, proposalsCount] = await Promise.all([
-    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
-    connectedAddress
-      ? fetchProposalCountByUser({
-          userId: connectedAddress,
-        })
-      : null,
-  ]);
+  const person = connectedAddress ? await Effect.runPromise(fetchProfile(connectedAddress)) : null;
 
-  const acceptedProposalsCount = proposalsCount ?? 0;
+  const acceptedProposalsCount = person?.spaceId
+    ? await fetchProposalCountByUser({ spaceId: person.spaceId })
+    : 0;
 
   return (
     <Component
@@ -36,6 +31,7 @@ export default async function PersonalHomePage(props: Props) {
       proposalType={(await props.searchParams).proposalType}
       acceptedProposalsCount={acceptedProposalsCount}
       connectedAddress={connectedAddress}
+      connectedSpaceId={person?.spaceId}
     />
   );
 }

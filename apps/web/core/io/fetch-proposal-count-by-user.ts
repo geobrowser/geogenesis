@@ -5,31 +5,31 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '../environment';
 import { graphql } from './subgraph/graphql';
 
-const getFetchUserProposalCountQuery = (createdBy: string) => {
+const getFetchUserProposalCountQuery = (spaceId: string) => {
   return `query {
-    proposals(filter: { createdById: { equalTo: "${createdBy}" } }) {
+    proposalsConnection(filter: { proposedBy: { is: "${spaceId}" } }) {
       totalCount
     }
   }`;
 };
 
 export interface FetchUserProposalCountOptions {
-  userId: string; // For now we use the address
+  spaceId: string;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  proposals: {
+  proposalsConnection: {
     totalCount: number;
   };
 }
 
-export async function fetchProposalCountByUser({ userId, signal }: FetchUserProposalCountOptions): Promise<number> {
+export async function fetchProposalCountByUser({ spaceId, signal }: FetchUserProposalCountOptions): Promise<number> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: getFetchUserProposalCountQuery(userId),
+    query: getFetchUserProposalCountQuery(spaceId),
     signal,
   });
 
@@ -47,21 +47,21 @@ export async function fetchProposalCountByUser({ userId, signal }: FetchUserProp
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposalCount. queryId: ${queryId} userId: ${userId}
+            `Encountered runtime graphql error in fetchProposalCount. queryId: ${queryId} spaceId: ${spaceId}
 
-            queryString: ${getFetchUserProposalCountQuery(userId)}
+            queryString: ${getFetchUserProposalCountQuery(spaceId)}
             `,
             error.message
           );
           return {
-            proposals: {
+            proposalsConnection: {
               totalCount: 0,
             },
           };
         default:
-          console.error(`${error._tag}: Unable to fetch proposals, queryId: ${queryId} userId: ${userId}`);
+          console.error(`${error._tag}: Unable to fetch proposals, queryId: ${queryId} spaceId: ${spaceId}`);
           return {
-            proposals: {
+            proposalsConnection: {
               totalCount: 0,
             },
           };
@@ -73,5 +73,5 @@ export async function fetchProposalCountByUser({ userId, signal }: FetchUserProp
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return result.proposals.totalCount ?? 0;
+  return result.proposalsConnection.totalCount ?? 0;
 }

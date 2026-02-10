@@ -1,26 +1,28 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { fetchProfile } from '~/core/io/subgraph';
-import { defaultProfile } from '~/core/io/subgraph/fetch-profile';
+import { defaultProfile, fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 
 const getProposedEditorInProposalQuery = (proposalId: string) => `query {
-  proposedEditors(
+  proposalActionsConnection(
     first: 1
-    filter: { proposalId: { equalTo: "${proposalId}" } }
+    filter: {
+      proposalId: { is: "${proposalId}" }
+      actionType: { in: [ADD_EDITOR, REMOVE_EDITOR] }
+    }
   ) {
     nodes {
-      accountId
+      targetId
     }
   }
 }`;
 
 interface NetworkResult {
-  proposedEditors: {
+  proposalActionsConnection: {
     nodes: {
-      accountId: string;
+      targetId: string | null;
     }[];
   };
 }
@@ -41,33 +43,24 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
 
       switch (error._tag) {
         case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposedMember. proposalId: ${proposalId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchProposedEditor. proposalId: ${proposalId} endpoint: ${endpoint}
 
             queryString: ${getProposedEditorInProposalQuery(proposalId)}
             `,
             error.message
           );
 
-          return {
-            proposedEditors: {
-              nodes: [],
-            },
-          };
+          return { proposalActionsConnection: { nodes: [] } };
 
         default:
-          console.error(`${error._tag}: Unable to fetch subspace, proposalId: ${proposalId} endpoint: ${endpoint}`);
+          console.error(
+            `${error._tag}: Unable to fetch proposed editor, proposalId: ${proposalId} endpoint: ${endpoint}`
+          );
 
-          return {
-            proposedEditors: {
-              nodes: [],
-            },
-          };
+          return { proposalActionsConnection: { nodes: [] } };
       }
     }
 
@@ -75,13 +68,12 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposedEditors = result.proposedEditors.nodes;
+  const actions = result.proposalActionsConnection.nodes;
 
-  if (proposedEditors.length === 0) {
+  if (actions.length === 0 || !actions[0].targetId) {
     return defaultProfile('');
   }
 
-  // There should only be one proposed editor in a single proposal
-  const proposedEditorAccount = proposedEditors[0].accountId;
-  return await Effect.runPromise(fetchProfile(proposedEditorAccount));
+  const proposedEditorSpaceId = actions[0].targetId;
+  return await Effect.runPromise(fetchProfileBySpaceId(proposedEditorSpaceId));
 }

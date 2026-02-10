@@ -1,6 +1,6 @@
 'use client';
 
-import { Content, Root, Trigger } from '@radix-ui/react-popover';
+import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
@@ -15,15 +15,18 @@ export function SpaceMembersPopover({ trigger, content }: Props) {
   return (
     <Root open={open} onOpenChange={setOpen}>
       <Trigger>{trigger}</Trigger>
-      <Content
-        key="space-editor-modal-content"
-        side="top"
-        sideOffset={8}
-        avoidCollisions
-        className="z-100 origin-bottom"
-      >
-        {content}
-      </Content>
+      <Portal>
+        <Content
+          key="space-editor-modal-content"
+          side="bottom"
+          align="start"
+          sideOffset={8}
+          avoidCollisions
+          className="z-100 origin-top-left"
+        >
+          {content}
+        </Content>
+      </Portal>
     </Root>
   );
 }
