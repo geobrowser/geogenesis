@@ -493,28 +493,32 @@ type TypesChangeRowProps = {
 };
 
 const TypesChangeRow = ({ relations }: TypesChangeRowProps) => {
-  const addedTypes = relations.filter(r => r.changeType === 'ADD').map(r => r.after?.toEntityId);
-  const removedTypes = relations.filter(r => r.changeType === 'REMOVE').map(r => r.before?.toEntityId);
+  const addedTypes = relations
+    .filter(r => r.changeType === 'ADD')
+    .map(r => ({ id: r.after?.toEntityId, name: r.after?.toEntityName }));
+  const removedTypes = relations
+    .filter(r => r.changeType === 'REMOVE')
+    .map(r => ({ id: r.before?.toEntityId, name: r.before?.toEntityName }));
 
   return (
     <div className="grid grid-cols-2 gap-20">
       <div className="flex flex-wrap gap-2">
-        {removedTypes.map((typeId, i) => (
+        {removedTypes.map((type, i) => (
           <div
             key={i}
             className="bg-deleted inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text line-through decoration-1"
           >
-            {typeId}
+            {type.name ?? type.id}
           </div>
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        {addedTypes.map((typeId, i) => (
+        {addedTypes.map((type, i) => (
           <div
             key={i}
             className="bg-added inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text"
           >
-            {typeId}
+            {type.name ?? type.id}
           </div>
         ))}
       </div>

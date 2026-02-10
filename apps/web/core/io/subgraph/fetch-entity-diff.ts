@@ -7,10 +7,12 @@ import { restFetch, ApiError } from '../rest';
 import { ApiEntityDiffResponseSchema } from '../rest';
 import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';
+import { fetchEntitySnapshot } from './fetch-entity-snapshot';
 
 interface FetchEntityDiffArgs {
   entityId: string;
-  fromEditId: string;
+  /** When omitted, returns an all-added diff representing the entity's creation. */
+  fromEditId?: string;
   toEditId: string;
   spaceId: string;
   signal?: AbortSignal;
@@ -23,6 +25,16 @@ export async function fetchEntityDiff({
   spaceId,
   signal,
 }: FetchEntityDiffArgs): Promise<EntityDiff | null> {
+  // No previous version — fetch the snapshot and convert to an all-added diff
+  if (!fromEditId) {
+    const snapshot = await fetchEntitySnapshot({ entityId, editId: toEditId, spaceId, signal });
+    if (!snapshot) return null;
+
+    const entityDiff = Diff.snapshotToDiff(snapshot);
+    const processed = await Diff.postProcessDiffs([entityDiff], spaceId);
+    return processed[0] ?? null;
+  }
+
   const config = Environment.getConfig();
 
   const params = new URLSearchParams();

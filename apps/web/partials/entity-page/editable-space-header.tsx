@@ -77,7 +77,6 @@ export function EditableSpaceHeading({
 
   const onVersionClick = (version: EntityVersion, index: number) => {
     const nextVersion = allVersions[index + 1];
-    if (!nextVersion) return;
 
     const date = new Date(version.createdAt);
     const dateLabel = date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
@@ -86,7 +85,7 @@ export function EditableSpaceHeading({
     setDiffSelection({
       entityId,
       spaceId,
-      fromEditId: nextVersion.editId,
+      fromEditId: nextVersion?.editId,
       toEditId: version.editId,
       label,
     });
@@ -150,20 +149,15 @@ export function EditableSpaceHeading({
             )}
             <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
               {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
-              {allVersions.length <= 1 && allVersions.length > 0 && !isFetching && <HistoryEmpty />}
-              {allVersions.length > 1 &&
-                allVersions.map((v, index) => {
-                  if (index === allVersions.length - 1) return null;
-                  return (
-                    <EntityVersionItem
-                      key={v.editId}
-                      createdAt={v.createdAt}
-                      name={v.name}
-                      createdBy={v.createdBy}
-                      onClick={() => onVersionClick(v, index)}
-                    />
-                  );
-                })}
+              {allVersions.map((v, index) => (
+                <EntityVersionItem
+                  key={v.editId}
+                  createdAt={v.createdAt}
+                  name={v.name}
+                  createdBy={v.createdBy}
+                  onClick={() => onVersionClick(v, index)}
+                />
+              ))}
               {isFetching && allVersions.length === 0 && (
                 <div className="flex h-12 w-full items-center justify-center bg-white">
                   <Dots />
