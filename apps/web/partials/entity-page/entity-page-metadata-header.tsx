@@ -8,6 +8,7 @@ import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   DEFAULT_NUMBER_FORMAT,
+  DEFAULT_URL_TEMPLATE,
   DEFAULT_TIME_FORMAT,
   FORMAT_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
@@ -113,6 +114,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       // Add format property if type is temporal or numeric
       const isTemporalType = newType === 'DATE' || newType === 'DATETIME' || newType === 'TIME';
       const isNumericType = newType === 'INT64' || newType === 'FLOAT64' || newType === 'DECIMAL';
+      const isTextOrUrlType = newType === 'TEXT' || newType === 'URL';
       if (isTemporalType || isNumericType) {
         addPropertyToEntity({
           entityId,
@@ -121,7 +123,15 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
           entityName: name ?? '',
           defaultValue: isTemporalType ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
         });
-      } else if (formatValue) {
+      } else if (newType === 'URL') {
+        addPropertyToEntity({
+          entityId,
+          propertyId: FORMAT_PROPERTY,
+          propertyName: 'Format',
+          entityName: name ?? '',
+          defaultValue: DEFAULT_URL_TEMPLATE,
+        });
+      } else if (formatValue && !isTextOrUrlType) {
         // Remove format property if type is not temporal or numeric and property exists
         storage.values.delete(formatValue);
       }
