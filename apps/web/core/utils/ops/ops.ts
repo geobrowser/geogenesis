@@ -13,7 +13,7 @@ function hexToBytes(hex: string): Uint8Array {
 interface ValueParam {
   property: string;
   value: {
-    type: 'text' | 'bool' | 'int64' | 'float64' | 'point' | 'date' | 'time' | 'datetime' | 'schedule';
+    type: 'text' | 'boolean' | 'integer' | 'float' | 'point' | 'date' | 'time' | 'datetime' | 'schedule';
     value?: string | number | boolean;
     lon?: number;
     lat?: number;

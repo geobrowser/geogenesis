@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "geogenesis",
@@ -23,7 +22,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@effect/opentelemetry": "^0.59.3",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.6.0",
+        "@geoprotocol/geo-sdk": "^0.8.0",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.208.0",
         "@opentelemetry/sdk-trace-base": "^2.4.0",
@@ -379,9 +378,9 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.6.0", "", { "dependencies": { "@geoprotocol/grc-20": "^0.3.0", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-b+z2CeS4N7DVPLIfMagYjGKQQMEirAul7360bU6FnGF1mamHJdNCb4Asn30/xjrP2kcxE+iK/7KmPtCIbg8sOA=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.8.0", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.0", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-tcrJcAtQLmIOMRgSsoSVQz7bTzLJUggemcSAXzLpiXMy7fjtMU5vEoU4bFLLB3usYJ1vB9Buba6+1PG9Towm5Q=="],
 
-    "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.3.0", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-Nd8lge6lAZxOeNYxmMzoTC8cYCEwN1RDaLod3IQO1DQnMzu7Qhv7F/x9ZnbZryO1wkbSSRQ4Z62CL6xf+BNrVQ=="],
+    "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.0", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-pZ42y0/nDR6L0pRPlW/xeLOwAcNvsQvP/9BpSO9DN8U4/dmGjHAxK9M2euXncjnFLoaCKmx8NiANVpHVD94MGA=="],
 
     "@graphql-codegen/add": ["@graphql-codegen/add@6.0.0", "", { "dependencies": { "@graphql-codegen/plugin-helpers": "^6.0.0", "tslib": "~2.6.0" }, "peerDependencies": { "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0" } }, "sha512-biFdaURX0KTwEJPQ1wkT6BRgNasqgQ5KbCI1a3zwtLtO7XTo7/vKITPylmiU27K5DSOWYnY/1jfSqUAEBuhZrQ=="],
 
@@ -3168,8 +3167,6 @@
     "@gemini-wallet/core/eventemitter3": ["eventemitter3@5.0.1", "", {}, "sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA=="],
 
     "@geoprotocol/geo-sdk/uuid": ["uuid@13.0.0", "", { "bin": { "uuid": "dist-node/bin/uuid" } }, "sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w=="],
-
-    "@geoprotocol/geo-sdk/viem": ["viem@2.45.0", "", { "dependencies": { "@noble/curves": "1.9.1", "@noble/hashes": "1.8.0", "@scure/bip32": "1.7.0", "@scure/bip39": "1.6.0", "abitype": "1.2.3", "isows": "1.0.7", "ox": "0.11.3", "ws": "8.18.3" }, "peerDependencies": { "typescript": ">=5.0.4" }, "optionalPeers": ["typescript"] }, "sha512-iVA9qrAgRdtpWa80lCZ6Jri6XzmLOwwA1wagX2HnKejKeliFLpON0KOdyfqvcy+gUpBVP59LBxP2aKiL3aj8fg=="],
 
     "@graphql-codegen/cli/@graphql-codegen/client-preset": ["@graphql-codegen/client-preset@4.8.3", "", { "dependencies": { "@babel/helper-plugin-utils": "^7.20.2", "@babel/template": "^7.20.7", "@graphql-codegen/add": "^5.0.3", "@graphql-codegen/gql-tag-operations": "4.0.17", "@graphql-codegen/plugin-helpers": "^5.1.1", "@graphql-codegen/typed-document-node": "^5.1.2", "@graphql-codegen/typescript": "^4.1.6", "@graphql-codegen/typescript-operations": "^4.6.1", "@graphql-codegen/visitor-plugin-common": "^5.8.0", "@graphql-tools/documents": "^1.0.0", "@graphql-tools/utils": "^10.0.0", "@graphql-typed-document-node/core": "3.2.0", "tslib": "~2.6.0" }, "peerDependencies": { "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0", "graphql-sock": "^1.0.0" }, "optionalPeers": ["graphql-sock"] }, "sha512-QpEsPSO9fnRxA6Z66AmBuGcwHjZ6dYSxYo5ycMlYgSPzAbyG8gn/kWljofjJfWqSY+T/lRn+r8IXTH14ml24vQ=="],
 
