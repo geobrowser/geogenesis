@@ -11,16 +11,16 @@ import { deriveProposalStatus } from '~/core/utils/utils';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
-type GqlProposalVote = {
+type NetworkProposalVote = {
   vote: 'YES' | 'NO' | 'ABSTAIN';
   voterId: string;
 };
 
-type GqlProposalAction = {
+type NetworkProposalAction = {
   actionType: string;
 };
 
-type GqlProposal = {
+type NetworkProposal = {
   id: string;
   name: string | null;
   proposedBy: string;
@@ -30,20 +30,20 @@ type GqlProposal = {
   createdAt: string;
   createdAtBlock: string;
   executedAt: string | null;
-  proposalActions: GqlProposalAction[];
+  proposalActions: NetworkProposalAction[];
   space: {
     type: string;
   };
   proposalVotesConnection: {
     totalCount: number;
-    nodes: GqlProposalVote[];
+    nodes: NetworkProposalVote[];
   };
 };
 
 type NetworkResult = {
   proposalsConnection: {
     totalCount: number;
-    nodes: GqlProposal[];
+    nodes: NetworkProposal[];
   };
 };
 
