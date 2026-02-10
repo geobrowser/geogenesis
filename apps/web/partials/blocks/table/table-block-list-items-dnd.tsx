@@ -166,30 +166,28 @@ const TableBlockListItemsDnd = ({
   };
 
   if (entries.length <= 1) {
-    return (
-      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
-        {entries.map((row, index) => {
-          const isPlaceholder = Boolean(row.placeholder);
+    <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
+      {entries.map((row, index) => {
+        const isPlaceholder = Boolean(row.placeholder);
 
-          return (
-            <TableBlockListItem
-              isEditing={isEditing}
-              key={`${row.entityId}-${index}`}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              rowEntityId={row.entityId}
-              isPlaceholder={isPlaceholder}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-              source={source}
-              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
-            />
-          );
-        })}
-      </div>
-    );
+        return (
+          <TableBlockListItem
+            isEditing={isEditing}
+            key={`${row.entityId}-${index}`}
+            columns={row.columns}
+            currentSpaceId={spaceId}
+            rowEntityId={row.entityId}
+            isPlaceholder={isPlaceholder}
+            onChangeEntry={onChangeEntry}
+            onLinkEntry={onLinkEntry}
+            properties={propertiesSchema}
+            relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
+            source={source}
+            autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
+          />
+        );
+      })}
+    </div>;
   }
   return (
     <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
