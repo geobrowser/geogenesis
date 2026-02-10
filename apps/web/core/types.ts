@@ -88,6 +88,7 @@ export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' |
 export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
   BOOLEAN: 'BOOL',
   INTEGER: 'INT64',
+  FLOAT: 'FLOAT64',
   CHECKBOX: 'BOOL',
   PLACE: 'RELATION',
 } as const;
@@ -166,7 +167,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
   PLACE: 'Place',
-  ADDRESS: 'Address'
+  ADDRESS: 'Address',
 };
 
 // ==============================================================================
