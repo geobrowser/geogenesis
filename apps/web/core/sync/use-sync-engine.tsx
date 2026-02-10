@@ -4,6 +4,7 @@ import { Atom } from '@xstate/store';
 
 import { ReactNode, createContext, useContext } from 'react';
 
+import { PersistenceEngine } from '../database/persistence-engine';
 import { queryClient } from '../query-client';
 import { Entity, Relation, Value } from '../types';
 import { SyncEngine } from './engine';
@@ -30,6 +31,7 @@ export function useSyncEngine() {
 export const stream = new GeoEventStream();
 export const store = new GeoStore(stream);
 export const engine = new SyncEngine(stream, queryClient, store);
+export const persistenceEngine = new PersistenceEngine(stream);
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {
   const hydrate = (entityIds?: string[]) => {
