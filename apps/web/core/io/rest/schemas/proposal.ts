@@ -72,14 +72,13 @@ export const ApiActionSchema = Schema.Struct({
 export type ApiAction = Schema.Schema.Type<typeof ApiActionSchema>;
 
 // ============================================================================
-// Proposal Status Response Schema
+// Proposal Response Schemas
 // ============================================================================
 
 /**
- * Full proposal status response from GET /proposals/:id/status
- * and GET /proposals/space/:spaceId/status
+ * Shared fields between detail and list proposal responses.
  */
-export const ApiProposalStatusResponseSchema = Schema.Struct({
+const ApiProposalBaseFields = {
   proposalId: Schema.String,
   spaceId: Schema.String,
   name: Schema.NullOr(Schema.String),
@@ -92,13 +91,6 @@ export const ApiProposalStatusResponseSchema = Schema.Struct({
   ),
   votingMode: Schema.Union(Schema.Literal('FAST'), Schema.Literal('SLOW')),
   actions: Schema.Array(ApiActionSchema),
-  votes: Schema.Struct({
-    yes: Schema.Number,
-    no: Schema.Number,
-    abstain: Schema.Number,
-    total: Schema.Number,
-    voters: Schema.Array(ApiVoteSchema),
-  }),
   userVote: Schema.NullOr(ApiVoteOptionSchema),
   quorum: Schema.Struct({
     required: Schema.Number,
@@ -119,15 +111,46 @@ export const ApiProposalStatusResponseSchema = Schema.Struct({
     isVotingEnded: Schema.Boolean,
   }),
   canExecute: Schema.Boolean,
+};
+
+/**
+ * Full proposal detail response from GET /proposals/:id/status.
+ * Includes individual voter records.
+ */
+export const ApiProposalStatusResponseSchema = Schema.Struct({
+  ...ApiProposalBaseFields,
+  votes: Schema.Struct({
+    yes: Schema.Number,
+    no: Schema.Number,
+    abstain: Schema.Number,
+    total: Schema.Number,
+    voters: Schema.Array(ApiVoteSchema),
+  }),
 });
 
 export type ApiProposalStatusResponse = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
 
 /**
+ * Proposal list item response from GET /proposals/space/:spaceId/status.
+ * Omits individual voter records — only aggregate counts.
+ */
+export const ApiProposalListItemSchema = Schema.Struct({
+  ...ApiProposalBaseFields,
+  votes: Schema.Struct({
+    yes: Schema.Number,
+    no: Schema.Number,
+    abstain: Schema.Number,
+    total: Schema.Number,
+  }),
+});
+
+export type ApiProposalListItem = Schema.Schema.Type<typeof ApiProposalListItemSchema>;
+
+/**
  * Paginated list of proposals from GET /proposals/space/:spaceId/status
  */
 export const ApiProposalListResponseSchema = Schema.Struct({
-  proposals: Schema.Array(ApiProposalStatusResponseSchema),
+  proposals: Schema.Array(ApiProposalListItemSchema),
   nextCursor: Schema.NullOr(Schema.String),
 });
 
@@ -137,10 +160,7 @@ export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListR
 // Mapping Functions
 // ============================================================================
 
-/**
- * Map API action type to internal ProposalType.
- */
-export function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
+export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
     case 'PUBLISH':
       return 'ADD_EDIT';

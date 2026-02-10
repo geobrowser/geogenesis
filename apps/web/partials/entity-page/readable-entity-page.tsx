@@ -16,6 +16,7 @@ import {
 } from '~/core/sync/use-store';
 import { DataType, RenderableType } from '~/core/types';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { usePropertyFormat } from '~/core/hooks/use-property-format';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -325,11 +326,30 @@ function RenderedValue({
     return null;
   }
 
+  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
+  const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
+
   switch (renderableType) {
     case 'URL':
-      return <WebUrlField key={`uri-${propertyId}-${value}`} isEditing={false} spaceId={spaceId} value={value} />;
-    case 'TEXT':
       return (
+        <WebUrlField
+          key={`uri-${propertyId}-${value}`}
+          isEditing={false}
+          spaceId={spaceId}
+          value={value}
+          resolvedUrl={resolvedUrl}
+        />
+      );
+    case 'TEXT':
+      return hasUrlTemplate ? (
+        <WebUrlField
+          key={`uri-${propertyId}-${value}`}
+          isEditing={false}
+          spaceId={spaceId}
+          value={value}
+          resolvedUrl={resolvedUrl}
+        />
+      ) : (
         <Text key={`string-${propertyId}-${value}`} as="p">
           {value}
         </Text>

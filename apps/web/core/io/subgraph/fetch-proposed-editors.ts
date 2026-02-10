@@ -6,13 +6,19 @@ import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
 
-const getFetchProposedEditorsQuery = (id: string, time: number) => `query {
-  space(id: "${id}") {
-    proposedEditors(
-      filter: {proposal: {status: {equalTo: PROPOSED}, endTime: {greaterThan: ${time}}}}
-    ) {
-      nodes {
-        accountId
+const getFetchProposedEditorsQuery = (spaceId: string) => `query {
+  proposalsConnection(
+    filter: {
+      spaceId: { is: "${spaceId}" }
+      executedAt: { isNull: true }
+      proposalActionsConnection: {
+        some: { actionType: { in: [ADD_EDITOR] } }
+      }
+    }
+  ) {
+    nodes {
+      proposalActions {
+        targetId
       }
     }
   }
@@ -23,17 +29,20 @@ export interface FetchProposedEditorsOptions {
 }
 
 type NetworkResult = {
-  space: { proposedEditors: { nodes: Array<{ accountId: string }> } } | null;
+  proposalsConnection: {
+    nodes: Array<{
+      proposalActions: Array<{ targetId: string | null }>;
+    }>;
+  };
 };
 
 export async function fetchProposedEditors(options: FetchProposedEditorsOptions): Promise<string[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
-  const now = Math.floor(Date.now() / 1_000);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchProposedEditorsQuery(options.id, now),
+    query: getFetchProposedEditorsQuery(options.id),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -54,19 +63,19 @@ export async function fetchProposedEditors(options: FetchProposedEditorsOptions)
               options.id
             } endpoint: ${endpoint}
 
-            queryString: ${getFetchProposedEditorsQuery(options.id, now)}
+            queryString: ${getFetchProposedEditorsQuery(options.id)}
             `,
             error.message
           );
 
-          return { space: null };
+          return { proposalsConnection: { nodes: [] } };
 
         default:
           console.error(
             `${error._tag}: Unable to fetch proposed editors, queryId: ${queryId} spaceId: ${options.id} endpoint: ${endpoint}`
           );
 
-          return { space: null };
+          return { proposalsConnection: { nodes: [] } };
       }
     }
 
@@ -75,11 +84,9 @@ export async function fetchProposedEditors(options: FetchProposedEditorsOptions)
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (!result.space) {
-    return [];
-  }
+  const targetIds = result.proposalsConnection.nodes.flatMap(node =>
+    node.proposalActions.map(action => action.targetId).filter((id): id is string => id != null)
+  );
 
-  const proposedEditors = result.space.proposedEditors.nodes.map(node => node.accountId);
-
-  return proposedEditors;
+  return targetIds;
 }

@@ -30,6 +30,7 @@ type WebUrlFieldProps = {
   placeholder?: string;
   spaceId: string;
   value: string;
+  resolvedUrl?: string;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   className?: string;
@@ -40,6 +41,7 @@ export function WebUrlField({
   isEditing = false,
   spaceId,
   value,
+  resolvedUrl,
   className = '',
   ...props
 }: WebUrlFieldProps) {
@@ -52,14 +54,15 @@ export function WebUrlField({
     setLocalValue(value);
   }, [value]);
 
-  if (value.startsWith('graph://')) {
+  if (!resolvedUrl && value.startsWith('graph://')) {
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
   // Check if URL has a protocol (http://, https://, mailto:, tel:, etc.)
   // If not, prepend https:// to prevent relative path behavior
-  const normalizedUrl = value && !value.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${value}` : value;
-
+  const hrefSource = resolvedUrl ?? value;
+  const normalizedUrl =
+    hrefSource && !hrefSource.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${hrefSource}` : hrefSource;
   return isEditing ? (
     <input
       {...props}

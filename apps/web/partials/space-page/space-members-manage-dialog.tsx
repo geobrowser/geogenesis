@@ -1,6 +1,6 @@
 'use client';
 
-import { Content, Overlay, Portal, Root, Trigger } from '@radix-ui/react-dialog';
+import { Content, Overlay, Portal, Root, Title, Trigger } from '@radix-ui/react-dialog';
 import { motion } from 'framer-motion';
 
 import * as React from 'react';
@@ -19,7 +19,10 @@ export function SpaceMembersManageDialog(props: Props) {
 
   return (
     <Root open={open} onOpenChange={onOpenChange}>
-      <Trigger className="w-full">{props.trigger}</Trigger>
+      <Trigger className="group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text">
+        <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
+        <div className="relative z-10 flex w-full items-center gap-2">{props.trigger}</div>
+      </Trigger>
 
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text bg-opacity-20" />
@@ -28,7 +31,7 @@ export function SpaceMembersManageDialog(props: Props) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <div className="flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between">
-                {props.header}
+                <Title asChild>{props.header}</Title>
                 <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
               </div>
 

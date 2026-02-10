@@ -7,7 +7,7 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
-import { EntityId } from '~/core/io/substream-schema';
+import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/substream-schema';
@@ -496,6 +496,13 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
     case 'REMOVE_SUBSPACE':
       return `Remove subspace from ${proposal.space.name}`;
   }
+}
+
+export function deriveProposalStatus(executedAt: string | null, endTime: number): ProposalStatus {
+  if (executedAt) return 'ACCEPTED';
+  const now = Math.floor(Date.now() / 1000);
+  if (endTime < now) return 'REJECTED';
+  return 'PROPOSED';
 }
 
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {

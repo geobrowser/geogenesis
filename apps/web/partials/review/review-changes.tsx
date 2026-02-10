@@ -43,7 +43,7 @@ const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY;
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const { isReviewOpen, setIsReviewOpen } = useDiff();
+  const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
@@ -117,14 +117,21 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isReadyToPublish = React.useMemo(() => {
-    if (!activeSpace || proposalName.length === 0) return false;
-    const ops = Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace);
+  const hasValidOps = React.useMemo(() => {
+    if (!activeSpace) return false;
 
-    return ops.length > 0;
-  }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
+    const result = Effect.runSyncExit(
+      Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
+    );
 
-  const [entities, isLoadingChanges] = useLocalChanges(activeSpace);
+    if (result._tag === 'Failure') return false;
+
+    return result.value.length > 0;
+  }, [activeSpace, valuesFromSpace, relationsFromSpace]);
+
+  const isReadyToPublish = hasValidOps && proposalName.length > 0;
+
+  const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
   const handleProposalNameChange = (name: string) => {

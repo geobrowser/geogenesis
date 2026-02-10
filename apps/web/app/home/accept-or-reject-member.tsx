@@ -17,11 +17,11 @@ interface Props {
 /**
  * Component for voting on membership proposals (ADD_MEMBER, REMOVE_MEMBER).
  *
- * In the new protocol, membership proposals use the same voting mechanism
- * as all other proposals via SpaceRegistry.enter() with PROPOSAL_VOTED action.
+ * Membership proposals use the fast-path voting mode, so the contract
+ * automatically executes the proposal when the vote threshold is met.
+ * No separate execute step is needed.
  */
 export function AcceptOrRejectMember({ spaceId, proposalId }: Props) {
-  // Use a single state variable to prevent race conditions where both could be true
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
   const { vote, status: voteStatus } = useVote({
@@ -30,6 +30,7 @@ export function AcceptOrRejectMember({ spaceId, proposalId }: Props) {
   });
 
   const hasVoted = voteStatus === 'success';
+  const hasError = voteStatus === 'error';
   const isPendingApproval = selectedVote === 'ACCEPT' && voteStatus === 'pending';
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
@@ -43,6 +44,22 @@ export function AcceptOrRejectMember({ spaceId, proposalId }: Props) {
     vote('REJECT');
   };
 
+  if (hasError) {
+    return (
+      <div className="flex items-center gap-2">
+        <p className="text-smallButton text-red-01">Vote failed</p>
+        <SmallButton
+          variant="secondary"
+          onClick={() => {
+            if (selectedVote) vote(selectedVote);
+          }}
+        >
+          Retry
+        </SmallButton>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
@@ -55,7 +72,7 @@ export function AcceptOrRejectMember({ spaceId, proposalId }: Props) {
       </div>
       {hasVoted && (
         <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-          <div className="text-smallButton">Vote registered</div>
+          <div className="text-smallButton">{selectedVote === 'ACCEPT' ? 'Approved' : 'Rejected'}</div>
         </div>
       )}
     </div>
