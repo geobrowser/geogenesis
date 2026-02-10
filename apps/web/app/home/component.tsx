@@ -24,8 +24,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
-import { Execute } from '~/partials/active-proposal/execute';
-
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
 import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 import { AcceptOrRejectMember } from './accept-or-reject-member';
@@ -44,9 +42,16 @@ type Props = {
   acceptedProposalsCount: number;
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
+  connectedSpaceId?: string;
 };
 
-export async function Component({ header, acceptedProposalsCount, proposalType, connectedAddress }: Props) {
+export async function Component({
+  header,
+  acceptedProposalsCount,
+  proposalType,
+  connectedAddress,
+  connectedSpaceId,
+}: Props) {
   return (
     <>
       <div className="mx-auto max-w-[880px]">
@@ -64,7 +69,11 @@ export async function Component({ header, acceptedProposalsCount, proposalType, 
                 </div>
               }
             >
-              <PendingProposals connectedAddress={connectedAddress} proposalType={proposalType} />
+              <PendingProposals
+                connectedAddress={connectedAddress}
+                connectedSpaceId={connectedSpaceId}
+                proposalType={proposalType}
+              />
             </React.Suspense>
           }
           acceptedProposalsCount={acceptedProposalsCount}
@@ -113,11 +122,12 @@ function PersonalHomeNavigation() {
 type PendingProposalsProps = {
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
+  connectedSpaceId?: string;
 };
 
-async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
+async function PendingProposals({ proposalType, connectedAddress, connectedSpaceId }: PendingProposalsProps) {
   const [activeProposals, profile] = await Promise.all([
-    getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
+    getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 
@@ -275,7 +285,6 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 
-  const isProposalDone = getIsProposalEnded(proposal.status, proposal.endTime);
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
@@ -288,14 +297,27 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       <Link href={NavUtils.toProposal(proposal.space.id, proposal.id)}>
         <div className="text-smallTitle">{proposalName}</div>
       </Link>
-      <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">
-        <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
-          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
-            <span className="relative h-3 w-3 overflow-hidden rounded-full">
-              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
-            </span>
-            <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
+      <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">
+        <Link
+          href={NavUtils.toSpace(proposal.space.id)}
+          className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
+        >
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            <GeoImage
+              value={space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
+              alt={`Cover image for space ${space.entity?.name ?? space.id}`}
+              fill
+              style={{ objectFit: 'cover' }}
+            />
           </div>
+          <p>{space.entity?.name ?? proposal.space.id}</p>
+        </Link>
+        <span className="text-grey-03">&middot;</span>
+        <div className="inline-flex items-center gap-1.5">
+          <span className="relative h-3 w-3 overflow-hidden rounded-full">
+            <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
+          </span>
+          <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
         </div>
       </div>
       <div className="flex w-full flex-col gap-4">
@@ -332,12 +354,6 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       </div>
       <div className="flex w-full items-center justify-between">
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
-
-        {process.env.NODE_ENV === 'development' && isProposalDone && (
-          <Execute spaceId={proposal.space.id} proposalId={proposal.id}>
-            Execute
-          </Execute>
-        )}
 
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor

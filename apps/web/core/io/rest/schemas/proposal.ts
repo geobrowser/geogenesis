@@ -160,10 +160,7 @@ export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListR
 // Mapping Functions
 // ============================================================================
 
-/**
- * Map API action type to internal ProposalType.
- */
-export function mapActionTypeToProposalType(actionType: ApiActionType): ProposalType {
+export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
     case 'PUBLISH':
       return 'ADD_EDIT';
