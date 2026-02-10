@@ -65,7 +65,7 @@ export function TableBlockContextMenu() {
         <Dropdown.Content
           sideOffset={8}
           className="z-[1001] block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          align="end"
+          align="start"
         >
           {isInitialState && (
             <>
