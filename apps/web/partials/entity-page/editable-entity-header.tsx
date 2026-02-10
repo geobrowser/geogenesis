@@ -142,7 +142,6 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
                     createdAt={v.createdAt}
                     name={v.name}
                     createdBy={v.createdBy}
-                    isFirst={index === 0}
                     onClick={() => onVersionClick(v, index)}
                   />
                 );

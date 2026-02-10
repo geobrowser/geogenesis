@@ -9,10 +9,9 @@ type EntityVersionItemProps = {
   name: string | null;
   createdBy: ApiProfile | null;
   onClick: () => void;
-  isFirst?: boolean;
 };
 
-export function EntityVersionItem({ createdAt, name, createdBy, onClick, isFirst }: EntityVersionItemProps) {
+export function EntityVersionItem({ createdAt, name, createdBy, onClick }: EntityVersionItemProps) {
   const date = new Date(createdAt);
 
   const formattedDate = date.toLocaleDateString(undefined, {
@@ -27,7 +26,7 @@ export function EntityVersionItem({ createdAt, name, createdBy, onClick, isFirst
     hour12: false,
   });
 
-  const versionName = isFirst ? 'Latest version' : (name ?? `Version from ${formattedDate}`);
+  const versionName = name ?? `Version from ${formattedDate}`;
 
   return (
     <button

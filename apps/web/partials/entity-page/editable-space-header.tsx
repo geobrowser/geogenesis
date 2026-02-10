@@ -160,7 +160,6 @@ export function EditableSpaceHeading({
                       createdAt={v.createdAt}
                       name={v.name}
                       createdBy={v.createdBy}
-                      isFirst={index === 0}
                       onClick={() => onVersionClick(v, index)}
                     />
                   );
