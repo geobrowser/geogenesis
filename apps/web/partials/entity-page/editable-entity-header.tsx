@@ -1,7 +1,6 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
 import Link from 'next/link';
 
@@ -10,7 +9,6 @@ import * as React from 'react';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { fetchEntityVersions, type EntityVersion } from '~/core/io/subgraph/fetch-entity-versions';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -24,13 +22,12 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import { HistoryEmpty } from '../history/history-empty';
-import { HistoryDiffSlideUp, type HistoryDiffSelection } from '../history/history-diff-slide-up';
+import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
+import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityPageMetadataHeader } from './entity-page-metadata-header';
-
-const PAGE_SIZE = 10;
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { values } = useSyncEngine();
@@ -46,41 +43,17 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const { storage } = useMutate();
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
-  const [diffSelection, setDiffSelection] = React.useState<HistoryDiffSelection | null>(null);
 
   const {
-    data: versionPages,
+    allVersions,
     isFetching,
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useInfiniteQuery({
-    enabled: isHistoryOpen,
-    queryKey: [`entity-versions-rest-${entityId}`],
-    queryFn: ({ signal, pageParam = 0 }) =>
-      fetchEntityVersions({ entityId, limit: PAGE_SIZE, offset: pageParam * PAGE_SIZE, signal }),
-    getNextPageParam: (lastPage, pages) => (lastPage.length === PAGE_SIZE ? pages.length : undefined),
-    initialPageParam: 0,
-  });
-
-  const allVersions = React.useMemo(() => versionPages?.pages.flat() ?? [], [versionPages]);
-
-  const onVersionClick = (version: EntityVersion, index: number) => {
-    const nextVersion = allVersions[index + 1];
-    if (!nextVersion) return;
-
-    const date = new Date(version.createdAt);
-    const label = `Changes from ${date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}`;
-
-    setDiffSelection({
-      entityId,
-      spaceId,
-      fromEditId: nextVersion.editId,
-      toEditId: version.editId,
-      label,
-    });
-    setIsHistoryOpen(false);
-  };
+    diffSelection,
+    onVersionClick,
+    clearDiffSelection,
+  } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
   const onNameChange = (value: string) => {
     storage.entities.name.set(entityId, spaceId, value);
@@ -131,19 +104,19 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
           )}
           <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
-            {allVersions.length <= 1 && allVersions.length > 0 && !isFetching && <HistoryEmpty />}
-            {allVersions.length > 1 &&
-              allVersions.map((v, index) => {
-                if (index === allVersions.length - 1) return null;
-                return (
-                  <EntityVersionItem
-                    key={v.editId}
-                    createdAt={v.createdAt}
-                    isFirst={index === 0}
-                    onClick={() => onVersionClick(v, index)}
-                  />
-                );
-              })}
+            {allVersions.map((v, index) => (
+              <EntityVersionItem
+                key={v.editId}
+                createdAt={v.createdAt}
+                name={v.name}
+                createdById={v.createdById}
+                createdBy={v.createdBy}
+                onClick={() => {
+                  onVersionClick(v, index);
+                  setIsHistoryOpen(false);
+                }}
+              />
+            ))}
             {isFetching && allVersions.length === 0 && (
               <div className="flex h-12 w-full items-center justify-center bg-white">
                 <Dots />
@@ -165,7 +138,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
         </div>
       </div>
 
-      <HistoryDiffSlideUp selection={diffSelection} onClose={() => setDiffSelection(null)} />
+      <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </>
   );
 }

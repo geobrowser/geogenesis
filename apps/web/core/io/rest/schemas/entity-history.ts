@@ -1,9 +1,13 @@
 import { Schema } from 'effect';
 
 import { ApiEntityDiffSchema } from './diff-shared';
+import { ApiProfileSchema } from './profile';
 
 const ApiEntityVersionSchema = Schema.Struct({
   editId: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  createdById: Schema.NullOr(Schema.String),
+  createdBy: Schema.NullOr(ApiProfileSchema),
   blockNumber: Schema.String,
   createdAt: Schema.String,
 });
