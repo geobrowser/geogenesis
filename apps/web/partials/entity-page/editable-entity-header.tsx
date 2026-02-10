@@ -136,6 +136,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
                 key={v.editId}
                 createdAt={v.createdAt}
                 name={v.name}
+                createdById={v.createdById}
                 createdBy={v.createdBy}
                 onClick={() => onVersionClick(v, index)}
               />

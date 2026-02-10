@@ -7,11 +7,12 @@ import { Text } from '~/design-system/text';
 type EntityVersionItemProps = {
   createdAt: string;
   name: string | null;
+  createdById: string | null;
   createdBy: ApiProfile | null;
   onClick: () => void;
 };
 
-export function EntityVersionItem({ createdAt, name, createdBy, onClick }: EntityVersionItemProps) {
+export function EntityVersionItem({ createdAt, name, createdById, createdBy, onClick }: EntityVersionItemProps) {
   const date = new Date(createdAt);
 
   const formattedDate = date.toLocaleDateString(undefined, {
@@ -28,6 +29,10 @@ export function EntityVersionItem({ createdAt, name, createdBy, onClick }: Entit
 
   const versionName = name ?? `Version from ${formattedDate}`;
 
+  // Use resolved profile, or fall back to a default constructed from createdById
+  const displayName = createdBy?.name ?? (createdById ? formatShortAddress(createdById) : null);
+  const avatarId = createdBy?.name ?? createdBy?.spaceId ?? createdById;
+
   return (
     <button
       type="button"
@@ -40,20 +45,16 @@ export function EntityVersionItem({ createdAt, name, createdBy, onClick }: Entit
         </Text>
       </div>
       <div className="flex items-center justify-between">
-        {createdBy ? (
-          <div className="flex items-center gap-1">
-            <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <Avatar
-                alt={`Avatar for ${createdBy.name ?? createdBy.spaceId}`}
-                avatarUrl={createdBy.avatarUrl}
-                value={createdBy.name ?? createdBy.spaceId}
-              />
-            </div>
-            <p className="text-smallButton">{createdBy.name ?? formatShortAddress(createdBy.address)}</p>
+        <div className="flex items-center gap-1">
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            <Avatar
+              alt={`Avatar for ${avatarId ?? 'unknown'}`}
+              avatarUrl={createdBy?.avatarUrl ?? null}
+              value={avatarId ?? 'unknown'}
+            />
           </div>
-        ) : (
-          <div />
-        )}
+          <p className="text-smallButton">{displayName ?? 'Unknown author'}</p>
+        </div>
         <p className="text-smallButton">
           {formattedDate} · {formattedTime}
         </p>
