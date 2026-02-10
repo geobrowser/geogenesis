@@ -80,15 +80,10 @@ export function TableBlockGalleryItem({
 
   const maybeCoverUrl = coverRelation?.toEntity.value;
 
-  // Check which image property is selected to be shown in the collection
-  const showCover = columns[SystemIds.COVER_PROPERTY] !== undefined;
-
-  // Only use cover if it's selected to be shown (cover takes priority if both are shown)
-  if (showCover) {
-    image = maybeCoverUrl;
-  } else {
-    image = maybeAvatarUrl;
-  }
+  // Always show cover if available, then fall back to avatar.
+  // This ensures images render even when cover/avatar aren't
+  // configured as shown columns on the data block.
+  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
 
   const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
   if (image && imageUrl) {
@@ -129,18 +124,14 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // Use the appropriate image property based on what's selected to be shown
-                // Prefer cover if shown, otherwise use avatar
-                const usePropertyId = showCover ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;
-                const usePropertyName = showCover ? 'Cover' : 'Avatar';
-
-                // Use the consolidated helper to create and link the image
+                // Gallery items default to cover for new uploads since
+                // the large image area is a natural fit for cover images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: usePropertyId,
-                  relationPropertyName: usePropertyName,
+                  relationPropertyId: SystemIds.COVER_PROPERTY,
+                  relationPropertyName: 'Cover',
                   spaceId: currentSpaceId,
                 });
               }}

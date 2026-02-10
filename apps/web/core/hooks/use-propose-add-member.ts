@@ -32,7 +32,7 @@ interface UseProposeAddMemberArgs {
 interface ProposeAddMemberParams {
   /** The space ID (bytes16 hex without 0x prefix) of the member to add */
   targetMemberSpaceId: string;
-  /** Voting mode: 'fast' (threshold-based) or 'slow' (duration-based). Defaults to 'slow'. */
+  /** Voting mode: 'fast' (threshold-based) or 'slow' (duration-based). Defaults to 'fast' since addMember is fast-path-valid. */
   votingMode?: 'fast' | 'slow';
 }
 
@@ -48,7 +48,7 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
   });
 
   const handleProposeAddMember = useCallback(
-    async ({ targetMemberSpaceId, votingMode = 'slow' }: ProposeAddMemberParams) => {
+    async ({ targetMemberSpaceId, votingMode = 'fast' }: ProposeAddMemberParams) => {
       if (!smartAccount) {
         const message = 'Please connect your wallet to propose adding a member';
         console.error('No smart account available');

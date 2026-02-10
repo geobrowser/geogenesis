@@ -117,12 +117,19 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isReadyToPublish = React.useMemo(() => {
-    if (!activeSpace || proposalName.length === 0) return false;
-    const ops = Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace);
+  const hasValidOps = React.useMemo(() => {
+    if (!activeSpace) return false;
 
-    return ops.length > 0;
-  }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
+    const result = Effect.runSyncExit(
+      Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
+    );
+
+    if (result._tag === 'Failure') return false;
+
+    return result.value.length > 0;
+  }, [activeSpace, valuesFromSpace, relationsFromSpace]);
+
+  const isReadyToPublish = hasValidOps && proposalName.length > 0;
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace);
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
@@ -216,7 +223,9 @@ export const ReviewChanges = () => {
             )}
           </div>
           <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-            <Pending isPending={isPublishing}>Propose edits</Pending>
+            <Pending isPending={isPublishing}>
+              {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
+            </Pending>
           </Button>
         </div>
         <div className="px-2">

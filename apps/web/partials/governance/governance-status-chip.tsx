@@ -49,6 +49,17 @@ export function GovernanceStatusChip({ status, endTime, yesPercentage }: Props) 
 
       return <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">{statusText}</div>;
     }
+    case 'REJECTED': {
+      return (
+        <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium text-red-01">
+          {/* Optically align the icon */}
+          <div className="mt-[0.75px]">
+            <CheckCloseSmall />
+          </div>
+          Rejected
+        </div>
+      );
+    }
     default:
       throw new Error(`${status} proposal status not implemented yet`);
   }

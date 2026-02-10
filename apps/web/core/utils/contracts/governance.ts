@@ -43,10 +43,10 @@ export interface ProposalAction {
 }
 
 /**
- * Encodes the data payload for a PROPOSAL_CREATED action (slow path).
+ * Encodes the data payload for a PROPOSAL_CREATED action.
  *
  * @param proposalId - bytes16 proposal ID
- * @param votingMode - 0 for FAST, 1 for SLOW
+ * @param votingMode - 0 for SLOW, 1 for FAST (matches Solidity enum VotingMode { Slow, Fast })
  * @param actions - Array of actions to execute if proposal passes
  * @returns Encoded bytes for use in SpaceRegistry.enter()
  */
