@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -35,11 +36,11 @@ const viewLabel: Record<PersonalHomeView, string> = {
 };
 
 type PersonalHomeDashboardProps = {
-  acceptedProposalsCount: number;
+  sidebarCounts?: SidebarCounts;
   proposalsList: React.ReactNode;
 };
 
-export function PersonalHomeDashboard({ acceptedProposalsCount, proposalsList }: PersonalHomeDashboardProps) {
+export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: PersonalHomeDashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const params = useSearchParams();
   const proposalType = params?.get('proposalType');
@@ -97,7 +98,7 @@ export function PersonalHomeDashboard({ acceptedProposalsCount, proposalsList }:
           {proposalsList}
         </div>
         <div className="w-1/3">
-          <Sidebar acceptedProposalsCount={acceptedProposalsCount} />
+          <Sidebar counts={sidebarCounts} />
         </div>
       </div>
     </>
@@ -192,32 +193,32 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
 };
 
 type SidebarProps = {
-  acceptedProposalsCount: number;
+  counts?: SidebarCounts;
 };
 
-const Sidebar = ({ acceptedProposalsCount }: SidebarProps) => {
+const Sidebar = ({ counts }: SidebarProps) => {
   return (
     <div className="space-y-2">
       <Activity
         label="My proposals"
         activities={[
-          { icon: <InProgressSmall />, label: 'In progress', count: 0 },
-          { icon: <CheckCircleSmall />, label: 'Accepted', count: acceptedProposalsCount },
-          { icon: <CheckCloseSmall />, label: 'Rejected', count: 0 },
+          { icon: <InProgressSmall />, label: 'In progress', count: counts?.myProposals.inProgress ?? 0 },
+          { icon: <CheckCircleSmall />, label: 'Accepted', count: counts?.myProposals.accepted ?? 0 },
+          { icon: <CheckCloseSmall />, label: 'Rejected', count: counts?.myProposals.rejected ?? 0 },
         ]}
       />
       <Activity
-        label="Proposals I’ve voted on"
+        label="Proposals I've voted on"
         activities={[
-          { icon: <CheckCircleSmall />, label: 'Accepted', count: 0 },
-          { icon: <CheckCloseSmall />, label: 'Rejected', count: 0 },
+          { icon: <CheckCircleSmall />, label: 'Accepted', count: counts?.votedOn.accepted ?? 0 },
+          { icon: <CheckCloseSmall />, label: 'Rejected', count: counts?.votedOn.rejected ?? 0 },
         ]}
       />
       <Activity
         label="I have accepted"
         activities={[
-          { icon: <Member />, label: 'Members', count: 0 },
-          { icon: <EditSmall />, label: 'Editors', count: 0 },
+          { icon: <Member />, label: 'Members', count: counts?.iHaveAccepted.members ?? 0 },
+          { icon: <EditSmall />, label: 'Editors', count: counts?.iHaveAccepted.editors ?? 0 },
         ]}
       />
     </div>
