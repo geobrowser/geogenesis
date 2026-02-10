@@ -2,8 +2,9 @@ import Dexie, { Table } from 'dexie';
 
 import { Relation, Value } from '../types';
 
-const DB_NAME = 'geogenesis';
-const VERSION = 3;
+const OLD_DB_NAME = 'geogenesis';
+const DB_NAME = 'geogenesis-local';
+const VERSION = 1;
 
 class Geo extends Dexie {
   values!: Table<Value>;
@@ -12,24 +13,20 @@ class Geo extends Dexie {
   constructor() {
     super(DB_NAME);
 
-    // Keep v2 declaration so Dexie knows the upgrade path
-    this.version(2).stores({
-      values: '++id',
-      relations: '++id',
+    this.version(VERSION).stores({
+      values: 'id, spaceId',
+      relations: 'id, spaceId',
     });
-
-    // v3: string PK + spaceId index for efficient space-scoped deletes
-    this.version(VERSION)
-      .stores({
-        values: 'id, spaceId',
-        relations: 'id, spaceId',
-      })
-      .upgrade(tx => {
-        // Clear stale v2 data since the PK type changed
-        tx.table('values').clear();
-        tx.table('relations').clear();
-      });
   }
 }
 
 export const db = new Geo();
+
+// Best-effort cleanup of legacy DB that used an incompatible PK.
+if (typeof indexedDB !== 'undefined') {
+  try {
+    indexedDB.deleteDatabase(OLD_DB_NAME);
+  } catch {
+    // Ignore cleanup errors; new DB should still work.
+  }
+}
