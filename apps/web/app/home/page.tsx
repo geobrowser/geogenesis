@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
+import { fetchSidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Profile } from '~/core/types';
 
@@ -21,15 +21,13 @@ export default async function PersonalHomePage(props: Props) {
 
   const person = connectedAddress ? await Effect.runPromise(fetchProfile(connectedAddress)) : null;
 
-  const acceptedProposalsCount = person?.spaceId
-    ? await fetchProposalCountByUser({ spaceId: person.spaceId })
-    : 0;
+  const sidebarCounts = person?.spaceId ? await fetchSidebarCounts(person.spaceId) : undefined;
 
   return (
     <Component
       header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} />}
       proposalType={(await props.searchParams).proposalType}
-      acceptedProposalsCount={acceptedProposalsCount}
+      sidebarCounts={sidebarCounts}
       connectedAddress={connectedAddress}
       connectedSpaceId={person?.spaceId}
     />
