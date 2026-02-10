@@ -106,19 +106,25 @@ function convertToSdkValue(value: Value): PropertyValueParam {
         ...(value.options?.language && { language: value.options.language }),
       } as PropertyValueParam;
     case 'BOOL':
-      return { property, type: 'bool', value: val === '1' || val === 'true' } as PropertyValueParam;
+      return { property, type: 'boolean', value: val === '1' || val === 'true' } as PropertyValueParam;
     case 'INT64':
       return {
         property,
-        type: 'int64',
+        type: 'integer',
         value: parseInt(val, 10) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
-      } as unknown as PropertyValueParam;
+      } as PropertyValueParam;
     case 'FLOAT64':
+      return {
+        property,
+        type: 'float',
+        value: parseFloat(val) || 0,
+        ...(value.options?.unit && { unit: value.options.unit }),
+      } as PropertyValueParam;
     case 'DECIMAL':
       return {
         property,
-        type: 'float64',
+        type: 'float',
         value: parseFloat(val) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
       } as PropertyValueParam;
