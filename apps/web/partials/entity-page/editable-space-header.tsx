@@ -80,7 +80,8 @@ export function EditableSpaceHeading({
     if (!nextVersion) return;
 
     const date = new Date(version.createdAt);
-    const label = `Changes from ${date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}`;
+    const dateLabel = date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+    const label = version.name ?? `Changes from ${dateLabel}`;
 
     setDiffSelection({
       entityId,
@@ -157,6 +158,8 @@ export function EditableSpaceHeading({
                     <EntityVersionItem
                       key={v.editId}
                       createdAt={v.createdAt}
+                      name={v.name}
+                      createdBy={v.createdBy}
                       isFirst={index === 0}
                       onClick={() => onVersionClick(v, index)}
                     />
