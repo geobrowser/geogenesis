@@ -8,12 +8,6 @@ import { Effect } from 'effect';
 import { VIDEO_BLOCK_TYPE } from '~/core/constants';
 import { getEntityBacklinks, getBatchEntities } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
-import type {
-  ApiEntitySnapshotResponse,
-  ApiVersionedValue,
-  ApiVersionedRelation,
-  ApiBlockSnapshot,
-} from '~/core/io/rest';
 import type { Entity, Relation, Value } from '~/core/types';
 
 import type {
@@ -120,13 +114,12 @@ export const BLOCK_TYPE_IDS = [TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, VIDEO_BLOCK_
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
-  const changes = diffWords(before, after);
+  // Short-circuit: when diffing against empty, the whole string is added/removed
+  if (before === '' && after !== '') return [{ value: after, added: true }];
+  if (after === '' && before !== '') return [{ value: before, removed: true }];
+  if (before === '' && after === '') return [];
 
-  return changes.map(change => ({
-    value: change.value,
-    ...(change.added ? { added: true } : {}),
-    ...(change.removed ? { removed: true } : {}),
-  }));
+  return mapDiffChunks(diffWords(before, after));
 }
 
 export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
@@ -140,18 +133,6 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
       }
       if (rel.typeId === BLOCKS && rel.changeType === 'REMOVE' && rel.before) {
         blockToParent.set(rel.before.toEntityId, entity.entityId);
-      }
-    }
-  }
-
-  for (const entity of entities) {
-    if (blockToParent.has(entity.entityId)) continue;
-    for (const rel of entity.relations) {
-      if (rel.typeId === TYPES_PROPERTY) {
-        const typeEntityId = rel.after?.toEntityId ?? rel.before?.toEntityId;
-        if (typeEntityId && BLOCK_TYPE_IDS.includes(typeEntityId)) {
-          break;
-        }
       }
     }
   }
@@ -634,127 +615,4 @@ function computeRelationChanges(
   return relationChanges;
 }
 
-// ============================================================================
-// Snapshot → Diff conversion (for first/oldest version)
-// ============================================================================
 
-const { IMAGE_URL_PROPERTY } = SystemIds;
-
-function serializeSnapshotValue(v: ApiVersionedValue): { type: string; value: string | null } {
-  if (v.text !== undefined && v.text !== null) return { type: 'TEXT', value: v.text };
-  if (v.boolean !== undefined && v.boolean !== null) return { type: 'BOOL', value: String(v.boolean) };
-  if (v.integer !== undefined && v.integer !== null) return { type: 'INT64', value: String(v.integer) };
-  if (v.float !== undefined && v.float !== null) return { type: 'FLOAT64', value: String(v.float) };
-  if (v.decimal !== undefined && v.decimal !== null) return { type: 'DECIMAL', value: v.decimal };
-  if (v.bytes !== undefined && v.bytes !== null) return { type: 'BYTES', value: v.bytes };
-  if (v.date !== undefined && v.date !== null) return { type: 'DATE', value: v.date };
-  if (v.time !== undefined && v.time !== null) return { type: 'TIME', value: v.time };
-  if (v.datetime !== undefined && v.datetime !== null) return { type: 'DATETIME', value: v.datetime };
-  if (v.point !== undefined && v.point !== null) return { type: 'POINT', value: v.point };
-  if (v.rect !== undefined && v.rect !== null) return { type: 'RECT', value: v.rect };
-  return { type: 'TEXT', value: null };
-}
-
-function snapshotValueToChange(v: ApiVersionedValue): ValueChange {
-  const { type, value } = serializeSnapshotValue(v);
-
-  if (type === 'TEXT') {
-    return {
-      propertyId: v.propertyId,
-      spaceId: v.spaceId,
-      type: 'TEXT',
-      before: null,
-      after: value,
-      diff: computeTextDiff('', value ?? ''),
-    };
-  }
-
-  return {
-    propertyId: v.propertyId,
-    spaceId: v.spaceId,
-    type: type as SimpleValueType,
-    before: null,
-    after: value,
-  };
-}
-
-function snapshotRelationToChange(r: ApiVersionedRelation): RelationChange {
-  return {
-    relationId: r.relationId,
-    typeId: r.typeId,
-    spaceId: r.spaceId,
-    changeType: 'ADD',
-    before: null,
-    after: {
-      toEntityId: r.toEntityId,
-      toSpaceId: r.toSpaceId ?? null,
-      position: r.position ?? null,
-    },
-  };
-}
-
-function getBlockTypeFromRelations(relations: readonly ApiVersionedRelation[]): 'textBlock' | 'imageBlock' | 'dataBlock' {
-  for (const rel of relations) {
-    if (rel.typeId === TYPES_PROPERTY) {
-      if (rel.toEntityId === TEXT_BLOCK) return 'textBlock';
-      if (rel.toEntityId === IMAGE_BLOCK) return 'imageBlock';
-      if (rel.toEntityId === DATA_BLOCK) return 'dataBlock';
-    }
-  }
-  return 'textBlock';
-}
-
-function snapshotBlockToChange(block: ApiBlockSnapshot): BlockChange {
-  const blockType = getBlockTypeFromRelations(block.relations);
-
-  switch (blockType) {
-    case 'textBlock': {
-      const content = block.values.find(v => v.propertyId === MARKDOWN_CONTENT)?.text ?? '';
-      return {
-        id: block.id,
-        type: 'textBlock',
-        before: null,
-        after: content,
-        diff: computeTextDiff('', content),
-      };
-    }
-    case 'imageBlock': {
-      const url = block.values.find(v => v.propertyId === IMAGE_URL_PROPERTY)?.text ?? null;
-      return {
-        id: block.id,
-        type: 'imageBlock',
-        before: null,
-        after: url,
-      };
-    }
-    case 'dataBlock': {
-      const name = block.values.find(v => v.propertyId === NAME_PROPERTY)?.text ?? null;
-      return {
-        id: block.id,
-        type: 'dataBlock',
-        before: null,
-        after: name,
-      };
-    }
-  }
-}
-
-/**
- * Convert a snapshot response into an all-added EntityDiff.
- * Used for the oldest version where there's no previous version to diff against.
- */
-export function snapshotToDiff(snapshot: ApiEntitySnapshotResponse): EntityDiff {
-  const nameValue = snapshot.values.find(v => v.propertyId === NAME_PROPERTY);
-  const name = nameValue?.text ?? null;
-
-  // Filter out BLOCKS relations from the entity-level relations since blocks are separate
-  const entityRelations = snapshot.relations.filter(r => r.typeId !== BLOCKS);
-
-  return {
-    entityId: snapshot.id,
-    name,
-    values: snapshot.values.map(snapshotValueToChange),
-    relations: entityRelations.map(snapshotRelationToChange),
-    blocks: snapshot.blocks.map(snapshotBlockToChange),
-  };
-}

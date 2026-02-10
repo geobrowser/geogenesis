@@ -44,6 +44,7 @@ const ApiBlockSnapshotSchema = Schema.Struct({
   relations: Schema.Array(ApiVersionedRelationSchema),
 });
 
+/** Entity snapshot from GET /versioned/entities/:id?editId=...&spaceId=... */
 export const ApiEntitySnapshotResponseSchema = Schema.Struct({
   id: Schema.String,
   values: Schema.Array(ApiVersionedValueSchema),

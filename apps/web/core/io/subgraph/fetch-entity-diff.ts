@@ -1,6 +1,7 @@
 import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { snapshotToDiff } from '~/core/io/dto/snapshot-to-diff';
 import { Diff, type EntityDiff } from '~/core/utils/diff';
 
 import { restFetch, ApiError } from '../rest';
@@ -30,7 +31,7 @@ export async function fetchEntityDiff({
     const snapshot = await fetchEntitySnapshot({ entityId, editId: toEditId, spaceId, signal });
     if (!snapshot) return null;
 
-    const entityDiff = Diff.snapshotToDiff(snapshot);
+    const entityDiff = snapshotToDiff(snapshot);
     const processed = await Diff.postProcessDiffs([entityDiff], spaceId);
     return processed[0] ?? null;
   }

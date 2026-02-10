@@ -31,7 +31,8 @@ export function EntityVersionItem({ createdAt, name, createdById, createdBy, onC
 
   // Use resolved profile, or fall back to a default constructed from createdById
   const displayName = createdBy?.name ?? (createdById ? formatShortAddress(createdById) : null);
-  const avatarId = createdBy?.name ?? createdBy?.spaceId ?? createdById;
+  // Use a stable identifier for avatar generation so the color doesn't change if the user renames
+  const avatarId = createdBy?.spaceId ?? createdById;
 
   return (
     <button
