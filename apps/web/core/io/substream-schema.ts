@@ -168,57 +168,6 @@ export type SubstreamTriple = Schema.Schema.Type<typeof SubstreamTriple>;
  * Relations can point to both the set of entities in type/from/to but also
  * a specific version of type/from/to at the time the relation was created.
  *
- * SubstreamRelationHistorical points to a specific version of type/from/to
- * which is set at the time the relation was created.
- */
-const SubstreamRelationHistorical = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  spaceId: Schema.String,
-  entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  entity: Schema.Struct({
-    currentVersion: Schema.NullOr(
-      Schema.Struct({
-        version: Schema.Struct({
-          triples: Schema.Struct({
-            nodes: Schema.Array(SubstreamTriple),
-          }),
-        }),
-      })
-    ),
-  }),
-  index: Schema.String,
-  typeOfVersion: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    name: Schema.NullOr(Schema.String),
-  }),
-  // @TODO: Picking from SubstreamEntity here creates a circular schema which is not
-  // allowed atm. For now we hard-code which fields from SubstreamEntity we want to
-  // use from the SubstreamRelation.
-  fromVersion: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    name: Schema.NullOr(Schema.String),
-  }),
-  toVersion: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    name: Schema.NullOr(Schema.String),
-    versionTypes: SubstreamVersionTypes,
-
-    // Currently our relation query only returns triples where the value type is URL
-    triples: Schema.Struct({
-      nodes: Schema.Array(SubstreamTriple),
-    }),
-  }),
-});
-
-export type SubstreamRelationHistorical = Schema.Schema.Type<typeof SubstreamRelationHistorical>;
-
-/**
- * Relations can point to both the set of entities in type/from/to but also
- * a specific version of type/from/to at the time the relation was created.
- *
  * SubstreamRelationLive points to the set of entities in type/from/to and
  * not a specific version for each.
  */
@@ -296,42 +245,6 @@ export const SubstreamVersion = Schema.Struct({
 
 export type SubstreamVersion = Schema.Schema.Type<typeof SubstreamVersion>;
 
-export const SubstreamVersionHistorical = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  name: Schema.NullOr(Schema.String),
-  description: Schema.NullOr(Schema.String),
-  versionSpaces: Schema.Struct({
-    nodes: Schema.Array(
-      Schema.Struct({
-        spaceId: Schema.String,
-      })
-    ),
-  }),
-  versionTypes: SubstreamVersionTypes,
-  relationsByFromVersionId: Schema.Struct({
-    nodes: Schema.Array(SubstreamRelationHistorical),
-  }),
-  triples: Schema.Struct({
-    nodes: Schema.Array(SubstreamTriple),
-  }),
-  edit: Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-    createdAt: Schema.Number,
-    createdById: Schema.String,
-    proposals: Schema.Struct({
-      nodes: Schema.Array(
-        Schema.Struct({
-          id: Schema.String,
-        })
-      ),
-    }),
-  }),
-});
-
-export type SubstreamVersionHistorical = Schema.Schema.Type<typeof SubstreamVersionHistorical>;
-
 /**
  * Entities
  */
@@ -361,33 +274,6 @@ export const SubstreamEntityLive = Schema.Struct({
 });
 
 export type SubstreamEntityLive = Schema.Schema.Type<typeof SubstreamEntityLive>;
-
-export const SubstreamEntityHistorical = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  currentVersion: Schema.Struct({
-    version: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-      name: Schema.NullOr(Schema.String),
-      description: Schema.NullOr(Schema.String),
-      versionSpaces: Schema.Struct({
-        nodes: Schema.Array(
-          Schema.Struct({
-            spaceId: Schema.String,
-          })
-        ),
-      }),
-      versionTypes: SubstreamVersionTypes,
-      relationsByFromVersionId: Schema.Struct({
-        nodes: Schema.Array(SubstreamRelationHistorical),
-      }),
-      triples: Schema.Struct({
-        nodes: Schema.Array(SubstreamTriple),
-      }),
-    }),
-  }),
-});
-
-export type SubstreamEntityHistorical = Schema.Schema.Type<typeof SubstreamEntityHistorical>;
 
 // @TODO: Including the metadata makes the schema circular when defining triples
 // and entities which is not allowed atm.For now we make a separate schema entry

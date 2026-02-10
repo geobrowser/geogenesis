@@ -15,7 +15,8 @@ import { ChangedEntity } from '~/partials/review/review-changes';
 export interface HistoryDiffSelection {
   entityId: string;
   spaceId: string;
-  fromEditId: string;
+  /** When omitted, shows the entity's creation as an all-added diff. */
+  fromEditId?: string;
   toEditId: string;
   label: string;
 }

@@ -114,13 +114,12 @@ export const BLOCK_TYPE_IDS = [TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, VIDEO_BLOCK_
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
-  const changes = diffWords(before, after);
+  // Short-circuit: when diffing against empty, the whole string is added/removed
+  if (before === '' && after !== '') return [{ value: after, added: true }];
+  if (after === '' && before !== '') return [{ value: before, removed: true }];
+  if (before === '' && after === '') return [];
 
-  return changes.map(change => ({
-    value: change.value,
-    ...(change.added ? { added: true } : {}),
-    ...(change.removed ? { removed: true } : {}),
-  }));
+  return mapDiffChunks(diffWords(before, after));
 }
 
 export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
@@ -134,18 +133,6 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
       }
       if (rel.typeId === BLOCKS && rel.changeType === 'REMOVE' && rel.before) {
         blockToParent.set(rel.before.toEntityId, entity.entityId);
-      }
-    }
-  }
-
-  for (const entity of entities) {
-    if (blockToParent.has(entity.entityId)) continue;
-    for (const rel of entity.relations) {
-      if (rel.typeId === TYPES_PROPERTY) {
-        const typeEntityId = rel.after?.toEntityId ?? rel.before?.toEntityId;
-        if (typeEntityId && BLOCK_TYPE_IDS.includes(typeEntityId)) {
-          break;
-        }
       }
     }
   }
@@ -627,3 +614,5 @@ function computeRelationChanges(
 
   return relationChanges;
 }
+
+
