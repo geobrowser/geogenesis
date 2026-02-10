@@ -1,10 +1,9 @@
 import { Effect } from 'effect';
-import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
@@ -12,7 +11,6 @@ import {
   getIsProposalExecutable,
   getNoVotePercentage,
   getProposalTimeRemaining,
-  getUserVote,
   getYesVotePercentage,
 } from '~/core/utils/utils';
 
@@ -39,7 +37,7 @@ const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as
 
 type Props = {
   header: React.ReactNode;
-  acceptedProposalsCount: number;
+  sidebarCounts?: SidebarCounts;
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
@@ -47,7 +45,7 @@ type Props = {
 
 export async function Component({
   header,
-  acceptedProposalsCount,
+  sidebarCounts,
   proposalType,
   connectedAddress,
   connectedSpaceId,
@@ -76,7 +74,7 @@ export async function Component({
               />
             </React.Suspense>
           }
-          acceptedProposalsCount={acceptedProposalsCount}
+          sidebarCounts={sidebarCounts}
         />
       </div>
     </>
@@ -152,7 +150,14 @@ async function PendingProposals({ proposalType, connectedAddress, connectedSpace
             return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
           default:
             // We encapsulate editor, subspace, and content proposals in this pending content proposal
-            return <PendingContentProposal key={proposal.id} proposal={proposal} user={user} />;
+            return (
+              <PendingContentProposal
+                key={proposal.id}
+                proposal={proposal}
+                user={user}
+                connectedSpaceId={connectedSpaceId}
+              />
+            );
         }
       })}
     </div>
@@ -257,7 +262,11 @@ async function getMembershipProposalName(
   }
 }
 
-async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
+async function PendingContentProposal({
+  proposal,
+  user,
+  connectedSpaceId,
+}: PendingMembershipProposalProps & { connectedSpaceId?: string }) {
   const space = await cachedFetchSpace(proposal.space.id);
 
   if (!space) {
@@ -280,8 +289,6 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
     }
   })();
 
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 
@@ -289,7 +296,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
   const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
-  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
+  const userVote = connectedSpaceId ? votes.find(v => v.accountId === connectedSpaceId) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
@@ -355,16 +362,14 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       <div className="flex w-full items-center justify-between">
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
-        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
-          <AcceptOrRejectEditor
-            spaceId={proposal.space.id}
-            proposalId={proposal.id}
-            isProposalEnded={isProposalEnded}
-            isProposalExecutable={isProposalExecutable}
-            status={proposal.status}
-            userVote={userVote}
-          />
-        )}
+        <AcceptOrRejectEditor
+          spaceId={proposal.space.id}
+          proposalId={proposal.id}
+          isProposalEnded={isProposalEnded}
+          isProposalExecutable={isProposalExecutable}
+          status={proposal.status}
+          userVote={userVote}
+        />
       </div>
     </div>
   );
