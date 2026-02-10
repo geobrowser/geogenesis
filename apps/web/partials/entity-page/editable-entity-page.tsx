@@ -101,7 +101,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
           const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
           return (
-            <div key={`${id}-${propertyId}`} className="break-words">
+            <div key={`${id}-${propertyId}`} className="w-full break-words">
               <RenderedProperty spaceId={spaceId} property={property} />
 
               {isRelation || isVideo ? (
@@ -1005,7 +1005,7 @@ function RenderedValue({
   };
 
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div className="flex w-full items-start justify-between gap-2">
       <div className="min-w-0 flex-1">{renderField()}</div>
       <div className="flex shrink-0 items-center gap-1">
         <DataTypePill
