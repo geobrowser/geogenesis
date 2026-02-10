@@ -43,6 +43,7 @@ type NetworkProposal = {
 type NetworkResult = {
   proposalsConnection: {
     totalCount: number;
+    pageInfo: { hasNextPage: boolean };
     nodes: NetworkProposal[];
   };
 };
@@ -58,14 +59,18 @@ function mapVote(vote: string): 'ACCEPT' | 'REJECT' | 'ABSTAIN' {
   }
 }
 
+const PAGE_SIZE = 100;
+
 export async function getActiveProposalsForSpacesWhereEditor(
   memberSpaceId?: string,
-  proposalType?: 'membership' | 'content'
+  proposalType?: 'membership' | 'content',
+  page: number = 0
 ) {
   if (!memberSpaceId) {
     return {
       totalCount: 0,
       proposals: [],
+      hasNextPage: false,
     };
   }
 
@@ -87,9 +92,12 @@ export async function getActiveProposalsForSpacesWhereEditor(
     `;
   }
 
+  const offset = page * PAGE_SIZE;
+
   const query = `query {
     proposalsConnection(
-      first: 10
+      first: ${PAGE_SIZE}
+      offset: ${offset}
       orderBy: END_TIME_DESC
       filter: {
         executedAt: { isNull: true }
@@ -105,6 +113,9 @@ export async function getActiveProposalsForSpacesWhereEditor(
       }
     ) {
       totalCount
+      pageInfo {
+        hasNextPage
+      }
       nodes {
         id
         name
@@ -155,6 +166,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
     return {
       totalCount: 0,
       proposals: [],
+      hasNextPage: false,
     };
   }
 
@@ -228,5 +240,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
   return {
     totalCount: data.proposalsConnection.totalCount,
     proposals,
+    hasNextPage: data.proposalsConnection.pageInfo.hasNextPage,
   };
 }
