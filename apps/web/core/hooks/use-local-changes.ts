@@ -5,18 +5,19 @@ import * as React from 'react';
 import { reactiveRelations, reactiveValues } from '../sync/store';
 import { Diff, type EntityDiff } from '../utils/diff';
 
-/** Takes a point-in-time snapshot — diffs are computed on demand, not reactively. */
-export const useLocalChanges = (spaceId?: string): readonly [EntityDiff[], boolean, () => void] => {
+/** Computes local diffs for a space. Bump `version` to force a re-compute. */
+export const useLocalChanges = (spaceId?: string, version = 0): readonly [EntityDiff[], boolean] => {
   const [diffs, setDiffs] = React.useState<EntityDiff[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const getLocalChanges = React.useCallback(() => {
+  React.useEffect(() => {
     if (!spaceId) {
       setDiffs([]);
       setIsLoading(false);
       return;
     }
 
+    let cancelled = false;
     setIsLoading(true);
 
     // isLocal === true filters out hydrated server data (which has isLocal undefined)
@@ -28,14 +29,16 @@ export const useLocalChanges = (spaceId?: string): readonly [EntityDiff[], boole
       .filter(r => r.spaceId === spaceId && r.isLocal === true && !r.hasBeenPublished);
 
     Diff.fromLocal(spaceId, localValues, localRelations).then(result => {
-      setDiffs(result);
-      setIsLoading(false);
+      if (!cancelled) {
+        setDiffs(result);
+        setIsLoading(false);
+      }
     });
-  }, [spaceId]);
 
-  React.useEffect(() => {
-    getLocalChanges();
-  }, [getLocalChanges]);
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId, version]);
 
-  return [diffs, isLoading, getLocalChanges] as const;
+  return [diffs, isLoading] as const;
 };

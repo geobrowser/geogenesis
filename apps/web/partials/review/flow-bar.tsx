@@ -27,7 +27,7 @@ export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
-  const { isReviewOpen, setIsReviewOpen } = useDiff();
+  const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
 
   const values = useValues({
     selector: t => t.hasBeenPublished === false && t.isLocal === true,
@@ -84,7 +84,7 @@ export const FlowBar = () => {
                 </p>
               </div>
               <button
-                onClick={() => setIsReviewOpen(true)}
+                onClick={() => { setIsReviewOpen(true); bumpReviewVersion(); }}
                 className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
               >
                 Review edits
