@@ -169,19 +169,23 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     reactiveValues.set(prev => {
-      const unchangedValues = prev.filter(t => {
-        return !valueIdsToWrite.has(t.id);
+      const prevById = new Map(prev.map(v => [v.id, v]));
+      const mergedIncoming = newValues.map(v => {
+        const local = prevById.get(v.id);
+        return local && local.isLocal && !local.hasBeenPublished ? local : v;
       });
-
-      return [...unchangedValues, ...newValues];
+      const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
+      return [...unchangedValues, ...mergedIncoming];
     });
 
     reactiveRelations.set(prev => {
-      const unchangedRelations = prev.filter(t => {
-        return !relationIdsToWrite.has(t.id);
+      const prevById = new Map(prev.map(r => [r.id, r]));
+      const mergedIncoming = newRelations.map(r => {
+        const local = prevById.get(r.id);
+        return local && local.isLocal && !local.hasBeenPublished ? local : r;
       });
-
-      return [...unchangedRelations, ...newRelations];
+      const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
+      return [...unchangedRelations, ...mergedIncoming];
     });
   }
 

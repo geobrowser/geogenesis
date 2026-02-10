@@ -118,20 +118,36 @@ export class PersistenceEngine {
       const localValues = storedValues.filter(v => v.isLocal && !v.hasBeenPublished);
       const localRelations = storedRelations.filter(r => r.isLocal && !r.hasBeenPublished);
 
+      if (localValues.length === 0 && localRelations.length === 0) return;
+
       if (localValues.length > 0) {
         reactiveValues.set(prev => {
-          const existingIds = new Set(prev.map(v => v.id));
-          const newValues = localValues.filter(v => !existingIds.has(v.id));
-          return newValues.length > 0 ? [...prev, ...newValues] : prev;
+          const localById = new Map(localValues.map(v => [v.id, v]));
+          const merged = prev.map(v => localById.get(v.id) ?? v);
+          const prevIds = new Set(prev.map(v => v.id));
+          for (const v of localValues) {
+            if (!prevIds.has(v.id)) {
+              merged.push(v);
+            }
+          }
+          return merged;
         });
+
       }
 
       if (localRelations.length > 0) {
         reactiveRelations.set(prev => {
-          const existingIds = new Set(prev.map(r => r.id));
-          const newRelations = localRelations.filter(r => !existingIds.has(r.id));
-          return newRelations.length > 0 ? [...prev, ...newRelations] : prev;
+          const localById = new Map(localRelations.map(r => [r.id, r]));
+          const merged = prev.map(r => localById.get(r.id) ?? r);
+          const prevIds = new Set(prev.map(r => r.id));
+          for (const r of localRelations) {
+            if (!prevIds.has(r.id)) {
+              merged.push(r);
+            }
+          }
+          return merged;
         });
+
       }
     } catch (err) {
       console.warn('[PersistenceEngine] restore failed:', err);
