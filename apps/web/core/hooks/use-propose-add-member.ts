@@ -87,14 +87,6 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
       const spaceAddress = space.address as Hex;
       const votingModeValue = votingMode === 'fast' ? VOTING_MODE.FAST : VOTING_MODE.SLOW;
 
-      console.log('Proposing to add member', {
-        fromSpaceId: personalSpaceId,
-        toSpaceId: spaceId,
-        targetMemberSpaceId,
-        votingMode,
-        spaceAddress,
-      });
-
       const writeTxEffect = Effect.gen(function* () {
         const proposalId = `0x${IdUtils.generate()}` as const;
         const fromSpaceId = `0x${personalSpaceId}` as const;
@@ -125,7 +117,6 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
         });
 
         const hash = yield* tx(callData);
-        console.log('Transaction hash: ', hash);
         return hash;
       });
 
@@ -142,7 +133,7 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
           // Necessary to propagate error status to useMutation
           throw error;
         },
-        onRight: () => console.log('Successfully proposed to add member'),
+        onRight: () => {},
       });
     },
     [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]

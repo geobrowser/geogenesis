@@ -90,13 +90,6 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
 
       const spaceAddress = space.address as Hex;
 
-      console.log('Proposing to remove editor', {
-        fromSpaceId: personalSpaceId,
-        toSpaceId: spaceId,
-        targetEditorSpaceId,
-        spaceAddress,
-      });
-
       const writeTxEffect = Effect.gen(function* () {
         const proposalId = `0x${IdUtils.generate()}` as const;
         const fromSpaceId = `0x${personalSpaceId}` as const;
@@ -128,7 +121,6 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
         });
 
         const hash = yield* tx(callData);
-        console.log('Transaction hash: ', hash);
         return hash;
       });
 
@@ -145,7 +137,7 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
           // Necessary to propagate error status to useMutation
           throw error;
         },
-        onRight: () => console.log('Successfully proposed to remove editor'),
+        onRight: () => {},
       });
     },
     [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]
