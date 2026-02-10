@@ -61,6 +61,7 @@ export const MAPBOX_PROPERTY = 'f9d8ff4e52f14e73b8f2bbb31dce5465';
 export const UNIT_PROPERTY = '11b0658120d341eab5702ef4ee0a4ffd';
 export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
 export const DEFAULT_NUMBER_FORMAT = ',?';
+export const DEFAULT_URL_TEMPLATE = 'https://example.com/{value}';
 
 export const UNICODE_LINK = 'https://unicode-org.github.io/icu/userguide/format_parse/numbers/skeletons.html';
 export const GRC_20_SPECIFICATION_LINK =
@@ -101,5 +102,48 @@ export const SUGGESTED_TIME_FORMATS = [
   {
     format: DEFAULT_TIME_FORMAT,
     label: 'July 4, 2024',
+  },
+];
+
+export const SUGGESTED_URL_FORMATS = [
+  {
+    format: 'https://x.com/{value}',
+    label: 'Twitter',
+  },
+  {
+    format: 'https://github.com/{value}',
+    label: 'GitHub',
+  },
+  {
+    format: 'https://instagram.com/{value}',
+    label: 'Instagram',
+  },
+  {
+    format: 'https://www.linkedin.com/in/{value}',
+    label: 'LinkedIn',
+  },
+  {
+    format: 'https://www.youtube.com/@{value}',
+    label: 'YouTube',
+  },
+  {
+    format: 'https://etherscan.io/address/{value}',
+    label: 'Etherscan',
+  },
+  {
+    format: 'https://t.me/{value}',
+    label: 'Telegram',
+  },
+  {
+    format: 'https://discord.gg/{value}',
+    label: 'Discord',
+  },
+  {
+    format: 'https://open.spotify.com/artist/{value}',
+    label: 'Spotify Artist',
+  },
+  {
+    format: 'https://en.wikipedia.org/wiki/{value}',
+    label: 'Wikipedia',
   },
 ];
