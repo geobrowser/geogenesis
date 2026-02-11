@@ -30,7 +30,7 @@ const textareaStyles = cva(
       variant: {
         mainPage: 'mb-[-1px] text-mainPage',
         body: 'mb-[-6.5px] text-body',
-        tableCell: 'mb-[-3.5px] text-tableCell',
+        tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
         tableProperty: '!text-tableProperty !text-grey-04',
         smallTitle: 'text-smallTitle',
       },

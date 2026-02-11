@@ -303,7 +303,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
       {relations.map(r => {
         return (
           <>
-            <div key={`relation-${r.id}-${r.toEntity.value}`} className="mt-1">
+            <div key={`relation-${r.id}-${r.toEntity.value}`}>
               <LinkableRelationChip
                 small
                 isEditing
@@ -351,7 +351,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
         );
       })}
 
-      <div className="mt-1">
+      <div>
         <SelectEntityAsPopover
           trigger={<SquareButton icon={<Create />} />}
           relationValueTypes={property.relationValueTypes}

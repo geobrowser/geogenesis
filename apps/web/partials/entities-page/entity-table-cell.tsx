@@ -88,7 +88,7 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {isRelation ? (
         <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
       ) : (
@@ -128,6 +128,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
     return (
       <LinkableRelationChip
+        small
         key={relation.toEntity.value}
         isEditing={false}
         currentSpaceId={spaceId}

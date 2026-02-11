@@ -60,8 +60,6 @@ const formatColumns = (
   unpublishedColumns: { id: string }[],
   spaceId: string
 ) => {
-  const columnSize = 880 / columns.length;
-
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -84,7 +82,6 @@ const formatColumns = (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
       },
-      size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
     });
   });
 };
@@ -318,7 +315,6 @@ export const TableBlockTable = ({
                         key={`${cellId}-${index}-${row.original.entityId}`}
                         isLinkable={isNameCell && isEditing}
                         href={href}
-                        width={cell.column.getSize()}
                         isShown={isShown}
                         isEditMode={isEditing}
                       >

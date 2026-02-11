@@ -38,9 +38,13 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   const value = 'TEXT';
 
   return (
-    <div className="relative flex w-full items-center justify-between">
+    <div className="relative inline-flex items-center justify-between">
+      {/* Invisible sizer so the input's container matches the intrinsic text width */}
+      <span className="pointer-events-none invisible whitespace-pre text-smallTitle" aria-hidden>
+        {localName || 'Column name...'}
+      </span>
       <input
-        className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
+        className="absolute inset-0 bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
         onBlur={e => {
