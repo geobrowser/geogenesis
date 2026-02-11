@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation';
 
 import React, { useEffect, useRef, useState } from 'react';
 
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
 import { useTabId } from '~/core/state/editor/use-editor';
 
@@ -158,7 +157,6 @@ const tabStyles = cva(
 );
 
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
-  const isHydrated = useHydrated();
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -185,17 +183,11 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (
-        // @HACK: This is a hack to workaround issues in the app directory. Right now (08/2023)
-        // nested layouts in the app directory re-render when search params change. This causes
-        // some of the layout to re-render, affecting the position of the active tab border.
-        // When re-renders from the server happen the active tab border starts in the wrong position.
         <motion.div
-          {...(isHydrated
-            ? {
-                layoutId: 'tab-group-active-border',
-                layout: true,
-              }
-            : {})}
+          layoutId="tab-group-active-border"
+          layout
+          initial={false}
+          transition={{ duration: 0.2 }}
           className="absolute bottom-[-8px] left-0 right-0 z-100 h-px bg-text"
         />
       )}
