@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
@@ -15,7 +15,7 @@ import { ReviewState, SpaceGovernanceType } from '../types';
 import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
-import { useGeoProfile } from './use-geo-profile';
+import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
 interface MakeProposalOptions {
@@ -29,7 +29,7 @@ interface MakeProposalOptions {
 
 export function usePublish() {
   const { smartAccount } = useSmartAccount();
-  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
   const { storage } = useMutate();
 
@@ -44,16 +44,11 @@ export function usePublish() {
   const make = React.useCallback(
     async ({ values: valuesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount) return;
-      if (!profile) {
-        onError?.();
-        dispatch({ type: 'ERROR', payload: 'Profile is still loading. Please try again.' });
-        return;
-      }
-      if (!IdUtils.isValid(profile.id)) {
+      if (!personalSpaceId) {
         onError?.();
         dispatch({
           type: 'ERROR',
-          payload: 'Unable to publish: your profile entity ID could not be resolved. Please complete onboarding.',
+          payload: 'Unable to publish: your personal space could not be resolved. Please complete onboarding.',
         });
         return;
       }
@@ -77,7 +72,7 @@ export function usePublish() {
 
         yield* makeProposal({
           name,
-          author: profile.id,
+          author: personalSpaceId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -121,7 +116,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [smartAccount, profile, dispatch, storage]
+    [smartAccount, personalSpaceId, dispatch, storage]
   );
 
   return {
@@ -131,7 +126,7 @@ export function usePublish() {
 
 export function useBulkPublish() {
   const { smartAccount } = useSmartAccount();
-  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
 
   /**
@@ -142,16 +137,11 @@ export function useBulkPublish() {
     async ({ values: triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (triples.length === 0) return;
       if (!smartAccount) return;
-      if (!profile) {
-        onError?.();
-        dispatch({ type: 'ERROR', payload: 'Profile is still loading. Please try again.' });
-        return;
-      }
-      if (!IdUtils.isValid(profile.id)) {
+      if (!personalSpaceId) {
         onError?.();
         dispatch({
           type: 'ERROR',
-          payload: 'Unable to publish: your profile entity ID could not be resolved. Please complete onboarding.',
+          payload: 'Unable to publish: your personal space could not be resolved. Please complete onboarding.',
         });
         return;
       }
@@ -168,7 +158,7 @@ export function useBulkPublish() {
 
         yield* makeProposal({
           name,
-          author: profile.id,
+          author: personalSpaceId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -205,7 +195,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [smartAccount, profile, dispatch]
+    [smartAccount, personalSpaceId, dispatch]
   );
 
   return {
@@ -231,7 +221,7 @@ function isUserRejection(error: unknown): boolean {
 
 interface MakeProposalArgs {
   name: string;
-  /** The author's Person Entity ID (front page entity of their personal space). */
+  /** The author's personal space ID. */
   author: string;
   ops: Op[];
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
