@@ -82,13 +82,13 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const showPanel = shouldShowPanel || isRelationPage;
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {showPanel && (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
           className="relative rounded-lg border border-grey-02 shadow-button"
         >
           <div className="flex flex-col gap-6 p-5">
