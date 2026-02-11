@@ -21,11 +21,6 @@ import { CellContent } from '~/design-system/table/cell-content';
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
-function truncateEntityId(id: string): string {
-  if (id.length <= 16) return id;
-  return id.slice(0, 8) + '…' + id.slice(-6);
-}
-
 type Props = {
   entityId: string;
   spaceId: string;
@@ -67,7 +62,7 @@ export const EntityTableCell = ({
             href={href}
             className="break-words text-tableCell text-ctaHover hover:underline"
           >
-            {name || truncateEntityId(entityId)}
+            {name || entityId}
           </Link>
         ) : (
           <CollectionMetadata
@@ -88,7 +83,7 @@ export const EntityTableCell = ({
               href={href}
               className="break-words text-tableCell text-ctaHover hover:underline"
             >
-              {name || truncateEntityId(entityId)}
+              {name || entityId}
             </Link>
           </CollectionMetadata>
         )}
