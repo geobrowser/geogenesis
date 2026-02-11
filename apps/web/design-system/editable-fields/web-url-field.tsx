@@ -6,6 +6,7 @@ import { cva } from 'class-variance-authority';
 import * as React from 'react';
 
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableChip } from '~/design-system/chip';
 
@@ -30,7 +31,7 @@ type WebUrlFieldProps = {
   placeholder?: string;
   spaceId: string;
   value: string;
-  resolvedUrl?: string;
+  format?: string | null;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   className?: string;
@@ -41,7 +42,7 @@ export function WebUrlField({
   isEditing = false,
   spaceId,
   value,
-  resolvedUrl,
+  format,
   className = '',
   ...props
 }: WebUrlFieldProps) {
@@ -53,6 +54,8 @@ export function WebUrlField({
   React.useEffect(() => {
     setLocalValue(value);
   }, [value]);
+
+  const resolvedUrl = isUrlTemplate(format) ? resolveUrlTemplate(format, value) : undefined;
 
   if (!resolvedUrl && value.startsWith('graph://')) {
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
