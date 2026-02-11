@@ -44,11 +44,8 @@ const ColumnHeader = ({
   isLastColumn: boolean;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
-
   return isEditMode && !isNameColumn ? (
-    <div className={cx(isLastColumn ? 'pr-12' : '')}>
-      <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} />
-    </div>
+    <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} isLastColumn={isLastColumn} />
   ) : (
     <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
   );
@@ -60,8 +57,6 @@ const formatColumns = (
   unpublishedColumns: { id: string }[],
   spaceId: string
 ) => {
-  const columnSize = 880 / columns.length;
-
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -72,19 +67,17 @@ const formatColumns = (
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={cx(isLastColumn ? 'pr-12' : '')}>
-            <EditableEntityTableColumnHeader
-              unpublishedColumns={unpublishedColumns}
-              column={column}
-              entityId={column.id}
-              spaceId={spaceId}
-            />
-          </div>
+          <EditableEntityTableColumnHeader
+            unpublishedColumns={unpublishedColumns}
+            column={column}
+            entityId={column.id}
+            spaceId={spaceId}
+            isLastColumn={isLastColumn}
+          />
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
       },
-      size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
     });
   });
 };
@@ -318,7 +311,6 @@ export const TableBlockTable = ({
                         key={`${cellId}-${index}-${row.original.entityId}`}
                         isLinkable={isNameCell && isEditing}
                         href={href}
-                        width={cell.column.getSize()}
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
