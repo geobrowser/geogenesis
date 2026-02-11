@@ -1,81 +1,41 @@
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { restFetch, ApiProposalStatusResponseSchema, encodePathSegment } from '~/core/io/rest';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 
-const getProposedMemberInProposalQuery = (proposalId: string) => `query {
-  proposalActionsConnection(
-    first: 1
-    filter: {
-      proposalId: { is: "${proposalId}" }
-      actionType: { in: [ADD_MEMBER] }
-    }
-  ) {
-    nodes {
-      targetId
-    }
-  }
-}`;
-
-type NetworkResult = {
-  proposalActionsConnection: {
-    nodes: {
-      targetId: string | null;
-    }[];
-  };
-};
-
 export async function fetchProposedMemberForProposal(proposalId: string): Promise<Profile | null> {
-  const endpoint = Environment.getConfig().api;
+  const config = Environment.getConfig();
+  const path = `/proposals/${encodePathSegment(proposalId)}/status`;
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint,
-    query: getProposedMemberInProposalQuery(proposalId),
-  });
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
+      })
+    )
+  );
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
-
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
-
-      switch (error._tag) {
-        case 'AbortError':
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposedMember. proposalId: ${proposalId} endpoint: ${endpoint}
-
-            queryString: ${getProposedMemberInProposalQuery(proposalId)}
-            `,
-            error.message
-          );
-
-          return { proposalActionsConnection: { nodes: [] } };
-
-        default:
-          console.error(
-            `${error._tag}: Unable to fetch proposed member, proposalId: ${proposalId} endpoint: ${endpoint}`
-          );
-
-          return { proposalActionsConnection: { nodes: [] } };
-      }
-    }
-
-    return resultOrError.right;
-  });
-
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const actions = result.proposalActionsConnection.nodes;
-
-  if (actions.length === 0 || !actions[0].targetId) {
+  if (Either.isLeft(result)) {
+    console.error(`Failed to fetch proposal ${proposalId} for proposed member:`, result.left);
     return null;
   }
 
-  // targetId is the space ID of the proposed member
-  const proposedMemberSpaceId = actions[0].targetId;
-  return await Effect.runPromise(fetchProfileBySpaceId(proposedMemberSpaceId));
-}
+  const decoded = Schema.decodeUnknownEither(ApiProposalStatusResponseSchema)(result.right);
 
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposal ${proposalId} for proposed member:`, decoded.left);
+    return null;
+  }
+
+  const proposal = decoded.right;
+  const memberAction = proposal.actions.find(a => a.actionType === 'ADD_MEMBER' || a.actionType === 'REMOVE_MEMBER');
+
+  if (!memberAction?.targetId) {
+    return null;
+  }
+
+  return await Effect.runPromise(fetchProfileBySpaceId(memberAction.targetId));
+}
