@@ -7,6 +7,7 @@ import { Schema } from 'effect';
  * Single profile from GET /profile/address/:address or GET /profile/space/:spaceId
  */
 export const ApiProfileSchema = Schema.Struct({
+  entityId: Schema.NullOr(Schema.String),
   spaceId: Schema.String,
   name: Schema.NullOr(Schema.String),
   avatarUrl: Schema.NullOr(Schema.String),
