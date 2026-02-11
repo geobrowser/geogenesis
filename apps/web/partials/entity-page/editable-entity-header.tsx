@@ -68,7 +68,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
         {!isRelationPage ? (
           <>
             {isEditing ? (
-              <div className="flex-grow">
+              <div className="flex-grow text-text">
                 <PageStringField
                   variant="mainPage"
                   placeholder="Entity name..."
