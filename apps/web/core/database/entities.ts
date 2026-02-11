@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
+import { useMemo } from 'react';
 
 import { getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
@@ -36,13 +37,21 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const spaces = entity?.spaces ?? [];
   const description = Entities.description(values);
   const types = readTypes(relations);
+  const stableTypeKey = useMemo(() => types.map(t => t.id).sort(), [types]);
+  const stableRelationKey = useMemo(
+    () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}`))].sort(),
+    [relations]
+  );
 
   const { data: schema } = useQuery({
-    enabled: types.length > 0,
-    queryKey: ['entity-schema-for-merging', id, types],
+    enabled: types.length > 0 || relations.length > 0,
+    queryKey: ['entity-schema-for-merging', id, stableTypeKey, stableRelationKey],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      return await getSchemaFromTypeIds(types.map(t => t.id));
+      return await getSchemaFromTypeIdsAndRelations(
+        types.map(t => t.id),
+        relations
+      );
     },
   });
 
@@ -142,4 +151,62 @@ export function readTypes(relations: Relation[]): { id: string; name: string | n
     }));
 
   return dedupeWith(typeIdsViaRelations, (a, b) => a.id === b.id);
+}
+
+/**
+ * Compute schema from both explicit type IDs and IS_TYPE_PROPERTY relations.
+ *
+ * When a property has isType set to true, relations using that property
+ * cause the target entity's properties to be inherited into the source
+ * entity's schema.
+ *
+ * 1. Fetch the type-based schema (existing behavior)
+ * 2. Batch-fetch property definitions for each unique relation type
+ * 3. Filter to those with isType=true, collect their target entity IDs
+ * 4. Fetch those targets' PROPERTIES to get additional schema properties
+ */
+export async function getSchemaFromTypeIdsAndRelations(
+  typeIds: string[],
+  relations: Relation[]
+): Promise<Property[]> {
+  const typeSchema = await getSchemaFromTypeIds(typeIds);
+
+  if (relations.length === 0) return typeSchema;
+
+  // Batch-fetch property definitions for all unique relation types
+  const relationTypeIds = [...new Set(relations.map(r => r.type.id))];
+  const relationProperties = await Effect.runPromise(getProperties(relationTypeIds));
+
+  // Find which relation types have isType=true
+  const isTypePropertyIds = new Set(
+    relationProperties.filter(p => p.isType).map(p => p.id)
+  );
+
+  if (isTypePropertyIds.size === 0) return typeSchema;
+
+  // Collect target entity IDs from matching relations
+  const targetIds = [...new Set(
+    relations
+      .filter(r => isTypePropertyIds.has(r.type.id))
+      .map(r => r.toEntity.id)
+  )];
+
+  // Fetch target entities to get their PROPERTIES relations
+  const targetEntities = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: { id: { in: targetIds } },
+    first: 100,
+    skip: 0,
+  });
+
+  const additionalPropertyIds = targetEntities
+    .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+    .map(r => r.toEntity.id);
+
+  if (additionalPropertyIds.length === 0) return typeSchema;
+
+  const additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
+
+  return dedupeWith([...typeSchema, ...additionalProperties], (a, b) => a.id === b.id);
 }
