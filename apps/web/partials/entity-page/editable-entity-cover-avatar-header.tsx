@@ -24,12 +24,12 @@ import { Upload } from '~/design-system/icons/upload';
 // | ------------------------------ | ------ | -------- | ------------ | --------- |
 // | No cover, no avatar            | 0      | 880      | 0            | 0         |
 // | No cover, with avatar          | 40     | 880      | 64           | 0         |
-// | Cover placeholder, no avatar   | 128    | 1192     | 32           | -24       |
-// | Cover placeholder, with avatar | 128    | 1192     | 80           | -24       |
+// | Cover placeholder, no avatar   | 120    | 1192     | 32           | -24       |
+// | Cover placeholder, with avatar | 120    | 1192     | 80           | -24       |
 // | Cover image, no avatar         | 320    | 1192     | 32           | -24       |
 // | Cover image, with avatar       | 320    | 1192     | 80           | -24       |
 const COVER_IMAGE_HEIGHT = 320;
-const COVER_PLACEHOLDER_HEIGHT = 128;
+const COVER_PLACEHOLDER_HEIGHT = 120; // Matches the Cover_Default.svg dimensions
 const AVATAR_ONLY_HEIGHT = 40;
 const COVER_MAX_WIDTH = 1192;
 const CONTENT_MAX_WIDTH = 880;
@@ -208,7 +208,7 @@ const AvatarCoverInput = ({
           isCover
             ? imgUrl
               ? 'bg-transparent'
-              : 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
+              : 'bg-cover-default bg-contain bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
               ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
               : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
