@@ -72,13 +72,21 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
+  const hasTypes = types.length > 0;
 
   const { data: schema } = useQuery({
-    enabled: types.length > 0,
+    enabled: hasTypes,
     placeholderData: keepPreviousData,
     queryKey: ['entity-schema-for-merging', entityId, types],
     queryFn: async () => await getSchemaFromTypeIds(types.map(t => t.id)),
   });
+
+  // When there are no types, always return the default schema. We can't
+  // rely on the query result here because keepPreviousData would hold
+  // stale type-specific properties (like Avatar) after all types are removed.
+  if (!hasTypes) {
+    return DEFAULT_ENTITY_SCHEMA;
+  }
 
   return schema ?? DEFAULT_ENTITY_SCHEMA;
 }

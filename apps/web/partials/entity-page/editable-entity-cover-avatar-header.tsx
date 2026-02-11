@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
@@ -55,41 +56,55 @@ export const EditableCoverAvatarHeader = ({
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
 
+  // Animate margin-bottom changes when avatar shows/hides. Using inline
+  // style so the transition only applies to margin — not to the layout
+  // changes that happen when switching between browse and edit mode.
+  const marginBottom = coverRenderable
+    ? showAvatar ? 80 : 32  // mb-20 : mb-8
+    : showAvatar ? 64 : 0;  // mb-16 : mb-0
+
   return (
     <div
+      style={{ marginBottom, transition: 'margin-bottom 0.2s ease-in-out' }}
       className={`${
         coverRenderable
-          ? `relative ${showAvatar ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}`
-          : `mx-auto ${showAvatar ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`
+          ? `relative -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}`
+          : `mx-auto w-[880px] ${avatarUrl ? 'h-10' : ''}`
       }`}
     >
       {coverRenderable && (
         <div
           key={`cover-editable-avatar-header-${id}`}
-          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat transition-all duration-200 ease-in-out"
+          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat"
         >
           <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
         </div>
       )}
       {/* Avatar placeholder - only show when there's an avatar or in edit mode with renderable */}
-      {showAvatar && (
-        <div
-          className={`${
-            coverRenderable
-              ? 'absolute bottom-[-40px] left-0 right-0 mx-auto flex w-full max-w-[880px] justify-start'
-              : 'mx-auto flex w-full max-w-[880px] justify-start'
-          }`}
-        >
-          <div className="flex h-20 w-20 items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
-            <AvatarCoverInput
-              typeOfId={ContentIds.AVATAR_PROPERTY}
-              entityId={id}
-              inputId="avatar-input"
-              imgUrl={avatarUrl}
-            />
-          </div>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {showAvatar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`${
+              coverRenderable
+                ? 'absolute bottom-[-40px] left-0 right-0 mx-auto flex w-full max-w-[880px] justify-start'
+                : 'mx-auto flex w-full max-w-[880px] justify-start'
+            }`}
+          >
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg">
+              <AvatarCoverInput
+                typeOfId={ContentIds.AVATAR_PROPERTY}
+                entityId={id}
+                inputId="avatar-input"
+                imgUrl={avatarUrl}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
