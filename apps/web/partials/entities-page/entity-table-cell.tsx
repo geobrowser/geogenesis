@@ -57,7 +57,11 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link entityId={entityId} href={href} className="text-tableCell text-ctaHover hover:underline">
+          <Link
+            entityId={entityId}
+            href={href}
+            className="break-words text-tableCell text-ctaHover hover:underline"
+          >
             {name || entityId}
           </Link>
         ) : (
@@ -77,7 +81,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="text-tableCell text-ctaHover hover:underline"
+              className="break-words text-tableCell text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -88,7 +92,7 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {isRelation ? (
         <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
       ) : (
@@ -128,6 +132,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
     return (
       <LinkableRelationChip
+        small
         key={relation.toEntity.value}
         isEditing={false}
         currentSpaceId={spaceId}
