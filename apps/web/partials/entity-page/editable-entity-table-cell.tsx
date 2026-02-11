@@ -103,6 +103,7 @@ export function EditableEntityTableCell({
           }}
           spaceId={spaceId}
           variant="tableCell"
+          width="full"
           autoFocus={autoFocus}
         />
       );
@@ -255,6 +256,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
         <SelectEntity
           spaceId={spaceId}
           relationValueTypes={property.relationValueTypes}
+          width="full"
           onDone={result => {
             // onChangeEntry(
             //   {
