@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
@@ -78,95 +79,103 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const schemaProperties = useEntitySchema(id, spaceId);
   const schemaPropertyIds = React.useMemo(() => new Set(schemaProperties.map(p => p.id)), [schemaProperties]);
 
-  if (!shouldShowPanel && !isRelationPage) {
-    return null;
-  }
+  const showPanel = shouldShowPanel || isRelationPage;
 
   return (
-    <div className="relative rounded-lg border border-grey-02 shadow-button">
-      <div className="flex flex-col gap-6 p-5">
-        {visiblePropertiesEntries.length === 0 && (
-          <div className="flex flex-col items-center justify-center text-center">
-            <Text as="p" variant="body" color="grey-04">
-              No properties added yet
-            </Text>
-            <Text as="p" variant="footnote" color="grey-03" className="mt-1">
-              Click the + button below to add properties
-            </Text>
+    <AnimatePresence initial={false}>
+      {showPanel && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="relative rounded-lg border border-grey-02 shadow-button"
+        >
+          <div className="flex flex-col gap-6 p-5">
+            {visiblePropertiesEntries.length === 0 && (
+              <div className="flex flex-col items-center justify-center text-center">
+                <Text as="p" variant="body" color="grey-04">
+                  No properties added yet
+                </Text>
+                <Text as="p" variant="footnote" color="grey-03" className="mt-1">
+                  Click the + button below to add properties
+                </Text>
+              </div>
+            )}
+            {visiblePropertiesEntries.map(([propertyId, property]) => {
+              const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
+
+              const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
+
+              return (
+                <div key={`${id}-${propertyId}`} className="w-full break-words">
+                  <RenderedProperty spaceId={spaceId} property={property} />
+
+                  {isRelation || isVideo ? (
+                    <RelationPropertyWithDelete
+                      key={propertyId}
+                      propertyId={propertyId}
+                      entityId={id}
+                      spaceId={spaceId}
+                      property={property}
+                      isSchemaProperty={schemaPropertyIds.has(propertyId)}
+                    />
+                  ) : (
+                    <RenderedValue
+                      key={propertyId}
+                      propertyId={propertyId}
+                      entityId={id}
+                      spaceId={spaceId}
+                      property={property}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-        {visiblePropertiesEntries.map(([propertyId, property]) => {
-          const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
+          <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
+            <SelectEntityAsPopover
+              trigger={<SquareButton icon={<Create />} />}
+              spaceId={spaceId}
+              relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+              onCreateEntity={result => {
+                const renderableType = result.renderableType || 'TEXT';
 
-          const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
+                const createdPropertyId = createProperty({
+                  name: result.name || '',
+                  propertyType: renderableType,
+                  verified: result.verified,
+                  space: result.space,
+                });
 
-          return (
-            <div key={`${id}-${propertyId}`} className="w-full break-words">
-              <RenderedProperty spaceId={spaceId} property={property} />
+                // Immediately add the property to the entity
+                addPropertyToEntity({
+                  entityId: id,
+                  propertyId: createdPropertyId,
+                  propertyName: result.name || '',
+                  entityName: name || undefined,
+                });
 
-              {isRelation || isVideo ? (
-                <RelationPropertyWithDelete
-                  key={propertyId}
-                  propertyId={propertyId}
-                  entityId={id}
-                  spaceId={spaceId}
-                  property={property}
-                  isSchemaProperty={schemaPropertyIds.has(propertyId)}
-                />
-              ) : (
-                <RenderedValue
-                  key={propertyId}
-                  propertyId={propertyId}
-                  entityId={id}
-                  spaceId={spaceId}
-                  property={property}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
-        <SelectEntityAsPopover
-          trigger={<SquareButton icon={<Create />} />}
-          spaceId={spaceId}
-          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-          onCreateEntity={result => {
-            const renderableType = result.renderableType || 'TEXT';
-
-            const createdPropertyId = createProperty({
-              name: result.name || '',
-              propertyType: renderableType,
-              verified: result.verified,
-              space: result.space,
-            });
-
-            // Immediately add the property to the entity
-            addPropertyToEntity({
-              entityId: id,
-              propertyId: createdPropertyId,
-              propertyName: result.name || '',
-              entityName: name || undefined,
-            });
-
-            return createdPropertyId;
-          }}
-          onDone={result => {
-            if (result) {
-              addPropertyToEntity({
-                entityId: id,
-                propertyId: result.id,
-                propertyName: result.name || '',
-                entityName: name || undefined,
-              });
-            }
-          }}
-          placeholder="Find or create property..."
-          advanced={false}
-          showIDs={false}
-        />
-      </div>
-    </div>
+                return createdPropertyId;
+              }}
+              onDone={result => {
+                if (result) {
+                  addPropertyToEntity({
+                    entityId: id,
+                    propertyId: result.id,
+                    propertyName: result.name || '',
+                    entityName: name || undefined,
+                  });
+                }
+              }}
+              placeholder="Find or create property..."
+              advanced={false}
+              showIDs={false}
+            />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -830,6 +839,7 @@ function RenderedValue({
 }) {
   const { storage } = useMutate();
   const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
 
   const property = propProperty || queriedProperty;
 
@@ -884,7 +894,6 @@ function RenderedValue({
   const renderField = () => {
     switch (property.dataType) {
       case 'TEXT': {
-        const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
         const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
         return (
           <>

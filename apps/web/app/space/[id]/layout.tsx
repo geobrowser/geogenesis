@@ -50,7 +50,7 @@ export default async function Layout(props0: LayoutProps) {
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
       >
-        <EntityPageCover avatarUrl={null} coverUrl={props.coverUrl} />
+        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableSpaceHeading
@@ -121,6 +121,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: [],
       blocks: [],
       space: null,
+      avatarUrl: null,
       coverUrl: null,
     };
   }
@@ -164,6 +165,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
     blockRelations: entity.relations,
     blocks,
     space,
+    avatarUrl: Entities.avatar(entity.relations) ?? null,
     coverUrl: Entities.cover(entity.relations) ?? null,
   };
 };
