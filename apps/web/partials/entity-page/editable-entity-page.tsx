@@ -839,6 +839,7 @@ function RenderedValue({
 }) {
   const { storage } = useMutate();
   const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
 
   const property = propProperty || queriedProperty;
 
@@ -893,7 +894,6 @@ function RenderedValue({
   const renderField = () => {
     switch (property.dataType) {
       case 'TEXT': {
-        const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
         const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
         return (
           <>
