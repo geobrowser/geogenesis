@@ -10,6 +10,13 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 // ==============================================================================
 
 export type Profile = {
+  /**
+   * The user's Person Entity ID when available (dashless UUID from the front page
+   * entity of their personal space), otherwise falls back to spaceId or wallet address.
+   *
+   * Use `IdUtils.isValid()` before passing this as an `author` to the geo-sdk, since
+   * the fallback values (wallet addresses) are not valid entity IDs.
+   */
   id: string;
   /** The user's personal space ID (bytes16 hex without 0x prefix) */
   spaceId: string;

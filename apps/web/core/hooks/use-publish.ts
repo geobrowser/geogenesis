@@ -1,6 +1,6 @@
 'use client';
 
-import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { IdUtils, Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
@@ -44,7 +44,19 @@ export function usePublish() {
   const make = React.useCallback(
     async ({ values: valuesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount) return;
-      if (!profile) return;
+      if (!profile) {
+        onError?.();
+        dispatch({ type: 'ERROR', payload: 'Profile is still loading. Please try again.' });
+        return;
+      }
+      if (!IdUtils.isValid(profile.id)) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: your profile entity ID could not be resolved. Please complete onboarding.',
+        });
+        return;
+      }
       if (valuesToPublish.length === 0 && relations.length === 0) return;
 
       const space = await Effect.runPromise(getSpace(spaceId));
@@ -130,7 +142,19 @@ export function useBulkPublish() {
     async ({ values: triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (triples.length === 0) return;
       if (!smartAccount) return;
-      if (!profile) return;
+      if (!profile) {
+        onError?.();
+        dispatch({ type: 'ERROR', payload: 'Profile is still loading. Please try again.' });
+        return;
+      }
+      if (!IdUtils.isValid(profile.id)) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: your profile entity ID could not be resolved. Please complete onboarding.',
+        });
+        return;
+      }
 
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
       // All of our contract calls rely on knowing plugin metadata so this is probably
