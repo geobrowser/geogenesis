@@ -108,54 +108,22 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     proposedMember.name ?? proposedMember.address ?? proposedMember.id
   } as member`;
 
-  const ProfileHeader = proposedMember.profileLink ? (
-    <Link href={proposedMember.profileLink} className="w-full">
-      <div className="flex items-center justify-between">
-        <div className="text-smallTitle">{proposalName}</div>
-        <div className="relative h-5 w-5 overflow-hidden rounded-full">
-          <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
-        </div>
-      </div>
-    </Link>
-  ) : (
-    <div className="w-full">
-      <div className="flex items-center justify-between">
-        <div className="text-smallTitle">{proposalName}</div>
-        <div className="relative h-5 w-5 overflow-hidden rounded-full">
-          <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-      <div className="space-y-2">
-        {ProfileHeader}
-
-        <Link
-          href={NavUtils.toSpace(proposal.space.id)}
-          className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
-        >
-          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
-            <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <GeoImage
-                value={space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
-                alt={`Cover image for space ${space.entity?.name ?? space.id}`}
-                fill
-                style={{ objectFit: 'cover' }}
-              />
-            </div>
-            <p>{space.entity?.name}</p>
-          </div>
-        </Link>
-      </div>
-      <div className="flex items-center justify-between">
-        <p className="text-metadataMedium">1 vote required</p>
-
-        <AcceptOrRejectMember spaceId={proposal.space.id} proposalId={proposal.id} />
-      </div>
-    </div>
+    <AcceptOrRejectMember
+      spaceId={proposal.space.id}
+      proposalId={proposal.id}
+      proposalName={proposalName}
+      proposedMember={{
+        id: proposedMember.id,
+        avatarUrl: proposedMember.avatarUrl,
+        profileLink: proposedMember.profileLink,
+      }}
+      space={{
+        id: proposal.space.id,
+        name: space.entity?.name ?? null,
+        image: space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE,
+      }}
+    />
   );
 }
 
