@@ -12,7 +12,6 @@ import { getSpace } from '../io/queries';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { ReviewState, SpaceGovernanceType } from '../types';
-import { getPersonalSpaceId } from '../utils/contracts/get-personal-space-id';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -263,29 +262,12 @@ function makeProposal(args: MakeProposalArgs) {
 
     if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
-      // Get the caller's personal space ID (required for DAO proposals)
-      const callerSpaceId = yield* Effect.retry(
-        Effect.tryPromise({
-          try: () => getPersonalSpaceId(smartAccount.account.address),
-          catch: error => {
-            console.error('[PUBLISH] getPersonalSpaceId failed:', error);
-            return new TransactionWriteFailedError('Failed to get personal space ID', { cause: error });
-          },
-        }),
-        retrySchedule('getPersonalSpaceId', Duration.seconds(10))
-      );
-
-      if (!callerSpaceId) {
-        yield* Effect.fail(
-          new TransactionWriteFailedError('You need a personal space to propose edits to a DAO space')
-        );
-        // Unreachable, but helps TypeScript narrow the type
-        return;
-      }
+      // `author` is the caller's personal space ID, already validated as non-null
+      // by the guard in usePublish/useBulkPublish before makeProposal is called.
 
       // Editors can use the fast path for immediate execution.
       // Members must use the slow path which requires a voting period.
-      const isEditor = space.editors.map(s => s.toLowerCase()).includes(callerSpaceId.toLowerCase());
+      const isEditor = space.editors.map(s => s.toLowerCase()).includes(author.toLowerCase());
       const votingMode = isEditor ? 'FAST' : 'SLOW';
 
       const result = yield* Effect.retry(
@@ -296,7 +278,7 @@ function makeProposal(args: MakeProposalArgs) {
               ops,
               author,
               daoSpaceAddress: space.address as `0x${string}`,
-              callerSpaceId: `0x${callerSpaceId}`,
+              callerSpaceId: `0x${author}`,
               daoSpaceId: `0x${space.id}`,
               votingMode,
               network: 'TESTNET',

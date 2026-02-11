@@ -57,7 +57,7 @@ export function useCreatePersonalSpace() {
         name: spaceName,
         spaceId,
         ops,
-        author: walletAddress,
+        author: spaceId,
         network: 'TESTNET',
       });
 
