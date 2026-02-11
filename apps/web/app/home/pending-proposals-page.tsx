@@ -4,14 +4,8 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
-import {
-  NavUtils,
-  getIsProposalEnded,
-  getIsProposalExecutable,
-  getNoVotePercentage,
-  getProposalTimeRemaining,
-  getYesVotePercentage,
-} from '~/core/utils/utils';
+import { Address } from '~/core/io/substream-schema';
+import { NavUtils, getIsProposalEnded, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { GeoImage } from '~/design-system/geo-image';
@@ -154,35 +148,34 @@ async function PendingContentProposal({
   user,
   connectedSpaceId,
 }: PendingMembershipProposalProps & { connectedSpaceId?: string }) {
-  const space = await cachedFetchSpace(proposal.space.id);
+  const [space, proposalName] = await Promise.all([
+    cachedFetchSpace(proposal.space.id),
+    (async () => {
+      switch (proposal.type) {
+        case 'ADD_EDIT':
+          return proposal.name;
+        case 'ADD_EDITOR':
+        case 'REMOVE_EDITOR':
+          return await getMembershipProposalName(proposal.type, proposal);
+        case 'ADD_SUBSPACE':
+        case 'REMOVE_SUBSPACE':
+          return proposal.name;
+        default:
+          throw new Error('Unsupported proposal type');
+      }
+    })(),
+  ]);
 
   if (!space) {
     return null;
   }
 
-  const proposalName = await (async () => {
-    switch (proposal.type) {
-      case 'ADD_EDIT':
-        return proposal.name;
-      case 'ADD_EDITOR':
-      case 'REMOVE_EDITOR':
-        return await getMembershipProposalName(proposal.type, proposal);
-      case 'ADD_SUBSPACE':
-      case 'REMOVE_SUBSPACE':
-        return proposal.name;
-      default:
-        throw new Error('Unsupported proposal type');
-    }
-  })();
-
-  const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
-
-  const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
-  const noVotesPercentage = getNoVotePercentage(votes, votesCount);
+  const yesVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.yesCount / votesCount) * 100) : 0;
+  const noVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.noCount / votesCount) * 100) : 0;
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
-  const userVote = connectedSpaceId ? votes.find(v => v.accountId === connectedSpaceId) : undefined;
+  const isProposalExecutable = isProposalEnded && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED';
+  const userVote = proposal.userVote ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') } : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (

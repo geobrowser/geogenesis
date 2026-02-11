@@ -19,7 +19,6 @@ import {
   mapProposalStatus,
   convertVoteOption,
   encodePathSegment,
-  validateActionTypes,
   isValidUUID,
   type ApiProposalListItem,
 } from '~/core/io/rest';
@@ -210,10 +209,6 @@ async function fetchProposalsByStatus({
   params.set('orderBy', orderBy);
   params.set('orderDirection', orderDirection);
 
-  // Exclude membership proposals
-  const excludeTypes = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
-  params.set('excludeActionTypes', excludeTypes.join(','));
-
   // If we have the user's address, pass it to get their votes
   if (connectedAddress && isValidUUID(connectedAddress)) {
     params.set('voterId', connectedAddress);
@@ -245,17 +240,6 @@ async function fetchProposalsByStatus({
   return decoded.right.proposals;
 }
 
-/**
- * Fetch governance proposals for a space using the new REST API.
- *
- * Excludes membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR)
- * which are shown in the home feed instead.
- *
- * Uses server-side status filtering to fetch proposals in priority order:
- * 1. EXECUTABLE - proposals ready to execute (sorted by end_time asc, oldest first)
- * 2. PROPOSED - active voting proposals (sorted by end_time asc, ending soonest first)
- * 3. ACCEPTED/REJECTED - completed proposals (sorted by end_time desc, most recent first)
- */
 type FetchGovernanceProposalsResult = {
   proposals: GovernanceProposal[];
   hasMore: boolean;
