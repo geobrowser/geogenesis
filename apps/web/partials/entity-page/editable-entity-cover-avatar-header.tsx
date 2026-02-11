@@ -21,7 +21,7 @@ import { Upload } from '~/design-system/icons/upload';
 const COVER_IMAGE_HEIGHT = 320;
 const COVER_PLACEHOLDER_HEIGHT = 120;
 const AVATAR_OVERFLOW = 40;
-const TRANSITION = { duration: 0.2, ease: 'easeInOut' as const };
+const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
 
 // maxWidth is always 1192 so the wrapper never animates horizontally.
 // When there's no cover the extra width is invisible (height is 0 or 40).
@@ -215,7 +215,7 @@ const AvatarCoverInput = ({
           <>
             <div className="absolute inset-0 rounded-lg bg-cover-default bg-contain bg-center bg-no-repeat" />
             <div
-              className="absolute inset-0 rounded-lg bg-cover-hover bg-contain bg-center bg-no-repeat transition-opacity duration-200"
+              className="absolute inset-0 rounded-lg bg-cover-hover bg-contain bg-center bg-no-repeat transition-opacity duration-150"
               style={{ opacity: hovered ? 1 : 0 }}
             />
           </>
@@ -239,10 +239,10 @@ const AvatarCoverInput = ({
               </SquareButton>
             ) : !imgUrl ? (
               <div className="relative">
-                <div className="transition-opacity duration-200" style={{ opacity: hovered ? 0 : 1 }}>
+                <div className="transition-opacity duration-150" style={{ opacity: hovered ? 0 : 1 }}>
                   <Upload color="grey-03" />
                 </div>
-                <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: hovered ? 1 : 0 }}>
+                <div className="absolute inset-0 transition-opacity duration-150" style={{ opacity: hovered ? 1 : 0 }}>
                   <Upload />
                 </div>
               </div>

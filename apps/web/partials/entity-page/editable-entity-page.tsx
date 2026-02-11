@@ -88,7 +88,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.15 }}
           className="relative rounded-lg border border-grey-02 shadow-button"
         >
           <div className="flex flex-col gap-6 p-5">
