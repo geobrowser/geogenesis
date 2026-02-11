@@ -44,24 +44,10 @@ const ColumnHeader = ({
   isLastColumn: boolean;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
-  const isEditable = isEditMode && !isNameColumn;
-
-  return (
-    <div className={cx('relative', isEditable && isLastColumn ? 'pr-12' : '')}>
-      <Text variant="smallTitle" className={isEditable ? 'invisible' : ''}>
-        {isNameColumn ? 'Name' : (column.name ?? column.id)}
-      </Text>
-      {isEditable && (
-        <div className="absolute inset-0">
-          <EditableEntityTableColumnHeader
-            unpublishedColumns={[]}
-            column={column}
-            entityId={column.id}
-            spaceId={spaceId}
-          />
-        </div>
-      )}
-    </div>
+  return isEditMode && !isNameColumn ? (
+    <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} isLastColumn={isLastColumn} />
+  ) : (
+    <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
   );
 };
 
@@ -81,14 +67,13 @@ const formatColumns = (
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={cx(isLastColumn ? 'pr-12' : '')}>
-            <EditableEntityTableColumnHeader
-              unpublishedColumns={unpublishedColumns}
-              column={column}
-              entityId={column.id}
-              spaceId={spaceId}
-            />
-          </div>
+          <EditableEntityTableColumnHeader
+            unpublishedColumns={unpublishedColumns}
+            column={column}
+            entityId={column.id}
+            spaceId={spaceId}
+            isLastColumn={isLastColumn}
+          />
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );

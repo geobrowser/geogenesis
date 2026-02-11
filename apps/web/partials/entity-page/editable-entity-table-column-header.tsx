@@ -1,5 +1,6 @@
 'use client';
 
+import cx from 'classnames';
 import * as React from 'react';
 import { memo, useState } from 'react';
 
@@ -16,6 +17,7 @@ interface Props {
   spaceId: string;
   entityId: string;
   unpublishedColumns: { id: string }[];
+  isLastColumn?: boolean;
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -23,6 +25,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   spaceId,
   entityId,
   unpublishedColumns,
+  isLastColumn,
 }: Props) {
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
@@ -38,9 +41,10 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   const value = 'TEXT';
 
   return (
-    <div className="flex h-full w-full items-center">
+    <div className={cx('inline-flex items-center', isLastColumn ? 'pr-12' : '')}>
       <input
-        className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
+        size={Math.max((localName || 'Column name...').length, 1)}
+        className="h-[1.3125rem] bg-transparent p-0 text-smallTitle leading-[1.3125rem] placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
         onBlur={e => {
