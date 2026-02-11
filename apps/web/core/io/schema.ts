@@ -30,6 +30,7 @@ export const Property = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   dataTypeName: Schema.NullOr(Schema.String),
   renderableTypeId: Schema.NullOr(Schema.String),
+  format: Schema.NullOr(Schema.String),
 });
 
 export type RemoteProperty = Schema.Schema.Type<typeof Property>;

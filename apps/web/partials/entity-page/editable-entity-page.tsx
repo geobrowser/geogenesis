@@ -29,7 +29,7 @@ import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync
 import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
-import { usePropertyFormat } from '~/core/hooks/use-property-format';
+import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
@@ -839,8 +839,6 @@ function RenderedValue({
 }) {
   const { storage } = useMutate();
   const { property: queriedProperty } = useQueryProperty({ id: propertyId });
-  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
-
   const property = propProperty || queriedProperty;
 
   const rawValue = useValue({
@@ -857,7 +855,6 @@ function RenderedValue({
   if (propertyId === SystemIds.NAME_PROPERTY) {
     return null;
   }
-
   const onChange = (value: string, options?: ValueOptions) => {
     if (!rawValue) {
       storage.values.set({
@@ -894,7 +891,8 @@ function RenderedValue({
   const renderField = () => {
     switch (property.dataType) {
       case 'TEXT': {
-        const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
+        const hasUrlTemplate = isUrlTemplate(property.format);
+        const resolvedUrl = hasUrlTemplate ? resolveUrlTemplate(property.format, value) : undefined;
         return (
           <>
             <PageStringField

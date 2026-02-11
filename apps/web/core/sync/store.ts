@@ -3,7 +3,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
@@ -322,6 +322,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const renderableTypeId = renderableType ? renderableType.toEntity.id : null;
 
+    const formatValue = entity?.values.find(v => v.property.id === FORMAT_PROPERTY);
+    const unitRelation = entity?.relations.find(t => t.type.id === UNIT_PROPERTY);
+
     return {
       id,
       name: entity?.name ?? null,
@@ -329,6 +332,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       relationValueTypes,
       renderableType: renderableTypeId,
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
+      format: formatValue?.value ?? null,
+      unit: unitRelation?.toEntity.id ?? null,
 
       /**
        * A data type is still editable as long as there's no

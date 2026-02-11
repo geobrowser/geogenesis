@@ -16,7 +16,7 @@ import {
 } from '~/core/sync/use-store';
 import { DataType, RenderableType } from '~/core/types';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
-import { usePropertyFormat } from '~/core/hooks/use-property-format';
+import { isUrlTemplate } from '~/core/utils/url-template';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -133,6 +133,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
                 entityId={entityId}
                 spaceId={t.spaceId}
                 renderableType={property.renderableTypeStrict ?? property.dataType}
+                format={property.format}
               />
             </div>
           </div>
@@ -299,11 +300,13 @@ function RenderedValue({
   propertyId,
   renderableType,
   spaceId,
+  format,
 }: {
   entityId: string;
   propertyId: string;
   spaceId: string;
   renderableType: DataType | RenderableType;
+  format?: string | null;
 }) {
   // Seems like we really want useRenderables to query entity data + property data
   // more granularly?
@@ -326,8 +329,7 @@ function RenderedValue({
     return null;
   }
 
-  const { hasUrlTemplate, resolveUrl } = usePropertyFormat(propertyId, spaceId);
-  const resolvedUrl = hasUrlTemplate ? resolveUrl(value) : undefined;
+  const hasUrlTemplate = isUrlTemplate(format);
 
   switch (renderableType) {
     case 'URL':
@@ -337,7 +339,7 @@ function RenderedValue({
           isEditing={false}
           spaceId={spaceId}
           value={value}
-          resolvedUrl={resolvedUrl}
+          format={format}
         />
       );
     case 'TEXT':
@@ -347,7 +349,7 @@ function RenderedValue({
           isEditing={false}
           spaceId={spaceId}
           value={value}
-          resolvedUrl={resolvedUrl}
+          format={format}
         />
       ) : (
         <Text key={`string-${propertyId}-${value}`} as="p">
