@@ -18,6 +18,7 @@ type NetworkProposalVote = {
 
 type NetworkProposalAction = {
   actionType: string;
+  targetId: string | null;
 };
 
 type NetworkProposal = {
@@ -93,6 +94,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   }
 
   const offset = page * PAGE_SIZE;
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
   const query = `query {
     proposalsConnection(
@@ -101,6 +103,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       orderBy: END_TIME_DESC
       filter: {
         executedAt: { isNull: true }
+        endTime: { greaterThan: "${nowSeconds}" }
         spaceId: { isNot: "${memberSpaceId}" }
         space: {
           editors: {
@@ -128,6 +131,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
         executedAt
         proposalActions {
           actionType
+          targetId
         }
         space {
           type
@@ -172,11 +176,27 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   const data = await Effect.runPromise(result);
 
-  const nowSeconds = Math.floor(Date.now() / 1000);
+  const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
+
+  const isMembershipProposal = (p: NetworkProposal) =>
+    p.proposalActions.some(a => MEMBERSHIP_ACTIONS.has(a.actionType));
+
+  const userHasVoted = (p: NetworkProposal) => p.proposalVotesConnection.nodes.some(v => v.voterId === memberSpaceId);
+
+  const seenMembershipProposals = new Set<string>();
+  const isDuplicateMembershipProposal = (p: NetworkProposal) => {
+    if (!isMembershipProposal(p)) return false;
+    const action = p.proposalActions[0];
+    if (!action?.targetId) return false;
+    const key = `${p.spaceId}:${action.actionType}:${action.targetId}`;
+    if (seenMembershipProposals.has(key)) return true;
+    seenMembershipProposals.add(key);
+    return false;
+  };
+
   const gqlProposals = data.proposalsConnection.nodes.filter(
     p =>
-      p.space.type !== 'PERSONAL' &&
-      Number(p.endTime) > nowSeconds
+      p.space.type !== 'PERSONAL' && !(isMembershipProposal(p) && userHasVoted(p)) && !isDuplicateMembershipProposal(p)
   );
 
   const creatorIds = gqlProposals.map(p => p.proposedBy);
@@ -184,58 +204,69 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
-  const proposals: Proposal[] = gqlProposals
-    .map(p => {
-      const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-      const profile = maybeProfile ?? {
-        id: p.proposedBy,
-        spaceId: p.proposedBy,
+  const proposals: Proposal[] = gqlProposals.map(p => {
+    const maybeProfile = profilesBySpaceId.get(p.proposedBy);
+    const profile = maybeProfile ?? {
+      id: p.proposedBy,
+      spaceId: p.proposedBy,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      address: p.proposedBy as `0x${string}`,
+      profileLink: null,
+    };
+
+    const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
+    const type = mapActionTypeToProposalType(actionType);
+    const endTime = Number(p.endTime);
+    const status = deriveProposalStatus(p.executedAt, endTime);
+
+    return {
+      id: p.id,
+      editId: '',
+      name: p.name,
+      createdAt: 0,
+      createdAtBlock: p.createdAtBlock ?? '0',
+      type,
+      startTime: Number(p.startTime),
+      endTime,
+      status,
+      space: {
+        id: p.spaceId,
         name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: p.proposedBy as `0x${string}`,
-        profileLink: null,
-      };
+        image: PLACEHOLDER_SPACE_IMAGE,
+      },
+      createdBy: profile,
+      proposalVotes: {
+        totalCount: p.proposalVotesConnection.totalCount,
+        nodes: p.proposalVotesConnection.nodes.map(v => ({
+          vote: mapVote(v.vote),
+          accountId: Address(v.voterId),
+          voter: profilesBySpaceId.get(v.voterId) ?? {
+            id: v.voterId,
+            spaceId: v.voterId,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
+            address: v.voterId as `0x${string}`,
+            profileLink: null,
+          },
+        })),
+      },
+    };
+  });
 
-      const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
-      const type = mapActionTypeToProposalType(actionType);
-      const endTime = Number(p.endTime);
-      const status = deriveProposalStatus(p.executedAt, endTime);
+  // Unvoted proposals first, then voted
+  proposals.sort((a, b) => {
+    const aVoted = a.proposalVotes.nodes.some(v => v.accountId === memberSpaceId);
+    const bVoted = b.proposalVotes.nodes.some(v => v.accountId === memberSpaceId);
 
-      return {
-        id: p.id,
-        editId: '',
-        name: p.name,
-        createdAt: 0,
-        createdAtBlock: p.createdAtBlock ?? '0',
-        type,
-        startTime: Number(p.startTime),
-        endTime,
-        status,
-        space: {
-          id: p.spaceId,
-          name: null,
-          image: PLACEHOLDER_SPACE_IMAGE,
-        },
-        createdBy: profile,
-        proposalVotes: {
-          totalCount: p.proposalVotesConnection.totalCount,
-          nodes: p.proposalVotesConnection.nodes.map(v => ({
-            vote: mapVote(v.vote),
-            accountId: Address(v.voterId),
-            voter: profilesBySpaceId.get(v.voterId) ?? {
-              id: v.voterId,
-              spaceId: v.voterId,
-              name: null,
-              avatarUrl: null,
-              coverUrl: null,
-              address: v.voterId as `0x${string}`,
-              profileLink: null,
-            },
-          })),
-        },
-      };
-    });
+    if (aVoted !== bVoted) {
+      return aVoted ? 1 : -1;
+    }
+
+    return b.endTime - a.endTime;
+  });
 
   return {
     totalCount: data.proposalsConnection.totalCount,
