@@ -142,7 +142,7 @@ async function createDaoSpace({
   const { cid } = await Ipfs.publishEdit({
     name: `Create ${spaceName} space`,
     ops,
-    author: walletAddress as Hex,
+    author: personalSpaceId,
     network: 'TESTNET',
   });
 
@@ -268,7 +268,7 @@ async function createPersonalStyleSpace({
     name: spaceName,
     spaceId,
     ops,
-    author: walletAddress as Hex,
+    author: spaceId,
     network: 'TESTNET',
   });
 
