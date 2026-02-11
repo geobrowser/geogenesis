@@ -238,7 +238,14 @@ const AvatarCoverInput = ({
                 <Dots color="bg-grey-03" />
               </SquareButton>
             ) : !imgUrl ? (
-              <Upload color={hovered ? undefined : 'grey-03'} />
+              <div className="relative">
+                <div className="transition-opacity duration-200" style={{ opacity: hovered ? 0 : 1 }}>
+                  <Upload color="grey-03" />
+                </div>
+                <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: hovered ? 1 : 0 }}>
+                  <Upload />
+                </div>
+              </div>
             ) : (
               hovered && (
                 <>
