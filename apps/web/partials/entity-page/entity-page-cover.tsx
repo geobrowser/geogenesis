@@ -15,63 +15,56 @@ type EntityPageCoverProps = {
   coverUrl: string | null;
 };
 
-function useAvatarUrl(entityId: string, spaceId: string, serverAvatarUrl: string | null) {
-  const avatarRelations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
+/**
+ * Resolves the image URL from a relation, with fallback to server-rendered value.
+ *
+ * Before the store has synced, the relation won't exist yet. We use the
+ * server-rendered URL so the page doesn't flash from "no image" to "has image"
+ * once the store loads. Once the store has produced a relation for this property,
+ * we switch to the store as the source of truth (so deletions work correctly).
+ */
+function useImageUrl(entityId: string, spaceId: string, propertyId: string, serverUrl: string | null) {
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId,
   });
 
-  const avatarRelation = avatarRelations[0];
-  const avatarEntityId = avatarRelation?.toEntity.id;
-  const avatarValue = avatarRelation?.toEntity.value;
-  const imageUrl = useImageUrlFromEntity(avatarEntityId, spaceId);
+  const relation = relations[0];
+  const relatedEntityId = relation?.toEntity.id;
+  const relatedValue = relation?.toEntity.value;
+  const imageUrl = useImageUrlFromEntity(relatedEntityId, spaceId);
 
-  if (!avatarRelation) {
+  // Once the store has a relation, it's the source of truth
+  const hasSeenRelation = React.useRef(false);
+  if (relation) {
+    hasSeenRelation.current = true;
+  }
+
+  // Store has never had this relation — use server value (store may not have synced yet)
+  if (!relation && !hasSeenRelation.current) {
+    return serverUrl;
+  }
+
+  // Store synced but relation was removed (user deleted it)
+  if (!relation && hasSeenRelation.current) {
     return null;
   }
 
-  // Use the looked-up image URL first, then fall back to toEntity.value only if it's a valid URL format
   if (imageUrl) {
     return imageUrl;
   }
 
-  if (avatarValue && (avatarValue.startsWith('ipfs://') || avatarValue.startsWith('http'))) {
-    return avatarValue;
+  if (relatedValue && (relatedValue.startsWith('ipfs://') || relatedValue.startsWith('http'))) {
+    return relatedValue;
   }
 
-  return serverAvatarUrl;
-}
-
-function useCoverUrl(entityId: string, spaceId: string, serverCoverUrl: string | null) {
-  const coverRelations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.type.id === SystemIds.COVER_PROPERTY && r.spaceId === spaceId,
-  });
-
-  const coverRelation = coverRelations[0];
-  const coverEntityId = coverRelation?.toEntity.id;
-  const coverValue = coverRelation?.toEntity.value;
-  const imageUrl = useImageUrlFromEntity(coverEntityId, spaceId);
-
-  if (!coverRelation) {
-    return null;
-  }
-
-  // Use the looked-up image URL first, then fall back to toEntity.value only if it's a valid URL format
-  if (imageUrl) {
-    return imageUrl;
-  }
-
-  if (coverValue && (coverValue.startsWith('ipfs://') || coverValue.startsWith('http'))) {
-    return coverValue;
-  }
-
-  return serverCoverUrl;
+  return serverUrl;
 }
 
 export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCoverUrl }: EntityPageCoverProps) => {
   const { id, spaceId } = useEntityStoreInstance();
 
-  const avatarUrl = useAvatarUrl(id, spaceId, serverAvatarUrl);
-  const coverUrl = useCoverUrl(id, spaceId, serverCoverUrl);
+  const avatarUrl = useImageUrl(id, spaceId, ContentIds.AVATAR_PROPERTY, serverAvatarUrl);
+  const coverUrl = useImageUrl(id, spaceId, SystemIds.COVER_PROPERTY, serverCoverUrl);
 
   return <EditableCoverAvatarHeader avatarUrl={avatarUrl} coverUrl={coverUrl} />;
 };

@@ -76,6 +76,7 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
 
   const { data: schema } = useQuery({
     enabled: hasTypes,
+    initialData: DEFAULT_ENTITY_SCHEMA,
     placeholderData: keepPreviousData,
     queryKey: ['entity-schema-for-merging', entityId, types],
     queryFn: async () => await getSchemaFromTypeIds(types.map(t => t.id)),

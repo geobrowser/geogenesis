@@ -3,8 +3,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { ChangeEvent, useRef } from 'react';
-import { useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -19,6 +18,34 @@ import { GeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
+// Layout constants — the state table from the plan.
+//
+// | State                          | height | maxWidth | marginBottom | marginTop |
+// | ------------------------------ | ------ | -------- | ------------ | --------- |
+// | No cover, no avatar            | 0      | 880      | 0            | 0         |
+// | No cover, with avatar          | 40     | 880      | 64           | 0         |
+// | Cover placeholder, no avatar   | 128    | 1192     | 32           | -24       |
+// | Cover placeholder, with avatar | 128    | 1192     | 80           | -24       |
+// | Cover image, no avatar         | 320    | 1192     | 32           | -24       |
+// | Cover image, with avatar       | 320    | 1192     | 80           | -24       |
+const COVER_IMAGE_HEIGHT = 320;
+const COVER_PLACEHOLDER_HEIGHT = 128;
+const AVATAR_ONLY_HEIGHT = 40;
+const COVER_MAX_WIDTH = 1192;
+const CONTENT_MAX_WIDTH = 880;
+const AVATAR_OVERFLOW = 40; // How far the avatar hangs below the wrapper
+const COVER_MARGIN_TOP = -24;
+const TRANSITION = { duration: 0.2, ease: 'easeInOut' as const };
+
+function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean) {
+  return {
+    height: hasCover ? (hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT) : hasAvatar ? AVATAR_ONLY_HEIGHT : 0,
+    maxWidth: hasCover ? COVER_MAX_WIDTH : CONTENT_MAX_WIDTH,
+    marginBottom: hasCover ? (hasAvatar ? 80 : 32) : hasAvatar ? 64 : 0,
+    marginTop: hasCover ? COVER_MARGIN_TOP : 0,
+  };
+}
+
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
   coverUrl,
@@ -29,70 +56,50 @@ export const EditableCoverAvatarHeader = ({
   const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
 
-  /**
-   * We render the cover and avatar states depending on the editable state
-   * and the entity's data.
-   *
-   * In edit mode we show the cover and avatar if it's already being rendered
-   * as part of existing data or if it _should_ be rendered because it's in
-   * the schema.
-   *
-   * In browse mode we show the cover and avatar if they exist in the relations
-   * for the entity.
-   */
-  const coverRelation = useRelation({
-    selector: r => r.fromEntity.id === id && r.type.id === SystemIds.COVER_PROPERTY && r.spaceId === spaceId,
-  });
-
-  const avatarRelation = useRelation({
-    selector: r => r.fromEntity.id === id && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
-  });
-
   const renderedProperties = useEditableProperties(id, spaceId);
 
-  const coverRenderable = editable ? renderedProperties[SystemIds.COVER_PROPERTY] : coverRelation;
-  const avatarRenderable = editable ? renderedProperties[ContentIds.AVATAR_PROPERTY] : avatarRelation;
+  // In browse mode, derive visibility from the props (which are stable from the
+  // server and update reactively via entity-page-cover.tsx's store subscriptions).
+  // In edit mode, use the schema-based renderables so cover/avatar placeholders
+  // appear even before the user has uploaded an image.
+  const coverRenderable = editable ? renderedProperties[SystemIds.COVER_PROPERTY] || coverUrl : coverUrl;
+  const showAvatar = editable ? avatarUrl || renderedProperties[ContentIds.AVATAR_PROPERTY] : avatarUrl;
 
-  // Only show avatar when there's an actual avatar or user is in edit mode
-  const showAvatar = avatarUrl || (editable && avatarRenderable);
-
-  // Animate margin-bottom changes when avatar shows/hides. Using inline
-  // style so the transition only applies to margin — not to the layout
-  // changes that happen when switching between browse and edit mode.
-  const marginBottom = coverRenderable
-    ? showAvatar ? 80 : 32  // mb-20 : mb-8
-    : showAvatar ? 64 : 0;  // mb-16 : mb-0
+  const layout = computeLayout(!!coverRenderable, !!coverUrl, !!showAvatar);
 
   return (
-    <div
-      style={{ marginBottom, transition: 'margin-bottom 0.2s ease-in-out' }}
-      className={`${
-        coverRenderable
-          ? `relative -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}`
-          : `mx-auto w-[880px] ${avatarUrl ? 'h-10' : ''}`
-      }`}
+    <motion.div
+      initial={false}
+      animate={layout}
+      transition={TRANSITION}
+      className="relative mx-auto w-full"
     >
-      {coverRenderable && (
-        <div
-          key={`cover-editable-avatar-header-${id}`}
-          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat"
-        >
-          <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
-        </div>
-      )}
-      {/* Avatar placeholder - only show when there's an avatar or in edit mode with renderable */}
+      {/* Cover — opacity fade */}
+      <AnimatePresence initial={false}>
+        {coverRenderable && (
+          <motion.div
+            key="cover"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={TRANSITION}
+            className="absolute inset-0 flex items-center justify-center rounded-lg bg-center bg-no-repeat"
+          >
+            <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Avatar — always absolute, position driven by wrapper height */}
       <AnimatePresence initial={false}>
         {showAvatar && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`${
-              coverRenderable
-                ? 'absolute bottom-[-40px] left-0 right-0 mx-auto flex w-full max-w-[880px] justify-start'
-                : 'mx-auto flex w-full max-w-[880px] justify-start'
-            }`}
+            transition={TRANSITION}
+            className="absolute left-0 right-0 mx-auto flex max-w-[880px] justify-start"
+            style={{ bottom: -AVATAR_OVERFLOW }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput
@@ -105,7 +112,7 @@ export const EditableCoverAvatarHeader = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 
