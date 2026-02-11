@@ -44,13 +44,24 @@ const ColumnHeader = ({
   isLastColumn: boolean;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
+  const isEditable = isEditMode && !isNameColumn;
 
-  return isEditMode && !isNameColumn ? (
-    <div className={cx(isLastColumn ? 'pr-12' : '')}>
-      <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} />
+  return (
+    <div className={cx('relative', isEditable && isLastColumn ? 'pr-12' : '')}>
+      <Text variant="smallTitle" className={isEditable ? 'invisible' : ''}>
+        {isNameColumn ? 'Name' : (column.name ?? column.id)}
+      </Text>
+      {isEditable && (
+        <div className="absolute inset-0">
+          <EditableEntityTableColumnHeader
+            unpublishedColumns={[]}
+            column={column}
+            entityId={column.id}
+            spaceId={spaceId}
+          />
+        </div>
+      )}
     </div>
-  ) : (
-    <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
   );
 };
 
