@@ -101,8 +101,10 @@ export function TableBlockContextMenu() {
                 </Link>
               </MenuItem>
               <MenuItem onClick={onCopyBlockId}>
-                <span>Copy block ID</span>
-                <Copy />
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span>Copy block ID</span>
+                  <Copy />
+                </div>
               </MenuItem>
             </>
           )}
