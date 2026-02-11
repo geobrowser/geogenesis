@@ -18,31 +18,19 @@ import { GeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-// Layout constants — the state table from the plan.
-//
-// | State                          | height | maxWidth | marginBottom | marginTop |
-// | ------------------------------ | ------ | -------- | ------------ | --------- |
-// | No cover, no avatar            | 0      | 880      | 0            | 0         |
-// | No cover, with avatar          | 40     | 880      | 64           | 0         |
-// | Cover placeholder, no avatar   | 120    | 1192     | 32           | -24       |
-// | Cover placeholder, with avatar | 120    | 1192     | 80           | -24       |
-// | Cover image, no avatar         | 320    | 1192     | 32           | -24       |
-// | Cover image, with avatar       | 320    | 1192     | 80           | -24       |
 const COVER_IMAGE_HEIGHT = 320;
-const COVER_PLACEHOLDER_HEIGHT = 120; // Matches the Cover_Default.svg dimensions
-const AVATAR_ONLY_HEIGHT = 40;
-const COVER_MAX_WIDTH = 1192;
-const CONTENT_MAX_WIDTH = 880;
-const AVATAR_OVERFLOW = 40; // How far the avatar hangs below the wrapper
-const COVER_MARGIN_TOP = -24;
+const COVER_PLACEHOLDER_HEIGHT = 120;
+const AVATAR_OVERFLOW = 40;
 const TRANSITION = { duration: 0.2, ease: 'easeInOut' as const };
 
+// maxWidth is always 1192 so the wrapper never animates horizontally.
+// When there's no cover the extra width is invisible (height is 0 or 40).
 function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean) {
   return {
-    height: hasCover ? (hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT) : hasAvatar ? AVATAR_ONLY_HEIGHT : 0,
-    maxWidth: hasCover ? COVER_MAX_WIDTH : CONTENT_MAX_WIDTH,
+    height: hasCover ? (hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT) : hasAvatar ? AVATAR_OVERFLOW : 0,
+    maxWidth: 1192,
     marginBottom: hasCover ? (hasAvatar ? 80 : 32) : hasAvatar ? 64 : 0,
-    marginTop: hasCover ? COVER_MARGIN_TOP : 0,
+    marginTop: hasCover ? -24 : 0,
   };
 }
 
@@ -58,14 +46,18 @@ export const EditableCoverAvatarHeader = ({
 
   const renderedProperties = useEditableProperties(id, spaceId);
 
-  // In browse mode, derive visibility from the props (which are stable from the
-  // server and update reactively via entity-page-cover.tsx's store subscriptions).
-  // In edit mode, use the schema-based renderables so cover/avatar placeholders
-  // appear even before the user has uploaded an image.
+  // In browse mode, derive visibility from the props (server-rendered URLs).
+  // In edit mode, use schema-based renderables so placeholders appear even
+  // before the user has uploaded an image.
   const coverRenderable = editable ? renderedProperties[SystemIds.COVER_PROPERTY] || coverUrl : coverUrl;
   const showAvatar = editable ? avatarUrl || renderedProperties[ContentIds.AVATAR_PROPERTY] : avatarUrl;
 
-  const layout = computeLayout(!!coverRenderable, !!coverUrl, !!showAvatar);
+  const hasCover = !!coverRenderable;
+  const hasCoverImage = !!coverUrl;
+  const hasAvatar = !!showAvatar;
+
+  const layout = computeLayout(hasCover, hasCoverImage, hasAvatar);
+  const coverHeight = hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT;
 
   return (
     <motion.div
@@ -74,25 +66,29 @@ export const EditableCoverAvatarHeader = ({
       transition={TRANSITION}
       className="relative mx-auto w-full"
     >
-      {/* Cover — opacity fade */}
-      <AnimatePresence initial={false}>
-        {coverRenderable && (
-          <motion.div
-            key="cover"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={TRANSITION}
-            className="absolute inset-0 flex items-center justify-center rounded-lg bg-center bg-no-repeat"
-          >
-            <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Cover — fixed size, fades in/out. The inner div clips it via overflow-hidden
+          so during the height animation the cover is revealed, not scaled. */}
+      <div className="absolute inset-0 overflow-hidden rounded-lg">
+        <AnimatePresence initial={false}>
+          {hasCover && (
+            <motion.div
+              key="cover"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={TRANSITION}
+              className="flex items-center justify-center"
+              style={{ height: coverHeight, width: '100%' }}
+            >
+              <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* Avatar — always absolute, position driven by wrapper height */}
+      {/* Avatar — outside the overflow-hidden clip so it's never clipped */}
       <AnimatePresence initial={false}>
-        {showAvatar && (
+        {hasAvatar && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
