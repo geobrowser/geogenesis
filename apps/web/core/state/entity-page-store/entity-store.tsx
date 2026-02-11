@@ -3,7 +3,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIds } from '~/core/database/entities';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -75,11 +75,12 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
 
   const { data: schema } = useQuery({
     enabled: types.length > 0,
+    placeholderData: keepPreviousData,
     queryKey: ['entity-schema-for-merging', entityId, types],
     queryFn: async () => await getSchemaFromTypeIds(types.map(t => t.id)),
   });
 
-  return schema ?? [];
+  return schema ?? DEFAULT_ENTITY_SCHEMA;
 }
 
 export function useRelationEntityRelations(entityId: string, spaceId?: string) {
