@@ -263,7 +263,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   }, [propertyData, entityId, spaceId, storage, name, relations]);
 
   return (
-    <div className="flex items-center gap-2 text-text">
+    <div className="flex items-center gap-1 text-text">
       {isPropertyEntity && editable && (
         <div className="flex items-center gap-2">
           <RenderableTypeDropdown
