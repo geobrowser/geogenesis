@@ -1,66 +1,121 @@
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal } from '~/core/io/dto/proposals';
-import { mapActionTypeToProposalType } from '~/core/io/rest';
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import {
+  type ApiProposalListItem,
+  ApiProposalListResponseSchema,
+  convertVoteOption,
+  encodePathSegment,
+  isValidUUID,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  restFetch,
+  validateActionTypes,
+} from '~/core/io/rest';
+import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { Address } from '~/core/io/substream-schema';
-import { deriveProposalStatus } from '~/core/utils/utils';
+import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
+import { Profile } from '~/core/types';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
-type NetworkProposalVote = {
-  vote: 'YES' | 'NO' | 'ABSTAIN';
-  voterId: string;
-};
+const PAGE_SIZE = 100;
 
-type NetworkProposalAction = {
-  actionType: string;
-  targetId: string | null;
-};
+const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
 
-type NetworkProposal = {
-  id: string;
-  name: string | null;
-  proposedBy: string;
-  spaceId: string;
-  startTime: string;
-  endTime: string;
-  createdAt: string;
-  createdAtBlock: string;
-  executedAt: string | null;
-  proposalActions: NetworkProposalAction[];
-  space: {
-    type: string;
-  };
-  proposalVotesConnection: {
-    totalCount: number;
-    nodes: NetworkProposalVote[];
+type EditorSpacesResult = {
+  spacesConnection: {
+    nodes: { id: string }[];
   };
 };
 
-type NetworkResult = {
-  proposalsConnection: {
-    totalCount: number;
-    pageInfo: { hasNextPage: boolean };
-    nodes: NetworkProposal[];
-  };
-};
+async function fetchEditorSpaceIds(memberSpaceId: string): Promise<string[]> {
+  const query = `query {
+    spacesConnection(
+      filter: {
+        editors: {
+          some: {
+            memberSpaceId: { is: "${memberSpaceId}" }
+          }
+        }
+      }
+    ) {
+      nodes {
+        id
+      }
+    }
+  }`;
 
-function mapVote(vote: string): 'ACCEPT' | 'REJECT' | 'ABSTAIN' {
-  switch (vote) {
-    case 'YES':
-      return 'ACCEPT';
-    case 'NO':
-      return 'REJECT';
-    default:
-      return 'ABSTAIN';
+  const fetchEffect = graphql<EditorSpacesResult>({
+    endpoint: Environment.getConfig().api,
+    query,
+  });
+
+  const result = await Effect.runPromise(Effect.either(fetchEffect));
+
+  if (Either.isLeft(result)) {
+    console.error('Failed to fetch editor spaces:', result.left);
+    return [];
   }
+
+  return result.right.spacesConnection.nodes.map(n => n.id).filter(id => id !== memberSpaceId);
 }
 
-const PAGE_SIZE = 100;
+async function fetchProposalsForSpace({
+  spaceId,
+  memberSpaceId,
+  proposalType,
+}: {
+  spaceId: string;
+  memberSpaceId: string;
+  proposalType?: 'membership' | 'content';
+}): Promise<readonly ApiProposalListItem[]> {
+  const config = Environment.getConfig();
+
+  const params = new URLSearchParams();
+  params.set('limit', String(PAGE_SIZE));
+  params.set('status', 'PROPOSED,EXECUTABLE');
+  params.set('orderBy', 'end_time');
+  params.set('orderDirection', 'desc');
+
+  if (proposalType === 'content') {
+    const types = validateActionTypes(['Publish']);
+    params.set('actionTypes', types.join(','));
+  } else if (proposalType === 'membership') {
+    const types = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
+    params.set('actionTypes', types.join(','));
+  }
+
+  if (isValidUUID(memberSpaceId)) {
+    params.set('voterId', memberSpaceId);
+  }
+
+  const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
+
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
+      })
+    )
+  );
+
+  if (Either.isLeft(result)) {
+    console.error(`Failed to fetch proposals for space ${spaceId}:`, result.left);
+    return [];
+  }
+
+  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposals for space ${spaceId}:`, decoded.left);
+    return [];
+  }
+
+  return decoded.right.proposals;
+}
 
 export async function getActiveProposalsForSpacesWhereEditor(
   memberSpaceId?: string,
@@ -70,103 +125,25 @@ export async function getActiveProposalsForSpacesWhereEditor(
   if (!memberSpaceId) {
     return {
       totalCount: 0,
-      proposals: [],
+      proposals: [] as Array<{
+        id: string;
+        name: string | null;
+        type: ProposalType;
+        createdBy: Profile;
+        startTime: number;
+        endTime: number;
+        status: ProposalStatus;
+        space: { id: string; name: string | null; image: string };
+        proposalVotes: { totalCount: number; yesCount: number; noCount: number };
+        userVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
+      }>,
       hasNextPage: false,
     };
   }
 
-  let proposalTypeFilter = '';
+  const editorSpaceIds = await fetchEditorSpaceIds(memberSpaceId);
 
-  if (proposalType === 'content') {
-    proposalTypeFilter = `
-      proposalActionsConnection: {
-        some: { actionType: { in: [PUBLISH] } }
-      }
-    `;
-  }
-
-  if (proposalType === 'membership') {
-    proposalTypeFilter = `
-      proposalActionsConnection: {
-        some: { actionType: { in: [ADD_EDITOR, ADD_MEMBER, REMOVE_EDITOR, REMOVE_MEMBER] } }
-      }
-    `;
-  }
-
-  const offset = page * PAGE_SIZE;
-  const nowSeconds = Math.floor(Date.now() / 1000);
-
-  const query = `query {
-    proposalsConnection(
-      first: ${PAGE_SIZE}
-      offset: ${offset}
-      orderBy: END_TIME_DESC
-      filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThan: "${nowSeconds}" }
-        spaceId: { isNot: "${memberSpaceId}" }
-        space: {
-          editors: {
-            some: {
-              memberSpaceId: { is: "${memberSpaceId}" }
-            }
-          }
-        }
-        ${proposalTypeFilter}
-      }
-    ) {
-      totalCount
-      pageInfo {
-        hasNextPage
-      }
-      nodes {
-        id
-        name
-        proposedBy
-        spaceId
-        startTime
-        endTime
-        createdAt
-        createdAtBlock
-        executedAt
-        proposalActions {
-          actionType
-          targetId
-        }
-        space {
-          type
-        }
-        proposalVotesConnection {
-          totalCount
-          nodes {
-            vote
-            voterId
-          }
-        }
-      }
-    }
-  }`;
-
-  const fetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query,
-  });
-
-  const result = await Effect.runPromise(Effect.either(fetchEffect));
-
-  if (Either.isLeft(result)) {
-    const error = result.left;
-
-    switch (error._tag) {
-      case 'GraphqlRuntimeError':
-        console.error(`Encountered runtime graphql error in getActiveProposalsForSpacesWhereEditor.`, error.message);
-        break;
-
-      default:
-        console.error(`${error._tag}: Unable to fetch proposals where editor`);
-        break;
-    }
-
+  if (editorSpaceIds.length === 0) {
     return {
       totalCount: 0,
       proposals: [],
@@ -174,103 +151,97 @@ export async function getActiveProposalsForSpacesWhereEditor(
     };
   }
 
-  const data = await Effect.runPromise(result);
-
-  const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
-
-  const isMembershipProposal = (p: NetworkProposal) =>
-    p.proposalActions.some(a => MEMBERSHIP_ACTIONS.has(a.actionType));
-
-  const userHasVoted = (p: NetworkProposal) => p.proposalVotesConnection.nodes.some(v => v.voterId === memberSpaceId);
-
-  const seenMembershipProposals = new Set<string>();
-  const isDuplicateMembershipProposal = (p: NetworkProposal) => {
-    if (!isMembershipProposal(p)) return false;
-    const action = p.proposalActions[0];
-    if (!action?.targetId) return false;
-    const key = `${p.spaceId}:${action.actionType}:${action.targetId}`;
-    if (seenMembershipProposals.has(key)) return true;
-    seenMembershipProposals.add(key);
-    return false;
-  };
-
-  const gqlProposals = data.proposalsConnection.nodes.filter(
-    p =>
-      p.space.type !== 'PERSONAL' && !(isMembershipProposal(p) && userHasVoted(p)) && !isDuplicateMembershipProposal(p)
+  const allResults = await Promise.all(
+    editorSpaceIds.map(spaceId => fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType }))
   );
 
-  const creatorIds = gqlProposals.map(p => p.proposedBy);
-  const uniqueCreatorIds = [...new Set(creatorIds)];
-  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
-  const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
+  const filteredProposals = deduplicateMembershipProposals(allResults.flat());
 
-  const proposals: Proposal[] = gqlProposals.map(p => {
-    const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    const profile = maybeProfile ?? {
-      id: p.proposedBy,
-      spaceId: p.proposedBy,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: p.proposedBy as `0x${string}`,
-      profileLink: null,
-    };
-
-    const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
-    const type = mapActionTypeToProposalType(actionType);
-    const endTime = Number(p.endTime);
-    const status = deriveProposalStatus(p.executedAt, endTime);
-
-    return {
-      id: p.id,
-      editId: '',
-      name: p.name,
-      createdAt: 0,
-      createdAtBlock: p.createdAtBlock ?? '0',
-      type,
-      startTime: Number(p.startTime),
-      endTime,
-      status,
-      space: {
-        id: p.spaceId,
-        name: null,
-        image: PLACEHOLDER_SPACE_IMAGE,
-      },
-      createdBy: profile,
-      proposalVotes: {
-        totalCount: p.proposalVotesConnection.totalCount,
-        nodes: p.proposalVotesConnection.nodes.map(v => ({
-          vote: mapVote(v.vote),
-          accountId: Address(v.voterId),
-          voter: profilesBySpaceId.get(v.voterId) ?? {
-            id: v.voterId,
-            spaceId: v.voterId,
-            name: null,
-            avatarUrl: null,
-            coverUrl: null,
-            address: v.voterId as `0x${string}`,
-            profileLink: null,
-          },
-        })),
-      },
-    };
-  });
-
-  // Unvoted proposals first, then voted
-  proposals.sort((a, b) => {
-    const aVoted = a.proposalVotes.nodes.some(v => v.accountId === memberSpaceId);
-    const bVoted = b.proposalVotes.nodes.some(v => v.accountId === memberSpaceId);
+  filteredProposals.sort((a, b) => {
+    const aVoted = a.userVote !== null;
+    const bVoted = b.userVote !== null;
 
     if (aVoted !== bVoted) {
       return aVoted ? 1 : -1;
     }
 
-    return b.endTime - a.endTime;
+    return b.timing.endTime - a.timing.endTime;
+  });
+
+  const startIndex = page * PAGE_SIZE;
+  const endIndex = startIndex + PAGE_SIZE;
+  const paginatedProposals = filteredProposals.slice(startIndex, endIndex);
+  const hasNextPage = filteredProposals.length > endIndex;
+
+  const creatorIds = paginatedProposals.map(p => p.proposedBy);
+  const uniqueCreatorIds = [...new Set(creatorIds)];
+  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
+  const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
+
+  const proposals = paginatedProposals.map(p => {
+    const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
+    const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
+    const type = mapActionTypeToProposalType(actionType);
+    const status = mapProposalStatus(p.status);
+
+    return {
+      id: p.proposalId,
+      name: p.name,
+      type,
+      createdBy: profile,
+      startTime: p.timing.startTime,
+      endTime: p.timing.endTime,
+      status,
+      space: {
+        id: p.spaceId,
+        name: null as string | null,
+        image: PLACEHOLDER_SPACE_IMAGE,
+      },
+      proposalVotes: {
+        totalCount: p.votes.total,
+        yesCount: p.votes.yes,
+        noCount: p.votes.no,
+      },
+      userVote: p.userVote ? convertVoteOption(p.userVote) : undefined,
+    };
   });
 
   return {
-    totalCount: data.proposalsConnection.totalCount,
+    totalCount: filteredProposals.length,
     proposals,
-    hasNextPage: data.proposalsConnection.pageInfo.hasNextPage,
+    hasNextPage,
   };
+}
+
+function deduplicateMembershipProposals(proposals: ApiProposalListItem[]): ApiProposalListItem[] {
+  const votedKeys = new Set<string>();
+  for (const p of proposals) {
+    if (!isMembershipProposal(p) || p.userVote === null) continue;
+    const key = membershipKey(p);
+    if (key) votedKeys.add(key);
+  }
+
+  const seen = new Set<string>();
+
+  return proposals.filter(p => {
+    if (!isMembershipProposal(p)) return true;
+    if (p.userVote !== null) return false;
+
+    const key = membershipKey(p);
+    if (!key) return true;
+    if (votedKeys.has(key)) return false;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isMembershipProposal(p: ApiProposalListItem) {
+  return p.actions.some(a => MEMBERSHIP_ACTIONS.has(a.actionType));
+}
+
+function membershipKey(p: ApiProposalListItem): string | null {
+  const action = p.actions[0];
+  if (!action?.targetId) return null;
+  return `${p.spaceId}:${action.actionType}:${action.targetId}`;
 }
