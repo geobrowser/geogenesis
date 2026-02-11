@@ -12,6 +12,8 @@
 <path d="M1144 -5.88923e-06C1144 -26.5097 1165.49 -48 1192 -48C1218.51 -48 1240 -26.5097 1240 2.50336e-06C1240 26.5097 1218.51 48 1192 48C1165.49 48 1144 26.5097 1144 -5.88923e-06Z" stroke="#F7E9FF" stroke-width="30"/>
 <!-- Desaturation overlay -->
 <rect width="1192" height="120" rx="12" fill="#DBDBDB" style="mix-blend-mode:color"/>
+<!-- Purple hover tint gradient (white → lavender, subtle) -->
+<rect width="1192" height="120" rx="12" fill="url(#hoverGradient)" opacity="0.15"/>
 <!-- Dashed border -->
 <rect x="0.5" y="0.5" width="1191" height="119" rx="11.5" stroke="#DBDBDB" stroke-dasharray="4 4"/>
 </g>
@@ -19,5 +21,9 @@
 <clipPath id="clip0">
 <rect width="1192" height="120" rx="12" fill="white"/>
 </clipPath>
+<linearGradient id="hoverGradient" x1="0" y1="0" x2="1192" y2="120" gradientUnits="userSpaceOnUse">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="#F7E9FF"/>
+</linearGradient>
 </defs>
 </svg>

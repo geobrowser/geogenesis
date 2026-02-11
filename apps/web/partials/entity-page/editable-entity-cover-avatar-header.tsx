@@ -204,12 +204,22 @@ const AvatarCoverInput = ({
           isCover
             ? imgUrl
               ? 'bg-transparent'
-              : 'bg-cover-default bg-contain bg-center bg-no-repeat hover:bg-cover-hover'
+              : ''
             : imgUrl
               ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
               : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
         }`}
       >
+        {/* Cover placeholder — two layers crossfaded via opacity for smooth hover */}
+        {isCover && !imgUrl && (
+          <>
+            <div className="absolute inset-0 rounded-lg bg-cover-default bg-contain bg-center bg-no-repeat" />
+            <div
+              className="absolute inset-0 rounded-lg bg-cover-hover bg-contain bg-center bg-no-repeat transition-opacity duration-200"
+              style={{ opacity: hovered ? 1 : 0 }}
+            />
+          </>
+        )}
         {imgUrl && (
           <GeoImage
             fill
