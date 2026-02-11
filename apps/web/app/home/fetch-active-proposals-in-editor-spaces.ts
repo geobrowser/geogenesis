@@ -3,15 +3,15 @@ import { Effect, Either, Schema } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import {
-  restFetch,
+  type ApiProposalListItem,
   ApiProposalListResponseSchema,
-  mapActionTypeToProposalType,
-  mapProposalStatus,
   convertVoteOption,
   encodePathSegment,
-  validateActionTypes,
   isValidUUID,
-  type ApiProposalListItem,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  restFetch,
+  validateActionTypes,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -59,9 +59,7 @@ async function fetchEditorSpaceIds(memberSpaceId: string): Promise<string[]> {
     return [];
   }
 
-  return result.right.spacesConnection.nodes
-    .map(n => n.id)
-    .filter(id => id !== memberSpaceId);
+  return result.right.spacesConnection.nodes.map(n => n.id).filter(id => id !== memberSpaceId);
 }
 
 async function fetchProposalsForSpace({
@@ -119,10 +117,6 @@ async function fetchProposalsForSpace({
   return decoded.right.proposals;
 }
 
-function isMembershipProposal(p: ApiProposalListItem) {
-  return p.actions.some(a => MEMBERSHIP_ACTIONS.has(a.actionType));
-}
-
 export async function getActiveProposalsForSpacesWhereEditor(
   memberSpaceId?: string,
   proposalType?: 'membership' | 'content',
@@ -158,31 +152,10 @@ export async function getActiveProposalsForSpacesWhereEditor(
   }
 
   const allResults = await Promise.all(
-    editorSpaceIds.map(spaceId =>
-      fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType })
-    )
+    editorSpaceIds.map(spaceId => fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType }))
   );
 
-  const allProposals = allResults.flat();
-
-  const seenMembershipProposals = new Set<string>();
-
-  const filteredProposals = allProposals.filter(p => {
-    if (isMembershipProposal(p) && p.userVote !== null) {
-      return false;
-    }
-
-    if (isMembershipProposal(p)) {
-      const action = p.actions[0];
-      if (action?.targetId) {
-        const key = `${p.spaceId}:${action.actionType}:${action.targetId}`;
-        if (seenMembershipProposals.has(key)) return false;
-        seenMembershipProposals.add(key);
-      }
-    }
-
-    return true;
-  });
+  const filteredProposals = deduplicateMembershipProposals(allResults.flat());
 
   filteredProposals.sort((a, b) => {
     const aVoted = a.userVote !== null;
@@ -238,4 +211,37 @@ export async function getActiveProposalsForSpacesWhereEditor(
     proposals,
     hasNextPage,
   };
+}
+
+function deduplicateMembershipProposals(proposals: ApiProposalListItem[]): ApiProposalListItem[] {
+  const votedKeys = new Set<string>();
+  for (const p of proposals) {
+    if (!isMembershipProposal(p) || p.userVote === null) continue;
+    const key = membershipKey(p);
+    if (key) votedKeys.add(key);
+  }
+
+  const seen = new Set<string>();
+
+  return proposals.filter(p => {
+    if (!isMembershipProposal(p)) return true;
+    if (p.userVote !== null) return false;
+
+    const key = membershipKey(p);
+    if (!key) return true;
+    if (votedKeys.has(key)) return false;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isMembershipProposal(p: ApiProposalListItem) {
+  return p.actions.some(a => MEMBERSHIP_ACTIONS.has(a.actionType));
+}
+
+function membershipKey(p: ApiProposalListItem): string | null {
+  const action = p.actions[0];
+  if (!action?.targetId) return null;
+  return `${p.spaceId}:${action.actionType}:${action.targetId}`;
 }
