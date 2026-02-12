@@ -114,8 +114,10 @@ export const ReviewChanges = () => {
   }, [spacesKey, activeSpace]);
 
   React.useEffect(() => {
+    // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
+    // publishing). The space name/image are still needed in the top bar during the
+    // publish-complete state. Stale metadata is harmless and gets replaced on the next fetch.
     if (dedupedSpacesWithActions.length === 0) {
-      setSpaces([]);
       return;
     }
 
