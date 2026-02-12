@@ -22,8 +22,8 @@ export type TypeIconComponent = React.ComponentType<{ color?: ColorName; classNa
 // Icon mapping for data types and renderable types
 export const TYPE_ICONS: Record<SwitchableRenderableType, TypeIconComponent> = {
   TEXT: Text,
-  INT64: Number,
-  FLOAT64: Number,
+  INTEGER: Number,
+  FLOAT: Number,
   DECIMAL: Number,
   BOOL: CheckboxChecked,
   DATE: Date,

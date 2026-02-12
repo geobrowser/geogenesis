@@ -38,10 +38,10 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       case 'RELATION':
         // RELATION dataType can be rendered as RELATION, IMAGE, or VIDEO
         return ['RELATION', 'IMAGE', 'VIDEO'] as SwitchableRenderableType[];
-      case 'INT64':
-        return ['INT64'] as SwitchableRenderableType[];
-      case 'FLOAT64':
-        return ['FLOAT64'] as SwitchableRenderableType[];
+      case 'INTEGER':
+        return ['INTEGER'] as SwitchableRenderableType[];
+      case 'FLOAT':
+        return ['FLOAT'] as SwitchableRenderableType[];
       case 'DECIMAL':
         return ['DECIMAL'] as SwitchableRenderableType[];
       case 'BOOL':

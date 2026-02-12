@@ -8,8 +8,8 @@ export type TextValueType = 'TEXT';
 
 export type SimpleValueType =
   | 'BOOL'
-  | 'INT64'
-  | 'FLOAT64'
+  | 'INTEGER'
+  | 'FLOAT'
   | 'DECIMAL'
   | 'BYTES'
   | 'DATE'

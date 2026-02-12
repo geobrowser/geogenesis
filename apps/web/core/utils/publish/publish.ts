@@ -73,17 +73,17 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   );
 
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    const sdkValues = set.map(convertToSdkValue);
-    const sdkUnset = deleted.map(value => ({
+    const grc20Values = set.map(convertToGrc20Value);
+    const grc20Unset = deleted.map(value => ({
       property: value.property.id,
       language: 'all' as const,
     }));
 
-    if (sdkValues.length > 0 || sdkUnset.length > 0) {
+    if (grc20Values.length > 0 || grc20Unset.length > 0) {
       const { ops: updateOps } = Graph.updateEntity({
         id: entityId,
-        values: sdkValues.length > 0 ? sdkValues : undefined,
-        unset: sdkUnset.length > 0 ? sdkUnset : undefined,
+        values: grc20Values.length > 0 ? grc20Values : undefined,
+        unset: grc20Unset.length > 0 ? grc20Unset : undefined,
       });
       ops.push(...updateOps);
     }
@@ -92,7 +92,7 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   return ops;
 }
 
-function convertToSdkValue(value: Value): PropertyValueParam {
+function convertToGrc20Value(value: Value): PropertyValueParam {
   const { dataType } = value.property;
   const val = value.value;
   const property = value.property.id;
@@ -107,14 +107,14 @@ function convertToSdkValue(value: Value): PropertyValueParam {
       };
     case 'BOOL':
       return { property, type: 'boolean', value: val === '1' || val === 'true' };
-    case 'INT64':
+    case 'INTEGER':
       return {
         property,
         type: 'integer',
         value: parseInt(val, 10) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
       };
-    case 'FLOAT64':
+    case 'FLOAT':
       return {
         property,
         type: 'float',

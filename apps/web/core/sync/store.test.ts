@@ -62,7 +62,7 @@ const mockValue2: Value = {
   property: {
     id: 'prop-2',
     name: 'Another Property',
-    dataType: 'INT64',
+    dataType: 'INTEGER',
   },
   value: '42',
   spaceId: 'space-1',
@@ -609,7 +609,7 @@ describe('GeoStore', () => {
       const testValue2: Value = {
         id: 'test-value-2',
         entity: { id: 'entity-2', name: 'Test Entity 2' },
-        property: { id: 'prop-2', name: 'Another Property', dataType: 'INT64' },
+        property: { id: 'prop-2', name: 'Another Property', dataType: 'INTEGER' },
         value: '42',
         spaceId: 'space-1',
         timestamp: '2023-01-02T00:00:00Z',
