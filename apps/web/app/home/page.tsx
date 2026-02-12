@@ -10,8 +10,6 @@ import { Avatar } from '~/design-system/avatar';
 
 import { Component } from './component';
 
-export const dynamic = 'force-dynamic';
-
 interface Props {
   searchParams: Promise<{ proposalType?: 'membership' | 'content' }>;
 }
