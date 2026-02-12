@@ -55,7 +55,8 @@ export function TableBlockListItem({
   let { image } = nameCell;
 
   const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
-  const description = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId })?.value ?? nameCell.description ?? null;
+  const descriptionValue = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId });
+  const description = descriptionValue?.value ?? nameCell.description ?? null;
 
   const avatarRelation = useRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
@@ -140,7 +141,6 @@ export function TableBlockListItem({
                   <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
-                    shouldDebounce={true}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}

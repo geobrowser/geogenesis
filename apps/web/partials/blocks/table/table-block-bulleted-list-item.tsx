@@ -3,8 +3,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
-import { Cell, Property } from '~/core/types';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
+import { Cell, Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -40,6 +41,7 @@ export function TableBlockBulletedListItem({
   source,
   autoFocus = false,
 }: Props) {
+  const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
@@ -73,7 +75,6 @@ export function TableBlockBulletedListItem({
                     onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                   }}
                   value={name ?? ''}
-                  shouldDebounce={true}
                 />
               ) : (
                 <CollectionMetadata
