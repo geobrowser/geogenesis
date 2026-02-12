@@ -8,9 +8,7 @@ import * as React from 'react';
 import { editingPropertiesAtom } from '~/atoms';
 
 interface Props {
-  href?: string;
   children: React.ReactNode;
-  isLinkable?: boolean;
   isShown?: boolean;
   isEditMode?: boolean;
 }
