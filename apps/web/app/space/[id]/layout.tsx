@@ -1,4 +1,5 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -36,6 +37,10 @@ export default async function Layout(props0: LayoutProps) {
   const { children } = props0;
 
   const spaceId = params.id;
+
+  if (!IdUtils.isValid(spaceId)) {
+    notFound();
+  }
 
   const props = await getSpaceFrontPage(spaceId);
 
