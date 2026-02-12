@@ -1,3 +1,5 @@
+import { connection } from 'next/server';
+
 import * as React from 'react';
 
 import { Metadata } from 'next';
@@ -36,7 +38,8 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  await connection();
   const params = new Promise<{ id: string }>(resolve => resolve({ id: ROOT_SPACE }));
   return <Layout params={params}>{children}</Layout>;
 }
