@@ -298,19 +298,11 @@ export const TableBlockTable = ({
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const propertyId = cell.getValue<Cell>().propertyId;
-
-                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
-
-                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
-                    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
                       <TableCell
                         key={`${cellId}-${index}-${row.original.entityId}`}
-                        isLinkable={isNameCell && isEditing}
-                        href={href}
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
