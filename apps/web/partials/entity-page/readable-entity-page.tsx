@@ -232,7 +232,7 @@ export function RelationsGroup({
             }
 
             return (
-              <div key={`relation-${relationId}-${linkedEntityId}`} className="mt-1">
+              <div key={`relation-${relationId}-${linkedEntityId}`} className={isMetadataHeader ? '' : 'mt-1'}>
                 <LinkableRelationChip
                   isEditing={false}
                   currentSpaceId={spaceId}

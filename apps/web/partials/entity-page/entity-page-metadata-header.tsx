@@ -275,13 +275,11 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         </div>
       )}
       {propertyDataType && !editable && (
-        <div>
-          <DataTypePill
-            dataType={propertyDataType.dataType}
-            renderableType={propertyDataType.renderableType}
-            spaceId={spaceId}
-          />
-        </div>
+        <DataTypePill
+          dataType={propertyDataType.dataType}
+          renderableType={propertyDataType.renderableType}
+          spaceId={spaceId}
+        />
       )}
       {editable ? (
         <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
