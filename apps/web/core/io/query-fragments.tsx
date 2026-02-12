@@ -511,6 +511,7 @@ export const propertyFragment = graphql(/* GraphQL */ `
     renderableTypeId
     renderableTypeName
     format
+    isType
   }
 `);
 

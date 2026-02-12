@@ -186,6 +186,7 @@ export type Property = {
   name: string | null;
   dataType: DataType;
   isDataTypeEditable?: boolean;
+  isType?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
   /**
    * We might render _any_ arbitrary renderable type in the UI or we might

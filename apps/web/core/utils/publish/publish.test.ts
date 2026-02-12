@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/types';
 
-import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect } from './publish';
+import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect, Publish } from './publish';
 
 /** Unwrap the Effect for test assertions */
 function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
@@ -372,5 +372,90 @@ describe('prepareLocalDataForPublishing', () => {
       expect(result[0].type).toBe('createRelation');
       expect(result[1].type).toBe('updateEntity');
     });
+  });
+});
+
+describe('parseDecimalString', () => {
+  const parseDecimalString = Publish.parseDecimalString;
+
+  it('should parse a simple decimal', () => {
+    const result = parseDecimalString('10.1');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 101n });
+  });
+
+  it('should parse a decimal with leading zero', () => {
+    const result = parseDecimalString('0.005');
+    expect(result.exponent).toBe(-3);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 5n });
+  });
+
+  it('should parse a whole number', () => {
+    const result = parseDecimalString('42');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 42n });
+  });
+
+  it('should parse zero', () => {
+    const result = parseDecimalString('0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should parse zero with decimal point', () => {
+    const result = parseDecimalString('0.0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should normalize trailing zeros in the fraction', () => {
+    // "1.0000" → combined = 10000, strip trailing zeros → mantissa = 1, exponent = 0
+    const result = parseDecimalString('1.0000');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should normalize trailing zeros in whole numbers', () => {
+    // "100" → mantissa = 1, exponent = 2
+    const result = parseDecimalString('100');
+    expect(result.exponent).toBe(2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should handle negative values', () => {
+    const result = parseDecimalString('-3.14');
+    expect(result.exponent).toBe(-2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -314n });
+  });
+
+  it('should handle negative whole numbers', () => {
+    const result = parseDecimalString('-50');
+    expect(result.exponent).toBe(1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -5n });
+  });
+
+  it('should handle negative zero', () => {
+    const result = parseDecimalString('-0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should trim whitespace', () => {
+    const result = parseDecimalString('  12.5  ');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 125n });
+  });
+
+  it('should handle large precision decimals', () => {
+    const result = parseDecimalString('123456789.123456789');
+    expect(result.exponent).toBe(-9);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 123456789123456789n });
+  });
+
+  it('should handle "1.10" by normalizing the trailing zero', () => {
+    // "1.10" → combined = 110, strip trailing zero → mantissa = 11, exponent = -1
+    const result = parseDecimalString('1.10');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 11n });
   });
 });

@@ -48,6 +48,7 @@ export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
 };
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
