@@ -2,8 +2,9 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
-import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIds } from '~/core/database/entities';
+import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIdsAndRelations } from '~/core/database/entities';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -72,20 +73,35 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
+  const stableTypeKey = useMemo(() => types.map(t => t.id).sort(), [types]);
   const hasTypes = types.length > 0;
 
+  const allRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && (spaceId ? r.spaceId === spaceId : true),
+  });
+  const stableRelationKey = useMemo(
+    () => [...new Set(allRelations.map(r => `${r.type.id}:${r.toEntity.id}`))].sort(),
+    [allRelations]
+  );
+
   const { data: schema } = useQuery({
-    enabled: hasTypes,
+    enabled: hasTypes || allRelations.length > 0,
     initialData: DEFAULT_ENTITY_SCHEMA,
     placeholderData: keepPreviousData,
-    queryKey: ['entity-schema-for-merging', entityId, types],
-    queryFn: async () => await getSchemaFromTypeIds(types.map(t => t.id)),
+    queryKey: ['entity-schema-for-merging', entityId, stableTypeKey, stableRelationKey],
+    queryFn: async () =>
+      await getSchemaFromTypeIdsAndRelations(
+        types.map(t => t.id),
+        allRelations
+      ),
   });
 
-  // When there are no types, always return the default schema. We can't
-  // rely on the query result here because keepPreviousData would hold
-  // stale type-specific properties (like Avatar) after all types are removed.
-  if (!hasTypes) {
+  // When there are no types and no relations, always return the default
+  // schema. We can't rely on the query result here because keepPreviousData
+  // would hold stale type-specific properties (like Avatar) after all types
+  // are removed. We still allow the query result through when relations
+  // exist, since IS_TYPE_PROPERTY relations can contribute schema properties.
+  if (!hasTypes && allRelations.length === 0) {
     return DEFAULT_ENTITY_SCHEMA;
   }
 
