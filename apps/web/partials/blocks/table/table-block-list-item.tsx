@@ -61,11 +61,7 @@ export function TableBlockListItem({
     selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
-  const nameValues = useValues({
-    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.NAME_PROPERTY,
-  });
-  const nameValueId = nameValues[0]?.id;
-  const descriptionValueId = descriptionValues[0]?.id;
+
 
   const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
   const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
@@ -142,43 +138,11 @@ export function TableBlockListItem({
             {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Create',
-                      data: result,
-                    }
-                  );
+                  onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
                 }}
                 onDone={(result, fromCreateFn) => {
-                  if (fromCreateFn) {
-                    // We bail out in the case that we're receiving the onDone
-                    // callback from within the create entity function internal
-                    // to SelectEntity.
-                    return;
-                  }
-
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  //
-                  // @TODO: When do we use the placeholder and when we use the real entity id?
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Find',
-                      data: result,
-                    }
-                  );
+                  if (fromCreateFn) return;
+                  onChangeEntry(rowEntityId, currentSpaceId, { type: 'FIND_ENTITY', entity: result });
                 }}
                 spaceId={currentSpaceId}
                 autoFocus={autoFocus}
@@ -191,31 +155,7 @@ export function TableBlockListItem({
                     value={name ?? ''}
                     shouldDebounce={true}
                     onChange={value => {
-                      onChangeEntry(
-                        {
-                          entityId: rowEntityId,
-                          entityName: name,
-                          spaceId: currentSpaceId,
-                        },
-                        {
-                          type: 'EVENT',
-                          data: {
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: {
-                                attributeId: SystemIds.NAME_PROPERTY,
-                                entityId: nameValueId,
-                                spaceId: currentSpaceId,
-                                attributeName: 'Name',
-                                entityName: name,
-                                type: 'TEXT',
-                                value: name ?? '',
-                              },
-                              value: { type: 'TEXT', value },
-                            },
-                          },
-                        }
-                      );
+                      onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
                   />
                 ) : (
@@ -235,31 +175,7 @@ export function TableBlockListItem({
                       placeholder="Entity name..."
                       value={name ?? ''}
                       onChange={value => {
-                        onChangeEntry(
-                          {
-                            entityId: rowEntityId,
-                            entityName: name,
-                            spaceId: currentSpaceId,
-                          },
-                          {
-                            type: 'EVENT',
-                            data: {
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: {
-                                  attributeId: SystemIds.NAME_PROPERTY,
-                                  entityId: rowEntityId,
-                                  spaceId: currentSpaceId,
-                                  attributeName: 'Name',
-                                  entityName: name,
-                                  type: 'TEXT',
-                                  value: name ?? '',
-                                },
-                                value: { type: 'TEXT', value },
-                              },
-                            },
-                          }
-                        );
+                        onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                       }}
                     />
                   </CollectionMetadata>
@@ -272,33 +188,11 @@ export function TableBlockListItem({
             <PageStringField
               placeholder="Add description..."
               onChange={value => {
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: SystemIds.DESCRIPTION_PROPERTY,
-                          entityId: descriptionValueId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Description',
-                          entityName: name,
-                          type: 'TEXT',
-                          value: description ?? '',
-                        },
-                        value: { type: 'TEXT', value: value },
-                      },
-                    },
-                  }
-                );
-
-                return;
+                onChangeEntry(rowEntityId, currentSpaceId, {
+                  type: 'SET_VALUE',
+                  property: { id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description', dataType: 'TEXT' },
+                  value,
+                });
               }}
               value={description ?? ''}
             />

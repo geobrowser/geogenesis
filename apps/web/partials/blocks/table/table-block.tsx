@@ -21,8 +21,7 @@ import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
-import { OmitStrict } from '~/core/types';
-import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
+import { Cell, Relation, Row } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -37,7 +36,7 @@ import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
-import { onChangeEntryFn } from './change-entry';
+import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockContextMenu } from './table-block-context-menu';
@@ -145,111 +144,73 @@ function useEntries(
 
   const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
-  const onChangeEntry: onChangeEntryFn = (context, event) => {
-    if (event.type === 'EVENT') {
-      // @TODO(migration): Editable data block content
-      // const send = action({
-      //   context,
-      // });
-      // send(event.data);
+  const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
+    // Step 1: Handle data writes
+    switch (action.type) {
+      case 'SET_NAME':
+        storage.entities.name.set(entityId, actionSpaceId, action.name);
+        break;
 
-      if (event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE') {
-        // Use the specialized entities.name.set API for NAME property to ensure proper sync
-        if (event.data.payload.renderable.attributeId === SystemIds.NAME_PROPERTY) {
-          storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value);
-        } else {
-          // For non-name properties, use the generic values API
-          const value: Value | OmitStrict<Value, 'id'> = {
-            id: event.data.payload.renderable.entityId ?? undefined,
-            entity: {
-              id: context.entityId,
-              name: event.data.payload.renderable.entityName,
-            },
-            property: {
-              id: event.data.payload.renderable.attributeId,
-              name: event.data.payload.renderable.attributeName,
-              dataType: event.data.payload.renderable.type,
-            },
-            spaceId,
-            value: event.data.payload.value.value ?? '',
-          };
+      case 'SET_VALUE': {
+        const existingValue = storage.values.get(
+          ID.createValueId({
+            entityId,
+            propertyId: action.property.id,
+            spaceId: actionSpaceId,
+          }),
+          entityId
+        );
 
-          if (!event.data.payload.renderable.entityId) {
-            storage.values.set(value);
-          } else {
-            storage.values.update(value, draft => {
-              draft.value = event.data.payload.value.value;
-            });
-          }
-        }
+        writeValue(storage, entityId, actionSpaceId, action.property, action.value, existingValue);
+        break;
       }
+
+      case 'FIND_ENTITY':
+      case 'CREATE_ENTITY':
+        // No data write — handled below in collection + placeholder sections
+        break;
     }
 
-    // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
-    // How do we know what the collection item values should be?
+    // Step 2: Handle collection item creation
     if (source.type === 'COLLECTION') {
-      const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
+      const maybeHasCollectionItem = entries.find(e => e.entityId === entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean }) | null = null;
+        let to: { id: string; name: string | null; space?: string; verified?: boolean } | null = null;
 
-        if (event.type === 'Find') {
-          to = event.data;
-        }
-
-        if (event.type === 'Create') {
-          to = {
-            ...event.data,
-            id: nextEntityId,
-          };
-        }
-
-        if (event.type === 'EVENT') {
-          to = {
-            id: context.entityId,
-            name: context.entityName,
-            space: context.spaceId,
-            verified: false,
-          };
+        if (action.type === 'FIND_ENTITY') {
+          to = action.entity;
+        } else if (action.type === 'CREATE_ENTITY') {
+          to = { id: nextEntityId, name: action.name };
+        } else {
+          // SET_NAME or SET_VALUE on a placeholder in a collection
+          to = { id: entityId, name: null, space: actionSpaceId, verified: false };
         }
 
         if (to !== null) {
-          const id = ID.createEntityId();
-
           upsertCollectionItemRelation({
-            relationId: id,
+            relationId: ID.createEntityId(),
             collectionId: source.value,
-            spaceId: spaceId,
-            toEntity: {
-              id: to.id,
-              name: to.name,
-            },
+            spaceId: actionSpaceId,
+            toEntity: { id: to.id, name: to.name },
             toSpaceId: to.space,
             verified: to.verified,
           });
 
-          // Mark this ID as pending to keep the placeholder visible
           setPendingEntityId(to.id);
         }
       }
     }
 
-    if (context.entityId === nextEntityId) {
+    // Step 3: Handle placeholder → entity creation
+    if (entityId === nextEntityId) {
       setHasPlaceholderRow(false);
 
-      /**
-       * We only create new entities during Find or Create and when creating
-       * from a placeholder.
-       *
-       * Find or Create is currently only available for Collections. We should
-       * only create new entities when we are creating. If we are finding then
-       * the entity already exists.
-       */
-      if (event.type !== 'Find') {
-        const maybeName = event.type === 'Create' ? event.data.name : undefined;
+      // Find means the entity already exists — don't create a new one.
+      if (action.type !== 'FIND_ENTITY') {
+        const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
 
-        // Mark this ID as pending before creating
-        setPendingEntityId(context.entityId);
+        setPendingEntityId(entityId);
 
         createEntityWithTypes({
           name: maybeName,
