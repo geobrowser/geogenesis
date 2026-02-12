@@ -275,7 +275,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         </div>
       )}
       {propertyDataType && !editable && (
-        <div className="h-100 mt-1 flex items-end">
+        <div className="mt-1">
           <DataTypePill
             dataType={propertyDataType.dataType}
             renderableType={propertyDataType.renderableType}
