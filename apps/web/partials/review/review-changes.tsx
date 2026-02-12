@@ -7,6 +7,7 @@ import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
+import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -165,6 +166,9 @@ export const ReviewChanges = () => {
 
   const isReadyToPublish = hasValidOps && proposalName.length > 0;
 
+  // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
+  const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
+
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
@@ -279,6 +283,7 @@ export const ReviewChanges = () => {
             <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
               <div className="text-body">Proposal name</div>
               <input
+                ref={proposalNameRef}
                 type="text"
                 value={rawProposalName}
                 onChange={e => handleProposalNameChange(e.target.value)}
