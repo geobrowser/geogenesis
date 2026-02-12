@@ -137,6 +137,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
         isEditing={false}
         currentSpaceId={spaceId}
         entityId={relationValue}
+        relationEntityId={relation.entityId}
         spaceId={relation.spaceId}
         relationId={relationId}
       >
