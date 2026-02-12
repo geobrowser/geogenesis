@@ -1,11 +1,15 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { useRouter } from 'next/navigation';
+
+import type { MouseEvent } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -15,6 +19,7 @@ import { PageStringField, TableImageField } from '~/design-system/editable-field
 import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -88,16 +93,21 @@ export function EditableEntityTableCell({
     return (
       <>
         {source.type !== 'COLLECTION' ? (
-          <PageStringField
-            variant="tableCell"
-            placeholder="Entity name..."
-            value={name ?? ''}
-            shouldDebounce={true}
-            onEnterKey={onAddPlaceholder}
-            onChange={value => {
-              onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
-            }}
-          />
+          <div className="group/name-cell relative flex w-full items-center">
+            <PageStringField
+              variant="tableCell"
+              placeholder="Entity name..."
+              value={name ?? ''}
+              shouldDebounce={true}
+              onEnterKey={onAddPlaceholder}
+              onChange={value => {
+                onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+              }}
+            />
+            <div className="absolute right-0 top-1/2 hidden -translate-y-1/2 group-hover/name-cell:block">
+              <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+            </div>
+          </div>
         ) : (
           <CollectionMetadata
             view="TABLE"
@@ -277,6 +287,17 @@ interface ValueGroupProps {
   entityId: string;
   property: Property;
   spaceId: string;
+}
+
+function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+  const router = useRouter();
+
+  const handleClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    router.push(NavUtils.toEntity(spaceId, entityId));
+  };
+
+  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
 }
 
 function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
