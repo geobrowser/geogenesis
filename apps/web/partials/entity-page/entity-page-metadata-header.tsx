@@ -265,14 +265,14 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   return (
     <div className="flex items-center gap-1 text-text">
       {isPropertyEntity && editable && (
-        <div className="flex items-center gap-2">
+        <>
           <RenderableTypeDropdown
             value={currentRenderableType}
             onChange={handlePropertyTypeChange}
             baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
           />
           <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-        </div>
+        </>
       )}
       {propertyDataType && !editable && (
         <DataTypePill
