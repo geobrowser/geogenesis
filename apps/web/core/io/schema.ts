@@ -10,8 +10,8 @@ const HexId = Schema.String.pipe(
 
 export const DataType = Schema.Union(
   Schema.Literal('TEXT'),
-  Schema.Literal('INT64'),
-  Schema.Literal('FLOAT64'),
+  Schema.Literal('INTEGER'),
+  Schema.Literal('FLOAT'),
   Schema.Literal('DECIMAL'),
   Schema.Literal('BOOL'),
   Schema.Literal('DATE'),
@@ -28,8 +28,10 @@ export type DataType = Schema.Schema.Type<typeof DataType>;
 export const Property = Schema.Struct({
   id: HexId,
   name: Schema.NullOr(Schema.String),
+  dataTypeId: Schema.NullOr(Schema.String),
   dataTypeName: Schema.NullOr(Schema.String),
   renderableTypeId: Schema.NullOr(Schema.String),
+  renderableTypeName: Schema.NullOr(Schema.String),
   format: Schema.NullOr(Schema.String),
 });
 

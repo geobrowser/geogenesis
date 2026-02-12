@@ -69,8 +69,8 @@ export type TabEntity = {
 
 export type DataType =
   | 'TEXT'
-  | 'INT64'
-  | 'FLOAT64'
+  | 'INTEGER'
+  | 'FLOAT'
   | 'DECIMAL'
   | 'BOOL'
   | 'DATE'
@@ -94,8 +94,8 @@ export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' |
  */
 export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
   BOOLEAN: 'BOOL',
-  INTEGER: 'INT64',
-  FLOAT: 'FLOAT64',
+  INT64: 'INTEGER',
+  FLOAT64: 'FLOAT',
   CHECKBOX: 'BOOL',
   PLACE: 'RELATION',
 } as const;
@@ -118,8 +118,8 @@ export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TE
 // All possible flattened render types (GRC-20)
 export type FlattenedRenderType =
   | 'TEXT'
-  | 'INT64'
-  | 'FLOAT64'
+  | 'INTEGER'
+  | 'FLOAT'
   | 'DECIMAL'
   | 'BOOL'
   | 'DATE'
@@ -147,8 +147,8 @@ export type SwitchableRenderableType =
   | 'IMAGE'
   | 'VIDEO'
   | 'BOOL'
-  | 'INT64'
-  | 'FLOAT64'
+  | 'INTEGER'
+  | 'FLOAT'
   | 'DECIMAL'
   | 'POINT'
   | 'GEO_LOCATION'
@@ -165,8 +165,8 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   IMAGE: 'Image',
   VIDEO: 'Video',
   BOOL: 'Checkbox',
-  INT64: 'Integer',
-  FLOAT64: 'Float',
+  INTEGER: 'Integer',
+  FLOAT: 'Float',
   DECIMAL: 'Decimal',
   DATE: 'Date',
   DATETIME: 'Date & Time',

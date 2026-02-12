@@ -2,11 +2,12 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
 import { DataType as AppDataType, LEGACY_DATA_TYPE_MAPPING, Property, RenderableType } from '~/core/types';
+import { getDataTypeFromEntityId } from '~/core/utils/property/properties';
 
 import { RemoteProperty } from '../schema';
 
 export function PropertyDto(queryResult: RemoteProperty): Property {
-  const mappedDataType = getAppDataTypeFromRemoteDataType(queryResult.dataTypeName);
+  const mappedDataType = resolveDataType(queryResult);
   const renderableTypeId = queryResult.renderableTypeId ?? null;
 
   return {
@@ -44,24 +45,17 @@ export function getStrictRenderableType(renderableType: string | null): Renderab
   }
 }
 
-/**
- * Maps remote GRC-20 v2 data type names to app DataType.
- * GRC-20 v2 types are passed through directly (normalized to uppercase).
- */
 export function getAppDataTypeFromRemoteDataType(dataType: string | null): AppDataType {
-  // Normalize to uppercase for case-insensitive matching
   const normalizedType = dataType?.toUpperCase() ?? null;
 
-  // Check for legacy type mapping first
   if (normalizedType && normalizedType in LEGACY_DATA_TYPE_MAPPING) {
     return LEGACY_DATA_TYPE_MAPPING[normalizedType]!;
   }
 
-  // Valid GRC-20 v2 types - pass through directly
   const validTypes: AppDataType[] = [
     'TEXT',
-    'INT64',
-    'FLOAT64',
+    'INTEGER',
+    'FLOAT',
     'DECIMAL',
     'BOOL',
     'DATE',
@@ -80,4 +74,13 @@ export function getAppDataTypeFromRemoteDataType(dataType: string | null): AppDa
 
   console.warn(`Unknown data type: ${dataType}, defaulting to TEXT`);
   return 'TEXT';
+}
+
+/** Prefers dataTypeId (UUID) over dataTypeName (string) for resolution. */
+export function resolveDataType(queryResult: RemoteProperty): AppDataType {
+  const result = queryResult.dataTypeId
+    ? getDataTypeFromEntityId(queryResult.dataTypeId)
+    : getAppDataTypeFromRemoteDataType(queryResult.dataTypeName);
+
+  return result;
 }

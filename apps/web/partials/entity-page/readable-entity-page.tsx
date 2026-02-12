@@ -375,8 +375,8 @@ function RenderedValue({
         </div>
       );
     }
-    case 'INT64':
-    case 'FLOAT64':
+    case 'INTEGER':
+    case 'FLOAT':
     case 'DECIMAL':
       return (
         <ReadableNumberField

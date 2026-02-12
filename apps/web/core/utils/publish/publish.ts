@@ -73,17 +73,17 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   );
 
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    const sdkValues = set.map(convertToSdkValue);
-    const sdkUnset = deleted.map(value => ({
+    const grc20Values = set.map(convertToGrc20Value);
+    const grc20Unset = deleted.map(value => ({
       property: value.property.id,
       language: 'all' as const,
     }));
 
-    if (sdkValues.length > 0 || sdkUnset.length > 0) {
+    if (grc20Values.length > 0 || grc20Unset.length > 0) {
       const { ops: updateOps } = Graph.updateEntity({
         id: entityId,
-        values: sdkValues.length > 0 ? sdkValues : undefined,
-        unset: sdkUnset.length > 0 ? sdkUnset : undefined,
+        values: grc20Values.length > 0 ? grc20Values : undefined,
+        unset: grc20Unset.length > 0 ? grc20Unset : undefined,
       });
       ops.push(...updateOps);
     }
@@ -92,7 +92,29 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   return ops;
 }
 
-function convertToSdkValue(value: Value): PropertyValueParam {
+// "10.5" → { mantissa: 105n, exponent: -1 }
+// "300"  → { mantissa: 300n, exponent: 0 }
+function decimalToMantissaExponent(val: string): { mantissa: bigint; exponent: number } {
+  const trimmed = val.trim();
+  if (!trimmed || isNaN(Number(trimmed))) {
+    return { mantissa: 0n, exponent: 0 };
+  }
+
+  const negative = trimmed.startsWith('-');
+  const abs = negative ? trimmed.slice(1) : trimmed;
+
+  const dotIndex = abs.indexOf('.');
+  if (dotIndex === -1) {
+    return { mantissa: BigInt(negative ? `-${abs}` : abs), exponent: 0 };
+  }
+
+  const fractionalDigits = abs.length - dotIndex - 1;
+  const withoutDot = abs.slice(0, dotIndex) + abs.slice(dotIndex + 1);
+  const mantissa = BigInt(negative ? `-${withoutDot}` : withoutDot);
+  return { mantissa, exponent: -fractionalDigits };
+}
+
+function convertToGrc20Value(value: Value): PropertyValueParam {
   const { dataType } = value.property;
   const val = value.value;
   const property = value.property.id;
@@ -107,27 +129,31 @@ function convertToSdkValue(value: Value): PropertyValueParam {
       } as PropertyValueParam;
     case 'BOOL':
       return { property, type: 'boolean', value: val === '1' || val === 'true' } as PropertyValueParam;
-    case 'INT64':
+    case 'INTEGER':
       return {
         property,
         type: 'integer',
         value: parseInt(val, 10) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
       } as PropertyValueParam;
-    case 'FLOAT64':
+    case 'FLOAT':
       return {
         property,
         type: 'float',
         value: parseFloat(val) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
       } as PropertyValueParam;
-    case 'DECIMAL':
-      return {
+    case 'DECIMAL': {
+      const { mantissa, exponent } = decimalToMantissaExponent(val);
+      const decimalParam = {
         property,
-        type: 'float',
-        value: parseFloat(val) || 0,
+        type: 'decimal',
+        mantissa: { type: 'i64' as const, value: mantissa },
+        exponent,
         ...(value.options?.unit && { unit: value.options.unit }),
       } as PropertyValueParam;
+      return decimalParam;
+    }
     case 'DATE':
       return { property, type: 'date', value: val } as PropertyValueParam;
     case 'DATETIME':
