@@ -143,8 +143,9 @@ function EditableRelationsGroup({
   const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
   const firstRelationValueType = property?.relationValueTypes?.[0];
 
+  // We don't filter by space id as we want to render data from all spaces.
   const relations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === typeOfId,
+    selector: r => r.fromEntity.id === entityId && r.type.id === typeOfId,
   });
 
   const isEmpty = relations.length === 0;
