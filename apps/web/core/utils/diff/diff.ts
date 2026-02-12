@@ -1,7 +1,18 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
-const { TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, BLOCKS, TYPES_PROPERTY, NAME_PROPERTY, MARKDOWN_CONTENT, COVER_PROPERTY } =
-  SystemIds;
+const {
+  TEXT_BLOCK,
+  IMAGE_BLOCK,
+  DATA_BLOCK,
+  BLOCKS,
+  TYPES_PROPERTY,
+  NAME_PROPERTY,
+  MARKDOWN_CONTENT,
+  COVER_PROPERTY,
+  VIEW_PROPERTY,
+  SHOWN_COLUMNS,
+  PROPERTIES,
+} = SystemIds;
 import { diffWords } from 'diff';
 import { Effect } from 'effect';
 
@@ -12,6 +23,7 @@ import type { Entity, Relation, Value } from '~/core/types';
 
 import type {
   BlockChange,
+  DataBlockChange,
   DiffChunk,
   EntityDiff,
   RelationChange,
@@ -113,8 +125,9 @@ export function mapApiEntityDiff(apiEntity: ApiEntityDiffShape): EntityDiff {
 export const BLOCK_TYPE_IDS = [TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, VIDEO_BLOCK_TYPE];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
+const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
+
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
-  // Short-circuit: when diffing against empty, the whole string is added/removed
   if (before === '' && after !== '') return [{ value: after, added: true }];
   if (after === '' && before !== '') return [{ value: before, removed: true }];
   if (before === '' && after === '') return [];
@@ -138,6 +151,7 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
   }
 
   const blockEntityIds = new Set(blockToParent.keys());
+
   if (blockEntityIds.size === 0) return entities;
 
   const parentBlocks = new Map<string, BlockChange[]>();
@@ -172,9 +186,10 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
 }
 
 export async function postProcessDiffs(entities: EntityDiff[], spaceId: string): Promise<EntityDiff[]> {
-  // 1. Analysis pass
+  // 1. Classify entities
   const blocksWithParent = new Set<string>();
   const blockTypeEntities: string[] = [];
+  const blockRelEntities: string[] = [];
   const idsToResolve = new Set<string>();
   const entityMap = new Map<string, EntityDiff>();
 
@@ -187,6 +202,7 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     }
 
     let isBlock = false;
+    let hasBlockConfig = false;
     for (const rel of entity.relations) {
       if (rel.typeId === BLOCKS) {
         if (rel.after?.toEntityId) blocksWithParent.add(rel.after.toEntityId);
@@ -196,12 +212,14 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
         const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
         if (typeId && BLOCK_TYPE_SET.has(typeId)) isBlock = true;
       }
+      if (BLOCK_CONFIG_RELATION_IDS.has(rel.typeId)) hasBlockConfig = true;
       if (!rel.typeName) idsToResolve.add(rel.typeId);
       if (rel.before && !rel.before.toEntityName) idsToResolve.add(rel.before.toEntityId);
       if (rel.after && !rel.after.toEntityName) idsToResolve.add(rel.after.toEntityId);
     }
 
     if (isBlock) blockTypeEntities.push(entity.entityId);
+    if (hasBlockConfig && !isBlock) blockRelEntities.push(entity.entityId);
   }
 
   const orphanSet = new Set(blockTypeEntities.filter(id => !blocksWithParent.has(id)));
@@ -249,23 +267,100 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     }
   }
 
-  // 3. Batch-fetch names (omit spaceId to resolve cross-space entities)
+  // 3. Resolve block relation entity parents via backlinks
+  const blockRelToParent = new Map<string, string>();
+
+  if (blockRelEntities.length > 0) {
+    await Promise.all(
+      blockRelEntities.map(async blockRelEntityId => {
+        try {
+          const backlinks = await Effect.runPromise(getEntityBacklinks(blockRelEntityId, spaceId));
+          if (backlinks.length > 0) {
+            blockRelToParent.set(blockRelEntityId, backlinks[0].id);
+            idsToResolve.add(backlinks[0].id);
+          }
+        } catch {
+          // Block relation entity stays as-is in the diff
+        }
+      })
+    );
+  }
+
+  // 4. Batch-fetch names and entity data
   const nameMap = new Map<string, string | null>();
+  const fetchedEntityMap = new Map<string, Entity>();
   if (idsToResolve.size > 0) {
     try {
       const fetched = await Effect.runPromise(getBatchEntities([...idsToResolve]));
       for (const e of fetched) {
         nameMap.set(e.id, e.name);
+        fetchedEntityMap.set(e.id, e);
       }
     } catch (error) {
       console.error('[postProcessDiffs] Failed to fetch entity names:', error);
     }
   }
 
-  // 4. Inject orphan BLOCKS relations
-  let processed = entities;
+  // 5. Merge block relation entity config into data block entities
+  const mergedBlockRelEntityIds = new Set<string>();
+
+  if (blockRelToParent.size > 0) {
+    for (const [blockRelEntityId, parentId] of blockRelToParent) {
+      const parentEntity = fetchedEntityMap.get(parentId);
+      if (!parentEntity) continue;
+
+      // Find the BLOCKS relation whose relation-entity IS the block relation entity
+      const blocksRel = parentEntity.relations.find(
+        r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
+      );
+      if (!blocksRel) continue;
+
+      const dataBlockEntityId = blocksRel.toEntity.id;
+      const blockRelDiff = entityMap.get(blockRelEntityId);
+      if (!blockRelDiff) continue;
+
+      const configRelations = blockRelDiff.relations.filter(r => BLOCK_CONFIG_RELATION_IDS.has(r.typeId));
+      if (configRelations.length === 0) continue;
+
+      const existingDataBlockDiff = entityMap.get(dataBlockEntityId);
+
+      if (existingDataBlockDiff) {
+        existingDataBlockDiff.relations.push(...configRelations);
+      } else {
+        const dataBlockName = nameMap.get(dataBlockEntityId) ?? blocksRel.toEntity.name ?? null;
+        const newDataBlockDiff: EntityDiff = {
+          entityId: dataBlockEntityId,
+          name: dataBlockName,
+          values: [],
+          relations: [
+            {
+              relationId: `synthetic-type-${dataBlockEntityId}`,
+              typeId: TYPES_PROPERTY,
+              spaceId,
+              changeType: 'ADD',
+              before: null,
+              after: { toEntityId: DATA_BLOCK, toSpaceId: null, position: null },
+            },
+            ...configRelations,
+          ],
+          blocks: [],
+        };
+        entities.push(newDataBlockDiff);
+        entityMap.set(dataBlockEntityId, newDataBlockDiff);
+
+        blockToParent.set(dataBlockEntityId, parentId);
+      }
+
+      mergedBlockRelEntityIds.add(blockRelEntityId);
+    }
+  }
+
+  // 6. Inject orphan BLOCKS relations
+  let processed: EntityDiff[] =
+    mergedBlockRelEntityIds.size > 0 ? entities.filter(e => !mergedBlockRelEntityIds.has(e.entityId)) : entities;
+
   if (blockToParent.size > 0) {
-    const result = entities.map(e => ({ ...e, relations: [...e.relations] }));
+    const result = processed.map(e => ({ ...e, relations: [...e.relations] }));
     const resultMap = new Map(result.map(e => [e.entityId, e]));
 
     for (const [blockId, parentId] of blockToParent) {
@@ -293,29 +388,99 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     processed = result;
   }
 
-  // 5. Group blocks under parents
+  // 7. Synthesize diffs for missing block entities
+  const processedIds = new Set(processed.map(e => e.entityId));
+  for (const blockId of blocksWithParent) {
+    if (processedIds.has(blockId)) continue;
+
+    const remoteBlock = fetchedEntityMap.get(blockId);
+    if (!remoteBlock) continue;
+
+    const blockType = remoteBlock.types.find(t => BLOCK_TYPE_SET.has(t.id));
+    if (!blockType) continue;
+
+    const values: ValueChange[] = [];
+    for (const rv of remoteBlock.values) {
+      if (rv.property.id === NAME_PROPERTY) continue;
+      const dataType = rv.property.dataType;
+      if (dataType === 'TEXT') {
+        values.push({
+          propertyId: rv.property.id,
+          propertyName: rv.property.name ?? null,
+          spaceId,
+          type: 'TEXT' as TextValueType,
+          before: rv.value,
+          after: null,
+          diff: computeTextDiff(rv.value, ''),
+        } as TextValueChange);
+      } else {
+        values.push({
+          propertyId: rv.property.id,
+          propertyName: rv.property.name ?? null,
+          spaceId,
+          type: dataType as SimpleValueType,
+          before: rv.value,
+          after: null,
+        } as SimpleValueChange);
+      }
+    }
+
+    const syntheticDiff: EntityDiff = {
+      entityId: blockId,
+      name: remoteBlock.name,
+      values,
+      relations: [
+        {
+          relationId: `synthetic-type-${blockId}`,
+          typeId: TYPES_PROPERTY,
+          spaceId,
+          changeType: 'ADD',
+          before: null,
+          after: { toEntityId: blockType.id, toSpaceId: null, position: null },
+        },
+      ],
+      blocks: [],
+    };
+
+    processed.push(syntheticDiff);
+  }
+
+  // 8. Group blocks under parents
   const grouped = groupBlocksUnderParents(processed);
 
-  // 6. Apply resolved names
+  // 9. Apply resolved names
+  const resolveValue = (v: ValueChange): ValueChange => ({
+    ...v,
+    propertyName: v.propertyName ?? nameMap.get(v.propertyId) ?? null,
+  });
+
+  const resolveRelation = (r: RelationChange): RelationChange => ({
+    ...r,
+    typeName: r.typeName ?? nameMap.get(r.typeId) ?? null,
+    before: r.before
+      ? { ...r.before, toEntityName: r.before.toEntityName ?? nameMap.get(r.before.toEntityId) ?? null }
+      : r.before,
+    after: r.after
+      ? { ...r.after, toEntityName: r.after.toEntityName ?? nameMap.get(r.after.toEntityId) ?? null }
+      : r.after,
+  });
+
   if (nameMap.size === 0) return grouped;
 
   return grouped.map(entity => ({
     ...entity,
     name: entity.name ?? nameMap.get(entity.entityId) ?? null,
-    values: entity.values.map(v => ({
-      ...v,
-      propertyName: v.propertyName ?? nameMap.get(v.propertyId) ?? null,
-    })),
-    relations: entity.relations.map(r => ({
-      ...r,
-      typeName: r.typeName ?? nameMap.get(r.typeId) ?? null,
-      before: r.before
-        ? { ...r.before, toEntityName: r.before.toEntityName ?? nameMap.get(r.before.toEntityId) ?? null }
-        : r.before,
-      after: r.after
-        ? { ...r.after, toEntityName: r.after.toEntityName ?? nameMap.get(r.after.toEntityId) ?? null }
-        : r.after,
-    })),
+    values: entity.values.map(resolveValue),
+    relations: entity.relations.map(resolveRelation),
+    blocks: entity.blocks.map(block => {
+      if (block.type !== 'dataBlock') return block;
+      const db = block as DataBlockChange;
+      return {
+        ...db,
+        ...(db.values ? { values: db.values.map(resolveValue) } : {}),
+        ...(db.relations ? { relations: db.relations.map(resolveRelation) } : {}),
+      };
+    }),
   }));
 }
 
@@ -325,12 +490,22 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   if (blockType === 'dataBlock') {
     const nameValue = entity.values.find(v => v.propertyId === NAME_PROPERTY);
 
+    const values = entity.values.filter(
+      v => v.propertyId !== NAME_PROPERTY && v.propertyId !== MARKDOWN_CONTENT
+    );
+    const relations = entity.relations.filter(
+      r => r.typeId !== TYPES_PROPERTY && r.typeId !== BLOCKS
+    );
+
     return {
       id: entity.entityId,
       type: 'dataBlock',
       before: nameValue?.before ?? null,
       after: nameValue?.after ?? null,
-    };
+      blockName: entity.name,
+      values: values.length > 0 ? values : undefined,
+      relations: relations.length > 0 ? relations : undefined,
+    } as DataBlockChange;
   }
 
   if (blockType === 'imageBlock') {
@@ -344,7 +519,6 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
     };
   }
 
-  // textBlock (default)
   const contentValue =
     entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ??
     entity.values.find(v => v.type === 'TEXT');
@@ -426,7 +600,13 @@ export async function fromLocal(
     }
   }
 
-  // Block entities are flat here — groupBlocksUnderParents() nests them later.
+  const imageEntityIds = new Set<string>();
+  for (const relation of localRelations) {
+    if (relation.renderableType === 'IMAGE') {
+      imageEntityIds.add(relation.toEntity.id);
+    }
+  }
+
   const diffs: EntityDiff[] = [];
   for (const entityId of allChangedEntityIds) {
     const entityValues = localValues.filter(v => v.entity.id === entityId);
@@ -438,8 +618,35 @@ export async function fromLocal(
     }
   }
 
-  // Backfill TYPES_PROPERTY from remote so postProcessDiffs can group blocks.
+  const imageEntityUrls = new Map<string, string>();
   for (const diff of diffs) {
+    if (imageEntityIds.has(diff.entityId)) {
+      const ipfsValue = diff.values.find(v => v.after && v.after.startsWith('ipfs://'));
+      if (ipfsValue?.after) {
+        imageEntityUrls.set(diff.entityId, ipfsValue.after);
+      }
+    }
+  }
+
+  const filteredDiffs = diffs
+    .filter(d => !imageEntityIds.has(d.entityId))
+    .map(d => ({
+      ...d,
+      relations: d.relations.map(r => {
+        const afterImageUrl = r.after && imageEntityUrls.get(r.after.toEntityId);
+        const beforeImageUrl = r.before && imageEntityUrls.get(r.before.toEntityId);
+
+        if (!afterImageUrl && !beforeImageUrl) return r;
+
+        return {
+          ...r,
+          ...(r.after && afterImageUrl ? { after: { ...r.after, imageUrl: afterImageUrl } } : {}),
+          ...(r.before && beforeImageUrl ? { before: { ...r.before, imageUrl: beforeImageUrl } } : {}),
+        };
+      }),
+    }));
+
+  for (const diff of filteredDiffs) {
     if (diff.relations.some(r => r.typeId === TYPES_PROPERTY)) continue;
 
     const remoteEntity = remoteEntities.get(diff.entityId);
@@ -458,7 +665,7 @@ export async function fromLocal(
     }
   }
 
-  return postProcessDiffs(diffs, spaceId);
+  return postProcessDiffs(filteredDiffs, spaceId);
 }
 
 function buildEntityDiff(
@@ -600,6 +807,8 @@ function computeRelationChanges(
             }),
           }
         : null;
+
+    if (before === null && after === null) continue;
 
     relationChanges.push({
       relationId: localRelation.id,

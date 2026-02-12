@@ -85,6 +85,9 @@ export interface DataBlockChange {
   type: 'dataBlock';
   before: string | null;
   after: string | null;
+  blockName?: string | null;
+  values?: ValueChange[];
+  relations?: RelationChange[];
 }
 
 export type BlockChange = TextBlockChange | ImageBlockChange | DataBlockChange;
