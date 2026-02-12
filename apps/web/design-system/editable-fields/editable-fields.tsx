@@ -52,7 +52,7 @@ type TableStringFieldProps = {
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
     callback: props.onChange,
-    delay: 1000,
+    delay: 300,
     initialValue: props.value || '',
   });
 
@@ -86,7 +86,7 @@ export function PageStringField({ shouldDebounce, onChange, onEnterKey, ...props
     flush,
   } = useOptimisticValueWithSideEffect({
     callback: onChange,
-    delay: 1500,
+    delay: 300,
     initialValue: props.value || '',
   });
 

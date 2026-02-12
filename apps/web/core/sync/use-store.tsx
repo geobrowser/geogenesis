@@ -445,6 +445,41 @@ export function useValue(options: UseValueParams) {
   return value;
 }
 
+/**
+ * Space-aware value lookup for data block cells. Returns a single Value
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useValue when rendering data that may originate from
+ * a different space than the one being edited. Entity pages should use
+ * useValue with a strict spaceId filter instead — they want null when
+ * the value doesn't exist in the current space.
+ */
+export function useSpaceAwareValue(options: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+}) {
+  const { entityId, propertyId, spaceId } = options;
+
+  const value = useSelector(
+    reactiveValues,
+    state => {
+      let fallback: Value | null = null;
+
+      for (const v of state) {
+        if (v.entity.id !== entityId || v.property.id !== propertyId || v.isDeleted) continue;
+        if (v.spaceId === spaceId) return v;
+        fallback ??= v;
+      }
+
+      return fallback;
+    },
+    equal
+  );
+
+  return value;
+}
+
 export function getValue(options: UseValueParams & { mergeWith?: Value[] }) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
