@@ -960,31 +960,6 @@ function RenderedValue({
         );
       }
 
-      // @TODO(migration): Fix url renderable
-      // case 'URL': {
-      //   return (
-      //     <WebUrlField
-      //       key={renderable.propertyId}
-      //       spaceId={spaceId}
-      //       placeholder="Add a URI"
-      //       isEditing={true}
-      //       onBlur={event =>
-      //         send({
-      //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-      //           payload: {
-      //             value: {
-      //               value: event.target.value,
-      //               type: 'URL',
-      //             },
-      //             renderable,
-      //           },
-      //         })
-      //       }
-      //       value={renderable.value}
-      //     />
-      //   );
-      // }
-
       case 'POINT': {
         return (
           <>
