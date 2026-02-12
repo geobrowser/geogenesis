@@ -4,7 +4,6 @@ import { ReactRenderer } from '@tiptap/react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import tippy, { Instance } from 'tippy.js';
 
-import { useEntity } from '~/core/database/entities';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GraphLinkTooltip } from './graph-link-tooltip';
@@ -67,7 +66,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                   component = null;
                 }
 
-                const linkText = linkElement.textContent || '';
                 const entityId = linkUrl.replace('graph://', '');
 
                 // Read cached entity data from data attributes (avoids fetching)
@@ -77,7 +75,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 try {
                   component = new ReactRenderer(GraphLinkTooltip, {
                     props: {
-                      linkText,
                       linkUrl,
                       spaceId,
                       entityId,
@@ -174,6 +171,12 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                       duration: [100, 150],
                       trigger: 'mouseenter',
                       hideOnClick: false,
+                      onShow: () => {
+                        // Prevent showing tooltip in read mode
+                        if (!editor.isEditable) {
+                          return false;
+                        }
+                      },
                       onHide: () => {
                         if (
                           popup &&
@@ -244,13 +247,25 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
               const linkId = linkElement.getAttribute('href');
 
-              if (linkId !== lastHoverId) {
-                lastHoverId = linkId;
-                currentLinkElement = linkElement;
-                const linkUrl = linkElement.getAttribute('href') || '';
-                show(linkElement, linkUrl);
+              // Always show the tooltip when hovering over a link
+              // This fixes the issue where re-hovering the same link wouldn't show the tooltip
+              lastHoverId = linkId;
+              currentLinkElement = linkElement;
+              const linkUrl = linkElement.getAttribute('href') || '';
+              show(linkElement, linkUrl);
+            };
+
+            // Listen for editor editable state changes to hide tooltip in read mode
+            const handleEditableChange = () => {
+              if (!editor.isEditable && popup && popup.state.isVisible) {
+                hide(true);
               }
             };
+
+            // Listen to 'update' and 'focus' events to catch state changes
+            editor.on('update', handleEditableChange);
+            editor.on('focus', handleEditableChange);
+            editor.on('blur', handleEditableChange);
 
             const handleMouseLeave = (event: Event) => {
               const target = event.target as Element;
@@ -291,6 +306,9 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 try {
                   editorView.dom.removeEventListener('mouseenter', handleMouseEnter, true);
                   editorView.dom.removeEventListener('mouseleave', handleMouseLeave, true);
+                  editor.off('update', handleEditableChange);
+                  editor.off('focus', handleEditableChange);
+                  editor.off('blur', handleEditableChange);
 
                   // Clean up tooltip immediately
                   hide(true);

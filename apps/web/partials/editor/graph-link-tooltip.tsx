@@ -4,7 +4,6 @@ import React from 'react';
 
 import { useEntity } from '~/core/database/entities';
 import { useToast } from '~/core/hooks/use-toast';
-import { getValidSpaceIdForEntity } from '~/core/utils/space/spaces';
 
 import { SquareButton } from '~/design-system/button';
 import { Copy } from '~/design-system/icons/copy';
@@ -28,13 +27,18 @@ interface GraphLinkTooltipProps {
 export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   linkText,
   entityId,
-  entityName,
-  entitySpaceId,
+  entityName: propEntityName,
+  entitySpaceId: propEntitySpaceId,
   onShowConnection,
   onRemoveLink,
   onClose,
 }) => {
   const [, setToast] = useToast();
+
+  // Fetch entity data if not provided via props (handles rerender case)
+  const entity = useEntity({ id: entityId || '', spaceId: propEntitySpaceId });
+  const entityName = propEntityName || entity?.name || linkText;
+  const entitySpaceId = propEntitySpaceId || entity?.spaces?.[0];
 
   const copyHandler = async () => {
     try {

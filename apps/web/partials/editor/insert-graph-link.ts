@@ -1,4 +1,4 @@
-import { Editor, ChainedCommands } from '@tiptap/core';
+import { ChainedCommands, Editor } from '@tiptap/core';
 
 interface InsertGraphLinkOptions {
   /** The TipTap editor instance (for @mention use case) */
@@ -31,7 +31,7 @@ interface InsertGraphLinkOptions {
  * @param options - Configuration options for link insertion
  */
 export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
-  const { editor, chain, entityId, url, linkText,entityName, spaceId, from, to } = options;
+  const { editor, chain, entityId, url, linkText, entityName, spaceId, from, to } = options;
 
   // Determine the URL and link text
   const linkUrl = url || (entityId ? `graph://${entityId}` : '');
@@ -42,16 +42,6 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
     return;
   }
 
-  // Build link attributes with data attributes for entity name and space ID
-  // This allows tooltips to display entity info without fetching
-  const linkAttrs: Record<string, string> = { href: linkUrl };
-  if (entityName) {
-    linkAttrs['data-entity-name'] = entityName;
-  }
-  if (spaceId) {
-    linkAttrs['data-space-id'] = spaceId;
-  }
-
   // If we have a range to delete (from/to) and a chain function (handler use case)
   if (chain && from !== undefined && to !== undefined) {
     chain()
@@ -59,10 +49,11 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
       .insertContent({
         type: 'text',
         text: text,
-        marks: [{
-          type: 'link',
-          attrs: linkAttrs
-        }]
+        marks: [
+          {
+            type: 'link',
+          },
+        ],
       })
       .run();
     return;
@@ -81,10 +72,11 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
         .insertContent({
           type: 'text',
           text: text,
-          marks: [{
-            type: 'link',
-            attrs: linkAttrs
-          }]
+          marks: [
+            {
+              type: 'link',
+            },
+          ],
         })
         .run();
     } else {
@@ -95,10 +87,11 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
         .insertContent({
           type: 'text',
           text: text,
-          marks: [{
-            type: 'link',
-            attrs: linkAttrs
-          }]
+          marks: [
+            {
+              type: 'link',
+            },
+          ],
         })
         .run();
     }
