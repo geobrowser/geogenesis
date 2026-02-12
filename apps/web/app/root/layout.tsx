@@ -36,8 +36,6 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-export const dynamic = 'force-dynamic';
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const params = new Promise<{ id: string }>(resolve => resolve({ id: ROOT_SPACE }));
   return <Layout params={params}>{children}</Layout>;
