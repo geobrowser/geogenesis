@@ -902,7 +902,6 @@ function RenderedValue({
               aria-label="text-field"
               value={value}
               onChange={onChange}
-              shouldDebounce={true}
             />
             {property.id === FORMAT_PROPERTY && (
               <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
@@ -957,31 +956,6 @@ function RenderedValue({
           />
         );
       }
-
-      // @TODO(migration): Fix url renderable
-      // case 'URL': {
-      //   return (
-      //     <WebUrlField
-      //       key={renderable.propertyId}
-      //       spaceId={spaceId}
-      //       placeholder="Add a URI"
-      //       isEditing={true}
-      //       onBlur={event =>
-      //         send({
-      //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-      //           payload: {
-      //             value: {
-      //               value: event.target.value,
-      //               type: 'URL',
-      //             },
-      //             renderable,
-      //           },
-      //         })
-      //       }
-      //       value={renderable.value}
-      //     />
-      //   );
-      // }
 
       case 'POINT': {
         return (

@@ -15,8 +15,8 @@ import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { Cell, Property, Row } from '~/core/types';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -113,7 +113,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // We are in a component internally within react-table. eslint isn't
     // able to infer that this is a valid React component.
     // eslint-disable-next-line
-    const name = useName(entityId);
+    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
@@ -298,19 +298,11 @@ export const TableBlockTable = ({
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const propertyId = cell.getValue<Cell>().propertyId;
-
-                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
-
-                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
-                    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
                       <TableCell
                         key={`${cellId}-${index}-${row.original.entityId}`}
-                        isLinkable={isNameCell && isEditing}
-                        href={href}
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
