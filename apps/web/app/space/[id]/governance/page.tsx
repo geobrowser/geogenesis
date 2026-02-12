@@ -37,8 +37,6 @@ const getVotingPeriod = (spaceId: string) => {
 };
 const passThreshold = '50%';
 
-export const dynamic = 'force-dynamic';
-
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
