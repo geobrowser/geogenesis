@@ -1,6 +1,5 @@
 'use client';
 
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import { useState } from 'react';
@@ -21,8 +20,7 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
-import { onChangeEntryFn } from './change-entry';
-import { writeValue } from './change-entry';
+import { createPropertyRelation, createTypeRelationForNewEntity, onChangeEntryFn, writeValue } from './change-entry';
 
 export function TableBlockPropertyField(props: {
   spaceId: string;
@@ -142,7 +140,6 @@ function EditableRelationsGroup({
   const { storage } = useMutate();
 
   const typeOfId = property.id;
-  const typeOfName = property.name;
   const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
   const firstRelationValueType = property?.relationValueTypes?.[0];
 
@@ -177,51 +174,11 @@ function EditableRelationsGroup({
           relationValueTypes={filterSearchByTypes}
           onCreateEntity={result => {
             if (firstRelationValueType) {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                verified: result.verified,
-                toSpaceId: result.space,
-                type: {
-                  id: SystemIds.TYPES_PROPERTY,
-                  name: 'Types',
-                },
-                fromEntity: {
-                  id: result.id,
-                  name: result.name,
-                },
-                toEntity: {
-                  id: firstRelationValueType.id,
-                  name: firstRelationValueType.name,
-                  value: firstRelationValueType.id,
-                },
-              });
+              createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
           }}
           onDone={result => {
-            storage.relations.set({
-              id: IdUtils.generate(),
-              // @TODO(migration): Reuse entity?
-              entityId: IdUtils.generate(),
-              spaceId,
-              renderableType: 'RELATION',
-              toSpaceId: result.space,
-              type: {
-                id: property.id,
-                name: property.name,
-              },
-              fromEntity: {
-                id: entityId,
-                name: null,
-              },
-              toEntity: {
-                id: result.id,
-                name: result.name,
-                value: result.id,
-              },
-            });
+            createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           variant="tableCell"
         />
@@ -270,51 +227,11 @@ function EditableRelationsGroup({
             relationValueTypes={filterSearchByTypes}
             onCreateEntity={result => {
               if (firstRelationValueType) {
-                storage.relations.set({
-                  id: IdUtils.generate(),
-                  // @TODO(migration): Reuse entity?
-                  entityId: IdUtils.generate(),
-                  spaceId,
-                  renderableType: 'RELATION',
-                  toSpaceId: result.space,
-                  type: {
-                    id: SystemIds.TYPES_PROPERTY,
-                    name: 'Types',
-                  },
-                  fromEntity: {
-                    id: result.id,
-                    name: result.name,
-                  },
-                  toEntity: {
-                    id: firstRelationValueType.id,
-                    name: firstRelationValueType.name,
-                    value: firstRelationValueType.id,
-                  },
-                });
+                createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
               }
             }}
             onDone={result => {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                // @TODO(migration): Reuse entity?
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                toSpaceId: result.space,
-                type: {
-                  id: typeOfId,
-                  name: typeOfName,
-                },
-                fromEntity: {
-                  id: entityId,
-                  name: null,
-                },
-                toEntity: {
-                  id: result.id,
-                  name: result.name,
-                  value: result.id,
-                },
-              });
+              createPropertyRelation(storage, spaceId, entityId, property, result);
             }}
             spaceId={spaceId}
           />
@@ -373,5 +290,7 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
           onBlur={v => onWriteValue(v.value)}
         />
       );
+    default:
+      return null;
   }
 }

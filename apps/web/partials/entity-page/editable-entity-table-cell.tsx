@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -19,7 +19,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { writeValue } from '~/partials/blocks/table/change-entry';
+import { createPropertyRelation, createTypeRelationForNewEntity, writeValue } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
 type Props = {
@@ -192,40 +192,11 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
           width="full"
           onCreateEntity={result => {
             if (firstRelationValueType) {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                verified: result.verified,
-                toSpaceId: result.space,
-                type: {
-                  id: SystemIds.TYPES_PROPERTY,
-                  name: 'Types',
-                },
-                fromEntity: {
-                  id: result.id,
-                  name: result.name,
-                },
-                toEntity: {
-                  id: firstRelationValueType.id,
-                  name: firstRelationValueType.name,
-                  value: firstRelationValueType.id,
-                },
-              });
+              createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
           }}
           onDone={result => {
-            storage.relations.set({
-              id: IdUtils.generate(),
-              entityId: IdUtils.generate(),
-              spaceId,
-              renderableType: 'RELATION',
-              toSpaceId: result.space,
-              type: { id: property.id, name: property.name },
-              fromEntity: { id: entityId, name: null },
-              toEntity: { id: result.id, name: result.name, value: result.id },
-            });
+            createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           variant="tableCell"
         />
@@ -289,40 +260,11 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
           relationValueTypes={filterSearchByTypes}
           onCreateEntity={result => {
             if (firstRelationValueType) {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                verified: result.verified,
-                toSpaceId: result.space,
-                type: {
-                  id: SystemIds.TYPES_PROPERTY,
-                  name: 'Types',
-                },
-                fromEntity: {
-                  id: result.id,
-                  name: result.name,
-                },
-                toEntity: {
-                  id: firstRelationValueType.id,
-                  name: firstRelationValueType.name,
-                  value: firstRelationValueType.id,
-                },
-              });
+              createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
           }}
           onDone={result => {
-            storage.relations.set({
-              id: IdUtils.generate(),
-              entityId: IdUtils.generate(),
-              spaceId,
-              renderableType: 'RELATION',
-              toSpaceId: result.space,
-              type: { id: property.id, name: property.name },
-              fromEntity: { id: entityId, name: null },
-              toEntity: { id: result.id, name: result.name, value: result.id },
-            });
+            createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           spaceId={spaceId}
         />
@@ -381,5 +323,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
           onBlur={v => onWriteValue(v.value)}
         />
       );
+    default:
+      return null;
   }
 }

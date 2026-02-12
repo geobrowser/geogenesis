@@ -62,7 +62,6 @@ export function TableBlockListItem({
   });
 
 
-
   const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
   const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
 

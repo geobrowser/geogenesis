@@ -145,6 +145,9 @@ function useEntries(
   const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
   const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
+    console.assert(entityId.length > 0, 'onChangeEntry: entityId must be non-empty');
+    console.assert(actionSpaceId.length > 0, 'onChangeEntry: actionSpaceId must be non-empty');
+
     // Step 1: Handle data writes
     switch (action.type) {
       case 'SET_NAME':
@@ -176,29 +179,24 @@ function useEntries(
       const maybeHasCollectionItem = entries.find(e => e.entityId === entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: { id: string; name: string | null; space?: string; verified?: boolean } | null = null;
+        const to =
+          action.type === 'FIND_ENTITY'
+            ? action.entity
+            : action.type === 'CREATE_ENTITY'
+              ? { id: nextEntityId, name: action.name }
+              : // SET_NAME or SET_VALUE on a placeholder in a collection
+                { id: entityId, name: null, space: actionSpaceId, verified: false };
 
-        if (action.type === 'FIND_ENTITY') {
-          to = action.entity;
-        } else if (action.type === 'CREATE_ENTITY') {
-          to = { id: nextEntityId, name: action.name };
-        } else {
-          // SET_NAME or SET_VALUE on a placeholder in a collection
-          to = { id: entityId, name: null, space: actionSpaceId, verified: false };
-        }
+        upsertCollectionItemRelation({
+          relationId: ID.createEntityId(),
+          collectionId: source.value,
+          spaceId: actionSpaceId,
+          toEntity: { id: to.id, name: to.name },
+          toSpaceId: to.space,
+          verified: to.verified,
+        });
 
-        if (to !== null) {
-          upsertCollectionItemRelation({
-            relationId: ID.createEntityId(),
-            collectionId: source.value,
-            spaceId: actionSpaceId,
-            toEntity: { id: to.id, name: to.name },
-            toSpaceId: to.space,
-            verified: to.verified,
-          });
-
-          setPendingEntityId(to.id);
-        }
+        setPendingEntityId(to.id);
       }
     }
 
