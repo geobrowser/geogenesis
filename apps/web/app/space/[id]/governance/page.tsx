@@ -9,12 +9,16 @@ import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import {
+  type GovernanceProposalType,
+  GovernanceProposalTypeFilter,
+} from '~/partials/governance/governance-proposal-type-filter';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ proposalId?: string }>;
+  searchParams: Promise<{ proposalId?: string; proposalType?: GovernanceProposalType }>;
 }
 
 const INITIAL_PUBLIC_SPACES = [
@@ -41,6 +45,8 @@ export default async function GovernancePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
 
+  const proposalType = searchParams.proposalType;
+
   return (
     <>
       <div className="space-y-4">
@@ -66,11 +72,9 @@ export default async function GovernancePage(props: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
-        {/* <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
-          All Proposals
-        </SmallButton> */}
+        <GovernanceProposalTypeFilter spaceId={params.id} />
         <React.Suspense fallback="Loading initial...">
-          <InitialGovernanceProposals spaceId={params.id} />
+          <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
         </React.Suspense>
       </div>
 
@@ -85,12 +89,26 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-async function InitialGovernanceProposals({ spaceId }: { spaceId: string }) {
-  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0 });
+async function InitialGovernanceProposals({
+  spaceId,
+  proposalType,
+}: {
+  spaceId: string;
+  proposalType?: GovernanceProposalType;
+}) {
+  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0, proposalType });
+
   return (
     <>
       {node}
-      {hasMore && <GovernanceProposalsListInfiniteScroll spaceId={spaceId} page={0} initialHasMore={hasMore} />}
+      {hasMore && (
+        <GovernanceProposalsListInfiniteScroll
+          spaceId={spaceId}
+          page={0}
+          initialHasMore={hasMore}
+          proposalType={proposalType}
+        />
+      )}
     </>
   );
 }
