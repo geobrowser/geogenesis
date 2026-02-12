@@ -13,6 +13,7 @@ export function PropertyDto(queryResult: RemoteProperty): Property {
     id: queryResult.id,
     name: queryResult.name,
     dataType: mappedDataType,
+    isType: queryResult.isType ?? false,
     // @TODO(grc-20-v2-migration): Remove legacy fields
     relationValueTypes: [],
     renderableType: renderableTypeId,

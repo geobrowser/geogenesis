@@ -27,7 +27,7 @@ type Documents = {
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
     "\n  query SpacesWhereMember($memberSpaceId: UUID!) {\n    spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesWhereMemberDocument,
-    "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n  }\n": typeof types.PropertyFragmentFragmentDoc,
+    "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n    isType\n  }\n": typeof types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertiesBatchDocument,
     "\n  query Result($id: UUID!) {\n    entity(id: $id) {\n      id\n      name\n      description\n      spaceIds\n      types {\n        id\n        name\n      }\n    }\n  }\n": typeof types.ResultDocument,
@@ -48,7 +48,7 @@ const documents: Documents = {
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
     "\n  query SpacesWhereMember($memberSpaceId: UUID!) {\n    spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {\n      ...FullSpace\n    }\n  }\n": types.SpacesWhereMemberDocument,
-    "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n  }\n": types.PropertyFragmentFragmentDoc,
+    "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n    isType\n  }\n": types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertiesBatchDocument,
     "\n  query Result($id: UUID!) {\n    entity(id: $id) {\n      id\n      name\n      description\n      spaceIds\n      types {\n        id\n        name\n      }\n    }\n  }\n": types.ResultDocument,
@@ -125,7 +125,7 @@ export function graphql(source: "\n  query SpacesWhereMember($memberSpaceId: UUI
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n  }\n"): (typeof documents)["\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n  }\n"];
+export function graphql(source: "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n    isType\n  }\n"): (typeof documents)["\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeName\n    renderableTypeId\n    format\n    isType\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
