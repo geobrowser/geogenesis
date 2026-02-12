@@ -3,8 +3,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { Cell, Property } from '~/core/types';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -43,8 +43,7 @@ export function TableBlockBulletedListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
-  // const name = getName(nameCell, currentSpaceId);
-  const name = useName(rowEntityId);
+  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
@@ -56,39 +55,11 @@ export function TableBlockBulletedListItem({
           {isPlaceholder && source.type === 'COLLECTION' ? (
             <SelectEntity
               onCreateEntity={result => {
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: result.name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'Create',
-                    data: result,
-                  }
-                );
+                onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
               }}
               onDone={(result, fromCreateFn) => {
-                if (fromCreateFn) {
-                  // We bail out in the case that we're receiving the onDone
-                  // callback from within the create entity function internal
-                  // to SelectEntity.
-                  return;
-                }
-
-                // This actually works quite differently than other creates since
-                // we want to use the existing placeholder entity id.
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: result.name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'Find',
-                    data: result,
-                  }
-                );
+                if (fromCreateFn) return;
+                onChangeEntry(rowEntityId, currentSpaceId, { type: 'FIND_ENTITY', entity: result });
               }}
               spaceId={currentSpaceId}
               autoFocus={autoFocus}
@@ -99,31 +70,7 @@ export function TableBlockBulletedListItem({
                 <PageStringField
                   placeholder="Add name..."
                   onChange={value => {
-                    onChangeEntry(
-                      {
-                        entityId: rowEntityId,
-                        entityName: name,
-                        spaceId: currentSpaceId,
-                      },
-                      {
-                        type: 'EVENT',
-                        data: {
-                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                          payload: {
-                            renderable: {
-                              attributeId: SystemIds.NAME_PROPERTY,
-                              entityId: rowEntityId,
-                              spaceId: currentSpaceId,
-                              attributeName: 'Name',
-                              entityName: name,
-                              type: 'TEXT',
-                              value: name ?? '',
-                            },
-                            value: { type: 'TEXT', value },
-                          },
-                        },
-                      }
-                    );
+                    onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                   }}
                   value={name ?? ''}
                   shouldDebounce={true}
@@ -144,31 +91,7 @@ export function TableBlockBulletedListItem({
                   <PageStringField
                     placeholder="Add name..."
                     onChange={value => {
-                      onChangeEntry(
-                        {
-                          entityId: rowEntityId,
-                          entityName: name,
-                          spaceId: currentSpaceId,
-                        },
-                        {
-                          type: 'EVENT',
-                          data: {
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: {
-                                attributeId: SystemIds.NAME_PROPERTY,
-                                entityId: rowEntityId,
-                                spaceId: currentSpaceId,
-                                attributeName: 'Name',
-                                entityName: name,
-                                type: 'TEXT',
-                                value: name ?? '',
-                              },
-                              value: { type: 'TEXT', value },
-                            },
-                          },
-                        }
-                      );
+                      onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
                     value={name ?? ''}
                   />

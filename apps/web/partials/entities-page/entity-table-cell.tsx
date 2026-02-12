@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { useRelations, useValue } from '~/core/sync/use-store';
+import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { isUrlTemplate } from '~/core/utils/url-template';
@@ -173,9 +173,7 @@ type ValueGroupProps = {
 };
 
 function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps) {
-  const rawValue = useValue({
-    selector: v => v.entity.id === entityId && v.property.id === property.id,
-  });
+  const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
   const value = rawValue?.value ?? '';
   const renderableType = property.renderableTypeStrict ?? property.dataType;
 
