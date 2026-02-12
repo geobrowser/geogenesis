@@ -55,15 +55,19 @@ export function useOptimisticValueWithSideEffect<T>({
 }) {
   const [value, setValue] = React.useState(initialValue);
   const isTypingRef = React.useRef(false);
-  const isInitialMountRef = React.useRef(true);
+
+  // Store callback in a ref so the debounced function stays stable across
+  // re-renders even when the parent passes a new inline arrow function.
+  const callbackRef = React.useRef(callback);
+  callbackRef.current = callback;
 
   const debouncedCallback = React.useMemo(
     () =>
       debounce((value: T) => {
-        callback(value);
+        callbackRef.current(value);
         isTypingRef.current = false;
       }, delay),
-    [callback, delay]
+    [delay]
   );
 
   const onChange = (newValue: T) => {
@@ -74,7 +78,7 @@ export function useOptimisticValueWithSideEffect<T>({
 
   const flush = () => {
     debouncedCallback.cancel();
-    callback(value);
+    callbackRef.current(value);
     isTypingRef.current = false;
   };
 
@@ -84,11 +88,6 @@ export function useOptimisticValueWithSideEffect<T>({
       setValue(initialValue);
     }
   }, [initialValue, value]);
-
-  // Skip callback on initial mount
-  React.useEffect(() => {
-    isInitialMountRef.current = false;
-  }, []);
 
   return { value, onChange, flush };
 }

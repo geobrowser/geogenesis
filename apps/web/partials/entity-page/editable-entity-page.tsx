@@ -902,7 +902,6 @@ function RenderedValue({
               aria-label="text-field"
               value={value}
               onChange={onChange}
-              shouldDebounce={true}
             />
             {property.id === FORMAT_PROPERTY && (
               <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
