@@ -50,8 +50,8 @@ function getBlockTypeFromRelations(relations: readonly ApiVersionedRelation[]): 
 function serializeSnapshotValue(v: ApiVersionedValue): { type: string; value: string | null } {
   if (v.text !== undefined && v.text !== null) return { type: 'TEXT', value: v.text };
   if (v.boolean !== undefined && v.boolean !== null) return { type: 'BOOL', value: String(v.boolean) };
-  if (v.integer !== undefined && v.integer !== null) return { type: 'INT64', value: String(v.integer) };
-  if (v.float !== undefined && v.float !== null) return { type: 'FLOAT64', value: String(v.float) };
+  if (v.integer !== undefined && v.integer !== null) return { type: 'INTEGER', value: String(v.integer) };
+  if (v.float !== undefined && v.float !== null) return { type: 'FLOAT', value: String(v.float) };
   if (v.decimal !== undefined && v.decimal !== null) return { type: 'DECIMAL', value: v.decimal };
   if (v.bytes !== undefined && v.bytes !== null) return { type: 'BYTES', value: v.bytes };
   if (v.date !== undefined && v.date !== null) return { type: 'DATE', value: v.date };

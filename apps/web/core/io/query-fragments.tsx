@@ -506,8 +506,10 @@ export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on PropertyInfo {
     id
     name
+    dataTypeId
     dataTypeName
     renderableTypeId
+    renderableTypeName
     format
     isType
   }
@@ -579,8 +581,11 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           property {
             id
             name
+            dataTypeId
             dataTypeName
             renderableTypeId
+            renderableTypeName
+            format
           }
           text
           integer

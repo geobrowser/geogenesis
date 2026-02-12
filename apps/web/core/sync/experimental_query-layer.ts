@@ -353,8 +353,8 @@ export class EntityQuery {
         if (cond.value) {
           // GRC-20 v2 numeric types
           if (
-            value.property.dataType === 'INT64' ||
-            value.property.dataType === 'FLOAT64' ||
+            value.property.dataType === 'INTEGER' ||
+            value.property.dataType === 'FLOAT' ||
             value.property.dataType === 'DECIMAL'
           ) {
             const numValue = parseFloat(value.value);

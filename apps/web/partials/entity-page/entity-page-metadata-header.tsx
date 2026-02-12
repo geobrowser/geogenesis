@@ -113,7 +113,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
 
       // Add format property if type is temporal or numeric
       const isTemporalType = newType === 'DATE' || newType === 'DATETIME' || newType === 'TIME';
-      const isNumericType = newType === 'INT64' || newType === 'FLOAT64' || newType === 'DECIMAL';
+      const isNumericType = newType === 'INTEGER' || newType === 'FLOAT' || newType === 'DECIMAL';
       const isTextOrUrlType = newType === 'TEXT' || newType === 'URL';
       if (isTemporalType || isNumericType) {
         addPropertyToEntity({

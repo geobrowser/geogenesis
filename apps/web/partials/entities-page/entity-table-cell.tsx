@@ -201,7 +201,7 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
     return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
   }
 
-  if (renderableType === 'INT64' || renderableType === 'FLOAT64' || renderableType === 'DECIMAL') {
+  if (renderableType === 'INTEGER' || renderableType === 'FLOAT' || renderableType === 'DECIMAL') {
     return (
       <NumberField
         variant="tableCell"

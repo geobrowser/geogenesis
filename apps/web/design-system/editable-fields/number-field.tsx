@@ -87,7 +87,7 @@ export function NumberField({
 }
 
 const onChangeWithValidation = (value: string, onChange: (v: string) => void, dataType?: DataType) => {
-  if (dataType === 'INT64') {
+  if (dataType === 'INTEGER') {
     const integerRegex = /^-?\d*$/;
     if (integerRegex.test(value)) {
       onChange(value);

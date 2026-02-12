@@ -390,7 +390,7 @@ describe('useImageUrlFromEntity', () => {
       {
         id: 'value-2',
         entity: { id: 'image-123', name: 'Image Entity' },
-        property: { id: 'prop-2', name: 'Number', dataType: 'INT64' },
+        property: { id: 'prop-2', name: 'Number', dataType: 'INTEGER' },
         spaceId: 'test-space',
         value: '123',
       },
