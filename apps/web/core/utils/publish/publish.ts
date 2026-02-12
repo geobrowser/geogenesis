@@ -193,7 +193,7 @@ function parseDecimalString(val: string): { exponent: number; mantissa: DecimalM
 
   // Normalize: strip trailing zeros from mantissa, adjust exponent
   // e.g. mantissa=1010, exp=-2 → mantissa=101, exp=-1
-  let exponent = -decimalPlaces;
+  let exponent = decimalPlaces === 0 ? 0 : -decimalPlaces;
   while (mantissaBigInt !== 0n && mantissaBigInt % 10n === 0n) {
     mantissaBigInt = mantissaBigInt / 10n;
     exponent += 1;
@@ -204,4 +204,6 @@ function parseDecimalString(val: string): { exponent: number; mantissa: DecimalM
 
 export const Publish = {
   prepareLocalDataForPublishing,
+  /** @internal Exported for testing only */
+  parseDecimalString,
 };
