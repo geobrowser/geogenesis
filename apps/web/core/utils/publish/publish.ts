@@ -1,4 +1,4 @@
-import { Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { Graph, Op, type DecimalMantissa, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
@@ -104,36 +104,39 @@ function convertToSdkValue(value: Value): PropertyValueParam {
         type: 'text',
         value: val,
         ...(value.options?.language && { language: value.options.language }),
-      } as PropertyValueParam;
+      };
     case 'BOOL':
-      return { property, type: 'boolean', value: val === '1' || val === 'true' } as PropertyValueParam;
+      return { property, type: 'boolean', value: val === '1' || val === 'true' };
     case 'INT64':
       return {
         property,
         type: 'integer',
         value: parseInt(val, 10) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
-      } as PropertyValueParam;
+      };
     case 'FLOAT64':
       return {
         property,
         type: 'float',
         value: parseFloat(val) || 0,
         ...(value.options?.unit && { unit: value.options.unit }),
-      } as PropertyValueParam;
-    case 'DECIMAL':
+      };
+    case 'DECIMAL': {
+      const { exponent, mantissa } = parseDecimalString(val);
       return {
         property,
-        type: 'float',
-        value: parseFloat(val) || 0,
+        type: 'decimal',
+        exponent,
+        mantissa,
         ...(value.options?.unit && { unit: value.options.unit }),
-      } as PropertyValueParam;
+      };
+    }
     case 'DATE':
-      return { property, type: 'date', value: val } as PropertyValueParam;
+      return { property, type: 'date', value: val };
     case 'DATETIME':
-      return { property, type: 'datetime', value: val } as PropertyValueParam;
+      return { property, type: 'datetime', value: val };
     case 'TIME':
-      return { property, type: 'time', value: val } as PropertyValueParam;
+      return { property, type: 'time', value: val };
     case 'POINT': {
       try {
         const point = JSON.parse(val);
@@ -142,16 +145,65 @@ function convertToSdkValue(value: Value): PropertyValueParam {
           type: 'point',
           lon: point.lon ?? point.x ?? 0,
           lat: point.lat ?? point.y ?? 0,
-        } as PropertyValueParam;
+        };
       } catch {
-        return { property, type: 'point', lon: 0, lat: 0 } as PropertyValueParam;
+        throw new Error(`Invalid lon/lat conversion data type ${val}`)
       }
     }
     default:
-      return { property, type: 'text', value: val } as PropertyValueParam;
+      throw new Error(`Unsupported conversion data type: ${dataType}`)
   }
+}
+
+/**
+ * Parse a decimal string (e.g. "10.1", "-0.005", "42") into the SDK's
+ * normalized { exponent, mantissa } representation.
+ *
+ * The mantissa is the integer value with trailing zeros stripped, and
+ * the exponent is the power of 10 to multiply by. For example:
+ *   "10.1"   → mantissa = 101n, exponent = -1
+ *   "0.005"  → mantissa = 5n,   exponent = -3
+ *   "42"     → mantissa = 42n,  exponent = 0
+ *   "0"      → mantissa = 0n,   exponent = 0
+ */
+function parseDecimalString(val: string): { exponent: number; mantissa: DecimalMantissa } {
+  const trimmed = val.trim();
+
+  // Split on decimal point
+  const dotIndex = trimmed.indexOf('.');
+  let integerPart: string;
+  let fractionPart: string;
+
+  if (dotIndex === -1) {
+    integerPart = trimmed;
+    fractionPart = '';
+  } else {
+    integerPart = trimmed.slice(0, dotIndex);
+    fractionPart = trimmed.slice(dotIndex + 1);
+  }
+
+  // Combine into a single integer string: "10.1" → "101", decimal places = 1
+  const decimalPlaces = fractionPart.length;
+  const combined = integerPart + fractionPart; // e.g. "101"
+  let mantissaBigInt = BigInt(combined);
+
+  if (mantissaBigInt === 0n) {
+    return { exponent: 0, mantissa: { type: 'i64', value: 0n } };
+  }
+
+  // Normalize: strip trailing zeros from mantissa, adjust exponent
+  // e.g. mantissa=1010, exp=-2 → mantissa=101, exp=-1
+  let exponent = decimalPlaces === 0 ? 0 : -decimalPlaces;
+  while (mantissaBigInt !== 0n && mantissaBigInt % 10n === 0n) {
+    mantissaBigInt = mantissaBigInt / 10n;
+    exponent += 1;
+  }
+
+  return { exponent, mantissa: { type: 'i64', value: mantissaBigInt } };
 }
 
 export const Publish = {
   prepareLocalDataForPublishing,
+  /** @internal Exported for testing only */
+  parseDecimalString,
 };
