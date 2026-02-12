@@ -3,8 +3,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { Cell, Property } from '~/core/types';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -43,7 +43,7 @@ export function TableBlockBulletedListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
-  const name = useName(rowEntityId);
+  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 

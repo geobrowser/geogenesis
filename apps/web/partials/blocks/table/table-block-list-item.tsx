@@ -5,9 +5,8 @@ import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelation, useValues } from '~/core/sync/use-store';
+import { useRelation, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
@@ -53,21 +52,10 @@ export function TableBlockListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { description, image } = nameCell;
+  let { image } = nameCell;
 
-  const name = useName(rowEntityId);
-
-  const descriptionValues = useValues({
-    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
-  });
-
-
-  const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
-  const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
-
-  if (maybeDescription) {
-    description = maybeDescription;
-  }
+  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
+  const description = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId })?.value ?? nameCell.description ?? null;
 
   const avatarRelation = useRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,

@@ -50,7 +50,10 @@ export function writeValue(
   console.assert(spaceId.length > 0, 'writeValue: spaceId must be non-empty');
   console.assert(property.id.length > 0, 'writeValue: property.id must be non-empty');
 
-  if (existingValue) {
+  // Only update in-place if the existing value belongs to the target space.
+  // If it's from another space, create a new value in the target space instead
+  // of mutating the foreign space's data (local override / fork model).
+  if (existingValue && existingValue.spaceId === spaceId) {
     console.assert(
       existingValue.entity.id === entityId,
       `writeValue: existingValue entity ${existingValue.entity.id} does not match entityId ${entityId}`

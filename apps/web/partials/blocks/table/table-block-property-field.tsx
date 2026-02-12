@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValue } from '~/core/sync/use-store';
+import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
@@ -250,9 +250,7 @@ type EditableValueGroupProps = {
 
 function EditableValueGroup({ entityId, property, spaceId, isEditing }: EditableValueGroupProps) {
   const { storage } = useMutate();
-  const rawValue = useValue({
-    selector: v => v.entity.id === entityId && v.property.id === property.id,
-  });
+  const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
 
   const renderableType = property.renderableType ?? property.dataType;
   const value = rawValue?.value ?? '';

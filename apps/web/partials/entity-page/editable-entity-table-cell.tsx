@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValue } from '~/core/sync/use-store';
+import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
@@ -281,10 +281,7 @@ interface ValueGroupProps {
 
 function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
   const { storage } = useMutate();
-  const rawValue = useValue({
-    // We don't filter by space id as we want to render data from all spaces.
-    selector: v => v.entity.id === entityId && v.property.id === property.id,
-  });
+  const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
   const value = rawValue?.value ?? '';
 
   const renderableType = property.renderableType ?? property.dataType;
