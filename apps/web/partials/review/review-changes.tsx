@@ -7,6 +7,7 @@ import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import type { Space } from '~/core/io/dto/spaces';
@@ -176,7 +177,7 @@ export const ReviewChanges = () => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = React.useCallback(async () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
@@ -192,7 +193,17 @@ export const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  };
+  }, [activeSpace, isReadyToPublish, makeProposal, valuesFromSpace, relationsFromSpace, proposalName]);
+
+  useKeyboardShortcuts(
+    React.useMemo(
+      () =>
+        isReviewOpen && isReadyToPublish && !isPublishing
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+    )
+  );
 
   const handleDeleteAll = () => {
     if (!activeSpace) return;
