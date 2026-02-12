@@ -4,9 +4,8 @@ import { cva } from 'class-variance-authority';
 import Textarea from 'react-textarea-autosize';
 
 import * as React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { GeoPoint } from '~/core/utils/utils';
 
@@ -38,11 +37,7 @@ interface PageGeoLocationFieldProps {
 }
 
 export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: value => props.onChange(value),
-    delay: 1000,
-    initialValue: props.value || '',
-  });
+  const isTypingRef = useRef(false);
 
   const [pointValues, setPointsValues] = React.useState(() => {
     const coordinates = GeoPoint.parseCoordinates(props.value);
@@ -56,6 +51,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
 
   const handlePointValueChange = (label: string, newValue: string) => {
     if (newValue === '' || validNumberPattern.test(newValue)) {
+      isTypingRef.current = true;
       const updatedPoints = {
         ...pointValues,
         [label]: newValue,
@@ -63,7 +59,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
       setPointsValues(updatedPoints);
       const lat = parseFloat(updatedPoints.latitude) || 0;
       const lon = parseFloat(updatedPoints.longitude) || 0;
-      setLocalValue(GeoPoint.formatCoordinates(lat, lon));
+      props.onChange(GeoPoint.formatCoordinates(lat, lon));
     } else {
       console.error(`Invalid ${label} input: "${newValue}". Coordinate values must be numeric.`);
     }
@@ -71,7 +67,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
 
   // Update point values when props.value changes from outside
   useEffect(() => {
-    if (props.value && props.value !== localValue) {
+    if (!isTypingRef.current && props.value) {
       const coordinates = GeoPoint.parseCoordinates(props.value);
       if (coordinates) {
         setPointsValues({
@@ -80,7 +76,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         });
       }
     }
-  }, [props.value, localValue]);
+  }, [props.value]);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -93,6 +89,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
               <Textarea
                 {...props}
                 onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
+                onBlur={() => { isTypingRef.current = false; }}
                 value={pointValues.latitude}
                 maxRows={1}
                 className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
@@ -104,6 +101,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
               <Textarea
                 {...props}
                 onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
+                onBlur={() => { isTypingRef.current = false; }}
                 value={pointValues.longitude}
                 maxRows={1}
                 className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}

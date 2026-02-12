@@ -62,6 +62,7 @@ export function EditableEntityTableCell({
   source,
   autoFocus = false,
 }: Props) {
+  const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
@@ -98,7 +99,6 @@ export function EditableEntityTableCell({
               variant="tableCell"
               placeholder="Entity name..."
               value={name ?? ''}
-              shouldDebounce={true}
               onEnterKey={onAddPlaceholder}
               onChange={value => {
                 onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
@@ -126,7 +126,6 @@ export function EditableEntityTableCell({
                 variant="tableCell"
                 placeholder="Entity name..."
                 value={name ?? ''}
-                shouldDebounce={true}
                 onEnterKey={onAddPlaceholder}
                 onChange={value => {
                   onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
