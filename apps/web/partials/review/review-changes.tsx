@@ -7,6 +7,8 @@ import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
+import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import type { Space } from '~/core/io/dto/spaces';
@@ -112,8 +114,10 @@ export const ReviewChanges = () => {
   }, [spacesKey, activeSpace]);
 
   React.useEffect(() => {
+    // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
+    // publishing). The space name/image are still needed in the top bar during the
+    // publish-complete state. Stale metadata is harmless and gets replaced on the next fetch.
     if (dedupedSpacesWithActions.length === 0) {
-      setSpaces([]);
       return;
     }
 
@@ -164,6 +168,9 @@ export const ReviewChanges = () => {
 
   const isReadyToPublish = hasValidOps && proposalName.length > 0;
 
+  // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
+  const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
+
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
@@ -176,7 +183,7 @@ export const ReviewChanges = () => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = React.useCallback(async () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
@@ -192,7 +199,17 @@ export const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  };
+  }, [activeSpace, isReadyToPublish, makeProposal, valuesFromSpace, relationsFromSpace, proposalName]);
+
+  useKeyboardShortcuts(
+    React.useMemo(
+      () =>
+        isReviewOpen && isReadyToPublish && !isPublishing
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+    )
+  );
 
   const handleDeleteAll = () => {
     if (!activeSpace) return;
@@ -268,6 +285,7 @@ export const ReviewChanges = () => {
             <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
               <div className="text-body">Proposal name</div>
               <input
+                ref={proposalNameRef}
                 type="text"
                 value={rawProposalName}
                 onChange={e => handleProposalNameChange(e.target.value)}
