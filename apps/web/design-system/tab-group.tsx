@@ -179,7 +179,7 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link className={tabStyles({ active, disabled })} href={href}>
+    <Link className={tabStyles({ active, disabled })} href={href} prefetch>
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (
