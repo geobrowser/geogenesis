@@ -372,6 +372,44 @@ describe('prepareLocalDataForPublishing', () => {
       expect(result[0].type).toBe('createRelation');
       expect(result[1].type).toBe('updateEntity');
     });
+
+    it('should skip values with RELATION data type instead of throwing', () => {
+      const entityId = IdUtils.generate();
+      const values = [
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          value: '',
+        }),
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Name', dataType: 'TEXT' },
+          value: 'hello',
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.set).toHaveLength(1);
+    });
+
+    it('should skip deleted values with RELATION data type instead of unsetting them', () => {
+      const values = [
+        createMockValue({
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          isDeleted: true,
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(0);
+    });
   });
 });
 
