@@ -2,29 +2,24 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 
-import { ApiProposalListResponseSchema, encodePathSegment, restFetch, validateActionTypes } from '../rest';
+import { encodePathSegment, restFetch } from '../rest';
 import { AbortError } from './errors';
 
-export interface FetchProposedMembersOptions {
-  id: string;
-}
+const ActiveProposalResponseSchema = Schema.Struct({
+  active: Schema.Boolean,
+});
 
 /**
- * Fetch the space IDs of members with active (non-rejected, non-expired) ADD_MEMBER proposals.
+ * Check whether a specific member has an active (PROPOSED or EXECUTABLE)
+ * ADD_MEMBER proposal in the given space.
  *
- * Uses the REST API which correctly computes proposal status, handling both
- * time-based expiry and fast-path rejections (where a proposal can be rejected
- * before the voting period ends).
+ * Uses the targeted REST endpoint which runs a single SELECT EXISTS query
+ * server-side, avoiding the need to fetch all proposals and filter client-side.
  */
-export async function fetchProposedMembers(options: FetchProposedMembersOptions): Promise<string[]> {
+export async function hasActiveMemberProposal(spaceId: string, memberSpaceId: string): Promise<boolean> {
   const config = Environment.getConfig();
 
-  const params = new URLSearchParams();
-  params.set('limit', '100');
-  params.set('status', 'PROPOSED,EXECUTABLE');
-  params.set('actionTypes', validateActionTypes(['AddMember']).join(','));
-
-  const path = `/proposals/space/${encodePathSegment(options.id)}/status?${params.toString()}`;
+  const path = `/proposals/space/${encodePathSegment(spaceId)}/members/${encodePathSegment(memberSpaceId)}/active`;
 
   const result = await Effect.runPromise(
     Effect.either(
@@ -42,23 +37,19 @@ export async function fetchProposedMembers(options: FetchProposedMembersOptions)
       throw error;
     }
 
-    console.error(`Failed to fetch proposed members for space ${options.id}:`, error);
-    return [];
+    console.error(`Failed to check active member proposal for space ${spaceId}, member ${memberSpaceId}:`, error);
+    return false;
   }
 
-  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+  const decoded = Schema.decodeUnknownEither(ActiveProposalResponseSchema)(result.right);
 
   if (Either.isLeft(decoded)) {
-    console.error(`Failed to decode proposed members for space ${options.id}:`, decoded.left);
-    return [];
+    console.error(
+      `Failed to decode active member proposal response for space ${spaceId}, member ${memberSpaceId}:`,
+      decoded.left
+    );
+    return false;
   }
 
-  const targetIds = decoded.right.proposals.flatMap(proposal =>
-    proposal.actions
-      .filter(a => a.actionType === 'ADD_MEMBER')
-      .map(a => a.targetId)
-      .filter((id): id is string => id != null)
-  );
-
-  return targetIds;
+  return decoded.right.active;
 }
