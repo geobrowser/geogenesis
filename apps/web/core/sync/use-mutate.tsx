@@ -1,7 +1,7 @@
 import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
+import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, Relation, Value } from '../types';
@@ -433,13 +433,13 @@ function createMutator(store: GeoStore): Mutator {
           }
         }
 
-        // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
+        // Create a video entity with the unified IPFS URL property
         const videoIdStr = toHexId(videoId);
         if (ipfsUrl) {
           store.setValue({
             id: ID.createValueId({
               entityId: videoIdStr,
-              propertyId: VIDEO_URL_PROPERTY,
+              propertyId: SystemIds.IMAGE_URL_PROPERTY,
               spaceId,
             }),
             entity: {
@@ -447,8 +447,8 @@ function createMutator(store: GeoStore): Mutator {
               name: null,
             },
             property: {
-              id: VIDEO_URL_PROPERTY,
-              name: 'Video URL',
+              id: SystemIds.IMAGE_URL_PROPERTY,
+              name: 'IPFS URL',
               dataType: 'TEXT',
               renderableType: 'URL',
             },
@@ -470,9 +470,9 @@ function createMutator(store: GeoStore): Mutator {
             name: 'Types',
           },
           toEntity: {
-            id: VIDEO_TYPE,
+            id: SystemIds.VIDEO_TYPE,
             name: 'Video',
-            value: VIDEO_TYPE,
+            value: SystemIds.VIDEO_TYPE,
           },
           spaceId,
           position: Position.generate(),

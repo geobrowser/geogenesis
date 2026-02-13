@@ -8,11 +8,10 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getValues, useValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType } from '~/core/types';
-import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
+import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
@@ -263,24 +262,37 @@ export function useEditorStore() {
         const toEntity = relationForBlockId?.block;
 
         if (toEntity?.type === 'IMAGE') {
+          // Read image URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
+          const imageUrlValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
+          });
+          const imageUrlValue = imageUrlValues?.[0]?.value || toEntity.value;
+
+          // Read image title from Values using NAME_PROPERTY
+          const titleValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
+          });
+          const titleValue = titleValues?.[0]?.value || '';
+
           return {
             type: 'image',
             attrs: {
               id: block.block.id,
-              src: getImagePath(toEntity.value),
+              src: getImagePath(imageUrlValue),
+              title: titleValue,
               relationId: block.relationId,
               spaceId,
-              alt: '',
-              title: '',
             },
           };
         }
 
         if (toEntity?.type === 'VIDEO') {
-          // Read video URL from Values using VIDEO_URL_PROPERTY
+          // Read video URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
           const videoUrlValues = getValues({
             mergeWith: initialBlockValues,
-            selector: value => value.entity.id === block.block.id && value.property.id === VIDEO_URL_PROPERTY,
+            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
           });
           const videoUrlValue = videoUrlValues?.[0]?.value || toEntity.value;
 
@@ -405,7 +417,7 @@ export function useEditorStore() {
             case 'image':
               return SystemIds.IMAGE_TYPE;
             case 'video':
-              return VIDEO_BLOCK_TYPE;
+              return SystemIds.VIDEO_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }
@@ -420,35 +432,15 @@ export function useEditorStore() {
             break;
           }
           case SystemIds.IMAGE_TYPE: {
-            const imageHash = getImageHash(node.attrs?.src);
-            const imageUrl = `ipfs://${imageHash}`;
-
-            // const { ops } = Image.make({ cid: imageUrl });
-            // const [, setTripleOp] = ops;
-
-            // DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.IMAGE_TYPE, spaceId), spaceId });
-
-            // if (setTripleOp.type === 'SET_TRIPLE') {
-            //   DB.upsert(
-            //     {
-            //       value: {
-            //         type: 'URL',
-            //         value: setTripleOp.triple.value.value,
-            //       },
-            //       entityId: node.id,
-            //       attributeId: setTripleOp.triple.attribute,
-            //       entityName: null,
-            //       attributeName: 'Image URL',
-            //     },
-            //     spaceId
-            //   );
-            // }
-
+            // Create a Types relation to mark this entity as an Image type
+            // URL storage is handled by image-node.tsx component
+            const imageTypeRelation = getRelationForBlockType(node.id, SystemIds.IMAGE_TYPE, spaceId);
+            storage.relations.set(imageTypeRelation);
             break;
           }
-          case VIDEO_BLOCK_TYPE: {
-            // Create a Types relation to mark this entity as a Video Block type
-            const relation = getRelationForBlockType(node.id, VIDEO_BLOCK_TYPE, spaceId);
+          case SystemIds.VIDEO_TYPE: {
+            // Create a Types relation to mark this entity as a Video type
+            const relation = getRelationForBlockType(node.id, SystemIds.VIDEO_TYPE, spaceId);
             storage.relations.set(relation);
             break;
           }
@@ -470,29 +462,9 @@ export function useEditorStore() {
 
       makeBlocksRelations({
         nextBlocks: newBlocks,
-        addedBlocks: addedBlocks.map(block => {
-          // For image blocks, store the ipfs URL in toEntity.value
-          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
-          if (block.type === 'image') {
-            const imageHash = getImageHash(block.attrs?.src ?? '');
-            const imageUrl = `ipfs://${imageHash}`;
-            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
-          }
-          // Video blocks and other blocks use block ID as the value
-          return { id: block.id, value: block.id };
-        }),
+        addedBlocks: addedBlocks.map(block => ({ id: block.id, value: block.id })),
         removedBlockIds: removed,
-        movedBlocks: movedBlocks.map(block => {
-          // For image blocks, store the ipfs URL in toEntity.value
-          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
-          if (block.type === 'image') {
-            const imageHash = getImageHash(block.attrs?.src ?? '');
-            const imageUrl = `ipfs://${imageHash}`;
-            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
-          }
-          // Video blocks and other blocks use block ID as the value
-          return { id: block.id, value: block.id };
-        }),
+        movedBlocks: movedBlocks.map(block => ({ id: block.id, value: block.id })),
         spaceId,
         blockRelations: blockRelations,
         entityPageId: activeEntityId,
@@ -515,26 +487,10 @@ export function useEditorStore() {
 
             break;
           }
-          case 'image': {
-            // Update the relation if the image src has changed
-            const existingRelation = blockRelations.find(r => r.block.id === node.attrs?.id);
-            if (existingRelation && node.attrs?.src) {
-              const imageHash = getImageHash(node.attrs.src);
-              const imageUrl = `ipfs://${imageHash}`;
-              // Only update if the value has changed
-              if (existingRelation.toEntity.value !== imageUrl && imageHash !== '') {
-                const updatedRelation: Relation = {
-                  ...existingRelation,
-                  toEntity: {
-                    ...existingRelation.toEntity,
-                    value: imageUrl,
-                  },
-                };
-                storage.relations.set(updatedRelation);
-              }
-            }
+          case 'image':
+            // Image block persistence is handled directly in image-node.tsx component
+            // using storage.values.set() for URL and storage.entities.name.set() for title
             break;
-          }
           case 'video':
             // Video block persistence is handled directly in video-node.tsx component
             // using storage.entities.name.set() for title

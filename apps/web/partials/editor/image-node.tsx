@@ -8,9 +8,9 @@ import * as React from 'react';
 import { useRef, useState } from 'react';
 
 import {
-  MAX_VIDEO_SIZE_BYTES,
-  VALID_VIDEO_TYPES,
-  VIDEO_ACCEPT,
+  IMAGE_ACCEPT,
+  MAX_IMAGE_SIZE_BYTES,
+  VALID_IMAGE_TYPES,
 } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -18,21 +18,21 @@ import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { NavUtils, getVideoPath } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { Image as ImageIcon } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { VideoSmall } from '~/design-system/icons/video-small';
 import { MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-export const VideoNode = Node.create({
-  name: 'video',
+export const ImageNode = Node.create({
+  name: 'image',
   group: 'block',
   atom: true,
   spanning: false,
@@ -41,7 +41,7 @@ export const VideoNode = Node.create({
   exitable: true,
 
   // Note: id and spaceId are defined by id-extension as global attributes
-  // We only define video-specific attributes here
+  // We only define image-specific attributes here
   addAttributes() {
     return {
       src: {
@@ -53,21 +53,21 @@ export const VideoNode = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'video-node',
+        tag: 'image-node',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['video-node', mergeAttributes(HTMLAttributes), 0];
+    return ['image-node', mergeAttributes(HTMLAttributes), 0];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(VideoNodeComponent);
+    return ReactNodeViewRenderer(ImageNodeComponent);
   },
 });
 
-function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
+function ImageNodeComponent({ node, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
@@ -77,8 +77,8 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="video-node my-4">
-        <VideoNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
+      <div contentEditable="false" className="image-node my-4">
+        <ImageNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
   );
@@ -90,7 +90,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
 }
 
-function VideoNodeChildren({
+function ImageNodeChildren({
   spaceId,
   entityId,
   relationEntityId,
@@ -101,7 +101,7 @@ function VideoNodeChildren({
   relationEntityId: string;
   onRemove: () => void;
 }) {
-  // Hydrate the video block entity from remote to populate the reactive store
+  // Hydrate the image block entity from remote to populate the reactive store
   useHydrateEntity({ id: entityId });
 
   const isEditing = useUserIsEditing(spaceId);
@@ -121,18 +121,18 @@ function VideoNodeChildren({
   });
   const storedName = nameValues?.[0]?.value ?? '';
 
-  // Read the video URL from the store
-  const videoUrlValues = useValues({
+  // Read the image URL from the store
+  const imageUrlValues = useValues({
     selector: v => v.entity.id === entityId && v.property.id === SystemIds.IMAGE_URL_PROPERTY && v.spaceId === spaceId,
   });
-  const storedVideoUrl = videoUrlValues?.[0]?.value ?? '';
+  const storedImageUrl = imageUrlValues?.[0]?.value ?? '';
 
-  // Read the Types relation (to VIDEO_TYPE) for deletion
+  // Read the Types relation (to IMAGE_TYPE) for deletion
   const typeRelations = useRelations({
     selector: r =>
       r.fromEntity.id === entityId &&
       r.type.id === SystemIds.TYPES_PROPERTY &&
-      r.toEntity.id === SystemIds.VIDEO_TYPE &&
+      r.toEntity.id === SystemIds.IMAGE_TYPE &&
       r.spaceId === spaceId,
   });
 
@@ -172,14 +172,14 @@ function VideoNodeChildren({
 
   const uploadFile = async (file: File) => {
     // Check file type
-    if (!VALID_VIDEO_TYPES.includes(file.type)) {
-      setUploadError('Invalid file type. Please upload MP4, MOV, AVI, WMV, WebM, or FLV.');
+    if (!VALID_IMAGE_TYPES.includes(file.type)) {
+      setUploadError('Invalid file type. Please upload PNG, JPEG, WebP, or GIF.');
       return;
     }
 
-    // Check file size (100MB limit)
-    if (file.size > MAX_VIDEO_SIZE_BYTES) {
-      setUploadError('File size exceeds 100MB limit');
+    // Check file size (20MB limit)
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setUploadError('File size exceeds 20MB limit');
       return;
     }
 
@@ -200,7 +200,7 @@ function VideoNodeChildren({
         setUploadProgress(prev => Math.min(prev + 2, 90));
       }, 300);
 
-      // Upload using Graph.createImage (works for video too)
+      // Upload using Graph.createImage
       const { ops } = await Graph.createImage({
         blob: file,
         network: 'TESTNET',
@@ -226,7 +226,7 @@ function VideoNodeChildren({
       }
 
       if (ipfsUrl) {
-        // Save the video URL to the store using the unified IPFS URL property
+        // Save the image URL to the store using the unified IPFS URL property
         storage.values.set({
           id: ID.createValueId({
             entityId,
@@ -248,12 +248,12 @@ function VideoNodeChildren({
       } else {
         // IPFS URL extraction failed - show error to user
         console.error('Failed to extract IPFS URL from upload response');
-        setUploadError('Upload succeeded but failed to process video URL. Please try again.');
+        setUploadError('Upload succeeded but failed to process image URL. Please try again.');
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        console.error('Video upload failed:', error);
-        setUploadError('Failed to upload video. Please try again.');
+        console.error('Image upload failed:', error);
+        setUploadError('Failed to upload image. Please try again.');
       }
     } finally {
       // Always clear the progress interval to prevent memory leak
@@ -307,17 +307,17 @@ function VideoNodeChildren({
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
     } catch (err) {
-      console.error('Failed to copy video block entity ID for: ', entityId);
+      console.error('Failed to copy image block entity ID for: ', entityId);
     }
   };
 
   const onRemoveBlock = () => {
     setIsMenuOpen(false);
 
-    // Delete the video URL value
-    const videoUrlValue = videoUrlValues?.[0];
-    if (videoUrlValue) {
-      storage.values.delete(videoUrlValue);
+    // Delete the image URL value
+    const imageUrlValue = imageUrlValues?.[0];
+    if (imageUrlValue) {
+      storage.values.delete(imageUrlValue);
     }
 
     // Delete the name value
@@ -326,7 +326,7 @@ function VideoNodeChildren({
       storage.values.delete(nameValue);
     }
 
-    // Delete the Types relation (VIDEO_TYPE)
+    // Delete the Types relation (IMAGE_TYPE)
     const typeRelation = typeRelations?.[0];
     if (typeRelation) {
       storage.relations.delete(typeRelation);
@@ -336,8 +336,8 @@ function VideoNodeChildren({
     onRemove();
   };
 
-  const hasVideo = Boolean(storedVideoUrl);
-  const videoSrc = hasVideo ? getVideoPath(storedVideoUrl) : '';
+  const hasImage = Boolean(storedImageUrl);
+  const imageSrc = hasImage ? getImagePath(storedImageUrl) : '';
   const uploadedBytes = Math.floor((uploadProgress / 100) * uploadFileSize);
 
   return (
@@ -349,7 +349,7 @@ function VideoNodeChildren({
           value={localName}
           onChange={handleNameChange}
           onBlur={handleNameBlur}
-          placeholder="Video title..."
+          placeholder="Image title..."
           readOnly={!isEditing}
           className="flex-1 bg-transparent text-mediumTitle text-text placeholder:text-grey-03 focus:outline-none"
         />
@@ -393,10 +393,10 @@ function VideoNodeChildren({
         </Dropdown.Root>
       </div>
 
-      {/* Video content or upload UI */}
-      {hasVideo ? (
+      {/* Image content or upload UI */}
+      {hasImage ? (
         <div className="relative">
-          <video src={videoSrc} controls className="w-full rounded-lg" />
+          <img src={imageSrc} alt={localName} className="w-full rounded-lg" />
         </div>
       ) : isEditing ? (
         <div
@@ -408,7 +408,7 @@ function VideoNodeChildren({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <input ref={fileInputRef} type="file" accept={VIDEO_ACCEPT} onChange={handleFileSelect} className="hidden" />
+          <input ref={fileInputRef} type="file" accept={IMAGE_ACCEPT} onChange={handleFileSelect} className="hidden" />
 
           {isUploading ? (
             <div className="flex w-full max-w-md flex-col items-center">
@@ -438,9 +438,9 @@ function VideoNodeChildren({
                 className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
                 style={{ backgroundColor: '#002FD924' }}
               >
-                <VideoSmall color="#002FD9" />
+                <ImageIcon color="ctaPrimary" />
               </div>
-              <p className="text-lg font-medium text-ctaPrimary">Drop video here</p>
+              <p className="text-lg font-medium text-ctaPrimary">Drop image here</p>
             </div>
           ) : (
             <>
@@ -448,7 +448,7 @@ function VideoNodeChildren({
                 className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
                 style={{ backgroundColor: '#002FD924' }}
               >
-                <VideoSmall color="#002FD9" />
+                <ImageIcon color="ctaPrimary" />
               </div>
               <p
                 className="mb-1 font-semibold text-text"
@@ -457,7 +457,7 @@ function VideoNodeChildren({
                 Drag & drop or select a file
               </p>
               <p className="mb-4 text-grey-04" style={{ fontSize: '14px', lineHeight: '12px', letterSpacing: '0px' }}>
-                Max 100mb · MP4, MOV, AVI, WMV, WebM, or FLV
+                Max 20mb · PNG, JPEG, WebP, or GIF
               </p>
               <button
                 onClick={handleUploadClick}
@@ -473,9 +473,9 @@ function VideoNodeChildren({
       ) : (
         <div className="flex min-h-[200px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-grey-02 p-8">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-divider">
-            <VideoSmall color="grey-04" />
+            <ImageIcon color="grey-04" />
           </div>
-          <p className="text-sm text-grey-04">No video</p>
+          <p className="text-sm text-grey-04">No image</p>
         </div>
       )}
     </div>
