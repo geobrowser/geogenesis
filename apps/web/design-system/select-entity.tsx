@@ -105,9 +105,13 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  const [allowedTypes, setAllowedTypes] = useState<NonNullable<Property['relationValueTypes']>>(
-    () => relationValueTypes ?? []
-  );
+  const [removedTypeIds, setRemovedTypeIds] = useState<Set<string>>(new Set());
+
+  const allowedTypes = React.useMemo(() => {
+    const base = relationValueTypes ?? [];
+    if (removedTypeIds.size === 0) return base;
+    return base.filter(t => !removedTypeIds.has(t.id));
+  }, [relationValueTypes, removedTypeIds]);
 
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
@@ -328,7 +332,7 @@ export const SelectEntity = ({
                                           filterType="Type"
                                           name={allowedType.name ?? ''}
                                           onDelete={() =>
-                                            setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
+                                            setRemovedTypeIds(prev => new Set([...prev, allowedType.id]))
                                           }
                                         />
                                       );
