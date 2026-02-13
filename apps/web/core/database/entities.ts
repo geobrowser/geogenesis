@@ -37,21 +37,34 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const spaces = entity?.spaces ?? [];
   const description = Entities.description(values);
   const types = readTypes(relations);
-  const stableTypeKey = useMemo(() => types.map(t => t.id).sort(), [types]);
+
+  // Extract type+space pairs from relations. Use toSpaceId (the type
+  // entity's space) when available, falling back to the relation's spaceId.
+  // Deduped by type ID: an entity should only have one TYPES_PROPERTY
+  // relation per type. If duplicates exist the first space wins.
+  const typesWithSpace = useMemo(
+    () =>
+      dedupeWith(
+        relations
+          .filter(r => r.type.id === SystemIds.TYPES_PROPERTY)
+          .map(r => ({ id: r.toEntity.id, spaceId: r.toSpaceId ?? r.spaceId })),
+        (a, b) => a.id === b.id
+      ),
+    [relations]
+  );
+
+  const stableTypeKey = useMemo(() => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).sort(), [typesWithSpace]);
   const stableRelationKey = useMemo(
-    () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}`))].sort(),
+    () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
     [relations]
   );
 
   const { data: schema } = useQuery({
     enabled: types.length > 0 || relations.length > 0,
-    queryKey: ['entity-schema-for-merging', id, stableTypeKey, stableRelationKey],
+    queryKey: ['entity-schema-for-merging', id, spaceId, stableTypeKey, stableRelationKey],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      return await getSchemaFromTypeIdsAndRelations(
-        types.map(t => t.id),
-        relations
-      );
+      return await getSchemaFromTypeIdsAndRelations(typesWithSpace, relations);
     },
   });
 
@@ -100,9 +113,18 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
  * type should adhere to. Currently schemas are optional.
  *
  * We expect that attributes are only defined via relations, not triples.
+ *
+ * Each type is paired with a spaceId so we can filter PROPERTIES relations
+ * per-type. The same type entity can define different properties in different
+ * spaces, so we need (typeId, spaceId) combos rather than a single spaceId.
+ *
+ * Invariant: each type ID should appear at most once. If the same type ID
+ * appears with different spaceIds, only the last entry's space is kept
+ * (Map insertion order). Callers are expected to dedupe by ID upstream.
  */
-export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property[]> {
-  const dedupedTypeIds = [...new Set(typesIds)];
+export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string }[]): Promise<Property[]> {
+  const dedupedTypeIds = [...new Set(types.map(t => t.id))];
+  const spaceByType = new Map(types.map(t => [t.id, t.spaceId]));
 
   // @TODO(migration): Should generate schema by syncing types
   const typeEntities = await E.findMany({
@@ -119,7 +141,10 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
   const propertyIds = typeEntities
     .flatMap(entity => {
-      return entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
+      const typeSpaceId = spaceByType.get(entity.id);
+      return entity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+      );
     })
     .map(r => r.toEntity.id);
 
@@ -166,10 +191,10 @@ export function readTypes(relations: Relation[]): { id: string; name: string | n
  * 4. Fetch those targets' PROPERTIES to get additional schema properties
  */
 export async function getSchemaFromTypeIdsAndRelations(
-  typeIds: string[],
+  types: { id: string; spaceId?: string }[],
   relations: Relation[]
 ): Promise<Property[]> {
-  const typeSchema = await getSchemaFromTypeIds(typeIds);
+  const typeSchema = await getSchemaFromTypeIds(types);
 
   if (relations.length === 0) return typeSchema;
 
@@ -184,12 +209,11 @@ export async function getSchemaFromTypeIdsAndRelations(
 
   if (isTypePropertyIds.size === 0) return typeSchema;
 
-  // Collect target entity IDs from matching relations
-  const targetIds = [...new Set(
-    relations
-      .filter(r => isTypePropertyIds.has(r.type.id))
-      .map(r => r.toEntity.id)
-  )];
+  // Collect target entity IDs from matching IS_TYPE relations,
+  // preserving the relation's spaceId for per-target filtering
+  const isTypeRelations = relations.filter(r => isTypePropertyIds.has(r.type.id));
+  const targetIds = [...new Set(isTypeRelations.map(r => r.toEntity.id))];
+  const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
 
   // Fetch target entities to get their PROPERTIES relations
   const targetEntities = await E.findMany({
@@ -201,7 +225,12 @@ export async function getSchemaFromTypeIdsAndRelations(
   });
 
   const additionalPropertyIds = targetEntities
-    .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+    .flatMap(entity => {
+      const targetSpaceId = spaceByTarget.get(entity.id);
+      return entity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
+      );
+    })
     .map(r => r.toEntity.id);
 
   if (additionalPropertyIds.length === 0) return typeSchema;

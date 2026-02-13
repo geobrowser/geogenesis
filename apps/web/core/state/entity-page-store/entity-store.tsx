@@ -20,6 +20,8 @@ export function useEntityTypes(entityId: string, spaceId?: string) {
   return types.map(t => ({
     id: t.toEntity.id,
     name: t.toEntity.name,
+    spaceId: t.spaceId,
+    toSpaceId: t.toSpaceId,
   }));
 }
 
@@ -73,14 +75,14 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
-  const stableTypeKey = useMemo(() => types.map(t => t.id).sort(), [types]);
+  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? t.spaceId}`).sort(), [types]);
   const hasTypes = types.length > 0;
 
   const allRelations = useRelations({
     selector: r => r.fromEntity.id === entityId && (spaceId ? r.spaceId === spaceId : true),
   });
   const stableRelationKey = useMemo(
-    () => [...new Set(allRelations.map(r => `${r.type.id}:${r.toEntity.id}`))].sort(),
+    () => [...new Set(allRelations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
     [allRelations]
   );
 
@@ -88,10 +90,10 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
     enabled: hasTypes || allRelations.length > 0,
     initialData: DEFAULT_ENTITY_SCHEMA,
     placeholderData: keepPreviousData,
-    queryKey: ['entity-schema-for-merging', entityId, stableTypeKey, stableRelationKey],
+    queryKey: ['entity-schema-for-merging', entityId, spaceId, stableTypeKey, stableRelationKey],
     queryFn: async () =>
       await getSchemaFromTypeIdsAndRelations(
-        types.map(t => t.id),
+        types.map(t => ({ id: t.id, spaceId: t.toSpaceId ?? t.spaceId })),
         allRelations
       ),
   });

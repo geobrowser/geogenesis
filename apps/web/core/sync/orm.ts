@@ -141,12 +141,14 @@ export class E {
     where,
     first,
     skip,
+    spaceId,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
+    spaceId?: string;
   }) {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
@@ -163,7 +165,7 @@ export class E {
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
       const entities = entityIds.map(entityId => {
-        return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+        return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
       const nonNullEntities = entities.filter(e => e !== null);
@@ -200,7 +202,7 @@ export class E {
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
     const entities = mergedIds.map(entityId => {
-      return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
     });
 
     return entities.filter(e => e !== null);

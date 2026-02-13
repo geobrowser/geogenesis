@@ -155,7 +155,7 @@ function DefaultPropertySelector() {
     queryKey: ['available-columns', filterState],
     queryFn: async () => {
       const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value)
+        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }))
       );
 
       return schema;
