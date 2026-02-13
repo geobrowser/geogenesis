@@ -525,7 +525,8 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+  const namedSpaces = spaces.filter(s => s.entity?.name?.trim());
+  const results = namedSpaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');

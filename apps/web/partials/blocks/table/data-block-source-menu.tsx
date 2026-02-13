@@ -134,7 +134,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
         <Input withSearchIcon placeholder="Search..." value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
-        {queriedSpaces.map(space => {
+        {queriedSpaces.filter(space => space.name?.trim()).map(space => {
           const active = source.type === 'SPACES' && source.value.includes(space.id);
 
           return (
