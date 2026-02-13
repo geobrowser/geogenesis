@@ -154,8 +154,7 @@ async function createDaoSpace({
   const initialEditsContentUri = encodeAbiParameters([{ type: 'string' }], [cid]);
 
   const publicClient = createPublicClient({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    chain: GEOGENESIS as any,
+    chain: GEOGENESIS,
     transport: http(),
   });
 

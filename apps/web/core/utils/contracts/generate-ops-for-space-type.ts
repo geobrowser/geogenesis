@@ -27,6 +27,18 @@ const TEMPLATE_BASED_TYPES: SpaceType[] = [
   'region',
 ];
 
+const DAO_SPACE_TYPES: SpaceType[] = [
+  'dao',
+  'academic-field',
+  'company',
+  'government-org',
+  'industry',
+  'interest',
+  'nonprofit',
+  'region',
+  'protocol',
+];
+
 export const generateOpsForSpaceType = async ({
   type,
   spaceName,
@@ -37,6 +49,7 @@ export const generateOpsForSpaceType = async ({
 }: DeployArgs) => {
   const ops: Op[] = [];
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
+  let hasSpaceType = false;
 
   if (!TEMPLATE_BASED_TYPES.includes(type)) {
     const newEntity = Graph.createEntity({
@@ -46,6 +59,7 @@ export const generateOpsForSpaceType = async ({
     });
 
     ops.push(...newEntity.ops);
+    hasSpaceType = true;
   }
 
   switch (type) {
@@ -56,6 +70,7 @@ export const generateOpsForSpaceType = async ({
         types: [SystemIds.SPACE_TYPE],
       });
       ops.push(...createEntityOps);
+      hasSpaceType = true;
 
       const { ops: personTypeOps } = Graph.createRelation({
         fromEntity: newEntityId,
@@ -165,6 +180,28 @@ export const generateOpsForSpaceType = async ({
     }
     default:
       break;
+  }
+
+  if (!hasSpaceType) {
+    hasSpaceType = ops.some(op => {
+      if (op.type !== 'createRelation') return false;
+      if (!('from' in op) || !('to' in op) || !('relationType' in op)) return false;
+      return (
+        String(op.from) === newEntityId &&
+        String(op.to) === SystemIds.SPACE_TYPE &&
+        String(op.relationType) === SystemIds.TYPES_PROPERTY
+      );
+    });
+  }
+
+  if (DAO_SPACE_TYPES.includes(type) && !hasSpaceType) {
+    const { ops: spaceTypeOps } = Graph.createRelation({
+      fromEntity: newEntityId,
+      toEntity: SystemIds.SPACE_TYPE,
+      type: SystemIds.TYPES_PROPERTY,
+    });
+
+    ops.push(...spaceTypeOps);
   }
 
   if (spaceAvatarUri) {
