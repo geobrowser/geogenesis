@@ -44,8 +44,8 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
         return ['FLOAT'] as SwitchableRenderableType[];
       case 'DECIMAL':
         return ['DECIMAL'] as SwitchableRenderableType[];
-      case 'BOOL':
-        return ['BOOL'] as SwitchableRenderableType[];
+      case 'BOOLEAN':
+        return ['BOOLEAN'] as SwitchableRenderableType[];
       case 'DATE':
         return ['DATE'] as SwitchableRenderableType[];
       case 'DATETIME':

@@ -361,7 +361,7 @@ export class EntityQuery {
             if (isNaN(numValue) || !this.matchesNumberCondition(numValue, cond.value as NumberCondition)) {
               return false;
             }
-          } else if (value.property.dataType === 'BOOL') {
+          } else if (value.property.dataType === 'BOOLEAN') {
             // GRC-20 v2 boolean type
             const boolValue = value.value === '1' || value.value.toLowerCase() === 'true';
             if (!this.matchesBooleanCondition(boolValue, cond.value as BooleanCondition)) {

@@ -83,7 +83,7 @@ function getValueFromDataType(dataType: DataType, remoteValue: RemoteValue): str
       return null;
 
     // GRC-20 v2 boolean type
-    case 'BOOL': {
+    case 'BOOLEAN': {
       if (remoteValue.boolean === null) {
         return null;
       }

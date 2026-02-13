@@ -879,6 +879,7 @@ function RenderedValue({
     storage.values.update(rawValue, draft => {
       draft.value = value;
       draft.options = options;
+      draft.property.dataType = property.dataType;
     });
   };
 
@@ -926,7 +927,7 @@ function RenderedValue({
             dataType={property.dataType}
           />
         );
-      case 'BOOL': {
+      case 'BOOLEAN': {
         const checked = getChecked(value);
 
         return (

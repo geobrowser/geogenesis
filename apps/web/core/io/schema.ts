@@ -13,7 +13,7 @@ export const DataType = Schema.Union(
   Schema.Literal('INTEGER'),
   Schema.Literal('FLOAT'),
   Schema.Literal('DECIMAL'),
-  Schema.Literal('BOOL'),
+  Schema.Literal('BOOLEAN'),
   Schema.Literal('DATE'),
   Schema.Literal('DATETIME'),
   Schema.Literal('POINT'),

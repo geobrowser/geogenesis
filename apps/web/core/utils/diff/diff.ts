@@ -64,7 +64,7 @@ export function mapValueDiff(v: ApiValueDiff): ValueChange {
   return {
     propertyId: v.propertyId,
     spaceId: v.spaceId,
-    type: (v.type === 'TEXT' ? 'TEXT' : v.type) as SimpleValueType,
+    type: v.type as SimpleValueType,
     before: v.before,
     after: v.after,
   };
