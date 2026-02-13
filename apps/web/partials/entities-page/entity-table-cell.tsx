@@ -197,7 +197,7 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
     return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} dataType={property.dataType} />;
   }
 
-  if (renderableType === 'BOOL') {
+  if (renderableType === 'BOOLEAN') {
     return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
   }
 

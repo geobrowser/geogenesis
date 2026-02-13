@@ -72,7 +72,7 @@ export type DataType =
   | 'INTEGER'
   | 'FLOAT'
   | 'DECIMAL'
-  | 'BOOL'
+  | 'BOOLEAN'
   | 'DATE'
   | 'DATETIME'
   | 'TIME'
@@ -81,24 +81,6 @@ export type DataType =
   | 'BYTES'
   | 'SCHEDULE'
   | 'EMBEDDING';
-
-// Legacy type aliases for backwards compatibility during migration
-export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-
-/**
- * Maps legacy GRC-20 data type names from older API responses to current types.
- *
- * Background: Some older data in the knowledge graph uses 'BOOLEAN' as the data type
- * string, but GRC-20 standardized on 'BOOL'. This mapping ensures backwards
- * compatibility when reading data from the API or reconstructing entities from storage.
- */
-export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
-  BOOLEAN: 'BOOL',
-  INT64: 'INTEGER',
-  FLOAT64: 'FLOAT',
-  CHECKBOX: 'BOOL',
-  PLACE: 'RELATION',
-} as const;
 
 // ==============================================================================
 // Renderable Types
@@ -121,7 +103,7 @@ export type FlattenedRenderType =
   | 'INTEGER'
   | 'FLOAT'
   | 'DECIMAL'
-  | 'BOOL'
+  | 'BOOLEAN'
   | 'DATE'
   | 'DATETIME'
   | 'TIME'
@@ -146,7 +128,7 @@ export type SwitchableRenderableType =
   | 'TIME'
   | 'IMAGE'
   | 'VIDEO'
-  | 'BOOL'
+  | 'BOOLEAN'
   | 'INTEGER'
   | 'FLOAT'
   | 'DECIMAL'
@@ -164,7 +146,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   RELATION: 'Relation',
   IMAGE: 'Image',
   VIDEO: 'Video',
-  BOOL: 'Checkbox',
+  BOOLEAN: 'Checkbox',
   INTEGER: 'Integer',
   FLOAT: 'Float',
   DECIMAL: 'Decimal',

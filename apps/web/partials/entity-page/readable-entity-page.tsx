@@ -386,7 +386,7 @@ function RenderedValue({
           unitId={options?.unit ?? undefined}
         />
       );
-    case 'BOOL': {
+    case 'BOOLEAN': {
       const checked = getChecked(value);
 
       return <Checkbox key={`checkbox-${propertyId}-${value}`} checked={checked} />;

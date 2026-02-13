@@ -36,7 +36,7 @@ vi.mock('~/core/constants', () => ({
     INTEGER: 'INTEGER_ENTITY_ID',
     FLOAT: 'FLOAT_ENTITY_ID',
     DECIMAL: 'DECIMAL_ENTITY_ID',
-    BOOL: 'BOOL_ENTITY_ID',
+    BOOLEAN: 'BOOLEAN_ENTITY_ID',
     BYTES: 'BYTES_ENTITY_ID',
     DATE: 'DATE_ENTITY_ID',
     TIME: 'TIME_ENTITY_ID',
@@ -102,10 +102,10 @@ describe('Properties', () => {
       });
     });
 
-    it('should map BOOL property type correctly', () => {
-      const result = mapPropertyType('BOOL');
+    it('should map BOOLEAN property type correctly', () => {
+      const result = mapPropertyType('BOOLEAN');
       expect(result).toEqual({
-        baseDataType: 'BOOL',
+        baseDataType: 'BOOLEAN',
         renderableTypeId: null,
       });
     });

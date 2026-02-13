@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
-import { DataType as AppDataType, LEGACY_DATA_TYPE_MAPPING, Property, RenderableType } from '~/core/types';
+import { DataType as AppDataType, Property, RenderableType } from '~/core/types';
 import { getDataTypeFromEntityId } from '~/core/utils/property/properties';
 
 import { RemoteProperty } from '../schema';
@@ -49,16 +49,12 @@ export function getStrictRenderableType(renderableType: string | null): Renderab
 export function getAppDataTypeFromRemoteDataType(dataType: string | null): AppDataType {
   const normalizedType = dataType?.toUpperCase() ?? null;
 
-  if (normalizedType && normalizedType in LEGACY_DATA_TYPE_MAPPING) {
-    return LEGACY_DATA_TYPE_MAPPING[normalizedType]!;
-  }
-
   const validTypes: AppDataType[] = [
     'TEXT',
     'INTEGER',
     'FLOAT',
     'DECIMAL',
-    'BOOL',
+    'BOOLEAN',
     'DATE',
     'DATETIME',
     'TIME',
