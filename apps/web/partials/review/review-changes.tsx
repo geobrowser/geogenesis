@@ -25,7 +25,6 @@ import type {
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
-import { Publish } from '~/core/utils/publish';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -159,19 +158,7 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const hasValidOps = React.useMemo(() => {
-    if (!activeSpace) return false;
-
-    const result = Effect.runSyncExit(
-      Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
-    );
-
-    if (result._tag === 'Failure') return false;
-
-    return result.value.length > 0;
-  }, [activeSpace, valuesFromSpace, relationsFromSpace]);
-
-  const isReadyToPublish = hasValidOps && proposalName.length > 0;
+  const isReadyToPublish = proposalName.length > 0;
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
