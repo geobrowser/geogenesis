@@ -413,6 +413,128 @@ describe('prepareLocalDataForPublishing', () => {
   });
 });
 
+describe('toRfc3339Date', () => {
+  const toRfc3339Date = Publish.toRfc3339Date;
+
+  it('should convert a full ISO string to date-only', () => {
+    expect(toRfc3339Date('2024-01-15T14:30:00.000Z')).toBe('2024-01-15');
+  });
+
+  it('should pass through an already-correct date-only string', () => {
+    expect(toRfc3339Date('2024-07-04')).toBe('2024-07-04');
+  });
+
+  it('should handle ISO string with timezone offset', () => {
+    expect(toRfc3339Date('2024-12-31T23:00:00.000+00:00')).toBe('2024-12-31');
+  });
+
+  it('should extract date from a time-only string (epoch date)', () => {
+    expect(toRfc3339Date('14:30:00Z')).toBe('1970-01-01');
+  });
+});
+
+describe('toRfc3339Time', () => {
+  const toRfc3339Time = Publish.toRfc3339Time;
+
+  it('should convert a full ISO string to time-only', () => {
+    expect(toRfc3339Time('2024-01-15T14:30:00.000Z')).toBe('14:30:00Z');
+  });
+
+  it('should convert a full ISO string with midnight', () => {
+    expect(toRfc3339Time('2024-01-15T00:00:00.000Z')).toBe('00:00:00Z');
+  });
+
+  it('should pass through an already-correct time-only string', () => {
+    expect(toRfc3339Time('14:30:00Z')).toBe('14:30:00Z');
+  });
+
+  it('should handle time extracted from a date-only string (midnight)', () => {
+    expect(toRfc3339Time('2024-07-04')).toBe('00:00:00Z');
+  });
+});
+
+describe('toRfc3339Datetime', () => {
+  const toRfc3339Datetime = Publish.toRfc3339Datetime;
+
+  it('should convert a full ISO string to RFC 3339 datetime', () => {
+    expect(toRfc3339Datetime('2024-01-15T14:30:00.000Z')).toBe('2024-01-15T14:30:00Z');
+  });
+
+  it('should convert a date-only string to datetime at midnight', () => {
+    expect(toRfc3339Datetime('2024-07-04')).toBe('2024-07-04T00:00:00Z');
+  });
+
+  it('should convert a time-only string to datetime on epoch date', () => {
+    expect(toRfc3339Datetime('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
+  });
+
+  it('should strip milliseconds from full ISO string', () => {
+    expect(toRfc3339Datetime('2024-06-15T09:45:30.123Z')).toBe('2024-06-15T09:45:30Z');
+  });
+
+  it('should produce exactly one trailing Z', () => {
+    const result = toRfc3339Datetime('2024-01-15T14:30:00.000Z');
+    expect(result).toBe('2024-01-15T14:30:00Z');
+    expect(result.endsWith('ZZ')).toBe(false);
+  });
+});
+
+describe('date/time publish round-trip', () => {
+  it('should produce SDK-compatible DATE value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Birthday', dataType: 'DATE' },
+        value: '2024-01-15T00:00:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('date');
+    expect(setValue.value).toBe('2024-01-15');
+  });
+
+  it('should produce SDK-compatible TIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Start Time', dataType: 'TIME' },
+        value: '1970-01-01T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('time');
+    expect(setValue.value).toBe('14:30:00Z');
+  });
+
+  it('should produce SDK-compatible DATETIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Created At', dataType: 'DATETIME' },
+        value: '2024-01-15T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('datetime');
+    expect(setValue.value).toBe('2024-01-15T14:30:00Z');
+  });
+});
+
 describe('parseDecimalString', () => {
   const parseDecimalString = Publish.parseDecimalString;
 

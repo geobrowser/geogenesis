@@ -214,6 +214,27 @@ export class GeoDate {
     }
   }
 
+  /**
+   * Normalizes a stored date/time value to a full ISO string that `new Date()` can parse.
+   * Handles RFC 3339 date-only ("2024-01-15"), time-only ("14:30:00Z"),
+   * datetime ("2024-01-15T14:30:00Z"), and full ISO strings ("2024-01-15T14:30:00.000Z").
+   */
+  static toFullISOString(dateString: string): string {
+    if (!dateString) return dateString;
+
+    // Time-only: "HH:MM:SSZ" or "HH:MM:SS±HH:MM" — prefix with epoch date
+    if (/^\d{2}:\d{2}:\d{2}/.test(dateString)) {
+      return `1970-01-01T${dateString}`;
+    }
+
+    // Date-only: "YYYY-MM-DD" (no T or time portion)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return `${dateString}T00:00:00.000Z`;
+    }
+
+    return dateString;
+  }
+
   // Geo DateField parses ISO strings in UTC time into day, month, year, hour, minute.
   static fromISOStringUTC(dateString: string): {
     day: string;
@@ -223,7 +244,8 @@ export class GeoDate {
     minute: string;
     meridiem: 'am' | 'pm';
   } {
-    const date = new Date(dateString);
+    const normalized = GeoDate.toFullISOString(dateString);
+    const date = new Date(normalized);
     const isDate = GeoDate.isValidDate(date);
     const day = isDate ? date.getUTCDate().toString() : '';
     const month = isDate ? (date.getUTCMonth() + 1).toString() : '';
@@ -295,8 +317,8 @@ export class GeoDate {
       if (this.isDateInterval(dateIsoString)) {
         const [startDateString, endDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
 
-        const startDate = parseISO(startDateString);
-        const endDate = parseISO(endDateString);
+        const startDate = parseISO(GeoDate.toFullISOString(startDateString));
+        const endDate = parseISO(GeoDate.toFullISOString(endDateString));
 
         const formattedStartDate = formatInTimeZone(startDate, 'UTC', validatedFormat);
         const formattedEndDate = formatInTimeZone(endDate, 'UTC', validatedFormat);
@@ -304,7 +326,7 @@ export class GeoDate {
         return `${formattedStartDate} — ${formattedEndDate}`;
       }
 
-      const date = parseISO(dateIsoString);
+      const date = parseISO(GeoDate.toFullISOString(dateIsoString));
       return formatInTimeZone(date, 'UTC', validatedFormat);
     } catch (e) {
       console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`, e);
