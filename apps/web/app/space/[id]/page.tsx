@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
@@ -27,6 +27,10 @@ interface Props {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   const spaceId = params.id;
+
+  if (!IdUtils.isValid(spaceId)) {
+    return { title: 'Not Found' };
+  }
 
   const space = await cachedFetchSpace(spaceId);
   const entity = space?.entity;
