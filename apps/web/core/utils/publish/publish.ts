@@ -2,6 +2,7 @@ import { Graph, Op, type DecimalMantissa, type PropertyValueParam } from '@geopr
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
+import { GeoDate } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
 
@@ -139,11 +140,14 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
       };
     }
     case 'DATE':
-      return { property, type: 'date', value: val };
+      // Stored as full ISO string (e.g. "2024-01-15T00:00:00.000Z"), SDK expects "YYYY-MM-DD"
+      return { property, type: 'date', value: toRfc3339Date(val) };
     case 'DATETIME':
-      return { property, type: 'datetime', value: val };
+      // Stored as full ISO string (e.g. "2024-01-15T14:30:00.000Z"), SDK expects "YYYY-MM-DDTHH:MM:SSZ"
+      return { property, type: 'datetime', value: toRfc3339Datetime(val) };
     case 'TIME':
-      return { property, type: 'time', value: val };
+      // Stored as full ISO string (e.g. "1970-01-01T14:30:00.000Z"), SDK expects "HH:MM:SSZ"
+      return { property, type: 'time', value: toRfc3339Time(val) };
     case 'POINT': {
       try {
         const point = JSON.parse(val);
@@ -209,8 +213,40 @@ function parseDecimalString(val: string): { exponent: number; mantissa: DecimalM
   return { exponent, mantissa: { type: 'i64', value: mantissaBigInt } };
 }
 
+/**
+ * Convert a stored value to RFC 3339 date-only: "YYYY-MM-DD"
+ */
+function toRfc3339Date(val: string): string {
+  const date = new Date(GeoDate.toFullISOString(val));
+  const yyyy = String(date.getUTCFullYear()).padStart(4, '0');
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Convert a stored value to RFC 3339 time-only: "HH:MM:SSZ"
+ */
+function toRfc3339Time(val: string): string {
+  const date = new Date(GeoDate.toFullISOString(val));
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const min = String(date.getUTCMinutes()).padStart(2, '0');
+  const ss = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${hh}:${min}:${ss}Z`;
+}
+
+/**
+ * Convert a stored value to RFC 3339 datetime: "YYYY-MM-DDTHH:MM:SSZ"
+ */
+function toRfc3339Datetime(val: string): string {
+  return `${toRfc3339Date(val)}T${toRfc3339Time(val)}`;
+}
+
 export const Publish = {
   prepareLocalDataForPublishing,
   /** @internal Exported for testing only */
   parseDecimalString,
+  toRfc3339Date,
+  toRfc3339Time,
+  toRfc3339Datetime,
 };

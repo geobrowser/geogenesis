@@ -2,19 +2,49 @@
 
 import React from 'react';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, SUGGESTED_URL_FORMATS } from '~/core/constants';
 import {
+  DATA_TYPE_ENTITY_IDS,
+  DATA_TYPE_PROPERTY,
   GRC_20_SPECIFICATION_LINK,
+  RENDERABLE_TYPE_PROPERTY,
+  SUGGESTED_DATE_FORMATS,
+  SUGGESTED_DATETIME_FORMATS,
+  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_NUMBER_FORMATS,
   SUGGESTED_TIME_FORMATS,
+  SUGGESTED_URL_FORMATS,
   UNICODE_LINK,
 } from '~/core/constants';
-import { useRelations, useValue } from '~/core/sync/use-store';
+import { useRelations } from '~/core/sync/use-store';
 import { ValueOptions } from '~/core/types';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { NewTab } from './icons/new-tab';
+
+// Reverse map: entity ID → data type name (e.g. 'DATE', 'TIME', etc.)
+const ENTITY_ID_TO_DATA_TYPE = Object.fromEntries(
+  Object.entries(DATA_TYPE_ENTITY_IDS).map(([type, id]) => [id, type])
+);
+
+const FORMAT_MAP = {
+  URL: SUGGESTED_URL_FORMATS,
+  DATE: SUGGESTED_DATE_FORMATS,
+  DATETIME: SUGGESTED_DATETIME_FORMATS,
+  TIME: SUGGESTED_TIME_FORMATS,
+  FLOAT: SUGGESTED_FLOAT_FORMATS,
+  NUMBER: SUGGESTED_NUMBER_FORMATS,
+} as const;
+
+type FormatKind = keyof typeof FORMAT_MAP;
+
+const DATA_TYPE_TO_FORMAT_KIND: Record<string, FormatKind> = {
+  DATE: 'DATE',
+  DATETIME: 'DATETIME',
+  TIME: 'TIME',
+  FLOAT: 'FLOAT',
+  DECIMAL: 'FLOAT',
+};
 
 const SuggestedFormats = ({
   entityId,
@@ -29,9 +59,10 @@ const SuggestedFormats = ({
 }) => {
   const [visible, setVisible] = React.useState(true);
 
-  const dataType = useValue({
-    selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === DATA_TYPE_PROPERTY,
-  })?.value;
+  const dataTypeRelation = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === DATA_TYPE_PROPERTY,
+  })[0];
+  const dataType = ENTITY_ID_TO_DATA_TYPE[dataTypeRelation?.toEntity.id ?? ''];
 
   const renderableTypeRelation = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === RENDERABLE_TYPE_PROPERTY,
@@ -42,16 +73,13 @@ const SuggestedFormats = ({
     setVisible(true);
   }, [dataType, renderableTypeStrict]);
 
-  const formatKind =
-    renderableTypeStrict === 'URL' ? 'URL' : dataType === 'TIME' ? 'TIME' : 'NUMBER';
-  const renderableFormats =
-    formatKind === 'URL'
-      ? SUGGESTED_URL_FORMATS
-      : formatKind === 'TIME'
-        ? SUGGESTED_TIME_FORMATS
-        : SUGGESTED_NUMBER_FORMATS;
-  const viewAllLink =
-    formatKind === 'TIME' ? GRC_20_SPECIFICATION_LINK : formatKind === 'NUMBER' ? UNICODE_LINK : null;
+  const formatKind: FormatKind =
+    renderableTypeStrict === 'URL' ? 'URL' : DATA_TYPE_TO_FORMAT_KIND[dataType ?? ''] ?? 'NUMBER';
+
+  const renderableFormats = FORMAT_MAP[formatKind];
+  const isTemporalType = formatKind === 'DATE' || formatKind === 'DATETIME' || formatKind === 'TIME';
+  const viewAllLink = isTemporalType ? GRC_20_SPECIFICATION_LINK : formatKind === 'NUMBER' || formatKind === 'FLOAT' ? UNICODE_LINK : null;
+  const formatKindLabel = isTemporalType ? 'date/time' : formatKind === 'URL' ? 'URL' : formatKind === 'FLOAT' ? 'float' : 'number';
   const formatLabel =
     renderableFormats.find(f => f.format === value)?.label ||
     (formatKind === 'URL' ? 'Custom URL' : 'Unspecified');
@@ -67,7 +95,7 @@ const SuggestedFormats = ({
         <div className="mt-3 w-full rounded-md bg-grey-01 p-3">
           <div className="flex w-full justify-between">
             <span className="text-tableProperty font-medium leading-5 text-text">
-              Other common {formatKind === 'URL' ? 'URL' : formatKind === 'TIME' ? 'time' : 'number'} formats
+              Other common {formatKindLabel} formats
             </span>
             <div className="flex">
               {viewAllLink && (
