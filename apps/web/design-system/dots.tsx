@@ -4,28 +4,52 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
+const loadingContainerVariants = {
+  start: {
+    transition: {
+      staggerChildren: 0.2,
+    },
+  },
+  end: {
+    transition: {
+      staggerChildren: 0.2,
+    },
+  },
+};
+
+const loadingCircleVariants = {
+  start: {
+    y: '-100%',
+  },
+  end: {
+    y: '25%',
+  },
+};
+
 interface Props {
   color?: 'bg-grey-03' | 'bg-grey-02';
 }
 
 export function Dots({ color = 'bg-grey-03' }: Props) {
   return (
-    <div className="flex items-center justify-center gap-1">
+    <motion.div
+      className="flex items-center justify-center gap-0.5"
+      variants={loadingContainerVariants}
+      initial="start"
+      animate="end"
+    >
       {[0, 1, 2].map(index => (
         <motion.span
           key={index}
           className={`block h-1 w-1 rounded-full ${color}`}
-          animate={{
-            y: ['-50%', '50%', '-50%'],
-          }}
+          variants={loadingCircleVariants}
           transition={{
-            duration: 0.6,
+            duration: 0.225,
             repeat: Infinity,
-            ease: 'easeInOut',
-            delay: index * 0.15,
+            repeatType: 'reverse',
           }}
         />
       ))}
-    </div>
+    </motion.div>
   );
 }
