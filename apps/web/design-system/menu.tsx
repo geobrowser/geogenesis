@@ -21,7 +21,7 @@ interface Props {
   modal?: boolean;
 }
 
-const contentStyles = cva('z-20 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+const contentStyles = cva('z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
   variants: {
     align: {
       start: 'origin-top-left',
