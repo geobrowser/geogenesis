@@ -83,7 +83,9 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const spaceName = space.entity.name ?? '';
   const spaceImage = space.entity.image;
 
-  const otherSpaces = spaces.filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id));
+  const otherSpaces = spaces.filter(
+    space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim()
+  );
 
   const formattedQuery = query.trim().toLowerCase();
 

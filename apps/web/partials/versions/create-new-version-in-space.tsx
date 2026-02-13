@@ -34,10 +34,12 @@ export const CreateNewVersionInSpace = ({
 
   const [query, setQuery] = useState<string>('');
 
+  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+
   const renderedSpaces =
     query.length === 0
-      ? spaces
-      : spaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
+      ? namedSpaces
+      : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
 
   return (
     <div className="bg-white">
