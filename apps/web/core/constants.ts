@@ -10,11 +10,7 @@ export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
-// Video type IDs
-export const VIDEO_URL_PROPERTY = '33da2ef5bd554e91af973e082e431a13';
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
-export const VIDEO_TYPE = 'd7a4817c9795405b93e212df759c43f8';
-export const VIDEO_BLOCK_TYPE = '809bc406d0f34f3ca8a1aa265733c6ce';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [
@@ -27,6 +23,11 @@ export const VALID_VIDEO_TYPES = [
 ];
 export const VIDEO_ACCEPT = VALID_VIDEO_TYPES.join(',');
 export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
+
+// Image file types and upload constraints
+export const VALID_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+export const IMAGE_ACCEPT = VALID_IMAGE_TYPES.join(',');
+export const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
 export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 

@@ -16,21 +16,22 @@ import type {
   ApiBlockSnapshot,
 } from '../rest';
 
-const { TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, BLOCKS, TYPES_PROPERTY, NAME_PROPERTY, MARKDOWN_CONTENT, IMAGE_URL_PROPERTY } =
+const { TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK, BLOCKS, TYPES_PROPERTY, NAME_PROPERTY, MARKDOWN_CONTENT, IMAGE_URL_PROPERTY } =
   SystemIds;
 
 /**
  * Determine block type from a TYPES_PROPERTY relation.
  * Shared logic with `detectBlockType` in diff.ts, but operates on raw API relation shapes.
  */
-function classifyBlockType(typeEntityId: string): 'textBlock' | 'imageBlock' | 'dataBlock' | null {
+function classifyBlockType(typeEntityId: string): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' | null {
   if (typeEntityId === TEXT_BLOCK) return 'textBlock';
-  if (typeEntityId === IMAGE_BLOCK) return 'imageBlock';
+  if (typeEntityId === IMAGE_BLOCK || typeEntityId === IMAGE_TYPE) return 'imageBlock';
+  if (typeEntityId === VIDEO_TYPE || typeEntityId === VIDEO_BLOCK) return 'videoBlock';
   if (typeEntityId === DATA_BLOCK) return 'dataBlock';
   return null;
 }
 
-function getBlockTypeFromRelations(relations: readonly ApiVersionedRelation[]): 'textBlock' | 'imageBlock' | 'dataBlock' {
+function getBlockTypeFromRelations(relations: readonly ApiVersionedRelation[]): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
   for (const rel of relations) {
     if (rel.typeId === TYPES_PROPERTY) {
       const blockType = classifyBlockType(rel.toEntityId);
@@ -116,6 +117,15 @@ function snapshotBlockToChange(block: ApiBlockSnapshot): BlockChange {
       };
     }
     case 'imageBlock': {
+      const url = block.values.find(v => v.propertyId === IMAGE_URL_PROPERTY)?.text ?? null;
+      return {
+        id: block.id,
+        type: 'imageBlock',
+        before: null,
+        after: url,
+      };
+    }
+    case 'videoBlock': {
       const url = block.values.find(v => v.propertyId === IMAGE_URL_PROPERTY)?.text ?? null;
       return {
         id: block.id,
