@@ -521,8 +521,9 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   },
                 };
 
-                if (result.space) {
-                  newRelation.toSpaceId = result.space;
+                const toSpaceId = result.space ?? result.primarySpace;
+                if (toSpaceId) {
+                  newRelation.toSpaceId = toSpaceId;
                 }
 
                 if (result.verified) {
