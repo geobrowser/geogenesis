@@ -1,9 +1,6 @@
-import { Graph } from '@geoprotocol/geo-sdk';
 import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
-
-import { getImagePath } from '~/core/utils/utils';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -96,44 +93,18 @@ export const commandItems: CommandSuggestionItem[] = [
   {
     icon: <EditorImage />,
     title: 'Image',
-    command: async ({ editor, range }) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/png, image/jpeg';
-      input.className = 'hidden';
-      input.onchange = async (e: any) => {
-        if (!e?.target?.files?.[0]) return;
-        const file = e.target.files[0];
-        // Use TESTNET network to upload to Pinata via alternative gateway
-        const { id, ops } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
-
-        // Extract the image URL from the ops - look for createEntity with ipfs:// value
-        let ipfsUrl: string | undefined;
-        for (const op of ops) {
-          if (op.type === 'createEntity') {
-            // Type assertion for new SDK format
-            const values = (op as unknown as { values: Array<{ value: { type: string; value?: string } }> }).values;
-            const ipfsValue = values?.find(pv => {
-              const val = pv.value?.value;
-              return typeof val === 'string' && val.startsWith('ipfs://');
-            });
-            if (ipfsValue) {
-              ipfsUrl = ipfsValue.value?.value;
-              break;
-            }
-          }
-        }
-
-        const src = ipfsUrl ? getImagePath(ipfsUrl) : '';
-
-        if (src) {
-          editor.chain().focus().deleteRange(range).setImage({ src }).run();
-        }
-      };
-      input.click();
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: range.from, to: range.to })
+        .insertContent({
+          type: 'image',
+        })
+        .createParagraphNear()
+        .blur()
+        .focus()
+        .run();
     },
   },
   {

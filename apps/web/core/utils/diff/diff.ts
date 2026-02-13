@@ -3,7 +3,10 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 const {
   TEXT_BLOCK,
   IMAGE_BLOCK,
+  IMAGE_TYPE,
   DATA_BLOCK,
+  VIDEO_TYPE,
+  VIDEO_BLOCK,
   BLOCKS,
   TYPES_PROPERTY,
   NAME_PROPERTY,
@@ -16,7 +19,6 @@ const {
 import { diffWords } from 'diff';
 import { Effect } from 'effect';
 
-import { VIDEO_BLOCK_TYPE } from '~/core/constants';
 import { getEntityBacklinks, getBatchEntities } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import type { Entity, Relation, Value } from '~/core/types';
@@ -122,7 +124,7 @@ export function mapApiEntityDiff(apiEntity: ApiEntityDiffShape): EntityDiff {
   };
 }
 
-export const BLOCK_TYPE_IDS = [TEXT_BLOCK, IMAGE_BLOCK, DATA_BLOCK, VIDEO_BLOCK_TYPE];
+export const BLOCK_TYPE_IDS: string[] = [TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
@@ -508,7 +510,7 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
     } as DataBlockChange;
   }
 
-  if (blockType === 'imageBlock') {
+  if (blockType === 'imageBlock' || blockType === 'videoBlock') {
     const contentValue = entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ?? entity.values[0];
 
     return {
@@ -535,12 +537,13 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   } as TextBlockChange;
 }
 
-export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' | 'dataBlock' {
+export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
   for (const rel of entity.relations) {
     if (rel.typeId === TYPES_PROPERTY) {
       const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
       if (typeId === TEXT_BLOCK) return 'textBlock';
-      if (typeId === IMAGE_BLOCK) return 'imageBlock';
+      if (typeId === IMAGE_BLOCK || typeId === IMAGE_TYPE) return 'imageBlock';
+      if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) return 'videoBlock';
       if (typeId === DATA_BLOCK) return 'dataBlock';
     }
   }
@@ -600,9 +603,21 @@ export async function fromLocal(
     }
   }
 
+  // Collect image content entity IDs (old-style separate image entities referenced by relations).
+  // Exclude image *block* entities — those have a TYPES_PROPERTY relation marking them as IMAGE_TYPE.
+  const imageBlockEntityIds = new Set<string>();
+  for (const relation of localRelations) {
+    if (relation.type.id === TYPES_PROPERTY) {
+      const typeId = relation.toEntity.id;
+      if (typeId === IMAGE_TYPE || typeId === IMAGE_BLOCK) {
+        imageBlockEntityIds.add(relation.fromEntity.id);
+      }
+    }
+  }
+
   const imageEntityIds = new Set<string>();
   for (const relation of localRelations) {
-    if (relation.renderableType === 'IMAGE') {
+    if (relation.renderableType === 'IMAGE' && !imageBlockEntityIds.has(relation.toEntity.id)) {
       imageEntityIds.add(relation.toEntity.id);
     }
   }

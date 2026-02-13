@@ -1,6 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { VIDEO_BLOCK_TYPE } from '~/core/constants';
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
@@ -256,7 +255,8 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.IMAGE_BLOCK,
   SystemIds.DATA_BLOCK,
   SystemIds.IMAGE_TYPE,
-  VIDEO_BLOCK_TYPE,
+  SystemIds.VIDEO_TYPE,
+  SystemIds.VIDEO_BLOCK,
 ];
 
 const BLOCK_TYPE_EXCLUSION_FILTERS = EXCLUDED_BLOCK_TYPES.map(typeId => ({

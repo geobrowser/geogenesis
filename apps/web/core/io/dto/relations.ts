@@ -1,15 +1,12 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { VIDEO_BLOCK_TYPE, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
-  const imageUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
+  const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
   const mediaEntityUrlValue =
-    relation.toEntity.valuesList.find(v => v.propertyId === imageUrlPropertyHex)?.text ??
-    relation.toEntity.valuesList.find(v => v.propertyId === VIDEO_URL_PROPERTY)?.text ??
-    null;
+    relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
   const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   const toEntityId = relation.toEntity.id;
@@ -48,6 +45,8 @@ function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): Rendera
   const typeIds = types.map(type => type.id);
 
   const imageTypeHex = SystemIds.IMAGE_TYPE.replace(/-/g, '');
+  const videoTypeHex = SystemIds.VIDEO_TYPE.replace(/-/g, '');
+  const videoBlockHex = SystemIds.VIDEO_BLOCK.replace(/-/g, '');
   const dataBlockHex = SystemIds.DATA_BLOCK.replace(/-/g, '');
   const textBlockHex = SystemIds.TEXT_BLOCK.replace(/-/g, '');
 
@@ -55,7 +54,8 @@ function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): Rendera
     return 'IMAGE';
   }
 
-  if (typeIds.includes(VIDEO_TYPE) || typeIds.includes(VIDEO_BLOCK_TYPE)) {
+  // Match both VIDEO_TYPE (new) and VIDEO_BLOCK (legacy) for backwards compatibility
+  if (typeIds.includes(videoTypeHex) || typeIds.includes(videoBlockHex)) {
     return 'VIDEO';
   }
 
