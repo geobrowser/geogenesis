@@ -9,8 +9,8 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { storage } from '~/core/sync/use-mutate';
-import { getValues, useValues } from '~/core/sync/use-store';
-import { Relation, RenderableEntityType } from '~/core/types';
+import { getRelations, getValues, useValues } from '~/core/sync/use-store';
+import { Relation, RenderableEntityType, Value } from '~/core/types';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
@@ -204,6 +204,31 @@ const makeBlocksRelations = async ({
   }
 };
 
+function deleteBlockEntityData(
+  blockId: string,
+  spaceId: string,
+  initialValues: Value[],
+  initialRelations: Relation[]
+) {
+  const blockValues = getValues({
+    mergeWith: initialValues,
+    selector: v => v.entity.id === blockId && v.spaceId === spaceId,
+  });
+
+  for (const value of blockValues) {
+    storage.values.delete(value);
+  }
+
+  const blockRelations = getRelations({
+    mergeWith: initialRelations,
+    selector: r => r.fromEntity.id === blockId && r.spaceId === spaceId,
+  });
+
+  for (const relation of blockRelations) {
+    storage.relations.delete(relation);
+  }
+}
+
 export const useTabId = () => {
   const searchParams = useSearchParams();
   const maybeTabId = searchParams?.get('tabId');
@@ -231,11 +256,17 @@ export function useEditorStore() {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
 
-  const initialBlockValues = React.useMemo(() => {
-    const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-
-    return blocks.flatMap(b => b.values);
+  const initialBlockEntities = React.useMemo(() => {
+    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
   }, [initialBlocks, initialTabs, isTab, tabId]);
+
+  const initialBlockValues = React.useMemo(() => {
+    return initialBlockEntities.flatMap(b => b.values);
+  }, [initialBlockEntities]);
+
+  const initialBlockEntityRelations = React.useMemo(() => {
+    return initialBlockEntities.flatMap(b => b.relations);
+  }, [initialBlockEntities]);
 
   // Subscribe to markdown content changes for all text blocks.
   // This ensures editorJson re-computes when text content is edited.
@@ -457,7 +488,7 @@ export function useEditorStore() {
 
       for (const removedBlockId of removed) {
         // @TODO(performance) removeMany
-        // @TODO(migration): Delete block entity
+        deleteBlockEntityData(removedBlockId, spaceId, initialBlockValues, initialBlockEntityRelations);
       }
 
       makeBlocksRelations({
@@ -500,7 +531,7 @@ export function useEditorStore() {
         }
       }
     },
-    [blockIds, activeEntityId, spaceId, blockRelations]
+    [blockIds, activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
   );
 
   return {
