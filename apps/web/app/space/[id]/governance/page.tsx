@@ -1,6 +1,8 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { cookies } from 'next/headers';
+import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -40,6 +42,11 @@ const passThreshold = '50%';
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+
+  if (!IdUtils.isValid(params.id)) {
+    notFound();
+  }
+
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
 
