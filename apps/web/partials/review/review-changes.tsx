@@ -25,7 +25,6 @@ import type {
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
-import { Publish } from '~/core/utils/publish';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -63,6 +62,9 @@ function hasVisibleChanges(entity: EntityDiff): boolean {
   const imageRelationPropertyIds = new Set(
     nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl).map(r => r.typeId)
   );
+  const otherRelationPropertyIds = new Set(
+    nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl).map(r => r.typeId)
+  );
   const hasValues = entity.values.some(
     v =>
       v.propertyId !== NAME_PROPERTY_ID &&
@@ -70,6 +72,7 @@ function hasVisibleChanges(entity: EntityDiff): boolean {
       v.propertyId !== COVER_PROPERTY_ID &&
       (v.type as string) !== 'RELATION' &&
       !imageRelationPropertyIds.has(v.propertyId) &&
+      !otherRelationPropertyIds.has(v.propertyId) &&
       (v.before !== null || v.after !== null)
   );
 
@@ -155,19 +158,7 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const hasValidOps = React.useMemo(() => {
-    if (!activeSpace) return false;
-
-    const result = Effect.runSyncExit(
-      Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace)
-    );
-
-    if (result._tag === 'Failure') return false;
-
-    return result.value.length > 0;
-  }, [activeSpace, valuesFromSpace, relationsFromSpace]);
-
-  const isReadyToPublish = hasValidOps && proposalName.length > 0;
+  const isReadyToPublish = proposalName.length > 0;
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
@@ -373,7 +364,10 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
   );
 
   const imageRelationPropertyIds = new Set(imageRelations.map(r => r.typeId));
-  const filteredOtherValues = otherValues.filter(v => !imageRelationPropertyIds.has(v.propertyId));
+  const otherRelationPropertyIds = new Set(otherRelations.map(r => r.typeId));
+  const filteredOtherValues = otherValues.filter(
+    v => !imageRelationPropertyIds.has(v.propertyId) && !otherRelationPropertyIds.has(v.propertyId)
+  );
 
   const avatarChangeImageUrl =
     avatarRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ??
@@ -444,33 +438,14 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
             />
           ))}
 
-        {filteredOtherValues.length > 0 && (
+        {(filteredOtherValues.length > 0 || otherRelations.length > 0) && (
           <div className="grid grid-cols-2 gap-20">
-            {filteredOtherValues.some(v => v.before !== null) ? (
+            {filteredOtherValues.some(v => v.before !== null) ||
+            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
                 {filteredOtherValues.map(value => (
                   <ValueChangeCell key={value.propertyId} value={value} side="before" />
                 ))}
-              </div>
-            ) : (
-              <div />
-            )}
-            {filteredOtherValues.some(v => v.after !== null) ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-                {filteredOtherValues.map(value => (
-                  <ValueChangeCell key={value.propertyId} value={value} side="after" />
-                ))}
-              </div>
-            ) : (
-              <div />
-            )}
-          </div>
-        )}
-
-        {otherRelations.length > 0 && (
-          <div className="grid grid-cols-2 gap-20">
-            {otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
                 {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
                   <RelationGroupCell
                     key={typeId}
@@ -484,8 +459,12 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
             ) : (
               <div />
             )}
-            {otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
+            {filteredOtherValues.some(v => v.after !== null) ||
+            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                {filteredOtherValues.map(value => (
+                  <ValueChangeCell key={value.propertyId} value={value} side="after" />
+                ))}
                 {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
                   <RelationGroupCell
                     key={typeId}
