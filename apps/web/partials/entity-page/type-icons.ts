@@ -25,7 +25,7 @@ export const TYPE_ICONS: Record<SwitchableRenderableType, TypeIconComponent> = {
   INTEGER: Number,
   FLOAT: Number,
   DECIMAL: Number,
-  BOOL: CheckboxChecked,
+  BOOLEAN: CheckboxChecked,
   DATE: Date,
   DATETIME: Date,
   TIME: Date,

@@ -60,6 +60,7 @@ export function writeValue(
     );
     storage.values.update(existingValue, draft => {
       draft.value = value;
+      draft.property.dataType = property.dataType;
     });
   } else {
     storage.values.set({

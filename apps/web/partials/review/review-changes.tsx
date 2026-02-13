@@ -29,6 +29,7 @@ import { Publish } from '~/core/utils/publish';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Dropdown } from '~/design-system/dropdown';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
@@ -1025,7 +1026,7 @@ const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
       <div>
         {value.type === 'TEXT' && diff ? (
           <TextDiffDisplay value={displayValue} diff={diff} side={side} />
-        ) : value.type === 'BOOL' ? (
+        ) : value.type === 'BOOLEAN' ? (
           <BooleanDisplay value={displayValue} side={side} />
         ) : value.type === 'POINT' ? (
           <PointDisplay value={displayValue} side={side} />
@@ -1181,11 +1182,12 @@ type BooleanDisplayProps = {
 const BooleanDisplay = ({ value, side }: BooleanDisplayProps) => {
   if (value === null) return null;
 
-  const displayValue = value === 'true' ? 'Yes' : 'No';
+  // Handle both '1'/'0' (local store format) and 'true'/'false' (API diff format)
+  const checked = getChecked(value) ?? value === 'true';
 
   return (
-    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
-      {displayValue}
+    <span className={cx('inline-flex shrink-0 items-center rounded p-1', side === 'before' ? 'bg-deleted' : 'bg-added')}>
+      <Checkbox checked={checked} disabled />
     </span>
   );
 };

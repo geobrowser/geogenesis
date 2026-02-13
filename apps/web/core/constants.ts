@@ -34,7 +34,7 @@ export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
   TEXT: '9edb6fcce4544aa5861139d7f024c010',
   RELATION: '4b6d9fc1fbfe474c861c83398e1b50d9',
-  BOOL: '7aa4792eeacd41868272fa7fc18298ac',
+  BOOLEAN: '7aa4792eeacd41868272fa7fc18298ac',
   INTEGER: '149fd752d9d04f80820d1d942eea7841',
   FLOAT: '9b597aaec31c46c88565a370da0c2a65',
   DECIMAL: 'a3288c22a0564f6fb409fbcccb2c118c',

@@ -7,7 +7,7 @@ export interface DiffChunk {
 export type TextValueType = 'TEXT';
 
 export type SimpleValueType =
-  | 'BOOL'
+  | 'BOOLEAN'
   | 'INTEGER'
   | 'FLOAT'
   | 'DECIMAL'

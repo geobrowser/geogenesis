@@ -99,9 +99,9 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         renderableTypeId: null,
       };
     // GRC-20 v2 boolean type
-    case 'BOOL':
+    case 'BOOLEAN':
       return {
-        baseDataType: 'BOOL',
+        baseDataType: 'BOOLEAN',
         renderableTypeId: null,
       };
     // GRC-20 v2 temporal types
@@ -161,7 +161,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   FLOAT: 'FLOAT',
   DECIMAL: 'DECIMAL',
   // GRC-20 v2 boolean type
-  BOOL: 'BOOL',
+  BOOLEAN: 'BOOLEAN',
   // GRC-20 v2 temporal types
   DATE: 'DATE',
   DATETIME: 'DATETIME',
