@@ -63,7 +63,7 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   if (!isClickable) {
     // Non-clickable pill (data type only)
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata tabular-nums">
+      <span className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-px text-metadata tabular-nums">
         {IconComponent && <IconComponent color="grey-04" />}
         <span>{formattedType}</span>
       </span>

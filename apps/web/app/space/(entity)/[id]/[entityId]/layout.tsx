@@ -1,4 +1,5 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -30,6 +31,10 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   const spaceId = params.id;
   const entityId = params.entityId;
+
+  if (!IdUtils.isValid(spaceId) || !IdUtils.isValid(entityId)) {
+    return { title: 'Not Found' };
+  }
 
   const result = await cachedFetchEntityPage(entityId, params.id);
 
@@ -69,6 +74,11 @@ export default async function ProfileLayout(props: Props) {
   const params = await props.params;
   const entityId = params.entityId;
   const spaceId = params.id;
+
+  if (!IdUtils.isValid(spaceId) || !IdUtils.isValid(entityId)) {
+    notFound();
+  }
+
   const { children } = props;
   const result = await cachedFetchEntityPage(entityId, spaceId);
   const typeIds = result?.entity?.types.map(t => t.id) ?? [];
