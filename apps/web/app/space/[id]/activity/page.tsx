@@ -1,3 +1,5 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -10,6 +12,11 @@ interface Props {
 
 export default async function Activity(props: Props) {
   const params = await props.params;
+
+  if (!IdUtils.isValid(params.id)) {
+    notFound();
+  }
+
   return (
     <Suspense fallback={<ActivitySkeleton />}>
       <ActivityServerContainer spaceId={params.id} />

@@ -1,3 +1,6 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
+
 import { ActivityPage } from '~/partials/activity/activity-page';
 
 interface Props {
@@ -13,5 +16,10 @@ interface Props {
 export default async function Activity(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+
+  if (!IdUtils.isValid(params.id) || !IdUtils.isValid(params.entityId)) {
+    notFound();
+  }
+
   return <ActivityPage entityId={params.entityId} searchParams={searchParams} />;
 }
