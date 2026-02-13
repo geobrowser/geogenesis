@@ -25,6 +25,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';
 
+export const revalidate = 60;
 interface Props {
   params: { id: string; entityId: string };
   searchParams?: { [key: string]: string | string[] | undefined };

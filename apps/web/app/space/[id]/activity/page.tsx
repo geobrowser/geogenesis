@@ -6,6 +6,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { ActivityServerContainer } from '~/partials/activity/activity-server-container';
 
+export const revalidate = 60;
 interface Props {
   params: Promise<{ id: string }>;
 }

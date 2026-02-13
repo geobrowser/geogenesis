@@ -21,6 +21,7 @@ import { Subspaces } from '~/partials/space-page/subspaces';
 
 import { cachedFetchSpace } from './cached-fetch-space';
 
+export const revalidate = 60;
 interface Props {
   params: Promise<{ id: string }>;
 }
