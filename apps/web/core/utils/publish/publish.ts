@@ -73,11 +73,13 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   );
 
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    const grc20Values = set.map(convertToGrc20Value);
-    const grc20Unset = deleted.map(value => ({
-      property: value.property.id,
-      language: 'all' as const,
-    }));
+    const grc20Values = set.map(convertToGrc20Value).filter((v): v is PropertyValueParam => v !== null);
+    const grc20Unset = deleted
+      .filter(value => value.property.dataType !== 'RELATION')
+      .map(value => ({
+        property: value.property.id,
+        language: 'all' as const,
+      }));
 
     if (grc20Values.length > 0 || grc20Unset.length > 0) {
       const { ops: updateOps } = Graph.updateEntity({
@@ -92,12 +94,17 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
   return ops;
 }
 
-function convertToGrc20Value(value: Value): PropertyValueParam {
+function convertToGrc20Value(value: Value): PropertyValueParam | null {
   const { dataType } = value.property;
   const val = value.value;
   const property = value.property.id;
 
   switch (dataType) {
+    case 'RELATION':
+      // Relations are handled separately via Graph.createRelation/deleteRelation.
+      // They can end up in the values array from the local store, so skip them.
+      console.log('[PUBLISH] Skipping RELATION value in convertToGrc20Value', { value, property });
+      return null;
     case 'TEXT':
       return {
         property,
