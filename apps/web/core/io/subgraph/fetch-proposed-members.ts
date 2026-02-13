@@ -1,91 +1,60 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 
-import { graphql } from './graphql';
-
-const getFetchProposedMembersQuery = (spaceId: string) => `query {
-  proposalsConnection(
-    filter: {
-      spaceId: { is: "${spaceId}" }
-      executedAt: { isNull: true }
-      proposalActionsConnection: {
-        some: { actionType: { in: [ADD_MEMBER] } }
-      }
-    }
-  ) {
-    nodes {
-      proposalActions {
-        targetId
-      }
-    }
-  }
-}`;
+import { ApiProposalListResponseSchema, encodePathSegment, restFetch, validateActionTypes } from '../rest';
+import { AbortError } from './errors';
 
 export interface FetchProposedMembersOptions {
   id: string;
 }
 
-type NetworkResult = {
-  proposalsConnection: {
-    nodes: Array<{
-      proposalActions: Array<{ targetId: string | null }>;
-    }>;
-  };
-};
-
+/**
+ * Fetch the space IDs of members with active (non-rejected, non-expired) ADD_MEMBER proposals.
+ *
+ * Uses the REST API which correctly computes proposal status, handling both
+ * time-based expiry and fast-path rejections (where a proposal can be rejected
+ * before the voting period ends).
+ */
 export async function fetchProposedMembers(options: FetchProposedMembersOptions): Promise<string[]> {
-  const queryId = uuid();
-  const endpoint = Environment.getConfig().api;
+  const config = Environment.getConfig();
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint,
-    query: getFetchProposedMembersQuery(options.id),
-  });
+  const params = new URLSearchParams();
+  params.set('limit', '100');
+  params.set('status', 'PROPOSED,EXECUTABLE');
+  params.set('actionTypes', validateActionTypes(['AddMember']).join(','));
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const path = `/proposals/space/${encodePathSegment(options.id)}/status?${params.toString()}`;
 
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
+      })
+    )
+  );
 
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposedMembers. queryId: ${queryId} spaceId: ${
-              options.id
-            } endpoint: ${endpoint}
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-            queryString: ${getFetchProposedMembersQuery(options.id)}
-            `,
-            error.message
-          );
-
-          return { proposalsConnection: { nodes: [] } };
-
-        default:
-          console.error(
-            `${error._tag}: Unable to fetch proposed members, queryId: ${queryId} spaceId: ${options.id} endpoint: ${endpoint}`
-          );
-
-          return { proposalsConnection: { nodes: [] } };
-      }
+    if (error instanceof AbortError) {
+      throw error;
     }
 
-    return resultOrError.right;
-  });
+    console.error(`Failed to fetch proposed members for space ${options.id}:`, error);
+    return [];
+  }
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
 
-  const targetIds = result.proposalsConnection.nodes.flatMap(node =>
-    node.proposalActions.map(action => action.targetId).filter((id): id is string => id != null)
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposed members for space ${options.id}:`, decoded.left);
+    return [];
+  }
+
+  const targetIds = decoded.right.proposals.flatMap(proposal =>
+    proposal.actions.filter(a => a.actionType === 'ADD_MEMBER').map(a => a.targetId).filter((id): id is string => id != null)
   );
 
   return targetIds;
