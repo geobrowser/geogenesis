@@ -158,6 +158,70 @@ describe('GeoDate', () => {
     expect(GeoDate.isDateInterval(undefined)).toBe(false);
   });
 
+  describe('toFullISOString', () => {
+    it('returns a full ISO string unchanged', () => {
+      expect(GeoDate.toFullISOString('2024-01-15T14:30:00.000Z')).toBe('2024-01-15T14:30:00.000Z');
+    });
+
+    it('converts date-only (YYYY-MM-DD) to full ISO string', () => {
+      expect(GeoDate.toFullISOString('2024-01-15')).toBe('2024-01-15T00:00:00.000Z');
+    });
+
+    it('converts time-only (HH:MM:SSZ) to full ISO string with epoch date', () => {
+      expect(GeoDate.toFullISOString('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
+    });
+
+    it('converts time-only without Z suffix', () => {
+      expect(GeoDate.toFullISOString('09:15:30')).toBe('1970-01-01T09:15:30');
+    });
+
+    it('returns empty string for empty input', () => {
+      expect(GeoDate.toFullISOString('')).toBe('');
+    });
+  });
+
+  describe('fromISOStringUTC with RFC 3339 inputs', () => {
+    it('parses a date-only string', () => {
+      expect(GeoDate.fromISOStringUTC('2024-07-04')).toEqual({
+        day: '4',
+        month: '7',
+        year: '2024',
+        hour: '12',
+        minute: '0',
+        meridiem: 'am',
+      });
+    });
+
+    it('parses a time-only string', () => {
+      expect(GeoDate.fromISOStringUTC('14:30:00Z')).toEqual({
+        day: '1',
+        month: '1',
+        year: '1970',
+        hour: '2',
+        minute: '30',
+        meridiem: 'pm',
+      });
+    });
+  });
+
+  describe('format with RFC 3339 inputs', () => {
+    it('formats a date-only string', () => {
+      const result = GeoDate.format('2024-07-04', 'yyyy-MM-dd');
+      expect(result).toBe('2024-07-04');
+    });
+
+    it('formats a time-only string', () => {
+      const result = GeoDate.format('14:30:00Z', 'HH:mm');
+      expect(result).toBe('14:30');
+    });
+
+    it('formats a date-only interval', () => {
+      const interval = '2024-01-15/2024-01-20';
+      const result = GeoDate.format(interval, 'yyyy-MM-dd');
+      expect(result).toBe('2024-01-15 — 2024-01-20');
+    });
+  });
+
   describe('format', () => {
     it('formats a single date with default format', () => {
       const date = '2023-01-15T12:30:00.000Z';
