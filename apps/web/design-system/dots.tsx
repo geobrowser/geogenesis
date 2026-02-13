@@ -1,18 +1,18 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, stagger } from 'framer-motion';
 
 import * as React from 'react';
 
 const loadingContainerVariants = {
   start: {
     transition: {
-      staggerChildren: 0.2,
+      delayChildren: stagger(0.2),
     },
   },
   end: {
     transition: {
-      staggerChildren: 0.2,
+      delayChildren: stagger(0.2),
     },
   },
 };
