@@ -61,7 +61,10 @@ export const VENUE_PROPERTY = 'f28bbb6bf4e8465d9de7a09085e224b9';
 export const ADDRESS_PROPERTY = '72ba2a0f729d4847925df3b09d46bb66';
 export const MAPBOX_PROPERTY = 'f9d8ff4e52f14e73b8f2bbb31dce5465';
 export const UNIT_PROPERTY = '11b0658120d341eab5702ef4ee0a4ffd';
-export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
+export const DEFAULT_DATE_FORMAT = 'MMMM d, yyyy';
+export const DEFAULT_DATETIME_FORMAT = 'h:mmaaa, MMMM d, yyyy';
+export const DEFAULT_TIME_FORMAT = 'h:mmaaa';
+export const DEFAULT_FLOAT_FORMAT = '.0000';
 export const DEFAULT_NUMBER_FORMAT = ',?';
 export const DEFAULT_URL_TEMPLATE = '';
 
@@ -88,22 +91,75 @@ export const SUGGESTED_NUMBER_FORMATS = [
   },
 ];
 
-export const SUGGESTED_TIME_FORMATS = [
+export const SUGGESTED_FLOAT_FORMATS = [
   {
-    format: 'h:mmaaa, MMMM d, yyyy',
-    label: '4:45pm, July 4,2024',
+    format: DEFAULT_FLOAT_FORMAT,
+    label: '1,000.0000',
+  },
+  {
+    format: '.000',
+    label: '1.000,0000',
+  },
+  {
+    format: ',000',
+    label: '1,000.0000',
+  },
+];
+
+export const SUGGESTED_DATE_FORMATS = [
+  {
+    format: DEFAULT_DATE_FORMAT,
+    label: 'July 4, 2024',
   },
   {
     format: 'MM/dd/yy',
     label: '07/04/24',
   },
   {
-    format: 'h:mmaa',
+    format: 'yyyy-MM-dd',
+    label: '2024-07-04',
+  },
+  {
+    format: 'dd/MM/yyyy',
+    label: '04/07/2024',
+  },
+];
+
+export const SUGGESTED_DATETIME_FORMATS = [
+  {
+    format: DEFAULT_DATETIME_FORMAT,
+    label: '4:45pm, July 4, 2024',
+  },
+  {
+    format: 'MM/dd/yy h:mmaaa',
+    label: '07/04/24 4:45pm',
+  },
+  {
+    format: 'yyyy-MM-dd HH:mm',
+    label: '2024-07-04 16:45',
+  },
+  {
+    format: DEFAULT_DATE_FORMAT,
+    label: 'July 4, 2024',
+  },
+];
+
+export const SUGGESTED_TIME_FORMATS = [
+  {
+    format: DEFAULT_TIME_FORMAT,
     label: '4:45pm',
   },
   {
-    format: DEFAULT_TIME_FORMAT,
-    label: 'July 4, 2024',
+    format: 'HH:mm',
+    label: '16:45',
+  },
+  {
+    format: 'HH:mm:ss',
+    label: '16:45:30',
+  },
+  {
+    format: 'h:mm:ssaaa',
+    label: '4:45:30pm',
   },
 ];
 
