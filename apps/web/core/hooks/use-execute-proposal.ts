@@ -106,7 +106,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     return result.right;
   }, [personalSpaceId, isRegistered, spaceId, proposalId, tx]);
 
-  const { mutate, status, error } = useMutation({
+  const { mutate, status, error, reset } = useMutation({
     mutationFn: handleExecute,
   });
 
@@ -114,5 +114,6 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     execute: mutate,
     status,
     error,
+    reset,
   };
 }
