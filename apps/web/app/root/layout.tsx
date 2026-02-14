@@ -8,6 +8,8 @@ import { DEFAULT_OPENGRAPH_IMAGE, ROOT_SPACE } from '~/core/constants';
 
 import Layout from '../space/[id]/layout';
 
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: 'Geo Genesis',
   description: "Browse and organize the world's public knowledge and information in a decentralized way.",

@@ -11,3 +11,4 @@ replay.log
 .output
 .nitro
 tmp
+.worktrees/

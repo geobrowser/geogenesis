@@ -26,6 +26,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from './cached-fetch-space';
 
+export const revalidate = 60;
 type LayoutProps = {
   params: Promise<{ id: string }>;
   children: React.ReactNode;

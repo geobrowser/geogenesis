@@ -22,6 +22,7 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
 
+export const revalidate = 60;
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
   children: React.ReactNode;

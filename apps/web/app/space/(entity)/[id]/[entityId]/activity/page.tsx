@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { ActivityPage } from '~/partials/activity/activity-page';
 
+export const revalidate = 60;
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
   searchParams: Promise<{
