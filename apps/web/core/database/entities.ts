@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { useMemo } from 'react';
 
+import { DATA_TYPE_PROPERTY } from '../constants';
 import { getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
@@ -196,8 +197,35 @@ export async function getSchemaFromTypeIdsAndRelations(
   relations: Relation[]
 ): Promise<Property[]> {
   const typeSchema = await getSchemaFromTypeIds(types);
+  let dataTypeSchema: Property[] = [];
 
-  if (relations.length === 0) return typeSchema;
+  const isPropertyEntity = types.some(t => t.id === SystemIds.PROPERTY);
+  if (isPropertyEntity) {
+    const dataTypeRelations = relations.filter(r => r.type.id === DATA_TYPE_PROPERTY);
+    if (dataTypeRelations.length > 0) {
+      const dataTypeIds = [...new Set(dataTypeRelations.map(r => r.toEntity.id))];
+
+      const dataTypeEntities = await E.findMany({
+        store: geoStore,
+        cache: queryClient,
+        where: { id: { in: dataTypeIds } },
+        first: 100,
+        skip: 0,
+      });
+
+      const dataTypePropertyIds = dataTypeEntities
+        .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+        .map(r => r.toEntity.id);
+
+      if (dataTypePropertyIds.length > 0) {
+        dataTypeSchema = await Effect.runPromise(getProperties(dataTypePropertyIds));
+      }
+    }
+  }
+
+  const baseSchema = dedupeWith([...typeSchema, ...dataTypeSchema], (a, b) => a.id === b.id);
+
+  if (relations.length === 0) return baseSchema;
 
   // Batch-fetch property definitions for all unique relation types
   const relationTypeIds = [...new Set(relations.map(r => r.type.id))];
@@ -208,7 +236,7 @@ export async function getSchemaFromTypeIdsAndRelations(
     relationProperties.filter(p => p.isType).map(p => p.id)
   );
 
-  if (isTypePropertyIds.size === 0) return typeSchema;
+  if (isTypePropertyIds.size === 0) return baseSchema;
 
   // Collect target entity IDs from matching IS_TYPE relations,
   // preserving the relation's spaceId for per-target filtering
@@ -234,9 +262,9 @@ export async function getSchemaFromTypeIdsAndRelations(
     })
     .map(r => r.toEntity.id);
 
-  if (additionalPropertyIds.length === 0) return typeSchema;
+  if (additionalPropertyIds.length === 0) return baseSchema;
 
   const additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
 
-  return dedupeWith([...typeSchema, ...additionalProperties], (a, b) => a.id === b.id);
+  return dedupeWith([...baseSchema, ...additionalProperties], (a, b) => a.id === b.id);
 }
