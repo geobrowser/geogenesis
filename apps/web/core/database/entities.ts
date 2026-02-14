@@ -98,6 +98,7 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
     id: SystemIds.TYPES_PROPERTY,
     name: 'Types',
     dataType: 'RELATION',
+    relationValueTypes: [{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }],
   },
   {
     id: SystemIds.COVER_PROPERTY,
