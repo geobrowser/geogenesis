@@ -150,8 +150,7 @@ export function TableBlockGalleryItem({
                 {source.type !== 'COLLECTION' ? (
                   <EditModeNameField
                     name={name}
-                    spaceId={currentSpaceId}
-                    entityId={rowEntityId}
+                    href={href}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -287,17 +286,14 @@ export function TableBlockGalleryItem({
 
 function EditModeNameField({
   name,
-  spaceId,
-  entityId,
+  href,
   onChange,
 }: {
   name: string | null;
-  spaceId: string;
-  entityId: string;
+  href: string;
   onChange: (value: string) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
-  const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
     <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
