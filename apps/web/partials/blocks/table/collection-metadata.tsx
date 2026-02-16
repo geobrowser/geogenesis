@@ -156,7 +156,7 @@ export const CollectionMetadata = ({
                       closeTimeoutRef.current = setTimeout(() => {
                         setIsPopoverOpen(false);
                         setIsHovered(false);
-                      }, 500);
+                      }, 300);
                     }}
                   >
                     {isEditing && (
@@ -205,12 +205,23 @@ export const CollectionMetadata = ({
             </div>
           )}
           {isHovered && isEditing && (
-            <PrefetchLink
-              href={`/space/${spaceId ?? currentSpaceId}/${entityId}`}
-              className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+            <span
+              className="pointer-events-auto ml-1 inline-flex items-center"
+              onMouseEnter={() => {
+                setIsPopoverOpen(false);
+                if (closeTimeoutRef.current) {
+                  clearTimeout(closeTimeoutRef.current);
+                  closeTimeoutRef.current = null;
+                }
+              }}
             >
-              <RightArrowLongChip />
-            </PrefetchLink>
+              <PrefetchLink
+                href={`/space/${spaceId ?? currentSpaceId}/${entityId}`}
+                className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              >
+                <RightArrowLongChip />
+              </PrefetchLink>
+            </span>
           )}
         </div>
       </div>
