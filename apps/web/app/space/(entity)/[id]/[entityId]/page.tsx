@@ -21,7 +21,7 @@ export default async function EntityTemplateStrategy(props: Props) {
   const result = await cachedFetchEntityPage(params.entityId, params.id);
 
   if (result?.entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
-    return <ProfileEntityServerContainer params={params} />;
+    return <ProfileEntityServerContainer params={params} searchParams={searchParams} />;
   }
 
   return <DefaultEntityPage params={params} searchParams={searchParams} />;

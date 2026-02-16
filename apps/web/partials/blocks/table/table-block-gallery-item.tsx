@@ -18,6 +18,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -145,9 +146,10 @@ export function TableBlockGalleryItem({
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
-                  <PageStringField
-                    placeholder="Entity name..."
-                    value={name ?? ''}
+                  <EditModeNameField
+                    name={name}
+                    entityId={rowEntityId}
+                    spaceId={currentSpaceId}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -280,3 +282,4 @@ export function TableBlockGalleryItem({
     </Link>
   );
 }
+
