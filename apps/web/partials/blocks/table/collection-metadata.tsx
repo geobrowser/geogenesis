@@ -217,6 +217,8 @@ export const CollectionMetadata = ({
             >
               <PrefetchLink
                 href={`/space/${spaceId ?? currentSpaceId}/${entityId}`}
+                entityId={entityId}
+                spaceId={spaceId ?? currentSpaceId}
                 className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
               >
                 <RightArrowLongChip />

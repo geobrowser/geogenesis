@@ -144,6 +144,8 @@ export function TableBlockListItem({
                   <EditModeNameField
                     name={name}
                     href={href}
+                    entityId={rowEntityId}
+                    spaceId={currentSpaceId}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -292,10 +294,14 @@ export function TableBlockListItem({
 function EditModeNameField({
   name,
   href,
+  entityId,
+  spaceId,
   onChange,
 }: {
   name: string | null;
   href: string;
+  entityId: string;
+  spaceId: string;
   onChange: (value: string) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -312,6 +318,8 @@ function EditModeNameField({
           {isHovered && (
             <Link
               href={href}
+              entityId={entityId}
+              spaceId={spaceId}
               className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
             >
               <RightArrowLongChip />
