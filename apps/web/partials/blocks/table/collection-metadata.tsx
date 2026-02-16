@@ -2,11 +2,9 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
-import { useRouter } from 'next/navigation';
 
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import type { MouseEvent } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
@@ -14,13 +12,12 @@ import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 
-import { SquareButton } from '~/design-system/button';
 import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
@@ -204,24 +201,18 @@ export const CollectionMetadata = ({
               </Popover.Root>
             </div>
           )}
-          <div className="pointer-events-auto absolute bottom-0 right-0 top-0 flex items-center">
-            {isHovered && <NavigateButton spaceId={spaceId} entityId={entityId} />}
-          </div>
+          {isHovered && isEditing && (
+            <PrefetchLink
+              href={`/space/${spaceId ?? currentSpaceId}/${entityId}`}
+              className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+            >
+              <RightArrowLongChip />
+            </PrefetchLink>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const NavigateButton = ({ spaceId, entityId }: { spaceId?: string; entityId: string }) => {
-  const router = useRouter();
 
-  if (!spaceId) return null;
-
-  const handleClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    router.push(`/space/${spaceId}/${entityId}`);
-  };
-
-  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
-};
