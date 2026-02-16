@@ -109,6 +109,12 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
    *
    * We need to check that spaces has data. We could be navigating
    * to an entity with no data like a relation entity page.
+   *
+   * When navigating from edit mode, ?edit=true is passed which sets
+   * preventRedirect. This preserves the user's editing context by
+   * keeping them in the current space. This is safe because entity
+   * data is fetched by entityId (spaceId is contextual, not an access
+   * boundary) and write operations are gated by on-chain governance.
    */
   if (entity && deterministicSpaceId && !spaces.includes(spaceId) && !preventRedirect) {
     console.log(`Redirecting from invalid space ${spaceId} to valid space ${deterministicSpaceId}`);

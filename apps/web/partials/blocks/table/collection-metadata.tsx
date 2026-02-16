@@ -220,6 +220,7 @@ export const CollectionMetadata = ({
                 href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
                 entityId={entityId}
                 spaceId={spaceId ?? currentSpaceId}
+                aria-label="Navigate to entity"
                 className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
               >
                 <RightArrowLongChip />

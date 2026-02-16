@@ -2,8 +2,6 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { useState } from 'react';
-
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
@@ -11,12 +9,12 @@ import { Cell, Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -76,6 +74,7 @@ export function TableBlockBulletedListItem({
                   name={name}
                   entityId={rowEntityId}
                   spaceId={currentSpaceId}
+                  placeholder="Add name..."
                   onChange={value => {
                     onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                   }}
@@ -138,40 +137,3 @@ export function TableBlockBulletedListItem({
   );
 }
 
-function EditModeNameField({
-  name,
-  entityId,
-  spaceId,
-  onChange,
-}: {
-  name: string | null;
-  entityId: string;
-  spaceId: string;
-  onChange: (value: string) => void;
-}) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-      <div className="absolute -inset-2 z-0" />
-      <div className="relative z-10">
-        <div className="relative z-20 w-full">
-          <PageStringField placeholder="Add name..." value={name ?? ''} onChange={onChange} />
-        </div>
-        <div className="pointer-events-none absolute inset-0 z-30">
-          <span className="inline text-body opacity-0">{name || 'Add name...'}</span>
-          {isHovered && (
-            <Link
-              href={NavUtils.toEntity(spaceId, entityId, true)}
-              entityId={entityId}
-              spaceId={spaceId}
-              className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
-            >
-              <RightArrowLongChip />
-            </Link>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
