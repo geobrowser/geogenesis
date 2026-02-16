@@ -3,6 +3,8 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import NextImage from 'next/image';
 
+import { useState } from 'react';
+
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -13,6 +15,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -138,9 +141,10 @@ export function TableBlockListItem({
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
-                  <PageStringField
-                    placeholder="Entity name..."
-                    value={name ?? ''}
+                  <EditModeNameField
+                    name={name}
+                    spaceId={currentSpaceId}
+                    entityId={rowEntityId}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -283,5 +287,42 @@ export function TableBlockListItem({
         })}
       </div>
     </Link>
+  );
+}
+
+function EditModeNameField({
+  name,
+  spaceId,
+  entityId,
+  onChange,
+}: {
+  name: string | null;
+  spaceId: string;
+  entityId: string;
+  onChange: (value: string) => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const href = NavUtils.toEntity(spaceId, entityId);
+
+  return (
+    <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      <div className="absolute -inset-2 z-0" />
+      <div className="relative z-10">
+        <div className="relative z-20 w-full">
+          <PageStringField placeholder="Entity name..." value={name ?? ''} onChange={onChange} />
+        </div>
+        <div className="pointer-events-none absolute inset-0 z-30">
+          <span className="inline text-body opacity-0">{name || 'Entity name...'}</span>
+          {isHovered && (
+            <Link
+              href={href}
+              className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+            >
+              <RightArrowLongChip />
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
