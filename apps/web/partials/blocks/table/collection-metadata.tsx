@@ -99,7 +99,9 @@ export const CollectionMetadata = ({
         setIsHovered(true);
       }}
       onMouseLeave={() => {
-        setIsHovered(false);
+        if (!isPopoverOpen) {
+          setIsHovered(false);
+        }
       }}
     >
       <div className="absolute -inset-2 z-0" />
@@ -153,6 +155,7 @@ export const CollectionMetadata = ({
                     onMouseLeave={() => {
                       closeTimeoutRef.current = setTimeout(() => {
                         setIsPopoverOpen(false);
+                        setIsHovered(false);
                       }, 500);
                     }}
                   >
