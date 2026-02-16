@@ -150,7 +150,6 @@ export function TableBlockGalleryItem({
                 {source.type !== 'COLLECTION' ? (
                   <EditModeNameField
                     name={name}
-                    href={href}
                     entityId={rowEntityId}
                     spaceId={currentSpaceId}
                     onChange={value => {
@@ -288,13 +287,11 @@ export function TableBlockGalleryItem({
 
 function EditModeNameField({
   name,
-  href,
   entityId,
   spaceId,
   onChange,
 }: {
   name: string | null;
-  href: string;
   entityId: string;
   spaceId: string;
   onChange: (value: string) => void;
@@ -312,7 +309,7 @@ function EditModeNameField({
           <span className="inline text-body opacity-0">{name || 'Entity name...'}</span>
           {isHovered && (
             <Link
-              href={`${href}?edit=true`}
+              href={NavUtils.toEntity(spaceId, entityId, true)}
               entityId={entityId}
               spaceId={spaceId}
               className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"

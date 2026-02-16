@@ -293,7 +293,7 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation();
-    router.push(NavUtils.toEntity(spaceId, entityId));
+    router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
   return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;

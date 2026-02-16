@@ -11,6 +11,7 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
+import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
@@ -216,7 +217,7 @@ export const CollectionMetadata = ({
               }}
             >
               <PrefetchLink
-                href={`/space/${spaceId ?? currentSpaceId}/${entityId}?edit=true`}
+                href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
                 entityId={entityId}
                 spaceId={spaceId ?? currentSpaceId}
                 className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
