@@ -1,14 +1,13 @@
 import { verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import cx from 'classnames';
 
 import { OrderDots } from '~/design-system/icons/order-dots';
 
+import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
-import { TableBlockListItem } from './table-block-list-item';
 
 const renderItem = ({ row, isEditing, spaceId, onChangeEntry, onLinkEntry, properties, source, isPlaceholder, autoFocus }: RenderItemProps) => (
-  <TableBlockListItem
+  <TableBlockBulletedListItem
     isEditing={isEditing}
     columns={row.columns}
     currentSpaceId={spaceId}
@@ -32,10 +31,10 @@ const renderDragOverlay = (props: RenderItemProps) => (
   </div>
 );
 
-const listConfig: DndItemsConfig = {
+const bulletedListConfig: DndItemsConfig = {
   sortingStrategy: verticalListSortingStrategy,
-  outerClassName: (isEditing: boolean) => cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4'),
-  itemsClassName: 'flex flex-col gap-4',
+  outerClassName: 'flex w-full flex-col',
+  itemsClassName: 'flex flex-col',
   sortableItemClassName: 'relative',
   sortableItemInnerClassName: 'flex items-center',
   positionBoxClassName: '-left-[152px] h-full items-center',
@@ -43,10 +42,10 @@ const listConfig: DndItemsConfig = {
   renderDragOverlay,
 };
 
-type TableBlockListItemsDndProps = Omit<TableBlockDndItemsProps, 'config'>;
+type TableBlockBulletedListItemsDndProps = Omit<TableBlockDndItemsProps, 'config'>;
 
-const TableBlockListItemsDnd = (props: TableBlockListItemsDndProps) => (
-  <TableBlockDndItems {...props} config={listConfig} />
+const TableBlockBulletedListItemsDnd = (props: TableBlockBulletedListItemsDndProps) => (
+  <TableBlockDndItems {...props} config={bulletedListConfig} />
 );
 
-export default TableBlockListItemsDnd;
+export default TableBlockBulletedListItemsDnd;

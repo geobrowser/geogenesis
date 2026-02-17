@@ -48,7 +48,10 @@ export const PositionBox = ({
   return (
     <div className={`absolute flex w-[152px] justify-end pr-3 ${className ? className : ''}`}>
       {openedDialog && (
-        <div className="mr-3 flex h-[110px] w-full flex-col gap-1 rounded-md border border-grey-02 bg-white p-1">
+        <div
+          className="mr-3 flex h-[110px] w-full flex-col gap-1 rounded-md border border-grey-02 bg-white p-1"
+          onPointerDown={e => e.stopPropagation()}
+        >
           <input
             type="number"
             min="1"
