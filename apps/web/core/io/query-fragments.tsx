@@ -75,13 +75,22 @@ export const entityFragment = graphql(/* GraphQL */ `
 export const entitiesQuery = graphql(/* GraphQL */ `
   query AllEntities(
     $spaceId: UUID
+    $spaceIds: UUIDFilter
     $typeIds: UUIDFilter
     $limit: Int
     $offset: Int
     $filter: EntityFilter
     $orderBy: [EntitiesOrderBy!]
   ) {
-    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy, spaceId: $spaceId, typeIds: $typeIds) {
+    entities(
+      first: $limit
+      offset: $offset
+      filter: $filter
+      orderBy: $orderBy
+      spaceId: $spaceId
+      spaceIds: $spaceIds
+      typeIds: $typeIds
+    ) {
       id
       name
       description

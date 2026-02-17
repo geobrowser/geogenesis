@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -26,22 +26,23 @@ export const DataBlockSourceMenu = ({
   onBack = () => null,
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
-  const { spaces } = useSpaces();
   const { entityId } = useDataBlock();
   const { setSource, source } = useSource();
+  const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
 
   return (
     <>
       {view === 'initial' && (
         <>
           <div className="border-b border-grey-02">
-            <button onClick={onBack} className="flex w-full items-center gap-1 p-2">
+            <button type="button" onClick={onBack} className="flex w-full items-center gap-1 p-2">
               <ArrowLeft color="grey-04" />
               <span className="text-smallButton text-grey-04">Back</span>
             </button>
           </div>
           <MenuItem active={source.type === 'COLLECTION'}>
             <button
+              type="button"
               onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
               className="flex w-full items-center justify-between gap-2"
             >
@@ -51,14 +52,14 @@ export const DataBlockSourceMenu = ({
           </MenuItem>
 
           <MenuItem active={source.type === 'SPACES'}>
-            <button onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
+            <button type="button" onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
               <div>
                 <div className="text-button text-text">Spaces</div>
                 {source.type === 'SPACES' && source.value.length > 0 && (
                   <div className="mt-1.5 flex items-center gap-1">
                     <div className="inline-flex">
                       {source.value.map(spaceId => {
-                        const selectedSpace = spaces.find(space => space.id === spaceId);
+                        const selectedSpace = spacesById.get(spaceId);
                         if (!selectedSpace) return null;
 
                         return (
@@ -69,7 +70,7 @@ export const DataBlockSourceMenu = ({
                                 className="h-[12px] w-[12px] rounded-sm"
                               />
                             ) : (
-                              <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
+                              <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="h-[12px] w-[12px] rounded-sm" />
                             )}
                           </div>
                         );
@@ -84,6 +85,7 @@ export const DataBlockSourceMenu = ({
           </MenuItem>
           <MenuItem active={source.type === 'GEO'}>
             <button
+              type="button"
               onClick={() => {
                 setSource({
                   type: 'GEO',
@@ -125,7 +127,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   return (
     <>
       <div className="border-b border-grey-02">
-        <button onClick={onBack} className="flex w-full items-center gap-1 p-2">
+        <button type="button" onClick={onBack} className="flex w-full items-center gap-1 p-2">
           <ArrowLeft color="grey-04" />
           <span className="text-smallButton text-grey-04">Back</span>
         </button>
@@ -144,7 +146,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
                   {space.image ? (
                     <NativeGeoImage value={space.image} className="h-[12px] w-[12px] rounded-sm" />
                   ) : (
-                    <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
+                    <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="h-[12px] w-[12px] rounded-sm" />
                   )}
                 </div>
                 <div className="flex-grow truncate text-button text-text">{space.name}</div>
