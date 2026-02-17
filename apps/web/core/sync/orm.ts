@@ -5,7 +5,15 @@ import { dedupeWith } from 'effect/Array';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
-import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
+import {
+  getAllEntities,
+  getBatchEntities,
+  getEntity,
+  getEntityNames,
+  getRelation,
+  getResults,
+  getSpaces,
+} from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult } from '../types';
 import { Entities } from '../utils/entity';
@@ -260,22 +268,36 @@ export class E {
     const entities = maybeEntities.filter(e => e !== null);
 
     const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
+    const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
-    const spaces = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-      queryFn: () =>
-        Effect.runPromise(
-          getSpaces({
-            spaceIds,
+    const [spaces, typeNames] = await Promise.all([
+      cache.fetchQuery({
+        queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
+        queryFn: () =>
+          Effect.runPromise(
+            getSpaces({
+              spaceIds,
+            })
+          ),
+      }),
+      typeIds.length > 0
+        ? cache.fetchQuery({
+            queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
+            queryFn: () => Effect.runPromise(getEntityNames(typeIds)),
           })
-        ),
-    });
+        : Promise.resolve([]),
+    ]);
 
     const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
+    const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
     return entities.map(e => {
       return {
         ...e,
+        types: e.types.map(t => ({
+          id: t.id,
+          name: t.name ?? typeNamesById.get(t.id) ?? null,
+        })),
         spaces: e.spaces.map(s => {
           const space = spacesById[s];
 
