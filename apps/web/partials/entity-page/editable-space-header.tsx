@@ -163,6 +163,7 @@ export function EditableSpaceHeading({
                 <CreateNewVersionInSpace
                   entityId={entityId as EntityId}
                   entityName={name ?? ''}
+                  sourceSpaceId={spaceId}
                   setIsCreatingNewVersion={setIsCreatingNewVersion}
                   onDone={() => {
                     setIsContextMenuOpen(false);

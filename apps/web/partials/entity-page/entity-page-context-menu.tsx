@@ -83,6 +83,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
         <CreateNewVersionInSpace
           entityId={entityId as EntityId}
           entityName={entityName}
+          sourceSpaceId={spaceId}
           setIsCreatingNewVersion={setIsCreatingNewVersion}
           onDone={() => {
             setIsMenuOpen(false);
