@@ -189,7 +189,48 @@ export const TableBlockDndItems = ({
   const resolvedOuterClassName =
     typeof config.outerClassName === 'function' ? config.outerClassName(isEditing) : config.outerClassName;
 
-  const content = (
+  const isCollection = source.type === 'COLLECTION';
+
+  const items = (
+    <div className={config.itemsClassName}>
+      {placeholderEntries.map((row, index) => (
+        <React.Fragment key={`${row.entityId}-placeholder-${index}`}>
+          {config.renderItem({
+            ...sharedItemProps,
+            row,
+            isPlaceholder: true,
+            autoFocus: shouldAutoFocusPlaceholder,
+          })}
+        </React.Fragment>
+      ))}
+      {sortableEntries.map((row, index: number) =>
+        isCollection ? (
+          <SortableItem
+            key={`${row.entityId}-${index}`}
+            row={row}
+            isEditing={isEditing}
+            position={index}
+            totalEntries={collectionLength}
+            handleMove={handleMove}
+            pageSize={pageSize}
+            pageNumber={pageNumber}
+            config={config}
+            sharedItemProps={sharedItemProps}
+          />
+        ) : (
+          <React.Fragment key={`${row.entityId}-${index}`}>
+            {config.renderItem({
+              ...sharedItemProps,
+              row,
+              isPlaceholder: false,
+            })}
+          </React.Fragment>
+        )
+      )}
+    </div>
+  );
+
+  const content = isCollection ? (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
@@ -197,32 +238,7 @@ export const TableBlockDndItems = ({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={sortableEntries.map(r => r.entityId)} strategy={config.sortingStrategy}>
-        <div className={config.itemsClassName}>
-          {placeholderEntries.map((row, index) => (
-            <React.Fragment key={`${row.entityId}-placeholder-${index}`}>
-              {config.renderItem({
-                ...sharedItemProps,
-                row,
-                isPlaceholder: true,
-                autoFocus: shouldAutoFocusPlaceholder,
-              })}
-            </React.Fragment>
-          ))}
-          {sortableEntries.map((row, index: number) => (
-            <SortableItem
-              key={`${row.entityId}-${index}`}
-              row={row}
-              isEditing={isEditing}
-              position={index}
-              totalEntries={collectionLength}
-              handleMove={handleMove}
-              pageSize={pageSize}
-              pageNumber={pageNumber}
-              config={config}
-              sharedItemProps={sharedItemProps}
-            />
-          ))}
-        </div>
+        {items}
       </SortableContext>
 
       <DragOverlay>
@@ -235,6 +251,8 @@ export const TableBlockDndItems = ({
           : null}
       </DragOverlay>
     </DndContext>
+  ) : (
+    items
   );
 
   if (resolvedOuterClassName !== undefined) {
