@@ -1,8 +1,12 @@
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { Effect, Either } from 'effect';
+import { Duration, Effect, Either } from 'effect';
+import * as Schedule from 'effect/Schedule';
 import { GraphQLClient } from 'graphql-request';
 
 import { getConfig } from '~/core/environment/environment';
+
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 200;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -35,13 +39,43 @@ class GraphqlRequestError extends Error {
   readonly status?: number;
   readonly response?: any;
   readonly request?: any;
+  readonly isAbort: boolean;
 
-  constructor(message: string, details?: { status?: number; response?: any; request?: any }) {
+  constructor(message: string, details?: { status?: number; response?: any; request?: any; isAbort?: boolean }) {
     super(message);
     this.status = details?.status;
     this.response = details?.response;
     this.request = details?.request;
+    this.isAbort = details?.isAbort ?? false;
   }
+}
+
+function isRetryableGraphqlError(error: GraphqlRequestError): boolean {
+  if (error.isAbort) {
+    return false;
+  }
+
+  if (error.status === undefined) {
+    return true;
+  }
+
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
+function withRetry<T>(operation: Effect.Effect<T, GraphqlRequestError>): Effect.Effect<T, GraphqlRequestError> {
+  return Effect.retry(operation, {
+    times: MAX_RETRIES,
+    while: isRetryableGraphqlError,
+    schedule: Schedule.exponential(Duration.millis(BASE_RETRY_DELAY_MS)).pipe(Schedule.jittered),
+  }).pipe(
+    Effect.tapError(error =>
+      Effect.sync(() => {
+        if (isRetryableGraphqlError(error)) {
+          console.warn('[GRAPHQL] Exhausted retries');
+        }
+      })
+    )
+  );
 }
 
 // Type utilities for extracting types from TypedDocumentNode
@@ -76,6 +110,7 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
 
         if (error instanceof Error) {
           errorDetails.message = error.message;
+          errorDetails.isAbort = error.name === 'AbortError';
 
           // Extract status code and response from graphql-request errors
           if ('response' in error) {
@@ -92,11 +127,11 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
           }
         }
 
-        return new GraphqlRequestError(String(error), errorDetails);
+        return new GraphqlRequestError(error instanceof Error ? error.message : String(error), errorDetails);
       },
     });
 
-    const dataResult = yield* Effect.either(run);
+    const dataResult = yield* Effect.either(withRetry(run));
 
     if (Either.isLeft(dataResult)) {
       const error = dataResult.left;
