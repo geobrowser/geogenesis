@@ -18,9 +18,10 @@ import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
   params: { id: string; entityId: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
-export async function ProfileEntityServerContainer({ params }: Props) {
+export async function ProfileEntityServerContainer({ params, searchParams }: Props) {
   const spaceId = params.id;
   const entityId = params.entityId;
 
@@ -52,15 +53,23 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   const spaces = person.spaces ?? [];
   const deterministicSpaceId = Spaces.getDeterministicSpaceId(spaces, spaceId) ?? profile?.homeSpaceId ?? null;
+  const preventRedirect = searchParams?.edit === 'true';
 
-  if (deterministicSpaceId && params.id !== deterministicSpaceId) {
+  /**
+   * When navigating from edit mode, ?edit=true is passed which sets
+   * preventRedirect. This preserves the user's editing context by
+   * keeping them in the current space. This is safe because entity
+   * data is fetched by entityId (spaceId is contextual, not an access
+   * boundary) and write operations are gated by on-chain governance.
+   */
+  if (deterministicSpaceId && params.id !== deterministicSpaceId && !preventRedirect) {
     console.log(
       `Redirecting from incorrect space ${params.id} to correct space ${deterministicSpaceId} for profile ${entityId}`
     );
     return redirect(NavUtils.toEntity(deterministicSpaceId, entityId));
   }
 
-  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && deterministicSpaceId) {
+  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && !preventRedirect && deterministicSpaceId) {
     console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
     return redirect(NavUtils.toSpace(deterministicSpaceId));
   }

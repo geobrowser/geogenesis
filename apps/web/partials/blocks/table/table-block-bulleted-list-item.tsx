@@ -14,6 +14,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -69,12 +70,14 @@ export function TableBlockBulletedListItem({
           ) : (
             <div>
               {source.type !== 'COLLECTION' ? (
-                <PageStringField
+                <EditModeNameField
+                  name={name}
+                  entityId={rowEntityId}
+                  spaceId={currentSpaceId}
                   placeholder="Add name..."
                   onChange={value => {
                     onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                   }}
-                  value={name ?? ''}
                 />
               ) : (
                 <CollectionMetadata
@@ -133,3 +136,4 @@ export function TableBlockBulletedListItem({
     </div>
   );
 }
+
