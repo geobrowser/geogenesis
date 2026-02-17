@@ -540,6 +540,15 @@ export const propertiesBatchQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entityNamesQuery = graphql(/* GraphQL */ `
+  query EntityNames($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      name
+    }
+  }
+`);
+
 export const resultQuery = graphql(/* GraphQL */ `
   query Result($id: UUID!) {
     entity(id: $id) {
