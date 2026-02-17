@@ -99,9 +99,9 @@ export const TableBlockDndItems = ({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active?.id as string);
-    const node = event.active?.node?.current;
-    if (node) {
-      setActiveWidth(node.getBoundingClientRect().width);
+    const initialRect = event.active?.rect?.current?.initial;
+    if (initialRect) {
+      setActiveWidth(initialRect.width);
     }
   };
 
