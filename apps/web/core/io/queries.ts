@@ -47,19 +47,73 @@ type GetAllEntitiesOptions = {
   limit?: number;
   offset?: number;
   spaceId?: string;
+  spaceIds?: UuidFilter;
   typeIds?: UuidFilter;
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
 
+function extractSingleSpaceIdFromFilter(filter?: EntityFilter): string | undefined {
+  if (!filter?.spaceIds || typeof filter.spaceIds !== 'object') return undefined;
+
+  const spaceIds = filter.spaceIds as Record<string, unknown>;
+
+  if (typeof spaceIds.anyEqualTo === 'string') {
+    return spaceIds.anyEqualTo;
+  }
+
+  if (Array.isArray(spaceIds.in) && spaceIds.in.length === 1 && typeof spaceIds.in[0] === 'string') {
+    return spaceIds.in[0];
+  }
+
+  return undefined;
+}
+
+function extractSpaceIdsFromFilter(filter?: EntityFilter): UuidFilter | undefined {
+  if (!filter?.spaceIds || typeof filter.spaceIds !== 'object') return undefined;
+
+  const spaceIds = filter.spaceIds as Record<string, unknown>;
+
+  if (Array.isArray(spaceIds.in) && spaceIds.in.length > 1 && spaceIds.in.every(v => typeof v === 'string')) {
+    return { in: spaceIds.in as string[] } as UuidFilter;
+  }
+
+  if (typeof spaceIds.anyEqualTo === 'string') {
+    return { is: spaceIds.anyEqualTo } as UuidFilter;
+  }
+
+  return undefined;
+}
+
+function removeSpaceIdsFromFilter(filter?: EntityFilter): EntityFilter | undefined {
+  if (!filter?.spaceIds) return filter;
+  const { spaceIds: _spaceIds, ...rest } = filter;
+  return Object.keys(rest).length > 0 ? (rest as EntityFilter) : undefined;
+}
+
 export function getAllEntities(
-  { limit, offset, spaceId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, spaceIds, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds = topLevelSpaceId ? undefined : spaceIds ?? extractedSpaceIds;
+  const normalizedFilter = topLevelSpaceId || topLevelSpaceIds ? removeSpaceIdsFromFilter(filter) : filter;
+
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: { limit, offset, spaceId, typeIds, filter, orderBy },
+    variables: {
+      limit,
+      offset,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeIds,
+      filter: normalizedFilter,
+      orderBy,
+    },
     signal,
   });
 }
