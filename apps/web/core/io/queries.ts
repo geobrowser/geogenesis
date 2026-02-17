@@ -10,6 +10,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
+import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import {
   entitiesBatchQuery,
   entitiesQuery,
@@ -47,19 +48,35 @@ type GetAllEntitiesOptions = {
   limit?: number;
   offset?: number;
   spaceId?: string;
+  spaceIds?: UuidFilter;
   typeIds?: UuidFilter;
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
 
 export function getAllEntities(
-  { limit, offset, spaceId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, spaceIds, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds = topLevelSpaceId ? undefined : spaceIds ?? extractedSpaceIds;
+  const normalizedFilter = topLevelSpaceId || topLevelSpaceIds ? removeSpaceIdsFromFilter(filter) : filter;
+
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: { limit, offset, spaceId, typeIds, filter, orderBy },
+    variables: {
+      limit,
+      offset,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeIds,
+      filter: normalizedFilter,
+      orderBy,
+    },
     signal,
   });
 }
