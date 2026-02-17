@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { ALL_SPACES_IMAGE, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -20,7 +21,8 @@ interface Props {
 }
 
 export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
-  const { spaces } = useSpaces();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
   const params = useSearchParams();
   const selectedSpaceId = params?.get('spaceId');
 

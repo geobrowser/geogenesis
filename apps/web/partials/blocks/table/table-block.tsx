@@ -15,7 +15,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
@@ -258,7 +258,6 @@ export const TableBlock = ({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
-  const { spaces } = useSpaces();
 
   // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
   const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
@@ -286,6 +285,12 @@ export const TableBlock = ({ spaceId }: Props) => {
   } = useDataBlock({ filterState: activeFilters });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
+
+  const filterSpaceIds = React.useMemo(
+    () => [...new Set(activeFilters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
+    [activeFilters]
+  );
+  const { spacesById } = useSpacesByIds(filterSpaceIds);
 
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
@@ -325,16 +330,18 @@ export const TableBlock = ({ spaceId }: Props) => {
   const filtersWithPropertyName = React.useMemo(() => {
     return activeFilters.map(f => {
       if (f.columnId === SystemIds.SPACE_FILTER) {
+        const selectedSpace = spacesById.get(f.value);
+
         return {
           ...f,
           columnName: 'Space',
-          value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
+          value: selectedSpace?.entity?.name ?? f.value,
         };
       }
 
       return f;
     });
-  }, [activeFilters, spaces]);
+  }, [activeFilters, spacesById]);
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
@@ -457,7 +464,7 @@ export const TableBlock = ({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
           {renderPlusButtonAsInline && (
-            <button onClick={onAddPlaceholder}>
+            <button type="button" onClick={onAddPlaceholder}>
               <Create />
             </button>
           )}
@@ -514,25 +521,29 @@ export const TableBlock = ({ spaceId }: Props) => {
             <Spacer height={12} />
             <PageNumberContainer>
               {source.type === 'COLLECTION' ? (
-                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                  return page === PagesPaginationPlaceholder.skip ? (
-                    <Text
-                      key={`ellipsis-${index}`}
-                      color="grey-03"
-                      className="flex justify-center"
-                      variant="metadataMedium"
-                    >
-                      ...
-                    </Text>
-                  ) : (
-                    <PageNumber
-                      key={`page-${page}`}
-                      number={page}
-                      onClick={() => setPage(page - 1)}
-                      isActive={page === pageNumber + 1}
-                    />
-                  );
-                })
+                (() => {
+                  let skipCounter = 0;
+
+                  return getPaginationPages(totalPages, pageNumber + 1).map(page => {
+                    return page === PagesPaginationPlaceholder.skip ? (
+                      <Text
+                        key={`ellipsis-${skipCounter++}`}
+                        color="grey-03"
+                        className="flex justify-center"
+                        variant="metadataMedium"
+                      >
+                        ...
+                      </Text>
+                    ) : (
+                      <PageNumber
+                        key={`page-${page}`}
+                        number={page}
+                        onClick={() => setPage(page - 1)}
+                        isActive={page === pageNumber + 1}
+                      />
+                    );
+                  });
+                })()
               ) : (
                 <>
                   {pageNumber > 1 && (
@@ -576,8 +587,8 @@ export function TableBlockLoadingPlaceholder({
   rows = 10,
   shimmer = true,
 }: TableBlockPlaceholderProps) {
-  const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
-  const PLACEHOLDER_ROWS = new Array(rows).fill(0);
+  const PLACEHOLDER_COLUMNS = Array.from({ length: columns }, (_, i) => `column-${i}`);
+  const PLACEHOLDER_ROWS = Array.from({ length: rows }, (_, i) => `row-${i}`);
 
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
@@ -585,9 +596,9 @@ export function TableBlockLoadingPlaceholder({
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
             <tr>
-              {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+              {PLACEHOLDER_COLUMNS.map(columnKey => (
                 <th
-                  key={index}
+                  key={columnKey}
                   className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
                   style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
                 >
@@ -597,11 +608,11 @@ export function TableBlockLoadingPlaceholder({
             </tr>
           </thead>
           <tbody>
-            {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
-              <tr key={index}>
-                {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+            {PLACEHOLDER_ROWS.map(rowKey => (
+              <tr key={rowKey}>
+                {PLACEHOLDER_COLUMNS.map(columnKey => (
                   <td
-                    key={index}
+                    key={`${rowKey}-${columnKey}`}
                     className={cx(
                       'border border-grey-02 bg-transparent p-[10px] align-top',
                       shimmer && 'animate-pulse'
