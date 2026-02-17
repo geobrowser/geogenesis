@@ -38,6 +38,7 @@ import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
+import { TableBlockBulletedListItemDnd } from './table-block-bulleted-items-dnd';
 import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -45,7 +46,7 @@ import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
-import { TableBlockTable } from './table-block-table';
+import { TableBlockTableDnd } from './table-block-table-dnd';
 
 interface Props {
   spaceId: string;
@@ -343,7 +344,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered);
 
   let EntriesComponent = (
-    <TableBlockTable
+    <TableBlockTableDnd
       source={source}
       space={spaceId}
       properties={properties}
@@ -355,6 +356,8 @@ export const TableBlock = ({ spaceId }: Props) => {
       onLinkEntry={onLinkEntry}
       onAddPlaceholder={onAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      onUpdateRelation={onUpdateRelation}
+      relations={relations ?? []}
     />
   );
 
@@ -381,28 +384,19 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'BULLETED_LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className="flex w-full flex-col">
-        {entries.map((row, index: number) => {
-          const isPlaceholder = Boolean(row.placeholder);
-
-          return (
-            <TableBlockBulletedListItem
-              isEditing={isEditing}
-              key={`${row.entityId}-${index}`}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              rowEntityId={row.entityId}
-              isPlaceholder={isPlaceholder}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-              source={source}
-              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
-            />
-          );
-        })}
-      </div>
+      <TableBlockBulletedListItemDnd
+        isEditing={isEditing}
+        spaceId={spaceId}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        autoFocus={shouldAutoFocusPlaceholder}
+        relations={relations ?? []}
+        onUpdateRelation={onUpdateRelation}
+        pageNumber={pageNumber}
+        entries={entries}
+      />
     );
   }
 
