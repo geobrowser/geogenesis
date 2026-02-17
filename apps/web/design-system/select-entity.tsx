@@ -10,14 +10,12 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useKey } from '~/core/hooks/use-key';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
@@ -702,27 +700,22 @@ type SpaceFilterInputProps = {
 };
 
 const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
-  const [query, onQueryChange] = React.useState('');
-  const debouncedQuery = useDebouncedValue(query, 100);
-  const { spaces } = useSpaces();
+  const { query, setQuery, spaces: results } = useSpacesQuery();
 
-  const namedSpaces = spaces.filter(s => s.entity?.name?.trim());
-  const results = namedSpaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
-
-  const onSelectSpace = (space: Space) => {
-    onQueryChange('');
+  const onSelectSpace = (space: (typeof results)[number]) => {
+    setQuery('');
 
     onSelect({
       id: space.id,
-      name: space.entity?.name ?? null,
+      name: space.name,
     });
   };
 
   return (
     <div className="relative z-100 w-full">
-      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+      <Popover.Root open={!!query} onOpenChange={() => setQuery('')}>
         <Popover.Anchor asChild>
-          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+          <Input value={query} onChange={e => setQuery(e.target.value)} />
         </Popover.Anchor>
         {query && (
           <Popover.Content
@@ -741,12 +734,12 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                       <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                         <div className="flex w-full items-center justify-between leading-[1rem]">
                           <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.entity?.name ?? result.id}
+                            {result.name ?? result.id}
                           </Text>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.entity?.name ?? result.id) && (
-                            <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
+                          {(result.name ?? result.id) && (
+                            <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
                           )}
                           <span style={{ rotate: '270deg' }}>
                             <ChevronDownSmall color="grey-04" />
