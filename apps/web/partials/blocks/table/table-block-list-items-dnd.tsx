@@ -24,7 +24,7 @@ const renderItem = ({ row, isEditing, spaceId, onChangeEntry, onLinkEntry, prope
 );
 
 const renderDragOverlay = (props: RenderItemProps) => (
-  <div className="relative inline-block" style={{ cursor: 'grabbing' }}>
+  <div className="relative" style={{ cursor: 'grabbing' }}>
     <div className="absolute -left-5 flex h-full items-center justify-center">
       <OrderDots color="#B6B6B6" />
     </div>

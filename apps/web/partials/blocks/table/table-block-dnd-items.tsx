@@ -93,11 +93,16 @@ export const TableBlockDndItems = ({
   );
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [activeWidth, setActiveWidth] = React.useState<number | null>(null);
 
   const activeRow = activeId ? sortableEntries.find(r => r?.entityId === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active?.id as string);
+    const node = event.active?.node?.current;
+    if (node) {
+      setActiveWidth(node.getBoundingClientRect().width);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -242,13 +247,15 @@ export const TableBlockDndItems = ({
       </SortableContext>
 
       <DragOverlay>
-        {activeId && activeRow
-          ? config.renderDragOverlay({
+        {activeId && activeRow ? (
+          <div style={{ width: activeWidth ?? undefined }}>
+            {config.renderDragOverlay({
               ...sharedItemProps,
               row: activeRow,
               isPlaceholder: Boolean(activeRow.placeholder),
-            })
-          : null}
+            })}
+          </div>
+        ) : null}
       </DragOverlay>
     </DndContext>
   ) : (
