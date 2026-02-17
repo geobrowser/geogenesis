@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -74,7 +74,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const { space, isLoading } = useSpace(spaceId);
 
   const entity = useEntity({ id: entityId });
-  const { spaces } = useSpaces();
+  const { spaces } = useSpacesByIds(entity?.spaces);
 
   if (isLoading || !space || !space.entity) {
     return null;

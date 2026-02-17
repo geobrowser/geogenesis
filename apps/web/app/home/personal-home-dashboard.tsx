@@ -8,8 +8,9 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Space } from '~/core/io/dto/spaces';
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -184,7 +185,7 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
       </div>
       {media && <div className="-mx-4 -mb-4">{media}</div>}
       <div>
-        <button onClick={handleDismissNotice} className="rounded border p-1">
+        <button type="button" onClick={handleDismissNotice} className="rounded border p-1">
           <Close />
         </button>
       </div>
@@ -271,7 +272,7 @@ const recommendedSpaces: Array<`0x${string}`> = [
 ];
 
 const JoinSpaces = () => {
-  const { spaces } = useSpaces();
+  const { spaces } = useSpacesByIds(recommendedSpaces);
 
   return (
     <div className="flex flex-wrap gap-2 pr-16">
@@ -286,7 +287,7 @@ const JoinSpaces = () => {
   );
 };
 
-const JoinSpaceItem = ({ space }: { space: ReturnType<typeof useSpaces>['spaces'][number] }) => {
+const JoinSpaceItem = ({ space }: { space: Space }) => {
   const imageValue = space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE;
 
   return (
