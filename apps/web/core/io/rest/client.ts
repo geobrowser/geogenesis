@@ -19,10 +19,12 @@ interface RestConfig {
 export class ApiError extends Error {
   readonly _tag = 'ApiError';
   readonly status: number;
+  readonly retryAfterMs?: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfterMs?: number) {
     super(message);
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -40,12 +42,46 @@ function isRetryableRestError(error: RestError): boolean {
   return error instanceof HttpError;
 }
 
+function getHeaderValue(headers: Headers, name: string): string | null {
+  return headers.get(name) ?? headers.get(name.toLowerCase());
+}
+
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (/^\d+$/.test(trimmedValue)) {
+    return Number.parseInt(trimmedValue, 10) * 1_000;
+  }
+
+  const parsedDate = Date.parse(trimmedValue);
+
+  if (Number.isNaN(parsedDate)) {
+    return undefined;
+  }
+
+  return Math.max(0, parsedDate - Date.now());
+}
+
 function withRetry<T>(operation: Effect.Effect<T, RestError>, path: string): Effect.Effect<T, RestError> {
-  return Effect.retry(operation, {
-    times: MAX_RETRIES,
-    while: isRetryableRestError,
-    schedule: Schedule.exponential(Duration.millis(BASE_RETRY_DELAY_MS)).pipe(Schedule.jittered),
-  }).pipe(
+  const retrySchedule = Schedule.exponential(Duration.millis(BASE_RETRY_DELAY_MS)).pipe(
+    Schedule.jittered,
+    Schedule.intersect(Schedule.identity<RestError>()),
+    Schedule.modifyDelay(([_, error], duration) => {
+      if (error instanceof ApiError && error.retryAfterMs !== undefined) {
+        return Duration.millis(error.retryAfterMs);
+      }
+
+      return duration;
+    }),
+    Schedule.whileInput(isRetryableRestError),
+    Schedule.intersect(Schedule.recurs(MAX_RETRIES))
+  );
+
+  return Effect.retry(operation, retrySchedule).pipe(
     Effect.tapError(error =>
       Effect.sync(() => {
         if (isRetryableRestError(error)) {
@@ -83,6 +119,8 @@ export function restFetch<T>({ endpoint, path, method = 'GET', body, signal }: R
     });
 
     if (!response.ok) {
+      const retryAfterMs = parseRetryAfterMs(getHeaderValue(response.headers, 'retry-after'));
+
       // Try to get error message from response
       const errorMessageResult = yield* Effect.either(
         Effect.tryPromise({
@@ -96,7 +134,7 @@ export function restFetch<T>({ endpoint, path, method = 'GET', body, signal }: R
 
       const errorMessage = Either.isRight(errorMessageResult) ? errorMessageResult.right : response.statusText;
 
-      return yield* Effect.fail(new ApiError(errorMessage, response.status));
+      return yield* Effect.fail(new ApiError(errorMessage, response.status, retryAfterMs));
     }
 
     const json = yield* Effect.tryPromise({
