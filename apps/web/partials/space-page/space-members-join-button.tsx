@@ -10,10 +10,7 @@ type SpaceMembersJoinButtonProps = {
   hasRequestedSpaceMembership: boolean;
 };
 
-export function SpaceMembersJoinButton({
-  spaceId,
-  hasRequestedSpaceMembership,
-}: SpaceMembersJoinButtonProps) {
+export function SpaceMembersJoinButton({ spaceId, hasRequestedSpaceMembership }: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
 
   const { shouldShowElement } = useOnboardGuard();

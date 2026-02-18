@@ -17,7 +17,6 @@ export type Proposal = {
   id: string;
   editId: string;
   type: ProposalType;
-  onchainProposalId: string;
   name: string | null;
   createdBy: Profile;
   createdAt: number;
@@ -39,6 +38,7 @@ export function ProposalDto(
 ): Proposal {
   const profile = maybeCreatorProfile ?? {
     id: proposal.createdById,
+    spaceId: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
@@ -62,7 +62,6 @@ export function ProposalDto(
     createdAt: proposal.edit?.createdAt ?? 0,
     createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
-    onchainProposalId: proposal.onchainProposalId,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -71,12 +70,14 @@ export function ProposalDto(
     proposalVotes: {
       totalCount: proposal.proposalVotes.totalCount,
       nodes: proposal.proposalVotes.nodes.map(v => {
-        const maybeProfile = voterProfiles.find(voter => v.accountId === voter.address);
+        // v.accountId is a space ID (bytes16 hex), so match against voter.spaceId
+        const maybeProfile = voterProfiles.find(voter => v.accountId === voter.spaceId);
 
         const voter = maybeProfile
           ? maybeProfile
           : {
               id: v.accountId,
+              spaceId: v.accountId,
               address: v.accountId as `0x${string}`,
               name: null,
               avatarUrl: null,
@@ -102,6 +103,7 @@ export function ProposalWithoutVotersDto(
 ): ProposalWithoutVoters {
   const profile = maybeCreatorProfile ?? {
     id: proposal.createdById,
+    spaceId: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
@@ -125,7 +127,6 @@ export function ProposalWithoutVotersDto(
     createdAt: proposal.edit?.createdAt ?? 0,
     createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
-    onchainProposalId: proposal.onchainProposalId,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,

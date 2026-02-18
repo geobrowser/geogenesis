@@ -1,11 +1,11 @@
 import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
+import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { extractValueString } from '../utils/value';
 import { DataType, Relation, Value } from '../types';
+import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -63,6 +63,7 @@ export interface Mutator {
       toSpaceId?: string;
       skipTypeRelation?: boolean;
     }) => void;
+    setDataType: (propertyId: string, dataType: DataType) => void;
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
@@ -139,6 +140,9 @@ function createMutator(store: GeoStore): Mutator {
         toSpaceId,
         skipTypeRelation = false,
       }) => {
+        // Check existing relations for duplicate prevention
+        const existingRelations = store.getResolvedRelations(entityId);
+
         // Set the name value
         const nameValue: Value = {
           id: ID.createValueId({
@@ -160,83 +164,114 @@ function createMutator(store: GeoStore): Mutator {
           value: name,
         };
 
-        // Set the dataType value
-        const dataTypeValue: Value = {
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
-            spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name,
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: dataType,
-            renderableType: null,
-          },
-          spaceId,
-          value: dataType,
-        };
-
         store.setValue(nameValue);
-        store.setValue(dataTypeValue);
+
+        // Create the data type relation (every property gets an explicit Data Type relation).
+        const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[dataType];
+        if (dataTypeEntityId) {
+          const hasDataTypeRelation = existingRelations.some(
+            r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
+          );
+
+          if (!hasDataTypeRelation) {
+            store.setRelation({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: DATA_TYPE_PROPERTY,
+                name: 'Data Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: dataTypeEntityId,
+                name: dataType,
+                value: dataTypeEntityId,
+              },
+            });
+          }
+        }
+
+        // Register the data type in the store so store.getProperty() works
+        store.setDataType(entityId, dataType);
 
         // When creating property by adding a property type relation,
         // we don't need to create the property type relation again
         if (!skipTypeRelation) {
-          const propertyTypeRelation: Relation = {
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            spaceId,
-            renderableType: 'RELATION',
-            verified,
-            toSpaceId,
-            position: Position.generate(),
-            type: {
-              id: SystemIds.TYPES_PROPERTY,
-              name: 'Types',
-            },
-            fromEntity: {
-              id: entityId,
-              name: name,
-            },
-            toEntity: {
-              id: SystemIds.PROPERTY,
-              name: 'Property',
-              value: SystemIds.PROPERTY,
-            },
-          };
-          store.setRelation(propertyTypeRelation);
+          const hasTypesRelation = existingRelations.some(
+            r =>
+              r.type.id === SystemIds.TYPES_PROPERTY &&
+              r.toEntity.id === SystemIds.PROPERTY &&
+              !r.isDeleted
+          );
+
+          if (!hasTypesRelation) {
+            const propertyTypeRelation: Relation = {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified,
+              toSpaceId,
+              position: Position.generate(),
+              type: {
+                id: SystemIds.TYPES_PROPERTY,
+                name: 'Types',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: SystemIds.PROPERTY,
+                name: 'Property',
+                value: SystemIds.PROPERTY,
+              },
+            };
+            store.setRelation(propertyTypeRelation);
+          }
         }
 
-        // If there's a renderableType, create the relation
+        // If there's a renderableType, create the relation (with duplicate guard)
         if (renderableTypeId) {
-          const renderableTypeRelation: Relation = {
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            spaceId,
-            renderableType: 'RELATION',
-            verified: false,
-            position: Position.generate(),
-            type: {
-              id: RENDERABLE_TYPE_PROPERTY,
-              name: 'Renderable Type',
-            },
-            fromEntity: {
-              id: entityId,
-              name: name,
-            },
-            toEntity: {
-              id: renderableTypeId,
-              name: renderableTypeId, // This should ideally be the actual name
-              value: renderableTypeId,
-            },
-          };
-          store.setRelation(renderableTypeRelation);
+          const hasRenderableTypeRelation = existingRelations.some(
+            r => r.type.id === RENDERABLE_TYPE_PROPERTY && !r.isDeleted
+          );
+
+          if (!hasRenderableTypeRelation) {
+            const renderableTypeRelation: Relation = {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: RENDERABLE_TYPE_PROPERTY,
+                name: 'Renderable Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: renderableTypeId,
+                name: renderableTypeId,
+                value: renderableTypeId,
+              },
+            };
+            store.setRelation(renderableTypeRelation);
+          }
         }
+      },
+      setDataType: (propertyId: string, dataType: DataType) => {
+        store.setDataType(propertyId, dataType);
       },
     },
     values: {

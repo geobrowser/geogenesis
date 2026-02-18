@@ -467,7 +467,7 @@ export const ProposalStatus = Schema.Union(
 );
 export type ProposalStatus = Schema.Schema.Type<typeof ProposalStatus>;
 
-const VoteType = Schema.Union(Schema.Literal('ACCEPT'), Schema.Literal('REJECT'));
+const VoteType = Schema.Union(Schema.Literal('ACCEPT'), Schema.Literal('REJECT'), Schema.Literal('ABSTAIN'));
 type VoteType = Schema.Schema.Type<typeof VoteType>;
 
 export const SubstreamVote = Schema.Struct({
@@ -503,7 +503,6 @@ export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
 export const SubstreamProposal = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   type: ProposalType,
-  onchainProposalId: Schema.String,
   createdById: AddressWithValidation,
   space: SubstreamSpaceEntityConfig,
   startTime: Schema.Number,

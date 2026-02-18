@@ -1,9 +1,10 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
-import { Value } from '../v2.types';
+import { Value } from '../types';
 import { useImageUrlFromEntity } from './use-entity-media';
 import {
   GeoDate,
@@ -14,6 +15,7 @@ import {
   getImagePath,
   getOpenGraphImageUrl,
   getPaginationPages,
+  validateSpaceId,
 } from './utils';
 
 describe('GeoNumber', () => {
@@ -434,5 +436,40 @@ describe('useImageUrlFromEntity', () => {
     expect(selector?.(matchingValue)).toBe(true);
     expect(selector?.(wrongEntityValue)).toBe(false);
     expect(selector?.(wrongSpaceValue)).toBe(false);
+  });
+});
+
+describe('validateSpaceId', () => {
+  it('returns true for valid space IDs (32 hex chars)', () => {
+    const validSpaceId = IdUtils.generate();
+    expect(validateSpaceId(validSpaceId)).toBe(true);
+  });
+
+  it('returns false for null', () => {
+    expect(validateSpaceId(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(validateSpaceId(undefined)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(validateSpaceId('')).toBe(false);
+  });
+
+  it('returns false for strings with wrong length', () => {
+    expect(validateSpaceId('abc123')).toBe(false);
+    expect(validateSpaceId('a'.repeat(31))).toBe(false);
+    expect(validateSpaceId('a'.repeat(33))).toBe(false);
+  });
+
+  it('returns false for strings with 0x prefix', () => {
+    const validSpaceId = IdUtils.generate();
+    expect(validateSpaceId(`0x${validSpaceId}`)).toBe(false);
+  });
+
+  it('returns false for non-hex characters', () => {
+    expect(validateSpaceId('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(false);
+    expect(validateSpaceId('GHIJKLMNOPQRSTUVWXYZ123456789012')).toBe(false);
   });
 });

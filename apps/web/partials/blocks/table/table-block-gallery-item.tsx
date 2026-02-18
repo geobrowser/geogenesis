@@ -8,9 +8,9 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
+import { Cell, Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
-import { Cell, Property } from '~/core/types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';

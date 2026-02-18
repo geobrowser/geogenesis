@@ -1,8 +1,9 @@
+import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -23,7 +24,7 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
   // For now we use editors for both editors and members until we have the new membership
   // model in place.
   const firstThreeEditors = space.editors.slice(0, 3);
-  const firstThreeProfiles = await fetchProfilesBySpaceIds(firstThreeEditors);
+  const firstThreeProfiles = await Effect.runPromise(fetchProfilesBySpaceIds(firstThreeEditors));
 
   return {
     firstThreeEditors: firstThreeProfiles,

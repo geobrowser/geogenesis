@@ -5,6 +5,7 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import * as React from 'react';
 
 import {
+  DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   DEFAULT_NUMBER_FORMAT,
   DEFAULT_TIME_FORMAT,
@@ -18,8 +19,8 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
-import { Properties } from '~/core/utils/property';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { Properties } from '~/core/utils/property';
 
 import { Divider } from '~/design-system/divider';
 
@@ -38,6 +39,13 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  });
+
+  // Include deleted relations so handlePropertyTypeChange can reuse/update
+  // them instead of creating new ones each time the dropdown changes.
+  const allRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+    includeDeleted: true,
   });
 
   const name = useName(entityId);
@@ -131,51 +139,51 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         return;
       }
 
-      // Update the dataType value if it's different from the current one
-      if (propertyData?.dataType !== baseDataType) {
-        storage.values.set({
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
+      // Register the data type so store.getProperty() returns the updated type
+      storage.properties.setDataType(entityId, baseDataType);
+
+      // Update the data type relation. Every property gets an explicit Data Type relation.
+      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
+      if (dataTypeEntityId) {
+        const existingDataTypeRelation = allRelations.find(
+          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY
+        );
+
+        if (existingDataTypeRelation) {
+          storage.relations.update(existingDataTypeRelation, draft => {
+            draft.toEntity.id = dataTypeEntityId;
+            draft.toEntity.name = baseDataType;
+            draft.toEntity.value = dataTypeEntityId;
+          });
+        } else {
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: ID.createEntityId(),
+            fromEntity: {
+              id: entityId,
+              name: name || '',
+            },
+            type: {
+              id: DATA_TYPE_PROPERTY,
+              name: 'Data Type',
+            },
+            toEntity: {
+              id: dataTypeEntityId,
+              name: baseDataType,
+              value: dataTypeEntityId,
+            },
             spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name: name || '',
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: baseDataType,
-        });
-      } else if (!propertyData) {
-        // If no dataType value exists and no propertyData, create the dataType value
-        storage.values.set({
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
-            spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name: name || '',
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: baseDataType,
-        });
+            position: Position.generate(),
+            verified: false,
+            renderableType: 'RELATION',
+          });
+        }
       }
 
-      // Handle the renderableType relation
-
-      const existingRelation = relations.find(
+      // Handle the renderableType relation.
+      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      const existingRelation = allRelations.find(
         r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
       );
 
@@ -219,7 +227,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
+    [entityId, spaceId, storage, propertyData, allRelations, isDataTypeEditable, name]
   );
 
   // Create property data when Property type is manually added to an existing entity

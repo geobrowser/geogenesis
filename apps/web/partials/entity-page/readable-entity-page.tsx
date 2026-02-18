@@ -5,7 +5,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
-import { useRenderedProperties } from '~/core/hooks/use-renderables';
+import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -14,9 +14,9 @@ import {
   useValue,
   useValues,
 } from '~/core/sync/use-store';
+import { DataType, RenderableType } from '~/core/types';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
-import { DataType, RenderableType } from '~/core/types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -52,7 +52,7 @@ function countRenderableProperty(renderedProperties: string[]): number {
 }
 
 export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
-  const renderedProperties = useRenderedProperties(entityId, spaceId);
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
 
   if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
@@ -104,9 +104,16 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
     return null;
   }
 
+  // Filter out empty values - don't show properties with no content in browse mode
+  const nonEmptyValues = values.filter(v => v.value);
+
+  if (nonEmptyValues.length === 0) {
+    return null;
+  }
+
   return (
     <>
-      {values.map((t, index) => {
+      {nonEmptyValues.map((t, index) => {
         // hide name property, it is already rendered in the header
         // @TODO: filter ahead of time rather than returning null here
         if (propertyId === SystemIds.NAME_PROPERTY) {
@@ -231,6 +238,7 @@ export function RelationsGroup({
                   spaceId={linkedSpaceId}
                   relationEntityId={relationEntityId}
                   relationId={relationId}
+                  small
                 >
                   {relationName ?? linkedEntityId}
                 </LinkableRelationChip>
@@ -312,6 +320,11 @@ function RenderedValue({
     return null;
   }
 
+  // Don't render empty values in browse mode
+  if (!value) {
+    return null;
+  }
+
   switch (renderableType) {
     case 'URL':
       return <WebUrlField key={`uri-${propertyId}-${value}`} isEditing={false} spaceId={spaceId} value={value} />;
@@ -359,7 +372,7 @@ function RenderedValue({
     case 'DATE':
     case 'DATETIME':
     case 'TIME': {
-      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} />;
+      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} dataType={renderableType} />;
     }
   }
 }

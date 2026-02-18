@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import * as React from 'react';
@@ -117,7 +118,7 @@ type PendingProposalsProps = {
 async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
   const [activeProposals, profile] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
-    connectedAddress ? fetchProfile({ walletAddress: connectedAddress }) : null,
+    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 
   if (activeProposals.proposals.length === 0) {
@@ -216,8 +217,8 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
         <p className="text-metadataMedium">1 vote required</p>
 
         <AcceptOrRejectMember
-          onchainProposalId={proposal.onchainProposalId}
-          membershipContractAddress={space.address}
+          spaceId={proposal.space.id}
+          proposalId={proposal.id}
         />
       </div>
     </div>
@@ -229,19 +230,20 @@ async function getMembershipProposalName(
   proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number]
 ) {
   const profile = await (type === 'ADD_EDITOR' || type === 'ADD_MEMBER'
-    ? fetchProfile({ walletAddress: proposal.createdBy.address })
+    ? Effect.runPromise(fetchProfile(proposal.createdBy.address))
     : fetchProposedEditorForProposal(proposal.id));
 
+  const displayName = profile?.name ?? profile?.address ?? 'Unknown';
+
   switch (type) {
-    case 'ADD_EDITOR': {
-      return `Add ${profile.name ?? profile.address} as editor`;
-    }
+    case 'ADD_EDITOR':
+      return `Add ${displayName} as editor`;
     case 'ADD_MEMBER':
-      return `Add ${profile.name ?? profile.address} as member`;
+      return `Add ${displayName} as member`;
     case 'REMOVE_EDITOR':
-      return `Remove ${profile.name ?? profile.address} as editor`;
+      return `Remove ${displayName} as editor`;
     case 'REMOVE_MEMBER':
-      return `Remove ${profile.name ?? profile.address} as member`;
+      return `Remove ${displayName} as member`;
   }
 }
 
@@ -332,24 +334,19 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
-          <Execute
-            contractAddress={space?.address as `0x${string}`}
-            onchainProposalId={proposal.onchainProposalId}
-          >
+          <Execute spaceId={proposal.space.id} proposalId={proposal.id}>
             Execute
           </Execute>
         )}
 
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor
-            onchainProposalId={proposal.onchainProposalId}
+            spaceId={proposal.space.id}
+            proposalId={proposal.id}
             isProposalEnded={isProposalEnded}
             isProposalExecutable={isProposalExecutable}
             status={proposal.status}
             userVote={userVote}
-            // We know that the space isn't null here, so casting is safe. If the space
-            // doesn't exist we redirect the user.
-            votingContractAddress={space?.address as `0x${string}`}
           />
         )}
       </div>

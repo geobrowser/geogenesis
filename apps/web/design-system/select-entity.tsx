@@ -78,6 +78,7 @@ type SelectEntityProps = {
   advanced?: boolean;
   autoFocus?: boolean;
   showUrlWarning?: boolean;
+  showIDs?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -99,6 +100,7 @@ export const SelectEntity = ({
   autoFocus = false,
   advanced = true,
   showUrlWarning = false,
+  showIDs = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -117,7 +119,7 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
-  const [renderableType, setRenderableType] = useState<SwitchableRenderableType>('TEXT');
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -508,8 +510,8 @@ export const SelectEntity = ({
                                           </div>
                                         )}
                                         <div className="flex items-center gap-1.5">
-                                          {result.types.slice(0, 3).map(type => (
-                                            <Tag key={type.id}>{type.name}</Tag>
+                                          {result.types.slice(0, 3).map((type, index) => (
+                                            <Tag key={`${type.id}-${index}`}>{type.name}</Tag>
                                           ))}
                                           {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
                                         </div>
@@ -620,17 +622,23 @@ export const SelectEntity = ({
                   </>
                 )}
                 {!result && (
-                  <div className="flex w-full items-center justify-between border-t border-grey-02 px-4 py-2">
+                  <div className="flex w-full items-center justify-between border-t border-grey-02 pl-[5px] pr-3 py-[5px]">
                     <div className="flex items-center gap-3">
-                      <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
-                        <Toggle checked={isShowingIds} />
-                        <div className="text-[0.875rem] text-grey-04">IDs</div>
-                      </button>
+                      {showIDs && (
+                        <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
+                          <Toggle checked={isShowingIds} />
+                          <div className="text-[0.875rem] text-grey-04">IDs</div>
+                        </button>
+                      )}
                       {isCreatingProperty && (
                         <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
-                    <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
+                    <button
+                      disabled={isCreatingProperty && !renderableType}
+                      onClick={onCreateNewEntity}
+                      className="text-resultLink text-ctaHover disabled:text-grey-03"
+                    >
                       Create new
                     </button>
                   </div>

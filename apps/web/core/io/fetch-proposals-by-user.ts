@@ -5,10 +5,10 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from './dto/proposals';
-import { SubstreamProposal } from './substream-schema';
-import { fetchProfilesBySpaceIds } from './subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from './subgraph/fetch-profile';
 import { getSpaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
+import { SubstreamProposal } from './substream-schema';
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
   const filter = [
@@ -33,7 +33,6 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
           createdAtBlock
         }
         type
-        onchainProposalId
         createdById
 
         startTime
@@ -137,7 +136,7 @@ export async function fetchProposalsByUser({
 
   const creatorIds = proposals.map(p => p.createdById);
   const uniqueCreatorIds = [...new Set(creatorIds)];
-  const profilesForProposals = await fetchProfilesBySpaceIds(uniqueCreatorIds);
+  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   return proposals.map(p => {

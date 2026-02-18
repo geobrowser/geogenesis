@@ -42,16 +42,14 @@ export const generateOpsForSpaceType = async ({
     const newEntity = Graph.createEntity({
       id: newEntityId,
       name: spaceName,
-      types: [], // Graph.createSpace() already adds Space type
+      types: [SystemIds.SPACE_TYPE],
     });
 
     ops.push(...newEntity.ops);
   }
 
-  // Add space type-specific ops
   switch (type) {
     case 'personal': {
-      // Create entity with SPACE_TYPE (required for space page entity)
       const { ops: createEntityOps } = Graph.createEntity({
         id: newEntityId,
         name: spaceName,
@@ -59,7 +57,6 @@ export const generateOpsForSpaceType = async ({
       });
       ops.push(...createEntityOps);
 
-      // Add PERSON_TYPE relation
       const { ops: personTypeOps } = Graph.createRelation({
         fromEntity: newEntityId,
         type: SystemIds.TYPES_PROPERTY,
@@ -67,7 +64,6 @@ export const generateOpsForSpaceType = async ({
       });
       ops.push(...personTypeOps);
 
-      // Create Account entity and relation
       const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
       ops.push(...accountOps);
 
@@ -172,13 +168,9 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    // Use TESTNET network to upload to Pinata via alternative gateway
     const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri, network: 'TESTNET' });
-
-    // Creates the image entity
     ops.push(...imageOps);
 
-    // Creates the relation pointing to the image entity
     const { ops: imageRelationOps } = Graph.createRelation({
       fromEntity: newEntityId,
       toEntity: imageId,
@@ -189,13 +181,9 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceCoverUri) {
-    // Use TESTNET network to upload to Pinata via alternative gateway
     const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri, network: 'TESTNET' });
-
-    // Creates the image entity
     ops.push(...imageOps);
 
-    // Creates the relation pointing to the image entity
     const { ops: imageRelationOps } = Graph.createRelation({
       fromEntity: newEntityId,
       toEntity: imageId,

@@ -14,10 +14,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
-import { EntityId } from '~/core/io/substream-schema';
 import { getEntity } from '~/core/io/queries';
-import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
+import { EntityId } from '~/core/io/substream-schema';
 import { Entity } from '~/core/types';
+import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';

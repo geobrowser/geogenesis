@@ -11,6 +11,8 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type Profile = {
   id: string;
+  /** The user's personal space ID (bytes16 hex without 0x prefix) */
+  spaceId: string;
   name: string | null;
   avatarUrl: string | null;
   coverUrl: string | null;
@@ -85,6 +87,9 @@ export type LegacyDataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' |
  */
 export const LEGACY_DATA_TYPE_MAPPING: Partial<Record<string, DataType>> = {
   BOOLEAN: 'BOOL',
+  INTEGER: 'INT64',
+  CHECKBOX: 'BOOL',
+  PLACE: 'RELATION',
 } as const;
 
 // ==============================================================================
@@ -118,7 +123,8 @@ export type FlattenedRenderType =
   | 'RELATION'
   | 'IMAGE'
   | 'VIDEO'
-  | 'PLACE';
+  | 'PLACE'
+  | 'ADDRESS';
 
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
@@ -138,7 +144,8 @@ export type SwitchableRenderableType =
   | 'DECIMAL'
   | 'POINT'
   | 'GEO_LOCATION'
-  | 'PLACE';
+  | 'PLACE'
+  | 'ADDRESS';
 
 /**
  * Human-readable labels for switchable renderable types
@@ -159,6 +166,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
   PLACE: 'Place',
+  ADDRESS: 'Address'
 };
 
 // ==============================================================================

@@ -21,8 +21,8 @@ import { CSS } from '@dnd-kit/utilities';
 import React from 'react';
 
 import { useMutate } from '~/core/sync/use-mutate';
-import { sortRelations } from '~/core/utils/utils';
 import { Relation } from '~/core/types';
+import { sortRelations } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from './chip';
 
@@ -85,6 +85,7 @@ export default function ReorderableRelationChipsDnd({
           <LinkableRelationChip
             key={`relation-${relation.id}`}
             isEditing
+            small
             onDelete={() => storage.relations.delete(relation)}
             onDone={result => {
               storage.relations.update(relation, draft => {
@@ -126,6 +127,7 @@ export default function ReorderableRelationChipsDnd({
           <div className="inline-block" style={{ cursor: 'grabbing' }}>
             <LinkableRelationChip
               isEditing
+              small
               onDelete={() => {}}
               currentSpaceId={spaceId}
               entityId={activeRelation.toEntity?.id}
@@ -193,6 +195,7 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
       <div {...attributes} {...listeners} className="inline-flex items-center">
         <LinkableRelationChip
           isEditing
+          small
           onDelete={() => storage.relations.delete(relation)}
           currentSpaceId={spaceId}
           entityId={relation.toEntity.id}

@@ -1,8 +1,9 @@
+import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
 import { cache } from 'react';
 
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profiles-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -21,7 +22,7 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
   }
 
   const firstThreeMembers = space.members.slice(0, 3);
-  const firstThreeProfiles = await fetchProfilesBySpaceIds(firstThreeMembers);
+  const firstThreeProfiles = await Effect.runPromise(fetchProfilesBySpaceIds(firstThreeMembers));
 
   return {
     firstThreeMembers: firstThreeProfiles,
