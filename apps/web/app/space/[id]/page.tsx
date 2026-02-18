@@ -16,7 +16,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
 import { cachedFetchSpace } from './cached-fetch-space';
@@ -83,11 +82,9 @@ export default async function SpacePage(props0: Props) {
   }
 
   const props = await getSpaceFrontPage(spaceId);
-  const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
-      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={props.id} />}
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
