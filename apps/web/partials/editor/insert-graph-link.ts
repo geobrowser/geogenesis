@@ -52,6 +52,9 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
         marks: [
           {
             type: 'link',
+            attrs: {
+              href: linkUrl,
+            },
           },
         ],
       })
@@ -75,6 +78,9 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
           marks: [
             {
               type: 'link',
+              attrs: {
+                href: linkUrl,
+              },
             },
           ],
         })
@@ -90,6 +96,9 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
           marks: [
             {
               type: 'link',
+              attrs: {
+                href: linkUrl,
+              },
             },
           ],
         })

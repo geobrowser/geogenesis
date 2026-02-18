@@ -68,7 +68,6 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
     );
   }
 
-  const spaces = person.spaces ?? [];
   const deterministicSpaceId = Spaces.getDeterministicSpaceId(spaces, spaceId) ?? profile?.homeSpaceId ?? null;
   const preventRedirect = searchParams?.edit === 'true';
 
