@@ -1,5 +1,6 @@
 import { RelationDtoLive } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
@@ -12,7 +13,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     id: remoteEntity.id,
     name: remoteEntity.name,
     description: remoteEntity.description,
-    spaces: [...remoteEntity.spaceIds],
+    spaces: sortSpaceIdsByRank([...remoteEntity.spaceIds]),
     types: [...remoteEntity.types],
     relations: relationsOut,
     values: values,
