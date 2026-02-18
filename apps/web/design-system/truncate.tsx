@@ -25,7 +25,8 @@ export const Truncate = ({
       className={cx(
         shouldTruncate && clampClassName[maxLines],
         textStyles[variant],
-        'w-full overflow-x-hidden leading-none',
+        'w-full leading-none',
+        shouldTruncate ? 'overflow-hidden' : 'overflow-visible',
         className
       )}
       {...rest}

@@ -23,7 +23,7 @@ import { VideoSmall } from '../icons/video-small';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height. We add a negative margin to compensate for this. This results in the correct line heights between both edit and browse modes. This only affects the editable titles of entity pages and editable titles of data blocks
-  'm-0 w-full resize-none bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
+  'm-0 w-full resize-none overflow-hidden bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
   {
     variants: {
       variant: {
