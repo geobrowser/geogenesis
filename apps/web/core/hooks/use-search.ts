@@ -8,6 +8,7 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
@@ -115,7 +116,7 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
         }
       }
 
-      return resultOrError.right;
+      return [...resultOrError.right].sort(compareBySpaceRank(r => r.spaces[0]?.spaceId ?? ''));
     },
     /**
      * We don't want to return stale search results. Instead we just

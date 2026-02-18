@@ -204,7 +204,7 @@ export function RelationsGroup({
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
             const linkedEntityId = r.toEntity.id;
-            const linkedSpaceId = r.spaceId;
+            const linkedSpaceId = r.toSpaceId ?? r.spaceId;
             const relationName = r.toEntity.name;
             const relationEntityId = r.entityId;
             const relationId = r.id;

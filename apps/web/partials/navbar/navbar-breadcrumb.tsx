@@ -10,6 +10,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -83,9 +84,9 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const spaceName = space.entity.name ?? '';
   const spaceImage = space.entity.image;
 
-  const otherSpaces = spaces.filter(
-    space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim()
-  );
+  const otherSpaces = spaces
+    .filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim())
+    .sort(compareBySpaceRank(s => s.id));
 
   const formattedQuery = query.trim().toLowerCase();
 
