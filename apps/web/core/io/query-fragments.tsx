@@ -75,13 +75,22 @@ export const entityFragment = graphql(/* GraphQL */ `
 export const entitiesQuery = graphql(/* GraphQL */ `
   query AllEntities(
     $spaceId: UUID
+    $spaceIds: UUIDFilter
     $typeIds: UUIDFilter
     $limit: Int
     $offset: Int
     $filter: EntityFilter
     $orderBy: [EntitiesOrderBy!]
   ) {
-    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy, spaceId: $spaceId, typeIds: $typeIds) {
+    entities(
+      first: $limit
+      offset: $offset
+      filter: $filter
+      orderBy: $orderBy
+      spaceId: $spaceId
+      spaceIds: $spaceIds
+      typeIds: $typeIds
+    ) {
       id
       name
       description
@@ -506,8 +515,12 @@ export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on PropertyInfo {
     id
     name
+    dataTypeId
     dataTypeName
     renderableTypeId
+    renderableTypeName
+    format
+    isType
   }
 `);
 
@@ -577,8 +590,11 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           property {
             id
             name
+            dataTypeId
             dataTypeName
             renderableTypeId
+            renderableTypeName
+            format
           }
           text
           integer

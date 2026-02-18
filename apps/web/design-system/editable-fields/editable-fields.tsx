@@ -8,7 +8,6 @@ import * as React from 'react';
 import { ChangeEvent, useCallback, useRef } from 'react';
 
 import { VIDEO_ACCEPT } from '~/core/constants';
-import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -30,7 +29,7 @@ const textareaStyles = cva(
       variant: {
         mainPage: 'mb-[-1px] text-mainPage',
         body: 'mb-[-6.5px] text-body',
-        tableCell: 'mb-[-3.5px] text-tableCell',
+        tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
         tableProperty: '!text-tableProperty !text-grey-04',
         smallTitle: 'text-smallTitle',
       },
@@ -50,17 +49,13 @@ type TableStringFieldProps = {
 };
 
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: props.onChange,
-    delay: 1000,
-    initialValue: props.value || '',
-  });
-
   return (
     <Textarea
       {...props}
-      onChange={e => setLocalValue(e.currentTarget.value)}
-      value={localValue}
+      onChange={e => {
+        props.onChange(e.currentTarget.value);
+      }}
+      value={props.value || ''}
       className={textareaStyles({ variant })}
       autoFocus={props.autoFocus}
     />
@@ -72,46 +67,24 @@ type PageStringFieldProps = {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
-  shouldDebounce?: boolean;
   autoFocus?: boolean;
   onEnterKey?: () => void;
 };
 
-export function PageStringField({ shouldDebounce, onChange, onEnterKey, ...props }: PageStringFieldProps) {
+export function PageStringField({ onChange, onEnterKey, ...props }: PageStringFieldProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const {
-    value: localValue,
-    onChange: setLocalValue,
-    flush,
-  } = useOptimisticValueWithSideEffect({
-    callback: onChange,
-    delay: 1500,
-    initialValue: props.value || '',
-  });
 
   return (
     <Textarea
       {...props}
       ref={textareaRef}
-      value={localValue}
+      value={props.value || ''}
       onChange={e => {
-        // Always update local state to maintain cursor position and prevent
-        // the sync effect from resetting the value while typing
-        setLocalValue(e.currentTarget.value);
-        if (!shouldDebounce) {
-          // Also call parent onChange immediately when not debouncing
-          onChange(e.currentTarget.value);
-        }
-      }}
-      onBlur={() => {
-        // Flush on blur to ensure changes are saved when leaving the field
-        flush();
+        onChange(e.currentTarget.value);
       }}
       onKeyDown={e => {
         if (e.key === 'Enter' && onEnterKey) {
           e.preventDefault();
-          flush(); // Flush pending changes immediately
           onEnterKey();
         }
       }}

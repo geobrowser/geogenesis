@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation';
 
 import React, { useEffect, useRef, useState } from 'react';
 
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
 import { useTabId } from '~/core/state/editor/use-editor';
 
@@ -117,8 +116,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
           {tabs.map(t => (
             <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
           ))}
-          <div className="absolute bottom-0 left-0 right-0 z-0 h-px bg-grey-02" />
         </div>
+        <div className="absolute bottom-0 left-0 right-0 z-0 h-px bg-grey-02" />
       </div>
       {scrollPosition !== 'end' && (
         <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-50 h-6 w-[50px] bg-gradient-to-l from-white" />
@@ -158,7 +157,6 @@ const tabStyles = cva(
 );
 
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
-  const isHydrated = useHydrated();
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -181,21 +179,15 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link className={tabStyles({ active, disabled })} href={href}>
+    <Link className={tabStyles({ active, disabled })} href={href} prefetch>
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (
-        // @HACK: This is a hack to workaround issues in the app directory. Right now (08/2023)
-        // nested layouts in the app directory re-render when search params change. This causes
-        // some of the layout to re-render, affecting the position of the active tab border.
-        // When re-renders from the server happen the active tab border starts in the wrong position.
         <motion.div
-          {...(isHydrated
-            ? {
-                layoutId: 'tab-group-active-border',
-                layout: true,
-              }
-            : {})}
+          layoutId="tab-group-active-border"
+          layout
+          initial={false}
+          transition={{ duration: 0.2 }}
           className="absolute bottom-[-8px] left-0 right-0 z-100 h-px bg-text"
         />
       )}

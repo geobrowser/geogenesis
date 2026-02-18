@@ -189,11 +189,14 @@ export class SyncEngine {
       return [];
     }
 
-    // Don't resync an entity if it was recently synced (within TTL)
+    // Don't resync an entity if it was recently synced (within TTL).
+    // Also skip empty string IDs which can appear when relation fields
+    // (e.g. toEntity.id, type.id) are unset.
     const now = Date.now();
     const uniqueEntityIds = [
       ...new Set(
         entityIds.filter(id => {
+          if (id === '') return false;
           const lastSynced = this.syncedEntities.get(id);
           // Sync if never synced or TTL has expired
           return lastSynced === undefined || now - lastSynced > SYNC_TTL_MS;

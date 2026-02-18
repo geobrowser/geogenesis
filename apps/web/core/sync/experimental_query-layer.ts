@@ -353,15 +353,15 @@ export class EntityQuery {
         if (cond.value) {
           // GRC-20 v2 numeric types
           if (
-            value.property.dataType === 'INT64' ||
-            value.property.dataType === 'FLOAT64' ||
+            value.property.dataType === 'INTEGER' ||
+            value.property.dataType === 'FLOAT' ||
             value.property.dataType === 'DECIMAL'
           ) {
             const numValue = parseFloat(value.value);
             if (isNaN(numValue) || !this.matchesNumberCondition(numValue, cond.value as NumberCondition)) {
               return false;
             }
-          } else if (value.property.dataType === 'BOOL') {
+          } else if (value.property.dataType === 'BOOLEAN') {
             // GRC-20 v2 boolean type
             const boolValue = value.value === '1' || value.value.toLowerCase() === 'true';
             if (!this.matchesBooleanCondition(boolValue, cond.value as BooleanCondition)) {

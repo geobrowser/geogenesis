@@ -242,7 +242,6 @@ export function useQueryEntities({
 }
 
 export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOptions) {
-  const cache = useQueryClient();
   const { store } = useSyncEngine();
 
   const { data: remoteProperty, isFetched } = useQuery({
@@ -256,6 +255,10 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       return await Effect.runPromise(getProperty(id));
     },
   });
+
+  // Hydrate the property entity so the store has its relations.
+  // The property API doesn't return relationValueTypes.
+  useHydrateEntity({ id, enabled: enabled && Boolean(id) });
 
   // Try store.getProperty first (for local properties with dataType registered)
   // Fall back to manual reconstruction (for existing properties added to entities)
@@ -278,8 +281,18 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     equal
   );
 
-  // Prefer remote property data, then local store, then reconstructed
-  const finalProperty = remoteProperty || property;
+  // Merge relationValueTypes from the hydrated entity into the remote property
+  const finalProperty = React.useMemo(() => {
+    if (!remoteProperty) return property;
+    if (!property) return remoteProperty;
+
+    const localRelationValueTypes = property.relationValueTypes;
+    if (localRelationValueTypes && localRelationValueTypes.length > 0) {
+      return { ...remoteProperty, relationValueTypes: localRelationValueTypes };
+    }
+
+    return remoteProperty;
+  }, [remoteProperty, property]);
 
   return {
     property: finalProperty,
@@ -293,7 +306,6 @@ type QueryPropertiesOptions = {
 };
 
 export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
-  const cache = useQueryClient();
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -345,9 +357,13 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
       const remoteProp = remotePropsMap.get(id);
       const localProp = localPropsMap.get(id);
 
-      // Prefer remote property, but fall back to local
       if (remoteProp) {
-        merged.push(remoteProp);
+        const localRelationValueTypes = localProp?.relationValueTypes;
+        if (localRelationValueTypes && localRelationValueTypes.length > 0) {
+          merged.push({ ...remoteProp, relationValueTypes: localRelationValueTypes });
+        } else {
+          merged.push(remoteProp);
+        }
       } else if (localProp) {
         merged.push(localProp);
       }
@@ -438,6 +454,41 @@ export function useValue(options: UseValueParams) {
       }
 
       return null;
+    },
+    equal
+  );
+
+  return value;
+}
+
+/**
+ * Space-aware value lookup for data block cells. Returns a single Value
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useValue when rendering data that may originate from
+ * a different space than the one being edited. Entity pages should use
+ * useValue with a strict spaceId filter instead — they want null when
+ * the value doesn't exist in the current space.
+ */
+export function useSpaceAwareValue(options: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+}) {
+  const { entityId, propertyId, spaceId } = options;
+
+  const value = useSelector(
+    reactiveValues,
+    state => {
+      let fallback: Value | null = null;
+
+      for (const v of state) {
+        if (v.entity.id !== entityId || v.property.id !== propertyId || v.isDeleted) continue;
+        if (v.spaceId === spaceId) return v;
+        fallback ??= v;
+      }
+
+      return fallback;
     },
     equal
   );

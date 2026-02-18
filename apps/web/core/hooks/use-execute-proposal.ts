@@ -44,7 +44,6 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
   });
 
   const handleExecute = useCallback(async () => {
-    // Validate inputs
     if (!validateSpaceId(spaceId)) {
       throw new Error('Invalid space ID format. Cannot execute proposal.');
     }
@@ -57,15 +56,18 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       throw new Error('You need a registered personal space to execute proposals');
     }
 
+    const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
+    const normalizedProposalId = proposalId.replace(/-/g, '').toLowerCase();
+
     const fromSpaceId = `0x${personalSpaceId}` as Hex;
-    const toSpaceId = `0x${spaceId}` as Hex;
-    const proposalIdHex = `0x${proposalId}` as Hex;
+    const toSpaceId = `0x${normalizedSpaceId}` as Hex;
+    const proposalIdHex = `0x${normalizedProposalId}` as Hex;
 
     // Encode the execute data: (proposalId)
     const data = encodeProposalExecutedData(proposalIdHex);
 
     // The topic is the proposal ID padded to bytes32
-    const topic = padBytes16ToBytes32(proposalId);
+    const topic = padBytes16ToBytes32(normalizedProposalId);
 
     const callData = encodeFunctionData({
       functionName: 'enter',
@@ -85,13 +87,13 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     const result = await Effect.runPromise(Effect.either(txEffect));
 
     if (Either.isLeft(result)) {
-      console.error('Execute failed', {
-        error: result.left,
-        fromSpaceId,
-        toSpaceId,
-        proposalId,
-      });
-      throw result.left;
+      const error = result.left;
+      console.error(
+        `Execute failed: ${error.message}`,
+        { fromSpaceId, toSpaceId, proposalId },
+        error
+      );
+      throw error;
     }
 
     console.log('Execute successful', {
@@ -104,12 +106,14 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     return result.right;
   }, [personalSpaceId, isRegistered, spaceId, proposalId, tx]);
 
-  const { mutate, status } = useMutation({
+  const { mutate, status, error, reset } = useMutation({
     mutationFn: handleExecute,
   });
 
   return {
     execute: mutate,
     status,
+    error,
+    reset,
   };
 }

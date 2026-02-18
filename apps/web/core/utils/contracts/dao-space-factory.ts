@@ -13,7 +13,7 @@ export const DEFAULT_VOTING_SETTINGS: VotingSettings = {
   slowPathPercentageThreshold: 510000n, // 51% for slow path (RATIO_BASE is 10^6)
   fastPathFlatThreshold: 0n, // 0 votes for fast path (auto-executes on first YES vote)
   quorum: 1n, // 1 vote quorum
-  duration: 7n * 24n * 60n * 60n, // 7 days in seconds
+  duration: 1n * 24n * 60n * 60n, // 1 day in seconds
 };
 
 export const EMPTY_SPACE_ID = '0x00000000000000000000000000000000' as Hex;

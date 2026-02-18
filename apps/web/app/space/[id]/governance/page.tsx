@@ -1,6 +1,8 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { cookies } from 'next/headers';
+import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -9,12 +11,16 @@ import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import {
+  type GovernanceProposalType,
+  GovernanceProposalTypeFilter,
+} from '~/partials/governance/governance-proposal-type-filter';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ proposalId?: string }>;
+  searchParams: Promise<{ proposalId?: string; proposalType?: GovernanceProposalType }>;
 }
 
 const INITIAL_PUBLIC_SPACES = [
@@ -33,13 +39,18 @@ const getVotingPeriod = (spaceId: string) => {
 };
 const passThreshold = '50%';
 
-export const dynamic = 'force-dynamic';
-
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+
+  if (!IdUtils.isValid(params.id)) {
+    notFound();
+  }
+
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
+
+  const proposalType = searchParams.proposalType;
 
   return (
     <>
@@ -66,11 +77,9 @@ export default async function GovernancePage(props: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
-        {/* <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
-          All Proposals
-        </SmallButton> */}
+        <GovernanceProposalTypeFilter spaceId={params.id} />
         <React.Suspense fallback="Loading initial...">
-          <InitialGovernanceProposals spaceId={params.id} />
+          <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
         </React.Suspense>
       </div>
 
@@ -85,12 +94,26 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-async function InitialGovernanceProposals({ spaceId }: { spaceId: string }) {
-  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0 });
+async function InitialGovernanceProposals({
+  spaceId,
+  proposalType,
+}: {
+  spaceId: string;
+  proposalType?: GovernanceProposalType;
+}) {
+  const { node, hasMore } = await GovernanceProposalsList({ spaceId, page: 0, proposalType });
+
   return (
     <>
       {node}
-      {hasMore && <GovernanceProposalsListInfiniteScroll spaceId={spaceId} page={0} initialHasMore={hasMore} />}
+      {hasMore && (
+        <GovernanceProposalsListInfiniteScroll
+          spaceId={spaceId}
+          page={0}
+          initialHasMore={hasMore}
+          proposalType={proposalType}
+        />
+      )}
     </>
   );
 }
@@ -107,16 +130,6 @@ interface NetworkResult {
   };
 }
 
-// Filter to exclude membership proposals from counts
-// Membership proposals (ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR) are shown in the home feed instead
-const EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER = `
-  proposalActionsConnection: {
-    none: {
-      actionType: { in: [ADD_MEMBER, REMOVE_MEMBER, ADD_EDITOR, REMOVE_EDITOR] }
-    }
-  }
-`;
-
 async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const nowSeconds = Math.floor(Date.now() / 1000).toString();
 
@@ -129,7 +142,6 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
           spaceId: { is: "${id}" }
           endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
           executedAt: { isNull: true }
-          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount
@@ -139,7 +151,6 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
         filter: {
           spaceId: { is: "${id}" }
           executedAt: { isNull: false }
-          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount
@@ -150,7 +161,6 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
           spaceId: { is: "${id}" }
           endTime: { lessThan: "${nowSeconds}" }
           executedAt: { isNull: true }
-          ${EXCLUDE_MEMBERSHIP_PROPOSALS_FILTER}
         }
       ) {
         totalCount

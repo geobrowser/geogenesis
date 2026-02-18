@@ -15,8 +15,8 @@ import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { Cell, Property, Row } from '~/core/types';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -44,11 +44,8 @@ const ColumnHeader = ({
   isLastColumn: boolean;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
-
   return isEditMode && !isNameColumn ? (
-    <div className={cx(isLastColumn ? 'pr-12' : '')}>
-      <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} />
-    </div>
+    <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} isLastColumn={isLastColumn} />
   ) : (
     <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
   );
@@ -60,8 +57,6 @@ const formatColumns = (
   unpublishedColumns: { id: string }[],
   spaceId: string
 ) => {
-  const columnSize = 880 / columns.length;
-
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -72,19 +67,17 @@ const formatColumns = (
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={cx(isLastColumn ? 'pr-12' : '')}>
-            <EditableEntityTableColumnHeader
-              unpublishedColumns={unpublishedColumns}
-              column={column}
-              entityId={column.id}
-              spaceId={spaceId}
-            />
-          </div>
+          <EditableEntityTableColumnHeader
+            unpublishedColumns={unpublishedColumns}
+            column={column}
+            entityId={column.id}
+            spaceId={spaceId}
+            isLastColumn={isLastColumn}
+          />
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
       },
-      size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
     });
   });
 };
@@ -120,7 +113,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // We are in a component internally within react-table. eslint isn't
     // able to infer that this is a valid React component.
     // eslint-disable-next-line
-    const name = useName(entityId);
+    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
@@ -261,7 +254,7 @@ export const TableBlockTable = ({
       <div className="overflow-x-scroll rounded-lg">
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
-            <tr>
+            <tr className="border-b border-grey-02">
               {properties.map((column, i) => {
                 const isShown = shownColumnIds.includes(column.id);
                 const headerClassNames = isShown
@@ -276,7 +269,7 @@ export const TableBlockTable = ({
                   <th
                     key={column.id}
                     className={cx(
-                      'group relative border-b border-grey-02 p-[10px] text-left',
+                      'group relative p-[10px] text-left',
                       headerClassNames,
                       !isEditingDateTime ? 'min-w-[250px]' : 'min-w-[300px]'
                     )}
@@ -305,20 +298,11 @@ export const TableBlockTable = ({
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const propertyId = cell.getValue<Cell>().propertyId;
-
-                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
-
-                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
-                    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
                       <TableCell
                         key={`${cellId}-${index}-${row.original.entityId}`}
-                        isLinkable={isNameCell && isEditing}
-                        href={href}
-                        width={cell.column.getSize()}
                         isShown={isShown}
                         isEditMode={isEditing}
                       >

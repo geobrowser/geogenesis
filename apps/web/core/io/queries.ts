@@ -10,6 +10,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
+import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import {
   entitiesBatchQuery,
   entitiesQuery,
@@ -47,19 +48,35 @@ type GetAllEntitiesOptions = {
   limit?: number;
   offset?: number;
   spaceId?: string;
+  spaceIds?: UuidFilter;
   typeIds?: UuidFilter;
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
 
 export function getAllEntities(
-  { limit, offset, spaceId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, spaceIds, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds = topLevelSpaceId ? undefined : spaceIds ?? extractedSpaceIds;
+  const normalizedFilter = topLevelSpaceId || topLevelSpaceIds ? removeSpaceIdsFromFilter(filter) : filter;
+
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: { limit, offset, spaceId, typeIds, filter, orderBy },
+    variables: {
+      limit,
+      offset,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeIds,
+      filter: normalizedFilter,
+      orderBy,
+    },
     signal,
   });
 }
@@ -204,7 +221,7 @@ interface ResultsArgs {
 }
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
-  const filter: EntityFilter | undefined = args.typeIds
+  const filter: EntityFilter | undefined = args.typeIds?.length
     ? { typeIds: { in: args.typeIds } }
     : { and: BLOCK_TYPE_EXCLUSION_FILTERS };
 
@@ -250,7 +267,14 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-const EXCLUDED_BLOCK_TYPES = [SystemIds.TEXT_BLOCK, SystemIds.IMAGE_BLOCK, SystemIds.DATA_BLOCK, SystemIds.IMAGE_TYPE];
+const EXCLUDED_BLOCK_TYPES = [
+  SystemIds.TEXT_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_TYPE,
+  SystemIds.VIDEO_TYPE,
+  SystemIds.VIDEO_BLOCK,
+];
 
 const BLOCK_TYPE_EXCLUSION_FILTERS = EXCLUDED_BLOCK_TYPES.map(typeId => ({
   typeIds: { anyNotEqualTo: typeId },

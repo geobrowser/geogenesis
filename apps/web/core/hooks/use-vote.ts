@@ -44,7 +44,6 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
   const handleVote = useCallback(
     async (option: SubstreamVote['vote']) => {
-      // Validate inputs
       if (!validateSpaceId(spaceId)) {
         throw new Error('Invalid space ID format. Cannot submit vote.');
       }
@@ -57,9 +56,12 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         throw new Error('You need a registered personal space to vote');
       }
 
+      const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
+      const normalizedProposalId = proposalId.replace(/-/g, '').toLowerCase();
+
       const fromSpaceId = `0x${personalSpaceId}` as Hex;
-      const toSpaceId = `0x${spaceId}` as Hex;
-      const proposalIdHex = `0x${proposalId}` as Hex;
+      const toSpaceId = `0x${normalizedSpaceId}` as Hex;
+      const proposalIdHex = `0x${normalizedProposalId}` as Hex;
 
       // Map vote option to contract enum
       const voteOption =
@@ -69,7 +71,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
       const data = encodeProposalVotedData(proposalIdHex, voteOption);
 
       // The topic is the proposal ID padded to bytes32
-      const topic = padBytes16ToBytes32(proposalId);
+      const topic = padBytes16ToBytes32(normalizedProposalId);
 
       const callData = encodeFunctionData({
         functionName: 'enter',
@@ -90,14 +92,13 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
       const result = await Effect.runPromise(Effect.either(txEffect));
 
       if (Either.isLeft(result)) {
-        console.error('Vote failed', {
-          error: result.left,
-          fromSpaceId,
-          toSpaceId,
-          proposalId,
-          voteOption: option,
-        });
-        throw result.left;
+        const error = result.left;
+        console.error(
+          `Vote failed: ${error.message}`,
+          { fromSpaceId, toSpaceId, proposalId, voteOption: option },
+          error
+        );
+        throw error;
       }
 
       console.log('Vote successful', {
@@ -113,12 +114,13 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
     [personalSpaceId, isRegistered, spaceId, proposalId, tx]
   );
 
-  const { mutate, status } = useMutation({
+  const { mutate, status, error } = useMutation({
     mutationFn: handleVote,
   });
 
   return {
     vote: mutate,
     status,
+    error,
   };
 }

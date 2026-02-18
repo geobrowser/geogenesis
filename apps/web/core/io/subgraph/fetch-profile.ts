@@ -30,7 +30,7 @@ export function defaultProfile(address: string, spaceId?: string): Profile {
  */
 function apiProfileToProfile(apiProfile: ApiProfile): Profile {
   return {
-    id: apiProfile.spaceId,
+    id: apiProfile.entityId ?? apiProfile.spaceId,
     spaceId: apiProfile.spaceId,
     name: apiProfile.name,
     avatarUrl: apiProfile.avatarUrl,

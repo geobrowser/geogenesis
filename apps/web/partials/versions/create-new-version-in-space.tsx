@@ -5,9 +5,14 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { IdUtils } from '@geoprotocol/geo-sdk';
+
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
+import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
+import { useMutate } from '~/core/sync/use-mutate';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -17,6 +22,7 @@ import { Input } from '~/design-system/input';
 type CreateNewVersionInSpaceProps = {
   entityId: EntityId;
   entityName?: string;
+  sourceSpaceId: string;
   setIsCreatingNewVersion: React.Dispatch<React.SetStateAction<boolean>>;
   onDone?: () => void;
 };
@@ -24,20 +30,89 @@ type CreateNewVersionInSpaceProps = {
 export const CreateNewVersionInSpace = ({
   entityId,
   entityName,
+  sourceSpaceId,
   setIsCreatingNewVersion,
   onDone,
 }: CreateNewVersionInSpaceProps) => {
   const router = useRouter();
+  const { storage } = useMutate();
 
   const { personalSpaceId } = usePersonalSpaceId();
   const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
+  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+
   const renderedSpaces =
     query.length === 0
-      ? spaces
-      : spaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
+      ? namedSpaces
+      : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
+
+  const cloneEntityIntoSpace = (targetSpaceId: string) => {
+    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return;
+
+    const sourceValues = getValues({
+      selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
+    });
+
+    const sourceRelations = getRelations({
+      selector: relation => relation.fromEntity.id === entityId && relation.spaceId === sourceSpaceId,
+    });
+
+    const existingTargetValueIds = new Set(
+      getValues({
+        selector: value => value.entity.id === entityId && value.spaceId === targetSpaceId,
+      }).map(value => value.id)
+    );
+
+    const existingTargetRelationSignatures = new Set(
+      getRelations({
+        selector: relation => relation.fromEntity.id === entityId && relation.spaceId === targetSpaceId,
+      }).map(
+        relation =>
+          `${relation.type.id}|${relation.fromEntity.id}|${relation.toEntity.id}|${relation.toSpaceId ?? ''}|${
+            relation.renderableType
+          }`
+      )
+    );
+
+    sourceValues.forEach(value => {
+      const id = ID.createValueId({
+        entityId: value.entity.id,
+        propertyId: value.property.id,
+        spaceId: targetSpaceId,
+      });
+
+      if (existingTargetValueIds.has(id)) return;
+
+      storage.values.set({
+        ...value,
+        id,
+        spaceId: targetSpaceId,
+        entity: { ...value.entity },
+        property: { ...value.property },
+      });
+    });
+
+    sourceRelations.forEach(relation => {
+      const signature = `${relation.type.id}|${relation.fromEntity.id}|${relation.toEntity.id}|${
+        relation.toSpaceId ?? ''
+      }|${relation.renderableType}`;
+
+      if (existingTargetRelationSignatures.has(signature)) return;
+
+      storage.relations.set({
+        ...relation,
+        id: IdUtils.generate(),
+        entityId: IdUtils.generate(),
+        spaceId: targetSpaceId,
+        fromEntity: { ...relation.fromEntity },
+        toEntity: { ...relation.toEntity },
+        type: { ...relation.type },
+      });
+    });
+  };
 
   return (
     <div className="bg-white">
@@ -58,9 +133,11 @@ export const CreateNewVersionInSpace = ({
           <CreateVersionSpaceItem
             key={space.id}
             space={space}
-            entityId={entityId}
-            entityName={entityName}
-            onDone={onDone}
+            onSelect={() => {
+              cloneEntityIntoSpace(space.id);
+              router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
+              onDone?.();
+            }}
           />
         ))}
       </div>
@@ -70,19 +147,14 @@ export const CreateNewVersionInSpace = ({
 
 type CreateVersionSpaceItemProps = {
   space: ReturnType<typeof useSpacesWhereMember>[number];
-  entityId: EntityId;
-  entityName?: string;
-  onDone?: () => void;
+  onSelect: () => void;
 };
 
-const CreateVersionSpaceItem = ({ space, entityId, entityName, onDone }: CreateVersionSpaceItemProps) => {
-  const router = useRouter();
-
+const CreateVersionSpaceItem = ({ space, onSelect }: CreateVersionSpaceItemProps) => {
   return (
     <button
       onClick={() => {
-        router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
-        onDone?.();
+        onSelect();
       }}
       className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
     >

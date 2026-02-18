@@ -62,7 +62,7 @@ export function useFilters(canEdit?: boolean) {
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
       const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value) ?? [];
-      return await getSchemaFromTypeIds(typesInFilter);
+      return await getSchemaFromTypeIds(typesInFilter.map(id => ({ id })));
     },
   });
 

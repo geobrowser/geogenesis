@@ -14,10 +14,11 @@ export function extractValueString(val: unknown): string {
       case 'datetime':
       case 'schedule':
         return String(v.value ?? '');
-      case 'bool':
+      case 'boolean':
         return v.value ? '1' : '0';
-      case 'int64':
-      case 'float64':
+      case 'integer':
+      case 'float':
+      case 'decimal':
         return String(v.value ?? '');
       case 'point':
         return JSON.stringify({ lon: v.lon, lat: v.lat });

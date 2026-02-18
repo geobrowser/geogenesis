@@ -2,7 +2,7 @@ import { ID } from '~/core/id';
 import { DataType, Value } from '~/core/types';
 
 import { RemoteValue } from '../schema';
-import { getAppDataTypeFromRemoteDataType } from './properties';
+import { resolveDataType } from './properties';
 
 /** Checks if a remote value has actual data (not just null fields). */
 export function hasValueData(remoteValue: RemoteValue): boolean {
@@ -21,7 +21,7 @@ export function hasValueData(remoteValue: RemoteValue): boolean {
 }
 
 export function ValueDto(entity: { id: string; name: string | null }, remoteValue: RemoteValue): Value {
-  const mappedDataType = getAppDataTypeFromRemoteDataType(remoteValue.property.dataTypeName);
+  const mappedDataType = resolveDataType(remoteValue.property);
   const value = getValueFromDataType(mappedDataType, remoteValue);
 
   if (value === null && mappedDataType !== 'RELATION') {
@@ -72,15 +72,18 @@ function getValueFromDataType(dataType: DataType, remoteValue: RemoteValue): str
       return remoteValue.text;
 
     // GRC-20 v2 numeric types
-    case 'INT64':
+    case 'INTEGER':
       return remoteValue.integer;
-    case 'FLOAT64':
+    case 'FLOAT':
       return remoteValue.float !== null ? String(remoteValue.float) : null;
     case 'DECIMAL':
-      return remoteValue.decimal !== null ? String(remoteValue.decimal) : null;
+      // Backend may return decimal values in the decimal or float field
+      if (remoteValue.decimal !== null) return String(remoteValue.decimal);
+      if (remoteValue.float !== null) return String(remoteValue.float);
+      return null;
 
     // GRC-20 v2 boolean type
-    case 'BOOL': {
+    case 'BOOLEAN': {
       if (remoteValue.boolean === null) {
         return null;
       }

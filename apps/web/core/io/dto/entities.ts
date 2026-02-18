@@ -1,11 +1,7 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
-
-import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
+import { RelationDtoLive } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
 import { RemoteEntity } from '../schema';
-import { EntityId, SubstreamEntityHistorical } from '../substream-schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
@@ -21,36 +17,5 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     relations: relationsOut,
     values: values,
     updatedAt: remoteEntity.updatedAt,
-  };
-}
-
-export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) {
-  const entity = substreamEntity.currentVersion.version;
-  // const networkTriples = entity.triples.nodes;
-  const triples: any[] = [];
-
-  const networkRelations = entity.relationsByFromVersionId.nodes;
-  const relationsOut = networkRelations.map(RelationDtoHistorical);
-
-  const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_PROPERTY))
-    .map(relation => {
-      return {
-        id: relation.toEntity.id,
-        name: relation.toEntity.name,
-      };
-    });
-
-  return {
-    id: substreamEntity.id,
-    name: entity.name,
-    // @TODO: This Dto is using the legacy data model still, so we can't
-    // correctly read description this way
-    description: Entities.description([]),
-    nameTripleSpaces: [],
-    spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
-    types: entityTypes,
-    relationsOut,
-    triples,
   };
 }

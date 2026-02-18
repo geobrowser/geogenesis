@@ -4,7 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
+import { useMemo } from 'react';
 
+import { DATA_TYPE_PROPERTY } from '../constants';
 import { getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
@@ -37,12 +39,33 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const description = Entities.description(values);
   const types = readTypes(relations);
 
+  // Extract type+space pairs from relations. Use toSpaceId (the type
+  // entity's space) when available, falling back to the relation's spaceId.
+  // Deduped by type ID: an entity should only have one TYPES_PROPERTY
+  // relation per type. If duplicates exist the first space wins.
+  const typesWithSpace = useMemo(
+    () =>
+      dedupeWith(
+        relations
+          .filter(r => r.type.id === SystemIds.TYPES_PROPERTY)
+          .map(r => ({ id: r.toEntity.id, spaceId: r.toSpaceId ?? r.spaceId })),
+        (a, b) => a.id === b.id
+      ),
+    [relations]
+  );
+
+  const stableTypeKey = useMemo(() => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).sort(), [typesWithSpace]);
+  const stableRelationKey = useMemo(
+    () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
+    [relations]
+  );
+
   const { data: schema } = useQuery({
-    enabled: types.length > 0,
-    queryKey: ['entity-schema-for-merging', id, types],
+    enabled: types.length > 0 || relations.length > 0,
+    queryKey: ['entity-schema-for-merging', id, spaceId, stableTypeKey, stableRelationKey],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      return await getSchemaFromTypeIds(types.map(t => t.id));
+      return await getSchemaFromTypeIdsAndRelations(typesWithSpace, relations);
     },
   });
 
@@ -75,6 +98,7 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
     id: SystemIds.TYPES_PROPERTY,
     name: 'Types',
     dataType: 'RELATION',
+    relationValueTypes: [{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }],
   },
   {
     id: SystemIds.COVER_PROPERTY,
@@ -91,9 +115,18 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
  * type should adhere to. Currently schemas are optional.
  *
  * We expect that attributes are only defined via relations, not triples.
+ *
+ * Each type is paired with a spaceId so we can filter PROPERTIES relations
+ * per-type. The same type entity can define different properties in different
+ * spaces, so we need (typeId, spaceId) combos rather than a single spaceId.
+ *
+ * Invariant: each type ID should appear at most once. If the same type ID
+ * appears with different spaceIds, only the last entry's space is kept
+ * (Map insertion order). Callers are expected to dedupe by ID upstream.
  */
-export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property[]> {
-  const dedupedTypeIds = [...new Set(typesIds)];
+export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string }[]): Promise<Property[]> {
+  const dedupedTypeIds = [...new Set(types.map(t => t.id))];
+  const spaceByType = new Map(types.map(t => [t.id, t.spaceId]));
 
   // @TODO(migration): Should generate schema by syncing types
   const typeEntities = await E.findMany({
@@ -110,7 +143,10 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
   const propertyIds = typeEntities
     .flatMap(entity => {
-      return entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
+      const typeSpaceId = spaceByType.get(entity.id);
+      return entity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+      );
     })
     .map(r => r.toEntity.id);
 
@@ -142,4 +178,93 @@ export function readTypes(relations: Relation[]): { id: string; name: string | n
     }));
 
   return dedupeWith(typeIdsViaRelations, (a, b) => a.id === b.id);
+}
+
+/**
+ * Compute schema from both explicit type IDs and IS_TYPE_PROPERTY relations.
+ *
+ * When a property has isType set to true, relations using that property
+ * cause the target entity's properties to be inherited into the source
+ * entity's schema.
+ *
+ * 1. Fetch the type-based schema (existing behavior)
+ * 2. Batch-fetch property definitions for each unique relation type
+ * 3. Filter to those with isType=true, collect their target entity IDs
+ * 4. Fetch those targets' PROPERTIES to get additional schema properties
+ */
+export async function getSchemaFromTypeIdsAndRelations(
+  types: { id: string; spaceId?: string }[],
+  relations: Relation[]
+): Promise<Property[]> {
+  const typeSchema = await getSchemaFromTypeIds(types);
+  let dataTypeSchema: Property[] = [];
+
+  const isPropertyEntity = types.some(t => t.id === SystemIds.PROPERTY);
+  if (isPropertyEntity) {
+    const dataTypeRelations = relations.filter(r => r.type.id === DATA_TYPE_PROPERTY);
+    if (dataTypeRelations.length > 0) {
+      const dataTypeIds = [...new Set(dataTypeRelations.map(r => r.toEntity.id))];
+
+      const dataTypeEntities = await E.findMany({
+        store: geoStore,
+        cache: queryClient,
+        where: { id: { in: dataTypeIds } },
+        first: 100,
+        skip: 0,
+      });
+
+      const dataTypePropertyIds = dataTypeEntities
+        .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+        .map(r => r.toEntity.id);
+
+      if (dataTypePropertyIds.length > 0) {
+        dataTypeSchema = await Effect.runPromise(getProperties(dataTypePropertyIds));
+      }
+    }
+  }
+
+  const baseSchema = dedupeWith([...typeSchema, ...dataTypeSchema], (a, b) => a.id === b.id);
+
+  if (relations.length === 0) return baseSchema;
+
+  // Batch-fetch property definitions for all unique relation types
+  const relationTypeIds = [...new Set(relations.map(r => r.type.id))];
+  const relationProperties = await Effect.runPromise(getProperties(relationTypeIds));
+
+  // Find which relation types have isType=true
+  const isTypePropertyIds = new Set(
+    relationProperties.filter(p => p.isType).map(p => p.id)
+  );
+
+  if (isTypePropertyIds.size === 0) return baseSchema;
+
+  // Collect target entity IDs from matching IS_TYPE relations,
+  // preserving the relation's spaceId for per-target filtering
+  const isTypeRelations = relations.filter(r => isTypePropertyIds.has(r.type.id));
+  const targetIds = [...new Set(isTypeRelations.map(r => r.toEntity.id))];
+  const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
+
+  // Fetch target entities to get their PROPERTIES relations
+  const targetEntities = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: { id: { in: targetIds } },
+    first: 100,
+    skip: 0,
+  });
+
+  const additionalPropertyIds = targetEntities
+    .flatMap(entity => {
+      const targetSpaceId = spaceByTarget.get(entity.id);
+      return entity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
+      );
+    })
+    .map(r => r.toEntity.id);
+
+  if (additionalPropertyIds.length === 0) return baseSchema;
+
+  const additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
+
+  return dedupeWith([...baseSchema, ...additionalProperties], (a, b) => a.id === b.id);
 }

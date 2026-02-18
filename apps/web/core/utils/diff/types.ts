@@ -7,9 +7,9 @@ export interface DiffChunk {
 export type TextValueType = 'TEXT';
 
 export type SimpleValueType =
-  | 'BOOL'
-  | 'INT64'
-  | 'FLOAT64'
+  | 'BOOLEAN'
+  | 'INTEGER'
+  | 'FLOAT'
   | 'DECIMAL'
   | 'BYTES'
   | 'DATE'
@@ -85,6 +85,9 @@ export interface DataBlockChange {
   type: 'dataBlock';
   before: string | null;
   after: string | null;
+  blockName?: string | null;
+  values?: ValueChange[];
+  relations?: RelationChange[];
 }
 
 export type BlockChange = TextBlockChange | ImageBlockChange | DataBlockChange;

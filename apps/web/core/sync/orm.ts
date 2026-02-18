@@ -106,6 +106,8 @@ export class E {
     store: GeoStore;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
@@ -123,6 +125,8 @@ export class E {
     spaceId?: string;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'relation', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
@@ -137,15 +141,17 @@ export class E {
     where,
     first,
     skip,
+    spaceId,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
+    spaceId?: string;
   }) {
     if (where?.id?.in) {
-      const entityIds = where.id.in;
+      const entityIds = where.id.in.filter(id => id !== '');
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds],
@@ -159,7 +165,7 @@ export class E {
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
       const entities = entityIds.map(entityId => {
-        return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+        return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
       const nonNullEntities = entities.filter(e => e !== null);
@@ -196,7 +202,7 @@ export class E {
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
     const entities = mergedIds.map(entityId => {
-      return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
     });
 
     return entities.filter(e => e !== null);

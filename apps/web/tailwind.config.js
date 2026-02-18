@@ -185,6 +185,7 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '400',
+            letterSpacing: '0px',
           },
         ],
         tableProperty: [

@@ -4,7 +4,6 @@ import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
 import History from '@tiptap/extension-history';
-import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -13,6 +12,7 @@ import Underline from '@tiptap/extension-underline';
 
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
+import { ImageNode } from './image-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
 import { VideoNode } from './video-node';
@@ -47,7 +47,7 @@ export const tiptapExtensions = [
   BulletList,
   ListItem,
   DataNode,
-  Image,
+  ImageNode,
   VideoNode,
   Placeholder.configure({
     placeholder: ({ node }) => {

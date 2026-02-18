@@ -65,7 +65,7 @@ export function TableBlockContextMenu() {
         <Dropdown.Content
           sideOffset={8}
           className="z-[1001] block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          align="end"
+          align="start"
         >
           {isInitialState && (
             <>
@@ -101,8 +101,10 @@ export function TableBlockContextMenu() {
                 </Link>
               </MenuItem>
               <MenuItem onClick={onCopyBlockId}>
-                <span>Copy block ID</span>
-                <Copy />
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span>Copy block ID</span>
+                  <Copy />
+                </div>
               </MenuItem>
             </>
           )}

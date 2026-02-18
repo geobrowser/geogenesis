@@ -11,24 +11,25 @@ import {
   MAX_VIDEO_SIZE_BYTES,
   VALID_VIDEO_TYPES,
   VIDEO_ACCEPT,
-  VIDEO_BLOCK_TYPE,
-  VIDEO_URL_PROPERTY,
 } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { getVideoPath } from '~/core/utils/utils';
+import { NavUtils, getVideoPath } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { Relation } from '~/design-system/icons/relation';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { VideoSmall } from '~/design-system/icons/video-small';
 import { MenuItem } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 export const VideoNode = Node.create({
   name: 'video',
@@ -70,10 +71,14 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
+  const { blockRelations } = useEditorStore();
+  const relation = blockRelations.find(b => b.block.id === id);
+  const relationEntityId = relation?.entityId ?? '';
+
   return (
     <NodeViewWrapper>
       <div contentEditable="false" className="video-node my-4">
-        <VideoNodeChildren spaceId={spaceId} entityId={id} onRemove={deleteNode} />
+        <VideoNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
   );
@@ -88,10 +93,12 @@ function formatFileSize(bytes: number): string {
 function VideoNodeChildren({
   spaceId,
   entityId,
+  relationEntityId,
   onRemove,
 }: {
   spaceId: string;
   entityId: string;
+  relationEntityId: string;
   onRemove: () => void;
 }) {
   // Hydrate the video block entity from remote to populate the reactive store
@@ -116,16 +123,16 @@ function VideoNodeChildren({
 
   // Read the video URL from the store
   const videoUrlValues = useValues({
-    selector: v => v.entity.id === entityId && v.property.id === VIDEO_URL_PROPERTY && v.spaceId === spaceId,
+    selector: v => v.entity.id === entityId && v.property.id === SystemIds.IMAGE_URL_PROPERTY && v.spaceId === spaceId,
   });
   const storedVideoUrl = videoUrlValues?.[0]?.value ?? '';
 
-  // Read the Types relation (to VIDEO_BLOCK_TYPE) for deletion
+  // Read the Types relation (to VIDEO_TYPE) for deletion
   const typeRelations = useRelations({
     selector: r =>
       r.fromEntity.id === entityId &&
       r.type.id === SystemIds.TYPES_PROPERTY &&
-      r.toEntity.id === VIDEO_BLOCK_TYPE &&
+      r.toEntity.id === SystemIds.VIDEO_TYPE &&
       r.spaceId === spaceId,
   });
 
@@ -219,15 +226,15 @@ function VideoNodeChildren({
       }
 
       if (ipfsUrl) {
-        // Save the video URL to the store
+        // Save the video URL to the store using the unified IPFS URL property
         storage.values.set({
           id: ID.createValueId({
             entityId,
-            propertyId: VIDEO_URL_PROPERTY,
+            propertyId: SystemIds.IMAGE_URL_PROPERTY,
             spaceId,
           }),
           entity: { id: entityId, name: null },
-          property: { id: VIDEO_URL_PROPERTY, name: 'Video URL', dataType: 'TEXT' },
+          property: { id: SystemIds.IMAGE_URL_PROPERTY, name: 'IPFS URL', dataType: 'TEXT' },
           spaceId,
           value: ipfsUrl,
         });
@@ -319,7 +326,7 @@ function VideoNodeChildren({
       storage.values.delete(nameValue);
     }
 
-    // Delete the Types relation (VIDEO_BLOCK_TYPE)
+    // Delete the Types relation (VIDEO_TYPE)
     const typeRelation = typeRelations?.[0];
     if (typeRelation) {
       storage.relations.delete(typeRelation);
@@ -356,6 +363,17 @@ function VideoNodeChildren({
               className="z-[1001] block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
               align="end"
             >
+              {isEditing && relationEntityId && (
+                <MenuItem>
+                  <Link
+                    href={NavUtils.toEntity(spaceId, relationEntityId)}
+                    className="flex w-full items-center justify-between gap-2"
+                  >
+                    <span>View block relation</span>
+                    <Relation />
+                  </Link>
+                </MenuItem>
+              )}
               <MenuItem onClick={onCopyBlockId}>
                 <span className="flex w-full items-center justify-between">
                   <span>Copy block ID</span>

@@ -1,9 +1,15 @@
 import { IdUtils, Op } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/types';
 
-import { prepareLocalDataForPublishing } from './publish';
+import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect, Publish } from './publish';
+
+/** Unwrap the Effect for test assertions */
+function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
+  return Effect.runSync(prepareLocalDataForPublishingEffect(values, relations, spaceId));
+}
 
 // Helper function to create a mock Value
 function createMockValue(overrides: Partial<Value> = {}): Value {
@@ -366,5 +372,250 @@ describe('prepareLocalDataForPublishing', () => {
       expect(result[0].type).toBe('createRelation');
       expect(result[1].type).toBe('updateEntity');
     });
+
+    it('should skip values with RELATION data type instead of throwing', () => {
+      const entityId = IdUtils.generate();
+      const values = [
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          value: '',
+        }),
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Name', dataType: 'TEXT' },
+          value: 'hello',
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.set).toHaveLength(1);
+    });
+
+    it('should skip deleted values with RELATION data type instead of unsetting them', () => {
+      const values = [
+        createMockValue({
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          isDeleted: true,
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(0);
+    });
+  });
+});
+
+describe('toRfc3339Date', () => {
+  const toRfc3339Date = Publish.toRfc3339Date;
+
+  it('should convert a full ISO string to date-only', () => {
+    expect(toRfc3339Date('2024-01-15T14:30:00.000Z')).toBe('2024-01-15');
+  });
+
+  it('should pass through an already-correct date-only string', () => {
+    expect(toRfc3339Date('2024-07-04')).toBe('2024-07-04');
+  });
+
+  it('should handle ISO string with timezone offset', () => {
+    expect(toRfc3339Date('2024-12-31T23:00:00.000+00:00')).toBe('2024-12-31');
+  });
+
+  it('should extract date from a time-only string (epoch date)', () => {
+    expect(toRfc3339Date('14:30:00Z')).toBe('1970-01-01');
+  });
+});
+
+describe('toRfc3339Time', () => {
+  const toRfc3339Time = Publish.toRfc3339Time;
+
+  it('should convert a full ISO string to time-only', () => {
+    expect(toRfc3339Time('2024-01-15T14:30:00.000Z')).toBe('14:30:00Z');
+  });
+
+  it('should convert a full ISO string with midnight', () => {
+    expect(toRfc3339Time('2024-01-15T00:00:00.000Z')).toBe('00:00:00Z');
+  });
+
+  it('should pass through an already-correct time-only string', () => {
+    expect(toRfc3339Time('14:30:00Z')).toBe('14:30:00Z');
+  });
+
+  it('should handle time extracted from a date-only string (midnight)', () => {
+    expect(toRfc3339Time('2024-07-04')).toBe('00:00:00Z');
+  });
+});
+
+describe('toRfc3339Datetime', () => {
+  const toRfc3339Datetime = Publish.toRfc3339Datetime;
+
+  it('should convert a full ISO string to RFC 3339 datetime', () => {
+    expect(toRfc3339Datetime('2024-01-15T14:30:00.000Z')).toBe('2024-01-15T14:30:00Z');
+  });
+
+  it('should convert a date-only string to datetime at midnight', () => {
+    expect(toRfc3339Datetime('2024-07-04')).toBe('2024-07-04T00:00:00Z');
+  });
+
+  it('should convert a time-only string to datetime on epoch date', () => {
+    expect(toRfc3339Datetime('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
+  });
+
+  it('should strip milliseconds from full ISO string', () => {
+    expect(toRfc3339Datetime('2024-06-15T09:45:30.123Z')).toBe('2024-06-15T09:45:30Z');
+  });
+
+  it('should produce exactly one trailing Z', () => {
+    const result = toRfc3339Datetime('2024-01-15T14:30:00.000Z');
+    expect(result).toBe('2024-01-15T14:30:00Z');
+    expect(result.endsWith('ZZ')).toBe(false);
+  });
+});
+
+describe('date/time publish round-trip', () => {
+  it('should produce SDK-compatible DATE value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Birthday', dataType: 'DATE' },
+        value: '2024-01-15T00:00:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('date');
+    expect(setValue.value).toBe('2024-01-15');
+  });
+
+  it('should produce SDK-compatible TIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Start Time', dataType: 'TIME' },
+        value: '1970-01-01T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('time');
+    expect(setValue.value).toBe('14:30:00Z');
+  });
+
+  it('should produce SDK-compatible DATETIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Created At', dataType: 'DATETIME' },
+        value: '2024-01-15T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('datetime');
+    expect(setValue.value).toBe('2024-01-15T14:30:00Z');
+  });
+});
+
+describe('parseDecimalString', () => {
+  const parseDecimalString = Publish.parseDecimalString;
+
+  it('should parse a simple decimal', () => {
+    const result = parseDecimalString('10.1');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 101n });
+  });
+
+  it('should parse a decimal with leading zero', () => {
+    const result = parseDecimalString('0.005');
+    expect(result.exponent).toBe(-3);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 5n });
+  });
+
+  it('should parse a whole number', () => {
+    const result = parseDecimalString('42');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 42n });
+  });
+
+  it('should parse zero', () => {
+    const result = parseDecimalString('0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should parse zero with decimal point', () => {
+    const result = parseDecimalString('0.0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should normalize trailing zeros in the fraction', () => {
+    // "1.0000" → combined = 10000, strip trailing zeros → mantissa = 1, exponent = 0
+    const result = parseDecimalString('1.0000');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should normalize trailing zeros in whole numbers', () => {
+    // "100" → mantissa = 1, exponent = 2
+    const result = parseDecimalString('100');
+    expect(result.exponent).toBe(2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should handle negative values', () => {
+    const result = parseDecimalString('-3.14');
+    expect(result.exponent).toBe(-2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -314n });
+  });
+
+  it('should handle negative whole numbers', () => {
+    const result = parseDecimalString('-50');
+    expect(result.exponent).toBe(1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -5n });
+  });
+
+  it('should handle negative zero', () => {
+    const result = parseDecimalString('-0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should trim whitespace', () => {
+    const result = parseDecimalString('  12.5  ');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 125n });
+  });
+
+  it('should handle large precision decimals', () => {
+    const result = parseDecimalString('123456789.123456789');
+    expect(result.exponent).toBe(-9);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 123456789123456789n });
+  });
+
+  it('should handle "1.10" by normalizing the trailing zero', () => {
+    // "1.10" → combined = 110, strip trailing zero → mantissa = 11, exponent = -1
+    const result = parseDecimalString('1.10');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 11n });
   });
 });

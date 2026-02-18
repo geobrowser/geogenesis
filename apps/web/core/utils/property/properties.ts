@@ -83,14 +83,14 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         renderableTypeId: VIDEO_RENDERABLE_TYPE,
       };
     // GRC-20 v2 numeric types
-    case 'INT64':
+    case 'INTEGER':
       return {
-        baseDataType: 'INT64',
+        baseDataType: 'INTEGER',
         renderableTypeId: null,
       };
-    case 'FLOAT64':
+    case 'FLOAT':
       return {
-        baseDataType: 'FLOAT64',
+        baseDataType: 'FLOAT',
         renderableTypeId: null,
       };
     case 'DECIMAL':
@@ -99,9 +99,9 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         renderableTypeId: null,
       };
     // GRC-20 v2 boolean type
-    case 'BOOL':
+    case 'BOOLEAN':
       return {
-        baseDataType: 'BOOL',
+        baseDataType: 'BOOLEAN',
         renderableTypeId: null,
       };
     // GRC-20 v2 temporal types
@@ -157,11 +157,11 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   IMAGE: 'RELATION',
   VIDEO: 'RELATION',
   // GRC-20 v2 numeric types
-  INT64: 'INT64',
-  FLOAT64: 'FLOAT64',
+  INTEGER: 'INTEGER',
+  FLOAT: 'FLOAT',
   DECIMAL: 'DECIMAL',
   // GRC-20 v2 boolean type
-  BOOL: 'BOOL',
+  BOOLEAN: 'BOOLEAN',
   // GRC-20 v2 temporal types
   DATE: 'DATE',
   DATETIME: 'DATETIME',

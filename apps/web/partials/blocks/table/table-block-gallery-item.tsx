@@ -5,9 +5,8 @@ import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelation, useValues } from '~/core/sync/use-store';
+import { useRelation, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
@@ -19,6 +18,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -53,20 +53,10 @@ export function TableBlockGalleryItem({
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { image, description } = nameCell;
+  let { image } = nameCell;
 
-  const name = useName(rowEntityId);
-
-  const descriptionValues = useValues({
-    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
-  });
-
-  const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
-  const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
-
-  if (maybeDescription) {
-    description = maybeDescription;
-  }
+  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
+  const description = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId })?.value ?? nameCell.description ?? null;
 
   const avatarRelation = useRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
@@ -80,15 +70,10 @@ export function TableBlockGalleryItem({
 
   const maybeCoverUrl = coverRelation?.toEntity.value;
 
-  // Check which image property is selected to be shown in the collection
-  const showCover = columns[SystemIds.COVER_PROPERTY] !== undefined;
-
-  // Only use cover if it's selected to be shown (cover takes priority if both are shown)
-  if (showCover) {
-    image = maybeCoverUrl;
-  } else {
-    image = maybeAvatarUrl;
-  }
+  // Always show cover if available, then fall back to avatar.
+  // This ensures images render even when cover/avatar aren't
+  // configured as shown columns on the data block.
+  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
 
   const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
   if (image && imageUrl) {
@@ -129,18 +114,14 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // Use the appropriate image property based on what's selected to be shown
-                // Prefer cover if shown, otherwise use avatar
-                const usePropertyId = showCover ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;
-                const usePropertyName = showCover ? 'Cover' : 'Avatar';
-
-                // Use the consolidated helper to create and link the image
+                // Gallery items default to cover for new uploads since
+                // the large image area is a natural fit for cover images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: usePropertyId,
-                  relationPropertyName: usePropertyName,
+                  relationPropertyId: SystemIds.COVER_PROPERTY,
+                  relationPropertyName: 'Cover',
                   spaceId: currentSpaceId,
                 });
               }}
@@ -153,43 +134,11 @@ export function TableBlockGalleryItem({
             {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Create',
-                      data: result,
-                    }
-                  );
+                  onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
                 }}
                 onDone={(result, fromCreateFn) => {
-                  if (fromCreateFn) {
-                    // We bail out in the case that we're receiving the onDone
-                    // callback from within the create entity function internal
-                    // to SelectEntity.
-                    return;
-                  }
-
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  //
-                  // @TODO: When do we use the placeholder and when we use the real entity id?
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Find',
-                      data: result,
-                    }
-                  );
+                  if (fromCreateFn) return;
+                  onChangeEntry(rowEntityId, currentSpaceId, { type: 'FIND_ENTITY', entity: result });
                 }}
                 spaceId={currentSpaceId}
                 autoFocus={autoFocus}
@@ -197,36 +146,12 @@ export function TableBlockGalleryItem({
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
-                  <PageStringField
-                    placeholder="Entity name..."
-                    value={name ?? ''}
-                    shouldDebounce={true}
+                  <EditModeNameField
+                    name={name}
+                    entityId={rowEntityId}
+                    spaceId={currentSpaceId}
                     onChange={value => {
-                      onChangeEntry(
-                        {
-                          entityId: rowEntityId,
-                          entityName: value,
-                          spaceId: currentSpaceId,
-                        },
-                        {
-                          type: 'EVENT',
-                          data: {
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: {
-                                attributeId: SystemIds.NAME_PROPERTY,
-                                entityId: rowEntityId,
-                                spaceId: currentSpaceId,
-                                attributeName: 'Name',
-                                entityName: name,
-                                type: 'TEXT',
-                                value: name ?? '',
-                              },
-                              value: { type: 'TEXT', value },
-                            },
-                          },
-                        }
-                      );
+                      onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
                   />
                 ) : (
@@ -246,31 +171,7 @@ export function TableBlockGalleryItem({
                       placeholder="Entity name..."
                       value={name ?? ''}
                       onChange={value => {
-                        onChangeEntry(
-                          {
-                            entityId: rowEntityId,
-                            entityName: value,
-                            spaceId: currentSpaceId,
-                          },
-                          {
-                            type: 'EVENT',
-                            data: {
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: {
-                                  attributeId: SystemIds.NAME_PROPERTY,
-                                  entityId: rowEntityId,
-                                  spaceId: currentSpaceId,
-                                  attributeName: 'Name',
-                                  entityName: name,
-                                  type: 'TEXT',
-                                  value: name ?? '',
-                                },
-                                value: { type: 'TEXT', value },
-                              },
-                            },
-                          }
-                        );
+                        onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                       }}
                     />
                   </CollectionMetadata>
@@ -381,3 +282,4 @@ export function TableBlockGalleryItem({
     </Link>
   );
 }
+

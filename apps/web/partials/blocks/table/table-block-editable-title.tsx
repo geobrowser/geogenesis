@@ -5,44 +5,37 @@ import * as React from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
-  const { spaces } = useSpaces();
-  const userCanEdit = useUserIsEditing(spaceId);
-
   const { name, setName, isLoading } = useDataBlock();
   const { source } = useSource();
+  const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
+  const userCanEdit = useUserIsEditing(spaceId);
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
   // Auto focus newly created data blocks
-  React.useEffect(() => {
-    if (!isLoading && !name) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 200);
-    }
-  }, [name, isLoading]);
+  const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200);
 
   return (
     <div className="table-block-editable-title flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
         <img
           src={PLACEHOLDER_SPACE_IMAGE}
+          alt=""
           className="flex !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover"
         />
       )}
       {source.type === 'SPACES' && (
         <div className="group relative z-100 flex h-full">
           {renderedSpaces.map(spaceId => {
-            const selectedSpace = spaces.find(space => space.id === spaceId);
+            const selectedSpace = spacesById.get(spaceId);
 
             if (!selectedSpace) return null;
 
@@ -56,6 +49,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
               <img
                 key={selectedSpace.id}
                 src={PLACEHOLDER_SPACE_IMAGE}
+                alt=""
                 className="-ml-1.5 block !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover first:-ml-0"
               />
             );
@@ -71,7 +65,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
           <div className="absolute right-0 top-0 z-100 size-0">
             <div className="pointer-events-none absolute -top-3 left-2 z-100 flex w-60 flex-col gap-1 overflow-auto rounded-lg border border-divider bg-white p-3 opacity-0 shadow-card group-hover:pointer-events-auto group-hover:opacity-100">
               {source.value.map(spaceId => {
-                const space = spaces.find(space => space.id === spaceId);
+                const space = spacesById.get(spaceId);
 
                 if (!space) return null;
 
@@ -81,7 +75,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
                       {space.entity?.image ? (
                         <NativeGeoImage value={space.entity.image} className="!size-[16px] !rounded-sm" />
                       ) : (
-                        <img src={PLACEHOLDER_SPACE_IMAGE} className="!size-[16px] !rounded-sm" />
+                        <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="!size-[16px] !rounded-sm" />
                       )}
                     </div>
                     <div className="flex-grow truncate text-button text-text">{space.entity?.name}</div>

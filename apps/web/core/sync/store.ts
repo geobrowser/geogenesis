@@ -3,7 +3,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
@@ -147,6 +147,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
+
+    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
   }
 
   public hydrateWith(entities: Entity[]) {
@@ -167,19 +169,23 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     reactiveValues.set(prev => {
-      const unchangedValues = prev.filter(t => {
-        return !valueIdsToWrite.has(t.id);
+      const prevById = new Map(prev.map(v => [v.id, v]));
+      const mergedIncoming = newValues.map(v => {
+        const local = prevById.get(v.id);
+        return local && local.isLocal && !local.hasBeenPublished ? local : v;
       });
-
-      return [...unchangedValues, ...newValues];
+      const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
+      return [...unchangedValues, ...mergedIncoming];
     });
 
     reactiveRelations.set(prev => {
-      const unchangedRelations = prev.filter(t => {
-        return !relationIdsToWrite.has(t.id);
+      const prevById = new Map(prev.map(r => [r.id, r]));
+      const mergedIncoming = newRelations.map(r => {
+        const local = prevById.get(r.id);
+        return local && local.isLocal && !local.hasBeenPublished ? local : r;
       });
-
-      return [...unchangedRelations, ...newRelations];
+      const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
+      return [...unchangedRelations, ...mergedIncoming];
     });
   }
 
@@ -316,6 +322,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const renderableTypeId = renderableType ? renderableType.toEntity.id : null;
 
+    const formatValue = entity?.values.find(v => v.property.id === FORMAT_PROPERTY);
+    const unitRelation = entity?.relations.find(t => t.type.id === UNIT_PROPERTY);
+
     return {
       id,
       name: entity?.name ?? null,
@@ -323,6 +332,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       relationValueTypes,
       renderableType: renderableTypeId,
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
+      format: formatValue?.value ?? null,
+      unit: unitRelation?.toEntity.id ?? null,
 
       /**
        * A data type is still editable as long as there's no
@@ -490,5 +501,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
         }),
       ];
     });
+
+    this.stream.emit({ type: GeoEventStream.CHANGES_PUBLISHED, valueIds, relationIds });
   }
 }

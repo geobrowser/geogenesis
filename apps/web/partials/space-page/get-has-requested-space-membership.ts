@@ -1,15 +1,16 @@
+import { Effect } from 'effect';
 import { cache } from 'react';
 
-import { fetchProposedMembers } from '~/core/io/subgraph/fetch-proposed-members';
+import { fetchProfile } from '~/core/io/subgraph';
+import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 
 export const getHasRequestedSpaceMembership = cache(
   async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
-    // const proposedMembers = await fetchProposedMembers({ id: spaceId });
-    const proposedMembers: string[] = [];
+    if (!connectedAddress) return false;
 
-    // @HACK to get around incorrect checksum addresses in substream
-    return connectedAddress
-      ? proposedMembers.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase())
-      : false;
+    const profile = await Effect.runPromise(fetchProfile(connectedAddress));
+    if (!profile?.spaceId) return false;
+
+    return hasActiveMemberProposal(spaceId, profile.spaceId);
   }
 );

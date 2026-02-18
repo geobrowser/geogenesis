@@ -1,4 +1,5 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -37,6 +38,10 @@ export default async function Layout(props0: LayoutProps) {
 
   const spaceId = params.id;
 
+  if (!IdUtils.isValid(spaceId)) {
+    notFound();
+  }
+
   const props = await getSpaceFrontPage(spaceId);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
@@ -50,7 +55,7 @@ export default async function Layout(props0: LayoutProps) {
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
       >
-        <EntityPageCover avatarUrl={null} coverUrl={props.coverUrl} />
+        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableSpaceHeading
@@ -121,6 +126,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: [],
       blocks: [],
       space: null,
+      avatarUrl: null,
       coverUrl: null,
     };
   }
@@ -164,6 +170,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
     blockRelations: entity.relations,
     blocks,
     space,
+    avatarUrl: Entities.avatar(entity.relations) ?? null,
     coverUrl: Entities.cover(entity.relations) ?? null,
   };
 };

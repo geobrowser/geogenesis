@@ -2,15 +2,13 @@ import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
+import { fetchSidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 
 import { Component } from './component';
-
-export const dynamic = 'force-dynamic';
 
 interface Props {
   searchParams: Promise<{ proposalType?: 'membership' | 'content' }>;
@@ -19,23 +17,17 @@ interface Props {
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
-  const [person, proposalsCount] = await Promise.all([
-    connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
-    connectedAddress
-      ? fetchProposalCountByUser({
-          userId: connectedAddress,
-        })
-      : null,
-  ]);
+  const person = connectedAddress ? await Effect.runPromise(fetchProfile(connectedAddress)) : null;
 
-  const acceptedProposalsCount = proposalsCount ?? 0;
+  const sidebarCounts = person?.spaceId ? await fetchSidebarCounts(person.spaceId) : undefined;
 
   return (
     <Component
       header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} />}
       proposalType={(await props.searchParams).proposalType}
-      acceptedProposalsCount={acceptedProposalsCount}
+      sidebarCounts={sidebarCounts}
       connectedAddress={connectedAddress}
+      connectedSpaceId={person?.spaceId}
     />
   );
 }

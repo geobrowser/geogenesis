@@ -10,15 +10,12 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useKey } from '~/core/hooks/use-key';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Space } from '~/core/io/dto/spaces';
-import { queryClient } from '~/core/query-client';
 import { useMutate } from '~/core/sync/use-mutate';
 import { detectWeb2URLs } from '~/core/utils/url-detection';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
@@ -30,7 +27,6 @@ import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Input } from '~/design-system/input';
 import { Select } from '~/design-system/select';
 import { Tag } from '~/design-system/tag';
@@ -109,9 +105,13 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  const [allowedTypes, setAllowedTypes] = useState<NonNullable<Property['relationValueTypes']>>(
-    () => relationValueTypes ?? []
-  );
+  const [removedTypeIds, setRemovedTypeIds] = useState<Set<string>>(new Set());
+
+  const allowedTypes = React.useMemo(() => {
+    const base = relationValueTypes ?? [];
+    if (removedTypeIds.size === 0) return base;
+    return base.filter(t => !removedTypeIds.has(t.id));
+  }, [relationValueTypes, removedTypeIds]);
 
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
@@ -352,7 +352,7 @@ export const SelectEntity = ({
                                           filterType="Type"
                                           name={allowedType.name ?? ''}
                                           onDelete={() =>
-                                            setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
+                                            setRemovedTypeIds(prev => new Set([...prev, allowedType.id]))
                                           }
                                         />
                                       );
@@ -472,22 +472,16 @@ export const SelectEntity = ({
                                   )}
                                   <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                                   <div className="mt-1.5 flex items-center gap-1.5">
-                                    {withSelectSpace && (
+                                    {withSelectSpace && (result.spaces ?? []).length > 0 && (
                                       <div className="flex shrink-0 items-center gap-1">
                                         <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
-                                          {(result.spaces ?? []).length > 0 ? (
-                                            <>
-                                              <NativeGeoImage
-                                                value={result.spaces[0].image}
-                                                alt=""
-                                                className="h-full w-full object-cover"
-                                              />
-                                            </>
-                                          ) : (
-                                            <TopRanked color="grey-04" />
-                                          )}
+                                          <NativeGeoImage
+                                            value={result.spaces[0].image}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                          />
                                         </span>
-                                        <span className="text-[0.875rem] text-text">Top-ranked</span>
+                                        <span className="text-[0.875rem] text-text">{result.spaces[0].name}</span>
                                       </div>
                                     )}
                                     {result.types.length > 0 && (
@@ -729,26 +723,22 @@ type SpaceFilterInputProps = {
 };
 
 const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
-  const [query, onQueryChange] = React.useState('');
-  const debouncedQuery = useDebouncedValue(query, 100);
-  const { spaces } = useSpaces();
+  const { query, setQuery, spaces: results } = useSpacesQuery();
 
-  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
-
-  const onSelectSpace = (space: Space) => {
-    onQueryChange('');
+  const onSelectSpace = (space: (typeof results)[number]) => {
+    setQuery('');
 
     onSelect({
       id: space.id,
-      name: space.entity?.name ?? null,
+      name: space.name,
     });
   };
 
   return (
     <div className="relative z-100 w-full">
-      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+      <Popover.Root open={!!query} onOpenChange={() => setQuery('')}>
         <Popover.Anchor asChild>
-          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+          <Input value={query} onChange={e => setQuery(e.target.value)} />
         </Popover.Anchor>
         {query && (
           <Popover.Content
@@ -767,12 +757,12 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                       <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                         <div className="flex w-full items-center justify-between leading-[1rem]">
                           <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.entity?.name ?? result.id}
+                            {result.name ?? result.id}
                           </Text>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.entity?.name ?? result.id) && (
-                            <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
+                          {(result.name ?? result.id) && (
+                            <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
                           )}
                           <span style={{ rotate: '270deg' }}>
                             <ChevronDownSmall color="grey-04" />

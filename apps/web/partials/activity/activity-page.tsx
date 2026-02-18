@@ -1,9 +1,11 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
+import { fetchProfile } from '~/core/io/subgraph';
 import { getProposalName } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -43,9 +45,11 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // some point in the future.
   const address = entity?.relations.find(t => t.type.id === SystemIds.ACCOUNTS_PROPERTY)?.toEntity.name;
 
-  const proposals = address
+  const profile = address ? await Effect.runPromise(fetchProfile(address)) : null;
+
+  const proposals = profile?.spaceId
     ? await fetchProposalsByUser({
-        userId: address,
+        proposerSpaceId: profile.spaceId,
         spaceId: searchParams.spaceId,
       })
     : [];

@@ -7,6 +7,8 @@ import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
+import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import type { Space } from '~/core/io/dto/spaces';
@@ -23,10 +25,10 @@ import type {
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
-import { Publish } from '~/core/utils/publish';
-import { useEntityAvatarUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Dropdown } from '~/design-system/dropdown';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
@@ -40,10 +42,47 @@ const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
 const COVER_PROPERTY_ID = SystemIds.COVER_PROPERTY;
 const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY;
 
+function hasVisibleChanges(entity: EntityDiff): boolean {
+  const hasName = entity.values.some(v => v.propertyId === NAME_PROPERTY_ID && (v.before !== null || v.after !== null));
+  const hasBlocks = entity.blocks.length > 0;
+
+  const hasAvatarOrCover = entity.relations.some(
+    r => (r.typeId === AVATAR_PROPERTY_ID || r.typeId === COVER_PROPERTY_ID) && (r.before !== null || r.after !== null)
+  );
+  const hasTypes = entity.relations.some(
+    r => r.typeId === TYPES_PROPERTY_ID && (r.before !== null || r.after !== null)
+  );
+
+  const nonSpecialRelations = entity.relations.filter(
+    r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
+  );
+  const hasImageRelations = nonSpecialRelations.some(r => r.after?.imageUrl || r.before?.imageUrl);
+  const hasOtherRelations = nonSpecialRelations.some(r => !r.after?.imageUrl && !r.before?.imageUrl);
+
+  const imageRelationPropertyIds = new Set(
+    nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl).map(r => r.typeId)
+  );
+  const otherRelationPropertyIds = new Set(
+    nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl).map(r => r.typeId)
+  );
+  const hasValues = entity.values.some(
+    v =>
+      v.propertyId !== NAME_PROPERTY_ID &&
+      v.propertyId !== AVATAR_PROPERTY_ID &&
+      v.propertyId !== COVER_PROPERTY_ID &&
+      (v.type as string) !== 'RELATION' &&
+      !imageRelationPropertyIds.has(v.propertyId) &&
+      !otherRelationPropertyIds.has(v.propertyId) &&
+      (v.before !== null || v.after !== null)
+  );
+
+  return hasName || hasBlocks || hasAvatarOrCover || hasTypes || hasImageRelations || hasOtherRelations || hasValues;
+}
+
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const { isReviewOpen, setIsReviewOpen } = useDiff();
+  const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
@@ -79,8 +118,10 @@ export const ReviewChanges = () => {
   }, [spacesKey, activeSpace]);
 
   React.useEffect(() => {
+    // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
+    // publishing). The space name/image are still needed in the top bar during the
+    // publish-complete state. Stale metadata is harmless and gets replaced on the next fetch.
     if (dedupedSpacesWithActions.length === 0) {
-      setSpaces([]);
       return;
     }
 
@@ -117,14 +158,14 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isReadyToPublish = React.useMemo(() => {
-    if (!activeSpace || proposalName.length === 0) return false;
-    const ops = Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace);
+  const isReadyToPublish = proposalName.length > 0;
 
-    return ops.length > 0;
-  }, [activeSpace, proposalName, valuesFromSpace, relationsFromSpace]);
+  // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
+  const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
 
-  const [entities, isLoadingChanges] = useLocalChanges(activeSpace);
+  const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
+  const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
+  const hasVisibleEntities = visibleEntities.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
   const handleProposalNameChange = (name: string) => {
@@ -134,7 +175,7 @@ export const ReviewChanges = () => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = React.useCallback(async () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
@@ -150,7 +191,17 @@ export const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  };
+  }, [activeSpace, isReadyToPublish, makeProposal, valuesFromSpace, relationsFromSpace, proposalName]);
+
+  useKeyboardShortcuts(
+    React.useMemo(
+      () =>
+        isReviewOpen && isReadyToPublish && !isPublishing
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+    )
+  );
 
   const handleDeleteAll = () => {
     if (!activeSpace) return;
@@ -226,6 +277,7 @@ export const ReviewChanges = () => {
             <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
               <div className="text-body">Proposal name</div>
               <input
+                ref={proposalNameRef}
                 type="text"
                 value={rawProposalName}
                 onChange={e => handleProposalNameChange(e.target.value)}
@@ -239,9 +291,7 @@ export const ReviewChanges = () => {
           </div>
         </div>
         <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
-          {statusBarState.reviewState === 'publish-complete' ? (
-            null
-          ) : isLoadingChanges ? (
+          {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
             <div className="rounded-xl bg-white p-4">
               <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
                 <div className="mb-4 flex items-center gap-3">
@@ -264,7 +314,7 @@ export const ReviewChanges = () => {
                 </div>
               </div>
             </div>
-          ) : entities.length === 0 ? (
+          ) : !hasVisibleEntities ? (
             <div className="rounded-xl bg-white p-4">
               <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
                 <Text as="p" variant="body" className="text-grey-04">
@@ -273,7 +323,7 @@ export const ReviewChanges = () => {
               </div>
             </div>
           ) : (
-            entities.map(entity => (
+            visibleEntities.map(entity => (
               <div key={entity.entityId} className="rounded-xl bg-white p-4">
                 <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
                   <ChangedEntity entity={entity} spaceId={activeSpace} />
@@ -296,29 +346,47 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
-  const otherRelations = entity.relations.filter(
+
+  const nonSpecialRelations = entity.relations.filter(
     r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
   );
+  const imageRelations = nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl);
+  const otherRelations = nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl);
 
   const nameChange = entity.values.find(v => v.propertyId === NAME_PROPERTY_ID);
+
   const otherValues = entity.values.filter(
-    v => v.propertyId !== NAME_PROPERTY_ID && v.propertyId !== AVATAR_PROPERTY_ID && v.propertyId !== COVER_PROPERTY_ID
+    v =>
+      v.propertyId !== NAME_PROPERTY_ID &&
+      v.propertyId !== AVATAR_PROPERTY_ID &&
+      v.propertyId !== COVER_PROPERTY_ID &&
+      (v.type as string) !== 'RELATION'
+  );
+
+  const imageRelationPropertyIds = new Set(imageRelations.map(r => r.typeId));
+  const otherRelationPropertyIds = new Set(otherRelations.map(r => r.typeId));
+  const filteredOtherValues = otherValues.filter(
+    v => !imageRelationPropertyIds.has(v.propertyId) && !otherRelationPropertyIds.has(v.propertyId)
   );
 
   const avatarChangeImageUrl =
     avatarRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ??
     avatarRelations.find(r => r.before?.imageUrl)?.before?.imageUrl;
-  const fetchedAvatarUrl = useEntityAvatarUrl(entity.entityId, spaceId);
-  const resolvedAvatarUrl = avatarChangeImageUrl ?? fetchedAvatarUrl;
+  const coverChangeImageUrl =
+    coverRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ??
+    coverRelations.find(r => r.before?.imageUrl)?.before?.imageUrl;
+  const fetchedMediaUrl = useEntityMediaUrl(entity.entityId, spaceId);
+
+  const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-grey-02">
-          {resolvedAvatarUrl && (
+        {resolvedAvatarUrl && (
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
             <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
-          )}
-        </div>
+          </div>
+        )}
         <h2 className="text-xl font-semibold">{entity.name}</h2>
       </div>
 
@@ -359,45 +427,57 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
           <BlockChangeRow key={block.id} block={block} />
         ))}
 
-        {otherValues.length > 0 && (
-          <div className="grid grid-cols-2 gap-20">
-            <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-              {otherValues.map(value => (
-                <ValueChangeCell key={value.propertyId} value={value} side="before" />
-              ))}
-            </div>
-            <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-              {otherValues.map(value => (
-                <ValueChangeCell key={value.propertyId} value={value} side="after" />
-              ))}
-            </div>
-          </div>
-        )}
+        {imageRelations.length > 0 &&
+          groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
+            <ImagePropertyChangeRow
+              key={typeId}
+              typeName={typeName}
+              typeId={typeId}
+              relations={relations}
+              spaceId={spaceId}
+            />
+          ))}
 
-        {otherRelations.length > 0 && (
+        {(filteredOtherValues.length > 0 || otherRelations.length > 0) && (
           <div className="grid grid-cols-2 gap-20">
-            <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-              {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                <RelationGroupCell
-                  key={typeId}
-                  typeId={typeId}
-                  typeName={typeName}
-                  relations={relations}
-                  side="before"
-                />
-              ))}
-            </div>
-            <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-              {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                <RelationGroupCell
-                  key={typeId}
-                  typeId={typeId}
-                  typeName={typeName}
-                  relations={relations}
-                  side="after"
-                />
-              ))}
-            </div>
+            {filteredOtherValues.some(v => v.before !== null) ||
+            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
+              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                {filteredOtherValues.map(value => (
+                  <ValueChangeCell key={value.propertyId} value={value} side="before" />
+                ))}
+                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
+                  <RelationGroupCell
+                    key={typeId}
+                    typeId={typeId}
+                    typeName={typeName}
+                    relations={relations}
+                    side="before"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div />
+            )}
+            {filteredOtherValues.some(v => v.after !== null) ||
+            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
+              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                {filteredOtherValues.map(value => (
+                  <ValueChangeCell key={value.propertyId} value={value} side="after" />
+                ))}
+                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
+                  <RelationGroupCell
+                    key={typeId}
+                    typeId={typeId}
+                    typeName={typeName}
+                    relations={relations}
+                    side="after"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div />
+            )}
           </div>
         )}
       </div>
@@ -433,7 +513,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
       <div>
         <div className="relative">
           {hasCoverChange && coverBeforeUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-deleted ring-4')}>
+            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
               <NativeGeoImage value={coverBeforeUrl} alt="Cover" className="h-full w-full object-cover" />
             </div>
           )}
@@ -442,7 +522,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
               className={cx(
                 'h-[80px] w-[80px] overflow-hidden rounded bg-grey-01',
                 hasCoverChange && coverBeforeUrl && 'absolute bottom-0 left-4 translate-y-1/2',
-                'ring-deleted ring-4'
+                'ring-4 ring-deleted'
               )}
             >
               <NativeGeoImage value={avatarBeforeUrl} alt="Avatar" className="h-full w-full object-cover" />
@@ -457,7 +537,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
       <div>
         <div className="relative">
           {hasCoverChange && resolvedCoverAfterUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-added ring-4')}>
+            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
               <NativeGeoImage value={resolvedCoverAfterUrl} alt="Cover" className="h-full w-full object-cover" />
             </div>
           )}
@@ -466,7 +546,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
               className={cx(
                 'h-[80px] w-[80px] overflow-hidden rounded bg-grey-01',
                 hasCoverChange && resolvedCoverAfterUrl && 'absolute bottom-0 left-4 translate-y-1/2',
-                'ring-added ring-4'
+                'ring-4 ring-added'
               )}
             >
               <NativeGeoImage value={resolvedAvatarAfterUrl} alt="Avatar" className="h-full w-full object-cover" />
@@ -481,33 +561,85 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
   );
 };
 
+type ImagePropertyChangeRowProps = {
+  typeName?: string | null;
+  typeId: string;
+  relations: RelationChange[];
+  spaceId: string;
+};
+
+const ImagePropertyChangeRow = ({ typeName, typeId, relations, spaceId }: ImagePropertyChangeRowProps) => {
+  const beforeUrl = relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null;
+  const afterUrl = relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
+
+  const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
+  const localImageUrl = useImageUrlFromEntity(afterEntityId, spaceId);
+  const resolvedAfterUrl = afterUrl ?? localImageUrl ?? null;
+
+  const hasBeforeImage = beforeUrl !== null;
+  const hasAfterImage = resolvedAfterUrl !== null;
+
+  return (
+    <div className="grid grid-cols-2 gap-20">
+      <div>
+        {hasBeforeImage && (
+          <div>
+            <Text as="p" variant="bodySemibold" className="mb-2">
+              {typeName ?? typeId}
+            </Text>
+            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
+              <NativeGeoImage value={beforeUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
+            </div>
+          </div>
+        )}
+      </div>
+      <div>
+        {hasAfterImage && (
+          <div>
+            <Text as="p" variant="bodySemibold" className="mb-2">
+              {typeName ?? typeId}
+            </Text>
+            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
+              <NativeGeoImage value={resolvedAfterUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 type TypesChangeRowProps = {
   relations: RelationChange[];
 };
 
 const TypesChangeRow = ({ relations }: TypesChangeRowProps) => {
-  const addedTypes = relations.filter(r => r.changeType === 'ADD').map(r => r.after?.toEntityId);
-  const removedTypes = relations.filter(r => r.changeType === 'REMOVE').map(r => r.before?.toEntityId);
+  const addedTypes = relations
+    .filter(r => r.changeType === 'ADD')
+    .map(r => ({ id: r.after?.toEntityId, name: r.after?.toEntityName }));
+  const removedTypes = relations
+    .filter(r => r.changeType === 'REMOVE')
+    .map(r => ({ id: r.before?.toEntityId, name: r.before?.toEntityName }));
 
   return (
     <div className="grid grid-cols-2 gap-20">
       <div className="flex flex-wrap gap-2">
-        {removedTypes.map((typeId, i) => (
+        {removedTypes.map((type, i) => (
           <div
             key={i}
-            className="bg-deleted inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text line-through decoration-1"
+            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-deleted px-1.5 py-0.5 text-metadata tabular-nums text-text line-through decoration-1"
           >
-            {typeId}
+            {type.name ?? type.id}
           </div>
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        {addedTypes.map((typeId, i) => (
+        {addedTypes.map((type, i) => (
           <div
             key={i}
-            className="bg-added inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text"
+            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-added px-1.5 py-0.5 text-metadata tabular-nums text-text"
           >
-            {typeId}
+            {type.name ?? type.id}
           </div>
         ))}
       </div>
@@ -832,16 +964,16 @@ const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
     <div
       className={cx(
         'overflow-hidden rounded-lg border border-grey-02 shadow-button',
-        isNew && side === 'after' && 'ring-added ring-4',
-        isDeleted && side === 'before' && 'ring-deleted ring-4'
+        isNew && side === 'after' && 'ring-4 ring-added',
+        isDeleted && side === 'before' && 'ring-4 ring-deleted'
       )}
     >
       <div className="flex items-center justify-between border-b border-grey-02 bg-white px-4 py-3">
         <div
           className={cx(
             'text-smallTitle font-semibold text-text',
-            block.before !== block.after && side === 'before' && 'bg-deleted rounded line-through decoration-1',
-            block.before !== block.after && side === 'after' && 'bg-added rounded'
+            block.before !== block.after && side === 'before' && 'rounded bg-deleted line-through decoration-1',
+            block.before !== block.after && side === 'after' && 'rounded bg-added'
           )}
         >
           {value}
@@ -863,6 +995,8 @@ const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
   const displayValue = side === 'before' ? value.before : value.after;
   const diff = value.type === 'TEXT' ? (value as TextValueChange).diff : undefined;
 
+  if (displayValue === null) return null;
+
   return (
     <div className="mb-6 last:mb-0">
       <Text as="p" variant="bodySemibold">
@@ -871,7 +1005,7 @@ const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
       <div>
         {value.type === 'TEXT' && diff ? (
           <TextDiffDisplay value={displayValue} diff={diff} side={side} />
-        ) : value.type === 'BOOL' ? (
+        ) : value.type === 'BOOLEAN' ? (
           <BooleanDisplay value={displayValue} side={side} />
         ) : value.type === 'POINT' ? (
           <PointDisplay value={displayValue} side={side} />
@@ -1027,11 +1161,12 @@ type BooleanDisplayProps = {
 const BooleanDisplay = ({ value, side }: BooleanDisplayProps) => {
   if (value === null) return null;
 
-  const displayValue = value === 'true' ? 'Yes' : 'No';
+  // Handle both '1'/'0' (local store format) and 'true'/'false' (API diff format)
+  const checked = getChecked(value) ?? value === 'true';
 
   return (
-    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
-      {displayValue}
+    <span className={cx('inline-flex shrink-0 items-center rounded p-1', side === 'before' ? 'bg-deleted' : 'bg-added')}>
+      <Checkbox checked={checked} disabled />
     </span>
   );
 };

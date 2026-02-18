@@ -142,7 +142,7 @@ async function createDaoSpace({
   const { cid } = await Ipfs.publishEdit({
     name: `Create ${spaceName} space`,
     ops,
-    author: walletAddress as Hex,
+    author: personalSpaceId,
     network: 'TESTNET',
   });
 
@@ -154,8 +154,7 @@ async function createDaoSpace({
   const initialEditsContentUri = encodeAbiParameters([{ type: 'string' }], [cid]);
 
   const publicClient = createPublicClient({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    chain: GEOGENESIS as any,
+    chain: GEOGENESIS,
     transport: http(),
   });
 
@@ -268,7 +267,7 @@ async function createPersonalStyleSpace({
     name: spaceName,
     spaceId,
     ops,
-    author: walletAddress as Hex,
+    author: spaceId,
     network: 'TESTNET',
   });
 

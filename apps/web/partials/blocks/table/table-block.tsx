@@ -15,14 +15,13 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
-import { OmitStrict } from '~/core/types';
-import { Cell, Relation, Row, SearchResult, Value } from '~/core/types';
+import { Cell, Relation, Row } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -37,13 +36,13 @@ import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
-import { onChangeEntryFn } from './change-entry';
+import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
-import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
+import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
@@ -112,9 +111,7 @@ function useEntries(
 
   const onUpdateRelation = (relation: Relation, newPosition: string | null) => {
     storage.relations.update(relation, draft => {
-      if (newPosition) {
-        draft.position = newPosition;
-      }
+      draft.position = newPosition ?? draft.position;
     });
   };
 
@@ -145,111 +142,71 @@ function useEntries(
 
   const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
-  const onChangeEntry: onChangeEntryFn = (context, event) => {
-    if (event.type === 'EVENT') {
-      // @TODO(migration): Editable data block content
-      // const send = action({
-      //   context,
-      // });
-      // send(event.data);
+  const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
+    console.assert(entityId.length > 0, 'onChangeEntry: entityId must be non-empty');
+    console.assert(actionSpaceId.length > 0, 'onChangeEntry: actionSpaceId must be non-empty');
 
-      if (event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE') {
-        // Use the specialized entities.name.set API for NAME property to ensure proper sync
-        if (event.data.payload.renderable.attributeId === SystemIds.NAME_PROPERTY) {
-          storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value);
-        } else {
-          // For non-name properties, use the generic values API
-          const value: Value | OmitStrict<Value, 'id'> = {
-            id: event.data.payload.renderable.entityId ?? undefined,
-            entity: {
-              id: context.entityId,
-              name: event.data.payload.renderable.entityName,
-            },
-            property: {
-              id: event.data.payload.renderable.attributeId,
-              name: event.data.payload.renderable.attributeName,
-              dataType: event.data.payload.renderable.type,
-            },
-            spaceId,
-            value: event.data.payload.value.value ?? '',
-          };
+    // Step 1: Handle data writes
+    switch (action.type) {
+      case 'SET_NAME':
+        storage.entities.name.set(entityId, actionSpaceId, action.name);
+        break;
 
-          if (!event.data.payload.renderable.entityId) {
-            storage.values.set(value);
-          } else {
-            storage.values.update(value, draft => {
-              draft.value = event.data.payload.value.value;
-            });
-          }
-        }
+      case 'SET_VALUE': {
+        const existingValue = storage.values.get(
+          ID.createValueId({
+            entityId,
+            propertyId: action.property.id,
+            spaceId: actionSpaceId,
+          }),
+          entityId
+        );
+
+        writeValue(storage, entityId, actionSpaceId, action.property, action.value, existingValue);
+        break;
       }
+
+      case 'FIND_ENTITY':
+      case 'CREATE_ENTITY':
+        // No data write — handled below in collection + placeholder sections
+        break;
     }
 
-    // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
-    // How do we know what the collection item values should be?
+    // Step 2: Handle collection item creation
     if (source.type === 'COLLECTION') {
-      const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
+      const maybeHasCollectionItem = entries.find(e => e.entityId === entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean }) | null = null;
+        const to =
+          action.type === 'FIND_ENTITY'
+            ? action.entity
+            : action.type === 'CREATE_ENTITY'
+              ? { id: nextEntityId, name: action.name }
+              : // SET_NAME or SET_VALUE on a placeholder in a collection
+                { id: entityId, name: null, space: actionSpaceId, verified: false };
 
-        if (event.type === 'Find') {
-          to = event.data;
-        }
+        upsertCollectionItemRelation({
+          relationId: ID.createEntityId(),
+          collectionId: source.value,
+          spaceId: actionSpaceId,
+          toEntity: { id: to.id, name: to.name },
+          toSpaceId: to.space,
+          verified: to.verified,
+        });
 
-        if (event.type === 'Create') {
-          to = {
-            ...event.data,
-            id: nextEntityId,
-          };
-        }
-
-        if (event.type === 'EVENT') {
-          to = {
-            id: context.entityId,
-            name: context.entityName,
-            space: context.spaceId,
-            verified: false,
-          };
-        }
-
-        if (to !== null) {
-          const id = ID.createEntityId();
-
-          upsertCollectionItemRelation({
-            relationId: id,
-            collectionId: source.value,
-            spaceId: spaceId,
-            toEntity: {
-              id: to.id,
-              name: to.name,
-            },
-            toSpaceId: to.space,
-            verified: to.verified,
-          });
-
-          // Mark this ID as pending to keep the placeholder visible
-          setPendingEntityId(to.id);
-        }
+        setPendingEntityId(to.id);
       }
     }
 
-    if (context.entityId === nextEntityId) {
+    // Step 3: Handle placeholder → entity creation
+    if (entityId === nextEntityId) {
       setHasPlaceholderRow(false);
 
-      /**
-       * We only create new entities during Find or Create and when creating
-       * from a placeholder.
-       *
-       * Find or Create is currently only available for Collections. We should
-       * only create new entities when we are creating. If we are finding then
-       * the entity already exists.
-       */
-      if (event.type !== 'Find') {
-        const maybeName = event.type === 'Create' ? event.data.name : undefined;
+      // Find means the entity already exists — don't create a new one.
+      if (action.type !== 'FIND_ENTITY') {
+        const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
 
-        // Mark this ID as pending before creating
-        setPendingEntityId(context.entityId);
+        setPendingEntityId(entityId);
 
         createEntityWithTypes({
           name: maybeName,
@@ -299,7 +256,6 @@ export const TableBlock = ({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
-  const { spaces } = useSpaces();
 
   // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
   const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
@@ -327,6 +283,12 @@ export const TableBlock = ({ spaceId }: Props) => {
   } = useDataBlock({ filterState: activeFilters });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
+
+  const filterSpaceIds = React.useMemo(
+    () => [...new Set(activeFilters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
+    [activeFilters]
+  );
+  const { spacesById } = useSpacesByIds(filterSpaceIds);
 
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
@@ -366,16 +328,18 @@ export const TableBlock = ({ spaceId }: Props) => {
   const filtersWithPropertyName = React.useMemo(() => {
     return activeFilters.map(f => {
       if (f.columnId === SystemIds.SPACE_FILTER) {
+        const selectedSpace = spacesById.get(f.value);
+
         return {
           ...f,
           columnName: 'Space',
-          value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
+          value: selectedSpace?.entity?.name ?? f.value,
         };
       }
 
       return f;
     });
-  }, [activeFilters, spaces]);
+  }, [activeFilters, spacesById]);
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
@@ -422,28 +386,22 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'BULLETED_LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className="flex w-full flex-col">
-        {entries.map((row, index: number) => {
-          const isPlaceholder = Boolean(row.placeholder);
-
-          return (
-            <TableBlockBulletedListItem
-              isEditing={isEditing}
-              key={`${row.entityId}-${index}`}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              rowEntityId={row.entityId}
-              isPlaceholder={isPlaceholder}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-              source={source}
-              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
-            />
-          );
-        })}
-      </div>
+      <TableBlockBulletedListItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      />
     );
   }
 
@@ -498,7 +456,7 @@ export const TableBlock = ({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
           {renderPlusButtonAsInline && (
-            <button onClick={onAddPlaceholder}>
+            <button type="button" onClick={onAddPlaceholder}>
               <Create />
             </button>
           )}
@@ -555,25 +513,29 @@ export const TableBlock = ({ spaceId }: Props) => {
             <Spacer height={12} />
             <PageNumberContainer>
               {source.type === 'COLLECTION' ? (
-                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                  return page === PagesPaginationPlaceholder.skip ? (
-                    <Text
-                      key={`ellipsis-${index}`}
-                      color="grey-03"
-                      className="flex justify-center"
-                      variant="metadataMedium"
-                    >
-                      ...
-                    </Text>
-                  ) : (
-                    <PageNumber
-                      key={`page-${page}`}
-                      number={page}
-                      onClick={() => setPage(page - 1)}
-                      isActive={page === pageNumber + 1}
-                    />
-                  );
-                })
+                (() => {
+                  let skipCounter = 0;
+
+                  return getPaginationPages(totalPages, pageNumber + 1).map(page => {
+                    return page === PagesPaginationPlaceholder.skip ? (
+                      <Text
+                        key={`ellipsis-${skipCounter++}`}
+                        color="grey-03"
+                        className="flex justify-center"
+                        variant="metadataMedium"
+                      >
+                        ...
+                      </Text>
+                    ) : (
+                      <PageNumber
+                        key={`page-${page}`}
+                        number={page}
+                        onClick={() => setPage(page - 1)}
+                        isActive={page === pageNumber + 1}
+                      />
+                    );
+                  });
+                })()
               ) : (
                 <>
                   {pageNumber > 1 && (
@@ -617,8 +579,8 @@ export function TableBlockLoadingPlaceholder({
   rows = 10,
   shimmer = true,
 }: TableBlockPlaceholderProps) {
-  const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
-  const PLACEHOLDER_ROWS = new Array(rows).fill(0);
+  const PLACEHOLDER_COLUMNS = Array.from({ length: columns }, (_, i) => `column-${i}`);
+  const PLACEHOLDER_ROWS = Array.from({ length: rows }, (_, i) => `row-${i}`);
 
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
@@ -626,9 +588,9 @@ export function TableBlockLoadingPlaceholder({
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
             <tr>
-              {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+              {PLACEHOLDER_COLUMNS.map(columnKey => (
                 <th
-                  key={index}
+                  key={columnKey}
                   className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
                   style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
                 >
@@ -638,11 +600,11 @@ export function TableBlockLoadingPlaceholder({
             </tr>
           </thead>
           <tbody>
-            {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
-              <tr key={index}>
-                {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+            {PLACEHOLDER_ROWS.map(rowKey => (
+              <tr key={rowKey}>
+                {PLACEHOLDER_COLUMNS.map(columnKey => (
                   <td
-                    key={index}
+                    key={`${rowKey}-${columnKey}`}
                     className={cx(
                       'border border-grey-02 bg-transparent p-[10px] align-top',
                       shimmer && 'animate-pulse'

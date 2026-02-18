@@ -10,10 +10,8 @@ import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Space } from '~/core/io/dto/spaces';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { FilterableValueType } from '~/core/value-types';
@@ -232,7 +230,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
   return (
     <div className="z-1000 flex items-center gap-1 px-2 pt-2">
       <p>Entities</p>
-      <button onClick={onToggleQueryMode}>
+      <button type="button" onClick={onToggleQueryMode}>
         <Toggle checked={queryMode === 'RELATIONS'} />
       </button>
       <p>Relations</p>
@@ -521,24 +519,20 @@ interface TableBlockSpaceFilterInputProps {
 }
 
 function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpaceFilterInputProps) {
-  const [query, onQueryChange] = React.useState('');
-  const debouncedQuery = useDebouncedValue(query, 100);
-  const { spaces } = useSpaces();
+  const { query, setQuery, spaces: results } = useSpacesQuery();
 
-  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
-
-  const onSelectSpace = (space: Space) => {
-    onQueryChange('');
+  const onSelectSpace = (space: (typeof results)[number]) => {
+    setQuery('');
 
     onSelect({
       id: space.id,
-      name: space.entity?.name ?? null,
+      name: space.name,
     });
   };
 
   return (
     <div className="relative w-full">
-      <Input value={query === '' ? selectedValue : query} onChange={e => onQueryChange(e.target.value)} />
+      <Input value={query === '' ? selectedValue : query} onChange={e => setQuery(e.target.value)} />
       {query && (
         <div className="absolute top-10 z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
           <ResizableContainer duration={0.125}>
@@ -553,13 +547,13 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                   <ResultItem onClick={() => onSelectSpace(result)}>
                     <div className="flex w-full items-center justify-between leading-[1rem]">
                       <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                        {result.entity?.name ?? result.id}
+                        {result.name ?? result.id}
                       </Text>
                     </div>
                     <Spacer height={4} />
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(result.entity?.name ?? result.id) && (
-                        <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
+                      {(result.name ?? result.id) && (
+                        <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
                       )}
                       <span style={{ rotate: '270deg' }}>
                         <ChevronDownSmall color="grey-04" />
