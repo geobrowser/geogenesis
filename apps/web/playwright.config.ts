@@ -69,12 +69,22 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'bun start',
-    url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !process.env.CI,
-    env: {
-      NEXT_PUBLIC_IS_TEST_ENV: 'true',
+  webServer: [
+    {
+      command: 'bun run test:e2e:mock-api',
+      url: 'http://127.0.0.1:4010/health',
+      reuseExistingServer: !process.env.CI,
     },
-  },
+    {
+      command: 'bun run build && bun start',
+      url: 'http://127.0.0.1:3000',
+      timeout: 240 * 1000,
+      reuseExistingServer: !process.env.CI,
+      env: {
+        NEXT_PUBLIC_IS_TEST_ENV: 'true',
+        NEXT_PUBLIC_API_ENDPOINT: 'http://127.0.0.1:4010/graphql',
+        NEXT_PUBLIC_API_ENDPOINT_TESTNET: 'http://127.0.0.1:4010/graphql',
+      },
+    },
+  ],
 });
