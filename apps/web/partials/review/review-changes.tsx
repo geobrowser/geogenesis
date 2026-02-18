@@ -1,25 +1,35 @@
 'use client';
 
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { useQuery } from '@tanstack/react-query';
+import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { editorContentVersionAtom } from '~/atoms';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
+import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getSpaces } from '~/core/io/queries';
+import { getAllEntities, getSpaces } from '~/core/io/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
+import { Gem } from '~/design-system/icons/gem';
 import { Pending } from '~/design-system/pending';
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
@@ -27,9 +37,17 @@ import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
-import { editorContentVersionAtom } from '~/atoms';
+import { BountyLinkingPanel } from './bounty-linking';
+import type { Bounty, BountyDifficulty, BountyStatus } from './bounty-linking/types';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+const BOUNTY_DESCRIPTION_NAMES = new Set(['description', 'details', 'summary']);
+const BOUNTY_MAX_PAYOUT_NAMES = new Set(['max payout', 'maximum payout', 'payout', 'reward', 'reward amount']);
+const BOUNTY_DIFFICULTY_NAMES = new Set(['difficulty', 'difficulty level', 'level']);
+const BOUNTY_STATUS_NAMES = new Set(['status', 'state']);
+const BOUNTY_DEADLINE_NAMES = new Set(['deadline', 'due date', 'due']);
+const BOUNTY_SUBMISSIONS_NAMES = new Set(['submissions', 'your submissions']);
 
 export const ReviewChanges = () => {
   const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
@@ -37,10 +55,13 @@ export const ReviewChanges = () => {
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
+  const { personalSpaceId } = usePersonalSpaceId();
 
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [spaces, setSpaces] = React.useState<Space[]>([]);
+  const [isBountyLinkingOpen, setIsBountyLinkingOpen] = React.useState(false);
+  const [selectedBountyIds, setSelectedBountyIds] = React.useState<Set<string>>(new Set());
 
   const valuesWithChanges = useValues({
     selector: t => t.hasBeenPublished === false && t.isLocal === true,
@@ -109,6 +130,65 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
+  const bountyTypeRelations = useRelations({
+    selector: r =>
+      r.spaceId === activeSpace &&
+      r.type.id === SystemIds.TYPES_PROPERTY &&
+      r.isDeleted !== true,
+  });
+
+  const bountyEntityIds = React.useMemo(() => {
+    const ids = bountyTypeRelations
+      .filter(isBountyTypeRelation)
+      .map(relation => relation.fromEntity.id);
+    return [...new Set(ids)];
+  }, [bountyTypeRelations]);
+
+  const bountyEntityIdSet = React.useMemo(() => new Set(bountyEntityIds), [bountyEntityIds]);
+
+  const bountyValues = useValues({
+    selector: value =>
+      value.spaceId === activeSpace &&
+      bountyEntityIdSet.has(value.entity.id) &&
+      value.isDeleted !== true,
+  });
+
+  const bountyRelations = useRelations({
+    selector: relation =>
+      relation.spaceId === activeSpace &&
+      bountyEntityIdSet.has(relation.fromEntity.id) &&
+      relation.isDeleted !== true,
+  });
+
+  const { data: remoteBountyEntities = [] } = useQuery({
+    queryKey: ['bounties-by-type', activeSpace, BOUNTY_TYPE_ID],
+    enabled: Boolean(activeSpace && isReviewOpen),
+    queryFn: async () => {
+      if (!activeSpace) return [];
+      return await Effect.runPromise(
+        getAllEntities({
+          spaceId: activeSpace,
+          typeIds: { is: BOUNTY_TYPE_ID },
+        })
+      );
+    },
+  });
+
+  const { bounties, bountiesById } = React.useMemo(() => {
+    const localResult = buildBounties(bountyEntityIds, bountyValues, bountyRelations);
+    const remoteBounties = remoteBountyEntities.map(entity =>
+      buildBounty(entity.id, entity.values ?? [], entity.relations ?? [])
+    );
+
+    const merged = new Map<string, Bounty>();
+    for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
+    for (const bounty of localResult.bounties) merged.set(bounty.id, bounty);
+
+    return { bounties: Array.from(merged.values()), bountiesById: merged };
+  }, [bountyEntityIds, bountyValues, bountyRelations, remoteBountyEntities]);
+
+  const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
+
   const isReadyToPublish = proposalName.length > 0;
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
@@ -130,24 +210,138 @@ export const ReviewChanges = () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
-    await makeProposal({
+    console.info('[bounty-linking] Submit start', {
+      activeSpace,
+      proposalName,
+      selectedBountyIds: Array.from(selectedBountyIds),
+      personalSpaceId,
+    });
+
+    let publishPromiseResolve: (value: boolean) => void = () => {};
+    const publishPromise = new Promise<boolean>(resolve => {
+      publishPromiseResolve = resolve;
+    });
+
+    const makePromise = makeProposal({
       values: valuesFromSpace,
       relations: relationsFromSpace,
       spaceId: activeSpace,
       name: proposalName,
       onSuccess: () => {
         setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
+        console.info('[bounty-linking] Proposal publish success', { activeSpace });
+        publishPromiseResolve(true);
       },
-      onError: () => {},
+      onError: () => {
+        console.info('[bounty-linking] Proposal publish error', { activeSpace });
+        publishPromiseResolve(false);
+      },
     });
 
+    const publishSucceeded = await Promise.race([publishPromise, makePromise.then(() => false)]);
+
+    console.info('[bounty-linking] Proposal publish finished', { publishSucceeded });
+
+    if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
+      const proposalEntityId = ID.createEntityId();
+      const bountyLinkValues: StoreValue[] = [
+        {
+          id: ID.createValueId({
+            entityId: proposalEntityId,
+            propertyId: SystemIds.NAME_PROPERTY,
+            spaceId: personalSpaceId,
+          }),
+          entity: {
+            id: proposalEntityId,
+            name: proposalName,
+          },
+          property: {
+            id: SystemIds.NAME_PROPERTY,
+            name: 'Name',
+            dataType: 'TEXT',
+          },
+          spaceId: personalSpaceId,
+          value: proposalName,
+          isLocal: true,
+          isDeleted: false,
+          hasBeenPublished: false,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+
+      const bountyTargetSpaceId = activeSpace !== personalSpaceId ? activeSpace : undefined;
+
+      const bountyLinkRelations: StoreRelation[] = Array.from(selectedBountyIds)
+        .map(bountyId => {
+          const bounty = bountiesById.get(bountyId);
+          if (!bounty) return null;
+          return {
+            id: ID.createEntityId(),
+            entityId: ID.createEntityId(),
+            spaceId: personalSpaceId,
+            toSpaceId: bountyTargetSpaceId,
+            renderableType: 'RELATION',
+            verified: false,
+            position: Position.generate(),
+            type: {
+              id: BOUNTIES_RELATION_TYPE,
+              name: 'Bounties',
+            },
+            fromEntity: {
+              id: proposalEntityId,
+              name: proposalName,
+            },
+            toEntity: {
+              id: bounty.id,
+              name: bounty.name,
+              value: bounty.id,
+            },
+          };
+        })
+        .filter((relation): relation is StoreRelation => relation !== null);
+
+      if (bountyLinkRelations.length > 0) {
+        console.info('[bounty-linking] Published relation ids', bountyLinkRelations.map(r => r.id), {
+          proposalEntityId,
+          personalSpaceId,
+          bountyTargetSpaceId,
+        });
+      }
+
+      await makeProposal({
+        values: bountyLinkValues,
+        relations: bountyLinkRelations,
+        spaceId: personalSpaceId,
+        name: `Bounty links for: ${proposalName}`,
+        onSuccess: () => {
+          setSelectedBountyIds(new Set());
+          console.info('[bounty-linking] Link publish success', { personalSpaceId });
+        },
+        onError: () => {
+          console.info('[bounty-linking] Link publish error', { personalSpaceId });
+        },
+      });
+    }
+
     setIsPublishing(false);
-  }, [activeSpace, isReadyToPublish, makeProposal, valuesFromSpace, relationsFromSpace, proposalName]);
+  }, [
+    activeSpace,
+    isReadyToPublish,
+    makeProposal,
+    valuesFromSpace,
+    relationsFromSpace,
+    proposalName,
+    selectedBountyIds,
+    personalSpaceId,
+    bountiesById,
+  ]);
 
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
+        isReviewOpen && isReadyToPublish && !isPublishing
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
       [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
     )
   );
@@ -158,6 +352,31 @@ export const ReviewChanges = () => {
     // Force the TipTap editor to recreate with fresh server content.
     bumpEditorContentVersion(v => v + 1);
   };
+
+  React.useEffect(() => {
+    setIsBountyLinkingOpen(false);
+    setSelectedBountyIds(new Set());
+  }, [activeSpace]);
+
+  React.useEffect(() => {
+    if (selectedBountyIds.size === 0) return;
+    setSelectedBountyIds(prev => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (bountyIdSet.has(id)) {
+          next.add(id);
+        }
+      }
+      if (next.size === prev.size) {
+        for (const id of next) {
+          if (!prev.has(id)) return next;
+        }
+        return prev;
+      }
+      return next;
+    });
+  }, [bountyIdSet, selectedBountyIds.size]);
 
   const spaceOptions = spaces.map(space => ({
     label: (
@@ -217,73 +436,257 @@ export const ReviewChanges = () => {
               </div>
             )}
           </div>
-          <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-            <Pending isPending={isPublishing}>
-              {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
-            </Pending>
-          </Button>
-        </div>
-        <div className="px-2">
-          <div className="rounded-xl bg-white px-4 py-10">
-            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-              <div className="text-body">Proposal name</div>
-              <input
-                ref={proposalNameRef}
-                type="text"
-                value={rawProposalName}
-                onChange={e => handleProposalNameChange(e.target.value)}
-                placeholder="Name your proposal..."
-                className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-hidden"
-              />
-              <div className="absolute top-4 right-4 xl:right-[2ch]">
-                <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+              disabled={bounties.length === 0}
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button transition-colors',
+                bounties.length === 0
+                  ? 'cursor-not-allowed border-grey-02 bg-grey-01 text-grey-03'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              <Gem color="purple" />
+              <span>{selectedBountyIds.size}</span>
+            </button>
+            <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+              <Pending isPending={isPublishing}>
+                {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
+              </Pending>
+            </Button>
           </div>
         </div>
-        <div className="flex min-h-0 grow flex-col gap-2 overflow-y-auto overscroll-contain px-2 pb-2">
-          {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
-            <div className="rounded-xl bg-white p-4">
-              <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                <div className="mb-4 flex items-center gap-3">
-                  <Skeleton className="h-8 w-8" />
-                  <Skeleton className="h-6 w-48" />
-                </div>
-                <div className="mb-4 grid grid-cols-2 gap-20">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-28" />
-                </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-20">
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-20">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : !hasVisibleEntities ? (
-            <div className="rounded-xl bg-white p-4">
-              <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                <Text as="p" variant="body" className="text-grey-04">
-                  No changes to review. Make some edits to see them here.
-                </Text>
-              </div>
-            </div>
-          ) : (
-            visibleEntities.map(entity => (
-              <div key={entity.entityId} className="rounded-xl bg-white p-4">
+        <div className="flex grow overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+            <div className="px-2">
+              <div className="rounded-xl bg-white px-4 py-10">
                 <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                  <ChangedEntity entity={entity} spaceId={activeSpace} />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="text-body">Proposal name</div>
+                      <input
+                        ref={proposalNameRef}
+                        type="text"
+                        value={rawProposalName}
+                        onChange={e => handleProposalNameChange(e.target.value)}
+                        placeholder="Name your proposal..."
+                        className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+            <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
+              {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
+                <div className="rounded-xl bg-white p-4">
+                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                    <div className="mb-4 flex items-center gap-3">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-6 w-48" />
+                    </div>
+                    <div className="mb-4 grid grid-cols-2 gap-20">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-20">
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-20">
+                        <Skeleton className="h-16 w-full" />
+                        <Skeleton className="h-16 w-full" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : !hasVisibleEntities ? (
+                <div className="rounded-xl bg-white p-4">
+                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                    <Text as="p" variant="body" className="text-grey-04">
+                      No changes to review. Make some edits to see them here.
+                    </Text>
+                  </div>
+                </div>
+              ) : (
+                visibleEntities.map(entity => (
+                  <div key={entity.entityId} className="rounded-xl bg-white p-4">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                      <ChangedEntity entity={entity} spaceId={activeSpace} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <BountyLinkingPanel
+            isOpen={isBountyLinkingOpen}
+            setIsOpen={setIsBountyLinkingOpen}
+            selectedBountyIds={selectedBountyIds}
+            setSelectedBountyIds={setSelectedBountyIds}
+            bounties={bounties}
+          />
         </div>
       </div>
     </SlideUp>
   );
 };
+
+function isBountyTypeRelation(relation: StoreRelation): boolean {
+  return relation.toEntity.id === BOUNTY_TYPE_ID;
+}
+
+function buildBounties(
+  entityIds: string[],
+  values: StoreValue[],
+  relations: StoreRelation[]
+): { bounties: Bounty[]; bountiesById: Map<string, Bounty> } {
+  const valuesByEntity = new Map<string, StoreValue[]>();
+  const relationsByEntity = new Map<string, StoreRelation[]>();
+
+  for (const value of values) {
+    const existing = valuesByEntity.get(value.entity.id) ?? [];
+    existing.push(value);
+    valuesByEntity.set(value.entity.id, existing);
+  }
+
+  for (const relation of relations) {
+    const existing = relationsByEntity.get(relation.fromEntity.id) ?? [];
+    existing.push(relation);
+    relationsByEntity.set(relation.fromEntity.id, existing);
+  }
+
+  const bounties = entityIds.map(entityId => {
+    const entityValues = valuesByEntity.get(entityId) ?? [];
+    const entityRelations = relationsByEntity.get(entityId) ?? [];
+
+    return buildBounty(entityId, entityValues, entityRelations);
+  });
+
+  const bountiesById = new Map(bounties.map(bounty => [bounty.id, bounty]));
+
+  return { bounties, bountiesById };
+}
+
+function buildBounty(
+  entityId: string,
+  entityValues: StoreValue[],
+  entityRelations: StoreRelation[]
+): Bounty {
+  const name =
+    Entities.name(entityValues) ??
+    findValueByNames(entityValues, new Set(['name', 'title'])) ??
+    entityValues[0]?.entity.name ??
+    'Untitled bounty';
+
+  const description =
+    Entities.description(entityValues) ??
+    findValueByNames(entityValues, BOUNTY_DESCRIPTION_NAMES) ??
+    null;
+
+  const maxPayout = parseNumber(
+    findValueByNames(entityValues, BOUNTY_MAX_PAYOUT_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_MAX_PAYOUT_NAMES)
+  );
+
+  const difficulty = parseDifficulty(
+    findValueByNames(entityValues, BOUNTY_DIFFICULTY_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_DIFFICULTY_NAMES)
+  );
+
+  const status = parseStatus(
+    findValueByNames(entityValues, BOUNTY_STATUS_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_STATUS_NAMES)
+  );
+
+  const deadline =
+    findValueByNames(entityValues, BOUNTY_DEADLINE_NAMES) ??
+    findRelationValueByNames(entityRelations, BOUNTY_DEADLINE_NAMES) ??
+    null;
+
+  const submissions = parseSubmissions(
+    findValueByNames(entityValues, BOUNTY_SUBMISSIONS_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_SUBMISSIONS_NAMES)
+  );
+
+  return {
+    id: entityId,
+    name,
+    description,
+    maxPayout,
+    difficulty,
+    status,
+    deadline,
+    yourSubmissions: submissions,
+  };
+}
+
+function findValueByNames(values: StoreValue[], names: Set<string>): string | null {
+  const match = values.find(value => {
+    const normalized = normalizeName(value.property.name);
+    return normalized ? names.has(normalized) : false;
+  });
+  return match?.value ?? null;
+}
+
+function findRelationValueByNames(relations: StoreRelation[], names: Set<string>): string | null {
+  const match = relations.find(relation => {
+    const normalized = normalizeName(relation.type.name);
+    return normalized ? names.has(normalized) : false;
+  });
+  return match?.toEntity.name ?? null;
+}
+
+function normalizeName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function parseNumber(value: string | null): number | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[^0-9.-]/g, '');
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseDifficulty(value: string | null): BountyDifficulty | null {
+  if (!value) return null;
+  const normalized = value.trim().toUpperCase();
+  if (normalized.startsWith('LOW')) return 'LOW';
+  if (normalized.startsWith('MED')) return 'MEDIUM';
+  if (normalized.startsWith('HARD')) return 'HARD';
+  if (normalized.startsWith('EXP')) return 'EXPERT';
+  return null;
+}
+
+function parseStatus(value: string | null): BountyStatus | null {
+  if (!value) return null;
+  const normalized = value.trim().toUpperCase();
+  if (normalized.includes('OPEN')) return 'OPEN';
+  if (normalized.includes('ALLOCATED')) return 'ALLOCATED';
+  if (normalized.includes('SELF')) return 'SELF_ASSIGNED';
+  if (normalized.includes('PROGRESS')) return 'IN_PROGRESS';
+  if (normalized.includes('COMPLETE')) return 'COMPLETED';
+  if (normalized.includes('CANCEL')) return 'CANCELLED';
+  return null;
+}
+
+function parseSubmissions(value: string | null): { current: number; max: number } | null {
+  if (!value) return null;
+  const match = value.match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) return null;
+  const current = Number(match[1]);
+  const max = Number(match[2]);
+  if (!Number.isFinite(current) || !Number.isFinite(max)) return null;
+  return { current, max };
+}

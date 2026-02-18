@@ -12,6 +12,10 @@ export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
+// Bounty linking - relation type used to link proposals to bounties
+export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
+export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';
+
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [
   'video/mp4',

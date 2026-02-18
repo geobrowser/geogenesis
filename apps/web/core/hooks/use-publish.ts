@@ -43,6 +43,12 @@ export function usePublish() {
    */
   const make = React.useCallback(
     async ({ values: valuesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+      console.info('[publish] start', {
+        spaceId,
+        name,
+        valuesCount: valuesToPublish.length,
+        relationsCount: relations.length,
+      });
       if (!smartAccount) return;
       if (!personalSpaceId) {
         onError?.();
@@ -105,10 +111,12 @@ export function usePublish() {
         }
 
         dispatch({ type: 'ERROR', payload: result.left.message });
+        console.info('[publish] error', { spaceId, name, error: result.left.message });
         return;
       }
 
       dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+      console.info('[publish] success', { spaceId, name });
 
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => {
