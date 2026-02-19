@@ -8,6 +8,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { SquareButton } from '~/design-system/button';
 import { Copy } from '~/design-system/icons/copy';
 import { Unlink } from '~/design-system/icons/unlink';
+import { Spinner } from '~/design-system/spinner';
 
 interface GraphLinkTooltipProps {
   linkText: string;
@@ -36,9 +37,9 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   const [, setToast] = useToast();
 
   // Fetch entity data if not provided via props (handles rerender case)
-  const entity = useEntity({ id: entityId || '', spaceId: propEntitySpaceId });
-  const entityName = propEntityName || entity?.name || linkText;
-  const entitySpaceId = propEntitySpaceId || entity?.spaces?.[0];
+  const { name: entityName, spaces, isLoading } = useEntity({ id: entityId || '', spaceId: propEntitySpaceId });
+  const entityNameValue = propEntityName || entityName || linkText;
+  const entitySpaceId = propEntitySpaceId || spaces?.[0];
 
   const copyHandler = async () => {
     try {
@@ -66,10 +67,17 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
       <button
         type="button"
         onClick={showConnectionHandler}
-        aria-label={`Show connection for ${entityName || linkText}`}
-        className="flex-1 cursor-pointer truncate rounded border border-grey-02 px-1.5 text-text transition-colors hover:bg-grey-01 focus:outline-none focus:ring-2 focus:ring-ctaPrimary focus:ring-offset-1"
+        aria-label={`Show connection for ${entityNameValue || linkText}`}
+        disabled={isLoading}
+        className="flex-1 cursor-pointer truncate rounded border border-grey-02 px-1.5 text-text transition-colors hover:bg-grey-01 focus:outline-none focus:ring-2 focus:ring-ctaPrimary focus:ring-offset-1 disabled:cursor-wait"
       >
-        {entityName || linkText}
+        {isLoading && !propEntityName ? (
+          <span className="flex items-center justify-center">
+            <Spinner />
+          </span>
+        ) : (
+          entityNameValue || linkText
+        )}
       </button>
       <SquareButton onClick={removeLinkHandler}>
         <Unlink color="grey-04" />

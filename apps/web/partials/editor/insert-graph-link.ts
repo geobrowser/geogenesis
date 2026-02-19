@@ -37,6 +37,22 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
   const linkUrl = url || (entityId ? `graph://${entityId}` : '');
   const text = linkText || entityId || '';
 
+  // Build link attributes including data attributes for entity name and space ID
+  const linkAttrs: Record<string, string> = {
+    href: linkUrl,
+    type:'this is changes'
+  };
+
+  // Add data attributes for hover tooltip (entity name and space ID)
+  // Note: entityName is passed directly, or via linkText (as in entity-mention-extension)
+  const effectiveEntityName = entityName || linkText;
+  if (effectiveEntityName) {
+    linkAttrs['data-entity-name'] = effectiveEntityName;
+  }
+  if (spaceId) {
+    linkAttrs['data-space-id'] = spaceId;
+  }
+
   if (!linkUrl) {
     console.warn('insertGraphLink: No URL or entityId provided');
     return;
@@ -44,6 +60,8 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
 
   // If we have a range to delete (from/to) and a chain function (handler use case)
   if (chain && from !== undefined && to !== undefined) {
+    // First delete the range, then insert content at the current selection
+    // After deleteRange, the cursor will be at the 'from' position, so insertContent will insert there
     chain()
       .deleteRange({ from, to })
       .insertContent({
@@ -52,9 +70,7 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
         marks: [
           {
             type: 'link',
-            attrs: {
-              href: linkUrl,
-            },
+            attrs: linkAttrs,
           },
         ],
       })
@@ -67,7 +83,7 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
     // If we have a selection range, delete it first (e.g., for @mention replacement)
     if (from !== undefined && to !== undefined) {
       // Use a single chain to ensure atomic operation
-      // IMPORTANT: Each chain method returns a new chain instance, so we must chain them together
+      // After deleteRange, insertContent will insert at the current cursor position
       editor
         .chain()
         .focus()
@@ -78,9 +94,7 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
           marks: [
             {
               type: 'link',
-              attrs: {
-                href: linkUrl,
-              },
+              attrs: linkAttrs,
             },
           ],
         })
@@ -96,9 +110,7 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
           marks: [
             {
               type: 'link',
-              attrs: {
-                href: linkUrl,
-              },
+              attrs: linkAttrs,
             },
           ],
         })
