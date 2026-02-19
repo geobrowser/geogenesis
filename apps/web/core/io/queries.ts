@@ -10,7 +10,6 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
-import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import {
   entitiesBatchQuery,
   entitiesQuery,
@@ -28,6 +27,8 @@ import {
   spacesQuery,
   spacesWhereMemberQuery,
 } from './query-fragments';
+import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
+import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
@@ -49,21 +50,34 @@ type GetAllEntitiesOptions = {
   offset?: number;
   spaceId?: string;
   spaceIds?: UuidFilter;
+  typeId?: string;
   typeIds?: UuidFilter;
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
 
 export function getAllEntities(
-  { limit, offset, spaceId, spaceIds, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, spaceIds, typeId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
   const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
   const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+  const extractedTypeId = extractSingleTypeIdFromFilter(filter);
+  const extractedTypeIds = extractTypeIdsFromFilter(filter);
 
   const topLevelSpaceId = spaceId ?? extractedSpaceId;
-  const topLevelSpaceIds = topLevelSpaceId ? undefined : spaceIds ?? extractedSpaceIds;
-  const normalizedFilter = topLevelSpaceId || topLevelSpaceIds ? removeSpaceIdsFromFilter(filter) : filter;
+  const topLevelSpaceIds = topLevelSpaceId ? undefined : (spaceIds ?? extractedSpaceIds);
+
+  const topLevelTypeId = typeId ?? extractedTypeId;
+  const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
+
+  let normalizedFilter = filter;
+  if (topLevelSpaceId || topLevelSpaceIds) {
+    normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
+  }
+  if (topLevelTypeId || topLevelTypeIds) {
+    normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
+  }
 
   return graphql({
     query: entitiesQuery,
@@ -73,7 +87,8 @@ export function getAllEntities(
       offset,
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
-      typeIds,
+      typeId: topLevelTypeId,
+      typeIds: topLevelTypeIds,
       filter: normalizedFilter,
       orderBy,
     },
