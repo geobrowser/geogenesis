@@ -1,4 +1,24 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { diffWords } from 'diff';
+import { Effect } from 'effect';
+
+import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
+import type { ApiEntityDiffShape } from '~/core/io/rest';
+import type { Entity, Relation, Value } from '~/core/types';
+
+import type {
+  BlockChange,
+  DataBlockChange,
+  DiffChunk,
+  EntityDiff,
+  RelationChange,
+  SimpleValueChange,
+  SimpleValueType,
+  TextBlockChange,
+  TextValueChange,
+  TextValueType,
+  ValueChange,
+} from './types';
 
 const {
   TEXT_BLOCK,
@@ -17,34 +37,12 @@ const {
   SHOWN_COLUMNS,
   PROPERTIES,
 } = SystemIds;
-import { diffWords } from 'diff';
-import { Effect } from 'effect';
-
-import { getEntityBacklinks, getBatchEntities } from '~/core/io/queries';
-import type { ApiEntityDiffShape } from '~/core/io/rest';
-import type { Entity, Relation, Value } from '~/core/types';
-
-import type {
-  BlockChange,
-  DataBlockChange,
-  DiffChunk,
-  EntityDiff,
-  RelationChange,
-  SimpleValueChange,
-  SimpleValueType,
-  TextBlockChange,
-  TextValueChange,
-  TextValueType,
-  ValueChange,
-} from './types';
 
 type ApiValueDiff = ApiEntityDiffShape['values'][number];
 type ApiRelationDiff = ApiEntityDiffShape['relations'][number];
 type ApiBlockDiff = ApiEntityDiffShape['blocks'][number];
 
-export function mapDiffChunks(
-  chunks: readonly { value: string; added?: boolean; removed?: boolean }[]
-): DiffChunk[] {
+export function mapDiffChunks(chunks: readonly { value: string; added?: boolean; removed?: boolean }[]): DiffChunk[] {
   return chunks.map(c => ({
     value: c.value,
     ...(c.added ? { added: true } : {}),
@@ -263,17 +261,21 @@ export async function postProcessDiffs(
     }
   }
 
-  // Collect the media URL from each media-property entity so we can inject it into the
-  // parent entity's relation (enabling ImagePropertyCell / VideoPropertyCell to render
-  // a preview in the governance/API diff path, just as fromLocal does).
-  // Also track which media type (image vs video) each entity is.
-  const mediaPropertyEntityUrls = new Map<string, { before: string | null; after: string | null; mediaType: 'image' | 'video' }>();
+  // Collect media URLs per entity and inject into parent relations for ImagePropertyCell/VideoPropertyCell rendering.
+  const mediaPropertyEntityUrls = new Map<
+    string,
+    { before: string | null; after: string | null; mediaType: 'image' | 'video' }
+  >();
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
     if (!entity) continue;
-    const mediaValue = entity.values.find(v => v.after || v.before);
+    // Prefer IMAGE_URL_PROPERTY — image entities also carry width/height values.
+    const mediaValue =
+      entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
+      entity.values.find(
+        v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
+      );
     if (mediaValue) {
-      // Determine media type from the entity's TYPES_PROPERTY relation
       let mediaType: 'image' | 'video' = 'image';
       for (const rel of entity.relations) {
         if (rel.typeId === TYPES_PROPERTY) {
@@ -331,7 +333,8 @@ export async function postProcessDiffs(
             orphanSet.has(entity.entityId) ||
             blocksWithParent.has(entity.entityId) ||
             mediaPropertyEntityIds.has(entity.entityId)
-          ) continue;
+          )
+            continue;
           if (!fallbackParentId) fallbackParentId = entity.entityId;
           if (entity.relations.some(r => r.typeId === BLOCKS)) {
             fallbackParentId = entity.entityId;
@@ -408,9 +411,7 @@ export async function postProcessDiffs(
 
       const parentEntity = fetchedEntityMap.get(parentId);
       if (parentEntity) {
-        const blocksRel = parentEntity.relations.find(
-          r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
-        );
+        const blocksRel = parentEntity.relations.find(r => r.type.id === BLOCKS && r.entityId === blockRelEntityId);
         if (blocksRel) {
           dataBlockEntityId = blocksRel.toEntity.id;
         }
@@ -435,9 +436,7 @@ export async function postProcessDiffs(
         existingDataBlockDiff.relations.push(...configRelations);
         existingDataBlockDiff.values.push(...configValues);
       } else {
-        const blocksRel = parentEntity?.relations.find(
-          r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
-        );
+        const blocksRel = parentEntity?.relations.find(r => r.type.id === BLOCKS && r.entityId === blockRelEntityId);
         const dataBlockName = nameMap.get(dataBlockEntityId) ?? blocksRel?.toEntity.name ?? null;
         const newDataBlockDiff: EntityDiff = {
           entityId: dataBlockEntityId,
@@ -528,7 +527,9 @@ export async function postProcessDiffs(
             ? {
                 before: {
                   ...r.before,
-                  ...(beforeMedia.mediaType === 'image' ? { imageUrl: beforeMedia.url } : { videoUrl: beforeMedia.url }),
+                  ...(beforeMedia.mediaType === 'image'
+                    ? { imageUrl: beforeMedia.url }
+                    : { videoUrl: beforeMedia.url }),
                 },
               }
             : {}),
@@ -675,12 +676,8 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   if (blockType === 'dataBlock') {
     const nameValue = entity.values.find(v => v.propertyId === NAME_PROPERTY);
 
-    const values = entity.values.filter(
-      v => v.propertyId !== NAME_PROPERTY && v.propertyId !== MARKDOWN_CONTENT
-    );
-    const relations = entity.relations.filter(
-      r => r.typeId !== TYPES_PROPERTY && r.typeId !== BLOCKS
-    );
+    const values = entity.values.filter(v => v.propertyId !== NAME_PROPERTY && v.propertyId !== MARKDOWN_CONTENT);
+    const relations = entity.relations.filter(r => r.typeId !== TYPES_PROPERTY && r.typeId !== BLOCKS);
 
     return {
       id: entity.entityId,
@@ -716,8 +713,7 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   }
 
   const contentValue =
-    entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ??
-    entity.values.find(v => v.type === 'TEXT');
+    entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ?? entity.values.find(v => v.type === 'TEXT');
   const before = contentValue?.before ?? null;
   const after = contentValue?.after ?? null;
   const diff = computeTextDiff(before ?? '', after ?? '');
@@ -844,39 +840,36 @@ export async function fromLocal(
     }
   }
 
-  // Resolve the IPFS URL for each media property entity. Each entity maps to a single
-  // URL — it gets injected into whichever side of the parent relation references that entity.
-  // Sources: (1) diff values (entity has local changes), (2) remote entity (no local changes,
-  // e.g. property was deleted so only the parent relation changed).
-  const imageEntityUrls = new Map<string, string>();
-  const videoEntityUrls = new Map<string, string>();
+  // Resolve media URLs, tracking before/after separately so cover replacements show the correct image on each side.
+  type MediaSides = { before: string | null; after: string | null };
+  const imageEntityUrls = new Map<string, MediaSides>();
+  const videoEntityUrls = new Map<string, MediaSides>();
   for (const diff of diffs) {
+    const resolveMediaValue = () =>
+      diff.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
+      diff.values.find(v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://')));
     if (imageEntityIds.has(diff.entityId)) {
-      const ipfsValue = diff.values.find(v =>
-        (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
-      );
-      const url = ipfsValue?.after ?? ipfsValue?.before;
-      if (url) imageEntityUrls.set(diff.entityId, url);
+      const ipfsValue = resolveMediaValue();
+      if (ipfsValue)
+        imageEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
     }
     if (videoEntityIds.has(diff.entityId)) {
-      const ipfsValue = diff.values.find(v =>
-        (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
-      );
-      const url = ipfsValue?.after ?? ipfsValue?.before;
-      if (url) videoEntityUrls.set(diff.entityId, url);
+      const ipfsValue = resolveMediaValue();
+      if (ipfsValue)
+        videoEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
     }
   }
-  // Fall back to remote entity data for media entities with no local changes
+  // Fall back to remote entity for media entities with no local changes.
   for (const entityId of imageEntityIds) {
     if (!imageEntityUrls.has(entityId)) {
       const url = resolveImageUrlFromEntity(remoteEntities.get(entityId));
-      if (url) imageEntityUrls.set(entityId, url);
+      if (url) imageEntityUrls.set(entityId, { before: url, after: url });
     }
   }
   for (const entityId of videoEntityIds) {
     if (!videoEntityUrls.has(entityId)) {
       const url = resolveImageUrlFromEntity(remoteEntities.get(entityId));
-      if (url) videoEntityUrls.set(entityId, url);
+      if (url) videoEntityUrls.set(entityId, { before: url, after: url });
     }
   }
 
@@ -887,10 +880,10 @@ export async function fromLocal(
     .map(d => ({
       ...d,
       relations: d.relations.map(r => {
-        const afterImageUrl = r.after && imageEntityUrls.get(r.after.toEntityId);
-        const beforeImageUrl = r.before && imageEntityUrls.get(r.before.toEntityId);
-        const afterVideoUrl = r.after && videoEntityUrls.get(r.after.toEntityId);
-        const beforeVideoUrl = r.before && videoEntityUrls.get(r.before.toEntityId);
+        const afterImageUrl = r.after ? (imageEntityUrls.get(r.after.toEntityId)?.after ?? null) : null;
+        const beforeImageUrl = r.before ? (imageEntityUrls.get(r.before.toEntityId)?.before ?? null) : null;
+        const afterVideoUrl = r.after ? (videoEntityUrls.get(r.after.toEntityId)?.after ?? null) : null;
+        const beforeVideoUrl = r.before ? (videoEntityUrls.get(r.before.toEntityId)?.before ?? null) : null;
 
         if (!afterImageUrl && !beforeImageUrl && !afterVideoUrl && !beforeVideoUrl) return r;
 
@@ -1108,5 +1101,3 @@ function computeRelationChanges(
 
   return relationChanges;
 }
-
-
