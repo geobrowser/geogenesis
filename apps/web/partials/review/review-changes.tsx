@@ -3,8 +3,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { RemoveScroll } from 'react-remove-scroll';
-
 import * as React from 'react';
 
 import { useAutofocus } from '~/core/hooks/use-autofocus';
@@ -19,13 +17,15 @@ import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type {
   BlockChange,
+  DataBlockChange,
   DiffChunk,
   EntityDiff,
   RelationChange,
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
-import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useEntityMediaUrl, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { getVideoPath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -36,6 +36,9 @@ import { Pending } from '~/design-system/pending';
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
+import { Tooltip } from '~/design-system/tooltip';
+
+import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
 
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
 const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
@@ -57,13 +60,21 @@ function hasVisibleChanges(entity: EntityDiff): boolean {
     r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
   );
   const hasImageRelations = nonSpecialRelations.some(r => r.after?.imageUrl || r.before?.imageUrl);
-  const hasOtherRelations = nonSpecialRelations.some(r => !r.after?.imageUrl && !r.before?.imageUrl);
+  const hasVideoRelations = nonSpecialRelations.some(r => r.after?.videoUrl || r.before?.videoUrl);
+  const hasOtherRelations = nonSpecialRelations.some(
+    r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl
+  );
 
   const imageRelationPropertyIds = new Set(
     nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl).map(r => r.typeId)
   );
+  const videoRelationPropertyIds = new Set(
+    nonSpecialRelations.filter(r => r.after?.videoUrl || r.before?.videoUrl).map(r => r.typeId)
+  );
   const otherRelationPropertyIds = new Set(
-    nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl).map(r => r.typeId)
+    nonSpecialRelations
+      .filter(r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl)
+      .map(r => r.typeId)
   );
   const hasValues = entity.values.some(
     v =>
@@ -72,11 +83,12 @@ function hasVisibleChanges(entity: EntityDiff): boolean {
       v.propertyId !== COVER_PROPERTY_ID &&
       (v.type as string) !== 'RELATION' &&
       !imageRelationPropertyIds.has(v.propertyId) &&
+      !videoRelationPropertyIds.has(v.propertyId) &&
       !otherRelationPropertyIds.has(v.propertyId) &&
       (v.before !== null || v.after !== null)
   );
 
-  return hasName || hasBlocks || hasAvatarOrCover || hasTypes || hasImageRelations || hasOtherRelations || hasValues;
+  return hasName || hasBlocks || hasAvatarOrCover || hasTypes || hasImageRelations || hasVideoRelations || hasOtherRelations || hasValues;
 }
 
 type Proposals = Record<string, { name: string; description: string }>;
@@ -226,7 +238,7 @@ export const ReviewChanges = () => {
 
   return (
     <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
-      <RemoveScroll enabled={isReviewOpen} className="flex h-full w-full flex-col gap-2 bg-grey-01">
+      <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
         <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
           <div className="flex items-center gap-4">
             <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
@@ -332,7 +344,7 @@ export const ReviewChanges = () => {
             ))
           )}
         </div>
-      </RemoveScroll>
+      </div>
     </SlideUp>
   );
 };
@@ -351,7 +363,10 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
     r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
   );
   const imageRelations = nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl);
-  const otherRelations = nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl);
+  const videoRelations = nonSpecialRelations.filter(r => r.after?.videoUrl || r.before?.videoUrl);
+  const otherRelations = nonSpecialRelations.filter(
+    r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl
+  );
 
   const nameChange = entity.values.find(v => v.propertyId === NAME_PROPERTY_ID);
 
@@ -364,9 +379,13 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
   );
 
   const imageRelationPropertyIds = new Set(imageRelations.map(r => r.typeId));
+  const videoRelationPropertyIds = new Set(videoRelations.map(r => r.typeId));
   const otherRelationPropertyIds = new Set(otherRelations.map(r => r.typeId));
   const filteredOtherValues = otherValues.filter(
-    v => !imageRelationPropertyIds.has(v.propertyId) && !otherRelationPropertyIds.has(v.propertyId)
+    v =>
+      !imageRelationPropertyIds.has(v.propertyId) &&
+      !videoRelationPropertyIds.has(v.propertyId) &&
+      !otherRelationPropertyIds.has(v.propertyId)
   );
 
   const avatarChangeImageUrl =
@@ -427,22 +446,33 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
           <BlockChangeRow key={block.id} block={block} />
         ))}
 
-        {imageRelations.length > 0 &&
-          groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
-            <ImagePropertyChangeRow
-              key={typeId}
-              typeName={typeName}
-              typeId={typeId}
-              relations={relations}
-              spaceId={spaceId}
-            />
-          ))}
-
-        {(filteredOtherValues.length > 0 || otherRelations.length > 0) && (
+        {(filteredOtherValues.length > 0 || otherRelations.length > 0 || imageRelations.length > 0 || videoRelations.length > 0) && (
           <div className="grid grid-cols-2 gap-20">
             {filteredOtherValues.some(v => v.before !== null) ||
-            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
+            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
+            imageRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
+            videoRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
+                  <ImagePropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="before"
+                  />
+                ))}
+                {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
+                  <VideoPropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="before"
+                  />
+                ))}
                 {filteredOtherValues.map(value => (
                   <ValueChangeCell key={value.propertyId} value={value} side="before" />
                 ))}
@@ -460,8 +490,30 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
               <div />
             )}
             {filteredOtherValues.some(v => v.after !== null) ||
-            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
+            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
+            imageRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
+            videoRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
+                  <ImagePropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="after"
+                  />
+                ))}
+                {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
+                  <VideoPropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="after"
+                  />
+                ))}
                 {filteredOtherValues.map(value => (
                   <ValueChangeCell key={value.propertyId} value={value} side="after" />
                 ))}
@@ -561,49 +613,70 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
   );
 };
 
-type ImagePropertyChangeRowProps = {
+type ImagePropertyCellProps = {
   typeName?: string | null;
   typeId: string;
   relations: RelationChange[];
   spaceId: string;
+  side: 'before' | 'after';
 };
 
-const ImagePropertyChangeRow = ({ typeName, typeId, relations, spaceId }: ImagePropertyChangeRowProps) => {
-  const beforeUrl = relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null;
-  const afterUrl = relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
+const ImagePropertyCell = ({ typeName, typeId, relations, spaceId, side }: ImagePropertyCellProps) => {
+  const url =
+    side === 'before'
+      ? relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null
+      : relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
 
   const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
   const localImageUrl = useImageUrlFromEntity(afterEntityId, spaceId);
-  const resolvedAfterUrl = afterUrl ?? localImageUrl ?? null;
+  const resolvedUrl = side === 'after' ? (url ?? localImageUrl ?? null) : url;
 
-  const hasBeforeImage = beforeUrl !== null;
-  const hasAfterImage = resolvedAfterUrl !== null;
+  if (resolvedUrl === null) return null;
+
+  const ringClass = side === 'before' ? 'ring-2 ring-deleted' : 'ring-2 ring-added';
 
   return (
-    <div className="grid grid-cols-2 gap-20">
-      <div>
-        {hasBeforeImage && (
-          <div>
-            <Text as="p" variant="bodySemibold" className="mb-2">
-              {typeName ?? typeId}
-            </Text>
-            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
-              <NativeGeoImage value={beforeUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
-            </div>
-          </div>
-        )}
+    <div className="mb-6 last:mb-0">
+      <Text as="p" variant="bodySemibold">
+        {typeName ?? typeId}
+      </Text>
+      <div className={cx('mt-1 h-20 w-20 overflow-hidden rounded-lg', ringClass)}>
+        <NativeGeoImage value={resolvedUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
       </div>
-      <div>
-        {hasAfterImage && (
-          <div>
-            <Text as="p" variant="bodySemibold" className="mb-2">
-              {typeName ?? typeId}
-            </Text>
-            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
-              <NativeGeoImage value={resolvedAfterUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
-            </div>
-          </div>
-        )}
+    </div>
+  );
+};
+
+type VideoPropertyCellProps = {
+  typeName?: string | null;
+  typeId: string;
+  relations: RelationChange[];
+  spaceId: string;
+  side: 'before' | 'after';
+};
+
+const VideoPropertyCell = ({ typeName, typeId, relations, spaceId, side }: VideoPropertyCellProps) => {
+  const url =
+    side === 'before'
+      ? relations.find(r => r.before?.videoUrl)?.before?.videoUrl ?? null
+      : relations.find(r => r.after?.videoUrl)?.after?.videoUrl ?? null;
+
+  const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
+  const localVideoUrl = useVideoUrlFromEntity(afterEntityId, spaceId);
+  const resolvedUrl = side === 'after' ? (url ?? localVideoUrl ?? null) : url;
+
+  if (resolvedUrl === null) return null;
+
+  const ringClass = side === 'before' ? 'ring-2 ring-deleted' : 'ring-2 ring-added';
+  const videoSrc = getVideoPath(resolvedUrl);
+
+  return (
+    <div className="mb-6 last:mb-0">
+      <Text as="p" variant="bodySemibold">
+        {typeName ?? typeId}
+      </Text>
+      <div className={cx('mt-1 aspect-video w-full max-w-[240px] overflow-hidden rounded-lg', ringClass)}>
+        <video src={videoSrc} controls className="h-full w-full object-cover" />
       </div>
     </div>
   );
@@ -665,6 +738,13 @@ const BlockChangeRow = ({ block }: BlockChangeRowProps) => {
         <div className="grid grid-cols-2 gap-20">
           <ImageBlockCell block={block} side="before" />
           <ImageBlockCell block={block} side="after" />
+        </div>
+      );
+    case 'videoBlock':
+      return (
+        <div className="grid grid-cols-2 gap-20">
+          <VideoBlockCell block={block} side="before" />
+          <VideoBlockCell block={block} side="after" />
         </div>
       );
     case 'dataBlock':
@@ -946,24 +1026,69 @@ const ImageBlockCell = ({ block, side }: ImageBlockCellProps) => {
   );
 };
 
+type VideoBlockCellProps = {
+  block: BlockChange & { type: 'videoBlock' };
+  side: 'before' | 'after';
+};
+
+const VideoBlockCell = ({ block, side }: VideoBlockCellProps) => {
+  const value = side === 'before' ? block.before : block.after;
+
+  if (value === null) {
+    return <div />;
+  }
+
+  const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+  const videoSrc = getVideoPath(value);
+
+  return (
+    <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
+      <video src={videoSrc} controls className="h-full w-full object-cover" />
+    </div>
+  );
+};
+
 type DataBlockCellProps = {
   block: BlockChange & { type: 'dataBlock' };
   side: 'before' | 'after';
 };
 
 const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
-  const value = side === 'before' ? block.before : block.after;
-  const isNew = block.before === null;
-  const isDeleted = block.after === null;
+  const dataBlock = block as DataBlockChange;
+  const nameValue = side === 'before' ? dataBlock.before : dataBlock.after;
+  const hasNameChange = dataBlock.before !== null || dataBlock.after !== null;
+  const displayName = nameValue ?? dataBlock.blockName ?? 'Data Block';
 
-  if ((isNew && side === 'before') || (isDeleted && side === 'after')) {
-    return <div />;
-  }
+  const allRelations = dataBlock.relations ?? [];
+  const configValues = dataBlock.values ?? [];
+
+  const viewRelations = allRelations.filter(r => r.typeId === SystemIds.VIEW_PROPERTY);
+  const columnRelations = allRelations.filter(r => r.typeId === SystemIds.SHOWN_COLUMNS);
+  const hasConfigChanges = allRelations.length > 0 || configValues.length > 0;
+
+  const viewInfo = getViewInfo(viewRelations, side) ?? { name: 'Table', entityId: SystemIds.TABLE_VIEW };
+  const filterValue = getFilterValue(configValues, side);
+
+  const hasViewChange = viewRelations.some(r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE');
+  const hasFilterChange = configValues.some(v => v.before !== v.after);
+  const isFilterAdded = configValues.some(v => v.before === null && v.after !== null);
+  const isFilterRemoved = configValues.some(v => v.before !== null && v.after === null);
+  const hasColumnsChange = columnRelations.some(r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE');
+  const isColumnsAdded = columnRelations.every(r => r.changeType === 'ADD') && columnRelations.length > 0;
+  const isColumnsRemoved = columnRelations.every(r => r.changeType === 'REMOVE') && columnRelations.length > 0;
+
+  // A block is genuinely new/deleted only when the name has a one-sided value
+  const isNew = dataBlock.before === null && dataBlock.after !== null;
+  const isDeleted = dataBlock.before !== null && dataBlock.after === null;
+
+  if (isNew && side === 'before') return <div />;
+  if (isDeleted && side === 'after') return <div />;
+  if (!hasNameChange && !hasConfigChanges) return <div />;
 
   return (
     <div
       className={cx(
-        'overflow-hidden rounded-lg border border-grey-02 shadow-button',
+        'flex flex-col overflow-hidden rounded-lg border border-grey-02 shadow-button',
         isNew && side === 'after' && 'ring-4 ring-added',
         isDeleted && side === 'before' && 'ring-4 ring-deleted'
       )}
@@ -972,18 +1097,157 @@ const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
         <div
           className={cx(
             'text-smallTitle font-semibold text-text',
-            block.before !== block.after && side === 'before' && 'rounded bg-deleted line-through decoration-1',
-            block.before !== block.after && side === 'after' && 'rounded bg-added'
+            hasNameChange && dataBlock.before !== dataBlock.after && side === 'before' && 'rounded bg-deleted line-through decoration-1',
+            hasNameChange && dataBlock.before !== dataBlock.after && side === 'after' && 'rounded bg-added'
           )}
         >
-          {value}
+          {displayName}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Filter change indicator — only show on the relevant side */}
+          {hasFilterChange &&
+            !(isFilterAdded && side === 'before') &&
+            !(isFilterRemoved && side === 'after') && (
+              <Tooltip
+                trigger={
+                  <div
+                    className={cx(
+                      'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                      side === 'before' && 'ring-2 ring-deleted',
+                      side === 'after' && 'ring-2 ring-added'
+                    )}
+                  >
+                    <span className="text-metadata text-grey-04">
+                      {isFilterAdded ? 'Filter added' : isFilterRemoved ? 'Filter removed' : 'Filters changed'}
+                    </span>
+                  </div>
+                }
+                label={
+                  <div className="max-w-[400px] text-left">
+                    <div className="whitespace-pre-wrap break-all font-mono text-xs">
+                      {filterValue ? formatJsonSafe(filterValue) : 'None'}
+                    </div>
+                  </div>
+                }
+                position="top"
+                variant="light"
+              />
+            )}
+
+          {/* Columns change indicator — only show on the relevant side */}
+          {hasColumnsChange &&
+            !(isColumnsAdded && side === 'before') &&
+            !(isColumnsRemoved && side === 'after') && (
+              <div
+                className={cx(
+                  'inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                  side === 'before' && 'ring-2 ring-deleted',
+                  side === 'after' && 'ring-2 ring-added'
+                )}
+              >
+                <span className="text-metadata text-grey-04">
+                  {isColumnsAdded ? 'Columns added' : isColumnsRemoved ? 'Columns removed' : 'Columns changed'}
+                </span>
+              </div>
+            )}
+
+          {viewInfo && (
+            <div
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                hasViewChange && side === 'before' && 'ring-2 ring-deleted',
+                hasViewChange && side === 'after' && 'ring-2 ring-added'
+              )}
+            >
+              <span className="text-metadata text-grey-04">{viewInfo.name}</span>
+            </div>
+          )}
         </div>
       </div>
-      <div className="bg-grey-01 p-4">
-        <div className="flex items-center justify-center py-8 text-metadata text-grey-04">Data block preview</div>
+
+      <div className="flex-1 bg-grey-01 p-4">
+        <DataBlockViewSkeleton viewEntityId={viewInfo?.entityId ?? null} />
       </div>
     </div>
   );
+};
+
+type ViewInfo = { name: string; entityId: string };
+
+function getViewInfo(viewRelations: RelationChange[], side: 'before' | 'after'): ViewInfo | null {
+  for (const r of viewRelations) {
+    if (side === 'before' && (r.changeType === 'REMOVE' || r.changeType === 'UPDATE') && r.before) {
+      return { name: r.before.toEntityName ?? 'Unknown', entityId: r.before.toEntityId };
+    }
+    if (side === 'after' && (r.changeType === 'ADD' || r.changeType === 'UPDATE') && r.after) {
+      return { name: r.after.toEntityName ?? 'Unknown', entityId: r.after.toEntityId };
+    }
+  }
+  return null;
+}
+
+function getFilterValue(configValues: ValueChange[], side: 'before' | 'after'): string | null {
+  for (const v of configValues) {
+    const val = side === 'before' ? v.before : v.after;
+    if (val !== null) return val;
+  }
+  return null;
+}
+
+function formatJsonSafe(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+const DataBlockViewSkeleton = ({ viewEntityId }: { viewEntityId: string | null }) => {
+  switch (viewEntityId) {
+    case SystemIds.GALLERY_VIEW:
+      return (
+        <div className="grid grid-cols-2 gap-3 opacity-60">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-2 rounded-[17px] p-[5px]">
+              <div className="aspect-[2/1] w-full rounded-lg bg-grey-02" />
+              <div className="h-5 w-3/4 rounded-sm bg-grey-02" />
+              <div className="h-3 w-full rounded-sm bg-grey-02" />
+              <div className="h-3 w-4/5 rounded-sm bg-grey-02" />
+            </div>
+          ))}
+        </div>
+      );
+    case SystemIds.LIST_VIEW:
+      return (
+        <div className="space-y-2 opacity-60">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-6">
+              <div className="h-16 w-16 shrink-0 rounded-[0.625rem] bg-grey-02" />
+              <div className="flex flex-1 flex-col gap-2">
+                <div className="h-5 w-32 rounded-sm bg-grey-02" />
+                <div className="h-3 w-full rounded-sm bg-grey-02" />
+                <div className="h-3 w-3/4 rounded-sm bg-grey-02" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    case SystemIds.BULLETED_LIST_VIEW:
+      return (
+        <div className="space-y-1 opacity-60">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex gap-2">
+              <div className="mt-1 shrink-0 text-xl leading-none text-grey-03">&bull;</div>
+              <div className="h-5 w-48 rounded-sm bg-grey-02" />
+            </div>
+          ))}
+        </div>
+      );
+    case SystemIds.TABLE_VIEW:
+    default:
+      return <TableBlockLoadingPlaceholder columns={3} rows={5} shimmer={false} />;
+  }
 };
 
 type ValueChangeCellProps = {

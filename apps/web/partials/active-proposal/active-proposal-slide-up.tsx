@@ -8,11 +8,10 @@ import { SlideUp } from '~/design-system/slide-up';
 
 interface Props {
   proposalId?: string;
-  spaceId: string;
   children: React.ReactNode;
 }
 
-export function ActiveProposalSlideUp({ proposalId, spaceId, children }: Props) {
+export function ActiveProposalSlideUp({ proposalId, children }: Props) {
   const router = useRouter();
 
   return (
@@ -20,7 +19,7 @@ export function ActiveProposalSlideUp({ proposalId, spaceId, children }: Props) 
       isOpen={Boolean(proposalId)}
       setIsOpen={open => {
         if (!open) {
-          router.push(`/space/${spaceId}/governance`);
+          router.back();
         }
       }}
     >

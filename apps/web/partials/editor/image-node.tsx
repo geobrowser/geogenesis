@@ -77,7 +77,7 @@ function ImageNodeComponent({ node, deleteNode }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="image-node my-4">
+      <div contentEditable="false" suppressContentEditableWarning className="image-node my-4">
         <ImageNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>

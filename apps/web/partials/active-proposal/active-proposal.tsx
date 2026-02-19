@@ -14,7 +14,6 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -23,6 +22,7 @@ import { AcceptOrReject } from './accept-or-reject';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
+import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
@@ -36,7 +36,7 @@ interface Props {
 
 export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
   return (
-    <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
+    <ActiveProposalSlideUp proposalId={proposalId}>
       <React.Suspense fallback="Loading...">
         <ReviewProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
@@ -69,9 +69,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
     <>
       <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <Link href={`/space/${spaceId}/governance`}>
-            <SquareButton icon={<Close />} />
-          </Link>
+          <CloseProposalButton />
           <p>Review proposal</p>
         </div>
 

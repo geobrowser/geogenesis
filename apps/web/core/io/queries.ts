@@ -192,6 +192,17 @@ export function getSpaces(
   });
 }
 
+export function getSpacesByAddresses(addresses: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesQuery,
+    decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
+    variables: {
+      filter: { address: { in: addresses } },
+    },
+    signal,
+  });
+}
+
 export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: spacesWhereMemberQuery,

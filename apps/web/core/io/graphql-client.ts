@@ -169,7 +169,10 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
 
         if (error instanceof Error) {
           errorDetails.message = error.message;
-          errorDetails.isAbort = error.name === 'AbortError';
+          errorDetails.isAbort =
+            error.name === 'AbortError' ||
+            error.message.includes('signal is aborted') ||
+            error.message.includes('The user aborted a request');
 
           // Extract status code and response from graphql-request errors
           if ('response' in error) {
@@ -195,22 +198,26 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
 
     if (Either.isLeft(dataResult)) {
       const error = dataResult.left;
-      console.error('GraphQL request failed:', error.message);
 
-      if (error.status) {
-        console.error('Status code:', error.status);
-      }
+      // Abort errors are expected during navigation/unmount — don't log them as errors
+      if (!error.isAbort) {
+        console.error('GraphQL request failed:', error.message);
 
-      if (error.response) {
-        console.error('Response:', error.response);
-      }
+        if (error.status) {
+          console.error('Status code:', error.status);
+        }
 
-      if (error.request) {
-        console.error('Request details:', {
-          url: error.request.url,
-          query: error.request.query,
-          variables: error.request.variables,
-        });
+        if (error.response) {
+          console.error('Response:', error.response);
+        }
+
+        if (error.request) {
+          console.error('Request details:', {
+            url: error.request.url,
+            query: error.request.query,
+            variables: error.request.variables,
+          });
+        }
       }
 
       return yield* Effect.fail(error);

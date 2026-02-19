@@ -28,7 +28,11 @@ export const useLocalChanges = (spaceId?: string, version = 0): readonly [Entity
       .get()
       .filter(r => r.spaceId === spaceId && r.isLocal === true && !r.hasBeenPublished);
 
-    Diff.fromLocal(spaceId, localValues, localRelations).then(result => {
+    // Include all store relations (local + server-hydrated) so fromLocal()
+    // can use BLOCKS relations to resolve config entity parents.
+    const allRelationsForSpace = reactiveRelations.get().filter(r => r.spaceId === spaceId && !r.isDeleted);
+
+    Diff.fromLocal(spaceId, localValues, localRelations, allRelationsForSpace).then(result => {
       if (!cancelled) {
         setDiffs(result);
         setIsLoading(false);
