@@ -5,7 +5,6 @@ import * as React from 'react';
 import { fetchProposal } from '~/core/io/subgraph';
 import {
   getIsProposalEnded,
-  getIsProposalExecutable,
   getNoVotePercentage,
   getProposalTimeRemaining,
   getUserVote,
@@ -61,7 +60,6 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
@@ -77,7 +75,6 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           spaceId={spaceId}
           proposalId={proposal.id}
           isProposalEnded={isProposalEnded}
-          isProposalExecutable={isProposalExecutable}
           status={proposal.status}
           userVote={userVote}
         />
