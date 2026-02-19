@@ -76,6 +76,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   query AllEntities(
     $spaceId: UUID
     $spaceIds: UUIDFilter
+    $typeId: UUID
     $typeIds: UUIDFilter
     $limit: Int
     $offset: Int
@@ -89,6 +90,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       orderBy: $orderBy
       spaceId: $spaceId
       spaceIds: $spaceIds
+      typeId: $typeId
       typeIds: $typeIds
     ) {
       id
