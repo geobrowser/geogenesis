@@ -274,6 +274,7 @@ export const SelectEntity = ({
               event.stopPropagation();
             }}
             className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+            collisionPadding={10}
             forceMount
           >
             <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
@@ -412,7 +413,14 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div
+                      className="no-scrollbar flex flex-col overflow-y-auto overflow-x-clip bg-white"
+                      style={{
+                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                        maxHeight:
+                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                      }}
+                    >
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -560,7 +568,14 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div
+                      className="no-scrollbar flex flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white"
+                      style={{
+                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                        maxHeight:
+                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                      }}
+                    >
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
