@@ -11,6 +11,7 @@ const {
   TYPES_PROPERTY,
   NAME_PROPERTY,
   MARKDOWN_CONTENT,
+  IMAGE_URL_PROPERTY,
   COVER_PROPERTY,
   VIEW_PROPERTY,
   SHOWN_COLUMNS,
@@ -143,10 +144,10 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
   const blockToParent = new Map<string, string>();
   for (const entity of entities) {
     for (const rel of entity.relations) {
-      if (rel.typeId === BLOCKS && rel.changeType === 'ADD' && rel.after) {
+      if (rel.typeId === BLOCKS && rel.after) {
         blockToParent.set(rel.after.toEntityId, entity.entityId);
       }
-      if (rel.typeId === BLOCKS && rel.changeType === 'REMOVE' && rel.before) {
+      if (rel.typeId === BLOCKS && rel.before && !rel.after) {
         blockToParent.set(rel.before.toEntityId, entity.entityId);
       }
     }
@@ -177,19 +178,38 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
       const filteredRelations = e.relations.filter(r => r.typeId !== BLOCKS);
 
       if (blocks || filteredRelations.length !== e.relations.length) {
+        const synthBlockMap = new Map((blocks ?? []).map(b => [b.id, b]));
+        // Prefer synthesized blocks with actual content over null-content API pre-computed
+        // blocks. The per-entity diff endpoint may return imageBlocks with null before/after
+        // (URL not serialized), while step 7's synthesized block correctly carries the URL.
+        const mergedBlocks = e.blocks.map(eb => {
+          if (eb.before === null && eb.after === null) {
+            const synth = synthBlockMap.get(eb.id);
+            if (synth !== undefined && (synth.before !== null || synth.after !== null)) return synth;
+          }
+          return eb;
+        });
+        const existingBlockIds = new Set(e.blocks.map(b => b.id));
+        const newBlocks = (blocks ?? []).filter(b => !existingBlockIds.has(b.id));
         return {
           ...e,
           relations: filteredRelations,
-          blocks: [...e.blocks, ...(blocks ?? [])],
+          blocks: [...mergedBlocks, ...newBlocks],
         };
       }
       return e;
     });
 }
 
-export async function postProcessDiffs(entities: EntityDiff[], spaceId: string): Promise<EntityDiff[]> {
+export async function postProcessDiffs(
+  entities: EntityDiff[],
+  spaceId: string,
+  configToParentMap?: Map<string, { parentId: string; dataBlockEntityId: string }>
+): Promise<EntityDiff[]> {
   // 1. Classify entities
-  const blocksWithParent = new Set<string>();
+  // Maps block entity ID → 'ADD' (block was added/exists in new state) or 'REMOVE' (block was removed).
+  // This is used in step 7 to synthesize diffs in the correct direction for the history path.
+  const blocksWithParent = new Map<string, 'ADD' | 'REMOVE'>();
   const blockTypeEntities: string[] = [];
   const blockRelEntities: string[] = [];
   const idsToResolve = new Set<string>();
@@ -207,8 +227,10 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     let hasBlockConfig = false;
     for (const rel of entity.relations) {
       if (rel.typeId === BLOCKS) {
-        if (rel.after?.toEntityId) blocksWithParent.add(rel.after.toEntityId);
-        if (rel.before?.toEntityId) blocksWithParent.add(rel.before.toEntityId);
+        // If the block exists in the new state (ADD or UPDATE), track as ADD.
+        // If only a REMOVE (no after), track as REMOVE.
+        if (rel.after?.toEntityId) blocksWithParent.set(rel.after.toEntityId, 'ADD');
+        if (rel.before?.toEntityId && !rel.after?.toEntityId) blocksWithParent.set(rel.before.toEntityId, 'REMOVE');
       }
       if (rel.typeId === TYPES_PROPERTY) {
         const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
@@ -224,7 +246,50 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     if (hasBlockConfig && !isBlock) blockRelEntities.push(entity.entityId);
   }
 
-  const orphanSet = new Set(blockTypeEntities.filter(id => !blocksWithParent.has(id)));
+  // Identify media-property entities: block-typed entities (e.g. IMAGE_TYPE, VIDEO_TYPE)
+  // that are targeted by non-BLOCKS relations from other entities in this diff set, and
+  // are NOT referenced via any BLOCKS relation.  These are media-property content entities
+  // (created when a user sets an image/video-type property value), NOT actual page blocks.
+  // Treating them as orphan blocks causes a duplicate block to appear in the UI.
+  const blockTypeEntitySet = new Set(blockTypeEntities);
+  const mediaPropertyEntityIds = new Set<string>();
+  for (const entity of entities) {
+    for (const rel of entity.relations) {
+      if (rel.typeId === BLOCKS) continue;
+      const targetId = rel.after?.toEntityId ?? rel.before?.toEntityId;
+      if (targetId && blockTypeEntitySet.has(targetId) && !blocksWithParent.has(targetId)) {
+        mediaPropertyEntityIds.add(targetId);
+      }
+    }
+  }
+
+  // Collect the media URL from each media-property entity so we can inject it into the
+  // parent entity's relation (enabling ImagePropertyCell / VideoPropertyCell to render
+  // a preview in the governance/API diff path, just as fromLocal does).
+  // Also track which media type (image vs video) each entity is.
+  const mediaPropertyEntityUrls = new Map<string, { before: string | null; after: string | null; mediaType: 'image' | 'video' }>();
+  for (const entityId of mediaPropertyEntityIds) {
+    const entity = entityMap.get(entityId);
+    if (!entity) continue;
+    const mediaValue = entity.values.find(v => v.after || v.before);
+    if (mediaValue) {
+      // Determine media type from the entity's TYPES_PROPERTY relation
+      let mediaType: 'image' | 'video' = 'image';
+      for (const rel of entity.relations) {
+        if (rel.typeId === TYPES_PROPERTY) {
+          const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
+          if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) {
+            mediaType = 'video';
+          }
+        }
+      }
+      mediaPropertyEntityUrls.set(entityId, { before: mediaValue.before, after: mediaValue.after, mediaType });
+    }
+  }
+
+  const orphanSet = new Set(
+    blockTypeEntities.filter(id => !blocksWithParent.has(id) && !mediaPropertyEntityIds.has(id))
+  );
 
   // 2. Resolve orphan block parents via backlinks
   const blockToParent = new Map<string, string>();
@@ -249,14 +314,32 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
 
     if (unresolvedOrphans.length > 0) {
       let fallbackParentId: string | undefined;
-      for (const entity of entities) {
-        if (orphanSet.has(entity.entityId) || blocksWithParent.has(entity.entityId)) continue;
-        if (!fallbackParentId) fallbackParentId = entity.entityId;
-        if (entity.relations.some(r => r.typeId === BLOCKS)) {
-          fallbackParentId = entity.entityId;
-          break;
+
+      // First, check if any sibling orphan was already resolved to a parent via backlinks.
+      // If so, unresolved orphans likely belong to the same parent (e.g. newly created blocks
+      // on the same page won't have backlinks yet since they're not in the committed graph).
+      if (blockToParent.size > 0) {
+        fallbackParentId = blockToParent.values().next().value!;
+      }
+
+      // Otherwise, fall back to scanning the entity list for a non-block entity.
+      if (!fallbackParentId) {
+        for (const entity of entities) {
+          // Skip orphan blocks, entities already referenced via BLOCKS, and image-property
+          // entities (which are filtered from processed and must not become synthetic parents).
+          if (
+            orphanSet.has(entity.entityId) ||
+            blocksWithParent.has(entity.entityId) ||
+            mediaPropertyEntityIds.has(entity.entityId)
+          ) continue;
+          if (!fallbackParentId) fallbackParentId = entity.entityId;
+          if (entity.relations.some(r => r.typeId === BLOCKS)) {
+            fallbackParentId = entity.entityId;
+            break;
+          }
         }
       }
+
       if (fallbackParentId) {
         for (const blockId of unresolvedOrphans) {
           blockToParent.set(blockId, fallbackParentId);
@@ -269,12 +352,21 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     }
   }
 
-  // 3. Resolve block relation entity parents via backlinks
+  // 3. Resolve block relation entity parents via backlinks (with configToParentMap fallback)
   const blockRelToParent = new Map<string, string>();
 
   if (blockRelEntities.length > 0) {
     await Promise.all(
       blockRelEntities.map(async blockRelEntityId => {
+        // First try the configToParentMap (local store data, no network request)
+        const localMapping = configToParentMap?.get(blockRelEntityId);
+        if (localMapping) {
+          blockRelToParent.set(blockRelEntityId, localMapping.parentId);
+          idsToResolve.add(localMapping.parentId);
+          return;
+        }
+
+        // Fall back to backlinks query
         try {
           const backlinks = await Effect.runPromise(getEntityBacklinks(blockRelEntityId, spaceId));
           if (backlinks.length > 0) {
@@ -308,32 +400,49 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
 
   if (blockRelToParent.size > 0) {
     for (const [blockRelEntityId, parentId] of blockRelToParent) {
-      const parentEntity = fetchedEntityMap.get(parentId);
-      if (!parentEntity) continue;
-
-      // Find the BLOCKS relation whose relation-entity IS the block relation entity
-      const blocksRel = parentEntity.relations.find(
-        r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
-      );
-      if (!blocksRel) continue;
-
-      const dataBlockEntityId = blocksRel.toEntity.id;
       const blockRelDiff = entityMap.get(blockRelEntityId);
       if (!blockRelDiff) continue;
 
+      // Find the data block entity ID via the parent's BLOCKS relation or configToParentMap
+      let dataBlockEntityId: string | undefined;
+
+      const parentEntity = fetchedEntityMap.get(parentId);
+      if (parentEntity) {
+        const blocksRel = parentEntity.relations.find(
+          r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
+        );
+        if (blocksRel) {
+          dataBlockEntityId = blocksRel.toEntity.id;
+        }
+      }
+
+      // Fall back to configToParentMap if the fetched parent doesn't have the BLOCKS relation
+      if (!dataBlockEntityId) {
+        dataBlockEntityId = configToParentMap?.get(blockRelEntityId)?.dataBlockEntityId;
+      }
+
+      if (!dataBlockEntityId) continue;
+
       const configRelations = blockRelDiff.relations.filter(r => BLOCK_CONFIG_RELATION_IDS.has(r.typeId));
-      if (configRelations.length === 0) continue;
+      const configValues = blockRelDiff.values.filter(
+        v => v.propertyId !== NAME_PROPERTY && v.propertyId !== MARKDOWN_CONTENT
+      );
+      if (configRelations.length === 0 && configValues.length === 0) continue;
 
       const existingDataBlockDiff = entityMap.get(dataBlockEntityId);
 
       if (existingDataBlockDiff) {
         existingDataBlockDiff.relations.push(...configRelations);
+        existingDataBlockDiff.values.push(...configValues);
       } else {
-        const dataBlockName = nameMap.get(dataBlockEntityId) ?? blocksRel.toEntity.name ?? null;
+        const blocksRel = parentEntity?.relations.find(
+          r => r.type.id === BLOCKS && r.entityId === blockRelEntityId
+        );
+        const dataBlockName = nameMap.get(dataBlockEntityId) ?? blocksRel?.toEntity.name ?? null;
         const newDataBlockDiff: EntityDiff = {
           entityId: dataBlockEntityId,
           name: dataBlockName,
-          values: [],
+          values: [...configValues],
           relations: [
             {
               relationId: `synthetic-type-${dataBlockEntityId}`,
@@ -358,8 +467,76 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
   }
 
   // 6. Inject orphan BLOCKS relations
-  let processed: EntityDiff[] =
-    mergedBlockRelEntityIds.size > 0 ? entities.filter(e => !mergedBlockRelEntityIds.has(e.entityId)) : entities;
+  // Also filter out media-property entities and inject their URLs into their
+  // parent entity's relations, so ChangedEntity can render them as ImagePropertyCell
+  // or VideoPropertyCell (the same behaviour fromLocal provides via entity URLs).
+  //
+  // Two sources for the media URL:
+  //   a) mediaPropertyEntityUrls — entity was in the input diff array (proposal path)
+  //   b) fetchedEntityMap        — entity was fetched in step 4 for name resolution
+  //      (history/single-entity path where the media property entity is a foreign entity
+  //       not included in the input, but already fetched to resolve its name)
+  type MediaUrlResult = { url: string; mediaType: 'image' | 'video' } | null;
+
+  const resolveMediaUrl = (targetId: string, side: 'after' | 'before'): MediaUrlResult => {
+    // (a) entity was in the input diff — use the before/after from its diff values
+    const fromDiff = mediaPropertyEntityUrls.get(targetId);
+    if (fromDiff) {
+      const url = side === 'after' ? fromDiff.after : fromDiff.before;
+      if (url) return { url, mediaType: fromDiff.mediaType };
+      return null;
+    }
+
+    // (b) entity was fetched in step 4 — use resolveImageUrlFromEntity (IPFS-URL aware).
+    //     Applied to both sides: for 'after', fetchedEntityMap reliably reflects current
+    //     state. For 'before', this handles the common case where the image entity is not
+    //     included in the proposal diff (only the parent's REMOVE relation was changed,
+    //     not the image entity itself). In the proposal path, 'before' = current state so
+    //     fetchedEntityMap is exact. In the history path it is best-effort — correct when
+    //     the image entity's URL hasn't changed since the historical point.
+    const fetched = fetchedEntityMap.get(targetId);
+    if (fetched && !blocksWithParent.has(targetId)) {
+      const isImage = fetched.types.some(t => t.id === IMAGE_TYPE || t.id === IMAGE_BLOCK);
+      const isVideo = fetched.types.some(t => t.id === VIDEO_TYPE || t.id === VIDEO_BLOCK);
+      if (isImage || isVideo) {
+        const url = resolveImageUrlFromEntity(fetched);
+        if (url) return { url, mediaType: isVideo ? 'video' : 'image' };
+      }
+    }
+
+    return null;
+  };
+
+  let processed: EntityDiff[] = entities
+    .filter(e => !mergedBlockRelEntityIds.has(e.entityId) && !mediaPropertyEntityIds.has(e.entityId))
+    .map(e => {
+      const updatedRelations = e.relations.map(r => {
+        const afterMedia = r.after ? resolveMediaUrl(r.after.toEntityId, 'after') : null;
+        const beforeMedia = r.before ? resolveMediaUrl(r.before.toEntityId, 'before') : null;
+        if (!afterMedia && !beforeMedia) return r;
+        return {
+          ...r,
+          ...(r.after && afterMedia
+            ? {
+                after: {
+                  ...r.after,
+                  ...(afterMedia.mediaType === 'image' ? { imageUrl: afterMedia.url } : { videoUrl: afterMedia.url }),
+                },
+              }
+            : {}),
+          ...(r.before && beforeMedia
+            ? {
+                before: {
+                  ...r.before,
+                  ...(beforeMedia.mediaType === 'image' ? { imageUrl: beforeMedia.url } : { videoUrl: beforeMedia.url }),
+                },
+              }
+            : {}),
+        };
+      });
+      if (updatedRelations.every((r, i) => r === e.relations[i])) return e;
+      return { ...e, relations: updatedRelations };
+    });
 
   if (blockToParent.size > 0) {
     const result = processed.map(e => ({ ...e, relations: [...e.relations] }));
@@ -391,8 +568,10 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
   }
 
   // 7. Synthesize diffs for missing block entities
+  // blockChangeType is 'ADD' when the block was added/exists in the new state,
+  // 'REMOVE' when it was present before and is now gone.
   const processedIds = new Set(processed.map(e => e.entityId));
-  for (const blockId of blocksWithParent) {
+  for (const [blockId, blockChangeType] of blocksWithParent) {
     if (processedIds.has(blockId)) continue;
 
     const remoteBlock = fetchedEntityMap.get(blockId);
@@ -405,15 +584,19 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
     for (const rv of remoteBlock.values) {
       if (rv.property.id === NAME_PROPERTY) continue;
       const dataType = rv.property.dataType;
+      // For ADD: block was created in this edit → before=null, after=value.
+      // For REMOVE: block existed before and was removed → before=value, after=null.
+      const before = blockChangeType === 'REMOVE' ? rv.value : null;
+      const after = blockChangeType === 'ADD' ? rv.value : null;
       if (dataType === 'TEXT') {
         values.push({
           propertyId: rv.property.id,
           propertyName: rv.property.name ?? null,
           spaceId,
           type: 'TEXT' as TextValueType,
-          before: rv.value,
-          after: null,
-          diff: computeTextDiff(rv.value, ''),
+          before,
+          after,
+          diff: computeTextDiff(before ?? '', after ?? ''),
         } as TextValueChange);
       } else {
         values.push({
@@ -421,8 +604,8 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
           propertyName: rv.property.name ?? null,
           spaceId,
           type: dataType as SimpleValueType,
-          before: rv.value,
-          after: null,
+          before,
+          after,
         } as SimpleValueChange);
       }
     }
@@ -436,9 +619,9 @@ export async function postProcessDiffs(entities: EntityDiff[], spaceId: string):
           relationId: `synthetic-type-${blockId}`,
           typeId: TYPES_PROPERTY,
           spaceId,
-          changeType: 'ADD',
-          before: null,
-          after: { toEntityId: blockType.id, toSpaceId: null, position: null },
+          changeType: blockChangeType,
+          before: blockChangeType === 'REMOVE' ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
+          after: blockChangeType === 'ADD' ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
         },
       ],
       blocks: [],
@@ -510,12 +693,23 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
     } as DataBlockChange;
   }
 
-  if (blockType === 'imageBlock' || blockType === 'videoBlock') {
-    const contentValue = entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ?? entity.values[0];
+  if (blockType === 'imageBlock') {
+    const contentValue = entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY) ?? entity.values[0];
 
     return {
       id: entity.entityId,
       type: 'imageBlock',
+      before: contentValue?.before ?? null,
+      after: contentValue?.after ?? null,
+    };
+  }
+
+  if (blockType === 'videoBlock') {
+    const contentValue = entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY) ?? entity.values[0];
+
+    return {
+      id: entity.entityId,
+      type: 'videoBlock',
       before: contentValue?.before ?? null,
       after: contentValue?.after ?? null,
     };
@@ -553,7 +747,8 @@ export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' 
 export async function fromLocal(
   spaceId: string,
   localValues: Value[],
-  localRelations: Relation[]
+  localRelations: Relation[],
+  allRelations?: Relation[]
 ): Promise<EntityDiff[]> {
   const allChangedEntityIds = new Set<string>();
   for (const value of localValues) {
@@ -570,8 +765,43 @@ export async function fromLocal(
     }
   }
 
+  // Detect block entity IDs (both active and deleted) BEFORE the fetch so we can
+  // include media property entities in the fetch set (they may have no local changes
+  // when only the parent relation is deleted, but we still need their remote URL).
+  // We must include deleted BLOCKS relations here because the BLOCKS relation carries
+  // renderableType 'IMAGE'/'VIDEO', and without this guard, deleted block entities
+  // would be misclassified as media-property entities and filtered out of the diff.
+  const actualBlockEntityIds = new Set<string>();
+  for (const relation of localRelations) {
+    if (relation.type.id === BLOCKS) {
+      actualBlockEntityIds.add(relation.toEntity.id);
+    }
+  }
+  if (allRelations) {
+    for (const rel of allRelations) {
+      if (rel.type.id === BLOCKS) {
+        actualBlockEntityIds.add(rel.toEntity.id);
+      }
+    }
+  }
+
+  // Collect image/video content entity IDs (separate entities referenced by IMAGE/VIDEO relations).
+  // Exclude actual block entities — those are referenced via BLOCKS relations
+  // and should remain as imageBlock/videoBlock diffs. Property entities also have IMAGE_TYPE
+  // or VIDEO_TYPE but are NOT blocks.
+  const imageEntityIds = new Set<string>();
+  const videoEntityIds = new Set<string>();
+  for (const relation of localRelations) {
+    if (relation.renderableType === 'IMAGE' && !actualBlockEntityIds.has(relation.toEntity.id)) {
+      imageEntityIds.add(relation.toEntity.id);
+    }
+    if (relation.renderableType === 'VIDEO' && !actualBlockEntityIds.has(relation.toEntity.id)) {
+      videoEntityIds.add(relation.toEntity.id);
+    }
+  }
+
   const remoteEntities = new Map<string, Entity>();
-  const idsToFetch = new Set([...allChangedEntityIds, ...mediaTargetEntityIds]);
+  const idsToFetch = new Set([...allChangedEntityIds, ...mediaTargetEntityIds, ...imageEntityIds, ...videoEntityIds]);
 
   if (idsToFetch.size > 0) {
     try {
@@ -603,25 +833,6 @@ export async function fromLocal(
     }
   }
 
-  // Collect image content entity IDs (old-style separate image entities referenced by relations).
-  // Exclude image *block* entities — those have a TYPES_PROPERTY relation marking them as IMAGE_TYPE.
-  const imageBlockEntityIds = new Set<string>();
-  for (const relation of localRelations) {
-    if (relation.type.id === TYPES_PROPERTY) {
-      const typeId = relation.toEntity.id;
-      if (typeId === IMAGE_TYPE || typeId === IMAGE_BLOCK) {
-        imageBlockEntityIds.add(relation.fromEntity.id);
-      }
-    }
-  }
-
-  const imageEntityIds = new Set<string>();
-  for (const relation of localRelations) {
-    if (relation.renderableType === 'IMAGE' && !imageBlockEntityIds.has(relation.toEntity.id)) {
-      imageEntityIds.add(relation.toEntity.id);
-    }
-  }
-
   const diffs: EntityDiff[] = [];
   for (const entityId of allChangedEntityIds) {
     const entityValues = localValues.filter(v => v.entity.id === entityId);
@@ -633,30 +844,62 @@ export async function fromLocal(
     }
   }
 
+  // Resolve the IPFS URL for each media property entity. Each entity maps to a single
+  // URL — it gets injected into whichever side of the parent relation references that entity.
+  // Sources: (1) diff values (entity has local changes), (2) remote entity (no local changes,
+  // e.g. property was deleted so only the parent relation changed).
   const imageEntityUrls = new Map<string, string>();
+  const videoEntityUrls = new Map<string, string>();
   for (const diff of diffs) {
     if (imageEntityIds.has(diff.entityId)) {
-      const ipfsValue = diff.values.find(v => v.after && v.after.startsWith('ipfs://'));
-      if (ipfsValue?.after) {
-        imageEntityUrls.set(diff.entityId, ipfsValue.after);
-      }
+      const ipfsValue = diff.values.find(v =>
+        (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
+      );
+      const url = ipfsValue?.after ?? ipfsValue?.before;
+      if (url) imageEntityUrls.set(diff.entityId, url);
+    }
+    if (videoEntityIds.has(diff.entityId)) {
+      const ipfsValue = diff.values.find(v =>
+        (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
+      );
+      const url = ipfsValue?.after ?? ipfsValue?.before;
+      if (url) videoEntityUrls.set(diff.entityId, url);
+    }
+  }
+  // Fall back to remote entity data for media entities with no local changes
+  for (const entityId of imageEntityIds) {
+    if (!imageEntityUrls.has(entityId)) {
+      const url = resolveImageUrlFromEntity(remoteEntities.get(entityId));
+      if (url) imageEntityUrls.set(entityId, url);
+    }
+  }
+  for (const entityId of videoEntityIds) {
+    if (!videoEntityUrls.has(entityId)) {
+      const url = resolveImageUrlFromEntity(remoteEntities.get(entityId));
+      if (url) videoEntityUrls.set(entityId, url);
     }
   }
 
+  const mediaPropertyEntityIds = new Set([...imageEntityIds, ...videoEntityIds]);
+
   const filteredDiffs = diffs
-    .filter(d => !imageEntityIds.has(d.entityId))
+    .filter(d => !mediaPropertyEntityIds.has(d.entityId))
     .map(d => ({
       ...d,
       relations: d.relations.map(r => {
         const afterImageUrl = r.after && imageEntityUrls.get(r.after.toEntityId);
         const beforeImageUrl = r.before && imageEntityUrls.get(r.before.toEntityId);
+        const afterVideoUrl = r.after && videoEntityUrls.get(r.after.toEntityId);
+        const beforeVideoUrl = r.before && videoEntityUrls.get(r.before.toEntityId);
 
-        if (!afterImageUrl && !beforeImageUrl) return r;
+        if (!afterImageUrl && !beforeImageUrl && !afterVideoUrl && !beforeVideoUrl) return r;
 
         return {
           ...r,
           ...(r.after && afterImageUrl ? { after: { ...r.after, imageUrl: afterImageUrl } } : {}),
           ...(r.before && beforeImageUrl ? { before: { ...r.before, imageUrl: beforeImageUrl } } : {}),
+          ...(r.after && afterVideoUrl ? { after: { ...r.after, videoUrl: afterVideoUrl } } : {}),
+          ...(r.before && beforeVideoUrl ? { before: { ...r.before, videoUrl: beforeVideoUrl } } : {}),
         };
       }),
     }));
@@ -680,7 +923,29 @@ export async function fromLocal(
     }
   }
 
-  return postProcessDiffs(filteredDiffs, spaceId);
+  // Build a mapping from config entity IDs to parent entity IDs using BLOCKS relations.
+  // When a parent has a BLOCKS relation, rel.entityId is the config entity,
+  // rel.fromEntity.id is the parent, and rel.toEntity.id is the data block.
+  const configToParentMap = new Map<string, { parentId: string; dataBlockEntityId: string }>();
+  if (allRelations) {
+    for (const rel of allRelations) {
+      if (rel.type.id === BLOCKS) {
+        configToParentMap.set(rel.entityId, {
+          parentId: rel.fromEntity.id,
+          dataBlockEntityId: rel.toEntity.id,
+        });
+      }
+    }
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[diff:local] before postProcessDiffs ' + JSON.stringify(filteredDiffs));
+  }
+  const result = await postProcessDiffs(filteredDiffs, spaceId, configToParentMap);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[diff:local] after postProcessDiffs ' + JSON.stringify(result));
+  }
+  return result;
 }
 
 function buildEntityDiff(
@@ -779,7 +1044,7 @@ function computeRelationChanges(
     const remoteRelation = remoteEntity?.relations.find(r => r.id === localRelation.id);
 
     let changeType: 'ADD' | 'REMOVE' | 'UPDATE';
-    if (localRelation.isDeleted && remoteRelation) {
+    if (localRelation.isDeleted) {
       changeType = 'REMOVE';
     } else if (!remoteRelation) {
       changeType = 'ADD';
@@ -797,15 +1062,20 @@ function computeRelationChanges(
 
     const isMedia = isMediaRelationType(localRelation.type.id);
 
+    // For the "before" state, prefer the remote relation data; fall back to
+    // the local relation data (which preserves the original values even after
+    // deletion via produce()).  This handles config / relation entities whose
+    // sub-relations may not be returned by getBatchEntities.
+    const beforeSource = remoteRelation ?? localRelation;
     const before =
-      remoteRelation && (changeType === 'REMOVE' || changeType === 'UPDATE')
+      changeType === 'REMOVE' || changeType === 'UPDATE'
         ? {
-            toEntityId: remoteRelation.toEntity.id,
-            toEntityName: remoteRelation.toEntity.name,
-            toSpaceId: remoteRelation.toSpaceId ?? null,
-            position: remoteRelation.position ?? null,
+            toEntityId: beforeSource.toEntity.id,
+            toEntityName: beforeSource.toEntity.name,
+            toSpaceId: beforeSource.toSpaceId ?? null,
+            position: beforeSource.position ?? null,
             ...(isMedia && {
-              imageUrl: resolveImageUrlFromEntity(remoteEntities.get(remoteRelation.toEntity.id)),
+              imageUrl: resolveImageUrlFromEntity(remoteEntities.get(beforeSource.toEntity.id)),
             }),
           }
         : null;

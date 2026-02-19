@@ -77,7 +77,7 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="video-node my-4">
+      <div contentEditable="false" suppressContentEditableWarning className="video-node my-4">
         <VideoNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>

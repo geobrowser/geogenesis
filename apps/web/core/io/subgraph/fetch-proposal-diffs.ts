@@ -64,5 +64,12 @@ export async function fetchProposalDiffs(proposalId: string, spaceId: string): P
     hasMore = page.pagination.hasMore;
   }
 
-  return Diff.postProcessDiffs(allEntities, spaceId);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[diff:proposal] before postProcessDiffs ' + JSON.stringify(allEntities));
+  }
+  const result = await Diff.postProcessDiffs(allEntities, spaceId);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[diff:proposal] after postProcessDiffs ' + JSON.stringify(result));
+  }
+  return result;
 }

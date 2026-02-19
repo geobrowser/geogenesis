@@ -1,6 +1,7 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -17,6 +18,8 @@ interface UseEntityHistoryArgs {
 }
 
 export function useEntityHistory({ entityId, spaceId, enabled }: UseEntityHistoryArgs) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [diffSelection, setDiffSelection] = React.useState<HistoryDiffSelection | null>(null);
 
   const {
@@ -51,11 +54,31 @@ export function useEntityHistory({ entityId, spaceId, enabled }: UseEntityHistor
         toEditId: version.editId,
         label,
       });
+
+      // Reflect selected version in URL for easy inspection
+      const newParams = new URLSearchParams(searchParams?.toString());
+      if (nextVersion?.editId) {
+        newParams.set('fromEditId', nextVersion.editId);
+      } else {
+        newParams.delete('fromEditId');
+      }
+      newParams.set('toEditId', version.editId);
+      const queryString = newParams.toString();
+      window.history.replaceState(null, '', `${pathname}${queryString ? `?${queryString}` : ''}`);
     },
-    [allVersions, entityId, spaceId]
+    [allVersions, entityId, spaceId, pathname, searchParams]
   );
 
-  const clearDiffSelection = React.useCallback(() => setDiffSelection(null), []);
+  const clearDiffSelection = React.useCallback(() => {
+    setDiffSelection(null);
+
+    // Remove version params from URL
+    const newParams = new URLSearchParams(searchParams?.toString());
+    newParams.delete('toEditId');
+    newParams.delete('fromEditId');
+    const queryString = newParams.toString();
+    window.history.replaceState(null, '', `${pathname}${queryString ? `?${queryString}` : ''}`);
+  }, [pathname, searchParams]);
 
   return {
     allVersions,
