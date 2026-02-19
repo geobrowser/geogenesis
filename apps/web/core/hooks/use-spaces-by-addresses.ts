@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
+import { Address } from '~/core/io/schema';
 import { Space } from '~/core/io/dto/spaces';
 import { getSpacesByAddresses } from '~/core/io/queries';
 
@@ -24,7 +25,7 @@ export function useSpacesByAddresses(addresses: string[] = []): UseSpacesByAddre
     select: (fetchedSpaces): UseSpacesByAddressesData => {
       const spacesByAddress = new Map(fetchedSpaces.map(space => [space.address, space]));
       const spaces = requestedAddresses
-        .map(address => spacesByAddress.get(address))
+        .map(address => spacesByAddress.get(Address(address)))
         .filter((space): space is Space => Boolean(space));
 
       return {
