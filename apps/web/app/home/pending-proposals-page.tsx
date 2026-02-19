@@ -174,7 +174,6 @@ async function PendingContentProposal({
   const yesVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.yesCount / votesCount) * 100) : 0;
   const noVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.noCount / votesCount) * 100) : 0;
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const isProposalExecutable = isProposalEnded && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED';
   const userVote = proposal.userVote ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') } : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
@@ -245,7 +244,6 @@ async function PendingContentProposal({
           spaceId={proposal.space.id}
           proposalId={proposal.id}
           isProposalEnded={isProposalEnded}
-          isProposalExecutable={isProposalExecutable}
           status={proposal.status}
           userVote={userVote}
         />

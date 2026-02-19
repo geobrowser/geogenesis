@@ -12,14 +12,9 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
-import { Execute } from './execute';
-
 interface Props {
   spaceId: string;
   isProposalEnded: boolean;
-  // If the proposal is executable that means it's done and the
-  // acceptance threshold has passed.
-  isProposalExecutable: boolean;
   status: Proposal['status'];
 
   userVote: SubstreamVote | undefined;
@@ -29,7 +24,6 @@ interface Props {
 export function AcceptOrReject({
   spaceId,
   isProposalEnded,
-  isProposalExecutable,
   status,
   userVote,
   proposalId,
@@ -57,14 +51,6 @@ export function AcceptOrReject({
     setHasRejected(true);
     vote('REJECT');
   };
-
-  if (isProposalExecutable && smartAccount) {
-    return (
-      <Execute spaceId={spaceId} proposalId={proposalId}>
-        Execute
-      </Execute>
-    );
-  }
 
   if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || hasApproved) {
