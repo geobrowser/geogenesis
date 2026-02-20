@@ -1,12 +1,16 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
 import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 
-export function CloseProposalButton() {
-  const router = useRouter();
+import { useCloseProposal } from './use-close-proposal';
 
-  return <SquareButton icon={<Close />} onClick={() => router.back()} />;
+type CloseProposalButtonProps = {
+  spaceId: string;
+};
+
+export function CloseProposalButton({ spaceId }: CloseProposalButtonProps) {
+  const closeProposal = useCloseProposal(spaceId);
+
+  return <SquareButton icon={<Close />} onClick={closeProposal} />;
 }

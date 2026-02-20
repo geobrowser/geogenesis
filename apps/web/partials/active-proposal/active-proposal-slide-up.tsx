@@ -1,25 +1,26 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
 import * as React from 'react';
 
 import { SlideUp } from '~/design-system/slide-up';
 
-interface Props {
-  proposalId?: string;
-  children: React.ReactNode;
-}
+import { useCloseProposal } from './use-close-proposal';
 
-export function ActiveProposalSlideUp({ proposalId, children }: Props) {
-  const router = useRouter();
+type ActiveProposalSlideUpProps = {
+  proposalId?: string;
+  spaceId: string;
+  children: React.ReactNode;
+};
+
+export function ActiveProposalSlideUp({ proposalId, spaceId, children }: ActiveProposalSlideUpProps) {
+  const closeProposal = useCloseProposal(spaceId);
 
   return (
     <SlideUp
       isOpen={Boolean(proposalId)}
       setIsOpen={open => {
         if (!open) {
-          router.back();
+          closeProposal();
         }
       }}
     >

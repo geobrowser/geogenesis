@@ -6,9 +6,14 @@ import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
+import type { Metadata } from 'next';
+
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
+import { cachedFetchProposal } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
+
+import { cachedFetchSpace } from '../cached-fetch-space';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import {
@@ -21,6 +26,34 @@ import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/gov
 interface Props {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ proposalId?: string; proposalType?: GovernanceProposalType }>;
+}
+
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
+  const spaceId = params.id;
+
+  if (!IdUtils.isValid(spaceId)) {
+    return { title: 'Not Found' };
+  }
+
+  const space = await cachedFetchSpace(spaceId);
+  const spaceName = space?.entity?.name ?? `Space ${spaceId}`;
+
+  if (searchParams.proposalId) {
+    const proposal = await cachedFetchProposal({ id: searchParams.proposalId });
+    const proposalName = proposal?.name;
+
+    if (proposalName) {
+      return {
+        title: `${proposalName} (${spaceName})`,
+      };
+    }
+  }
+
+  return {
+    title: `${spaceName} Governance`,
+  };
 }
 
 const INITIAL_PUBLIC_SPACES = [

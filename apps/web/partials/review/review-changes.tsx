@@ -1472,7 +1472,10 @@ const DateDisplay = ({ value, side }: DateDisplayProps) => {
   }
 
   return (
-    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
+    <span
+      suppressHydrationWarning
+      className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}
+    >
       {displayValue}
     </span>
   );
