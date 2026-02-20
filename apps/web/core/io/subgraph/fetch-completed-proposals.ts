@@ -22,9 +22,6 @@ export interface FetchProposalsOptions {
   first?: number;
 }
 
-/**
- * Convert API proposal response to ProposalWithoutVoters.
- */
 function apiProposalToDto(proposal: ApiProposalListItem, profile?: Profile): ProposalWithoutVoters {
   const profileData: Profile = profile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
@@ -41,6 +38,7 @@ function apiProposalToDto(proposal: ApiProposalListItem, profile?: Profile): Pro
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
+    canExecute: proposal.canExecute,
     space: {
       id: proposal.spaceId,
       name: null,

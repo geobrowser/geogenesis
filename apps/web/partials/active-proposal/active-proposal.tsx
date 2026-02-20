@@ -9,7 +9,6 @@ import {
   getProposalTimeRemaining,
   getUserVote,
   getYesVotePercentage,
-  toTitleCase,
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -76,6 +75,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           proposalId={proposal.id}
           isProposalEnded={isProposalEnded}
           status={proposal.status}
+          canExecute={proposal.canExecute}
           userVote={userVote}
         />
       </div>
@@ -98,7 +98,15 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                     </Link>
                     <span className="text-grey-04">·</span>
                     <span className="text-text">
-                      {isProposalEnded ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}
+                      {isProposalEnded
+                        ? proposal.status === 'ACCEPTED'
+                          ? 'Accepted'
+                          : proposal.status === 'REJECTED'
+                            ? 'Rejected'
+                            : proposal.canExecute
+                              ? 'Pending execution'
+                              : 'Rejected'
+                        : `${hours}h ${minutes}m remaining`}
                     </span>
                   </div>
                 </div>

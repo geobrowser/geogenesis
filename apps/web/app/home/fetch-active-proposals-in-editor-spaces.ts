@@ -133,6 +133,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
         startTime: number;
         endTime: number;
         status: ProposalStatus;
+        canExecute: boolean;
         space: { id: string; name: string | null; image: string };
         proposalVotes: { totalCount: number; yesCount: number; noCount: number };
         userVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
@@ -192,6 +193,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status,
+      canExecute: p.canExecute,
       space: {
         id: p.spaceId,
         name: null as string | null,

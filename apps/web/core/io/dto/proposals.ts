@@ -25,6 +25,7 @@ export type Proposal = {
   startTime: number;
   endTime: number;
   status: ProposalStatus;
+  canExecute: boolean;
   proposalVotes: {
     totalCount: number;
     nodes: VoteWithProfile[];
@@ -65,6 +66,7 @@ export function ProposalDto(
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
+    canExecute: false,
     space: spaceWithMetadata,
     createdBy: profile,
     proposalVotes: {
@@ -130,6 +132,7 @@ export function ProposalWithoutVotersDto(
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
+    canExecute: false,
     space: spaceWithMetadata,
     createdBy: profile,
   };
