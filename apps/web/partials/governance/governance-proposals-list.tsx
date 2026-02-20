@@ -146,7 +146,7 @@ export async function GovernanceProposalsList({
                 <GovernanceStatusChip
                   endTime={p.endTime}
                   status={p.status}
-                  yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
+                  canExecute={p.canExecute}
                 />
               </div>
             </Link>
@@ -179,6 +179,7 @@ type GovernanceProposal = {
   startTime: number;
   endTime: number;
   status: ProposalStatus;
+  canExecute: boolean;
   proposalVotes: {
     totalCount: number;
     yesCount: number;
@@ -206,6 +207,7 @@ function apiProposalToGovernanceDto(
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
+    canExecute: proposal.canExecute,
     createdBy: profile,
     targetProfile: maybeTargetProfile,
     userVote: proposal.userVote ? convertVoteOption(proposal.userVote) : undefined,

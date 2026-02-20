@@ -244,6 +244,7 @@ async function PendingContentProposal({
           spaceId={proposal.space.id}
           proposalId={proposal.id}
           isProposalEnded={isProposalEnded}
+          canExecute={proposal.canExecute}
           status={proposal.status}
           userVote={userVote}
         />

@@ -12,10 +12,13 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
+import { Execute } from './execute';
+
 interface Props {
   spaceId: string;
   isProposalEnded: boolean;
   status: Proposal['status'];
+  canExecute: boolean;
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
@@ -25,6 +28,7 @@ export function AcceptOrReject({
   spaceId,
   isProposalEnded,
   status,
+  canExecute,
   userVote,
   proposalId,
 }: Props) {
@@ -63,6 +67,18 @@ export function AcceptOrReject({
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    }
+
+    if (status === 'REJECTED') {
+      return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    }
+
+    if (canExecute && smartAccount) {
+      return <Execute spaceId={spaceId} proposalId={proposalId} />;
+    }
+
+    if (canExecute) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
