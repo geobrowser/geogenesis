@@ -16,7 +16,7 @@ import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
-  const urlComponents = useSelectedLayoutSegments().filter(s => !s.startsWith('('));
+  const urlComponents = useSelectedLayoutSegments()?.filter(s => !s.startsWith('('));
   const routeSpaceId = urlComponents?.[1];
   const { space: routeSpace } = useSpace(routeSpaceId);
 
