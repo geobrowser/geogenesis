@@ -79,7 +79,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           userVote={userVote}
         />
       </div>
-      <div className="relative overflow-y-auto overflow-x-clip overscroll-contain">
+      <div className="relative overflow-x-clip">
         <MetadataMotionContainer>
           <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
             <div className="flex flex-col items-center gap-8">
