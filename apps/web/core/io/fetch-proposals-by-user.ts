@@ -160,6 +160,7 @@ export async function fetchProposalsByUser({
       startTime: Number(p.startTime),
       endTime,
       status,
+      canExecute: false,
       space: {
         id: p.spaceId,
         name: null,

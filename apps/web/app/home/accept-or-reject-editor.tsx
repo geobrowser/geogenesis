@@ -10,9 +10,12 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
+import { Execute } from '~/partials/active-proposal/execute';
+
 interface Props {
   spaceId: string;
   isProposalEnded: boolean;
+  canExecute: boolean;
   status: Proposal['status'];
 
   userVote: SubstreamVote | undefined;
@@ -22,6 +25,7 @@ interface Props {
 export function AcceptOrRejectEditor({
   spaceId,
   isProposalEnded,
+  canExecute,
   status,
   userVote,
   proposalId,
@@ -61,6 +65,18 @@ export function AcceptOrRejectEditor({
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    }
+
+    if (status === 'REJECTED') {
+      return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    }
+
+    if (canExecute && smartAccount) {
+      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+    }
+
+    if (canExecute) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;

@@ -101,17 +101,18 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     id: apiProposal.proposalId,
-    editId: '', // Not provided by new API, will need to be fetched separately if needed
+    editId: '',
     name: apiProposal.name,
     type: proposalType,
-    createdAt: 0, // Not directly provided, could be derived from startTime if needed
-    createdAtBlock: '0', // Not provided by new API
+    createdAt: 0,
+    createdAtBlock: '0',
     startTime: apiProposal.timing.startTime,
     endTime: apiProposal.timing.endTime,
     status: mapProposalStatus(apiProposal.status),
+    canExecute: apiProposal.canExecute,
     space: {
       id: apiProposal.spaceId,
-      name: null, // Would need to fetch space metadata separately
+      name: null,
       image: '',
     },
     createdBy: profile,
