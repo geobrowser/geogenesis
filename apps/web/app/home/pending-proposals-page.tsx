@@ -179,7 +179,7 @@ async function PendingContentProposal({
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id)}>
+      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home')}>
         <div className="text-smallTitle">{proposalName}</div>
       </Link>
       <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">

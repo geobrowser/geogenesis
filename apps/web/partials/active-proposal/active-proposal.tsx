@@ -35,7 +35,7 @@ interface Props {
 
 export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
   return (
-    <ActiveProposalSlideUp proposalId={proposalId}>
+    <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
         <ReviewProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
@@ -67,7 +67,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
     <>
       <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <CloseProposalButton />
+          <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
         </div>
 
