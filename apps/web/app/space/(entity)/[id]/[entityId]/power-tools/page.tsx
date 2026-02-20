@@ -1,11 +1,14 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import { useParams, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
+import { getRelationEntityRelations } from '~/core/io/queries';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { useQueryEntities, useQueryEntity, useQueryRelation, useRelation } from '~/core/sync/use-store';
 
@@ -26,9 +29,17 @@ export default function PowerToolsPage() {
     enabled: Boolean(spaceId && relationId),
   });
 
-  const blockRelation = useRelation({
+  const { data: relationEntityRelations, isLoading: isRelationEntityLoading } = useQuery({
+    queryKey: ['relation-entity-relations', relationId, spaceId],
+    queryFn: ({ signal }) => Effect.runPromise(getRelationEntityRelations(relationId, spaceId, signal)),
+    enabled: Boolean(spaceId && relationId),
+  });
+
+  const relationFromStore = useRelation({
     selector: r => r.id === relationId || r.entityId === relationId,
   });
+
+  const blockRelation = relationFromStore ?? relationEntityRelations?.[0] ?? null;
 
   const parentEntityId = blockRelation?.fromEntity.id ?? null;
 
@@ -51,7 +62,7 @@ export default function PowerToolsPage() {
     enabled: blockIds.length > 0,
   });
 
-  const isLoading = isRelationLoading || isParentLoading || isBlocksLoading;
+  const isLoading = isRelationLoading || isRelationEntityLoading || isParentLoading || isBlocksLoading;
 
   if (!spaceId || !dataBlockEntityId || !relationId) {
     return (

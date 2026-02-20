@@ -223,16 +223,16 @@ export const SelectEntity = ({
     }
   }, [hasResults, selectedIndex]);
 
-  const containerRef = useRef(null!);
-  const popoverRef = useRef<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const target = event.target as Node;
+      const target = event.target as Node | null;
       const container = containerRef.current;
       const popover = popoverRef.current;
-      if (container && container.contains(target)) return;
-      if (popover && popover.contains(target)) return;
+      if (target && container && container.contains(target)) return;
+      if (target && popover && popover.contains(target)) return;
       onQueryChange('');
       setSelectedIndex(0);
     };

@@ -90,7 +90,7 @@ export function TableBlockContextMenu() {
                   href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
                   className="flex w-full items-center justify-between gap-2"
                 >
-                  <span>Open in Power Tools</span>
+                  <span>Open fullscreen</span>
                   <TableView />
                 </Link>
               </MenuItem>

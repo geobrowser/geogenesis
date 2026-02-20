@@ -57,7 +57,7 @@ export const FlowBar = () => {
         {!hideFlowbar && (
           <div
             className={cx(
-              'pointer-events-none fixed bottom-5 inset-x-0 z-10 flex justify-center text-button',
+              'pointer-events-none fixed bottom-5 inset-x-0 z-[1000] flex justify-center text-button',
               RemoveScroll.classNames.fullWidth
             )}
           >
