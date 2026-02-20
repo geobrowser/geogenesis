@@ -218,7 +218,7 @@ export const SelectEntity = ({
     if (element) {
       element.scrollIntoView({
         behavior: 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     }
   }, [hasResults, selectedIndex]);
@@ -419,6 +419,11 @@ export const SelectEntity = ({
                         // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                         maxHeight:
                           'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                        // Enforce a minimum height so the results area stays visible. When
+                        // the anchor is near the viewport bottom, this forces the content to
+                        // exceed the available space, triggering Radix/Floating UI to flip
+                        // the dropdown above the input.
+                        minHeight: results.length > 0 ? '100px' : '2.5rem',
                       }}
                     >
                       {!results?.length && isLoading && (
@@ -574,6 +579,7 @@ export const SelectEntity = ({
                         // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                         maxHeight:
                           'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                        minHeight: '100px',
                       }}
                     >
                       {(result.spaces ?? []).map((space, index) => (
