@@ -302,7 +302,7 @@ export const ReviewChanges = () => {
             </div>
           </div>
         </div>
-        <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
+        <div className="flex min-h-0 grow flex-col gap-2 overflow-y-auto overscroll-contain px-2 pb-2">
           {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
             <div className="rounded-xl bg-white p-4">
               <div className="relative mx-auto w-full max-w-[1350px] shrink-0">

@@ -384,7 +384,15 @@ export async function postProcessDiffs(
   }
 
   // 4. Batch-fetch names and entity data
+  // Seed nameMap from diff entities so new entities in the same proposal resolve
+  // before we fetch committed data (which overwrites when available).
   const nameMap = new Map<string, string | null>();
+  for (const entity of entities) {
+    if (entity.name) {
+      nameMap.set(entity.entityId, entity.name);
+    }
+  }
+
   const fetchedEntityMap = new Map<string, Entity>();
   if (idsToResolve.size > 0) {
     try {
