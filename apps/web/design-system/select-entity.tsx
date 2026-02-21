@@ -11,7 +11,6 @@ import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
@@ -235,6 +234,7 @@ export const SelectEntity = ({
       if (target && popover && popover.contains(target)) return;
       onQueryChange('');
       setSelectedIndex(0);
+      setResult(null);
     };
 
     document.addEventListener('mousedown', handler);
@@ -245,10 +245,6 @@ export const SelectEntity = ({
       document.removeEventListener('touchstart', handler);
     };
   }, [onQueryChange]);
-
-  useOnClickOutside(() => {
-    setResult(null);
-  }, popoverRef);
 
   return (
     <div

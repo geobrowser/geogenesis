@@ -18,8 +18,8 @@ import { Property, Relation } from '~/core/types';
 import { PowerToolsData, PowerToolsRow } from '../types';
 
 const DEFAULT_PAGE_SIZE = 25;
-// Disabled window trimming for now to avoid dropping rows the UI expects to render.
-const MAX_PAGES_IN_MEMORY = Number.POSITIVE_INFINITY;
+// Keep a bounded window in memory to avoid re-render costs after long scroll sessions.
+const MAX_PAGES_IN_MEMORY = 6;
 const MAX_FETCH_PAGES = 200;
 
 function buildRowMeta(
