@@ -1,11 +1,11 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { FilterString, fromGeoFilterString, toGeoFilterState } from './filters';
 
 // Mock the queries module
-vi.mock('~/core/io/v2/queries', () => ({
+vi.mock('~/core/io/queries', () => ({
   getProperty: vi.fn((propertyId: string) => {
     if (propertyId === SystemIds.TYPES_PROPERTY) {
       return Effect.succeed({ id: propertyId, name: 'Types', dataType: 'RELATION' });

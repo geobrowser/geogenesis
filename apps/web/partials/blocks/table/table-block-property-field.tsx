@@ -1,4 +1,5 @@
-import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
 import cx from 'classnames';
 
 import { useState } from 'react';
@@ -6,8 +7,8 @@ import { useState } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValue } from '~/core/sync/use-store';
-import { Property } from '~/core/v2.types';
+import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
+import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -19,7 +20,7 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
-import { onChangeEntryFn } from './change-entry';
+import { createPropertyRelation, createTypeRelationForNewEntity, onChangeEntryFn, writeValue } from './change-entry';
 
 export function TableBlockPropertyField(props: {
   spaceId: string;
@@ -39,7 +40,14 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} entityName={entityName} />
+          <EditableRelationsGroup
+            entityId={entityId}
+            spaceId={spaceId}
+            property={property}
+            disableLink={disableLink}
+            entityName={entityName}
+            isEditing={isEditing}
+          />
         </div>
       );
     }
@@ -49,7 +57,7 @@ export function TableBlockPropertyField(props: {
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
           <div className="flex w-full flex-wrap gap-2">
-            <EditableValueGroup entityId={entityId} property={property} isEditing={isEditing} />
+            <EditableValueGroup entityId={entityId} property={property} spaceId={spaceId} isEditing={isEditing} />
           </div>
         </div>
       </div>
@@ -98,9 +106,15 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
         </div>
       </div>
       {isRelation ? (
-        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
+        <EditableRelationsGroup
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          disableLink={disableLink}
+          isEditing={false}
+        />
       ) : (
-        <EditableValueGroup entityId={entityId} property={property} isEditing={false} />
+        <EditableValueGroup entityId={entityId} property={property} spaceId={spaceId} isEditing={false} />
       )}
     </div>
   );
@@ -112,18 +126,26 @@ type EditableRelationsGroupProps = {
   property: Property;
   disableLink?: boolean;
   entityName?: string | null;
+  isEditing: boolean;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false, entityName }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({
+  entityId,
+  spaceId,
+  property,
+  disableLink = false,
+  entityName,
+  isEditing,
+}: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
-  const typeOfName = property.name;
   const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
   const firstRelationValueType = property?.relationValueTypes?.[0];
 
+  // We don't filter by space id as we want to render data from all spaces.
   const relations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === typeOfId,
+    selector: r => r.fromEntity.id === entityId && r.type.id === typeOfId,
   });
 
   const isEmpty = relations.length === 0;
@@ -143,6 +165,9 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
   }
 
   if (isEmpty) {
+    if (!isEditing) {
+      return null;
+    }
     return (
       <div data-testid="select-entity" className="w-full">
         <SelectEntity
@@ -150,51 +175,11 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
           relationValueTypes={filterSearchByTypes}
           onCreateEntity={result => {
             if (firstRelationValueType) {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                verified: result.verified,
-                toSpaceId: result.space,
-                type: {
-                  id: SystemIds.TYPES_PROPERTY,
-                  name: 'Types',
-                },
-                fromEntity: {
-                  id: result.id,
-                  name: result.name,
-                },
-                toEntity: {
-                  id: firstRelationValueType.id,
-                  name: firstRelationValueType.name,
-                  value: firstRelationValueType.id,
-                },
-              });
+              createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
           }}
           onDone={result => {
-            storage.relations.set({
-              id: IdUtils.generate(),
-              // @TODO(migration): Reuse entity?
-              entityId: IdUtils.generate(),
-              spaceId,
-              renderableType: 'RELATION',
-              toSpaceId: result.space,
-              type: {
-                id: property.id,
-                name: property.name,
-              },
-              fromEntity: {
-                id: entityId,
-                name: null,
-              },
-              toEntity: {
-                id: result.id,
-                name: result.name,
-                value: result.id,
-              },
-            });
+            createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           variant="tableCell"
         />
@@ -212,7 +197,7 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
         return (
           <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
             <LinkableRelationChip
-              isEditing
+              isEditing={isEditing}
               onDelete={() => {
                 storage.relations.delete(r);
               }}
@@ -236,58 +221,18 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
           </div>
         );
       })}
-      {!isEmpty && (
+      {!isEmpty && isEditing && (
         <div className="mt-2">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
             relationValueTypes={filterSearchByTypes}
             onCreateEntity={result => {
               if (firstRelationValueType) {
-                storage.relations.set({
-                  id: IdUtils.generate(),
-                  // @TODO(migration): Reuse entity?
-                  entityId: IdUtils.generate(),
-                  spaceId,
-                  renderableType: 'RELATION',
-                  toSpaceId: result.space,
-                  type: {
-                    id: SystemIds.TYPES_PROPERTY,
-                    name: 'Types',
-                  },
-                  fromEntity: {
-                    id: result.id,
-                    name: result.name,
-                  },
-                  toEntity: {
-                    id: firstRelationValueType.id,
-                    name: firstRelationValueType.name,
-                    value: firstRelationValueType.id,
-                  },
-                });
+                createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
               }
             }}
             onDone={result => {
-              storage.relations.set({
-                id: IdUtils.generate(),
-                // @TODO(migration): Reuse entity?
-                entityId: IdUtils.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                toSpaceId: result.space,
-                type: {
-                  id: typeOfId,
-                  name: typeOfName,
-                },
-                fromEntity: {
-                  id: entityId,
-                  name: null,
-                },
-                toEntity: {
-                  id: result.id,
-                  name: result.name,
-                  value: result.id,
-                },
-              });
+              createPropertyRelation(storage, spaceId, entityId, property, result);
             }}
             spaceId={spaceId}
           />
@@ -300,16 +245,20 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
 type EditableValueGroupProps = {
   entityId: string;
   property: Property;
+  spaceId: string;
   isEditing: boolean;
 };
 
-function EditableValueGroup({ entityId, property, isEditing }: EditableValueGroupProps) {
-  const rawValue = useValue({
-    selector: v => v.entity.id === entityId && v.property.id === property.id,
-  });
+function EditableValueGroup({ entityId, property, spaceId, isEditing }: EditableValueGroupProps) {
+  const { storage } = useMutate();
+  const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
 
   const renderableType = property.renderableType ?? property.dataType;
   const value = rawValue?.value ?? '';
+
+  const onWriteValue = (newValue: string) => {
+    writeValue(storage, entityId, spaceId, property, newValue, rawValue);
+  };
 
   switch (renderableType) {
     case 'NUMBER':
@@ -320,93 +269,15 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
           format={property.format || undefined}
           unitId={rawValue?.options?.unit || property.unit || undefined}
           isEditing={isEditing}
-          onChange={value => {
-            // onChangeEntry(
-            //   {
-            //     entityId: renderable.entityId,
-            //     entityName: renderable.entityName,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'NUMBER',
-            //           value: value,
-            //           options: {
-            //             // format: renderable.options?.format,
-            //             unit: rawValue.options?.unit,
-            //           },
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
-          }}
+          dataType={property.dataType}
+          onChange={onWriteValue}
         />
       );
     case 'TEXT':
-      return (
-        <TableStringField
-          variant="tableCell"
-          placeholder="Add value..."
-          value={value}
-          onChange={value => {
-            // onChangeEntry(
-            //   {
-            //     entityId: renderable.entityId,
-            //     entityName: renderable.entityName,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'TEXT',
-            //           value: value,
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
-          }}
-        />
-      );
+      return <TableStringField variant="tableCell" placeholder="Add value..." value={value} onChange={onWriteValue} />;
     case 'CHECKBOX': {
       const checked = getChecked(value);
-      return (
-        <Checkbox
-          checked={checked}
-          onChange={() => {
-            // onChangeEntry(
-            //   {
-            //     entityId: renderable.entityId,
-            //     entityName: renderable.entityName,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'CHECKBOX',
-            //           value: !checked ? '1' : '0',
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
-          }}
-        />
-      );
+      return <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />;
     }
     case 'TIME':
       return (
@@ -414,65 +285,11 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
           isEditing={true}
           value={value}
           propertyId={property.id}
-          onBlur={value => {
-            // onChangeEntry(
-            //   {
-            //     entityId: renderable.entityId,
-            //     entityName: renderable.entityName,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'TIME',
-            //           value: value.value,
-            //           options: {
-            //             format: value.format,
-            //           },
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
-          }}
+          dataType={property.dataType}
+          onBlur={v => onWriteValue(v.value)}
         />
       );
-    // case 'URL':
-    //   return (
-    //     <WebUrlField
-    //       key={property.id}
-    //       variant="tableCell"
-    //       placeholder="Add a URI"
-    //       isEditing={true}
-    //       spaceId={spaceId}
-    //       value={value}
-    //       onBlur={e => {
-    //         onChangeEntry(
-    //           {
-    //             entityId: renderable.entityId,
-    //             entityName: renderable.entityName,
-    //             spaceId: renderable.spaceId,
-    //           },
-    //           {
-    //             type: 'EVENT',
-    //             data: {
-    //               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-    //               payload: {
-    //                 renderable,
-    //                 value: {
-    //                   type: 'URL',
-    //                   value: e.currentTarget.value,
-    //                 },
-    //               },
-    //             },
-    //           }
-    //         );
-    //       }}
-    //     />
-    //   );
+    default:
+      return null;
   }
 }

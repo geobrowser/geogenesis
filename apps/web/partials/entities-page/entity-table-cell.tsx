@@ -1,11 +1,14 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { useRelations, useValue } from '~/core/sync/use-store';
-import { useImageUrlFromEntity } from '~/core/utils/utils';
-import { Property } from '~/core/v2.types';
+import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
+import { Property } from '~/core/types';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { isUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -54,7 +57,11 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link entityId={entityId} href={href} className="text-tableCell text-ctaHover hover:underline">
+          <Link
+            entityId={entityId}
+            href={href}
+            className="break-words text-tableCell text-ctaHover hover:underline"
+          >
             {name || entityId}
           </Link>
         ) : (
@@ -74,7 +81,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="text-tableCell text-ctaHover hover:underline"
+              className="break-words text-tableCell text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -85,7 +92,7 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {isRelation ? (
         <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
       ) : (
@@ -108,7 +115,14 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
-      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} directImageUrl={relation.toEntity.value} spaceId={spaceId} />;
+      return (
+        <ImageRelation
+          key={relation.id}
+          linkedEntityId={relation.toEntity.id}
+          directImageUrl={relation.toEntity.value}
+          spaceId={spaceId}
+        />
+      );
     }
 
     const value = relation.toEntity.value;
@@ -118,10 +132,12 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
     return (
       <LinkableRelationChip
+        small
         key={relation.toEntity.value}
         isEditing={false}
         currentSpaceId={spaceId}
         entityId={relationValue}
+        relationEntityId={relation.entityId}
         spaceId={relation.spaceId}
         relationId={relationId}
       >
@@ -131,7 +147,15 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   });
 }
 
-function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEntityId: string; directImageUrl?: string | null; spaceId: string }) {
+function ImageRelation({
+  linkedEntityId,
+  directImageUrl,
+  spaceId,
+}: {
+  linkedEntityId: string;
+  directImageUrl?: string | null;
+  spaceId: string;
+}) {
   // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
   // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
   // We need to check if it's a valid image URL before using it
@@ -150,25 +174,34 @@ type ValueGroupProps = {
 };
 
 function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps) {
-  const rawValue = useValue({
-    selector: v => v.entity.id === entityId && v.property.id === property.id,
-  });
+  const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
   const value = rawValue?.value ?? '';
   const renderableType = property.renderableTypeStrict ?? property.dataType;
 
+  const hasUrlTemplate = isUrlTemplate(property.format);
+
   if (renderableType === 'URL') {
-    return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
+    return (
+      <WebUrlField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        spaceId={spaceId}
+        value={value}
+        format={property.format}
+      />
+    );
   }
 
-  if (renderableType === 'TIME') {
-    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
+  if (renderableType === 'DATE' || renderableType === 'DATETIME' || renderableType === 'TIME') {
+    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} dataType={property.dataType} />;
   }
 
-  if (renderableType === 'CHECKBOX') {
+  if (renderableType === 'BOOLEAN') {
     return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
   }
 
-  if (renderableType === 'NUMBER') {
+  if (renderableType === 'INTEGER' || renderableType === 'FLOAT' || renderableType === 'DECIMAL') {
     return (
       <NumberField
         variant="tableCell"
@@ -177,6 +210,19 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
         value={value}
         format={property.format || undefined}
         unitId={rawValue?.options?.unit || property.unit || undefined}
+      />
+    );
+  }
+
+  if (renderableType === 'TEXT' && hasUrlTemplate) {
+    return (
+      <WebUrlField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        spaceId={spaceId}
+        value={value}
+        format={property.format}
       />
     );
   }

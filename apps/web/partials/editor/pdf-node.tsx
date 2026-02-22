@@ -41,8 +41,10 @@ function PdfNodeComponent({ node }: NodeViewProps) {
   const { id, src } = node.attrs;
 
   return (
-    <NodeViewWrapper as="div" className="pdf-node my-4 h-full">
-      <PdfNodeChildren pdfSrc={src} entityId={id} />
+    <NodeViewWrapper>
+      <div contentEditable="false" suppressContentEditableWarning className="pdf-node my-4">
+        <PdfNodeChildren pdfSrc={src} entityId={id} />
+      </div>
     </NodeViewWrapper>
   );
 }

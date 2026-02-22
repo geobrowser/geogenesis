@@ -1,3 +1,5 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -10,6 +12,11 @@ interface Props {
 
 export default async function Activity(props: Props) {
   const params = await props.params;
+
+  if (!IdUtils.isValid(params.id)) {
+    notFound();
+  }
+
   return (
     <Suspense fallback={<ActivitySkeleton />}>
       <ActivityServerContainer spaceId={params.id} />
@@ -20,8 +27,8 @@ export default async function Activity(props: Props) {
 const ActivitySkeleton = () => {
   return (
     <div className="divide-y divide-divider">
-      {new Array(3).fill(0).map(i => (
-        <div key={i} className="flex items-center gap-5 py-4">
+      {new Array(3).fill(0).map((_, index) => (
+        <div key={index} className="flex items-center gap-5 py-4">
           <div>
             <Skeleton className="size-10 rounded-md" />
           </div>

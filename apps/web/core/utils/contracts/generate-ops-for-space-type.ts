@@ -1,7 +1,7 @@
-import { Account, ContentIds, Graph, Op, SystemIds } from '@graphprotocol/grc-20';
+import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import type { SpaceType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { validateEntityId } from '~/core/utils/utils';
@@ -15,6 +15,30 @@ type DeployArgs = {
   entityId?: string;
 };
 
+// Space types that use templates - don't create entity first, let cloneEntity handle it
+const TEMPLATE_BASED_TYPES: SpaceType[] = [
+  'personal',
+  'company',
+  'academic-field',
+  'dao',
+  'industry',
+  'interest',
+  'protocol',
+  'region',
+];
+
+const DAO_SPACE_TYPES: SpaceType[] = [
+  'dao',
+  'academic-field',
+  'company',
+  'government-org',
+  'industry',
+  'interest',
+  'nonprofit',
+  'region',
+  'protocol',
+];
+
 export const generateOpsForSpaceType = async ({
   type,
   spaceName,
@@ -25,28 +49,37 @@ export const generateOpsForSpaceType = async ({
 }: DeployArgs) => {
   const ops: Op[] = [];
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
+  let hasSpaceType = false;
 
-  const newEntity = Graph.createEntity({
-    id: newEntityId,
-    name: spaceName,
-    types: [], // Graph.createSpace() already adds Space type
-  });
+  if (!TEMPLATE_BASED_TYPES.includes(type)) {
+    const newEntity = Graph.createEntity({
+      id: newEntityId,
+      name: spaceName,
+      types: [SystemIds.SPACE_TYPE],
+    });
 
-  ops.push(...newEntity.ops);
+    ops.push(...newEntity.ops);
+    hasSpaceType = true;
+  }
 
-  // Add space type-specific ops
   switch (type) {
     case 'personal': {
-      const [personOps] = await cloneEntity({
-        oldEntityId: SystemIds.PERSON_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
+      const { ops: createEntityOps } = Graph.createEntity({
+        id: newEntityId,
+        name: spaceName,
+        types: [SystemIds.SPACE_TYPE],
       });
+      ops.push(...createEntityOps);
+      hasSpaceType = true;
 
-      ops.push(...personOps);
+      const { ops: personTypeOps } = Graph.createRelation({
+        fromEntity: newEntityId,
+        type: SystemIds.TYPES_PROPERTY,
+        toEntity: SystemIds.PERSON_TYPE,
+      });
+      ops.push(...personTypeOps);
 
       const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
-
       ops.push(...accountOps);
 
       const { ops: accountRelationOps } = Graph.createRelation({
@@ -54,7 +87,6 @@ export const generateOpsForSpaceType = async ({
         toEntity: accountId,
         type: SystemIds.ACCOUNTS_PROPERTY,
       });
-
       ops.push(...accountRelationOps);
 
       break;
@@ -150,14 +182,32 @@ export const generateOpsForSpaceType = async ({
       break;
   }
 
-  if (spaceAvatarUri) {
-    // Use TESTNET network to upload to Pinata via alternative gateway
-    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri, network: 'TESTNET' });
+  if (!hasSpaceType) {
+    hasSpaceType = ops.some(op => {
+      if (op.type !== 'createRelation') return false;
+      if (!('from' in op) || !('to' in op) || !('relationType' in op)) return false;
+      return (
+        String(op.from) === newEntityId &&
+        String(op.to) === SystemIds.SPACE_TYPE &&
+        String(op.relationType) === SystemIds.TYPES_PROPERTY
+      );
+    });
+  }
 
-    // Creates the image entity
+  if (DAO_SPACE_TYPES.includes(type) && !hasSpaceType) {
+    const { ops: spaceTypeOps } = Graph.createRelation({
+      fromEntity: newEntityId,
+      toEntity: SystemIds.SPACE_TYPE,
+      type: SystemIds.TYPES_PROPERTY,
+    });
+
+    ops.push(...spaceTypeOps);
+  }
+
+  if (spaceAvatarUri) {
+    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri, network: 'TESTNET' });
     ops.push(...imageOps);
 
-    // Creates the relation pointing to the image entity
     const { ops: imageRelationOps } = Graph.createRelation({
       fromEntity: newEntityId,
       toEntity: imageId,
@@ -168,13 +218,9 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceCoverUri) {
-    // Use TESTNET network to upload to Pinata via alternative gateway
     const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri, network: 'TESTNET' });
-
-    // Creates the image entity
     ops.push(...imageOps);
 
-    // Creates the relation pointing to the image entity
     const { ops: imageRelationOps } = Graph.createRelation({
       fromEntity: newEntityId,
       toEntity: imageId,

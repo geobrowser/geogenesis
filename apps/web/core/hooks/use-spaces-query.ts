@@ -11,7 +11,7 @@ import { Subgraph } from '~/core/io';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 
-const filterByTypes = ['362c1dbd-dc64-44bb-a3c4-652f38a642d7']; // Filter only space type entities
+const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space type entities
 
 export function useSpacesQuery() {
   const [query, setQuery] = useState('');

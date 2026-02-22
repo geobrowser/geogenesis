@@ -1,6 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import {
+  ADDRESS,
+  DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
@@ -11,7 +13,28 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/v2.types';
+import {
+  DataType,
+  Entity,
+  Property,
+  Relation,
+  SwitchableRenderableType,
+  Value,
+} from '~/core/types';
+
+/** Reverse mapping: data type entity ID → DataType string */
+const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
+  Object.entries(DATA_TYPE_ENTITY_IDS).map(([k, v]) => [v, k as DataType])
+);
+
+/** Resolves a data type entity ID to its DataType string. */
+export function getDataTypeFromEntityId(entityId: string): DataType {
+  const dataType = ENTITY_ID_TO_DATA_TYPE[entityId];
+  if (!dataType) {
+    console.warn(`Unknown data type entity ID: ${entityId}, defaulting to TEXT`);
+  }
+  return dataType ?? 'TEXT';
+}
 
 /**
  * Interface for property type mapping configuration
@@ -60,14 +83,37 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'RELATION',
         renderableTypeId: VIDEO_RENDERABLE_TYPE,
       };
-    case 'NUMBER':
+    // GRC-20 v2 numeric types
+    case 'INTEGER':
       return {
-        baseDataType: 'NUMBER',
+        baseDataType: 'INTEGER',
         renderableTypeId: null,
       };
-    case 'CHECKBOX':
+    case 'FLOAT':
       return {
-        baseDataType: 'CHECKBOX',
+        baseDataType: 'FLOAT',
+        renderableTypeId: null,
+      };
+    case 'DECIMAL':
+      return {
+        baseDataType: 'DECIMAL',
+        renderableTypeId: null,
+      };
+    // GRC-20 v2 boolean type
+    case 'BOOLEAN':
+      return {
+        baseDataType: 'BOOLEAN',
+        renderableTypeId: null,
+      };
+    // GRC-20 v2 temporal types
+    case 'DATE':
+      return {
+        baseDataType: 'DATE',
+        renderableTypeId: null,
+      };
+    case 'DATETIME':
+      return {
+        baseDataType: 'DATETIME',
         renderableTypeId: null,
       };
     case 'TIME':
@@ -88,7 +134,12 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
     case 'PDF':
       return {
         baseDataType: 'RELATION',
-        renderableTypeId: PDF_TYPE,
+        renderableTypeId: PDF_TYPE
+      }
+    case 'ADDRESS':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: ADDRESS,
       };
     default: {
       // This ensures exhaustive type checking
@@ -103,7 +154,7 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
 }
 
 /**
- * Map of property types to their base data types for filtering purposes
+ * Map of property types to their base data types for filtering purposes (GRC-20 v2)
  */
 export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   TEXT: 'TEXT',
@@ -111,13 +162,21 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   RELATION: 'RELATION',
   IMAGE: 'RELATION',
   VIDEO: 'RELATION',
-  NUMBER: 'NUMBER',
-  CHECKBOX: 'CHECKBOX',
+  // GRC-20 v2 numeric types
+  INTEGER: 'INTEGER',
+  FLOAT: 'FLOAT',
+  DECIMAL: 'DECIMAL',
+  // GRC-20 v2 boolean type
+  BOOLEAN: 'BOOLEAN',
+  // GRC-20 v2 temporal types
+  DATE: 'DATE',
+  DATETIME: 'DATETIME',
   TIME: 'TIME',
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
   PLACE: 'RELATION',
   PDF: 'RELATION',
+  ADDRESS: 'RELATION',
 } as const;
 
 /**
@@ -140,14 +199,16 @@ export function reconstructFromStore(
     return null;
   }
 
-  // Get the dataType value
-  const dataTypeValue = getValues({
-    selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
+  // Get the data type relation
+  const dataTypeRelation = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === DATA_TYPE_PROPERTY,
   })[0];
 
-  if (!dataTypeValue) {
+  if (!dataTypeRelation) {
     return null;
   }
+
+  const dataType: DataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
 
   // Get the name value
   const nameValue = getValues({
@@ -168,13 +229,6 @@ export function reconstructFromStore(
   const unitRelation = getRelations({
     selector: r => r.fromEntity.id === id && r.type.id === UNIT_PROPERTY,
   })[0];
-
-  // Validate and cast dataType
-  const validDataTypes: DataType[] = ['TEXT', 'NUMBER', 'CHECKBOX', 'TIME', 'POINT', 'RELATION'];
-  const dataTypeString = String(dataTypeValue.value);
-  const dataType: DataType = validDataTypes.includes(dataTypeString as DataType)
-    ? (dataTypeString as DataType)
-    : 'TEXT';
 
   // Get relation value types
   const relationValueTypes = getRelations({
@@ -249,7 +303,7 @@ export function getCurrentRenderableType(
 
   // If there's a renderableType, map it to the appropriate type
   if (propertyDataType.renderableType) {
-    return getStrictRenderableType(propertyDataType.renderableType.id) || 'TEXT'; // Default to TEXT if mapping fails
+    return getStrictRenderableType(propertyDataType.renderableType.id) || 'TEXT';
   }
 
   // Otherwise, default to the base dataType

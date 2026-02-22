@@ -1,7 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useSelector } from '@xstate/store/react';
 import Link from 'next/link';
 
@@ -10,7 +9,6 @@ import * as React from 'react';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -24,8 +22,10 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import { HistoryEmpty } from '../history/history-empty';
-import { HistoryItem } from '../history/history-item';
+import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
+import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
+import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityPageMetadataHeader } from './entity-page-metadata-header';
 
@@ -45,27 +45,15 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
-    data: versions,
+    allVersions,
     isFetching,
     isFetchingNextPage,
     fetchNextPage,
-  } = useInfiniteQuery({
-    enabled: isHistoryOpen,
-    queryKey: [`entity-versions-for-entityId-${entityId}`],
-    queryFn: ({ signal, pageParam = 0 }) => fetchHistoryVersions({ entityId, page: pageParam, signal }),
-    getNextPageParam: (_lastPage, pages) => pages.length,
-    initialPageParam: 0,
-  });
-
-  const isOnePage = versions?.pages && versions.pages[0].length < 5;
-
-  const isLastPage =
-    versions?.pages &&
-    versions.pages.length > 1 &&
-    versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
-
-  const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
-  const showMore = !isOnePage && !isLastPage;
+    hasNextPage,
+    diffSelection,
+    onVersionClick,
+    clearDiffSelection,
+  } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
   const onNameChange = (value: string) => {
     storage.entities.name.set(entityId, spaceId, value);
@@ -75,78 +63,82 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const isRelationPage = relations.length > 0;
 
   return (
-    <div className="relative flex items-center justify-between">
-      {!isRelationPage ? (
-        <>
-          {isEditing ? (
-            <div className="flex-grow">
-              <PageStringField
-                variant="mainPage"
-                placeholder="Entity name..."
-                value={name ?? ''}
-                onChange={onNameChange}
-              />
-              {/*
-            This height differs from the readable page height due to how we're using an expandable textarea for editing
-            the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
-            have to manually adjust the spacing here to remove the layout shift.
-          */}
-              <Spacer height={3.5} />
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between">
-                <Text as="h1" variant="mainPage">
-                  {name ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </div>
-              <Spacer height={12} />
-            </div>
-          )}
-        </>
-      ) : (
-        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isRelationPage={true} />
-      )}
-
-      <div className="flex items-center gap-5">
-        {isEditing && (
-          <Link
-            href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-          >
-            <Create />
-          </Link>
-        )}
-        <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-          {versions?.pages?.length === 0 && <HistoryEmpty />}
-          {renderedVersions?.map((group, index) => (
-            <React.Fragment key={index}>
-              {group.map(v => (
-                <HistoryItem
-                  key={v.id}
-                  spaceId={spaceId}
-                  proposalId={v.proposalId}
-                  createdAt={v.createdAt}
-                  createdBy={v.createdBy}
-                  name={v.editName}
+    <>
+      <div className="relative flex items-center justify-between">
+        {!isRelationPage ? (
+          <>
+            {isEditing ? (
+              <div className="flex-grow text-text">
+                <PageStringField
+                  variant="mainPage"
+                  placeholder="Entity name..."
+                  value={name ?? ''}
+                  onChange={onNameChange}
                 />
-              ))}
-            </React.Fragment>
-          ))}
-          {showMore && (
-            <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
-              {isFetching || isFetchingNextPage ? (
-                <Dots />
-              ) : (
-                <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
-                  Show more
-                </SmallButton>
-              )}
-            </div>
+                {/* Manual spacing to match the <Text /> height and avoid layout shift */}
+                <Spacer height={3.5} />
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between">
+                  <Text as="h1" variant="mainPage">
+                    {name ?? ZERO_WIDTH_SPACE}
+                  </Text>
+                </div>
+                <Spacer height={12} />
+              </div>
+            )}
+          </>
+        ) : (
+          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isRelationPage={true} />
+        )}
+
+        <div className="flex items-center gap-5">
+          {isEditing && (
+            <Link
+              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+            >
+              <Create />
+            </Link>
           )}
-        </HistoryPanel>
-        <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+          <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+            {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
+            {allVersions.map((v, index) => (
+              <EntityVersionItem
+                key={v.editId}
+                createdAt={v.createdAt}
+                name={v.name}
+                createdById={v.createdById}
+                createdBy={v.createdBy}
+                onClick={() => {
+                  onVersionClick(v, index);
+                  setIsHistoryOpen(false);
+                }}
+              />
+            ))}
+            {isFetching && allVersions.length === 0 && (
+              <div className="flex h-12 w-full items-center justify-center bg-white">
+                <Dots />
+              </div>
+            )}
+            {hasNextPage && (
+              <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+                {isFetchingNextPage ? (
+                  <Dots />
+                ) : (
+                  <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                    Show more
+                  </SmallButton>
+                )}
+              </div>
+            )}
+          </HistoryPanel>
+          <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+        </div>
       </div>
-    </div>
+
+      <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
+    </>
   );
 }

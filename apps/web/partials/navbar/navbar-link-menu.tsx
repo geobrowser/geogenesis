@@ -5,8 +5,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Dictionary } from '~/core/types';
+import { useSpace } from '~/core/hooks/use-space';
 
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
@@ -17,11 +16,9 @@ import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
-  const { spaces } = useSpaces();
-  const urlComponents = useSelectedLayoutSegments();
-
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.entity?.name ?? undefined]));
-  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.entity?.image ?? undefined]));
+  const urlComponents = useSelectedLayoutSegments()?.filter(s => !s.startsWith('('));
+  const routeSpaceId = urlComponents?.[1];
+  const { space: routeSpace } = useSpace(routeSpaceId);
 
   const onClick = (path: string) => {
     onOpenChange(false);
@@ -41,8 +38,8 @@ export function NavbarLinkMenu() {
           const { path, title, img } = getComponentRoute({
             urlComponents,
             index,
-            spaceNames,
-            spaceImages,
+            routeSpaceName: routeSpace?.entity?.name ?? null,
+            routeSpaceImage: routeSpace?.entity?.image ?? null,
           });
 
           return (
@@ -59,8 +56,8 @@ export function NavbarLinkMenu() {
 type GetComponentRouteConfig = {
   urlComponents: string[];
   index: number;
-  spaceNames: Dictionary<string, string>;
-  spaceImages: Dictionary<string, string>;
+  routeSpaceName: string | null;
+  routeSpaceImage: string | null;
 };
 
 type ComponentRoute = {
@@ -69,14 +66,14 @@ type ComponentRoute = {
   img: string | null;
 };
 
-function getComponentRoute({ urlComponents, index, spaceNames, spaceImages }: GetComponentRouteConfig): ComponentRoute {
+function getComponentRoute({ urlComponents, index, routeSpaceName, routeSpaceImage }: GetComponentRouteConfig): ComponentRoute {
   const component = urlComponents[index];
 
   switch (index) {
     case 0:
       return { path: '/root', title: 'Root', img: '/spaces.png' };
     case 1:
-      return { path: `/space/${component}`, title: spaceNames[component] ?? '', img: spaceImages[component] ?? '' };
+      return { path: `/space/${component}`, title: routeSpaceName ?? '', img: routeSpaceImage ?? '' };
     default:
       throw new Error(
         `Generated a breadcrumb component for a nested route structure that is not supported: ${urlComponents}, ${component}`

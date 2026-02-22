@@ -8,13 +8,9 @@ export const IPFS_GATEWAY_PATH = 'https://upload.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
 
-export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
+export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
-// Video type IDs
-export const VIDEO_URL_PROPERTY = '33da2ef5-bd55-4e91-af97-3e082e431a13';
-export const VIDEO_RENDERABLE_TYPE = '0fb6bbf0-2204-4db4-9f70-fa82c41570a4';
-export const VIDEO_TYPE = 'd7a4817c-9795-405b-93e2-12df759c43f8';
-export const VIDEO_BLOCK_TYPE = '809bc406-d0f3-4f3c-a8a1-aa265733c6ce';
+export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [
@@ -28,24 +24,51 @@ export const VALID_VIDEO_TYPES = [
 export const VIDEO_ACCEPT = VALID_VIDEO_TYPES.join(',');
 export const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
 
-export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';
-export const VALUE_TYPE_PROPERTY = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8';
-export const IS_TYPE_PROPERTY = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
-export const ROOT_SPACE = '2a98e6b4-3728-44a4-9b8e-02e15f0677c8';
+// Image file types and upload constraints
+export const VALID_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+export const IMAGE_ACCEPT = VALID_IMAGE_TYPES.join(',');
+export const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
-export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
-export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
+export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 
+/** DataType → entity ID for Data Type relations. */
+export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
+  TEXT: '9edb6fcce4544aa5861139d7f024c010',
+  RELATION: '4b6d9fc1fbfe474c861c83398e1b50d9',
+  BOOLEAN: '7aa4792eeacd41868272fa7fc18298ac',
+  INTEGER: '149fd752d9d04f80820d1d942eea7841',
+  FLOAT: '9b597aaec31c46c88565a370da0c2a65',
+  DECIMAL: 'a3288c22a0564f6fb409fbcccb2c118c',
+  BYTES: '66b433247667496899b48a89bd1de22b',
+  DATE: 'e661d10292794449a22367dbae1be05a',
+  TIME: 'ad75102b03c04d59903813ede9482742',
+  DATETIME: '167664f668f840e1976b20bd16ed8d47',
+  SCHEDULE: 'caf4dd12ba4844b99171aff6c1313b50',
+  POINT: 'df250d17e364413d97792ddaae841e34',
+  EMBEDDING: 'f732849378ba4577a33fac5f1c964f18',
+};
+export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
+export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+
+export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+
+export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
+export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
+
+export const PLACE = '783bc688e65f4e54b67fa5643d78345e';
+export const ADDRESS = '5c6e72fb834047c082818be159ecd495';
+export const VENUE_PROPERTY = 'f28bbb6bf4e8465d9de7a09085e224b9';
+export const ADDRESS_PROPERTY = '72ba2a0f729d4847925df3b09d46bb66';
+export const MAPBOX_PROPERTY = 'f9d8ff4e52f14e73b8f2bbb31dce5465';
 export const PDF_TYPE = '14a39e59-d987-4596-956a-c2dd4165c210';
 export const PDF_URL = '9d69ac47-7023-43e2-b72a-91a335eb54d9';
-export const PLACE = '783bc688-e65f-4e54-b67f-a5643d78345e';
-export const ADDRESS = '5c6e72fb-8340-47c0-8281-8be159ecd495';
-export const VENUE_PROPERTY = 'f28bbb6b-f4e8-465d-9de7-a09085e224b9';
-export const ADDRESS_PROPERTY = '72ba2a0f-729d-4847-925d-f3b09d46bb66';
-export const MAPBOX_PROPERTY = 'f9d8ff4e-52f1-4e73-b8f2-bbb31dce5465';
-export const UNIT_PROPERTY = '11b06581-20d3-41ea-b570-2ef4ee0a4ffd';
-export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
+export const UNIT_PROPERTY = '11b0658120d341eab5702ef4ee0a4ffd';
+export const DEFAULT_DATE_FORMAT = 'MMMM d, yyyy';
+export const DEFAULT_DATETIME_FORMAT = 'h:mmaaa, MMMM d, yyyy';
+export const DEFAULT_TIME_FORMAT = 'h:mmaaa';
+export const DEFAULT_FLOAT_FORMAT = '.0000';
 export const DEFAULT_NUMBER_FORMAT = ',?';
+export const DEFAULT_URL_TEMPLATE = '';
 
 export const UNICODE_LINK = 'https://unicode-org.github.io/icu/userguide/format_parse/numbers/skeletons.html';
 export const GRC_20_SPECIFICATION_LINK =
@@ -70,21 +93,117 @@ export const SUGGESTED_NUMBER_FORMATS = [
   },
 ];
 
-export const SUGGESTED_TIME_FORMATS = [
+export const SUGGESTED_FLOAT_FORMATS = [
   {
-    format: 'h:mmaaa, MMMM d, yyyy',
-    label: '4:45pm, July 4,2024',
+    format: DEFAULT_FLOAT_FORMAT,
+    label: '1,000.0000',
+  },
+  {
+    format: '.000',
+    label: '1.000,0000',
+  },
+  {
+    format: ',000',
+    label: '1,000.0000',
+  },
+];
+
+export const SUGGESTED_DATE_FORMATS = [
+  {
+    format: DEFAULT_DATE_FORMAT,
+    label: 'July 4, 2024',
   },
   {
     format: 'MM/dd/yy',
     label: '07/04/24',
   },
   {
-    format: 'h:mmaa',
+    format: 'yyyy-MM-dd',
+    label: '2024-07-04',
+  },
+  {
+    format: 'dd/MM/yyyy',
+    label: '04/07/2024',
+  },
+];
+
+export const SUGGESTED_DATETIME_FORMATS = [
+  {
+    format: DEFAULT_DATETIME_FORMAT,
+    label: '4:45pm, July 4, 2024',
+  },
+  {
+    format: 'MM/dd/yy h:mmaaa',
+    label: '07/04/24 4:45pm',
+  },
+  {
+    format: 'yyyy-MM-dd HH:mm',
+    label: '2024-07-04 16:45',
+  },
+  {
+    format: DEFAULT_DATE_FORMAT,
+    label: 'July 4, 2024',
+  },
+];
+
+export const SUGGESTED_TIME_FORMATS = [
+  {
+    format: DEFAULT_TIME_FORMAT,
     label: '4:45pm',
   },
   {
-    format: DEFAULT_TIME_FORMAT,
-    label: 'July 4, 2024',
+    format: 'HH:mm',
+    label: '16:45',
+  },
+  {
+    format: 'HH:mm:ss',
+    label: '16:45:30',
+  },
+  {
+    format: 'h:mm:ssaaa',
+    label: '4:45:30pm',
+  },
+];
+
+export const SUGGESTED_URL_FORMATS = [
+  {
+    format: 'https://x.com/{value}',
+    label: 'Twitter',
+  },
+  {
+    format: 'https://github.com/{value}',
+    label: 'GitHub',
+  },
+  {
+    format: 'https://instagram.com/{value}',
+    label: 'Instagram',
+  },
+  {
+    format: 'https://www.linkedin.com/in/{value}',
+    label: 'LinkedIn',
+  },
+  {
+    format: 'https://www.youtube.com/@{value}',
+    label: 'YouTube',
+  },
+  {
+    format: 'https://etherscan.io/address/{value}',
+    label: 'Etherscan',
+  },
+  {
+    format: 'https://t.me/{value}',
+    label: 'Telegram',
+  },
+  {
+    format: 'https://discord.gg/{value}',
+    label: 'Discord',
+  },
+  {
+    format: 'https://open.spotify.com/artist/{value}',
+    label: 'Spotify Artist',
+  },
+  {
+    format: 'https://en.wikipedia.org/wiki/{value}',
+    label: 'Wikipedia',
   },
 ];

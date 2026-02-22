@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -8,16 +10,14 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useKey } from '~/core/hooks/use-key';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
-import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
+import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
@@ -27,7 +27,6 @@ import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Input } from '~/design-system/input';
 import { Select } from '~/design-system/select';
 import { Tag } from '~/design-system/tag';
@@ -74,6 +73,7 @@ type SelectEntityProps = {
   withSearchIcon?: boolean;
   advanced?: boolean;
   autoFocus?: boolean;
+  showIDs?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -94,6 +94,7 @@ export const SelectEntity = ({
   withSearchIcon = false,
   advanced = true,
   autoFocus = false,
+  showIDs = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -101,9 +102,13 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  const [allowedTypes, setAllowedTypes] = useState<NonNullable<Property['relationValueTypes']>>(
-    () => relationValueTypes ?? []
-  );
+  const [removedTypeIds, setRemovedTypeIds] = useState<Set<string>>(new Set());
+
+  const allowedTypes = React.useMemo(() => {
+    const base = relationValueTypes ?? [];
+    if (removedTypeIds.size === 0) return base;
+    return base.filter(t => !removedTypeIds.has(t.id));
+  }, [relationValueTypes, removedTypeIds]);
 
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
@@ -111,7 +116,7 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
-  const [renderableType, setRenderableType] = useState<SwitchableRenderableType>('TEXT');
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -213,7 +218,7 @@ export const SelectEntity = ({
     if (element) {
       element.scrollIntoView({
         behavior: 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     }
   }, [hasResults, selectedIndex]);
@@ -269,6 +274,7 @@ export const SelectEntity = ({
               event.stopPropagation();
             }}
             className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+            collisionPadding={10}
             forceMount
           >
             <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
@@ -324,7 +330,7 @@ export const SelectEntity = ({
                                           filterType="Type"
                                           name={allowedType.name ?? ''}
                                           onDelete={() =>
-                                            setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
+                                            setRemovedTypeIds(prev => new Set([...prev, allowedType.id]))
                                           }
                                         />
                                       );
@@ -407,7 +413,19 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div
+                      className="no-scrollbar flex flex-col overflow-y-auto overflow-x-clip bg-white"
+                      style={{
+                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                        maxHeight:
+                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                        // Enforce a minimum height so the results area stays visible. When
+                        // the anchor is near the viewport bottom, this forces the content to
+                        // exceed the available space, triggering Radix/Floating UI to flip
+                        // the dropdown above the input.
+                        minHeight: results.length > 0 ? '100px' : '2.5rem',
+                      }}
+                    >
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -444,22 +462,16 @@ export const SelectEntity = ({
                                   )}
                                   <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                                   <div className="mt-1.5 flex items-center gap-1.5">
-                                    {withSelectSpace && (
+                                    {withSelectSpace && (result.spaces ?? []).length > 0 && (
                                       <div className="flex shrink-0 items-center gap-1">
                                         <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
-                                          {(result.spaces ?? []).length > 0 ? (
-                                            <>
-                                              <NativeGeoImage
-                                                value={result.spaces[0].image}
-                                                alt=""
-                                                className="h-full w-full object-cover"
-                                              />
-                                            </>
-                                          ) : (
-                                            <TopRanked color="grey-04" />
-                                          )}
+                                          <NativeGeoImage
+                                            value={result.spaces[0].image}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                          />
                                         </span>
-                                        <span className="text-[0.875rem] text-text">Top-ranked</span>
+                                        <span className="text-[0.875rem] text-text">{result.spaces[0].name}</span>
                                       </div>
                                     )}
                                     {result.types.length > 0 && (
@@ -482,8 +494,8 @@ export const SelectEntity = ({
                                           </div>
                                         )}
                                         <div className="flex items-center gap-1.5">
-                                          {result.types.slice(0, 3).map(type => (
-                                            <Tag key={type.id}>{type.name}</Tag>
+                                          {result.types.slice(0, 3).map((type, index) => (
+                                            <Tag key={`${type.id}-${index}`}>{type.name}</Tag>
                                           ))}
                                           {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
                                         </div>
@@ -561,7 +573,15 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div
+                      className="no-scrollbar flex flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white"
+                      style={{
+                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                        maxHeight:
+                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                        minHeight: '100px',
+                      }}
+                    >
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -594,17 +614,23 @@ export const SelectEntity = ({
                   </>
                 )}
                 {!result && (
-                  <div className="flex w-full items-center justify-between border-t border-grey-02 px-4 py-2">
+                  <div className="flex w-full items-center justify-between border-t border-grey-02 pl-[5px] pr-3 py-[5px]">
                     <div className="flex items-center gap-3">
-                      <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
-                        <Toggle checked={isShowingIds} />
-                        <div className="text-[0.875rem] text-grey-04">IDs</div>
-                      </button>
+                      {showIDs && (
+                        <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
+                          <Toggle checked={isShowingIds} />
+                          <div className="text-[0.875rem] text-grey-04">IDs</div>
+                        </button>
+                      )}
                       {isCreatingProperty && (
                         <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
-                    <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
+                    <button
+                      disabled={isCreatingProperty && !renderableType}
+                      onClick={onCreateNewEntity}
+                      className="text-resultLink text-ctaHover disabled:text-grey-03"
+                    >
                       Create new
                     </button>
                   </div>
@@ -695,26 +721,22 @@ type SpaceFilterInputProps = {
 };
 
 const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
-  const [query, onQueryChange] = React.useState('');
-  const debouncedQuery = useDebouncedValue(query, 100);
-  const { spaces } = useSpaces();
+  const { query, setQuery, spaces: results } = useSpacesQuery();
 
-  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
-
-  const onSelectSpace = (space: Space) => {
-    onQueryChange('');
+  const onSelectSpace = (space: (typeof results)[number]) => {
+    setQuery('');
 
     onSelect({
       id: space.id,
-      name: space.entity?.name ?? null,
+      name: space.name,
     });
   };
 
   return (
     <div className="relative z-100 w-full">
-      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+      <Popover.Root open={!!query} onOpenChange={() => setQuery('')}>
         <Popover.Anchor asChild>
-          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+          <Input value={query} onChange={e => setQuery(e.target.value)} />
         </Popover.Anchor>
         {query && (
           <Popover.Content
@@ -733,12 +755,12 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                       <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                         <div className="flex w-full items-center justify-between leading-[1rem]">
                           <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.entity?.name ?? result.id}
+                            {result.name ?? result.id}
                           </Text>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.entity?.name ?? result.id) && (
-                            <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
+                          {(result.name ?? result.id) && (
+                            <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
                           )}
                           <span style={{ rotate: '270deg' }}>
                             <ChevronDownSmall color="grey-04" />

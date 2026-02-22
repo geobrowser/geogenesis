@@ -8,10 +8,10 @@ import { useCallback, useEffect, useState } from 'react';
 import * as React from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
@@ -287,16 +287,17 @@ type CreateNewEntityInSpaceProps = {
 };
 
 const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: CreateNewEntityInSpaceProps) => {
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const spaces = useSpacesWhereMember(address);
+  const { personalSpaceId } = usePersonalSpaceId();
+  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
+  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+
   const renderedSpaces =
     query.length === 0
-      ? spaces
-      : spaces.filter(space => space?.entity?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
+      ? namedSpaces
+      : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
 
   return (
     <div>

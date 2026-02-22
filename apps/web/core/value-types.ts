@@ -1,3 +1,3 @@
-import { DataType } from './v2.types';
+import { DataType } from './types';
 
 export type FilterableValueType = DataType | 'RELATION';

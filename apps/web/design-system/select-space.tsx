@@ -7,8 +7,8 @@ import * as React from 'react';
 
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';
-import { EntityId } from '~/core/io/schema';
-import { getEntity } from '~/core/io/v2/queries';
+import { getEntity } from '~/core/io/queries';
+import { EntityId } from '~/core/io/substream-schema';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';

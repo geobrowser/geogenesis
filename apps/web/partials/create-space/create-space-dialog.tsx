@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -38,7 +38,7 @@ const entityIdAtom = atom<string>('');
 const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
-type Step = 'select-type' | 'select-governance' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
 const stepAtom = atom<Step>('select-type');
 
@@ -106,16 +106,19 @@ export function CreateSpaceDialog() {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger
-        onClick={() => {
-          setName('');
-          setImage('');
-          setEntityId('');
-          setGovernanceType(null);
-          setStep('select-type');
-        }}
-      >
-        New space
+      <Dialog.Trigger asChild>
+        <span
+          role="button"
+          onClick={() => {
+            setName('');
+            setImage('');
+            setEntityId('');
+            setGovernanceType(null);
+            setStep('select-type');
+          }}
+        >
+          New space
+        </span>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Content
@@ -135,7 +138,7 @@ export function CreateSpaceDialog() {
             Create a new space by selecting a template and configuring governance settings
           </Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
-            <AnimatePresence initial={false} mode="wait">
+            <AnimatePresence mode="wait">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -145,7 +148,6 @@ export function CreateSpaceDialog() {
                 <ModalCard childKey="card">
                   <StepHeader />
                   {step === 'select-type' && <StepSelectType />}
-                  {step === 'select-governance' && <SelectGovernanceType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
                   {workflowSteps.includes(step) && (
                     <StepComplete
@@ -186,37 +188,23 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 
 const headerText: Record<Step, string> = {
   'select-type': 'Select space template',
-  'select-governance': 'Governance type',
   'enter-profile': '',
   'create-space': '',
   completed: '',
 };
 
 const StepHeader = () => {
-  const spaceType = useAtomValue(spaceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setEntityId = useSetAtom(entityIdAtom);
 
-  // @TODO: Governance type
-  const showBack = step === 'select-governance' || step === 'enter-profile';
+  const showBack = step === 'enter-profile';
 
   const handleBack = () => {
     setName('');
     setEntityId('');
-    switch (step) {
-      case 'select-governance':
-        setStep('select-type');
-        break;
-      case 'enter-profile':
-        if (spaceType === 'default') {
-          setStep('select-governance');
-        } else {
-          setStep('select-type');
-        }
-        break;
-      default:
-        break;
+    if (step === 'enter-profile') {
+      setStep('select-type');
     }
   };
 
@@ -278,15 +266,10 @@ function StepSelectType() {
                 onClick={() => {
                   setSpaceType(spaceType.value);
 
-                  if (spaceType.value === 'default') {
-                    setGovernanceType(null);
-                    setStep('select-governance');
-                  } else {
-                    if (spaceType.governance) {
-                      setGovernanceType(spaceType.governance);
-                    }
-                    setStep('enter-profile');
+                  if (spaceType.governance) {
+                    setGovernanceType(spaceType.governance);
                   }
+                  setStep('enter-profile');
                 }}
                 className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pl-2 pr-3 transition-colors duration-150 ease-in-out hover:bg-divider"
               >
@@ -303,82 +286,32 @@ function StepSelectType() {
   );
 }
 
-const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance?: 'PUBLIC' | 'PERSONAL' }[] = [
-  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default' },
+const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance?: 'DAO' | 'PERSONAL' }[] = [
+  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default', governance: 'DAO' },
   {
     image: '/images/onboarding/academic-field.png',
     label: 'Academic field',
     value: 'academic-field',
-    governance: 'PUBLIC',
+    governance: 'DAO',
   },
-  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'PERSONAL' },
-  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'PUBLIC' },
+  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'DAO' },
+  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'DAO' },
   {
     image: '/images/onboarding/gov-org.png',
     label: 'Government org',
     value: 'government-org',
-    governance: 'PERSONAL',
+    governance: 'DAO',
   },
-  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'PUBLIC' },
+  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'DAO' },
   {
     image: '/images/onboarding/interest-group.png',
     label: 'Interest',
     value: 'interest',
-    governance: 'PUBLIC',
+    governance: 'DAO',
   },
-  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'PUBLIC' },
-  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'PERSONAL' },
-  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'PUBLIC' },
-];
-
-function SelectGovernanceType() {
-  const setGovernanceType = useSetAtom(governanceTypeAtom);
-  const setStep = useSetAtom(stepAtom);
-
-  return (
-    <>
-      <StepContents childKey="account-type">
-        <div className="mt-3 flex flex-grow flex-col gap-3">
-          {governanceTypeOptions.map(({ label, value, image, sublabel }) => {
-            return (
-              <GovernanceTypeButton
-                key={value}
-                onClick={() => {
-                  setGovernanceType(value);
-                  setStep('enter-profile');
-                }}
-                label={label}
-                image={image}
-                sublabel={sublabel}
-              />
-            );
-          })}
-        </div>
-      </StepContents>
-    </>
-  );
-}
-
-type GovernanceTypeOption = {
-  label: string;
-  value: 'PUBLIC' | 'PERSONAL';
-  sublabel: string;
-  image: string;
-};
-
-const governanceTypeOptions: GovernanceTypeOption[] = [
-  {
-    label: 'Public',
-    value: 'PUBLIC',
-    image: '/images/onboarding/public.png',
-    sublabel: 'All proposed edits go through governance and are either accepted or rejected by the Editors.',
-  },
-  {
-    label: 'Personal',
-    value: 'PERSONAL',
-    image: '/images/onboarding/personal.png',
-    sublabel: 'All edits are automatically added without a voting period.',
-  },
+  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'DAO' },
+  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'DAO' },
+  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'DAO' },
 ];
 
 type StepEnterProfileProps = {
@@ -531,12 +464,12 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
 
 const governanceText: Record<SpaceGovernanceType, string> = {
   PERSONAL: 'Personal access controls',
-  PUBLIC: 'Public governance',
+  DAO: 'Public governance',
 };
 
 const governanceLabel: Record<SpaceGovernanceType, string> = {
-  PERSONAL: 'A vote isn’t required to publish edits in this space',
-  PUBLIC: 'A vote is required to publish edits in this space',
+  PERSONAL: "A vote isn't required to publish edits in this space",
+  DAO: 'A vote is required to publish edits in this space',
 };
 
 type StepCompleteProps = {
@@ -597,32 +530,6 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
         </div>
       </div>
     </>
-  );
-}
-
-type GovernanceTypeButtonProps = {
-  onClick: () => void;
-  label: string;
-  sublabel: string;
-  image: string;
-};
-
-function GovernanceTypeButton({ onClick, label, image, sublabel }: GovernanceTypeButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cx(
-        'flex flex-1 flex-grow items-center justify-between rounded-lg border border-divider bg-white p-4 text-text transition-all duration-300 hover:bg-divider'
-      )}
-    >
-      <div className="space-y-7">
-        <div className="space-y-2">
-          <h4 className="text-quoteMedium">{label}</h4>
-          <p className="text-metadata">{sublabel}</p>
-        </div>
-        <img src={image} alt={label} className="max-h-6 w-auto" />
-      </div>
-    </button>
   );
 }
 

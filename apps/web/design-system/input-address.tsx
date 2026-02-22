@@ -1,4 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -11,7 +13,7 @@ import { startTransition, useState } from 'react';
 import { Feature } from '~/core/hooks/use-place-search';
 import { usePlaceSearch } from '~/core/hooks/use-place-search';
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import {
   ADDRESS_PROPERTY,
@@ -23,8 +25,8 @@ import {
   SOURCES_TYPE,
   SOURCE_DATABASE_IDENTIFIER_PROPERTY,
 } from '~/core/system-ids';
+import { Relation } from '~/core/types';
 import { GeoPoint } from '~/core/utils/utils';
-import { Relation } from '~/core/v2.types';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Tag } from '~/design-system/tag';

@@ -2,14 +2,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
+import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
-import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
+import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
 import { OmitStrict } from '../types';
+import { Entity, Relation, SearchResult } from '../types';
 import { Entities } from '../utils/entity';
-import { Values } from '../utils/value';
-import { Entity, Relation, SearchResult } from '../v2.types';
+// @TODO replace with Values.merge()
+import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
@@ -69,14 +70,12 @@ export class E {
       return remoteEntity;
     }
 
-    const mergedValues = Values.merge(localEntity.values, remoteEntity.values);
+    const mergedValues = merge(localEntity.values, remoteEntity.values);
 
-    const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
+    const values = mergedValues.filter(v => !v.isDeleted && (spaceId ? v.spaceId === spaceId : true));
 
     const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
-    const relations = mergedRelations.filter(r =>
-      Boolean(r.isDeleted) === false && spaceId ? r.spaceId === spaceId : true
-    );
+    const relations = mergedRelations.filter(r => !r.isDeleted && (spaceId ? r.spaceId === spaceId : true));
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
@@ -107,6 +106,8 @@ export class E {
     store: GeoStore;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
@@ -124,6 +125,8 @@ export class E {
     spaceId?: string;
     cache: QueryClient;
   }): Promise<Entity | null> {
+    if (id === '') return null;
+
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'relation', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
@@ -138,15 +141,17 @@ export class E {
     where,
     first,
     skip,
+    spaceId,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
+    spaceId?: string;
   }) {
     if (where?.id?.in) {
-      const entityIds = where.id.in;
+      const entityIds = where.id.in.filter(id => id !== '');
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds],
@@ -160,7 +165,7 @@ export class E {
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
       const entities = entityIds.map(entityId => {
-        return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+        return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
       const nonNullEntities = entities.filter(e => e !== null);
@@ -179,12 +184,14 @@ export class E {
     const limit = first;
     const offset = skip;
     const filter = convertWhereConditionToEntityFilter(where);
+    const typeIds = extractTypeIdsFromWhere(where);
 
     const remoteEntities = await Effect.runPromise(
       getAllEntities({
         limit,
         offset,
         filter,
+        typeIds,
       })
     );
 
@@ -195,7 +202,7 @@ export class E {
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
     const entities = mergedIds.map(entityId => {
-      return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
     });
 
     return entities.filter(e => e !== null);

@@ -2,18 +2,49 @@
 
 import React from 'react';
 
-import { DATA_TYPE_PROPERTY } from '~/core/constants';
 import {
+  DATA_TYPE_ENTITY_IDS,
+  DATA_TYPE_PROPERTY,
   GRC_20_SPECIFICATION_LINK,
+  RENDERABLE_TYPE_PROPERTY,
+  SUGGESTED_DATE_FORMATS,
+  SUGGESTED_DATETIME_FORMATS,
+  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_NUMBER_FORMATS,
   SUGGESTED_TIME_FORMATS,
+  SUGGESTED_URL_FORMATS,
   UNICODE_LINK,
 } from '~/core/constants';
-import { useValue } from '~/core/sync/use-store';
-import { ValueOptions } from '~/core/v2.types';
+import { useRelations } from '~/core/sync/use-store';
+import { ValueOptions } from '~/core/types';
+import { getStrictRenderableType } from '~/core/io/dto/properties';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { NewTab } from './icons/new-tab';
+
+// Reverse map: entity ID → data type name (e.g. 'DATE', 'TIME', etc.)
+const ENTITY_ID_TO_DATA_TYPE = Object.fromEntries(
+  Object.entries(DATA_TYPE_ENTITY_IDS).map(([type, id]) => [id, type])
+);
+
+const FORMAT_MAP = {
+  URL: SUGGESTED_URL_FORMATS,
+  DATE: SUGGESTED_DATE_FORMATS,
+  DATETIME: SUGGESTED_DATETIME_FORMATS,
+  TIME: SUGGESTED_TIME_FORMATS,
+  FLOAT: SUGGESTED_FLOAT_FORMATS,
+  NUMBER: SUGGESTED_NUMBER_FORMATS,
+} as const;
+
+type FormatKind = keyof typeof FORMAT_MAP;
+
+const DATA_TYPE_TO_FORMAT_KIND: Record<string, FormatKind> = {
+  DATE: 'DATE',
+  DATETIME: 'DATETIME',
+  TIME: 'TIME',
+  FLOAT: 'FLOAT',
+  DECIMAL: 'FLOAT',
+};
 
 const SuggestedFormats = ({
   entityId,
@@ -28,15 +59,30 @@ const SuggestedFormats = ({
 }) => {
   const [visible, setVisible] = React.useState(true);
 
-  const dataType = useValue({
-    selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === DATA_TYPE_PROPERTY,
-  })?.value;
+  const dataTypeRelation = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === DATA_TYPE_PROPERTY,
+  })[0];
+  const dataType = ENTITY_ID_TO_DATA_TYPE[dataTypeRelation?.toEntity.id ?? ''];
+
+  const renderableTypeRelation = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === RENDERABLE_TYPE_PROPERTY,
+  })[0];
+  const renderableTypeStrict = getStrictRenderableType(renderableTypeRelation?.toEntity.id ?? null);
 
   React.useEffect(() => {
     setVisible(true);
-  }, [dataType]);
+  }, [dataType, renderableTypeStrict]);
 
-  const renderableFormats = dataType === 'TIME' ? SUGGESTED_TIME_FORMATS : SUGGESTED_NUMBER_FORMATS;
+  const formatKind: FormatKind =
+    renderableTypeStrict === 'URL' ? 'URL' : DATA_TYPE_TO_FORMAT_KIND[dataType ?? ''] ?? 'NUMBER';
+
+  const renderableFormats = FORMAT_MAP[formatKind];
+  const isTemporalType = formatKind === 'DATE' || formatKind === 'DATETIME' || formatKind === 'TIME';
+  const viewAllLink = isTemporalType ? GRC_20_SPECIFICATION_LINK : formatKind === 'NUMBER' || formatKind === 'FLOAT' ? UNICODE_LINK : null;
+  const formatKindLabel = isTemporalType ? 'date/time' : formatKind === 'URL' ? 'URL' : formatKind === 'FLOAT' ? 'float' : 'number';
+  const formatLabel =
+    renderableFormats.find(f => f.format === value)?.label ||
+    (formatKind === 'URL' ? 'Custom URL' : 'Unspecified');
 
   return (
     visible && (
@@ -44,23 +90,25 @@ const SuggestedFormats = ({
         <div className="flex items-center gap-1 text-[13px] font-normal text-grey-04">
           <span>Browse format</span>
           <span className="h-[2px] w-[2px] rounded-full bg-grey-04"></span>
-          <span>{renderableFormats.find(f => f.format === value)?.label}</span>
+          <span>{formatLabel}</span>
         </div>
         <div className="mt-3 w-full rounded-md bg-grey-01 p-3">
           <div className="flex w-full justify-between">
             <span className="text-tableProperty font-medium leading-5 text-text">
-              Other common {dataType === 'TIME' ? 'time' : 'number'} formats
+              Other common {formatKindLabel} formats
             </span>
             <div className="flex">
-              <a
-                className="mr-4 flex items-center gap-[6px] text-ctaHover"
-                target="_blank"
-                rel="noreferrer"
-                href={dataType === 'TIME' ? GRC_20_SPECIFICATION_LINK : UNICODE_LINK}
-              >
-                View all
-                <NewTab />
-              </a>
+              {viewAllLink && (
+                <a
+                  className="mr-4 flex items-center gap-[6px] text-ctaHover"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={viewAllLink}
+                >
+                  View all
+                  <NewTab />
+                </a>
+              )}
               <button onClick={() => setVisible(false)} className="text-ctaHover">
                 Dismiss
               </button>

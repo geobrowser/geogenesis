@@ -1,15 +1,20 @@
-import { Entity } from '~/core/v2.types';
+import { Entity } from '~/core/types';
+
+import { getTopRankedSpaceId } from './space-ranking';
 
 export const getValidSpaceIdForEntity = (entity: Entity) => {
   const validSpaces = entity?.spaces ?? [];
-  // @TODO replace with ranking algorithm
-  const spaceId = getRandomSpaceId(validSpaces);
-
-  return spaceId;
+  return getTopRankedSpaceId(validSpaces);
 };
 
-const getRandomSpaceId = (spaceIds: string[]) => {
-  const randomIndex = crypto.getRandomValues(new Uint32Array(1))[0] % spaceIds.length;
+export const getDeterministicSpaceId = (spaceIds: string[], preferredSpaceId?: string) => {
+  if (spaceIds.length === 0) {
+    return null;
+  }
 
-  return spaceIds[randomIndex];
+  if (preferredSpaceId && spaceIds.includes(preferredSpaceId)) {
+    return preferredSpaceId;
+  }
+
+  return getTopRankedSpaceId(spaceIds);
 };

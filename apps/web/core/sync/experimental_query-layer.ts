@@ -1,11 +1,13 @@
-import { Entity, Relation, Value } from '../v2.types';
+import { ID } from '~/core/id';
+
+import { Entity, Relation, Value } from '../types';
 
 const compareOperators = {
   string: {
-    equals: (a: string, b: string) => a === b,
-    contains: (a: string, b: string) => a.toLowerCase().includes(b.toLowerCase()),
-    startsWith: (a: string, b: string) => a.toLowerCase().startsWith(b.toLowerCase()),
-    endsWith: (a: string, b: string) => a.toLowerCase().endsWith(b.toLowerCase()),
+    equals: (a: string, b: string) => ID.uuidToHex(a) === ID.uuidToHex(b),
+    contains: (a: string, b: string) => ID.uuidToHex(a).includes(ID.uuidToHex(b)),
+    startsWith: (a: string, b: string) => ID.uuidToHex(a).startsWith(ID.uuidToHex(b)),
+    endsWith: (a: string, b: string) => ID.uuidToHex(a).endsWith(ID.uuidToHex(b)),
   },
   number: {
     equals: (a: number, b: number) => a === b,
@@ -349,18 +351,24 @@ export class EntityQuery {
 
         // Check value
         if (cond.value) {
-          if (value.property.dataType === 'NUMBER') {
+          // GRC-20 v2 numeric types
+          if (
+            value.property.dataType === 'INTEGER' ||
+            value.property.dataType === 'FLOAT' ||
+            value.property.dataType === 'DECIMAL'
+          ) {
             const numValue = parseFloat(value.value);
             if (isNaN(numValue) || !this.matchesNumberCondition(numValue, cond.value as NumberCondition)) {
               return false;
             }
-          } else if (value.property.dataType === 'CHECKBOX') {
-            const boolValue = value.value.toLowerCase() === 'true';
+          } else if (value.property.dataType === 'BOOLEAN') {
+            // GRC-20 v2 boolean type
+            const boolValue = value.value === '1' || value.value.toLowerCase() === 'true';
             if (!this.matchesBooleanCondition(boolValue, cond.value as BooleanCondition)) {
               return false;
             }
           } else {
-            // TEXT, URL, TIME
+            // TEXT, URL, DATE, DATETIME, TIME, etc.
             if (!this.matchesStringCondition(value.value, cond.value as StringCondition)) {
               return false;
             }

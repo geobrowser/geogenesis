@@ -1,3 +1,5 @@
+'use client';
+
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
@@ -6,11 +8,12 @@ import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
-import { getProperties, getProperty } from '../io/v2/queries';
+import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
+import { Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
-import { Values } from '../utils/value';
-import { Property, Relation, Value } from '../v2.types';
+// @TODO replace with Values.merge()
+import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
@@ -147,6 +150,12 @@ type QueryEntitiesOptions = {
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+  /**
+   * When true, returns an empty array until the initial fetch completes.
+   * This prevents the selector from returning partial/stale results from
+   * the reactive store while the remote query is still in flight.
+   */
+  deferUntilFetched?: boolean;
 
   /**
    * By default we query the local store for the entity without
@@ -171,6 +180,7 @@ export function useQueryEntities({
   skip = 0,
   enabled = true,
   placeholderData = undefined,
+  deferUntilFetched = false,
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -209,6 +219,10 @@ export function useQueryEntities({
         return [];
       }
 
+      if (deferUntilFetched && !isFetched) {
+        return [];
+      }
+
       const result = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
@@ -228,7 +242,6 @@ export function useQueryEntities({
 }
 
 export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOptions) {
-  const cache = useQueryClient();
   const { store } = useSyncEngine();
 
   const { data: remoteProperty, isFetched } = useQuery({
@@ -242,6 +255,10 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       return await Effect.runPromise(getProperty(id));
     },
   });
+
+  // Hydrate the property entity so the store has its relations.
+  // The property API doesn't return relationValueTypes.
+  useHydrateEntity({ id, enabled: enabled && Boolean(id) });
 
   // Try store.getProperty first (for local properties with dataType registered)
   // Fall back to manual reconstruction (for existing properties added to entities)
@@ -264,8 +281,18 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     equal
   );
 
-  // Prefer remote property data, then local store, then reconstructed
-  const finalProperty = remoteProperty || property;
+  // Merge relationValueTypes from the hydrated entity into the remote property
+  const finalProperty = React.useMemo(() => {
+    if (!remoteProperty) return property;
+    if (!property) return remoteProperty;
+
+    const localRelationValueTypes = property.relationValueTypes;
+    if (localRelationValueTypes && localRelationValueTypes.length > 0) {
+      return { ...remoteProperty, relationValueTypes: localRelationValueTypes };
+    }
+
+    return remoteProperty;
+  }, [remoteProperty, property]);
 
   return {
     property: finalProperty,
@@ -279,7 +306,6 @@ type QueryPropertiesOptions = {
 };
 
 export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
-  const cache = useQueryClient();
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -331,9 +357,13 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
       const remoteProp = remotePropsMap.get(id);
       const localProp = localPropsMap.get(id);
 
-      // Prefer remote property, but fall back to local
       if (remoteProp) {
-        merged.push(remoteProp);
+        const localRelationValueTypes = localProp?.relationValueTypes;
+        if (localRelationValueTypes && localRelationValueTypes.length > 0) {
+          merged.push({ ...remoteProp, relationValueTypes: localRelationValueTypes });
+        } else {
+          merged.push(remoteProp);
+        }
       } else if (localProp) {
         merged.push(localProp);
       }
@@ -398,7 +428,7 @@ export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {
       .filter(v => (selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true));
   }
 
-  return Values.merge(reactiveValues.get(), mergeWith).filter(v =>
+  return merge(reactiveValues.get(), mergeWith).filter(v =>
     selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true
   );
 }
@@ -431,10 +461,45 @@ export function useValue(options: UseValueParams) {
   return value;
 }
 
+/**
+ * Space-aware value lookup for data block cells. Returns a single Value
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useValue when rendering data that may originate from
+ * a different space than the one being edited. Entity pages should use
+ * useValue with a strict spaceId filter instead — they want null when
+ * the value doesn't exist in the current space.
+ */
+export function useSpaceAwareValue(options: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+}) {
+  const { entityId, propertyId, spaceId } = options;
+
+  const value = useSelector(
+    reactiveValues,
+    state => {
+      let fallback: Value | null = null;
+
+      for (const v of state) {
+        if (v.entity.id !== entityId || v.property.id !== propertyId || v.isDeleted) continue;
+        if (v.spaceId === spaceId) return v;
+        fallback ??= v;
+      }
+
+      return fallback;
+    },
+    equal
+  );
+
+  return value;
+}
+
 export function getValue(options: UseValueParams & { mergeWith?: Value[] }) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
-  const values = mergeWith.length === 0 ? reactiveValues.get() : Values.merge(reactiveValues.get(), mergeWith);
+  const values = mergeWith.length === 0 ? reactiveValues.get() : merge(reactiveValues.get(), mergeWith);
 
   if (id) {
     return values.find(v => v.id === id && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;

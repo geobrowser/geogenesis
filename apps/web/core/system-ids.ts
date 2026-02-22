@@ -8,7 +8,7 @@ export {
 } from '~/core/constants';
 
 // Additional constants for Place functionality
-export const SOURCES_TYPE = '49c5d5e1-679a-4dbd-bfd3-3f618f227c94';
-export const SOURCE_DATABASE_IDENTIFIER_PROPERTY = '5e92c8a4-1714-4ee7-9a09-389ef4336aeb';
-export const PROPERTIES_SOURCED = '198150d0-8f4e-410a-9329-9aab3ac3c1e3';
-export const RELATIONS_SOURCED = '2596082f-f4d3-4a61-9b6a-831e253cb345';
+export const SOURCES_TYPE = '49c5d5e1679a4dbdbfd33f618f227c94';
+export const SOURCE_DATABASE_IDENTIFIER_PROPERTY = '5e92c8a417144ee79a09389ef4336aeb';
+export const PROPERTIES_SOURCED = '198150d08f4e410a93299aab3ac3c1e3';
+export const RELATIONS_SOURCED = '2596082ff4d34a619b6a831e253cb345';

@@ -8,16 +8,16 @@ import { motion } from 'framer-motion';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
+import { useSubspace } from '~/core/hooks/use-subspace';
 import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
-import { SubstreamSubspace } from '~/core/io/schema';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { getSpaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamSubspace } from '~/core/io/substream-schema';
 import { SpaceGovernanceType } from '~/core/types';
+import { type SubspaceRelationType } from '~/core/utils/contracts/governance';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -230,7 +230,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
               {queriedSpaces?.map(s => (
-                <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />
+                <SpaceQueryResult key={s.address} subspace={s} spaceId={spaceId} spaceType={spaceType} />
               ))}
             </motion.div>
           )}
@@ -268,7 +268,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
                   </div>
                 </div>
               </div>
-              {spaceType === 'PUBLIC' && (
+              {spaceType === 'DAO' && (
                 <Link href={`${NavUtils.toSpace(spaceId)}/governance`}>
                   <SmallButton>View proposal</SmallButton>
                 </Link>
@@ -285,7 +285,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
           <Divider type="horizontal" />
 
           {subspaces?.map(s => (
-            <CurrentSubspace key={s.daoAddress} subspace={s} spaceId={spaceId} spaceType={spaceType} />
+            <CurrentSubspace key={s.address} subspace={s} spaceId={spaceId} spaceType={spaceType} />
           ))}
         </div>
       )}
@@ -293,21 +293,61 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
   );
 }
 
-function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: string }) {
-  const { addSubspace, status } = useAddSubspace({
-    spaceId,
-    shouldRefreshOnSuccess: true,
-  });
+const RELATION_TYPE_LABELS: Record<SubspaceRelationType, string> = {
+  verified: 'Verified',
+  related: 'Related',
+  subtopic: 'Subtopic',
+};
 
-  if (status === 'success') {
-    // Remove the item from the list once we succeed
-    return null;
-  }
+function SubspaceRelationActions({
+  subspaceId,
+  spaceId,
+  spaceType,
+}: {
+  subspaceId: string;
+  spaceId: string;
+  spaceType: SpaceGovernanceType;
+}) {
+  const [selectedRelation, setSelectedRelation] = React.useState<SubspaceRelationType>('verified');
+  const { setSubspace, setStatus: status } = useSubspace({ spaceId });
 
-  const onAddSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
-    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
-    addSubspace(subspaceAddress);
+  const onSetSubspace = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setSubspace({ subspaceId, relationType: selectedRelation });
   };
+
+  const buttonLabel = spaceType === 'DAO' ? `Propose ${RELATION_TYPE_LABELS[selectedRelation]}` : `Set ${RELATION_TYPE_LABELS[selectedRelation]}`;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        className="rounded border border-grey-02 bg-white px-1.5 py-0.5 text-footnote text-text"
+        value={selectedRelation}
+        onChange={e => setSelectedRelation(e.target.value as SubspaceRelationType)}
+        onClick={e => e.preventDefault()}
+      >
+        <option value="verified">Verified</option>
+        <option value="related">Related</option>
+        {/* Subtopic is excluded: it requires a topicEntityId (knowledge graph entity UUID)
+            which needs a dedicated entity picker UI that doesn't exist yet. */}
+      </select>
+      {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
+      {status === 'idle' && <SmallButton onClick={onSetSubspace}>{buttonLabel}</SmallButton>}
+      {status === 'success' && <SmallButton disabled>Proposed</SmallButton>}
+    </div>
+  );
+}
+
+function SpaceQueryResult({
+  subspace,
+  spaceId,
+  spaceType,
+}: {
+  subspace: Subspace;
+  spaceId: string;
+  spaceType: SpaceGovernanceType;
+}) {
+  if (!subspace.id) return null;
 
   return (
     <Link
@@ -334,11 +374,8 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
           </div>
         </div>
       </div>
-      {/* @TODO: Actual states with animations */}
-      {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
-      {status === 'idle' && (
-        <SmallButton onClick={event => onAddSubspace(event, subspace.daoAddress)}>Propose to add</SmallButton>
-      )}
+
+      <SubspaceRelationActions subspaceId={subspace.id} spaceId={spaceId} spaceType={spaceType} />
     </Link>
   );
 }
@@ -352,19 +389,16 @@ function CurrentSubspace({
   spaceId: string;
   spaceType: SpaceGovernanceType;
 }) {
-  const { removeSubspace, status } = useRemoveSubspace({
-    spaceId,
-    shouldRefreshOnSuccess: true,
-  });
+  const { unsetSubspace, unsetStatus: status } = useSubspace({ spaceId });
 
   if (status === 'success') {
     // Remove the item from the list once we succeed
     return null;
   }
 
-  const onRemoveSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
-    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
-    removeSubspace(subspaceAddress);
+  const onUnsetSubspace = (event: React.MouseEvent<HTMLButtonElement>, relationType: SubspaceRelationType) => {
+    event.preventDefault();
+    unsetSubspace({ subspaceId: subspace.id, relationType });
   };
 
   return (
@@ -395,8 +429,8 @@ function CurrentSubspace({
       {/* @TODO: Actual states with animations */}
       {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
       {status === 'idle' && (
-        <SmallButton onClick={event => onRemoveSubspace(event, subspace.daoAddress)}>
-          {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
+        <SmallButton onClick={event => onUnsetSubspace(event, 'verified')}>
+          {spaceType === 'DAO' ? 'Propose to remove' : 'Remove subspace'}
         </SmallButton>
       )}
     </Link>

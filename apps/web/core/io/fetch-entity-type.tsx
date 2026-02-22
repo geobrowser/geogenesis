@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
 import { slog } from '../utils/utils';
-import { SubstreamType, SubstreamVersionTypes } from './schema';
 import { versionTypesFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
+import { SubstreamType, SubstreamVersionTypes } from './substream-schema';
 
 function getFetchEntityTypeQuery(id: string) {
   return `query {

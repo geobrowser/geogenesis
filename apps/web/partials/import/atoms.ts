@@ -1,7 +1,7 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { atom } from 'jotai';
 
-import { Value } from '~/core/v2.types';
+import { Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 

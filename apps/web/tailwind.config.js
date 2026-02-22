@@ -26,6 +26,8 @@ module.exports = {
       errorTertiary: '#FFE1DC',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
+      deleted: '#FFDAD3',
+      added: '#C5F7E0',
     },
     borderRadius: {
       none: '0',
@@ -34,6 +36,7 @@ module.exports = {
       DEFAULT: '6px',
       md: '8px',
       lg: '12px',
+      xl: '16px',
       full: '9999px',
     },
     boxShadow: {
@@ -180,6 +183,7 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '400',
+            letterSpacing: '0px',
           },
         ],
         tableProperty: [

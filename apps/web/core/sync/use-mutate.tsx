@@ -1,19 +1,32 @@
-import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import {
-  DATA_TYPE_PROPERTY,
-  PDF_TYPE,
-  PDF_URL,
-  RENDERABLE_TYPE_PROPERTY,
-  VIDEO_TYPE,
-  VIDEO_URL_PROPERTY,
-} from '../constants';
+import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, PDF_TYPE, PDF_URL, RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { DataType, Relation, Value } from '../v2.types';
+import { DataType, Relation, Value } from '../types';
+import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
+
+/** Convert a Uint8Array or string ID to a hex string. */
+function toHexId(id: unknown): string {
+  if (typeof id === 'string') {
+    return id;
+  }
+  if (id instanceof Uint8Array) {
+    return Array.from(id)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  // Fallback for other array-like types
+  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
+    return Array.from(id as ArrayLike<number>)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return String(id);
+}
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
@@ -50,6 +63,7 @@ export interface Mutator {
       toSpaceId?: string;
       skipTypeRelation?: boolean;
     }) => void;
+    setDataType: (propertyId: string, dataType: DataType) => void;
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
@@ -136,6 +150,9 @@ function createMutator(store: GeoStore): Mutator {
         toSpaceId,
         skipTypeRelation = false,
       }) => {
+        // Check existing relations for duplicate prevention
+        const existingRelations = store.getResolvedRelations(entityId);
+
         // Set the name value
         const nameValue: Value = {
           id: ID.createValueId({
@@ -157,83 +174,109 @@ function createMutator(store: GeoStore): Mutator {
           value: name,
         };
 
-        // Set the dataType value
-        const dataTypeValue: Value = {
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
-            spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name,
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: dataType,
-            renderableType: null,
-          },
-          spaceId,
-          value: dataType,
-        };
-
         store.setValue(nameValue);
-        store.setValue(dataTypeValue);
+
+        // Create the data type relation (every property gets an explicit Data Type relation).
+        const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[dataType];
+        if (dataTypeEntityId) {
+          const hasDataTypeRelation = existingRelations.some(r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted);
+
+          if (!hasDataTypeRelation) {
+            store.setRelation({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: DATA_TYPE_PROPERTY,
+                name: 'Data Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: dataTypeEntityId,
+                name: dataType,
+                value: dataTypeEntityId,
+              },
+            });
+          }
+        }
+
+        // Register the data type in the store so store.getProperty() works
+        store.setDataType(entityId, dataType);
 
         // When creating property by adding a property type relation,
         // we don't need to create the property type relation again
         if (!skipTypeRelation) {
-          const propertyTypeRelation: Relation = {
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            spaceId,
-            renderableType: 'RELATION',
-            verified,
-            toSpaceId,
-            position: Position.generate(),
-            type: {
-              id: SystemIds.TYPES_PROPERTY,
-              name: 'Types',
-            },
-            fromEntity: {
-              id: entityId,
-              name: name,
-            },
-            toEntity: {
-              id: SystemIds.PROPERTY,
-              name: 'Property',
-              value: SystemIds.PROPERTY,
-            },
-          };
-          store.setRelation(propertyTypeRelation);
+          const hasTypesRelation = existingRelations.some(
+            r => r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted
+          );
+
+          if (!hasTypesRelation) {
+            const propertyTypeRelation: Relation = {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified,
+              toSpaceId,
+              position: Position.generate(),
+              type: {
+                id: SystemIds.TYPES_PROPERTY,
+                name: 'Types',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: SystemIds.PROPERTY,
+                name: 'Property',
+                value: SystemIds.PROPERTY,
+              },
+            };
+            store.setRelation(propertyTypeRelation);
+          }
         }
 
-        // If there's a renderableType, create the relation
+        // If there's a renderableType, create the relation (with duplicate guard)
         if (renderableTypeId) {
-          const renderableTypeRelation: Relation = {
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            spaceId,
-            renderableType: 'RELATION',
-            verified: false,
-            position: Position.generate(),
-            type: {
-              id: RENDERABLE_TYPE_PROPERTY,
-              name: 'Renderable Type',
-            },
-            fromEntity: {
-              id: entityId,
-              name: name,
-            },
-            toEntity: {
-              id: renderableTypeId,
-              name: renderableTypeId, // This should ideally be the actual name
-              value: renderableTypeId,
-            },
-          };
-          store.setRelation(renderableTypeRelation);
+          const hasRenderableTypeRelation = existingRelations.some(
+            r => r.type.id === RENDERABLE_TYPE_PROPERTY && !r.isDeleted
+          );
+
+          if (!hasRenderableTypeRelation) {
+            const renderableTypeRelation: Relation = {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: RENDERABLE_TYPE_PROPERTY,
+                name: 'Renderable Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: renderableTypeId,
+                name: renderableTypeId,
+                value: renderableTypeId,
+              },
+            };
+            store.setRelation(renderableTypeRelation);
+          }
         }
+      },
+      setDataType: (propertyId: string, dataType: DataType) => {
+        store.setDataType(propertyId, dataType);
       },
     },
     values: {
@@ -289,51 +332,49 @@ function createMutator(store: GeoStore): Mutator {
           network: 'TESTNET',
         });
 
-        // Process the operations returned by Graph.createImage
         for (const op of createImageOps) {
-          if (op.type === 'CREATE_RELATION') {
+          if (op.type === 'createRelation') {
             store.setRelation({
-              id: op.relation.id,
-              entityId: op.relation.entity,
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
               fromEntity: {
-                id: op.relation.fromEntity,
+                id: toHexId(op.from),
                 name: null,
               },
               type: {
-                id: op.relation.type,
+                id: toHexId(op.relationType),
                 name: 'Image',
               },
               toEntity: {
-                id: op.relation.toEntity,
+                id: toHexId(op.to),
                 name: 'Image',
-                value: op.relation.toEntity,
+                value: toHexId(op.to),
               },
               spaceId,
               position: Position.generate(),
               verified: false,
               renderableType: 'RELATION',
             });
-          } else if (op.type === 'UPDATE_ENTITY') {
-            // Create values for each property in the entity update
-            for (const value of op.entity.values) {
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
               store.setValue({
                 id: ID.createValueId({
-                  entityId: op.entity.id,
-                  propertyId: value.property,
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
                   spaceId,
                 }),
                 entity: {
-                  id: op.entity.id,
+                  id: toHexId(op.id),
                   name: null,
                 },
                 property: {
-                  id: value.property,
+                  id: toHexId(pv.property),
                   name: 'Image Property',
                   dataType: 'TEXT',
                   renderableType: 'URL',
                 },
                 spaceId,
-                value: value.value,
+                value: extractValueString(pv.value),
               });
             }
           }
@@ -341,6 +382,7 @@ function createMutator(store: GeoStore): Mutator {
 
         // Create relation from parent entity to image entity
         const relationId = ID.createEntityId();
+        const imageIdStr = toHexId(imageId);
         store.setRelation({
           id: relationId,
           entityId: ID.createEntityId(),
@@ -353,9 +395,9 @@ function createMutator(store: GeoStore): Mutator {
             name: relationPropertyName || '',
           },
           toEntity: {
-            id: imageId,
+            id: imageIdStr,
             name: null,
-            value: imageId,
+            value: imageIdStr,
           },
           spaceId,
           position: Position.generate(),
@@ -363,7 +405,7 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'IMAGE',
         });
 
-        return { imageId, relationId };
+        return { imageId: imageIdStr, relationId };
       },
     },
     videos: {
@@ -382,33 +424,36 @@ function createMutator(store: GeoStore): Mutator {
           network: 'TESTNET',
         });
 
-        // Extract the IPFS URL from the ops
         let ipfsUrl: string | undefined;
         for (const op of createVideoOps) {
-          if (op.type === 'UPDATE_ENTITY') {
-            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find((pv: any) => {
+              const valStr = extractValueString(pv.value);
+              return valStr.startsWith('ipfs://');
+            });
             if (ipfsValue) {
-              ipfsUrl = ipfsValue.value;
+              ipfsUrl = extractValueString(ipfsValue.value);
               break;
             }
           }
         }
 
-        // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
+        // Create a video entity with the unified IPFS URL property
+        const videoIdStr = toHexId(videoId);
         if (ipfsUrl) {
           store.setValue({
             id: ID.createValueId({
-              entityId: videoId,
-              propertyId: VIDEO_URL_PROPERTY,
+              entityId: videoIdStr,
+              propertyId: SystemIds.IMAGE_URL_PROPERTY,
               spaceId,
             }),
             entity: {
-              id: videoId,
+              id: videoIdStr,
               name: null,
             },
             property: {
-              id: VIDEO_URL_PROPERTY,
-              name: 'Video URL',
+              id: SystemIds.IMAGE_URL_PROPERTY,
+              name: 'IPFS URL',
               dataType: 'TEXT',
               renderableType: 'URL',
             },
@@ -422,7 +467,7 @@ function createMutator(store: GeoStore): Mutator {
           id: ID.createEntityId(),
           entityId: ID.createEntityId(),
           fromEntity: {
-            id: videoId,
+            id: videoIdStr,
             name: null,
           },
           type: {
@@ -430,9 +475,9 @@ function createMutator(store: GeoStore): Mutator {
             name: 'Types',
           },
           toEntity: {
-            id: VIDEO_TYPE,
+            id: SystemIds.VIDEO_TYPE,
             name: 'Video',
-            value: VIDEO_TYPE,
+            value: SystemIds.VIDEO_TYPE,
           },
           spaceId,
           position: Position.generate(),
@@ -454,9 +499,9 @@ function createMutator(store: GeoStore): Mutator {
             name: relationPropertyName || '',
           },
           toEntity: {
-            id: videoId,
+            id: videoIdStr,
             name: null,
-            value: videoId,
+            value: videoIdStr,
           },
           spaceId,
           position: Position.generate(),
@@ -464,7 +509,7 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'VIDEO',
         });
 
-        return { videoId, relationId };
+        return { videoId: videoIdStr, relationId };
       },
     },
     pdfs: {
@@ -485,39 +530,38 @@ function createMutator(store: GeoStore): Mutator {
 
         // Process the operations returned by Graph.createImage
         for (const op of createImageOps) {
-          if (op.type === 'CREATE_RELATION') {
+          if (op.type === 'createRelation') {
             store.setRelation({
-              id: op.relation.id,
-              entityId: op.relation.entity,
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
               fromEntity: {
-                id: op.relation.fromEntity,
+                id: toHexId(op.from),
                 name: null,
               },
               type: {
-                id: op.relation.type,
+                id: toHexId(op.relationType),
                 name: 'PDF',
               },
               toEntity: {
-                id: PDF_TYPE,
+                id: toHexId(op.to),
                 name: 'PDF',
-                value: PDF_TYPE,
+                value: toHexId(op.to),
               },
               spaceId,
               position: Position.generate(),
               verified: false,
               renderableType: 'RELATION',
             });
-          } else if (op.type === 'UPDATE_ENTITY') {
-            // Create values for each property in the entity update
-            for (const value of op.entity.values) {
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
               store.setValue({
                 id: ID.createValueId({
-                  entityId: op.entity.id,
-                  propertyId: PDF_URL,
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
                   spaceId,
                 }),
                 entity: {
-                  id: op.entity.id,
+                  id: toHexId(op.id),
                   name: null,
                 },
                 property: {
@@ -527,13 +571,13 @@ function createMutator(store: GeoStore): Mutator {
                   renderableType: 'URL',
                 },
                 spaceId,
-                value: value.value,
+                value: extractValueString(pv.value),
               });
             }
           }
         }
 
-        // Create relation from parent entity to image entity
+        // Create relation from parent entity to pdf entity
         const relationId = ID.createEntityId();
         store.setRelation({
           id: relationId,

@@ -1,11 +1,12 @@
 'use client';
 
-import { GraphUrl } from '@graphprotocol/grc-20';
+import { GraphUrl } from '@geoprotocol/geo-sdk';
 import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableChip } from '~/design-system/chip';
 
@@ -30,6 +31,7 @@ type WebUrlFieldProps = {
   placeholder?: string;
   spaceId: string;
   value: string;
+  format?: string | null;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   className?: string;
@@ -40,6 +42,7 @@ export function WebUrlField({
   isEditing = false,
   spaceId,
   value,
+  format,
   className = '',
   ...props
 }: WebUrlFieldProps) {
@@ -52,14 +55,17 @@ export function WebUrlField({
     setLocalValue(value);
   }, [value]);
 
-  if (value.startsWith('graph://')) {
+  const resolvedUrl = isUrlTemplate(format) ? resolveUrlTemplate(format, value) : undefined;
+
+  if (!resolvedUrl && value.startsWith('graph://')) {
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
   // Check if URL has a protocol (http://, https://, mailto:, tel:, etc.)
   // If not, prepend https:// to prevent relative path behavior
-  const normalizedUrl = value && !value.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${value}` : value;
-
+  const hrefSource = resolvedUrl ?? value;
+  const normalizedUrl =
+    hrefSource && !hrefSource.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${hrefSource}` : hrefSource;
   return isEditing ? (
     <input
       {...props}

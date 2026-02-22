@@ -1,18 +1,15 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { VIDEO_BLOCK_TYPE, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
-import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
-import { Relation, RenderableEntityType } from '~/core/v2.types';
-
-import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../schema';
+import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
+import { Relation, RenderableEntityType } from '~/core/types';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
-  // Check for both IMAGE_URL_PROPERTY and VIDEO_URL_PROPERTY for media URLs
+  const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
   const mediaEntityUrlValue =
-    relation.toEntity.valuesList.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.string ??
-    relation.toEntity.valuesList.find(relation => relation.propertyId === VIDEO_URL_PROPERTY)?.string ??
-    null;
+    relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
   const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
+
+  const toEntityId = relation.toEntity.id;
 
   return {
     id: relation.id,
@@ -20,8 +17,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
     entityId: relation.entityId,
     position: relation.position ?? undefined,
     verified: relation.verified ?? undefined,
-    // toSpaceId: relation.toSpaceId ?? undefined,
-    toSpaceId: undefined,
+    toSpaceId: relation.toSpaceId ?? undefined,
     renderableType,
     type: {
       id: relation.type.id,
@@ -32,51 +28,14 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
       name: relation.fromEntity.name,
     },
     toEntity: {
-      id: relation.toEntity.id,
+      id: toEntityId,
       name: relation.toEntity.name,
 
       // The "Renderable Type" for an entity provides a hint to the consumer
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
       // Right now we support images, videos, and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : relation.toEntity.id,
-    },
-  };
-}
-
-export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
-  const toEntityTypes = relation.toVersion.versionTypes.nodes.map(relation => relation.type);
-
-  // If the entity is an image/video then we should already have the triples used to define
-  // the media URI. We need to parse the triples to find the correct triple URI value.
-  // const mediaEntityUrlValue =
-  // toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_PROPERTY)?.value.value ?? null;
-  const mediaEntityUrlValue = undefined;
-
-  const renderableType = getRenderableEntityType(toEntityTypes);
-
-  return {
-    space: relation.spaceId,
-    id: relation.entityId,
-    index: 'a0',
-    typeOf: {
-      id: relation.typeOfVersion.entityId,
-      name: relation.typeOfVersion.name,
-    },
-    fromEntity: {
-      id: relation.fromVersion.entityId,
-      name: relation.fromVersion.name,
-    },
-    toEntity: {
-      id: relation.toVersion.entityId,
-      name: relation.toVersion.name,
-
-      // The "Renderable Type" for an entity provides a hint to the consumer
-      // of the entity to _what_ the entity is so they know how they should
-      // render it depending on their use case.
-      renderableType,
-      // Right now we support images, videos, and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : relation.toVersion.entityId,
+      value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : toEntityId,
     },
   };
 }
@@ -84,43 +43,26 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
 function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {
   const typeIds = types.map(type => type.id);
 
-  if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
+  const imageTypeHex = SystemIds.IMAGE_TYPE.replace(/-/g, '');
+  const videoTypeHex = SystemIds.VIDEO_TYPE.replace(/-/g, '');
+  const videoBlockHex = SystemIds.VIDEO_BLOCK.replace(/-/g, '');
+  const dataBlockHex = SystemIds.DATA_BLOCK.replace(/-/g, '');
+  const textBlockHex = SystemIds.TEXT_BLOCK.replace(/-/g, '');
+
+  if (typeIds.includes(imageTypeHex)) {
     return 'IMAGE';
   }
 
-  // Check for both VIDEO_TYPE and VIDEO_BLOCK_TYPE
-  if (typeIds.includes(EntityId(VIDEO_TYPE)) || typeIds.includes(EntityId(VIDEO_BLOCK_TYPE))) {
+  // Match both VIDEO_TYPE (new) and VIDEO_BLOCK (legacy) for backwards compatibility
+  if (typeIds.includes(videoTypeHex) || typeIds.includes(videoBlockHex)) {
     return 'VIDEO';
   }
 
-  if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
+  if (typeIds.includes(dataBlockHex)) {
     return 'DATA';
   }
 
-  if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
-    return 'TEXT';
-  }
-
-  return 'RELATION';
-}
-
-function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
-  const typeIds = types.map(relation => relation.entityId);
-
-  if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
-    return 'IMAGE';
-  }
-
-  // Check for both VIDEO_TYPE and VIDEO_BLOCK_TYPE
-  if (typeIds.includes(EntityId(VIDEO_TYPE)) || typeIds.includes(EntityId(VIDEO_BLOCK_TYPE))) {
-    return 'VIDEO';
-  }
-
-  if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
-    return 'DATA';
-  }
-
-  if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
+  if (typeIds.includes(textBlockHex)) {
     return 'TEXT';
   }
 

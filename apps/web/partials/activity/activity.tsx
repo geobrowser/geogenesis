@@ -1,8 +1,8 @@
 'use client';
 
+import { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Entity } from '~/core/v2.types';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoImage } from '~/design-system/geo-image';

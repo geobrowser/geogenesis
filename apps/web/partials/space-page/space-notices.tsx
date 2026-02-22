@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
@@ -35,7 +35,7 @@ import { dismissedNoticesAtom } from '~/atoms';
 import { teamNoticeDismissedAtom } from '~/atoms';
 import type { RepeatingNotice } from '~/atoms';
 
-const AUTHORS_PROPERTY = '91a9e2f6-e51a-48f7-9976-61de8561b690';
+const AUTHORS_PROPERTY = '91a9e2f6e51a48f7997661de8561b690';
 
 type SpaceNoticesProps = {
   spaceType: SpacePageType;

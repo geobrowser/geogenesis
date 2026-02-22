@@ -7,8 +7,8 @@ import pluralize from 'pluralize';
 import { useState } from 'react';
 
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
+import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
-import type { Relation } from '~/core/v2.types';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
@@ -116,7 +116,7 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
       </Link>
       <div className="flex-1 p-3">
         <Link
-          href={NavUtils.toEntity(relation.spaceId ?? spaceId, relation.toEntity.id)}
+          href={NavUtils.toEntity(relation.toSpaceId ?? relation.spaceId ?? spaceId, relation.toEntity.id)}
           className="inline-flex items-center gap-2"
         >
           {relation.toEntity.name}

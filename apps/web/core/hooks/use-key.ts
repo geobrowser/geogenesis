@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect } from 'react';
 
 export const useKey = (key: KeyboardEvent['key'], callback: (event: KeyboardEvent) => void) => {

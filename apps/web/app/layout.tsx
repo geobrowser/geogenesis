@@ -111,7 +111,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${calibre.variable}`}>
+    <html lang="en" className={`${calibre.variable}`} suppressHydrationWarning>
       <head>
         <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </head>

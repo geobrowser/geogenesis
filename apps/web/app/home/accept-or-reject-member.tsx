@@ -1,106 +1,136 @@
 'use client';
 
-import { MemberAccessAbi } from '@graphprotocol/grc-20/abis';
 import cx from 'classnames';
-import { Effect, Either } from 'effect';
-import { encodeFunctionData } from 'viem';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useVote } from '~/core/hooks/use-vote';
+import { NavUtils } from '~/core/utils/utils';
 
+import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
 import { Pending } from '~/design-system/pending';
-
-function useApproveOrReject(membershipContractAddress: string | null) {
-  const tx = useSmartAccountTransaction({
-    address: membershipContractAddress,
-  });
-
-  const approveOrReject = async (calldata: `0x${string}`) => {
-    const txEffect = await tx(calldata);
-    const maybeHash = await Effect.runPromise(Effect.either(txEffect));
-
-    if (Either.isLeft(maybeHash)) {
-      console.error('Could not approve or reject', maybeHash.left);
-      return;
-    }
-
-    // @TODO: UI states/error states
-    console.log('Approve or reject successful!', maybeHash.right);
-    return maybeHash.right;
-  };
-
-  return approveOrReject;
-}
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
-  onchainProposalId: string;
-  membershipContractAddress: string | null;
+  spaceId: string;
+  proposalId: string;
+  proposalName: string;
+  proposedMember: {
+    id: string;
+    avatarUrl: string | null;
+    profileLink: string | null;
+  };
+  space: {
+    id: string;
+    name: string | null;
+    image: string;
+  };
 }
 
-export function AcceptOrRejectMember(props: Props) {
-  const [isPendingApproval, setIsPendingApproval] = useState<boolean>(false);
-  const [isPendingRejection, setIsPendingRejection] = useState<boolean>(false);
-  const [hasVoted, setHasVoted] = useState<boolean>(false);
+export function AcceptOrRejectMember({ spaceId, proposalId, proposalName, proposedMember, space }: Props) {
+  const [dismissed, setDismissed] = useState<boolean>(false);
 
-  const approveOrReject = useApproveOrReject(props.membershipContractAddress);
+  const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
-  const onApprove = async () => {
-    try {
-      setIsPendingApproval(true);
-      const hash = await approveOrReject(
-        encodeFunctionData({
-          abi: MemberAccessAbi,
-          functionName: 'approve',
-          args: [BigInt(props.onchainProposalId)],
-        })
-      );
-      console.log('transaction successful', hash);
-      setHasVoted(true);
-      setIsPendingApproval(false);
-    } catch (error) {
-      console.error(error);
-      setHasVoted(false);
-      setIsPendingApproval(false);
-    }
+  const { vote, status: voteStatus } = useVote({
+    spaceId,
+    proposalId,
+  });
+
+  const hasVoted = voteStatus === 'success';
+  const hasError = voteStatus === 'error';
+  const isPendingApproval = selectedVote === 'ACCEPT' && voteStatus === 'pending';
+  const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
+
+  const onApprove = () => {
+    setSelectedVote('ACCEPT');
+    vote('ACCEPT');
   };
 
-  const onReject = async () => {
-    try {
-      setIsPendingRejection(true);
-      const hash = await approveOrReject(
-        encodeFunctionData({
-          abi: MemberAccessAbi,
-          functionName: 'reject',
-          args: [BigInt(props.onchainProposalId)],
-        })
-      );
-      console.log('transaction successful', hash);
-      setHasVoted(true);
-      setIsPendingRejection(false);
-    } catch (error) {
-      console.error(error);
-      setHasVoted(false);
-      setIsPendingRejection(false);
-    }
+  const onReject = () => {
+    setSelectedVote('REJECT');
+    vote('REJECT');
   };
+
+  useEffect(() => {
+    if (hasVoted) {
+      const timer = setTimeout(() => setDismissed(true), 1_500);
+      return () => clearTimeout(timer);
+    }
+  }, [hasVoted]);
+
+  if (dismissed) return null;
+
+  const header = (
+    <div className="flex items-center justify-between">
+      <div className="text-smallTitle">{proposalName}</div>
+      <div className="relative h-5 w-5 overflow-hidden rounded-full">
+        <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="relative">
-      <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
-        <SmallButton variant="secondary" onClick={onReject}>
-          <Pending isPending={isPendingRejection}>Reject</Pending>
-        </SmallButton>
-        <SmallButton variant="secondary" onClick={onApprove}>
-          <Pending isPending={isPendingApproval}>Approve</Pending>
-        </SmallButton>
+    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+      <div className="space-y-2">
+        {proposedMember.profileLink ? (
+          <Link href={proposedMember.profileLink} className="w-full">
+            {header}
+          </Link>
+        ) : (
+          <div className="w-full">{header}</div>
+        )}
+
+        <Link href={NavUtils.toSpace(space.id)} className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
+          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
+            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+              <GeoImage
+                value={space.image}
+                alt={`Cover image for space ${space.name ?? space.id}`}
+                fill
+                style={{ objectFit: 'cover' }}
+              />
+            </div>
+            <p>{space.name}</p>
+          </div>
+        </Link>
       </div>
-      {hasVoted && (
-        <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-          <div className="text-smallButton">Vote registered</div>
-        </div>
-      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-metadataMedium">1 vote required</p>
+
+        {hasError ? (
+          <div className="flex items-center gap-2">
+            <p className="text-smallButton text-red-01">Vote failed</p>
+            <SmallButton
+              variant="secondary"
+              onClick={() => {
+                if (selectedVote) vote(selectedVote);
+              }}
+            >
+              Retry
+            </SmallButton>
+          </div>
+        ) : (
+          <div className="relative">
+            <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
+              <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+                <Pending isPending={isPendingRejection}>Reject</Pending>
+              </SmallButton>
+              <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
+                <Pending isPending={isPendingApproval}>Approve</Pending>
+              </SmallButton>
+            </div>
+            {hasVoted && (
+              <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+                <div className="text-smallButton">{selectedVote === 'ACCEPT' ? 'Approved' : 'Rejected'}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

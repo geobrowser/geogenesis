@@ -9,7 +9,7 @@ import { useState } from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dots } from '~/design-system/dots';

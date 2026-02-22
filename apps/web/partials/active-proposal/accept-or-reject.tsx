@@ -7,7 +7,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
-import { SubstreamVote } from '~/core/io/schema';
+import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -17,29 +17,25 @@ import { Execute } from './execute';
 interface Props {
   spaceId: string;
   isProposalEnded: boolean;
-  // If the proposal is executable that means it's done and the
-  // acceptance threshold has passed.
-  isProposalExecutable: boolean;
   status: Proposal['status'];
+  canExecute: boolean;
 
   userVote: SubstreamVote | undefined;
-  onchainProposalId: string;
-  votingContractAddress: `0x${string}`;
+  proposalId: string;
 }
 
 export function AcceptOrReject({
   spaceId,
   isProposalEnded,
-  isProposalExecutable,
   status,
+  canExecute,
   userVote,
-  onchainProposalId,
-  votingContractAddress,
+  proposalId,
 }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
-    address: votingContractAddress,
-    onchainProposalId,
+    spaceId,
+    proposalId,
   });
 
   const [hasApproved, setHasApproved] = useState<boolean>(false);
@@ -60,14 +56,6 @@ export function AcceptOrReject({
     vote('REJECT');
   };
 
-  if (isProposalExecutable && smartAccount) {
-    return (
-      <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
-        Execute
-      </Execute>
-    );
-  }
-
   if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || hasApproved) {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
@@ -79,6 +67,18 @@ export function AcceptOrReject({
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    }
+
+    if (status === 'REJECTED') {
+      return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    }
+
+    if (canExecute && smartAccount) {
+      return <Execute spaceId={spaceId} proposalId={proposalId} />;
+    }
+
+    if (canExecute) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;

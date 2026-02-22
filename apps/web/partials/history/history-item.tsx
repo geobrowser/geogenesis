@@ -1,66 +1,65 @@
-import { Profile } from '~/core/types';
-import { GeoDate, NavUtils, formatShortAddress } from '~/core/utils/utils';
+import type { ApiProfile } from '~/core/io/rest/schemas/profile';
+import { formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-interface Props {
-  createdAt: number;
-  createdBy: Profile;
+type EntityVersionItemProps = {
+  createdAt: string;
   name: string | null;
-  spaceId: string;
-  proposalId: string;
-}
+  createdById: string | null;
+  createdBy: ApiProfile | null;
+  onClick: () => void;
+};
 
-export function HistoryItem({ spaceId, proposalId, createdAt, createdBy, name }: Props) {
-  const lastEditedDate = GeoDate.fromGeoTime(createdAt);
+export function EntityVersionItem({ createdAt, name, createdById, createdBy, onClick }: EntityVersionItemProps) {
+  const date = new Date(createdAt);
 
-  // e.g. Mar 12, 2023
-  const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
+  const formattedDate = date.toLocaleDateString(undefined, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 
-  // e.g. 13:41
-  const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
+  const formattedTime = date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
 
-  // Older versions from before we added proposal names may not have a name, so we fall back to
-  // an address – date format.
-  const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
+  const versionName = name ?? `Version from ${formattedDate}`;
+
+  // Use resolved profile, or fall back to a default constructed from createdById
+  const displayName = createdBy?.name ?? (createdById ? formatShortAddress(createdById) : null);
+  // Use a stable identifier for avatar generation so the color doesn't change if the user renames
+  const avatarId = createdBy?.spaceId ?? createdById;
 
   return (
-    <PrefetchLink
-      href={NavUtils.toProposal(spaceId, proposalId)}
-      className="relative z-10 block w-full bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text"
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative z-10 block w-full bg-white px-2 py-3 text-left text-grey-04 hover:bg-bg hover:text-text"
     >
       <div className="flex items-center justify-between">
-        <Text as="h1" variant="metadataMedium" className="mb-2 truncate text-ellipsis !text-sm">
+        <Text as="span" variant="metadataMedium" className="mb-1 truncate text-ellipsis !text-sm">
           {versionName}
         </Text>
       </div>
       <div className="flex items-center justify-between">
-        <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1">
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
             <Avatar
-              alt={`Avatar for ${createdBy.name ?? createdBy.id}`}
-              avatarUrl={createdBy.avatarUrl}
-              value={createdBy.name ?? createdBy.id}
+              alt={`Avatar for ${avatarId ?? 'unknown'}`}
+              avatarUrl={createdBy?.avatarUrl ?? null}
+              value={avatarId ?? 'unknown'}
             />
           </div>
-          <p className="text-smallButton">{createdBy.name ?? formatShortAddress(createdBy.id)}</p>
+          <p className="text-smallButton">{displayName ?? 'Unknown author'}</p>
         </div>
-        <div className="flex">
-          <p className="text-smallButton">
-            {formattedLastEditedDate} · {lastEditedTime}
-          </p>
-        </div>
+        <p className="text-smallButton">
+          {formattedDate} · {formattedTime}
+        </p>
       </div>
-    </PrefetchLink>
+    </button>
   );
 }

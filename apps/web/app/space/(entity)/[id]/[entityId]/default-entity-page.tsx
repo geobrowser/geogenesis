@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -102,28 +102,34 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const entity = entityPage?.entity;
   const relationEntityRelations = entityPage?.relations ?? [];
   const spaces = entity?.spaces ?? [];
+  const deterministicSpaceId = Spaces.getDeterministicSpaceId(spaces, spaceId);
 
   /**
    * Redirect from an invalid space to a valid one.
    *
    * We need to check that spaces has data. We could be navigating
    * to an entity with no data like a relation entity page.
+   *
+   * When navigating from edit mode, ?edit=true is passed which sets
+   * preventRedirect. This preserves the user's editing context by
+   * keeping them in the current space. This is safe because entity
+   * data is fetched by entityId (spaceId is contextual, not an access
+   * boundary) and write operations are gated by on-chain governance.
    */
-  if (entity && spaces.length > 0 && !spaces.includes(spaceId) && !preventRedirect) {
-    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${newSpaceId}`);
+  if (entity && deterministicSpaceId && !spaces.includes(spaceId) && !preventRedirect) {
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${deterministicSpaceId}`);
 
-    return redirect(NavUtils.toEntity(newSpaceId, entityId));
+    return redirect(NavUtils.toEntity(deterministicSpaceId, entityId));
   }
 
   /**
    * If we're in a valid space for the entity and the entity is
    * a space, redirect to the space front page directly.
    */
-  // if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
-  //   console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
-  //   return redirect(NavUtils.toSpace(spaceId));
-  // }
+  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && !preventRedirect && deterministicSpaceId) {
+    console.log(`Redirecting from space entity ${entityId} to space page ${deterministicSpaceId}`);
+    return redirect(NavUtils.toSpace(deterministicSpaceId));
+  }
 
   const tabRelations = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY) ?? [];
   const tabIds = sortRelations(tabRelations).map(r => r.toEntity.id);

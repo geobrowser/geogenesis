@@ -21,7 +21,7 @@ interface Props {
   modal?: boolean;
 }
 
-const contentStyles = cva('z-20 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+const contentStyles = cva('z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
   variants: {
     align: {
       start: 'origin-top-left',
@@ -46,7 +46,9 @@ export function Menu({
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open} modal={modal}>
-      <Trigger asChild={asChild}>{trigger}</Trigger>
+      <Trigger asChild={asChild} suppressHydrationWarning>
+        {trigger}
+      </Trigger>
       <PopoverContent align={align} side={side} sideOffset={sideOffset} className={contentStyles({ align, className })}>
         {children}
       </PopoverContent>

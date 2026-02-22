@@ -4,13 +4,21 @@ import { ColorName, colors } from '~/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;
+  className?: string;
 }
 
-export function GeoLocation({ color }: Props) {
+export function GeoLocation({ color, className }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <g clipPath="url(#clip0_49261_69243)">
         <circle cx="8" cy="8.5" r="7.5" stroke={themeColor} />
         <path

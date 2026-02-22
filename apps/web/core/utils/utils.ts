@@ -1,5 +1,5 @@
-import { IdUtils } from '@graphprotocol/grc-20';
-import { Position } from '@graphprotocol/grc-20';
+import { IdUtils } from '@geoprotocol/geo-sdk';
+import { Position } from '@geoprotocol/geo-sdk';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -7,12 +7,11 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
-import { EntityId } from '~/core/io/schema';
-import { useValues } from '~/core/sync/use-store';
+import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
-import { SubstreamVote } from '../io/schema';
-import { Entity, Relation, Row } from '../v2.types';
+import { SubstreamVote } from '../io/substream-schema';
+import { Entity, Relation, Row } from '../types';
 import { Entities } from './entity';
 
 export const NavUtils = {
@@ -20,7 +19,8 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
-  toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
+  toProposal: (spaceId: string, proposalId: string, from?: string) =>
+    `/space/${spaceId}/governance?proposalId=${proposalId}${from ? `&from=${from}` : ''}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },
@@ -215,6 +215,27 @@ export class GeoDate {
     }
   }
 
+  /**
+   * Normalizes a stored date/time value to a full ISO string that `new Date()` can parse.
+   * Handles RFC 3339 date-only ("2024-01-15"), time-only ("14:30:00Z"),
+   * datetime ("2024-01-15T14:30:00Z"), and full ISO strings ("2024-01-15T14:30:00.000Z").
+   */
+  static toFullISOString(dateString: string): string {
+    if (!dateString) return dateString;
+
+    // Time-only: "HH:MM:SSZ" or "HH:MM:SS±HH:MM" — prefix with epoch date
+    if (/^\d{2}:\d{2}:\d{2}/.test(dateString)) {
+      return `1970-01-01T${dateString}`;
+    }
+
+    // Date-only: "YYYY-MM-DD" (no T or time portion)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return `${dateString}T00:00:00.000Z`;
+    }
+
+    return dateString;
+  }
+
   // Geo DateField parses ISO strings in UTC time into day, month, year, hour, minute.
   static fromISOStringUTC(dateString: string): {
     day: string;
@@ -224,7 +245,8 @@ export class GeoDate {
     minute: string;
     meridiem: 'am' | 'pm';
   } {
-    const date = new Date(dateString);
+    const normalized = GeoDate.toFullISOString(dateString);
+    const date = new Date(normalized);
     const isDate = GeoDate.isValidDate(date);
     const day = isDate ? date.getUTCDate().toString() : '';
     const month = isDate ? (date.getUTCMonth() + 1).toString() : '';
@@ -296,8 +318,8 @@ export class GeoDate {
       if (this.isDateInterval(dateIsoString)) {
         const [startDateString, endDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
 
-        const startDate = parseISO(startDateString);
-        const endDate = parseISO(endDateString);
+        const startDate = parseISO(GeoDate.toFullISOString(startDateString));
+        const endDate = parseISO(GeoDate.toFullISOString(endDateString));
 
         const formattedStartDate = formatInTimeZone(startDate, 'UTC', validatedFormat);
         const formattedEndDate = formatInTimeZone(endDate, 'UTC', validatedFormat);
@@ -305,7 +327,7 @@ export class GeoDate {
         return `${formattedStartDate} — ${formattedEndDate}`;
       }
 
-      const date = parseISO(dateIsoString);
+      const date = parseISO(GeoDate.toFullISOString(dateIsoString));
       return formatInTimeZone(date, 'UTC', validatedFormat);
     } catch (e) {
       console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`, e);
@@ -374,34 +396,15 @@ export const getImageHash = (value: string) => {
   return value;
 };
 
-/**
- * Hook to efficiently get image URL for a specific entity
- * @param imageEntityId The ID of the image entity
- * @param spaceId The space ID to query within
- * @returns The IPFS URL string or undefined if not found
- */
-export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
-  const imageValues = useValues({
-    selector: v => v.entity.id === imageEntityId && v.spaceId === spaceId,
-  });
-
-  if (!imageEntityId || imageValues.length === 0) return undefined;
-
-  // Find the first value that is a string starting with 'ipfs://'
-  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return imageUrlValue?.value;
-}
-
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
 // e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getImagePath = (value: string) => {
   // Use Pinata gateway as the primary source for IPFS images
-  if (value.startsWith('ipfs://')) {
+  if (value?.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
-  } else if (value.startsWith('http')) {
+  } else if (value?.startsWith('http')) {
     return value;
   } else {
     // The image is likely a static, bundled path
@@ -450,26 +453,6 @@ export const getVideoPathFallback = (value: string) => {
     return value;
   }
 };
-
-/**
- * Hook to get the video URL from a video entity
- * Similar to useImageUrlFromEntity but for video entities
- * @param videoEntityId The entity ID of the video entity
- * @param spaceId The space ID to query within
- * @returns The IPFS URL string or undefined if not found
- */
-export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId: string): string | undefined {
-  const videoValues = useValues({
-    selector: v => v.entity.id === videoEntityId && v.spaceId === spaceId,
-  });
-
-  if (!videoEntityId || videoValues.length === 0) return undefined;
-
-  // Find the first value that is a string starting with 'ipfs://'
-  const videoUrlValue = videoValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return videoUrlValue?.value;
-}
 
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);
@@ -538,6 +521,13 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
   }
 }
 
+export function deriveProposalStatus(executedAt: string | null, endTime: number): ProposalStatus {
+  if (executedAt) return 'ACCEPTED';
+  const now = Math.floor(Date.now() / 1000);
+  if (endTime < now) return 'REJECTED';
+  return 'PROPOSED';
+}
+
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
@@ -587,6 +577,16 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
   if (typeof maybeEntityId !== 'string') return false;
 
   return IdUtils.isValid(maybeEntityId);
+};
+
+/**
+ * Validates that a string is a valid space ID (bytes16 hex format).
+ * Space IDs are 32 hex characters without 0x prefix.
+ */
+export const validateSpaceId = (maybeSpaceId: string | null | undefined): maybeSpaceId is string => {
+  if (typeof maybeSpaceId !== 'string') return false;
+
+  return IdUtils.isValid(maybeSpaceId);
 };
 
 export const getTabSlug = (label: string) => {

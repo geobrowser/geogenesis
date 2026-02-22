@@ -1,7 +1,8 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
-import { EntityId } from '~/core/io/schema';
-import { Relation, Value } from '~/core/v2.types';
+import { EntityId } from '~/core/io/substream-schema';
+import { Relation, Value } from '~/core/types';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -74,5 +75,5 @@ export function spaces(values?: Value[], relations?: Relation[]): string[] {
     spaces.push(relation.spaceId);
   }
 
-  return [...new Set(spaces)];
+  return sortSpaceIdsByRank([...new Set(spaces)]);
 }

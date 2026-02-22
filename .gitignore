@@ -10,3 +10,4 @@ pgdata
 replay.log
 .output
 .nitro
+tmp

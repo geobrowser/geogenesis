@@ -12,6 +12,7 @@ module.exports = {
     '^react$',
     '^next$',
     '^@legendapp$',
+    '^@geoprotocol$',
     '^@geogenesis$',
     // External dependencies
     '^w',

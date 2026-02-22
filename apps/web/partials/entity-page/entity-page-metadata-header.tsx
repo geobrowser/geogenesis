@@ -1,13 +1,18 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import {
+  DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_DATETIME_FORMAT,
+  DEFAULT_FLOAT_FORMAT,
   DEFAULT_NUMBER_FORMAT,
   DEFAULT_TIME_FORMAT,
+  DEFAULT_URL_TEMPLATE,
   FORMAT_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
 } from '~/core/constants';
@@ -18,8 +23,8 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -38,6 +43,13 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  });
+
+  // Include deleted relations so handlePropertyTypeChange can reuse/update
+  // them instead of creating new ones each time the dropdown changes.
+  const allRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+    includeDeleted: true,
   });
 
   const name = useName(entityId);
@@ -102,17 +114,32 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     (newType: SwitchableRenderableType) => {
       if (!entityId || !spaceId) return;
 
-      // Add format property if type is TIME or NUMBER
-      if (newType === 'TIME' || newType === 'NUMBER') {
+      // Add format property if type is temporal or numeric
+      const isTemporalType = newType === 'DATE' || newType === 'DATETIME' || newType === 'TIME';
+      const isFloatType = newType === 'FLOAT' || newType === 'DECIMAL';
+      const isNumericType = newType === 'INTEGER' || isFloatType;
+      const isTextOrUrlType = newType === 'TEXT' || newType === 'URL';
+      const temporalDefaultFormat =
+        newType === 'DATETIME' ? DEFAULT_DATETIME_FORMAT : newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_DATE_FORMAT;
+      const numericDefaultFormat = isFloatType ? DEFAULT_FLOAT_FORMAT : DEFAULT_NUMBER_FORMAT;
+      if (isTemporalType || isNumericType) {
         addPropertyToEntity({
           entityId,
           propertyId: FORMAT_PROPERTY,
           propertyName: 'Format',
           entityName: name ?? '',
-          defaultValue: newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
+          defaultValue: isTemporalType ? temporalDefaultFormat : numericDefaultFormat,
         });
-      } else if (formatValue) {
-        // Remove format property if type is not TIME or NUMBER and property exists
+      } else if (newType === 'URL') {
+        addPropertyToEntity({
+          entityId,
+          propertyId: FORMAT_PROPERTY,
+          propertyName: 'Format',
+          entityName: name ?? '',
+          defaultValue: DEFAULT_URL_TEMPLATE,
+        });
+      } else if (formatValue && !isTextOrUrlType) {
+        // Remove format property if type is not temporal or numeric and property exists
         storage.values.delete(formatValue);
       }
 
@@ -129,51 +156,51 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         return;
       }
 
-      // Update the dataType value if it's different from the current one
-      if (propertyData?.dataType !== baseDataType) {
-        storage.values.set({
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
+      // Register the data type so store.getProperty() returns the updated type
+      storage.properties.setDataType(entityId, baseDataType);
+
+      // Update the data type relation. Every property gets an explicit Data Type relation.
+      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
+      if (dataTypeEntityId) {
+        const existingDataTypeRelation = allRelations.find(
+          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY
+        );
+
+        if (existingDataTypeRelation) {
+          storage.relations.update(existingDataTypeRelation, draft => {
+            draft.toEntity.id = dataTypeEntityId;
+            draft.toEntity.name = baseDataType;
+            draft.toEntity.value = dataTypeEntityId;
+          });
+        } else {
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: ID.createEntityId(),
+            fromEntity: {
+              id: entityId,
+              name: name || '',
+            },
+            type: {
+              id: DATA_TYPE_PROPERTY,
+              name: 'Data Type',
+            },
+            toEntity: {
+              id: dataTypeEntityId,
+              name: baseDataType,
+              value: dataTypeEntityId,
+            },
             spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name: name || '',
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: baseDataType,
-        });
-      } else if (!propertyData) {
-        // If no dataType value exists and no propertyData, create the dataType value
-        storage.values.set({
-          id: ID.createValueId({
-            entityId,
-            propertyId: DATA_TYPE_PROPERTY,
-            spaceId,
-          }),
-          entity: {
-            id: entityId,
-            name: name || '',
-          },
-          property: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: baseDataType,
-        });
+            position: Position.generate(),
+            verified: false,
+            renderableType: 'RELATION',
+          });
+        }
       }
 
-      // Handle the renderableType relation
-
-      const existingRelation = relations.find(
+      // Handle the renderableType relation.
+      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      const existingRelation = allRelations.find(
         r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
       );
 
@@ -217,23 +244,20 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
+    [entityId, spaceId, storage, propertyData, allRelations, isDataTypeEditable, name]
   );
 
-  // Create property data when Property type is added
+  // Create property data when Property type is manually added to an existing entity
   React.useEffect(() => {
-    // Check if there's already a Property type relation to avoid duplicates
     const existingPropertyTypeRelation = relations.find(
       r =>
         r.fromEntity.id === entityId && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY
     );
 
-    // Only create property if:
+    // Only create default property data if:
     // 1. Entity has Property type relation
-    // 2. No property data exists from backend
+    // 2. No property data exists yet (not created via storage.properties.create())
     if (existingPropertyTypeRelation && !propertyData && entityId && spaceId) {
-      // Create the property with a default dataType of TEXT
-      // Skip creating the Property type relation since it already exists
       storage.properties.create({
         entityId,
         spaceId,
@@ -246,25 +270,23 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   }, [propertyData, entityId, spaceId, storage, name, relations]);
 
   return (
-    <div className="flex items-center gap-2 text-text">
+    <div className="flex items-center gap-1 text-text">
       {isPropertyEntity && editable && (
-        <div className="flex items-center gap-2">
+        <>
           <RenderableTypeDropdown
             value={currentRenderableType}
             onChange={handlePropertyTypeChange}
             baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
           />
           <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-        </div>
+        </>
       )}
       {propertyDataType && !editable && (
-        <div className="h-100 mt-1 flex items-end">
-          <DataTypePill
-            dataType={propertyDataType.dataType}
-            renderableType={propertyDataType.renderableType}
-            spaceId={spaceId}
-          />
-        </div>
+        <DataTypePill
+          dataType={propertyDataType.dataType}
+          renderableType={propertyDataType.renderableType}
+          spaceId={spaceId}
+        />
       )}
       {editable ? (
         <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />

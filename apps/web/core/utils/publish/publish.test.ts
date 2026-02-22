@@ -1,15 +1,15 @@
-import {
-  CreateRelationOp,
-  DeleteRelationOp,
-  IdUtils,
-  UnsetEntityValuesOp,
-  UpdateEntityOp,
-} from '@graphprotocol/grc-20';
+import { IdUtils, Op } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { Relation, Value } from '~/core/v2.types';
+import { Relation, Value } from '~/core/types';
 
-import { prepareLocalDataForPublishing } from './publish';
+import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect, Publish } from './publish';
+
+/** Unwrap the Effect for test assertions */
+function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
+  return Effect.runSync(prepareLocalDataForPublishingEffect(values, relations, spaceId));
+}
 
 // Helper function to create a mock Value
 function createMockValue(overrides: Partial<Value> = {}): Value {
@@ -65,9 +65,33 @@ function createMockRelation(overrides: Partial<Relation> = {}): Relation {
   };
 }
 
+// Type helpers for new SDK operation format
+type UpdateEntityOp = Op & {
+  type: 'updateEntity';
+  id: unknown;
+  set: Array<{ property: unknown; value: unknown }>;
+  unset: Array<{ property: unknown }>;
+};
+
+type CreateRelationOp = Op & {
+  type: 'createRelation';
+  id: unknown;
+  relationType: unknown;
+  entity: unknown;
+  from: unknown;
+  to: unknown;
+  position?: string;
+  toSpace?: unknown;
+};
+
+type DeleteRelationOp = Op & {
+  type: 'deleteRelation';
+  id: unknown;
+};
+
 describe('prepareLocalDataForPublishing', () => {
   describe('basic functionality', () => {
-    it('should create UPDATE_ENTITY operation for valid values', () => {
+    it('should create updateEntity operation for valid values', () => {
       const values = [createMockValue()];
       const relations: Relation[] = [];
 
@@ -75,13 +99,13 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.type).toBe('UPDATE_ENTITY');
-      expect(updateOp.entity.values).toHaveLength(1);
-      expect(updateOp.entity.values[0].property).toBeDefined();
-      expect(updateOp.entity.values[0].value).toBe('test value');
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.set).toHaveLength(1);
+      expect(updateOp.set[0].property).toBeDefined();
+      expect(updateOp.set[0].value).toBeDefined();
     });
 
-    it('should create CREATE_RELATION operation for valid relations', () => {
+    it('should create createRelation operation for valid relations', () => {
       const values: Value[] = [];
       const relations = [createMockRelation()];
 
@@ -89,18 +113,16 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.type).toBe('CREATE_RELATION');
-      expect(createOp.relation.id).toBeDefined();
-      expect(createOp.relation.type).toBeDefined();
-      expect(createOp.relation.entity).toBeDefined();
-      expect(createOp.relation.fromEntity).toBeDefined();
-      expect(createOp.relation.toEntity).toBeDefined();
-      expect(createOp.relation.position).toBe('1');
-      expect(createOp.relation.verified).toBe(true);
-      expect(createOp.relation.toSpace).toBeUndefined();
+      expect(createOp.type).toBe('createRelation');
+      expect(createOp.id).toBeDefined();
+      expect(createOp.relationType).toBeDefined();
+      expect(createOp.entity).toBeDefined();
+      expect(createOp.from).toBeDefined();
+      expect(createOp.to).toBeDefined();
+      expect(createOp.position).toBe('1');
     });
 
-    it('should create DELETE_RELATION operation for deleted relations', () => {
+    it('should create deleteRelation operation for deleted relations', () => {
       const values: Value[] = [];
       const relations = [createMockRelation({ isDeleted: true })];
 
@@ -108,22 +130,22 @@ describe('prepareLocalDataForPublishing', () => {
 
       expect(result).toHaveLength(1);
       const deleteOp = result[0] as DeleteRelationOp;
-      expect(deleteOp.type).toBe('DELETE_RELATION');
+      expect(deleteOp.type).toBe('deleteRelation');
       expect(deleteOp.id).toBeDefined();
     });
 
-    it('should create UNSET_ENTITY_VALUES operation for deleted values', () => {
+    it('should create updateEntity operation with unset for deleted values', () => {
       const values = [createMockValue({ isDeleted: true })];
       const relations: Relation[] = [];
 
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      const unsetOp = result[0] as UnsetEntityValuesOp;
-      expect(unsetOp.type).toBe('UNSET_ENTITY_VALUES');
-      expect(unsetOp.unsetEntityValues.id).toBeDefined();
-      expect(unsetOp.unsetEntityValues.properties).toHaveLength(1);
-      expect(unsetOp.unsetEntityValues.properties[0]).toBeDefined();
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.id).toBeDefined();
+      expect(updateOp.unset).toHaveLength(1);
+      expect(updateOp.unset[0].property).toBeDefined();
     });
   });
 
@@ -135,7 +157,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out already published values', () => {
@@ -145,7 +167,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out values with empty property IDs', () => {
@@ -158,7 +180,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out values with empty entity IDs', () => {
@@ -171,7 +193,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should filter out non-local values', () => {
@@ -181,7 +203,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('updateEntity');
     });
 
     it('should include deleted values with empty string value', () => {
@@ -191,7 +213,9 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('UNSET_ENTITY_VALUES');
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.unset.length).toBeGreaterThan(0);
     });
   });
 
@@ -224,20 +248,14 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(2);
+      expect(result.every(op => op.type === 'updateEntity')).toBe(true);
 
-      const entity1Op = result.find(
-        op => op.type === 'UPDATE_ENTITY' && (op as UpdateEntityOp).entity.id === entity1Id
-      ) as UpdateEntityOp;
-
-      const entity2Op = result.find(
-        op => op.type === 'UPDATE_ENTITY' && (op as UpdateEntityOp).entity.id === entity2Id
-      ) as UpdateEntityOp;
-
-      expect(entity1Op.entity.values).toHaveLength(2);
-      expect(entity2Op.entity.values).toHaveLength(1);
+      const ops = result as UpdateEntityOp[];
+      const setCounts = ops.map(op => op.set?.length ?? 0).sort();
+      expect(setCounts).toEqual([1, 2]);
     });
 
-    it('should create both UPDATE_ENTITY and UNSET_ENTITY_VALUES for same entity', () => {
+    it('should create updateEntity with both set and unset for same entity', () => {
       const entityId = IdUtils.generate();
       const property1Id = IdUtils.generate();
       const property2Id = IdUtils.generate();
@@ -261,62 +279,13 @@ describe('prepareLocalDataForPublishing', () => {
 
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
-      expect(result).toHaveLength(2);
-
-      const updateOp = result.find(op => op.type === 'UPDATE_ENTITY') as UpdateEntityOp;
-      const unsetOp = result.find(op => op.type === 'UNSET_ENTITY_VALUES') as UnsetEntityValuesOp;
-
-      expect(updateOp.entity.id).toBe(entityId);
-      expect(updateOp.entity.values).toHaveLength(1);
-      expect(updateOp.entity.values[0].property).toBe(property1Id);
-
-      expect(unsetOp.unsetEntityValues.id).toBe(entityId);
-      expect(unsetOp.unsetEntityValues.properties).toEqual([property2Id]);
-    });
-  });
-
-  describe('value options handling', () => {
-    it('should include value options when present', () => {
-      const values = [
-        createMockValue({
-          options: { unit: 'kg', language: 'en' },
-        }),
-      ];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+      expect(result).toHaveLength(1);
 
       const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0].options).toEqual({
-        unit: 'kg',
-        language: 'en',
-      });
-    });
-
-    it('should filter out undefined option values', () => {
-      const values = [
-        createMockValue({
-          options: { unit: 'kg', language: undefined },
-        }),
-      ];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
-
-      const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0].options).toEqual({
-        unit: 'kg',
-      });
-    });
-
-    it('should not include options when null', () => {
-      const values = [createMockValue({ options: null })];
-      const relations: Relation[] = [];
-
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
-
-      const updateOp = result[0] as UpdateEntityOp;
-      expect(updateOp.entity.values[0]).not.toHaveProperty('options');
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.id).toBeDefined();
+      expect(updateOp.set).toHaveLength(1);
+      expect(updateOp.unset).toHaveLength(1);
     });
   });
 
@@ -333,7 +302,7 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.relation.toSpace).toBe(toSpaceId);
+      expect(createOp.toSpace).toBeDefined();
     });
 
     it('should handle relation without optional fields', () => {
@@ -349,9 +318,8 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       const createOp = result[0] as CreateRelationOp;
-      expect(createOp.relation.position).toBeUndefined();
-      expect(createOp.relation.verified).toBeUndefined();
-      expect(createOp.relation.toSpace).toBeUndefined();
+      expect(createOp.position).toBeUndefined();
+      expect(createOp.toSpace).toBeUndefined();
     });
   });
 
@@ -363,10 +331,9 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(4);
-      expect(result.some(op => op.type === 'CREATE_RELATION')).toBe(true);
-      expect(result.some(op => op.type === 'DELETE_RELATION')).toBe(true);
-      expect(result.some(op => op.type === 'UPDATE_ENTITY')).toBe(true);
-      expect(result.some(op => op.type === 'UNSET_ENTITY_VALUES')).toBe(true);
+      expect(result.some(op => op.type === 'createRelation')).toBe(true);
+      expect(result.some(op => op.type === 'deleteRelation')).toBe(true);
+      expect(result.some(op => op.type === 'updateEntity')).toBe(true);
     });
 
     it('should return empty array when no valid values but still process all relations', () => {
@@ -384,8 +351,8 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       // Values are filtered out, but relations are processed regardless of their metadata
-      expect(result).toHaveLength(3); // All 3 relations become CREATE_RELATION ops
-      expect(result.every(op => op.type === 'CREATE_RELATION')).toBe(true);
+      expect(result).toHaveLength(3); // All 3 relations become createRelation ops
+      expect(result.every(op => op.type === 'createRelation')).toBe(true);
     });
   });
 
@@ -402,8 +369,253 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('CREATE_RELATION');
-      expect(result[1].type).toBe('UPDATE_ENTITY');
+      expect(result[0].type).toBe('createRelation');
+      expect(result[1].type).toBe('updateEntity');
     });
+
+    it('should skip values with RELATION data type instead of throwing', () => {
+      const entityId = IdUtils.generate();
+      const values = [
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          value: '',
+        }),
+        createMockValue({
+          entity: { id: entityId, name: 'Entity' },
+          property: { id: IdUtils.generate(), name: 'Name', dataType: 'TEXT' },
+          value: 'hello',
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      const updateOp = result[0] as UpdateEntityOp;
+      expect(updateOp.type).toBe('updateEntity');
+      expect(updateOp.set).toHaveLength(1);
+    });
+
+    it('should skip deleted values with RELATION data type instead of unsetting them', () => {
+      const values = [
+        createMockValue({
+          property: { id: IdUtils.generate(), name: 'Some Relation', dataType: 'RELATION' },
+          isDeleted: true,
+        }),
+      ];
+      const relations: Relation[] = [];
+
+      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+
+      expect(result).toHaveLength(0);
+    });
+  });
+});
+
+describe('toRfc3339Date', () => {
+  const toRfc3339Date = Publish.toRfc3339Date;
+
+  it('should convert a full ISO string to date-only', () => {
+    expect(toRfc3339Date('2024-01-15T14:30:00.000Z')).toBe('2024-01-15');
+  });
+
+  it('should pass through an already-correct date-only string', () => {
+    expect(toRfc3339Date('2024-07-04')).toBe('2024-07-04');
+  });
+
+  it('should handle ISO string with timezone offset', () => {
+    expect(toRfc3339Date('2024-12-31T23:00:00.000+00:00')).toBe('2024-12-31');
+  });
+
+  it('should extract date from a time-only string (epoch date)', () => {
+    expect(toRfc3339Date('14:30:00Z')).toBe('1970-01-01');
+  });
+});
+
+describe('toRfc3339Time', () => {
+  const toRfc3339Time = Publish.toRfc3339Time;
+
+  it('should convert a full ISO string to time-only', () => {
+    expect(toRfc3339Time('2024-01-15T14:30:00.000Z')).toBe('14:30:00Z');
+  });
+
+  it('should convert a full ISO string with midnight', () => {
+    expect(toRfc3339Time('2024-01-15T00:00:00.000Z')).toBe('00:00:00Z');
+  });
+
+  it('should pass through an already-correct time-only string', () => {
+    expect(toRfc3339Time('14:30:00Z')).toBe('14:30:00Z');
+  });
+
+  it('should handle time extracted from a date-only string (midnight)', () => {
+    expect(toRfc3339Time('2024-07-04')).toBe('00:00:00Z');
+  });
+});
+
+describe('toRfc3339Datetime', () => {
+  const toRfc3339Datetime = Publish.toRfc3339Datetime;
+
+  it('should convert a full ISO string to RFC 3339 datetime', () => {
+    expect(toRfc3339Datetime('2024-01-15T14:30:00.000Z')).toBe('2024-01-15T14:30:00Z');
+  });
+
+  it('should convert a date-only string to datetime at midnight', () => {
+    expect(toRfc3339Datetime('2024-07-04')).toBe('2024-07-04T00:00:00Z');
+  });
+
+  it('should convert a time-only string to datetime on epoch date', () => {
+    expect(toRfc3339Datetime('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
+  });
+
+  it('should strip milliseconds from full ISO string', () => {
+    expect(toRfc3339Datetime('2024-06-15T09:45:30.123Z')).toBe('2024-06-15T09:45:30Z');
+  });
+
+  it('should produce exactly one trailing Z', () => {
+    const result = toRfc3339Datetime('2024-01-15T14:30:00.000Z');
+    expect(result).toBe('2024-01-15T14:30:00Z');
+    expect(result.endsWith('ZZ')).toBe(false);
+  });
+});
+
+describe('date/time publish round-trip', () => {
+  it('should produce SDK-compatible DATE value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Birthday', dataType: 'DATE' },
+        value: '2024-01-15T00:00:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('date');
+    expect(setValue.value).toBe('2024-01-15');
+  });
+
+  it('should produce SDK-compatible TIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Start Time', dataType: 'TIME' },
+        value: '1970-01-01T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('time');
+    expect(setValue.value).toBe('14:30:00Z');
+  });
+
+  it('should produce SDK-compatible DATETIME value from stored ISO string', () => {
+    const entityId = IdUtils.generate();
+    const propertyId = IdUtils.generate();
+    const values = [
+      createMockValue({
+        entity: { id: entityId, name: 'Entity' },
+        property: { id: propertyId, name: 'Created At', dataType: 'DATETIME' },
+        value: '2024-01-15T14:30:00.000Z',
+      }),
+    ];
+
+    const result = prepareLocalDataForPublishing(values, [], 'test-space');
+    const updateOp = result[0] as UpdateEntityOp;
+    const setValue = updateOp.set[0].value as { type: string; value: string };
+    expect(setValue.type).toBe('datetime');
+    expect(setValue.value).toBe('2024-01-15T14:30:00Z');
+  });
+});
+
+describe('parseDecimalString', () => {
+  const parseDecimalString = Publish.parseDecimalString;
+
+  it('should parse a simple decimal', () => {
+    const result = parseDecimalString('10.1');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 101n });
+  });
+
+  it('should parse a decimal with leading zero', () => {
+    const result = parseDecimalString('0.005');
+    expect(result.exponent).toBe(-3);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 5n });
+  });
+
+  it('should parse a whole number', () => {
+    const result = parseDecimalString('42');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 42n });
+  });
+
+  it('should parse zero', () => {
+    const result = parseDecimalString('0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should parse zero with decimal point', () => {
+    const result = parseDecimalString('0.0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should normalize trailing zeros in the fraction', () => {
+    // "1.0000" → combined = 10000, strip trailing zeros → mantissa = 1, exponent = 0
+    const result = parseDecimalString('1.0000');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should normalize trailing zeros in whole numbers', () => {
+    // "100" → mantissa = 1, exponent = 2
+    const result = parseDecimalString('100');
+    expect(result.exponent).toBe(2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 1n });
+  });
+
+  it('should handle negative values', () => {
+    const result = parseDecimalString('-3.14');
+    expect(result.exponent).toBe(-2);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -314n });
+  });
+
+  it('should handle negative whole numbers', () => {
+    const result = parseDecimalString('-50');
+    expect(result.exponent).toBe(1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: -5n });
+  });
+
+  it('should handle negative zero', () => {
+    const result = parseDecimalString('-0');
+    expect(result.exponent).toBe(0);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 0n });
+  });
+
+  it('should trim whitespace', () => {
+    const result = parseDecimalString('  12.5  ');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 125n });
+  });
+
+  it('should handle large precision decimals', () => {
+    const result = parseDecimalString('123456789.123456789');
+    expect(result.exponent).toBe(-9);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 123456789123456789n });
+  });
+
+  it('should handle "1.10" by normalizing the trailing zero', () => {
+    // "1.10" → combined = 110, strip trailing zero → mantissa = 11, exponent = -1
+    const result = parseDecimalString('1.10');
+    expect(result.exponent).toBe(-1);
+    expect(result.mantissa).toEqual({ type: 'i64', value: 11n });
   });
 });

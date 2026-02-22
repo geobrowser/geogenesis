@@ -1,135 +1,124 @@
-import { Schema } from 'effect';
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { Profile } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
-import { Proposal, ProposalDto } from '../dto/proposals';
-import { SubstreamProposal } from '../schema';
-import { fetchProfile } from './fetch-profile';
-import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment } from './fragments';
-import { graphql } from './graphql';
-
-export const getFetchProposalQuery = (id: string) => `query {
-  proposal(id: ${JSON.stringify(id)}) {
-    id
-    type
-    onchainProposalId
-
-    edit {
-      id
-      name
-      createdAt
-      createdAtBlock
-    }
-
-    startTime
-    endTime
-    status
-
-    proposalVotes {
-      totalCount
-      nodes {
-        vote
-        accountId
-      }
-    }
-
-    space {
-      id
-      ${spaceMetadataFragment}
-    }
-
-    createdById
-    startTime
-    endTime
-    status
-  }
-}`;
+import { Proposal } from '../dto/proposals';
+import {
+  ApiError,
+  restFetch,
+  ApiProposalStatusResponseSchema,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  convertVoteOption,
+  encodePathSegment,
+  type ApiProposalStatusResponse,
+} from '../rest';
+import { Address, SubstreamVote } from '../substream-schema';
+import { AbortError } from './errors';
+import { defaultProfile, fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
 
 export interface FetchProposalOptions {
   id: string;
   signal?: AbortController['signal'];
+  voterId?: string;
 }
 
-interface NetworkResult {
-  proposal: SubstreamProposal | null;
-}
-
+/**
+ * Fetch a single proposal by ID using the new REST API.
+ *
+ * Uses the REST endpoint: GET /proposals/:id/status
+ */
 export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
-  const queryId = uuid();
+  const config = Environment.getConfig();
+  const { id, signal, voterId } = options;
 
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query: getFetchProposalQuery(options.id),
-    signal: options?.signal,
-  });
+  // Build path with proper encoding
+  const encodedId = encodePathSegment(id);
+  const queryParams = voterId ? `?voterId=${encodeURIComponent(voterId)}` : '';
+  const path = `/proposals/${encodedId}/status${queryParams}`;
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const result = await Effect.runPromise(
+    Effect.either(
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
+        signal,
+      })
+    )
+  );
 
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
-
-            queryString: ${getFetchProposalQuery(options.id)}
-            `,
-            error.message
-          );
-
-          return {
-            proposal: null,
-          };
-        default:
-          console.error(`${error._tag}: Unable to fetch proposal, queryId: ${queryId} id: ${options.id}`);
-          return {
-            proposal: null,
-          };
-      }
+    if (error instanceof AbortError) {
+      throw error;
     }
 
-    return resultOrError.right;
-  });
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
-  const proposal = result.proposal;
-
-  if (!proposal) {
+    console.error(`Failed to fetch proposal ${id}:`, error);
     return null;
   }
 
-  const [profile, voterProfiles] = await Promise.all([
-    fetchProfile({ address: proposal.createdById }),
-    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.accountId)),
+  const decoded = Schema.decodeUnknownEither(ApiProposalStatusResponseSchema)(result.right);
+
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode proposal ${id}:`, decoded.left);
+    return null;
+  }
+
+  const apiProposal = decoded.right;
+
+  // Fetch profiles for the creator and voters
+  const voterIds = apiProposal.votes.voters.map(v => v.voterId);
+  const [creatorProfile, voterProfiles] = await Promise.all([
+    Effect.runPromise(fetchProfileBySpaceId(apiProposal.proposedBy)),
+    Effect.runPromise(fetchProfilesBySpaceIds(voterIds)),
   ]);
 
-  const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
+  // Determine proposal type from the first action
+  const firstAction = apiProposal.actions[0];
+  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
 
-  const decodedProposal = Either.match(proposalOrError, {
-    onLeft: error => {
-      console.error(`Unable to decode proposal ${proposal.id} with error ${error}`);
-      return null;
-    },
-    onRight: proposal => {
-      return proposal;
-    },
+  // Convert votes to internal format
+  const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
+    vote: convertVoteOption(v.vote),
+    accountId: Address(v.voterId),
+  }));
+
+  // Build voter profiles map
+  const votesWithProfiles = votes.map((v, i) => {
+    const maybeProfile = voterProfiles[i];
+    const voter = maybeProfile ?? defaultProfile(v.accountId, v.accountId);
+    return { ...v, voter };
   });
 
-  if (decodedProposal === null) {
-    return null;
-  }
+  const profile: Profile = creatorProfile ?? defaultProfile(apiProposal.proposedBy, apiProposal.proposedBy);
 
-  return ProposalDto(proposal, profile, voterProfiles);
+  return {
+    id: apiProposal.proposalId,
+    editId: '',
+    name: apiProposal.name,
+    type: proposalType,
+    createdAt: 0,
+    createdAtBlock: '0',
+    startTime: apiProposal.timing.startTime,
+    endTime: apiProposal.timing.endTime,
+    status: mapProposalStatus(apiProposal.status),
+    canExecute: apiProposal.canExecute,
+    space: {
+      id: apiProposal.spaceId,
+      name: null,
+      image: '',
+    },
+    createdBy: profile,
+    proposalVotes: {
+      totalCount: apiProposal.votes.total,
+      nodes: votesWithProfiles,
+    },
+  };
 }

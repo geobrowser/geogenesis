@@ -1,4 +1,4 @@
-import { DataType, Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, Relation, Value } from '../types';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
@@ -8,6 +8,8 @@ const RELATION_CREATED = 'relations:created' as const;
 const RELATION_DELETED = 'relations:deleted' as const;
 const ENTITIES_SYNCED = 'entities:synced' as const;
 const DATA_TYPE_CREATED = 'datatype:created' as const;
+const LOCAL_CHANGES_CLEARED = 'local-changes:cleared' as const;
+const CHANGES_PUBLISHED = 'changes:published' as const;
 const HYDRATE = 'hydrate' as const;
 
 export type GeoEvent =
@@ -56,6 +58,15 @@ export type GeoEvent =
         id: string;
         dataType: DataType;
       };
+    }
+  | {
+      type: typeof LOCAL_CHANGES_CLEARED;
+      spaceId: string;
+    }
+  | {
+      type: typeof CHANGES_PUBLISHED;
+      valueIds: string[];
+      relationIds: string[];
     };
 
 // Extract event types that match a specific 'type' value
@@ -83,6 +94,8 @@ export class GeoEventStream {
   static RELATION_DELETED = RELATION_DELETED;
   static DATA_TYPE_CREATED = DATA_TYPE_CREATED;
   static ENTITIES_SYNCED = ENTITIES_SYNCED;
+  static LOCAL_CHANGES_CLEARED = LOCAL_CHANGES_CLEARED;
+  static CHANGES_PUBLISHED = CHANGES_PUBLISHED;
   static HYDRATE = HYDRATE;
 
   private listeners: Record<string, Array<(event: GeoEvent) => void>> = {};

@@ -1,7 +1,6 @@
 import { usePrivy } from '@geogenesis/auth';
 
-import { useGeoProfile } from './use-geo-profile';
-import { useSmartAccount } from './use-smart-account';
+import { usePersonalSpaceId } from './use-personal-space-id';
 
 /**
  * Temporarily hide some elements in the interface until we open up for GA.
@@ -11,12 +10,10 @@ import { useSmartAccount } from './use-smart-account';
  * user interface into the knowledge graph.
  */
 export function useOnboardGuard() {
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
   const { user } = usePrivy();
-  const { profile } = useGeoProfile(address);
+  const { isRegistered } = usePersonalSpaceId();
 
   return {
-    shouldShowElement: Boolean(profile?.profileLink && user),
+    shouldShowElement: Boolean(isRegistered && user),
   };
 }

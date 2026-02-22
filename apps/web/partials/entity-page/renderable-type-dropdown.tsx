@@ -1,46 +1,24 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
 import * as React from 'react';
 import { useState } from 'react';
 
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
 
-import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
-import { Date } from '~/design-system/icons/date';
-import { PdfFile } from '~/design-system/icons/file-pdf';
-import { GeoLocation } from '~/design-system/icons/geo-location';
-import { Image } from '~/design-system/icons/image';
-import { Number } from '~/design-system/icons/number';
-import { Relation } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
-import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
+import { TypeIconComponent, TYPE_ICONS } from './type-icons';
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
   baseDataType?: string;
 }
-
-const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
-  TIME: Date,
-  TEXT: Text,
-  URL: Url,
-  RELATION: Relation,
-  IMAGE: Image,
-  VIDEO: VideoSmall,
-  CHECKBOX: CheckboxChecked,
-  NUMBER: Number,
-  POINT: GeoLocation,
-  GEO_LOCATION: GeoLocation,
-  PLACE: GeoLocation,
-  PDF: PdfFile,
-};
 
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
@@ -64,15 +42,15 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     onClick: (value: SwitchableRenderableType) => {
       onChange?.(value);
     },
-    Icon: icons[key],
+    Icon: TYPE_ICONS[key],
   }));
 
-  let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName }>;
+  let Icon = DashedCircle as TypeIconComponent;
   if (value) {
-    Icon = icons[value];
+    Icon = TYPE_ICONS[value];
   }
 
-  let label = 'Set renderable type';
+  let label = 'Set property type';
   if (value) {
     label = SWITCHABLE_RENDERABLE_TYPE_LABELS[value];
   }
@@ -81,17 +59,17 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
-          className={`flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
+          className={`flex items-center gap-[6px] leading-4 rounded-[6px] border px-1.5 py-[3px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
         >
-          <Icon color={open ? 'text' : 'grey-04'} />
+          <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}
           <div className={`${open ? '-rotate-180' : ''} transition-transform duration-300 ease-in-out`}>
-            <ChevronDownSmall />
+            <ChevronDown />
           </div>
         </button>
       </DropdownPrimitive.Trigger>
       <DropdownPrimitive.Content
-        align="end"
+        align="start"
         sideOffset={4}
         collisionPadding={10}
         avoidCollisions={true}

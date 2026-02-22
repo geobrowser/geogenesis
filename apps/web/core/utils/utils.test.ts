@@ -1,8 +1,11 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
+import { Value } from '../types';
+import { useImageUrlFromEntity } from './use-entity-media';
 import {
   GeoDate,
   GeoNumber,
@@ -12,7 +15,7 @@ import {
   getImagePath,
   getOpenGraphImageUrl,
   getPaginationPages,
-  useImageUrlFromEntity,
+  validateSpaceId,
 } from './utils';
 
 describe('GeoNumber', () => {
@@ -153,6 +156,70 @@ describe('GeoDate', () => {
     expect(GeoDate.isDateInterval('2023-01-01T12:00:00.000Z')).toBe(false);
     expect(GeoDate.isDateInterval('')).toBe(false);
     expect(GeoDate.isDateInterval(undefined)).toBe(false);
+  });
+
+  describe('toFullISOString', () => {
+    it('returns a full ISO string unchanged', () => {
+      expect(GeoDate.toFullISOString('2024-01-15T14:30:00.000Z')).toBe('2024-01-15T14:30:00.000Z');
+    });
+
+    it('converts date-only (YYYY-MM-DD) to full ISO string', () => {
+      expect(GeoDate.toFullISOString('2024-01-15')).toBe('2024-01-15T00:00:00.000Z');
+    });
+
+    it('converts time-only (HH:MM:SSZ) to full ISO string with epoch date', () => {
+      expect(GeoDate.toFullISOString('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
+    });
+
+    it('converts time-only without Z suffix', () => {
+      expect(GeoDate.toFullISOString('09:15:30')).toBe('1970-01-01T09:15:30');
+    });
+
+    it('returns empty string for empty input', () => {
+      expect(GeoDate.toFullISOString('')).toBe('');
+    });
+  });
+
+  describe('fromISOStringUTC with RFC 3339 inputs', () => {
+    it('parses a date-only string', () => {
+      expect(GeoDate.fromISOStringUTC('2024-07-04')).toEqual({
+        day: '4',
+        month: '7',
+        year: '2024',
+        hour: '12',
+        minute: '0',
+        meridiem: 'am',
+      });
+    });
+
+    it('parses a time-only string', () => {
+      expect(GeoDate.fromISOStringUTC('14:30:00Z')).toEqual({
+        day: '1',
+        month: '1',
+        year: '1970',
+        hour: '2',
+        minute: '30',
+        meridiem: 'pm',
+      });
+    });
+  });
+
+  describe('format with RFC 3339 inputs', () => {
+    it('formats a date-only string', () => {
+      const result = GeoDate.format('2024-07-04', 'yyyy-MM-dd');
+      expect(result).toBe('2024-07-04');
+    });
+
+    it('formats a time-only string', () => {
+      const result = GeoDate.format('14:30:00Z', 'HH:mm');
+      expect(result).toBe('14:30');
+    });
+
+    it('formats a date-only interval', () => {
+      const interval = '2024-01-15/2024-01-20';
+      const result = GeoDate.format(interval, 'yyyy-MM-dd');
+      expect(result).toBe('2024-01-15 — 2024-01-20');
+    });
   });
 
   describe('format', () => {
@@ -351,9 +418,21 @@ describe('useImageUrlFromEntity', () => {
   });
 
   it('should return the first IPFS URL when found', () => {
-    const mockValues = [
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-other-value' },
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'ipfs://QmHash123' },
+    const mockValues: Value[] = [
+      {
+        id: 'value-1',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'some-other-value',
+      },
+      {
+        id: 'value-2',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-2', name: 'IPFS URL', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'ipfs://QmHash123',
+      },
     ];
 
     vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
@@ -364,9 +443,21 @@ describe('useImageUrlFromEntity', () => {
   });
 
   it('should return undefined when values exist but none are IPFS URLs', () => {
-    const mockValues = [
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-string-value' },
-      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 123 },
+    const mockValues: Value[] = [
+      {
+        id: 'value-1',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-1', name: 'Text', dataType: 'TEXT' },
+        spaceId: 'test-space',
+        value: 'some-string-value',
+      },
+      {
+        id: 'value-2',
+        entity: { id: 'image-123', name: 'Image Entity' },
+        property: { id: 'prop-2', name: 'Number', dataType: 'INTEGER' },
+        spaceId: 'test-space',
+        value: '123',
+      },
     ];
 
     vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
@@ -381,11 +472,68 @@ describe('useImageUrlFromEntity', () => {
 
     renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
 
-    const selector = mockUseValues.mock.calls[0][0].selector;
+    const selector = mockUseValues.mock.calls[0]?.[0]?.selector;
 
     // Test that selector filters correctly
-    expect(selector({ entity: { id: 'image-123' }, spaceId: 'test-space' })).toBe(true);
-    expect(selector({ entity: { id: 'wrong-id' }, spaceId: 'test-space' })).toBe(false);
-    expect(selector({ entity: { id: 'image-123' }, spaceId: 'wrong-space' })).toBe(false);
+    const matchingValue: Value = {
+      id: 'value-1',
+      entity: { id: 'image-123', name: 'Image Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'test-space',
+      value: 'test',
+    };
+    const wrongEntityValue: Value = {
+      id: 'value-2',
+      entity: { id: 'wrong-id', name: 'Wrong Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'test-space',
+      value: 'test',
+    };
+    const wrongSpaceValue: Value = {
+      id: 'value-3',
+      entity: { id: 'image-123', name: 'Image Entity' },
+      property: { id: 'prop-1', name: 'URL', dataType: 'TEXT' },
+      spaceId: 'wrong-space',
+      value: 'test',
+    };
+
+    expect(selector?.(matchingValue)).toBe(true);
+    expect(selector?.(wrongEntityValue)).toBe(false);
+    expect(selector?.(wrongSpaceValue)).toBe(false);
+  });
+});
+
+describe('validateSpaceId', () => {
+  it('returns true for valid space IDs (32 hex chars)', () => {
+    const validSpaceId = IdUtils.generate();
+    expect(validateSpaceId(validSpaceId)).toBe(true);
+  });
+
+  it('returns false for null', () => {
+    expect(validateSpaceId(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(validateSpaceId(undefined)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(validateSpaceId('')).toBe(false);
+  });
+
+  it('returns false for strings with wrong length', () => {
+    expect(validateSpaceId('abc123')).toBe(false);
+    expect(validateSpaceId('a'.repeat(31))).toBe(false);
+    expect(validateSpaceId('a'.repeat(33))).toBe(false);
+  });
+
+  it('returns false for strings with 0x prefix', () => {
+    const validSpaceId = IdUtils.generate();
+    expect(validateSpaceId(`0x${validSpaceId}`)).toBe(false);
+  });
+
+  it('returns false for non-hex characters', () => {
+    expect(validateSpaceId('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(false);
+    expect(validateSpaceId('GHIJKLMNOPQRSTUVWXYZ123456789012')).toBe(false);
   });
 });

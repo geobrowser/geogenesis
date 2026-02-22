@@ -1,11 +1,11 @@
-import { ContentIds, Graph, Id, Op, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Graph, Id, Op, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { ID } from '~/core/id';
-import { getEntity } from '~/core/io/v2/queries';
+import { getEntity } from '~/core/io/queries';
+import { Relation } from '~/core/types';
 import { Ops } from '~/core/utils/ops';
-import { Relation } from '~/core/v2.types';
 
 type Options = {
   oldEntityId: string;
@@ -58,7 +58,7 @@ export const cloneEntity = async (
         entity: newEntityId,
         value: {
           property: SystemIds.NAME_PROPERTY,
-          value: newEntityName,
+          value: { type: 'text', value: newEntityName },
         },
       })
     );
@@ -85,7 +85,7 @@ export const cloneEntity = async (
         entity: newEntityId,
         value: {
           property: Id(triple.property.id),
-          value: tripleValue,
+          value: { type: 'text', value: tripleValue },
         },
       })
     );

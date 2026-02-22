@@ -2,6 +2,7 @@
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+import { RemoveScroll } from 'react-remove-scroll';
 
 import * as React from 'react';
 
@@ -30,9 +31,9 @@ export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
           animate="visible"
           exit="hidden"
           transition={transition}
-          className={cx('fixed inset-0 z-100 h-full w-full bg-white', !isOpen && 'pointer-events-none')}
+          className={cx('fixed inset-0 z-[10000] h-full w-full overflow-hidden bg-white', !isOpen && 'pointer-events-none')}
         >
-          {children}
+          <RemoveScroll className="h-full w-full">{children}</RemoveScroll>
         </motion.div>
       )}
     </AnimatePresence>

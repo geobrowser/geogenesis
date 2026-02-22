@@ -1,4 +1,6 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { Effect } from 'effect';
@@ -14,7 +16,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { getProperties } from '~/core/io/v2/queries';
+import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -153,7 +155,7 @@ function DefaultPropertySelector() {
     queryKey: ['available-columns', filterState],
     queryFn: async () => {
       const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value)
+        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }))
       );
 
       return schema;

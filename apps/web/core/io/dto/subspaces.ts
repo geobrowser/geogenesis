@@ -1,11 +1,11 @@
-import { SpaceEntity } from '~/core/v2.types';
+import { SpaceEntity } from '~/core/types';
 
-import { Address, SpaceId, SubstreamSubspace } from '../schema';
+import { Address, SpaceId, SubstreamSubspace } from '../substream-schema';
 import { SpaceEntityDto } from './spaces';
 
 export type Subspace = {
   id: SpaceId;
-  daoAddress: Address;
+  address: Address;
   totalEditors: number;
   totalMembers: number;
   spaceConfig: SpaceEntity;
@@ -17,7 +17,7 @@ export function SubspaceDto(subspace: SubstreamSubspace) {
 
   return {
     id: subspace.id,
-    daoAddress: subspace.daoAddress,
+    address: subspace.daoAddress,
     totalEditors: subspace.spaceEditors.totalCount,
     totalMembers: subspace.spaceMembers.totalCount,
     spaceConfig: spaceConfigWithImage,

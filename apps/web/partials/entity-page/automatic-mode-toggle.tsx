@@ -1,9 +1,9 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
@@ -16,13 +16,20 @@ export const AutomaticModeToggle = () => {
 
   const { editable, setEditable } = useEditable();
   const { storage } = useMutate();
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
     const shouldStartInEditMode = searchParams?.get('edit') === 'true';
     const newEntityName = searchParams?.get('entityName');
     const entityType = searchParams?.get('type');
 
-    if (editable || !shouldStartInEditMode) return;
+    if (!shouldStartInEditMode) {
+      hasProcessedRef.current = false;
+      return;
+    }
+
+    if (hasProcessedRef.current) return;
+    hasProcessedRef.current = true;
 
     const spaceId = params?.['id'] as string | undefined;
     const entityId = params?.['entityId'] as string | undefined;
@@ -35,7 +42,10 @@ export const AutomaticModeToggle = () => {
       const newSearchString = newSearchParams.toString();
       const queryString = newSearchString ? `?${newSearchString}` : '';
       window.history.replaceState(null, '', `${pathname}${queryString}`);
-      setEditable(true);
+
+      if (!editable) {
+        setEditable(true);
+      }
 
       if (spaceId && entityId && newEntityName) {
         storage.values.set({
@@ -63,7 +73,7 @@ export const AutomaticModeToggle = () => {
         storage.properties.create({
           entityId,
           spaceId,
-          name: newEntityName || 'New Property',
+          name: newEntityName || '',
           dataType: 'TEXT',
           renderableTypeId: null,
         });

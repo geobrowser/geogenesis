@@ -19,7 +19,7 @@ export async function SpaceMembersContent({ spaceId, isPublicSpace }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   // For now we use editors for both editors and members until we have the new membership
-  const [{ allMembers, totalMembers, votingPluginAddress }, isEditor, hasRequestedSpaceMembership] = await Promise.all([
+  const [{ allMembers, totalMembers }, isEditor, hasRequestedSpaceMembership] = await Promise.all([
     getMembersForSpace(spaceId),
     getIsMemberForSpace(spaceId, connectedAddress),
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
@@ -46,7 +46,7 @@ export async function SpaceMembersContent({ spaceId, isPublicSpace }: Props) {
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
                 {connectedAddress ? (
                   <SpaceMembersPopoverMemberRequestButton
-                    votingPluginAddress={votingPluginAddress}
+                    spaceId={spaceId}
                     hasRequestedSpaceMembership={hasRequestedSpaceMembership}
                   />
                 ) : (

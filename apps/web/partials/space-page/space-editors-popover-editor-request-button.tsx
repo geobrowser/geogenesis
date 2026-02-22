@@ -6,17 +6,17 @@ import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 import { Pending } from '~/design-system/pending';
 
 type SpaceEditorsPopoverEditorRequestButtonProps = {
-  votingContractAddress: string | null;
+  spaceId: string;
   isMember: boolean;
   hasRequestedSpaceEditorship: boolean;
 };
 
 export function SpaceEditorsPopoverEditorRequestButton({
-  votingContractAddress,
+  spaceId,
   isMember,
   hasRequestedSpaceEditorship,
 }: SpaceEditorsPopoverEditorRequestButtonProps) {
-  const { requestToBeEditor, status } = useRequestToBeEditor(votingContractAddress);
+  const { requestToBeEditor, status } = useRequestToBeEditor({ spaceId });
 
   const { shouldShowElement } = useOnboardGuard();
 
@@ -27,7 +27,7 @@ export function SpaceEditorsPopoverEditorRequestButton({
   return (
     <Pending isPending={status === 'pending'} position="end">
       {!hasRequestedSpaceEditorship ? (
-        <button disabled={status !== 'idle'} onClick={() => requestToBeEditor()}>
+        <button type="button" disabled={!isMember || status !== 'idle'} onClick={() => requestToBeEditor()}>
           <RequestButtonText status={status} isMember={isMember} />
         </button>
       ) : (

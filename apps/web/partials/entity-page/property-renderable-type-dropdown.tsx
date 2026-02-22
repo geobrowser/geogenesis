@@ -1,45 +1,23 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
 import * as React from 'react';
 import { Dispatch, SetStateAction, useState } from 'react';
 
-import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
-import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
-import { Date } from '~/design-system/icons/date';
-import { PdfFile } from '~/design-system/icons/file-pdf';
-import { GeoLocation } from '~/design-system/icons/geo-location';
-import { Image } from '~/design-system/icons/image';
-import { Number } from '~/design-system/icons/number';
-import { Relation } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
-import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
+import { TypeIconComponent, TYPE_ICONS } from './type-icons';
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
   dataType?: string;
 }
-
-const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
-  TIME: Date,
-  TEXT: Text,
-  URL: Url,
-  RELATION: Relation,
-  IMAGE: Image,
-  VIDEO: VideoSmall,
-  CHECKBOX: CheckboxChecked,
-  NUMBER: Number,
-  POINT: GeoLocation,
-  GEO_LOCATION: GeoLocation,
-  PLACE: GeoLocation,
-  PDF: PdfFile,
-};
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
   const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);
@@ -52,7 +30,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       return [];
     }
 
-    // Based on the dataType, determine which renderable types are valid
+    // Based on the GRC-20 v2 dataType, determine which renderable types are valid
     switch (dataType) {
       case 'TEXT':
         // TEXT dataType can be rendered as TEXT, URL, or GEO_LOCATION
@@ -60,10 +38,18 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       case 'RELATION':
         // RELATION dataType can be rendered as RELATION, IMAGE, or VIDEO
         return ['RELATION', 'IMAGE', 'VIDEO'] as SwitchableRenderableType[];
-      case 'NUMBER':
-        return ['NUMBER'] as SwitchableRenderableType[];
-      case 'CHECKBOX':
-        return ['CHECKBOX'] as SwitchableRenderableType[];
+      case 'INTEGER':
+        return ['INTEGER'] as SwitchableRenderableType[];
+      case 'FLOAT':
+        return ['FLOAT'] as SwitchableRenderableType[];
+      case 'DECIMAL':
+        return ['DECIMAL'] as SwitchableRenderableType[];
+      case 'BOOLEAN':
+        return ['BOOLEAN'] as SwitchableRenderableType[];
+      case 'DATE':
+        return ['DATE'] as SwitchableRenderableType[];
+      case 'DATETIME':
+        return ['DATETIME'] as SwitchableRenderableType[];
       case 'TIME':
         return ['TIME'] as SwitchableRenderableType[];
       case 'POINT':
@@ -83,12 +69,12 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
     ) => {
       setSelectedValue(value);
     },
-    Icon: icons[key],
+    Icon: TYPE_ICONS[key],
   }));
 
-  let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName }>;
+  let Icon = DashedCircle as TypeIconComponent;
   if (selectedValue) {
-    Icon = icons[selectedValue];
+    Icon = TYPE_ICONS[selectedValue];
   }
 
   let label = 'Set renderable type';

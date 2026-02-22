@@ -1,12 +1,12 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
-import { Entity, Relation } from '~/core/v2.types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
@@ -83,13 +83,33 @@ export function useView() {
         return;
       }
 
-      storage.relations.update(viewRelation, draft => {
-        draft.toEntity = {
+      // Delete the existing view relation and create a new one rather than
+      // updating in place. GRC-20 createRelation ops don't overwrite existing
+      // relations with the same id, so reusing the id would be a no-op on the server.
+      storage.relations.delete(viewRelation);
+
+      const newRelation: Relation = {
+        id: IdUtils.generate(),
+        entityId: IdUtils.generate(),
+        spaceId: spaceId,
+        position: Position.generate(),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.VIEW_PROPERTY,
+          name: 'View',
+        },
+        fromEntity: {
+          id: newRelationId,
+          name: blockEntity?.name ?? null,
+        },
+        toEntity: {
           id: newView.id,
           name: newView.name,
           value: newView.id,
-        };
-      });
+        },
+      };
+
+      storage.relations.set(newRelation);
     }
   };
 

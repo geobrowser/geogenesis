@@ -1,4 +1,7 @@
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
 import { fetchProfile } from '../io/subgraph';
 import { Profile } from '../types';
@@ -18,9 +21,7 @@ export function useGeoProfile(account?: `0x${string}`): {
     queryFn: async () => {
       if (!account) return null;
 
-      return await fetchProfile({
-        address: account,
-      });
+      return await Effect.runPromise(fetchProfile(account));
     },
   });
 

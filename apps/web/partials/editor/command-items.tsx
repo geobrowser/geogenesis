@@ -1,12 +1,10 @@
-import { Graph } from '@graphprotocol/grc-20';
+import { Graph } from '@geoprotocol/geo-sdk';
 import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
 
-import { PDF_URL } from '~/core/constants';
-import { ID } from '~/core/id';
-import { storage } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
+import { extractValueString } from '~/core/utils/value';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -114,13 +112,14 @@ export const commandItems: CommandSuggestionItem[] = [
           network: 'TESTNET',
         });
 
-        // Extract the pdf URL from the ops - look for UPDATE_ENTITY with ipfs:// value
+        // Extract the pdf URL from the ops - look for createEntity with ipfs:// value
         let ipfsUrl: string | undefined;
         for (const op of ops) {
-          if (op.type === 'UPDATE_ENTITY') {
-            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find((v: any) => v.value.value.startsWith('ipfs://'));
+
             if (ipfsValue) {
-              ipfsUrl = ipfsValue.value;
+              ipfsUrl = extractValueString(ipfsValue.value);
               break;
             }
           }
@@ -148,39 +147,18 @@ export const commandItems: CommandSuggestionItem[] = [
   {
     icon: <EditorImage />,
     title: 'Image',
-    command: async ({ editor, range }) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/png, image/jpeg';
-      input.className = 'hidden';
-      input.onchange = async (e: any) => {
-        if (!e?.target?.files?.[0]) return;
-        const file = e.target.files[0];
-        // Use TESTNET network to upload to Pinata via alternative gateway
-        const { id, ops } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
-
-        // Extract the image URL from the ops - look for UPDATE_ENTITY with ipfs:// value
-        let ipfsUrl: string | undefined;
-        for (const op of ops) {
-          if (op.type === 'UPDATE_ENTITY') {
-            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
-            if (ipfsValue) {
-              ipfsUrl = ipfsValue.value;
-              break;
-            }
-          }
-        }
-
-        const src = ipfsUrl ? getImagePath(ipfsUrl) : '';
-
-        if (src) {
-          editor.chain().focus().deleteRange(range).setImage({ src }).run();
-        }
-      };
-      input.click();
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: range.from, to: range.to })
+        .insertContent({
+          type: 'image',
+        })
+        .createParagraphNear()
+        .blur()
+        .focus()
+        .run();
     },
   },
   {

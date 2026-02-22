@@ -1,41 +1,33 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
+import { SpaceEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { SpaceEntity } from '~/core/v2.types';
 
-import { type Address, RemoteEntity, RemoteSpace } from '../v2/v2.schema';
+import { type Address, RemoteEntity, RemoteSpace } from '../schema';
 import { EntityDtoLive } from './entities';
 
 export type Space = {
   id: string;
   type: SpaceGovernanceType;
   entity: SpaceEntity;
-  daoAddress: Address;
-  spaceAddress: Address;
-  mainVotingAddress: Address | null;
-  membershipAddress: Address | null;
-  personalAddress: Address | null;
+  address: Address;
 
+  // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
   members: string[];
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
-  const spaceEntity = SpaceEntityDto(space.id, space.page);
+  const spaceId = space.id;
+  const spaceEntity = SpaceEntityDto(spaceId, space.page);
 
   return {
-    id: space.id,
+    id: spaceId,
     type: space.type,
     entity: spaceEntity,
-
-    editors: space.editorsList.map(editor => editor.address),
-    members: space.membersList.map(member => member.address),
-
-    daoAddress: space.daoAddress,
-    mainVotingAddress: space.mainVotingAddress,
-    membershipAddress: space.membershipAddress,
-    personalAddress: space.personalAddress,
-    spaceAddress: space.spaceAddress,
+    address: space.address,
+    editors: space.editorsList.map(editor => editor.memberSpaceId),
+    members: space.membersList.map(member => member.memberSpaceId),
   };
 }
 
@@ -47,7 +39,7 @@ export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | nul
   if (maybeEntity) {
     entity = {
       ...maybeEntity,
-      // @TODO: Should be scoped to the space automatically by API
+      // Filter to space scope (API should do this automatically in future)
       values: maybeEntity.values.filter(triple => triple.spaceId === spaceId),
       relations: maybeEntity.relations.filter(relation => relation.spaceId === spaceId),
     };

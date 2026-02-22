@@ -1,10 +1,20 @@
-import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
-import { VIDEO_BLOCK_TYPE } from '~/core/constants';
-import { EntityId } from '~/core/io/schema';
-import { Relation } from '~/core/v2.types';
+import { EntityId } from '~/core/io/substream-schema';
+import { Relation } from '~/core/types';
 
-type BlockTypeId = typeof SystemIds.TEXT_BLOCK | typeof SystemIds.IMAGE_TYPE | typeof SystemIds.DATA_BLOCK | typeof VIDEO_BLOCK_TYPE;
+type BlockTypeId =
+  | typeof SystemIds.TEXT_BLOCK
+  | typeof SystemIds.IMAGE_TYPE
+  | typeof SystemIds.DATA_BLOCK
+  | typeof SystemIds.VIDEO_TYPE;
+
+const BLOCK_TYPE_NAMES: Record<BlockTypeId, string> = {
+  [SystemIds.TEXT_BLOCK]: 'Text Block',
+  [SystemIds.IMAGE_TYPE]: 'Image',
+  [SystemIds.DATA_BLOCK]: 'Data Block',
+  [SystemIds.VIDEO_TYPE]: 'Video',
+};
 
 export function getRelationForBlockType(
   fromBlockEntityId: string,
@@ -23,7 +33,7 @@ export function getRelationForBlockType(
     },
     toEntity: {
       id: EntityId(blockTypeId),
-      name: null,
+      name: BLOCK_TYPE_NAMES[blockTypeId],
       value: blockTypeId,
     },
     fromEntity: {

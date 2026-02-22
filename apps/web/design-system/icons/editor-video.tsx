@@ -9,12 +9,7 @@ export const EditorVideo = () => (
       stroke="black"
       strokeOpacity="0.2"
     />
-    <path
-      d="M6 5.5V10.5L11 8L6 5.5Z"
-      fill="#35363A"
-      stroke="#35363A"
-      strokeLinejoin="round"
-    />
+    <path d="M6 5.5V10.5L11 8L6 5.5Z" fill="#35363A" stroke="#35363A" strokeLinejoin="round" />
     <path
       d="M6 5.5V10.5L11 8L6 5.5Z"
       fill="black"

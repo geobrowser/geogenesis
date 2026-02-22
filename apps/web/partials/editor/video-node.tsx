@@ -1,28 +1,35 @@
 'use client';
 
+import { Graph, SystemIds } from '@geoprotocol/geo-sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { Graph, SystemIds } from '@graphprotocol/grc-20';
 import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT, VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
+import {
+  MAX_VIDEO_SIZE_BYTES,
+  VALID_VIDEO_TYPES,
+  VIDEO_ACCEPT,
+} from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { getVideoPath } from '~/core/utils/utils';
+import { NavUtils, getVideoPath } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { Relation } from '~/design-system/icons/relation';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { VideoSmall } from '~/design-system/icons/video-small';
 import { MenuItem } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 export const VideoNode = Node.create({
   name: 'video',
@@ -64,10 +71,14 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
+  const { blockRelations } = useEditorStore();
+  const relation = blockRelations.find(b => b.block.id === id);
+  const relationEntityId = relation?.entityId ?? '';
+
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="video-node my-4">
-        <VideoNodeChildren spaceId={spaceId} entityId={id} onRemove={deleteNode} />
+      <div contentEditable="false" suppressContentEditableWarning className="video-node my-4">
+        <VideoNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
   );
@@ -82,10 +93,12 @@ function formatFileSize(bytes: number): string {
 function VideoNodeChildren({
   spaceId,
   entityId,
+  relationEntityId,
   onRemove,
 }: {
   spaceId: string;
   entityId: string;
+  relationEntityId: string;
   onRemove: () => void;
 }) {
   // Hydrate the video block entity from remote to populate the reactive store
@@ -110,16 +123,16 @@ function VideoNodeChildren({
 
   // Read the video URL from the store
   const videoUrlValues = useValues({
-    selector: v => v.entity.id === entityId && v.property.id === VIDEO_URL_PROPERTY && v.spaceId === spaceId,
+    selector: v => v.entity.id === entityId && v.property.id === SystemIds.IMAGE_URL_PROPERTY && v.spaceId === spaceId,
   });
   const storedVideoUrl = videoUrlValues?.[0]?.value ?? '';
 
-  // Read the Types relation (to VIDEO_BLOCK_TYPE) for deletion
+  // Read the Types relation (to VIDEO_TYPE) for deletion
   const typeRelations = useRelations({
     selector: r =>
       r.fromEntity.id === entityId &&
       r.type.id === SystemIds.TYPES_PROPERTY &&
-      r.toEntity.id === VIDEO_BLOCK_TYPE &&
+      r.toEntity.id === SystemIds.VIDEO_TYPE &&
       r.spaceId === spaceId,
   });
 
@@ -195,28 +208,33 @@ function VideoNodeChildren({
 
       setUploadProgress(100);
 
-      // Extract the IPFS URL from the ops
+      // Extract the IPFS URL from the ops (new SDK format)
       let ipfsUrl: string | undefined;
       for (const op of ops) {
-        if (op.type === 'UPDATE_ENTITY') {
-          const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+        if (op.type === 'createEntity') {
+          // Type assertion for new SDK format
+          const values = (op as unknown as { values: Array<{ value: { type: string; value?: string } }> }).values;
+          const ipfsValue = values?.find(pv => {
+            const val = pv.value?.value;
+            return typeof val === 'string' && val.startsWith('ipfs://');
+          });
           if (ipfsValue) {
-            ipfsUrl = ipfsValue.value;
+            ipfsUrl = ipfsValue.value?.value;
             break;
           }
         }
       }
 
       if (ipfsUrl) {
-        // Save the video URL to the store
+        // Save the video URL to the store using the unified IPFS URL property
         storage.values.set({
           id: ID.createValueId({
             entityId,
-            propertyId: VIDEO_URL_PROPERTY,
+            propertyId: SystemIds.IMAGE_URL_PROPERTY,
             spaceId,
           }),
           entity: { id: entityId, name: null },
-          property: { id: VIDEO_URL_PROPERTY, name: 'Video URL', dataType: 'TEXT' },
+          property: { id: SystemIds.IMAGE_URL_PROPERTY, name: 'IPFS URL', dataType: 'TEXT' },
           spaceId,
           value: ipfsUrl,
         });
@@ -308,7 +326,7 @@ function VideoNodeChildren({
       storage.values.delete(nameValue);
     }
 
-    // Delete the Types relation (VIDEO_BLOCK_TYPE)
+    // Delete the Types relation (VIDEO_TYPE)
     const typeRelation = typeRelations?.[0];
     if (typeRelation) {
       storage.relations.delete(typeRelation);
@@ -345,6 +363,17 @@ function VideoNodeChildren({
               className="z-[1001] block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
               align="end"
             >
+              {isEditing && relationEntityId && (
+                <MenuItem>
+                  <Link
+                    href={NavUtils.toEntity(spaceId, relationEntityId)}
+                    className="flex w-full items-center justify-between gap-2"
+                  >
+                    <span>View block relation</span>
+                    <Relation />
+                  </Link>
+                </MenuItem>
+              )}
               <MenuItem onClick={onCopyBlockId}>
                 <span className="flex w-full items-center justify-between">
                   <span>Copy block ID</span>
@@ -379,13 +408,7 @@ function VideoNodeChildren({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={VIDEO_ACCEPT}
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept={VIDEO_ACCEPT} onChange={handleFileSelect} className="hidden" />
 
           {isUploading ? (
             <div className="flex w-full max-w-md flex-col items-center">
@@ -411,14 +434,20 @@ function VideoNodeChildren({
             </div>
           ) : isDragging ? (
             <div className="flex flex-col items-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
+              <div
+                className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
+                style={{ backgroundColor: '#002FD924' }}
+              >
                 <VideoSmall color="#002FD9" />
               </div>
               <p className="text-lg font-medium text-ctaPrimary">Drop video here</p>
             </div>
           ) : (
             <>
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
+              <div
+                className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg"
+                style={{ backgroundColor: '#002FD924' }}
+              >
                 <VideoSmall color="#002FD9" />
               </div>
               <p
@@ -427,10 +456,7 @@ function VideoNodeChildren({
               >
                 Drag & drop or select a file
               </p>
-              <p
-                className="mb-4 text-grey-04"
-                style={{ fontSize: '14px', lineHeight: '12px', letterSpacing: '0px' }}
-              >
+              <p className="mb-4 text-grey-04" style={{ fontSize: '14px', lineHeight: '12px', letterSpacing: '0px' }}>
                 Max 100mb · MP4, MOV, AVI, WMV, WebM, or FLV
               </p>
               <button
@@ -440,7 +466,7 @@ function VideoNodeChildren({
                 <Upload />
                 Select file
               </button>
-              {uploadError && <p className="mt-4 text-sm text-red-500">{uploadError}</p>}
+              {uploadError && <p className="text-red-500 mt-4 text-sm">{uploadError}</p>}
             </>
           )}
         </div>

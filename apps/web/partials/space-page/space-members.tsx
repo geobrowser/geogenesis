@@ -29,9 +29,13 @@ export async function SpaceMembers({ spaceId }: Props) {
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
 
-  const isPublicSpace = space?.type === 'PUBLIC';
+  const isPublicSpace = space?.type === 'DAO';
 
   if (!space) {
+    return null;
+  }
+
+  if (space.type === 'PERSONAL') {
     return null;
   }
 
@@ -50,11 +54,7 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersMenu
           manageMembersComponent={
             <React.Suspense>
-              <SpaceMembersDialogServerContainer
-                spaceType={space.type}
-                spaceId={spaceId}
-                votingPluginAddress={space.type === 'PERSONAL' ? space.personalAddress : space.mainVotingAddress}
-              />
+              <SpaceMembersDialogServerContainer spaceType={space.type} spaceId={spaceId} />
             </React.Suspense>
           }
           trigger={<ChevronDownSmall color="grey-04" />}
@@ -75,11 +75,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
 
       {isPublicSpace ? (
-        <SpaceMembersJoinButton
-          spaceId={spaceId}
-          votingPluginAddress={space.mainVotingAddress}
-          hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-        />
+        <SpaceMembersJoinButton spaceId={spaceId} hasRequestedSpaceMembership={hasRequestedSpaceMembership} />
       ) : null}
     </div>
   );

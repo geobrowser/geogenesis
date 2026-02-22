@@ -1,8 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { JSONContent } from '@tiptap/core';
 
 import { ID } from '~/core/id';
-import { Value } from '~/core/v2.types';
+import { Value } from '~/core/types';
 
 import * as Parser from './parser';
 import { getNodeId, getTextNodeHtml } from './utils';
