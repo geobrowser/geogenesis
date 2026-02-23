@@ -69,7 +69,11 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
     return redirect(NavUtils.toEntity(deterministicSpaceId, entityId));
   }
 
-  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && !preventRedirect && deterministicSpaceId) {
+  if (
+    person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) &&
+    !preventRedirect &&
+    deterministicSpaceId
+  ) {
     console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
     return redirect(NavUtils.toSpace(deterministicSpaceId));
   }

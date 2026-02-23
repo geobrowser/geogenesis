@@ -113,7 +113,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   //               value={proposalName}
   //               onChange={({ currentTarget: { value } }) => setProposalName(value)}
   //               placeholder="Name your proposal..."
-  //               className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+  //               className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-hidden"
   //             />
   //           </div>
   //           <div className="flex gap-10">
@@ -164,7 +164,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   //                 <NewEntity key={entityId} change={changes[entityId]} />
   //               ))} */}
   //             </div>
-  //             <div className="absolute bottom-0 left-0 right-0 z-10 h-1/2 bg-gradient-to-b from-transparent via-bg/75 to-bg"></div>
+  //             <div className="absolute bottom-0 left-0 right-0 z-10 h-1/2 bg-linear-to-b from-transparent via-bg/75 to-bg"></div>
   //             <div className="absolute bottom-16 left-0 right-0 z-20">
   //               <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-grey-01 p-5 text-bodySemibold">
   //                 <span>

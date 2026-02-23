@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
+
 import { useMemo } from 'react';
 
 import { DATA_TYPE_PROPERTY } from '../constants';
@@ -232,9 +233,7 @@ export async function getSchemaFromTypeIdsAndRelations(
   const relationProperties = await Effect.runPromise(getProperties(relationTypeIds));
 
   // Find which relation types have isType=true
-  const isTypePropertyIds = new Set(
-    relationProperties.filter(p => p.isType).map(p => p.id)
-  );
+  const isTypePropertyIds = new Set(relationProperties.filter(p => p.isType).map(p => p.id));
 
   if (isTypePropertyIds.size === 0) return baseSchema;
 

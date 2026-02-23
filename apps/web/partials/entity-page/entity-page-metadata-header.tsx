@@ -7,8 +7,8 @@ import * as React from 'react';
 import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
-  DEFAULT_DATE_FORMAT,
   DEFAULT_DATETIME_FORMAT,
+  DEFAULT_DATE_FORMAT,
   DEFAULT_FLOAT_FORMAT,
   DEFAULT_NUMBER_FORMAT,
   DEFAULT_TIME_FORMAT,
@@ -120,7 +120,11 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       const isNumericType = newType === 'INTEGER' || isFloatType;
       const isTextOrUrlType = newType === 'TEXT' || newType === 'URL';
       const temporalDefaultFormat =
-        newType === 'DATETIME' ? DEFAULT_DATETIME_FORMAT : newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_DATE_FORMAT;
+        newType === 'DATETIME'
+          ? DEFAULT_DATETIME_FORMAT
+          : newType === 'TIME'
+            ? DEFAULT_TIME_FORMAT
+            : DEFAULT_DATE_FORMAT;
       const numericDefaultFormat = isFloatType ? DEFAULT_FLOAT_FORMAT : DEFAULT_NUMBER_FORMAT;
       if (isTemporalType || isNumericType) {
         addPropertyToEntity({

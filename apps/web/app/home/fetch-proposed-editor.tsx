@@ -1,7 +1,7 @@
 import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { restFetch, ApiProposalStatusResponseSchema, encodePathSegment } from '~/core/io/rest';
+import { ApiProposalStatusResponseSchema, encodePathSegment, restFetch } from '~/core/io/rest';
 import { defaultProfile, fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { Profile } from '~/core/types';
 

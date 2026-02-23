@@ -204,12 +204,7 @@ const makeBlocksRelations = async ({
   }
 };
 
-function deleteBlockEntityData(
-  blockId: string,
-  spaceId: string,
-  initialValues: Value[],
-  initialRelations: Relation[]
-) {
+function deleteBlockEntityData(blockId: string, spaceId: string, initialValues: Value[], initialRelations: Relation[]) {
   const blockValues = getValues({
     mergeWith: initialValues,
     selector: v => v.entity.id === blockId && v.spaceId === spaceId,

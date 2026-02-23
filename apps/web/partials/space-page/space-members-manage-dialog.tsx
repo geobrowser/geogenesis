@@ -25,9 +25,9 @@ export function SpaceMembersManageDialog(props: Props) {
       </Trigger>
 
       <Portal>
-        <Overlay className="fixed inset-0 z-100 bg-text bg-opacity-20" />
+        <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
-        <Content className="fixed inset-0 top-[25%] z-100 mx-auto h-[415px] max-w-[586px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none">
+        <Content className="fixed inset-0 top-[25%] z-100 mx-auto h-[415px] max-w-[586px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-hidden">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <div className="flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between">

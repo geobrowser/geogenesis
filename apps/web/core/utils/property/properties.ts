@@ -12,14 +12,7 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import {
-  DataType,
-  Entity,
-  Property,
-  Relation,
-  SwitchableRenderableType,
-  Value,
-} from '~/core/types';
+import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 
 /** Reverse mapping: data type entity ID → DataType string */
 const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(

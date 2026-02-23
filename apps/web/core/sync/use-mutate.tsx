@@ -169,9 +169,7 @@ function createMutator(store: GeoStore): Mutator {
         // Create the data type relation (every property gets an explicit Data Type relation).
         const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[dataType];
         if (dataTypeEntityId) {
-          const hasDataTypeRelation = existingRelations.some(
-            r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
-          );
+          const hasDataTypeRelation = existingRelations.some(r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted);
 
           if (!hasDataTypeRelation) {
             store.setRelation({
@@ -205,10 +203,7 @@ function createMutator(store: GeoStore): Mutator {
         // we don't need to create the property type relation again
         if (!skipTypeRelation) {
           const hasTypesRelation = existingRelations.some(
-            r =>
-              r.type.id === SystemIds.TYPES_PROPERTY &&
-              r.toEntity.id === SystemIds.PROPERTY &&
-              !r.isDeleted
+            r => r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted
           );
 
           if (!hasTypesRelation) {

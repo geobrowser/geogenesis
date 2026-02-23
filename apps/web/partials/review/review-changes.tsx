@@ -3,6 +3,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 import { Effect } from 'effect';
+
 import * as React from 'react';
 
 import { useAutofocus } from '~/core/hooks/use-autofocus';
@@ -88,7 +89,16 @@ function hasVisibleChanges(entity: EntityDiff): boolean {
       (v.before !== null || v.after !== null)
   );
 
-  return hasName || hasBlocks || hasAvatarOrCover || hasTypes || hasImageRelations || hasVideoRelations || hasOtherRelations || hasValues;
+  return (
+    hasName ||
+    hasBlocks ||
+    hasAvatarOrCover ||
+    hasTypes ||
+    hasImageRelations ||
+    hasVideoRelations ||
+    hasOtherRelations ||
+    hasValues
+  );
 }
 
 type Proposals = Record<string, { name: string; description: string }>;
@@ -208,9 +218,7 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing
-          ? [{ key: 'Enter', callback: () => handleSubmit() }]
-          : [],
+        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
       [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
     )
   );
@@ -272,7 +280,7 @@ export const ReviewChanges = () => {
                     />
                   </div>
                 )}
-                <span className="text-metadataMedium font-semibold leading-none">
+                <span className="text-metadataMedium leading-none font-semibold">
                   {activeSpaceMetadata?.entity.name ?? activeSpace}
                 </span>
               </div>
@@ -294,9 +302,9 @@ export const ReviewChanges = () => {
                 value={rawProposalName}
                 onChange={e => handleProposalNameChange(e.target.value)}
                 placeholder="Name your proposal..."
-                className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-hidden"
               />
-              <div className="absolute right-4 top-4 xl:right-[2ch]">
+              <div className="absolute top-4 right-4 xl:right-[2ch]">
                 <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
               </div>
             </div>
@@ -446,7 +454,10 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
           <BlockChangeRow key={block.id} block={block} />
         ))}
 
-        {(filteredOtherValues.length > 0 || otherRelations.length > 0 || imageRelations.length > 0 || videoRelations.length > 0) && (
+        {(filteredOtherValues.length > 0 ||
+          otherRelations.length > 0 ||
+          imageRelations.length > 0 ||
+          videoRelations.length > 0) && (
           <div className="grid grid-cols-2 gap-20">
             {filteredOtherValues.some(v => v.before !== null) ||
             otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
@@ -565,7 +576,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
       <div>
         <div className="relative">
           {hasCoverChange && coverBeforeUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
+            <div className={cx('aspect-17/5 w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
               <NativeGeoImage value={coverBeforeUrl} alt="Cover" className="h-full w-full object-cover" />
             </div>
           )}
@@ -589,7 +600,7 @@ const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChang
       <div>
         <div className="relative">
           {hasCoverChange && resolvedCoverAfterUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
+            <div className={cx('aspect-17/5 w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
               <NativeGeoImage value={resolvedCoverAfterUrl} alt="Cover" className="h-full w-full object-cover" />
             </div>
           )}
@@ -624,8 +635,8 @@ type ImagePropertyCellProps = {
 const ImagePropertyCell = ({ typeName, typeId, relations, spaceId, side }: ImagePropertyCellProps) => {
   const url =
     side === 'before'
-      ? relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null
-      : relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
+      ? (relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null)
+      : (relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null);
 
   const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
   const localImageUrl = useImageUrlFromEntity(afterEntityId, spaceId);
@@ -658,8 +669,8 @@ type VideoPropertyCellProps = {
 const VideoPropertyCell = ({ typeName, typeId, relations, spaceId, side }: VideoPropertyCellProps) => {
   const url =
     side === 'before'
-      ? relations.find(r => r.before?.videoUrl)?.before?.videoUrl ?? null
-      : relations.find(r => r.after?.videoUrl)?.after?.videoUrl ?? null;
+      ? (relations.find(r => r.before?.videoUrl)?.before?.videoUrl ?? null)
+      : (relations.find(r => r.after?.videoUrl)?.after?.videoUrl ?? null);
 
   const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
   const localVideoUrl = useVideoUrlFromEntity(afterEntityId, spaceId);
@@ -700,7 +711,7 @@ const TypesChangeRow = ({ relations }: TypesChangeRowProps) => {
         {removedTypes.map((type, i) => (
           <div
             key={i}
-            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-deleted px-1.5 py-0.5 text-metadata tabular-nums text-text line-through decoration-1"
+            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-deleted px-1.5 py-0.5 text-metadata text-text tabular-nums line-through decoration-1"
           >
             {type.name ?? type.id}
           </div>
@@ -710,7 +721,7 @@ const TypesChangeRow = ({ relations }: TypesChangeRowProps) => {
         {addedTypes.map((type, i) => (
           <div
             key={i}
-            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-added px-1.5 py-0.5 text-metadata tabular-nums text-text"
+            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-added px-1.5 py-0.5 text-metadata text-text tabular-nums"
           >
             {type.name ?? type.id}
           </div>
@@ -1069,11 +1080,15 @@ const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
   const viewInfo = getViewInfo(viewRelations, side) ?? { name: 'Table', entityId: SystemIds.TABLE_VIEW };
   const filterValue = getFilterValue(configValues, side);
 
-  const hasViewChange = viewRelations.some(r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE');
+  const hasViewChange = viewRelations.some(
+    r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
+  );
   const hasFilterChange = configValues.some(v => v.before !== v.after);
   const isFilterAdded = configValues.some(v => v.before === null && v.after !== null);
   const isFilterRemoved = configValues.some(v => v.before !== null && v.after === null);
-  const hasColumnsChange = columnRelations.some(r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE');
+  const hasColumnsChange = columnRelations.some(
+    r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
+  );
   const isColumnsAdded = columnRelations.every(r => r.changeType === 'ADD') && columnRelations.length > 0;
   const isColumnsRemoved = columnRelations.every(r => r.changeType === 'REMOVE') && columnRelations.length > 0;
 
@@ -1097,7 +1112,10 @@ const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
         <div
           className={cx(
             'text-smallTitle font-semibold text-text',
-            hasNameChange && dataBlock.before !== dataBlock.after && side === 'before' && 'rounded bg-deleted line-through decoration-1',
+            hasNameChange &&
+              dataBlock.before !== dataBlock.after &&
+              side === 'before' &&
+              'rounded bg-deleted line-through decoration-1',
             hasNameChange && dataBlock.before !== dataBlock.after && side === 'after' && 'rounded bg-added'
           )}
         >
@@ -1106,51 +1124,47 @@ const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
 
         <div className="flex items-center gap-2">
           {/* Filter change indicator — only show on the relevant side */}
-          {hasFilterChange &&
-            !(isFilterAdded && side === 'before') &&
-            !(isFilterRemoved && side === 'after') && (
-              <Tooltip
-                trigger={
-                  <div
-                    className={cx(
-                      'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
-                      side === 'before' && 'ring-2 ring-deleted',
-                      side === 'after' && 'ring-2 ring-added'
-                    )}
-                  >
-                    <span className="text-metadata text-grey-04">
-                      {isFilterAdded ? 'Filter added' : isFilterRemoved ? 'Filter removed' : 'Filters changed'}
-                    </span>
+          {hasFilterChange && !(isFilterAdded && side === 'before') && !(isFilterRemoved && side === 'after') && (
+            <Tooltip
+              trigger={
+                <div
+                  className={cx(
+                    'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                    side === 'before' && 'ring-2 ring-deleted',
+                    side === 'after' && 'ring-2 ring-added'
+                  )}
+                >
+                  <span className="text-metadata text-grey-04">
+                    {isFilterAdded ? 'Filter added' : isFilterRemoved ? 'Filter removed' : 'Filters changed'}
+                  </span>
+                </div>
+              }
+              label={
+                <div className="max-w-[400px] text-left">
+                  <div className="font-mono text-xs break-all whitespace-pre-wrap">
+                    {filterValue ? formatJsonSafe(filterValue) : 'None'}
                   </div>
-                }
-                label={
-                  <div className="max-w-[400px] text-left">
-                    <div className="whitespace-pre-wrap break-all font-mono text-xs">
-                      {filterValue ? formatJsonSafe(filterValue) : 'None'}
-                    </div>
-                  </div>
-                }
-                position="top"
-                variant="light"
-              />
-            )}
+                </div>
+              }
+              position="top"
+              variant="light"
+            />
+          )}
 
           {/* Columns change indicator — only show on the relevant side */}
-          {hasColumnsChange &&
-            !(isColumnsAdded && side === 'before') &&
-            !(isColumnsRemoved && side === 'after') && (
-              <div
-                className={cx(
-                  'inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
-                  side === 'before' && 'ring-2 ring-deleted',
-                  side === 'after' && 'ring-2 ring-added'
-                )}
-              >
-                <span className="text-metadata text-grey-04">
-                  {isColumnsAdded ? 'Columns added' : isColumnsRemoved ? 'Columns removed' : 'Columns changed'}
-                </span>
-              </div>
-            )}
+          {hasColumnsChange && !(isColumnsAdded && side === 'before') && !(isColumnsRemoved && side === 'after') && (
+            <div
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                side === 'before' && 'ring-2 ring-deleted',
+                side === 'after' && 'ring-2 ring-added'
+              )}
+            >
+              <span className="text-metadata text-grey-04">
+                {isColumnsAdded ? 'Columns added' : isColumnsRemoved ? 'Columns removed' : 'Columns changed'}
+              </span>
+            </div>
+          )}
 
           {viewInfo && (
             <div
@@ -1210,7 +1224,7 @@ const DataBlockViewSkeleton = ({ viewEntityId }: { viewEntityId: string | null }
         <div className="grid grid-cols-2 gap-3 opacity-60">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex flex-col gap-2 rounded-[17px] p-[5px]">
-              <div className="aspect-[2/1] w-full rounded-lg bg-grey-02" />
+              <div className="aspect-2/1 w-full rounded-lg bg-grey-02" />
               <div className="h-5 w-3/4 rounded-sm bg-grey-02" />
               <div className="h-3 w-full rounded-sm bg-grey-02" />
               <div className="h-3 w-4/5 rounded-sm bg-grey-02" />
@@ -1327,7 +1341,7 @@ const RelationGroupCell = ({ typeId, typeName, relations, side }: RelationGroupC
           <div
             key={i}
             className={cx(
-              'inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text',
+              'inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata text-text tabular-nums',
               side === 'before' && 'bg-deleted line-through decoration-1',
               side === 'after' && 'bg-added'
             )}
@@ -1429,7 +1443,9 @@ const BooleanDisplay = ({ value, side }: BooleanDisplayProps) => {
   const checked = getChecked(value) ?? value === 'true';
 
   return (
-    <span className={cx('inline-flex shrink-0 items-center rounded p-1', side === 'before' ? 'bg-deleted' : 'bg-added')}>
+    <span
+      className={cx('inline-flex shrink-0 items-center rounded p-1', side === 'before' ? 'bg-deleted' : 'bg-added')}
+    >
       <Checkbox checked={checked} disabled />
     </span>
   );

@@ -5,12 +5,12 @@ import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import {
-  restFetch,
-  ApiProfileSchema,
   ApiBatchProfileResponseSchema,
-  encodePathSegment,
-  validateWalletAddress,
   type ApiProfile,
+  ApiProfileSchema,
+  encodePathSegment,
+  restFetch,
+  validateWalletAddress,
 } from '../rest';
 
 export function defaultProfile(address: string, spaceId?: string): Profile {

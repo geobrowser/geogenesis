@@ -2,6 +2,7 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
 import { useMemo } from 'react';
 
 import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIdsAndRelations } from '~/core/database/entities';

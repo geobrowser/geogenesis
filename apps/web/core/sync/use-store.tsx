@@ -470,11 +470,7 @@ export function useValue(options: UseValueParams) {
  * useValue with a strict spaceId filter instead — they want null when
  * the value doesn't exist in the current space.
  */
-export function useSpaceAwareValue(options: {
-  entityId: string;
-  propertyId: string;
-  spaceId: string;
-}) {
+export function useSpaceAwareValue(options: { entityId: string; propertyId: string; spaceId: string }) {
   const { entityId, propertyId, spaceId } = options;
 
   const value = useSelector(

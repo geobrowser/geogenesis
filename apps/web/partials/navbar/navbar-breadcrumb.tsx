@@ -55,7 +55,7 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
       </div>
       <Divider type="vertical" className="inline-block h-4 w-px" />
       <div className="truncate sm:max-w-[20ch]">
-        <Text variant="button" className="hover:!text-text">
+        <Text variant="button" className="hover:text-text!">
           {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
         </Text>
       </div>
@@ -104,7 +104,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
         </div>
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <div className="truncate sm:max-w-[20ch]">
-          <Text variant="button" className="hover:!text-text">
+          <Text variant="button" className="hover:text-text!">
             {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
           </Text>
         </div>
@@ -121,7 +121,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <Popover.Trigger className="flex items-center gap-1.5">
           <div className="truncate sm:max-w-[20ch]">
-            <Text variant="button" className="hover:!text-text">
+            <Text variant="button" className="hover:text-text!">
               {shorten(spaceName)}
             </Text>
           </div>
@@ -140,7 +140,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, y: 10, scale: 0.95 }}
           transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.125 } }}
-          className="relative top-[0.375rem] z-100 w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1"
+          className="relative top-1.5 z-100 w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1"
           onOpenAutoFocus={event => event.preventDefault()}
         >
           <div>
@@ -159,11 +159,11 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
                     />
                   </div>
                   <div className="truncate">
-                    <Text variant="button" className="hover:!text-text">
+                    <Text variant="button" className="hover:text-text!">
                       {spaceName}
                     </Text>
                   </div>
-                  <div className="flex flex-grow items-center justify-end">
+                  <div className="flex grow items-center justify-end">
                     <Check color="grey-04" />
                   </div>
                 </div>
@@ -190,7 +190,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
                       />
                     </div>
                     <div className="truncate">
-                      <Text variant="button" className="hover:!text-text">
+                      <Text variant="button" className="hover:text-text!">
                         {spaceName}
                       </Text>
                     </div>

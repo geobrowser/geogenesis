@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -13,25 +14,24 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
-import { Plus } from '~/design-system/icons/plus';
-import { Text } from '~/design-system/text';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { NewTab } from '~/design-system/icons/new-tab';
+import { Plus } from '~/design-system/icons/plus';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Text } from '~/design-system/text';
 
-import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { writeValue } from '~/partials/blocks/table/change-entry';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
-import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { PowerToolsTable } from './power-tools-table';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
+import { PowerToolsTable } from './power-tools-table';
 import { PowerToolsRow } from './types';
 
 const PANEL_ENTITY_ID_PARAM = 'panelEntityId';
@@ -93,7 +93,9 @@ function PowerToolsEntityPanel({
       <div className="h-full overflow-y-auto p-4">
         {isPanelLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Text variant="body" color="grey-04">Loading entity...</Text>
+            <Text variant="body" color="grey-04">
+              Loading entity...
+            </Text>
           </div>
         ) : (
           <EntityStoreProvider id={entityId} spaceId={spaceId}>
@@ -283,8 +285,12 @@ export function PowerToolsScreen() {
           <Text variant="largeTitle">Power Tools</Text>
           {blockName && (
             <>
-              <Text variant="largeTitle" color="grey-03">•</Text>
-              <Text variant="largeTitle" color="grey-04">{blockName}</Text>
+              <Text variant="largeTitle" color="grey-03">
+                •
+              </Text>
+              <Text variant="largeTitle" color="grey-04">
+                {blockName}
+              </Text>
             </>
           )}
         </div>
@@ -318,7 +324,9 @@ export function PowerToolsScreen() {
       <div className="relative h-full overflow-hidden">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Text variant="body" color="grey-04">Loading data...</Text>
+            <Text variant="body" color="grey-04">
+              Loading data...
+            </Text>
           </div>
         ) : (
           <PowerToolsTable
@@ -335,11 +343,7 @@ export function PowerToolsScreen() {
           />
         )}
         {panelEntityId && (
-          <PowerToolsEntityPanel
-            entityId={panelEntityId}
-            spaceId={panelSpaceId}
-            onClose={handleCloseEntityPanel}
-          />
+          <PowerToolsEntityPanel entityId={panelEntityId} spaceId={panelSpaceId} onClose={handleCloseEntityPanel} />
         )}
       </div>
     </div>

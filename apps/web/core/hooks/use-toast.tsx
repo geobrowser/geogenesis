@@ -26,7 +26,7 @@ export function Toast() {
   return (
     <AnimatePresence>
       {toast && (
-        <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
+        <div className="pointer-events-none fixed right-0 bottom-0 left-0 flex w-full justify-center p-4">
           <motion.div
             variants={flowVariants}
             initial="hidden"

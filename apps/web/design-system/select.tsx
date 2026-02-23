@@ -33,8 +33,8 @@ export const Select = ({
           variant === 'secondary' ? 'bg-white text-text' : 'bg-text text-white',
           !disabled
             ? 'hover:shadow-inner-text focus:shadow-inner-lg-text'
-            : '!cursor-not-allowed !bg-grey-02 text-opacity-50 grayscale',
-          'inline-flex flex-1 whitespace-nowrap rounded px-3 py-2 text-button shadow-inner-grey-02 [&[data-placeholder]]:text-text',
+            : 'cursor-not-allowed! bg-grey-02! opacity-50 grayscale',
+          'inline-flex flex-1 rounded px-3 py-2 text-button whitespace-nowrap shadow-inner-grey-02 data-placeholder:text-text',
           className
         )}
       >
@@ -42,17 +42,17 @@ export const Select = ({
           <div className={cx('truncate', value === '' && 'text-grey-03')}>
             <SelectPrimitive.Value placeholder={placeholder} />
           </div>
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <ChevronDownSmall color={variant === 'secondary' ? 'ctaPrimary' : 'white'} />
           </div>
         </div>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Content
         className={cx(
-          'z-[2] overflow-hidden rounded border border-grey-02 bg-white',
+          'z-2 overflow-hidden rounded border border-grey-02 bg-white',
           position === 'item-aligned'
             ? 'mt-10 max-w-[241px]'
-            : 'mt-1 max-h-[240px] w-[var(--radix-select-trigger-width)] overflow-y-auto'
+            : 'mt-1 max-h-[240px] w-(--radix-select-trigger-width) overflow-y-auto'
         )}
         position={position}
       >
@@ -65,8 +65,8 @@ export const Select = ({
               title={option.label}
               aria-label={option.label}
               className={cx(
-                'flex w-full select-none flex-col justify-center overflow-hidden truncate px-3 py-2.5 text-button text-grey-04 hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-none [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text',
-                option.disabled && '!cursor-not-allowed !text-opacity-25',
+                'flex w-full flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
+                option.disabled && 'cursor-not-allowed! opacity-25!',
                 option?.className
               )}
             >

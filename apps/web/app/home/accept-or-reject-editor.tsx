@@ -22,14 +22,7 @@ interface Props {
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({
-  spaceId,
-  isProposalEnded,
-  canExecute,
-  status,
-  userVote,
-  proposalId,
-}: Props) {
+export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,

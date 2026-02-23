@@ -104,7 +104,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       <div
         ref={scrollRef}
         className={cx(
-          'relative z-0 select-none overflow-x-auto overflow-y-clip',
+          'relative z-0 overflow-x-auto overflow-y-clip select-none',
           isScrollable.current && 'cursor-grab active:cursor-grabbing',
           '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           className
@@ -117,13 +117,13 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
             <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
           ))}
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-0 h-px bg-grey-02" />
+        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
       {scrollPosition !== 'end' && (
-        <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-50 h-6 w-[50px] bg-gradient-to-l from-white" />
+        <div className="pointer-events-none absolute top-0 right-0 bottom-0 z-50 h-6 w-[50px] bg-linear-to-l from-white" />
       )}
       {scrollPosition !== 'start' && (
-        <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-50 h-6 w-[50px] bg-gradient-to-r from-white" />
+        <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 h-6 w-[50px] bg-linear-to-r from-white" />
       )}
     </div>
   );
@@ -138,7 +138,7 @@ interface TabProps {
 }
 
 const tabStyles = cva(
-  'relative z-10 flex items-center gap-1.5 whitespace-nowrap text-quoteMedium transition-colors duration-100',
+  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100',
   {
     variants: {
       active: {
@@ -146,7 +146,7 @@ const tabStyles = cva(
         false: 'text-grey-04 hover:text-text',
       },
       disabled: {
-        true: 'cursor-not-allowed opacity-25 hover:!text-grey-04',
+        true: 'cursor-not-allowed opacity-25 hover:text-grey-04!',
         false: '',
       },
     },
@@ -188,7 +188,7 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
           layout
           initial={false}
           transition={{ duration: 0.2 }}
-          className="absolute bottom-[-8px] left-0 right-0 z-100 h-px bg-text"
+          className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
         />
       )}
     </Link>
@@ -201,8 +201,8 @@ type BadgeProps = {
 
 const Badge = ({ children }: BadgeProps) => {
   return (
-    <div className="flex-shrink-0">
-      <div className="rounded bg-black px-[0.3125rem] py-0.5 text-xs leading-none text-white">{children}</div>
+    <div className="shrink-0">
+      <div className="rounded bg-black px-1.25 py-0.5 text-xs leading-none text-white">{children}</div>
     </div>
   );
 };

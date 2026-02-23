@@ -12,7 +12,11 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { type SubspaceRelationType, encodeProposalCreatedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
+import {
+  type SubspaceRelationType,
+  encodeProposalCreatedData,
+  padBytes16ToBytes32,
+} from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
   EMPTY_SIGNATURE,

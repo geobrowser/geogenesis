@@ -1,8 +1,331 @@
-@tailwind base;
+@import 'tailwindcss';
+
+@theme {
+  /* Colors */
+  --color-*: initial;
+  --color-current: currentColor;
+  --color-transparent: transparent;
+  --color-white: #ffffff;
+  --color-text: #202020;
+  --color-ctaPrimary: #3963fe;
+  --color-ctaHover: #002fd9;
+  --color-ctaTertiary: #f0f3ff;
+  --color-purple: #6833ff;
+  --color-black: #000000;
+  --color-pink: #fe31c5;
+  --color-bg: #fbfbfb;
+  --color-grey-01: #f6f6f6;
+  --color-grey-02: #dbdbdb;
+  --color-grey-03: #b6b6b6;
+  --color-grey-04: #606060;
+  --color-link: #8b8b8b;
+  --color-divider: #f0f0f0;
+  --color-orange: #ffa134;
+  --color-green: #2ace9d;
+  --color-successTertiary: #d4f5eb;
+  --color-errorTertiary: #ffe1dc;
+  --color-red-01: #ff523a;
+  --color-red-02: #ffeeeb;
+  --color-deleted: #ffdad3;
+  --color-added: #c5f7e0;
+
+  /* Border Radius */
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Box Shadow */
+  --shadow-*: initial;
+  --shadow-none: none;
+  --shadow-onboarding: 0px 0px 71.36363220214844px 0px;
+  --shadow-dropdown: 0px 6px 8px #60606033;
+  --shadow-button: 0px 1px 2px #f0f0f0;
+  --shadow-card: 0px 26px 45px rgba(0, 0, 0, 0.09);
+  --shadow-light: 0px 1px 2px #f0f0f0;
+  --shadow-big: 0 1px 21px #dbdbdb;
+  --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.09);
+  --shadow-inner: inset 0 0 0 1px;
+  --shadow-inner-transparent: inset 0 0 0 1px transparent;
+  --shadow-inner-grey-02: inset 0 0 0 1px #dbdbdb;
+  --shadow-inner-ctaHover: inset 0 0 0 1px #002fd9;
+  --shadow-inner-text: inset 0 0 0 1px #202020;
+  --shadow-inner-green: inset 0 0 0 1px #2ace9d;
+  --shadow-inner-lg: inset 0 0 0 2px;
+  --shadow-inner-lg-transparent: inset 0 0 0 2px transparent;
+  --shadow-inner-lg-grey-02: inset 0 0 0 2px #dbdbdb;
+  --shadow-inner-lg-ctaHover: inset 0 0 0 2px #002fd9;
+  --shadow-inner-lg-text: inset 0 0 0 2px #202020;
+  --shadow-inner-lg-green: inset 0 0 0 2px #2ace9d;
+
+  /* Breakpoints (max-width variants defined below) */
+  --breakpoint-*: initial;
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.15s ease-in-out;
+  --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-slide-down: slideDown 300ms ease-in-out;
+  --animate-slide-up: slideUp 300ms ease-in-out;
+
+  /* Font Sizes */
+  --text-mainPage: 3.25rem;
+  --text-mainPage--line-height: 3.5rem;
+  --text-mainPage--letter-spacing: -0.5px;
+  --text-mainPage--font-weight: 600;
+
+  --text-largeTitle: 2rem;
+  --text-largeTitle--line-height: 2.5rem;
+  --text-largeTitle--letter-spacing: -0.5px;
+  --text-largeTitle--font-weight: 600;
+
+  --text-mediumTitle: 1.4rem;
+  --text-mediumTitle--line-height: 1.6rem;
+  --text-mediumTitle--letter-spacing: -0.25px;
+  --text-mediumTitle--font-weight: 500;
+
+  --text-cardEntityTitle: 1.3125rem;
+  --text-cardEntityTitle--line-height: 1.75rem;
+  --text-cardEntityTitle--font-weight: 500;
+
+  --text-smallTitle: 1.1875rem;
+  --text-smallTitle--line-height: 1.3125rem;
+  --text-smallTitle--letter-spacing: -0.25px;
+  --text-smallTitle--font-weight: 600;
+
+  --text-body: 1.25rem;
+  --text-body--line-height: 1.8125rem;
+  --text-body--letter-spacing: -0.08px;
+  --text-body--font-weight: 400;
+
+  --text-bodySemibold: 1.1875rem;
+  --text-bodySemibold--line-height: 1.8125rem;
+  --text-bodySemibold--font-weight: 600;
+
+  --text-tableCell: 1.1875rem;
+  --text-tableCell--line-height: 1.3125rem;
+  --text-tableCell--letter-spacing: 0px;
+  --text-tableCell--font-weight: 400;
+
+  --text-tableProperty: 1rem;
+  --text-tableProperty--line-height: 1rem;
+  --text-tableProperty--letter-spacing: -0.25px;
+  --text-tableProperty--font-weight: 400;
+
+  --text-quote: 1.0625rem;
+  --text-quote--line-height: 1.375rem;
+  --text-quote--font-weight: 400;
+
+  --text-quoteMedium: 1.0625rem;
+  --text-quoteMedium--line-height: 1.375rem;
+  --text-quoteMedium--font-weight: 600;
+
+  --text-listItem: 1.125rem;
+  --text-listItem--line-height: 1.8125rem;
+  --text-listItem--font-weight: 400;
+
+  --text-listSemibold: 1.125rem;
+  --text-listSemibold--line-height: 1.8125rem;
+  --text-listSemibold--font-weight: 600;
+
+  --text-button: 1.0625rem;
+  --text-button--line-height: 1.1875rem;
+  --text-button--letter-spacing: -0.17px;
+  --text-button--font-weight: 500;
+
+  --text-smallButton: 0.875rem;
+  --text-smallButton--line-height: 0.875rem;
+  --text-smallButton--font-weight: 500;
+
+  --text-tag: 0.6875rem;
+  --text-tag--line-height: 0.8125rem;
+  --text-tag--font-weight: 500;
+
+  --text-input: 1.0625rem;
+  --text-input--line-height: 1.125rem;
+  --text-input--font-weight: 400;
+
+  --text-inputMedium: 1.0625rem;
+  --text-inputMedium--line-height: 1.125rem;
+  --text-inputMedium--font-weight: 500;
+
+  --text-metadata: 1rem;
+  --text-metadata--line-height: 1.25rem;
+  --text-metadata--letter-spacing: -0.25px;
+  --text-metadata--font-weight: 400;
+
+  --text-metadataMedium: 1rem;
+  --text-metadataMedium--line-height: 1.25rem;
+  --text-metadataMedium--letter-spacing: -0.25px;
+  --text-metadataMedium--font-weight: 500;
+
+  --text-breadcrumb: 0.875rem;
+  --text-breadcrumb--line-height: 0.9375rem;
+  --text-breadcrumb--font-weight: 500;
+
+  --text-footnote: 0.6875rem;
+  --text-footnote--line-height: 0.8125rem;
+  --text-footnote--font-weight: 400;
+
+  --text-footnoteMedium: 0.6875rem;
+  --text-footnoteMedium--line-height: 0.8125rem;
+  --text-footnoteMedium--font-weight: 500;
+
+  --text-navlink: 0.678rem;
+  --text-navlink--line-height: 0.75rem;
+  --text-navlink--font-weight: 500;
+
+  --text-errorMessage: 0.875rem;
+  --text-errorMessage--line-height: 1rem;
+  --text-errorMessage--font-weight: 500;
+
+  --text-resultTitle: 1rem;
+  --text-resultTitle--line-height: 1rem;
+  --text-resultTitle--letter-spacing: -0.25px;
+  --text-resultTitle--font-weight: 500;
+
+  --text-resultLink: 1rem;
+  --text-resultLink--line-height: 1rem;
+  --text-resultLink--letter-spacing: -0.25px;
+  --text-resultLink--font-weight: 400;
+
+  --text-textLink: 1.1875rem;
+  --text-textLink--line-height: 1.8125rem;
+  --text-textLink--font-weight: 400;
+
+  --text-textLinkSemibold: 1.1875rem;
+  --text-textLinkSemibold--line-height: 1.8125rem;
+  --text-textLinkSemibold--font-weight: 600;
+}
+
+/* Desktop-first breakpoints (max-width) */
+@custom-variant sm (@media (max-width: 639px));
+@custom-variant md (@media (max-width: 767px));
+@custom-variant lg (@media (max-width: 1023px));
+@custom-variant xl (@media (max-width: 1279px));
+@custom-variant 2xl (@media (max-width: 1535px));
+@custom-variant 3xl (@media (max-width: 1920px));
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulseStrong {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+/* @theme handles font-size/line-height/font-weight; just add underline */
+.text-textLink,
+.text-textLinkSemibold {
+  text-decoration-line: underline;
+}
+
+/* Background image utilities */
+@utility bg-cover-default {
+  background-image: url('/images/placeholders/Cover_Default.svg');
+}
+
+@utility bg-cover-hover {
+  background-image: url('/images/placeholders/Cover_Hover.svg');
+}
+
+@utility bg-avatar-default {
+  background-image: url('/images/placeholders/Avatar_Default.svg');
+}
+
+@utility bg-avatar-hover {
+  background-image: url('/images/placeholders/Avatar_Hover.svg');
+}
+
+/* Gradients */
+@utility bg-gradient-grey {
+  background: linear-gradient(64deg, #f0f3ff 0%, #f0f3ff 100%);
+}
+
+@utility bg-gradient-blue {
+  background: linear-gradient(109deg, #b0d4ff 12.96%, #bdefff 87.04%);
+}
+
+@utility bg-gradient-green {
+  background: linear-gradient(64deg, #9fffbf 0%, #ccfcff 100%);
+}
+
+@utility bg-gradient-orange {
+  background: linear-gradient(64deg, rgba(255, 161, 52, 0.3) -17.64%, rgba(255, 82, 58, 0.3) 100%);
+}
+
+@utility bg-gradient-purple {
+  background: linear-gradient(
+    64deg,
+    rgba(254, 83, 61, 0.3) 0%,
+    rgba(243, 32, 184, 0.3) 31.69%,
+    rgba(91, 36, 246, 0.3) 100%
+  );
+}
+
+@utility bg-gradient-yellow {
+  background: linear-gradient(109deg, #ffcdb0 12.96%, #f9f6a8 87.04%);
+}
+
+@utility bg-gradient-geo {
+  background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
+}
+
+/* v4 border-color compat: v3 defaulted to gray-200, v4 defaults to currentcolor */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-grey-02, currentcolor);
+  }
+}
 
 @layer base {
   :root {
-    /* These override the privy modal color defaults */
+    /* Privy modal overrides */
     --privy-border-radius-sm: 12px !important;
     --privy-border-radius-md: 12px !important;
     --privy-border-radius-mdlg: 12px !important;
@@ -23,129 +346,95 @@
   }
 }
 
-/* Global styles */
-* {
-  scrollbar-width: thin;
-}
-
-:root {
-  color-scheme: light;
-}
-
-body {
-  @apply overflow-x-clip overflow-y-scroll bg-white;
-  font-family: var(--font-calibre), sans-serif;
-  text-rendering: optimizeLegibility;
-}
-
-html body {
-  margin-right: 0 !important;
-}
-
-/* Normalize link, button, and form styles */
-a {
-  text-decoration: none;
-}
-
-button {
-  border-radius: 0;
-  font-weight: inherit;
-  text-align: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-}
-
-select {
-  text-transform: inherit;
-}
-
-input[type='button'],
-input[type='reset'],
-input[type='submit'] {
-  text-align: inherit;
-  cursor: pointer;
-}
-
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  opacity: 1;
-}
-
-input[type='search']::-webkit-search-decoration,
-input[type='search']::-webkit-search-cancel-button,
-input[type='search']::-webkit-search-results-button,
-input[type='search']::-webkit-search-results-decoration {
-  appearance: none;
-}
-
-a:focus,
-button:focus,
-input[type='button']:focus,
-input[type='reset']:focus,
-input[type='submit']:focus {
-  outline: 0;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: inherit;
-  opacity: 0.75;
-}
-
-input::-ms-clear {
-  display: none;
-}
-
-.not-editable .is-empty {
-  @apply !invisible;
-}
-
-@tailwind components;
-
-/* Gradients */
-@layer utilities {
-  .bg-gradient-grey {
-    background: linear-gradient(64deg, #f0f3ff 0%, #f0f3ff 100%);
+@layer base {
+  * {
+    scrollbar-width: thin;
   }
-  .bg-gradient-blue {
-    background: linear-gradient(109deg, #b0d4ff 12.96%, #bdefff 87.04%);
+
+  :root {
+    color-scheme: light;
   }
-  .bg-gradient-green {
-    background: linear-gradient(64deg, #9fffbf 0%, #ccfcff 100%);
+
+  body {
+    @apply overflow-x-clip overflow-y-scroll bg-white;
+    font-family: var(--font-calibre), sans-serif;
+    text-rendering: optimizeLegibility;
   }
-  .bg-gradient-orange {
-    background: linear-gradient(64deg, rgba(255, 161, 52, 0.3) -17.64%, rgba(255, 82, 58, 0.3) 100%);
+
+  html body {
+    margin-right: 0 !important;
   }
-  .bg-gradient-purple {
-    background: linear-gradient(
-      64deg,
-      rgba(254, 83, 61, 0.3) 0%,
-      rgba(243, 32, 184, 0.3) 31.69%,
-      rgba(91, 36, 246, 0.3) 100%
-    );
+
+  a {
+    text-decoration: none;
+    cursor: pointer;
   }
-  .bg-gradient-yellow {
-    background: linear-gradient(109deg, #ffcdb0 12.96%, #f9f6a8 87.04%);
+
+  button {
+    border-radius: 0;
+    font-weight: inherit;
+    text-align: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
   }
-  .bg-gradient-geo {
-    background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
+
+  select {
+    text-transform: inherit;
+  }
+
+  input[type='button'],
+  input[type='reset'],
+  input[type='submit'] {
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    opacity: 1;
+  }
+
+  input[type='search']::-webkit-search-decoration,
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-results-button,
+  input[type='search']::-webkit-search-results-decoration {
+    appearance: none;
+  }
+
+  a:focus,
+  button:focus,
+  input[type='button']:focus,
+  input[type='reset']:focus,
+  input[type='submit']:focus {
+    outline: 0;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: inherit;
+    opacity: 0.75;
+  }
+
+  input::-ms-clear {
+    display: none;
+  }
+
+  .not-editable .is-empty {
+    @apply invisible!;
   }
 }
 
-@tailwind utilities;
-
+/* react-medium-image-zoom */
 [data-rmiz-btn-unzoom] {
-  /* This is the default unzoom button for the react-medium-image-zoom package*/
-  /* It's styled differently than the rest of our site and animates jankily, so hiding for now */
   display: none;
 }
 
 [data-rmiz-modal-overlay='visible'] {
-  /* This is the background color of the overlay for the react-medium-image-zoom package*/
   background-color: rgba(0, 0, 0, 0.6) !important;
 }
 
-/* Provide space for the gap cursor */
+/* ProseMirror gap cursor spacing */
 .ProseMirror {
   @apply pb-8;
 }
@@ -158,7 +447,7 @@ input::-ms-clear {
   @apply h-auto max-w-full;
 }
 
-/* Hide scrollbar utility class */
+/* Extra utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -168,7 +457,6 @@ input::-ms-clear {
   scrollbar-width: none;
 }
 
-/* Font utility classes */
 .font-inherit {
   font-family: inherit;
   font-weight: inherit;
@@ -176,13 +464,12 @@ input::-ms-clear {
   color: inherit;
 }
 
-/* Radix UI utility classes */
+/* Radix UI */
 .elevated-popover > [data-radix-popper-content-wrapper] {
   z-index: 1001 !important;
 }
 
-/* Radix UI fixes */
-/* see https://github.com/radix-ui/primitives/issues/2908*/
+/* https://github.com/radix-ui/primitives/issues/2908 */
 [data-radix-popper-content-wrapper] {
   width: var(--radix-popper-anchor-width);
 }

@@ -108,11 +108,7 @@ export function NavbarActions() {
                 <div className="relative h-4 w-4 overflow-hidden rounded-full">
                   <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
                 </div>
-                <Link
-                  prefetch={false}
-                  href={NavUtils.toSpace(personalSpaceId)}
-                  className="text-button"
-                >
+                <Link prefetch={false} href={NavUtils.toSpace(personalSpaceId)} className="text-button">
                   Personal space
                 </Link>
               </div>
@@ -137,7 +133,7 @@ export function NavbarActions() {
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full items-center justify-between bg-white px-3 py-2 text-button select-none hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
   {
     variants: {
       disabled: {
@@ -276,7 +272,7 @@ function ModeToggle() {
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
                 <MotionPopoverContent
-                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-none"
+                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
                   side="bottom"
                   align="end"
                   alignOffset={-8}

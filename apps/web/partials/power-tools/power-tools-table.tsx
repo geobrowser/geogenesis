@@ -11,15 +11,15 @@ import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Text } from '~/design-system/text';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Text } from '~/design-system/text';
 
-import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
+import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
+import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 
 import { PowerToolsRow } from './types';
-import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 
 interface Props {
   rows: PowerToolsRow[];
@@ -115,7 +115,7 @@ function NameCell({
           entityId={row.entityId}
           spaceId={row.spaceId}
           href={href}
-          className="break-words text-tableCell text-ctaHover hover:underline"
+          className="text-tableCell wrap-break-word text-ctaHover hover:underline"
           onClick={handleOpen}
         >
           {name || row.entityId}
@@ -128,13 +128,12 @@ function NameCell({
     <Link
       entityId={row.entityId}
       href={href}
-      className="break-words text-tableCell text-ctaHover hover:underline"
+      className="text-tableCell wrap-break-word text-ctaHover hover:underline"
       onClick={handleOpen}
     >
       {name || row.entityId}
     </Link>
   );
-
 }
 
 function PowerToolsCell({
@@ -159,7 +158,11 @@ function PowerToolsCell({
   source: Source;
 }) {
   if (row.placeholder && property.id !== SystemIds.NAME_PROPERTY && !isEditing) {
-    return <Text variant="body" color="grey-04">—</Text>;
+    return (
+      <Text variant="body" color="grey-04">
+        —
+      </Text>
+    );
   }
 
   if (property.id === SystemIds.NAME_PROPERTY) {
@@ -319,7 +322,7 @@ export function PowerToolsTable({
 
   return (
     <div ref={tableRef} className="h-full w-full overflow-auto">
-      <div className="sticky top-0 z-10 bg-white shadow-sm">
+      <div className="shadow-sm sticky top-0 z-10 bg-white">
         <div
           className="grid border-b border-grey-02 bg-grey-01"
           style={{
@@ -338,7 +341,7 @@ export function PowerToolsTable({
                   {property.name || property.id}
                 </Text>
                 <div
-                  className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-blue-04/50"
+                  className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
                   onMouseDown={event => handleMouseDown(event, property.id)}
                 />
               </div>
@@ -364,7 +367,7 @@ export function PowerToolsTable({
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={node => rowVirtualizer.measureElement(node)}
-              className={`absolute left-0 top-0 border-b border-grey-02 ${
+              className={`absolute top-0 left-0 border-b border-grey-02 ${
                 row.placeholder ? 'bg-grey-01' : !isEditing ? 'bg-grey-01/50' : 'hover:bg-grey-01'
               }`}
               style={{
@@ -382,10 +385,7 @@ export function PowerToolsTable({
               >
                 {columnLayout.columns.map(({ property }) => {
                   return (
-                    <div
-                      key={`${rowId}-${property.id}`}
-                      className="border-r border-grey-02 px-4 py-2"
-                    >
+                    <div key={`${rowId}-${property.id}`} className="border-r border-grey-02 px-4 py-2">
                       <div className="flex w-full items-start gap-2 overflow-visible">
                         <PowerToolsCell
                           row={row}

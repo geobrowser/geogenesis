@@ -46,7 +46,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
         onClick={() => setIsMenuOpen(false)}
         className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
       >
-        <Text variant="button" className="hover:!text-text">
+        <Text variant="button" className="hover:text-text!">
           All
         </Text>
       </Link>
@@ -55,7 +55,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
         onClick={() => setIsMenuOpen(false)}
         className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
       >
-        <Text variant="button" className="hover:!text-text">
+        <Text variant="button" className="hover:text-text!">
           Active proposals
         </Text>
       </Link>
@@ -64,7 +64,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
         onClick={() => setIsMenuOpen(false)}
         className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
       >
-        <Text variant="button" className="hover:!text-text">
+        <Text variant="button" className="hover:text-text!">
           Membership requests
         </Text>
       </Link>

@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { fetchEntityVersions, type EntityVersion } from '~/core/io/subgraph/fetch-entity-versions';
+import { type EntityVersion, fetchEntityVersions } from '~/core/io/subgraph/fetch-entity-versions';
 
 import type { HistoryDiffSelection } from './history-diff-slide-up';
 

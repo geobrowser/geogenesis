@@ -15,8 +15,8 @@ import {
   useValues,
 } from '~/core/sync/use-store';
 import { DataType, RenderableType } from '~/core/types';
-import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { isUrlTemplate } from '~/core/utils/url-template';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -121,7 +121,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
           return null;
         }
         return (
-          <div key={`${entityId}-${propertyId}-${index}`} className="break-words">
+          <div key={`${entityId}-${propertyId}-${index}`} className="wrap-break-word">
             <Link href={NavUtils.toEntity(spaceId, propertyId)}>
               <Text as="p" variant="bodySemibold">
                 {property.name || propertyId}
@@ -192,7 +192,7 @@ export function RelationsGroup({
 
   return (
     <>
-      <div key={`${propertyId}-${property.name}`} className="break-words">
+      <div key={`${propertyId}-${property.name}`} className="wrap-break-word">
         {propertyId !== SystemIds.TYPES_PROPERTY && (
           <Link href={NavUtils.toEntity(spaceId, propertyId)}>
             <Text as="p" variant="bodySemibold">
@@ -394,7 +394,15 @@ function RenderedValue({
     case 'DATE':
     case 'DATETIME':
     case 'TIME': {
-      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} dataType={renderableType} />;
+      return (
+        <DateField
+          key={`time-${propertyId}-${value}`}
+          isEditing={false}
+          value={value}
+          propertyId={propertyId}
+          dataType={renderableType}
+        />
+      );
     }
   }
 }

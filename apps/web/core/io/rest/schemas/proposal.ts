@@ -15,11 +15,7 @@ import { ProposalStatus, ProposalType } from '../../substream-schema';
 /**
  * API vote option values.
  */
-export const ApiVoteOptionSchema = Schema.Union(
-  Schema.Literal('YES'),
-  Schema.Literal('NO'),
-  Schema.Literal('ABSTAIN')
-);
+export const ApiVoteOptionSchema = Schema.Union(Schema.Literal('YES'), Schema.Literal('NO'), Schema.Literal('ABSTAIN'));
 
 export type ApiVoteOption = Schema.Schema.Type<typeof ApiVoteOptionSchema>;
 

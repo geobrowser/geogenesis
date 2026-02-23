@@ -70,7 +70,7 @@ export const FindEntity = ({
               setHasDismissedPopover(false);
             }}
             placeholder={placeholder}
-            className="block w-full px-2 py-1 text-center text-2xl text-mediumTitle placeholder:text-grey-02 focus:outline-none"
+            className="block w-full px-2 py-1 text-center text-mediumTitle text-2xl placeholder:text-grey-02 focus:outline-hidden"
             spellCheck={false}
           />
         </Popover.Anchor>
@@ -81,19 +81,19 @@ export const FindEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] pt-2"
+              className="z-9999 w-(--radix-popper-anchor-width) pt-2"
               forceMount
             >
               <div className="rounded-lg border border-grey-02 bg-white">
                 <div className="px-4 py-3 text-center">
                   <div className="text-metadataMedium text-text">Existing entities found</div>
-                  <div className="mt-1 text-breadcrumb font-normal leading-tight text-text">
+                  <div className="mt-1 text-breadcrumb leading-tight font-normal text-text">
                     Someone has created these entities. Select one if it matches - your space will use the same entity
                     ID.
                   </div>
                 </div>
                 <ResizableContainer>
-                  <div className="flex max-h-[210px] flex-col overflow-y-auto overflow-x-clip border-t border-grey-02 bg-white">
+                  <div className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto border-t border-grey-02 bg-white">
                     {!results?.length && isLoading && (
                       <div className="w-full border-b border-divider bg-white px-3 py-2">
                         <div className="truncate text-button text-text">Loading...</div>
@@ -117,13 +117,13 @@ export const FindEntity = ({
                                   onQueryChange('');
                                   setHasDismissedPopover(true);
                                 }}
-                                className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                                className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                               >
                                 <div className="relative w-full">
                                   <div className="relative z-0 max-w-full truncate text-button text-text">
                                     {result.name}
                                   </div>
-                                  <div className="absolute bottom-0 right-0 top-0 flex items-center">
+                                  <div className="absolute top-0 right-0 bottom-0 flex items-center">
                                     <button
                                       onClick={event => {
                                         event.stopPropagation();
@@ -186,7 +186,7 @@ export const FindEntity = ({
                       onCreateEntity({ id: '', name: query });
                       setHasDismissedPopover(true);
                     }}
-                    className="block w-full rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                    className="block w-full rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                   >
                     <div className="text-metadataMedium text-text">Don’t use an existing entity</div>
                   </button>

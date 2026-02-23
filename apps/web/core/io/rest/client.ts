@@ -1,6 +1,6 @@
+import * as Duration from 'effect/Duration';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import * as Duration from 'effect/Duration';
 import * as Schedule from 'effect/Schedule';
 
 import { AbortError, HttpError, JsonParseError } from '../subgraph/errors';

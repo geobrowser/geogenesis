@@ -30,7 +30,7 @@ type SelectSpaceProps = {
   width?: 'clamped' | 'full';
 };
 
-const containerStyles = cva('relative z-[9999]', {
+const containerStyles = cva('relative z-9999', {
   variants: {
     width: {
       clamped: 'w-[400px]',
@@ -89,7 +89,7 @@ export const SelectSpace = ({
           )}
         >
           <ResizableContainer>
-            <div className="no-scrollbar flex max-h-[270px] flex-col overflow-y-auto overflow-x-clip bg-white">
+            <div className="no-scrollbar flex max-h-[270px] flex-col overflow-x-clip overflow-y-auto bg-white">
               {isLoading && (
                 <div className="w-full bg-white px-3 py-2">
                   <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -109,7 +109,7 @@ export const SelectSpace = ({
                           });
                         }}
                         className={cx(
-                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-none',
+                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-hidden',
                           !spaceId ? 'bg-divider' : 'hover:bg-grey-01 focus:bg-grey-01'
                         )}
                       >
@@ -147,7 +147,7 @@ export const SelectSpace = ({
                               });
                             }}
                             className={cx(
-                              'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-none',
+                              'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-hidden',
                               !isSelected ? 'hover:bg-grey-01 focus:bg-grey-01' : 'cursor-default bg-divider'
                             )}
                           >
@@ -187,7 +187,7 @@ export const SelectSpace = ({
                             {result.description && (
                               <>
                                 <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
-                                  <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
+                                  <p className="text-[0.75rem]! leading-[1.2] text-grey-04">
                                     {entity?.description ?? result.description}
                                   </p>
                                 </Truncate>

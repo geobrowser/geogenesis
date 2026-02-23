@@ -46,7 +46,7 @@ export const EntityPageRelations = ({ entityId, spaceId, serverRelations }: Enti
       </button>
       <ResizableContainer>
         {isOpen && (
-          <div className="divide-y divide-grey-02 border-b border-t border-grey-02">
+          <div className="divide-y divide-grey-02 border-t border-b border-grey-02">
             {mergedRelations.map(relation => (
               <Relationship key={relation.id} relation={relation} spaceId={spaceId} />
             ))}
@@ -102,7 +102,7 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
         setIsHovered(false);
         setIsMenuOpen(false);
       }}
-      className="relative flex text-smallTitle font-medium leading-none"
+      className="relative flex text-smallTitle leading-none font-medium"
     >
       <div className="flex-1 p-3">
         <Link href={NavUtils.toEntity(spaceId, relation.fromEntity.id)}>{relation.fromEntity.name}</Link>
@@ -128,7 +128,7 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
         </Link>
       </div>
       {isHovered && (
-        <div className="absolute bottom-0 right-0 top-0 inline-flex items-center">
+        <div className="absolute top-0 right-0 bottom-0 inline-flex items-center">
           <Menu
             className="max-w-[160px]"
             open={isMenuOpen}

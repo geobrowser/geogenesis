@@ -44,7 +44,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-100 block !w-40 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-100 block w-40! overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
           {DATA_BLOCK_VIEWS.map(view => {

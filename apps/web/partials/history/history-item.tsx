@@ -41,7 +41,7 @@ export function EntityVersionItem({ createdAt, name, createdById, createdBy, onC
       className="relative z-10 block w-full bg-white px-2 py-3 text-left text-grey-04 hover:bg-bg hover:text-text"
     >
       <div className="flex items-center justify-between">
-        <Text as="span" variant="metadataMedium" className="mb-1 truncate text-ellipsis !text-sm">
+        <Text as="span" variant="metadataMedium" className="mb-1 truncate text-sm! text-ellipsis">
           {versionName}
         </Text>
       </div>

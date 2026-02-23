@@ -33,7 +33,12 @@ export const ApiRelationDiffSchema = Schema.Struct({
 
 export const ApiBlockDiffSchema = Schema.Struct({
   id: Schema.String,
-  type: Schema.Union(Schema.Literal('textBlock'), Schema.Literal('imageBlock'), Schema.Literal('videoBlock'), Schema.Literal('dataBlock')),
+  type: Schema.Union(
+    Schema.Literal('textBlock'),
+    Schema.Literal('imageBlock'),
+    Schema.Literal('videoBlock'),
+    Schema.Literal('dataBlock')
+  ),
   before: Schema.NullOr(Schema.String),
   after: Schema.NullOr(Schema.String),
   diff: Schema.optional(Schema.Array(ApiDiffChunkSchema)),

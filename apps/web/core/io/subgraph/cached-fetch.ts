@@ -5,11 +5,12 @@
  * This is especially useful when multiple components need the same data.
  */
 import { Effect } from 'effect';
+
 import { cache } from 'react';
 
 import { fetchProfile, fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
-import { fetchProposal, type FetchProposalOptions } from './fetch-proposal';
-import { fetchProposals, type FetchProposalsOptions } from './fetch-proposals';
+import { type FetchProposalOptions, fetchProposal } from './fetch-proposal';
+import { type FetchProposalsOptions, fetchProposals } from './fetch-proposals';
 
 /**
  * Cached profile fetch by wallet address.

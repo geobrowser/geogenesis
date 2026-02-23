@@ -38,11 +38,11 @@ import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
+import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
-import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
@@ -432,7 +432,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>
-            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
+            <img src={placeholder.image} className="h-[64px]! w-auto object-contain" alt="" />
           </div>
         </div>
       </div>

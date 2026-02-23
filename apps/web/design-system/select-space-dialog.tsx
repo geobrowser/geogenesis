@@ -22,7 +22,7 @@ export function SelectSpaceAsPopover({ trigger, onDone, entityId, spaceId, verif
           side="bottom"
           sideOffset={4}
           align="start"
-          className="relative z-100 focus:outline-none"
+          className="relative z-100 focus:outline-hidden"
           avoidCollisions={false}
         >
           <SelectSpace entityId={entityId} spaceId={spaceId} verified={verified} onDone={onDone} variant="floating" />

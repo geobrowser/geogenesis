@@ -9,7 +9,10 @@ import * as React from 'react';
  * @param delayMs  - Optional delay in ms before focusing (e.g. to wait for an animation).
  * @returns A ref to attach to the focusable element.
  */
-export function useAutofocus<T extends HTMLElement = HTMLElement>(enabled: boolean, delayMs = 0): React.RefObject<T | null> {
+export function useAutofocus<T extends HTMLElement = HTMLElement>(
+  enabled: boolean,
+  delayMs = 0
+): React.RefObject<T | null> {
   const ref = React.useRef<T>(null);
 
   React.useEffect(() => {

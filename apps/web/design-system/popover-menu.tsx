@@ -31,7 +31,7 @@ export const PopoverMenu = ({ isOpen, onOpenChange, menu = <></>, position = 'bo
           {isOpen && (
             <MotionPopoverContent
               className={cx(
-                'relative z-10 rounded border border-grey-02 bg-white p-1 text-white shadow-button focus:outline-none',
+                'relative z-10 rounded border border-grey-02 bg-white p-1 text-white shadow-button focus:outline-hidden',
                 positionClassName[position]
               )}
               side={position}

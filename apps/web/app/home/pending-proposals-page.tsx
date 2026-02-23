@@ -174,7 +174,9 @@ async function PendingContentProposal({
   const yesVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.yesCount / votesCount) * 100) : 0;
   const noVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.noCount / votesCount) * 100) : 0;
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const userVote = proposal.userVote ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') } : undefined;
+  const userVote = proposal.userVote
+    ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
+    : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
@@ -212,12 +214,12 @@ async function PendingContentProposal({
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
           ) : (
-            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
               <TickSmall />
             </div>
           )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
+            <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
           </div>
           <p>{yesVotesPercentage}%</p>
         </div>
@@ -227,12 +229,12 @@ async function PendingContentProposal({
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
           ) : (
-            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
               <CloseSmall />
             </div>
           )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
+            <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
           </div>
           <p>{noVotesPercentage}%</p>
         </div>

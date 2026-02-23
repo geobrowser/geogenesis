@@ -55,8 +55,14 @@ export function TableBlockGalleryItem({
   const { propertyId: cellId, verified } = nameCell;
   let { image } = nameCell;
 
-  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
-  const description = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId })?.value ?? nameCell.description ?? null;
+  const name =
+    useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
+      ?.value ?? null;
+  const description =
+    useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId })
+      ?.value ??
+    nameCell.description ??
+    null;
 
   const avatarRelation = useRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
@@ -101,7 +107,7 @@ export function TableBlockGalleryItem({
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
-        <div className="relative flex aspect-[2/1] w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex aspect-2/1 w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <GeoImage
               value={image}
@@ -213,7 +219,7 @@ export function TableBlockGalleryItem({
       href={href}
       className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider"
     >
-      <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
+      <div className="relative aspect-2/1 w-full overflow-clip rounded-lg bg-grey-01">
         {image ? (
           <GeoImage
             value={image}
@@ -282,4 +288,3 @@ export function TableBlockGalleryItem({
     </Link>
   );
 }
-

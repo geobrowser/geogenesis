@@ -178,7 +178,9 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
           if ('response' in error) {
             errorDetails.response = (error as any).response;
             errorDetails.status = (error as any).response?.status;
-            errorDetails.retryAfterMs = parseRetryAfterMs(getHeaderValue((error as any).response?.headers, 'retry-after'));
+            errorDetails.retryAfterMs = parseRetryAfterMs(
+              getHeaderValue((error as any).response?.headers, 'retry-after')
+            );
           }
 
           if ('request' in error) {

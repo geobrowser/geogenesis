@@ -22,7 +22,7 @@ type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = (props: ResultsListProps) => (
   <ul
-    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden"
+    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
     {...props}
   />
 );
@@ -33,7 +33,7 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
   <button
     className={cx(
       existsOnEntity ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
-      'flex w-full flex-col p-2 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none aria-selected:bg-grey-02',
+      'flex w-full flex-col p-2 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden aria-selected:bg-grey-02',
       className
     )}
     {...rest}
@@ -81,12 +81,12 @@ export const ResultContent = ({
         className={cx(
           active && 'bg-grey-01',
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
-          'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none'
+          'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'
         )}
         {...rest}
       >
-        <div className="flex w-full items-center justify-between leading-[1rem]">
-          <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
+        <div className="flex w-full items-center justify-between leading-4">
+          <Text variant="metadataMedium" ellipsize className="leading-4.5">
             {result.name ?? result.id}
           </Text>
           {alreadySelected && <CheckCircleSmall color="grey-04" />}
@@ -184,11 +184,11 @@ export const SpaceContent = ({
         onClick={onSelect}
         className={cx(
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
-          'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none'
+          'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'
         )}
       >
-        <div className="flex w-full items-center justify-between leading-[1rem]">
-          <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
+        <div className="flex w-full items-center justify-between leading-4">
+          <Text variant="metadataMedium" ellipsize className="leading-4.5">
             {entity.name ?? entity.id}
           </Text>
           {alreadySelected && <CheckCircleSmall color="grey-04" />}

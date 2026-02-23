@@ -88,11 +88,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
 
     if (Either.isLeft(result)) {
       const error = result.left;
-      console.error(
-        `Execute failed: ${error.message}`,
-        { fromSpaceId, toSpaceId, proposalId },
-        error
-      );
+      console.error(`Execute failed: ${error.message}`, { fromSpaceId, toSpaceId, proposalId }, error);
       throw error;
     }
 
