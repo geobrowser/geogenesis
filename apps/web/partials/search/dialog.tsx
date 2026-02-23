@@ -128,7 +128,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                 <div className={cx('relative p-1', autocomplete.results.length > 0 && 'border-b border-grey-02')}>
                   <AnimatePresence mode="wait">
                     {autocomplete.isLoading ? (
-                      <div className="absolute left-4 top-[50%] z-100">
+                      <div className="absolute top-[50%] left-4 z-100">
                         <motion.span
                           key="dots"
                           initial={{ opacity: 0, scale: 0.95 }}
@@ -140,7 +140,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </motion.span>
                       </div>
                     ) : (
-                      <div className="absolute left-4 top-[0.875rem] z-100">
+                      <div className="absolute top-3.5 left-4 z-100">
                         <motion.span
                           key="search"
                           initial={{ opacity: 0, scale: 0.95 }}
@@ -307,7 +307,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-[4] p-2 text-center text-button text-text">Select space to create entity in</div>
+        <div className="flex-4 p-2 text-center text-button text-text">Select space to create entity in</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">

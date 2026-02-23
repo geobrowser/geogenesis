@@ -12,13 +12,13 @@ import { GeoPoint } from '~/core/utils/utils';
 import { Map } from '../map';
 
 const textareaStyles = cva(
-  'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
+  'm-0 -mb-px w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-hidden',
   {
     variants: {
       variant: {
         mainPage: 'text-mainPage',
         body: 'text-body',
-        tableCell: '-mb-0 text-tableCell',
+        tableCell: 'mb-0 text-tableCell',
         smallTitle: 'text-smallTitle',
       },
     },
@@ -84,27 +84,31 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         <div className="mt-[3px] flex w-full justify-between leading-[29px]">
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-2">
-              <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>
+              <label className="text-bodySemibold text-[19px] font-normal text-text">Latitude</label>
               <span className="w-[11px] border-t border-t-[#606060]"></span>
               <Textarea
                 {...props}
                 onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
-                onBlur={() => { isTypingRef.current = false; }}
+                onBlur={() => {
+                  isTypingRef.current = false;
+                }}
                 value={pointValues.latitude}
                 maxRows={1}
-                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal`}
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[19px] text-bodySemibold font-normal text-text">Longitude</label>
+              <label className="text-bodySemibold text-[19px] font-normal text-text">Longitude</label>
               <span className="w-[11px] border-t border-t-[#606060]"></span>
               <Textarea
                 {...props}
                 onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
-                onBlur={() => { isTypingRef.current = false; }}
+                onBlur={() => {
+                  isTypingRef.current = false;
+                }}
                 value={pointValues.longitude}
                 maxRows={1}
-                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal`}
               />
             </div>
           </div>

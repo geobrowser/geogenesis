@@ -23,14 +23,14 @@ import { VideoSmall } from '../icons/video-small';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height. We add a negative margin to compensate for this. This results in the correct line heights between both edit and browse modes. This only affects the editable titles of entity pages and editable titles of data blocks
-  'm-0 w-full resize-none overflow-hidden bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
+  'm-0 w-full resize-none overflow-hidden bg-transparent p-0 placeholder:text-grey-03 focus:outline-hidden',
   {
     variants: {
       variant: {
-        mainPage: 'mb-[-1px] text-mainPage',
+        mainPage: '-mb-px text-mainPage',
         body: 'mb-[-6.5px] text-body',
         tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
-        tableProperty: '!text-tableProperty !text-grey-04',
+        tableProperty: 'text-tableProperty! text-grey-04!',
         smallTitle: 'text-smallTitle',
       },
     },
@@ -605,7 +605,7 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
         aria-label="Close video"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

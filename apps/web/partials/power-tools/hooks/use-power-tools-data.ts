@@ -5,11 +5,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { useCollection } from '~/core/blocks/data/use-collection';
 import { getSchemaFromTypeIds, readTypes } from '~/core/database/entities';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useQueryEntities, useQueryEntitiesAsync } from '~/core/sync/use-store';
@@ -57,22 +57,26 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const [page, setPage] = React.useState(0);
-  const [loadedEntityPages, setLoadedEntityPages] = React.useState<Array<{
-    page: number;
-    entities: Array<{
-      id: string;
-      spaces?: string[];
-      types?: { id: string; name: string | null }[];
-      name?: string | null;
-      values?: { property: { id: string } }[];
-      relations?: { type: { id: string }; toEntity: { id: string }; spaceId?: string }[];
-    }>;
-  }>>([]);
+  const [loadedEntityPages, setLoadedEntityPages] = React.useState<
+    Array<{
+      page: number;
+      entities: Array<{
+        id: string;
+        spaces?: string[];
+        types?: { id: string; name: string | null }[];
+        name?: string | null;
+        values?: { property: { id: string } }[];
+        relations?: { type: { id: string }; toEntity: { id: string }; spaceId?: string }[];
+      }>;
+    }>
+  >([]);
   const [lastPageCount, setLastPageCount] = React.useState(0);
-  const [loadedCollectionRelationPages, setLoadedCollectionRelationPages] = React.useState<Array<{
-    page: number;
-    relations: Relation[];
-  }>>([]);
+  const [loadedCollectionRelationPages, setLoadedCollectionRelationPages] = React.useState<
+    Array<{
+      page: number;
+      relations: Relation[];
+    }>
+  >([]);
   const [columnIds, setColumnIds] = React.useState<string[]>([SystemIds.NAME_PROPERTY]);
 
   const sourceValue = 'value' in source ? source.value : null;
@@ -109,41 +113,39 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
     return true;
   }, []);
 
-  const upsertEntityPage = React.useCallback((
-    prev: typeof loadedEntityPages,
-    nextPage: number,
-    nextItems: typeof loadedEntityPages[number]['entities']
-  ) => {
-    const existing = prev.find(page => page.page === nextPage);
-    if (existing && sameItemsById(existing.entities, nextItems)) {
-      return prev;
-    }
-    const trimmed = prev.filter(page => page.page !== nextPage);
-    trimmed.push({ page: nextPage, entities: nextItems });
-    trimmed.sort((a, b) => a.page - b.page);
-    if (Number.isFinite(MAX_PAGES_IN_MEMORY) && trimmed.length > MAX_PAGES_IN_MEMORY) {
-      trimmed.splice(0, trimmed.length - MAX_PAGES_IN_MEMORY);
-    }
-    return trimmed;
-  }, [sameItemsById]);
+  const upsertEntityPage = React.useCallback(
+    (prev: typeof loadedEntityPages, nextPage: number, nextItems: (typeof loadedEntityPages)[number]['entities']) => {
+      const existing = prev.find(page => page.page === nextPage);
+      if (existing && sameItemsById(existing.entities, nextItems)) {
+        return prev;
+      }
+      const trimmed = prev.filter(page => page.page !== nextPage);
+      trimmed.push({ page: nextPage, entities: nextItems });
+      trimmed.sort((a, b) => a.page - b.page);
+      if (Number.isFinite(MAX_PAGES_IN_MEMORY) && trimmed.length > MAX_PAGES_IN_MEMORY) {
+        trimmed.splice(0, trimmed.length - MAX_PAGES_IN_MEMORY);
+      }
+      return trimmed;
+    },
+    [sameItemsById]
+  );
 
-  const upsertRelationPage = React.useCallback((
-    prev: typeof loadedCollectionRelationPages,
-    nextPage: number,
-    nextItems: Relation[]
-  ) => {
-    const existing = prev.find(page => page.page === nextPage);
-    if (existing && sameItemsById(existing.relations, nextItems)) {
-      return prev;
-    }
-    const trimmed = prev.filter(page => page.page !== nextPage);
-    trimmed.push({ page: nextPage, relations: nextItems });
-    trimmed.sort((a, b) => a.page - b.page);
-    if (Number.isFinite(MAX_PAGES_IN_MEMORY) && trimmed.length > MAX_PAGES_IN_MEMORY) {
-      trimmed.splice(0, trimmed.length - MAX_PAGES_IN_MEMORY);
-    }
-    return trimmed;
-  }, [sameItemsById]);
+  const upsertRelationPage = React.useCallback(
+    (prev: typeof loadedCollectionRelationPages, nextPage: number, nextItems: Relation[]) => {
+      const existing = prev.find(page => page.page === nextPage);
+      if (existing && sameItemsById(existing.relations, nextItems)) {
+        return prev;
+      }
+      const trimmed = prev.filter(page => page.page !== nextPage);
+      trimmed.push({ page: nextPage, relations: nextItems });
+      trimmed.sort((a, b) => a.page - b.page);
+      if (Number.isFinite(MAX_PAGES_IN_MEMORY) && trimmed.length > MAX_PAGES_IN_MEMORY) {
+        trimmed.splice(0, trimmed.length - MAX_PAGES_IN_MEMORY);
+      }
+      return trimmed;
+    },
+    [sameItemsById]
+  );
 
   const {
     collectionItems,
@@ -156,10 +158,7 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
     where,
   });
 
-  const {
-    entities: queriedEntities,
-    isLoading: isQueryLoading,
-  } = useQueryEntities({
+  const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
     where,
     first: pageSize,
     skip: page * pageSize,
@@ -276,7 +275,9 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
         .map(r => ({ id: r.toEntity.id, name: null as string | null }));
       for (const t of types) {
         if (!ids.has(t.id)) {
-          const spaceIdForType = relations.find((r: { toEntity: { id: string }; spaceId?: string }) => r.toEntity.id === t.id)?.spaceId;
+          const spaceIdForType = relations.find(
+            (r: { toEntity: { id: string }; spaceId?: string }) => r.toEntity.id === t.id
+          )?.spaceId;
           ids.set(t.id, { id: t.id, spaceId: spaceIdForType });
         }
       }
@@ -334,9 +335,10 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
   const fetchAllIds = React.useCallback(async () => {
     if (source.type === 'COLLECTION') {
       // When filters are active, use queryEntitiesAsync to match against the filter.
-      const relations = blockEntity?.relations?.filter(
-        r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
-      ) ?? [];
+      const relations =
+        blockEntity?.relations?.filter(
+          r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
+        ) ?? [];
       const candidateIds = relations.map(r => r.toEntity.id);
 
       if (candidateIds.length === 0) return [];

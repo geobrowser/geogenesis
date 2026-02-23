@@ -1,4 +1,4 @@
-import { Graph, Op, type DecimalMantissa, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { type DecimalMantissa, Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
@@ -158,11 +158,11 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
           lat: point.lat ?? point.y ?? 0,
         };
       } catch {
-        throw new Error(`Invalid lon/lat conversion data type ${val}`)
+        throw new Error(`Invalid lon/lat conversion data type ${val}`);
       }
     }
     default:
-      throw new Error(`Unsupported conversion data type: ${dataType}`)
+      throw new Error(`Unsupported conversion data type: ${dataType}`);
   }
 }
 

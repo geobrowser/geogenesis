@@ -19,13 +19,7 @@ type Props = {
   connectedSpaceId?: string;
 };
 
-export async function Component({
-  header,
-  sidebarCounts,
-  proposalType,
-  connectedAddress,
-  connectedSpaceId,
-}: Props) {
+export async function Component({ header, sidebarCounts, proposalType, connectedAddress, connectedSpaceId }: Props) {
   return (
     <>
       <div className="mx-auto max-w-[880px]">

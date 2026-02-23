@@ -5,12 +5,12 @@ import { Profile } from '~/core/types';
 
 import { ProposalWithoutVoters } from '../dto/proposals';
 import {
-  restFetch,
+  type ApiProposalListItem,
   ApiProposalListResponseSchema,
+  encodePathSegment,
   mapActionTypeToProposalType,
   mapProposalStatus,
-  encodePathSegment,
-  type ApiProposalListItem,
+  restFetch,
 } from '../rest';
 import { AbortError } from './errors';
 import { defaultProfile, fetchProfilesBySpaceIds } from './fetch-profile';

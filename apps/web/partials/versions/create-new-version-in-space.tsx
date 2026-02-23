@@ -1,11 +1,10 @@
 'use client';
 
+import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { useState } from 'react';
-
-import { IdUtils } from '@geoprotocol/geo-sdk';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
@@ -122,7 +121,7 @@ export const CreateNewVersionInSpace = ({
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-[4] p-2 text-center text-button text-text">Select space to create in</div>
+        <div className="flex-4 p-2 text-center text-button text-text">Select space to create in</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">

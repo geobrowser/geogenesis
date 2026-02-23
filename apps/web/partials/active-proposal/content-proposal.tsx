@@ -1,5 +1,5 @@
-import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
 import type { Proposal } from '~/core/io/dto/proposals';
+import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
 
 import { Text } from '~/design-system/text';
 

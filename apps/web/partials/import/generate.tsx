@@ -474,7 +474,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   //                       },
   //                       { value: 'entity', label: 'Relation', render: <Relation />, className: `items-center` },
   //                     ]}
-  //                     className="!flex-[0]"
+  //                     className="flex-0!"
   //                     position="popper"
   //                   />
   //                   <Select
@@ -543,7 +543,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   //                           },
   //                           { value: 'RELATION', label: 'Relation', render: <Relation />, className: `items-center` },
   //                         ]}
-  //                         className="!flex-[0]"
+  //                         className="flex-0!"
   //                         disabled
   //                       />
   //                       <Select

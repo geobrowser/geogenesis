@@ -1,10 +1,20 @@
 import { rectSortingStrategy } from '@dnd-kit/sortable';
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { TableBlockGalleryItem } from './table-block-gallery-item';
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
+import { TableBlockGalleryItem } from './table-block-gallery-item';
 
-const renderItem = ({ row, isEditing, spaceId, onChangeEntry, onLinkEntry, properties, source, isPlaceholder, autoFocus }: RenderItemProps) => (
+const renderItem = ({
+  row,
+  isEditing,
+  spaceId,
+  onChangeEntry,
+  onLinkEntry,
+  properties,
+  source,
+  isPlaceholder,
+  autoFocus,
+}: RenderItemProps) => (
   <TableBlockGalleryItem
     isEditing={isEditing}
     columns={row.columns}

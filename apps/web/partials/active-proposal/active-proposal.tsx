@@ -24,7 +24,6 @@ import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
-
 interface Props {
   proposalId?: string;
   connectedAddress: string | undefined;
@@ -81,7 +80,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
       </div>
       <div className="relative overflow-x-clip">
         <MetadataMotionContainer>
-          <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
+          <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
             <div className="flex flex-col items-center gap-8">
               <div className="flex flex-col items-center gap-3">
                 <div className="text-mediumTitle">{proposal.name}</div>
@@ -113,24 +112,24 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
               </div>
               <div className="flex w-full gap-[60px]">
                 <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
                     <Tick />
                   </div>
                   <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
                     <div
-                      className="absolute bottom-0 left-0 top-0 bg-green"
+                      className="absolute top-0 bottom-0 left-0 bg-green"
                       style={{ width: `${yesVotesPercentage}%` }}
                     />
                   </div>
                   <div>{yesVotesPercentage}%</div>
                 </div>
                 <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
                     <Close />
                   </div>
                   <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
                     <div
-                      className="absolute bottom-0 left-0 top-0 bg-red-01"
+                      className="absolute top-0 bottom-0 left-0 bg-red-01"
                       style={{ width: `${noVotesPercentage}%` }}
                     />
                   </div>
@@ -143,7 +142,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           </div>
         </MetadataMotionContainer>
         <div className="h-full overflow-x-clip border-t border-divider">
-          <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
+          <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
             {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
             {(proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE') && (
               <SubspaceProposal proposal={proposal} />

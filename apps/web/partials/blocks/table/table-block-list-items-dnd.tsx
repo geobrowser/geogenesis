@@ -7,7 +7,17 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
 import { TableBlockListItem } from './table-block-list-item';
 
-const renderItem = ({ row, isEditing, spaceId, onChangeEntry, onLinkEntry, properties, source, isPlaceholder, autoFocus }: RenderItemProps) => (
+const renderItem = ({
+  row,
+  isEditing,
+  spaceId,
+  onChangeEntry,
+  onLinkEntry,
+  properties,
+  source,
+  isPlaceholder,
+  autoFocus,
+}: RenderItemProps) => (
   <TableBlockListItem
     isEditing={isEditing}
     columns={row.columns}

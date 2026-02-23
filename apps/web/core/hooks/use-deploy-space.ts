@@ -280,12 +280,7 @@ async function createPersonalStyleSpace({
   return spaceId;
 }
 
-async function findNewDaoSpaceAddress(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  publicClient: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  receipt: any
-): Promise<Hex | null> {
+async function findNewDaoSpaceAddress(publicClient: any, receipt: any): Promise<Hex | null> {
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() === DAO_SPACE_FACTORY_ADDRESS.toLowerCase()) continue;
     if (log.address.toLowerCase() === SPACE_REGISTRY_ADDRESS_HEX.toLowerCase()) continue;

@@ -57,7 +57,7 @@ export const FlowBar = () => {
         {!hideFlowbar && (
           <div
             className={cx(
-              'pointer-events-none fixed bottom-5 inset-x-0 z-[1000] flex justify-center text-button',
+              'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
               RemoveScroll.classNames.fullWidth
             )}
           >
@@ -84,7 +84,10 @@ export const FlowBar = () => {
                 </p>
               </div>
               <button
-                onClick={() => { bumpReviewVersion(); setIsReviewOpen(true); }}
+                onClick={() => {
+                  bumpReviewVersion();
+                  setIsReviewOpen(true);
+                }}
                 className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
               >
                 Review edits
@@ -113,7 +116,9 @@ const StatusBar = () => {
   };
 
   return (
-    <div className={cx('fixed bottom-0 inset-x-0 z-[1000] flex flex-col items-center', RemoveScroll.classNames.fullWidth)}>
+    <div
+      className={cx('fixed inset-x-0 bottom-0 z-1000 flex flex-col items-center', RemoveScroll.classNames.fullWidth)}
+    >
       <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.2 }}>
         <div className="m-8 h-10 overflow-hidden rounded bg-text px-3 py-2.5 text-button text-white">
           <AnimatePresence mode="wait">

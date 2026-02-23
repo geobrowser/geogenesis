@@ -16,7 +16,7 @@ export const ServerContent = ({ content }: ServerContentProps) => {
   }
 
   return (
-    <div className="tiptap ProseMirror !pb-[2rem]">
+    <div className="tiptap ProseMirror pb-8!">
       {content.map((block, index) => (
         <Block key={index} block={block} />
       ))}

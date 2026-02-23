@@ -3,9 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { Address } from '~/core/io/schema';
 import { Space } from '~/core/io/dto/spaces';
 import { getSpacesByAddresses } from '~/core/io/queries';
+import { Address } from '~/core/io/schema';
 
 type UseSpacesByAddressesResult = {
   spaces: Space[];

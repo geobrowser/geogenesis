@@ -127,7 +127,7 @@ export async function GovernanceProposalsList({
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div className="inline-flex flex-[3] items-center gap-8">
+                <div className="inline-flex flex-3 items-center gap-8">
                   <GovernanceProposalVoteState
                     yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
                     noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
@@ -143,11 +143,7 @@ export async function GovernanceProposalsList({
                   />
                 </div>
 
-                <GovernanceStatusChip
-                  endTime={p.endTime}
-                  status={p.status}
-                  canExecute={p.canExecute}
-                />
+                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
             </Link>
           );

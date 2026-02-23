@@ -7,7 +7,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { resolveRenderableTypeKey, TYPE_ICONS } from './type-icons';
+import { TYPE_ICONS, resolveRenderableTypeKey } from './type-icons';
 
 interface DataTypePillProps {
   dataType: DataType;
@@ -23,7 +23,6 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   // Determine what to display
   const hasRenderableType = !!renderableType;
   const displayTypeName = renderableType?.name?.toUpperCase() || dataType;
-
 
   // Get the appropriate entity ID for linking
   let targetId: string | null = null;

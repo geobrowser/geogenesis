@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+
 import { cache } from 'react';
 
 import { fetchProfile } from '~/core/io/subgraph';

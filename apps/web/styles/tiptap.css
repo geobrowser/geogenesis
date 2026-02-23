@@ -1,3 +1,5 @@
+@reference "./styles.css";
+
 .ProseMirror {
   padding-bottom: 0;
 }
@@ -119,7 +121,7 @@
 }
 
 .ProseMirror .node-tableNode {
-  @apply [&:not(:first-child)]:mt-12;
+  @apply not-first:mt-12;
 }
 
 .ProseMirror ul {

@@ -2,8 +2,8 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 
-import { restFetch, ApiError } from '../rest';
-import { ApiEntityVersionsResponseSchema, type ApiEntityVersion } from '../rest';
+import { ApiError, restFetch } from '../rest';
+import { type ApiEntityVersion, ApiEntityVersionsResponseSchema } from '../rest';
 import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';
 

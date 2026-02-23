@@ -1,12 +1,12 @@
-import { Effect, Either, Schema } from 'effect';
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { snapshotToDiff } from '~/core/io/dto/snapshot-to-diff';
 import { getBatchEntities } from '~/core/io/queries';
 import { Diff, type EntityDiff } from '~/core/utils/diff';
 
-import { restFetch, ApiError } from '../rest';
+import { ApiError, restFetch } from '../rest';
 import { ApiEntityDiffResponseSchema } from '../rest';
 import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';
@@ -148,9 +148,7 @@ async function discoverBlockEntityIds(entityId: string, spaceId: string): Promis
     const entity = entities[0];
     if (!entity) return [];
 
-    return entity.relations
-      .filter(r => r.type.id === SystemIds.BLOCKS)
-      .map(r => r.toEntity.id);
+    return entity.relations.filter(r => r.type.id === SystemIds.BLOCKS).map(r => r.toEntity.id);
   } catch {
     return [];
   }

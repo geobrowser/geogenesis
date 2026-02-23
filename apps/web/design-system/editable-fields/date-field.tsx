@@ -39,7 +39,7 @@ const dateTextStyles = cva('', {
     variant: {
       body: 'text-body text-text',
       tableCell: 'text-tableCell text-text',
-      tableProperty: '!text-tableProperty !text-grey-04',
+      tableProperty: 'text-tableProperty! text-grey-04!',
     },
   },
   defaultVariants: {
@@ -48,13 +48,13 @@ const dateTextStyles = cva('', {
 });
 
 const dateFieldStyles = cva(
-  'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-none',
+  'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-hidden',
   {
     variants: {
       variant: {
         body: 'text-body',
         tableCell: 'text-tableCell',
-        tableProperty: '!text-tableProperty !text-grey-04',
+        tableProperty: 'text-tableProperty! text-grey-04!',
       },
       error: {
         true: 'text-red-01',
@@ -67,12 +67,12 @@ const dateFieldStyles = cva(
   }
 );
 
-const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
+const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-hidden', {
   variants: {
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: '!text-tableProperty !text-grey-04',
+      tableProperty: 'text-tableProperty! text-grey-04!',
     },
     error: {
       true: 'text-red-01',
@@ -264,11 +264,7 @@ function useSelectAllOnFocus(refs: React.RefObject<HTMLInputElement | null>[]) {
  * Serializes to date-only ISO string (YYYY-MM-DDT00:00:00.000Z)
  */
 function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
-  const {
-    day: initialDay,
-    month: initialMonth,
-    year: initialYear,
-  } = GeoDate.fromISOStringUTC(initialDate);
+  const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -278,7 +274,10 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
   const [month, setMonth] = useFieldWithValidation(formattedInitialMonth, monthValidator);
   const [year, setYear] = useFieldWithValidation(formattedInitialYear, yearValidator);
 
-  const [dateFormState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, dateFormValidator);
+  const [dateFormState] = useFormWithValidation(
+    { day: day.value, month: month.value, year: year.value },
+    dateFormValidator
+  );
 
   const [yearTouched, setYearTouched] = React.useState(false);
   const [monthTouched, setMonthTouched] = React.useState(false);
@@ -391,7 +390,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
       {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
-          <div className="flex flex-[6] flex-col">
+          <div className="flex flex-6 flex-col">
             <input
               ref={yearInputRef}
               value={year.value}
@@ -405,9 +404,9 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
             />
           </div>
 
-          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
+          <span className="size flex flex-1 justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[4] flex-col">
+          <div className="flex flex-4 flex-col">
             <input
               ref={monthInputRef}
               value={month.value}
@@ -424,9 +423,9 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
             />
           </div>
 
-          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
+          <span className="size flex flex-1 justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[4] flex-col">
+          <div className="flex flex-4 flex-col">
             <input
               ref={dayInputRef}
               value={day.value}
@@ -463,11 +462,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
  * Serializes to ISO string with fixed date 1970-01-01
  */
 function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
-  const {
-    hour: initialHour,
-    minute: initialMinute,
-    meridiem: initialMeridiem,
-  } = GeoDate.fromISOStringUTC(initialDate);
+  const { hour: initialHour, minute: initialMinute, meridiem: initialMeridiem } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialHour =
     initialHour === '' ? initialHour : initialHour.padStart(2, '0') === '00' ? '12' : initialHour.padStart(2, '0');
@@ -605,7 +600,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
           </div>
 
           <Spacer width={12} />
-          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-hidden">
             <SmallButton
               ref={meridiemButtonRef}
               onClick={() => onToggleMeridiem()}
@@ -658,7 +653,10 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
   const [minute, setMinute] = useFieldWithValidation(formattedInitialMinute, minuteValidator);
   const [meridiem, setMeridiem] = React.useState<'am' | 'pm'>(initialMeridiem);
 
-  const [dateFormState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, dateFormValidator);
+  const [dateFormState] = useFormWithValidation(
+    { day: day.value, month: month.value, year: year.value },
+    dateFormValidator
+  );
   const [timeFormState] = useFormWithValidation({ hour: hour.value, minute: minute.value }, timeFormValidator);
 
   const [yearTouched, setYearTouched] = React.useState(false);
@@ -737,8 +735,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
     }
 
     const isValidDayCheck = day.value !== '' || (!day.isValidating && day.isValid);
-    const isValidMonthCheck =
-      month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
+    const isValidMonthCheck = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
     const isValidYearCheck = year.value !== '' || (!year.isValidating && year.isValid);
     const isValidHourCheck = hour.value === '' || (!hour.isValidating && hour.isValid);
     const isValidMinuteCheck = minute.value === '' || (!minute.isValidating && minute.isValid);
@@ -856,7 +853,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
       {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
-          <div className="flex flex-[6] flex-col">
+          <div className="flex flex-6 flex-col">
             <input
               ref={yearInputRef}
               value={year.value}
@@ -870,9 +867,9 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
             />
           </div>
 
-          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
+          <span className="size flex flex-1 justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[4] flex-col">
+          <div className="flex flex-4 flex-col">
             <input
               ref={monthInputRef}
               value={month.value}
@@ -889,9 +886,9 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
             />
           </div>
 
-          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
+          <span className="size flex flex-1 justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[4] flex-col">
+          <div className="flex flex-4 flex-col">
             <input
               ref={dayInputRef}
               value={day.value}
@@ -940,7 +937,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
           </div>
 
           <Spacer width={12} />
-          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-hidden">
             <SmallButton
               ref={meridiemButtonRef}
               onClick={() => onToggleMeridiem()}
@@ -971,13 +968,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
 /**
  * Internal DateInput dispatcher - routes to the appropriate variant based on dataType
  */
-function DateInput({
-  variant,
-  initialDate,
-  onDateChange,
-  label,
-  dataType,
-}: DateInputProps & { dataType?: DataType }) {
+function DateInput({ variant, initialDate, onDateChange, label, dataType }: DateInputProps & { dataType?: DataType }) {
   switch (dataType) {
     case 'DATE':
       return <DateOnlyInput variant={variant} initialDate={initialDate} onDateChange={onDateChange} label={label} />;

@@ -13,7 +13,8 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { ColorName } from '~/design-system/theme/colors';
 
-import { TypeIconComponent, TYPE_ICONS } from './type-icons';
+import { TYPE_ICONS, TypeIconComponent } from './type-icons';
+
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
@@ -59,7 +60,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
-          className={`flex items-center gap-[6px] leading-4 rounded-[6px] border px-1.5 py-[3px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
+          className={`flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
         >
           <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}
@@ -85,8 +86,8 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
                   option.onClick(option.value);
                 }}
                 className={cx(
-                  'flex w-full select-none items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text hover:cursor-pointer hover:bg-divider focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  value === option.value && '!bg-divider'
+                  'flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                  value === option.value && 'bg-divider!'
                 )}
               >
                 <TypeIcon color="grey-04" />

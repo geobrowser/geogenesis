@@ -24,14 +24,7 @@ interface Props {
   proposalId: string;
 }
 
-export function AcceptOrReject({
-  spaceId,
-  isProposalEnded,
-  status,
-  canExecute,
-  userVote,
-  proposalId,
-}: Props) {
+export function AcceptOrReject({ spaceId, isProposalEnded, status, canExecute, userVote, proposalId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     spaceId,

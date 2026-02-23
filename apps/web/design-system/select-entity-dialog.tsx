@@ -50,7 +50,7 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-[1001]" collisionPadding={10} avoidCollisions={true}>
+        <Popover.Content sideOffset={4} align="start" className="z-1001" collisionPadding={10} avoidCollisions={true}>
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}

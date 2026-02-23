@@ -66,7 +66,12 @@ type ComponentRoute = {
   img: string | null;
 };
 
-function getComponentRoute({ urlComponents, index, routeSpaceName, routeSpaceImage }: GetComponentRouteConfig): ComponentRoute {
+function getComponentRoute({
+  urlComponents,
+  index,
+  routeSpaceName,
+  routeSpaceImage,
+}: GetComponentRouteConfig): ComponentRoute {
   const component = urlComponents[index];
 
   switch (index) {

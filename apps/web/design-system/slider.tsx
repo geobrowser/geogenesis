@@ -69,7 +69,7 @@ const MobileSlider = ({ label, children }: SliderProps) => {
           </div>
         )}
       </div>
-      <div className="no-scrollbar -mx-4 hidden w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-y-clip overflow-x-scroll xl:flex">
+      <div className="no-scrollbar -mx-4 hidden w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-x-scroll overflow-y-clip xl:flex">
         {slides.map((slide: ReactNode, index: number) => (
           <Slide key={index} mode="mobile" index={index} id={`${prefix}-slider-mobile-${index}`} onChange={setPage}>
             {slide}
@@ -126,7 +126,7 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
           </div>
         )}
       </div>
-      <div className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-y-clip overflow-x-scroll xl:hidden">
+      <div className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-x-scroll overflow-y-clip xl:hidden">
         {slides.map((slide: ReactNode, index: number) => (
           <Slide key={index} mode="desktop" index={index} id={`${prefix}-slider-desktop-${index}`} onChange={setPage}>
             {slide}
@@ -159,10 +159,7 @@ const Slide = ({ mode, index, id, onChange, children }: SlideProps) => {
     <div
       ref={ref}
       id={id}
-      className={cx(
-        'grid w-full flex-shrink-0 snap-center gap-8 px-4',
-        mode === 'desktop' ? 'grid-cols-3' : 'grid-cols-2'
-      )}
+      className={cx('grid w-full shrink-0 snap-center gap-8 px-4', mode === 'desktop' ? 'grid-cols-3' : 'grid-cols-2')}
     >
       {children}
     </div>

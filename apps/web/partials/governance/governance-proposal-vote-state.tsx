@@ -22,12 +22,12 @@ export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user,
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
         ) : (
-          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
             <TickSmall />
           </div>
         )}
         <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
-          <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesPercentage}%` }} />
+          <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesPercentage}%` }} />
         </div>
         <div>{yesPercentage}%</div>
       </div>
@@ -37,12 +37,12 @@ export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user,
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
         ) : (
-          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
             <CloseSmall />
           </div>
         )}
         <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
-          <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noPercentage}%` }} />
+          <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noPercentage}%` }} />
         </div>
         <div>{noPercentage}%</div>
       </div>

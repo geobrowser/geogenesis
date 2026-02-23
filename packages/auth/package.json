@@ -32,7 +32,7 @@
     "permissionless": "0.2.39",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.5.3",
-    "viem": "^2.45.0",
+    "viem": "^2.46.2",
     "wagmi": "^3.4.3"
   },
   "devDependencies": {

@@ -27,7 +27,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
 
           return (
             <Link key={index} href={href} className="group">
-              <div className="relative aspect-[16/9] w-full overflow-clip rounded-lg bg-grey-01">
+              <div className="relative aspect-video w-full overflow-clip rounded-lg bg-grey-01">
                 <GeoImage
                   value={image}
                   className="transition-transform duration-150 ease-in-out group-hover:scale-105"

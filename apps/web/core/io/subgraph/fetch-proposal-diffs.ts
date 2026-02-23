@@ -3,7 +3,7 @@ import { Effect, Either, Schema } from 'effect';
 import { Environment } from '~/core/environment';
 import { Diff, type EntityDiff } from '~/core/utils/diff';
 
-import { restFetch, ApiError } from '../rest';
+import { ApiError, restFetch } from '../rest';
 import { ApiProposalDiffResponseSchema } from '../rest';
 import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';

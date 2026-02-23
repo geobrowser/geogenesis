@@ -42,10 +42,14 @@ export function GovernanceStatusChip({ status, endTime, canExecute }: Props) {
       }
 
       if (isVotingEnded) {
-        return <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>;
+        return (
+          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>
+        );
       }
 
-      return <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">{`${hours}h ${minutes}m remaining`}</div>;
+      return (
+        <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">{`${hours}h ${minutes}m remaining`}</div>
+      );
     }
     case 'REJECTED': {
       return (

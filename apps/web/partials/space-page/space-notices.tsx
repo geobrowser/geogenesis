@@ -234,12 +234,12 @@ const Notice = ({ id, color, media, title, description, action, format = 'normal
   return (
     <div id={id} className={noticeClassNames({ color, format })}>
       <div className="relative z-10 flex h-full flex-col">
-        <div className="grow text-balance pr-8 text-[1.0625rem] font-medium leading-tight">{title}</div>
+        <div className="grow pr-8 text-[1.0625rem] leading-tight font-medium text-balance">{title}</div>
         {description && <div className="mt-4 shrink-0 text-metadata">{description}</div>}
         {action && <div className="mt-4 flex shrink-0 gap-2">{action}</div>}
       </div>
-      {media && <div className="pointer-events-none absolute bottom-0.5 right-0 z-0 flex overflow-clip">{media}</div>}
-      <div className="absolute right-0 top-0 z-10 p-3">
+      {media && <div className="pointer-events-none absolute right-0 bottom-0.5 z-0 flex overflow-clip">{media}</div>}
+      <div className="absolute top-0 right-0 z-10 p-3">
         <button
           onClick={handleDismissNotice}
           className="p-1 opacity-50 transition duration-300 ease-in-out hover:opacity-100"
@@ -266,7 +266,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
   const { storage } = useMutate();
 
   return (
-    <div className="pr-[3.25rem]">
+    <div className="pr-13">
       <SelectEntity
         placeholder=""
         onDone={(result, fromCreateFn) => {
@@ -299,7 +299,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
         }}
         spaceId={spaceId}
         relationValueTypes={projectValueTypes}
-        inputClassName="!py-[3.5px]"
+        inputClassName="py-[3.5px]!"
         variant="floating"
         width="full"
         withSearchIcon
@@ -361,7 +361,7 @@ const JoinSpaceItem = ({ space }: { space: (typeof spaces)[number] }) => {
       <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
         <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />
       </span>
-      <span className="whitespace-nowrap text-breadcrumb">{space.name}</span>
+      <span className="text-breadcrumb whitespace-nowrap">{space.name}</span>
     </Link>
   );
 };
@@ -406,7 +406,7 @@ const TeamNotice = () => {
       <div className="col-span-3 overflow-clip rounded-lg border border-grey-02">
         <div className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-4">
-            <div className="bg-gradient-purple flex aspect-[3/2] w-[3.75rem] shrink-0 items-center justify-center rounded p-2">
+            <div className="flex aspect-3/2 w-15 shrink-0 items-center justify-center rounded p-2 bg-gradient-purple">
               <img src="/invite-your-team-to-create-a-geo-account.png" alt="" className="h-full w-auto" />
             </div>
             <div className="flex w-full items-center justify-between">
@@ -418,7 +418,7 @@ const TeamNotice = () => {
           </div>
           <hr className="h-px w-full border-none bg-grey-02" />
           <div className="flex items-center gap-4">
-            <div className="bg-gradient-blue flex aspect-[3/2] w-[3.75rem] shrink-0 items-center justify-center rounded p-2">
+            <div className="flex aspect-3/2 w-15 shrink-0 items-center justify-center rounded p-2 bg-gradient-blue">
               <img src="/ask-for-their-person-id.png" alt="" className="h-full w-auto" />
             </div>
             <div className="flex w-full items-center">
@@ -427,7 +427,7 @@ const TeamNotice = () => {
           </div>
           <hr className="h-px w-full border-none bg-grey-02" />
           <div className="flex items-start gap-4">
-            <div className="bg-gradient-green flex aspect-[3/2] w-[3.75rem] shrink-0 items-center justify-center rounded p-2">
+            <div className="flex aspect-3/2 w-15 shrink-0 items-center justify-center rounded p-2 bg-gradient-green">
               <img src="/link-or-add-team-members.png" alt="" className="h-auto w-full" />
             </div>
             <div>

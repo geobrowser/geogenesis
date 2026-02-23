@@ -8,9 +8,9 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useSpacesByAddresses } from '~/core/hooks/use-spaces-by-addresses';
 import { Space } from '~/core/io/dto/spaces';
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-import { useSpacesByAddresses } from '~/core/hooks/use-spaces-by-addresses';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -65,7 +65,7 @@ export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: Personal
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
+            <Text variant="button" className="hover:text-text!">
               All
             </Text>
           </Link>
@@ -76,7 +76,7 @@ export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: Personal
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
+            <Text variant="button" className="hover:text-text!">
               Active proposals
             </Text>
           </Link>
@@ -87,7 +87,7 @@ export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: Personal
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
+            <Text variant="button" className="hover:text-text!">
               Membership requests
             </Text>
           </Link>
@@ -251,7 +251,7 @@ function Activity({ label = '', activities = [] }: ActivityProps) {
 // const FindOrCreateCompanySpace = () => {
 //   return (
 //     <div className="w-full rounded bg-white p-2 focus-within:ring-2 focus-within:ring-black">
-//       <input type="text" placeholder="Find or create..." className="w-full focus:outline-none" />
+//       <input type="text" placeholder="Find or create..." className="w-full focus:outline-hidden" />
 //     </div>
 //   );
 // };

@@ -52,7 +52,8 @@ function HistoryDiffContent({ selection, onClose }: { selection: HistoryDiffSele
       }),
   });
 
-  const isEmpty = !isLoading && (!diff || (diff.values.length === 0 && diff.relations.length === 0 && diff.blocks.length === 0));
+  const isEmpty =
+    !isLoading && (!diff || (diff.values.length === 0 && diff.relations.length === 0 && diff.blocks.length === 0));
 
   return (
     <div className="h-full overflow-y-auto overscroll-contain">
@@ -62,8 +63,8 @@ function HistoryDiffContent({ selection, onClose }: { selection: HistoryDiffSele
           <p>{selection.label}</p>
         </div>
       </div>
-      <div className="relative overflow-y-auto overflow-x-clip overscroll-contain">
-        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
+      <div className="relative overflow-x-clip overflow-y-auto overscroll-contain">
+        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Dots />

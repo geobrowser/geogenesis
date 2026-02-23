@@ -61,11 +61,11 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
       entityId={entity.id}
       className="flex items-center gap-5 py-4 hover:bg-bg"
     >
-      <div className="relative size-10 flex-shrink-0 overflow-hidden rounded-md bg-grey-01">
+      <div className="relative size-10 shrink-0 overflow-hidden rounded-md bg-grey-01">
         {validAvatarUrl ? (
           <GeoImage value={validAvatarUrl} className="object-cover" alt="" fill priority />
         ) : (
-          <div className="bg-gradient-geo flex h-full w-full" />
+          <div className="flex h-full w-full bg-gradient-geo" />
         )}
       </div>
       <div>

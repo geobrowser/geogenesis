@@ -11,7 +11,7 @@ interface BreadcrumbProps {
 
 export function Breadcrumb({ children, img }: BreadcrumbProps) {
   return (
-    <span className="flex cursor-pointer items-center whitespace-nowrap py-px no-underline">
+    <span className="flex cursor-pointer items-center py-px whitespace-nowrap no-underline">
       {img && (
         <>
           <div className="relative h-3 w-3 overflow-hidden rounded-sm">

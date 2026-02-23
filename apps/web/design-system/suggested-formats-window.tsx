@@ -7,25 +7,23 @@ import {
   DATA_TYPE_PROPERTY,
   GRC_20_SPECIFICATION_LINK,
   RENDERABLE_TYPE_PROPERTY,
-  SUGGESTED_DATE_FORMATS,
   SUGGESTED_DATETIME_FORMATS,
+  SUGGESTED_DATE_FORMATS,
   SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_NUMBER_FORMATS,
   SUGGESTED_TIME_FORMATS,
   SUGGESTED_URL_FORMATS,
   UNICODE_LINK,
 } from '~/core/constants';
+import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { useRelations } from '~/core/sync/use-store';
 import { ValueOptions } from '~/core/types';
-import { getStrictRenderableType } from '~/core/io/dto/properties';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { NewTab } from './icons/new-tab';
 
 // Reverse map: entity ID → data type name (e.g. 'DATE', 'TIME', etc.)
-const ENTITY_ID_TO_DATA_TYPE = Object.fromEntries(
-  Object.entries(DATA_TYPE_ENTITY_IDS).map(([type, id]) => [id, type])
-);
+const ENTITY_ID_TO_DATA_TYPE = Object.fromEntries(Object.entries(DATA_TYPE_ENTITY_IDS).map(([type, id]) => [id, type]));
 
 const FORMAT_MAP = {
   URL: SUGGESTED_URL_FORMATS,
@@ -74,15 +72,24 @@ const SuggestedFormats = ({
   }, [dataType, renderableTypeStrict]);
 
   const formatKind: FormatKind =
-    renderableTypeStrict === 'URL' ? 'URL' : DATA_TYPE_TO_FORMAT_KIND[dataType ?? ''] ?? 'NUMBER';
+    renderableTypeStrict === 'URL' ? 'URL' : (DATA_TYPE_TO_FORMAT_KIND[dataType ?? ''] ?? 'NUMBER');
 
   const renderableFormats = FORMAT_MAP[formatKind];
   const isTemporalType = formatKind === 'DATE' || formatKind === 'DATETIME' || formatKind === 'TIME';
-  const viewAllLink = isTemporalType ? GRC_20_SPECIFICATION_LINK : formatKind === 'NUMBER' || formatKind === 'FLOAT' ? UNICODE_LINK : null;
-  const formatKindLabel = isTemporalType ? 'date/time' : formatKind === 'URL' ? 'URL' : formatKind === 'FLOAT' ? 'float' : 'number';
+  const viewAllLink = isTemporalType
+    ? GRC_20_SPECIFICATION_LINK
+    : formatKind === 'NUMBER' || formatKind === 'FLOAT'
+      ? UNICODE_LINK
+      : null;
+  const formatKindLabel = isTemporalType
+    ? 'date/time'
+    : formatKind === 'URL'
+      ? 'URL'
+      : formatKind === 'FLOAT'
+        ? 'float'
+        : 'number';
   const formatLabel =
-    renderableFormats.find(f => f.format === value)?.label ||
-    (formatKind === 'URL' ? 'Custom URL' : 'Unspecified');
+    renderableFormats.find(f => f.format === value)?.label || (formatKind === 'URL' ? 'Custom URL' : 'Unspecified');
 
   return (
     visible && (
@@ -94,7 +101,7 @@ const SuggestedFormats = ({
         </div>
         <div className="mt-3 w-full rounded-md bg-grey-01 p-3">
           <div className="flex w-full justify-between">
-            <span className="text-tableProperty font-medium leading-5 text-text">
+            <span className="text-tableProperty leading-5 font-medium text-text">
               Other common {formatKindLabel} formats
             </span>
             <div className="flex">

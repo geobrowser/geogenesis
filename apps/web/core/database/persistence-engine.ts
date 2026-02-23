@@ -1,6 +1,6 @@
-import { Relation, Value } from '../types';
 import { reactiveRelations, reactiveValues } from '../sync/store';
 import { GeoEventStream } from '../sync/stream';
+import { Relation, Value } from '../types';
 import { db } from './indexeddb';
 
 const DEBOUNCE_MS = 300;
@@ -132,7 +132,6 @@ export class PersistenceEngine {
           }
           return merged;
         });
-
       }
 
       if (localRelations.length > 0) {
@@ -147,7 +146,6 @@ export class PersistenceEngine {
           }
           return merged;
         });
-
       }
     } catch (err) {
       console.warn('[PersistenceEngine] restore failed:', err);

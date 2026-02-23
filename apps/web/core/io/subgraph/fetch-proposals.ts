@@ -6,13 +6,13 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { ProposalWithoutVoters } from '../dto/proposals';
 import {
-  restFetch,
+  type ApiProposalListItem,
   ApiProposalListResponseSchema,
+  encodePathSegment,
   mapActionTypeToProposalType,
   mapProposalStatus,
-  encodePathSegment,
+  restFetch,
   validateActionTypes,
-  type ApiProposalListItem,
 } from '../rest';
 import { AbortError } from './errors';
 import { defaultProfile, fetchProfilesBySpaceIds } from './fetch-profile';

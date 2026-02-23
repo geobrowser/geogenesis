@@ -7,13 +7,13 @@ import { NavUtils } from '~/core/utils/utils';
 import { Proposal } from '../dto/proposals';
 import {
   ApiError,
-  restFetch,
+  type ApiProposalStatusResponse,
   ApiProposalStatusResponseSchema,
-  mapActionTypeToProposalType,
-  mapProposalStatus,
   convertVoteOption,
   encodePathSegment,
-  type ApiProposalStatusResponse,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  restFetch,
 } from '../rest';
 import { Address, SubstreamVote } from '../substream-schema';
 import { AbortError } from './errors';

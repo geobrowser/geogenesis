@@ -257,7 +257,7 @@ export const SelectEntity = ({
       })}
     >
       {withSearchIcon && (
-        <div className="absolute bottom-0 left-3 top-0 z-10 flex items-center">
+        <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
           <Search />
         </div>
       )}
@@ -284,7 +284,7 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               collisionPadding={10}
               forceMount
             >
@@ -296,356 +296,358 @@ export const SelectEntity = ({
                     withSearchIcon && 'rounded-t-none'
                   )}
                 >
-                {advanced && (
-                  <div className="w-full">
-                    <button
-                      onClick={handleShowAdvanced}
-                      className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
-                    >
-                      <div className="inline-flex items-center gap-1">
-                        <span className="text-[0.6875rem] text-grey-04">Advanced</span>
-                        <span
-                          className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
-                        >
-                          <ChevronDownSmall color="grey-04" />
-                        </span>
-                      </div>
-                    </button>
-                    <ResizableContainer>
-                      {isShowingAdvanced && (
-                        <div className="border-b border-grey-02 px-4 py-2">
-                          {!isAddingFilter ? (
-                            <>
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-[0.875rem] text-grey-04">Applied</span>
-                                </div>
-                                <div>
-                                  <button
-                                    onClick={() => setIsAddingFilter(true)}
-                                    className="text-[0.875rem] text-ctaHover"
-                                  >
-                                    + Add filter
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
-                                {hasNoFilters ? (
-                                  <div>No filters applied</div>
-                                ) : (
-                                  <>
-                                    {allowedTypes.map(allowedType => {
-                                      return (
-                                        <FilterPill
-                                          key={allowedType.id}
-                                          filterType="Type"
-                                          name={allowedType.name ?? ''}
-                                          onDelete={() =>
-                                            setRemovedTypeIds(prev => new Set([...prev, allowedType.id]))
-                                          }
-                                        />
-                                      );
-                                    })}
-                                    {spaceFilter && (
-                                      <FilterPill
-                                        key={spaceFilter.spaceId}
-                                        filterType="Space"
-                                        name={spaceFilter.spaceName ?? ''}
-                                        onDelete={() => setSpaceFilter(null)}
-                                      />
-                                    )}
-                                    {typeFilter && (
-                                      <FilterPill
-                                        key={typeFilter.typeId}
-                                        filterType="Type"
-                                        name={typeFilter.typeName ?? ''}
-                                        onDelete={() => setTypeFilter(null)}
-                                      />
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div>
-                                <button
-                                  onClick={() => {
-                                    setIsAddingFilter(false);
-                                  }}
-                                  className="text-[0.875rem] text-grey-04"
-                                >
-                                  Back
-                                </button>
-                              </div>
-                              <div className="relative z-100 mt-1 flex w-full items-center gap-2 text-black">
-                                <div className="flex flex-1">
-                                  <Select
-                                    options={[
-                                      { value: 'space', label: 'Space' },
-                                      { value: 'type', label: 'Type' },
-                                    ]}
-                                    value={addFilterValue}
-                                    onChange={value => setAddFilterValue(value as 'space' | 'type')}
-                                  />
-                                </div>
-                                <span className="text-button text-grey-04">is</span>
-                                <div className="flex flex-[2]">
-                                  {addFilterValue === 'space' && (
-                                    <SpaceFilterInput
-                                      onSelect={result => {
-                                        setSpaceFilter({
-                                          spaceId: result.id,
-                                          spaceName: result.name,
-                                        });
-                                        setIsAddingFilter(false);
-                                      }}
-                                    />
-                                  )}
-                                  {addFilterValue === 'type' && (
-                                    <TypeFilterInput
-                                      onSelect={result => {
-                                        setTypeFilter({
-                                          typeId: result.id,
-                                          typeName: result.name,
-                                        });
-                                        setIsAddingFilter(false);
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            </>
-                          )}
+                  {advanced && (
+                    <div className="w-full">
+                      <button
+                        onClick={handleShowAdvanced}
+                        className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
+                      >
+                        <div className="inline-flex items-center gap-1">
+                          <span className="text-[0.6875rem] text-grey-04">Advanced</span>
+                          <span
+                            className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
+                          >
+                            <ChevronDownSmall color="grey-04" />
+                          </span>
                         </div>
-                      )}
-                    </ResizableContainer>
-                  </div>
-                )}
-                {!result ? (
-                  <ResizableContainer>
-                    <div
-                      className="no-scrollbar flex flex-col overflow-y-auto overflow-x-clip bg-white"
-                      style={{
-                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
-                        maxHeight:
-                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
-                        // Enforce a minimum height so the results area stays visible. When
-                        // the anchor is near the viewport bottom, this forces the content to
-                        // exceed the available space, triggering Radix/Floating UI to flip
-                        // the dropdown above the input.
-                        minHeight: results.length > 0 ? '100px' : '2.5rem',
-                      }}
-                    >
-                      {!results?.length && isLoading && (
-                        <div className="w-full bg-white px-3 py-2">
-                          <div className="truncate text-resultTitle text-text">Loading...</div>
-                        </div>
-                      )}
-                      {isEmpty ? (
-                        <div className="w-full bg-white px-3 py-2">
-                          <div className="truncate text-resultTitle text-text">No results.</div>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-divider bg-white">
-                          {results.map((result, index) => (
-                            <div key={index} className="w-full">
-                              <div className="p-1">
-                                <button
-                                  onClick={() => {
-                                    setResult(null);
-                                    onDone?.({
-                                      id: result.id,
-                                      name: result.name,
-                                      primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
-                                    });
-                                    onQueryChange('');
-                                    setSelectedIndex(0);
-                                  }}
-                                  id={`select-entity-result-${index}`}
-                                  className={cx(
-                                    'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none',
-                                    index === selectedIndex && 'bg-grey-01'
-                                  )}
-                                >
-                                  {isShowingIds && (
-                                    <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
-                                  )}
-                                  <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
-                                  <div className="mt-1.5 flex items-center gap-1.5">
-                                    {withSelectSpace && (result.spaces ?? []).length > 0 && (
-                                      <div className="flex shrink-0 items-center gap-1">
-                                        <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
-                                          <NativeGeoImage
-                                            value={result.spaces[0].image}
-                                            alt=""
-                                            className="h-full w-full object-cover"
-                                          />
-                                        </span>
-                                        <span className="text-[0.875rem] text-text">{result.spaces[0].name}</span>
-                                      </div>
-                                    )}
-                                    {result.types.length > 0 && (
-                                      <>
-                                        {withSelectSpace && (
-                                          <div className="shrink-0">
-                                            <svg
-                                              width="8"
-                                              height="9"
-                                              viewBox="0 0 8 9"
-                                              fill="none"
-                                              xmlns="http://www.w3.org/2000/svg"
-                                            >
-                                              <path
-                                                d="M2.25 8L5.75 4.5L2.25 1"
-                                                stroke="#606060"
-                                                strokeLinecap="round"
-                                              />
-                                            </svg>
-                                          </div>
-                                        )}
-                                        <div className="flex items-center gap-1.5">
-                                          {result.types.slice(0, 3).map((type, index) => (
-                                            <Tag key={`${type.id}-${index}`}>{type.name}</Tag>
-                                          ))}
-                                          {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
-                                        </div>
-                                      </>
-                                    )}
+                      </button>
+                      <ResizableContainer>
+                        {isShowingAdvanced && (
+                          <div className="border-b border-grey-02 px-4 py-2">
+                            {!isAddingFilter ? (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="text-[0.875rem] text-grey-04">Applied</span>
                                   </div>
-                                  {result.description && (
+                                  <div>
+                                    <button
+                                      onClick={() => setIsAddingFilter(true)}
+                                      className="text-[0.875rem] text-ctaHover"
+                                    >
+                                      + Add filter
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
+                                  {hasNoFilters ? (
+                                    <div>No filters applied</div>
+                                  ) : (
                                     <>
-                                      <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
-                                        <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
-                                          {result.description}
-                                        </p>
-                                      </Truncate>
+                                      {allowedTypes.map(allowedType => {
+                                        return (
+                                          <FilterPill
+                                            key={allowedType.id}
+                                            filterType="Type"
+                                            name={allowedType.name ?? ''}
+                                            onDelete={() =>
+                                              setRemovedTypeIds(prev => new Set([...prev, allowedType.id]))
+                                            }
+                                          />
+                                        );
+                                      })}
+                                      {spaceFilter && (
+                                        <FilterPill
+                                          key={spaceFilter.spaceId}
+                                          filterType="Space"
+                                          name={spaceFilter.spaceName ?? ''}
+                                          onDelete={() => setSpaceFilter(null)}
+                                        />
+                                      )}
+                                      {typeFilter && (
+                                        <FilterPill
+                                          key={typeFilter.typeId}
+                                          filterType="Type"
+                                          name={typeFilter.typeName ?? ''}
+                                          onDelete={() => setTypeFilter(null)}
+                                        />
+                                      )}
                                     </>
                                   )}
-                                </button>
-                              </div>
-                              {withSelectSpace && (
-                                <div className="-mt-2 p-1">
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div>
                                   <button
-                                    onClick={() => setResult(result)}
-                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
+                                    onClick={() => {
+                                      setIsAddingFilter(false);
+                                    }}
+                                    className="text-[0.875rem] text-grey-04"
                                   >
-                                    <div className="flex items-center gap-1">
-                                      <div className="inline-flex gap-0">
-                                        {(result.spaces ?? []).slice(0, 3).map(space => (
-                                          <div
-                                            key={space.spaceId}
-                                            className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
-                                          >
+                                    Back
+                                  </button>
+                                </div>
+                                <div className="relative z-100 mt-1 flex w-full items-center gap-2 text-black">
+                                  <div className="flex flex-1">
+                                    <Select
+                                      options={[
+                                        { value: 'space', label: 'Space' },
+                                        { value: 'type', label: 'Type' },
+                                      ]}
+                                      value={addFilterValue}
+                                      onChange={value => setAddFilterValue(value as 'space' | 'type')}
+                                    />
+                                  </div>
+                                  <span className="text-button text-grey-04">is</span>
+                                  <div className="flex flex-2">
+                                    {addFilterValue === 'space' && (
+                                      <SpaceFilterInput
+                                        onSelect={result => {
+                                          setSpaceFilter({
+                                            spaceId: result.id,
+                                            spaceName: result.name,
+                                          });
+                                          setIsAddingFilter(false);
+                                        }}
+                                      />
+                                    )}
+                                    {addFilterValue === 'type' && (
+                                      <TypeFilterInput
+                                        onSelect={result => {
+                                          setTypeFilter({
+                                            typeId: result.id,
+                                            typeName: result.name,
+                                          });
+                                          setIsAddingFilter(false);
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </ResizableContainer>
+                    </div>
+                  )}
+                  {!result ? (
+                    <ResizableContainer>
+                      <div
+                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto bg-white"
+                        style={{
+                          // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                          maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                          // Enforce a minimum height so the results area stays visible. When
+                          // the anchor is near the viewport bottom, this forces the content to
+                          // exceed the available space, triggering Radix/Floating UI to flip
+                          // the dropdown above the input.
+                          minHeight: results.length > 0 ? '100px' : '2.5rem',
+                        }}
+                      >
+                        {!results?.length && isLoading && (
+                          <div className="w-full bg-white px-3 py-2">
+                            <div className="truncate text-resultTitle text-text">Loading...</div>
+                          </div>
+                        )}
+                        {isEmpty ? (
+                          <div className="w-full bg-white px-3 py-2">
+                            <div className="truncate text-resultTitle text-text">No results.</div>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-divider bg-white">
+                            {results.map((result, index) => (
+                              <div key={index} className="w-full">
+                                <div className="p-1">
+                                  <button
+                                    onClick={() => {
+                                      setResult(null);
+                                      onDone?.({
+                                        id: result.id,
+                                        name: result.name,
+                                        primarySpace: result.spaces?.[0]?.spaceId
+                                          ? result.spaces[0].spaceId
+                                          : undefined,
+                                      });
+                                      onQueryChange('');
+                                      setSelectedIndex(0);
+                                    }}
+                                    id={`select-entity-result-${index}`}
+                                    className={cx(
+                                      'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden',
+                                      index === selectedIndex && 'bg-grey-01'
+                                    )}
+                                  >
+                                    {isShowingIds && (
+                                      <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
+                                    )}
+                                    <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
+                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                      {withSelectSpace && (result.spaces ?? []).length > 0 && (
+                                        <div className="flex shrink-0 items-center gap-1">
+                                          <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
                                             <NativeGeoImage
-                                              value={space.image}
+                                              value={result.spaces[0].image}
                                               alt=""
                                               className="h-full w-full object-cover"
                                             />
+                                          </span>
+                                          <span className="text-[0.875rem] text-text">{result.spaces[0].name}</span>
+                                        </div>
+                                      )}
+                                      {result.types.length > 0 && (
+                                        <>
+                                          {withSelectSpace && (
+                                            <div className="shrink-0">
+                                              <svg
+                                                width="8"
+                                                height="9"
+                                                viewBox="0 0 8 9"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                              >
+                                                <path
+                                                  d="M2.25 8L5.75 4.5L2.25 1"
+                                                  stroke="#606060"
+                                                  strokeLinecap="round"
+                                                />
+                                              </svg>
+                                            </div>
+                                          )}
+                                          <div className="flex items-center gap-1.5">
+                                            {result.types.slice(0, 3).map((type, index) => (
+                                              <Tag key={`${type.id}-${index}`}>{type.name}</Tag>
+                                            ))}
+                                            {result.types.length > 3 ? (
+                                              <Tag>{`+${result.types.length - 3}`}</Tag>
+                                            ) : null}
                                           </div>
-                                        ))}
-                                      </div>
-                                      <div className="text-[0.875rem] text-text">
-                                        {(result.spaces ?? []).length}{' '}
-                                        {pluralize('space', (result.spaces ?? []).length)}
-                                      </div>
+                                        </>
+                                      )}
                                     </div>
-                                    <div className="text-[0.875rem] text-grey-04">Select space</div>
+                                    {result.description && (
+                                      <>
+                                        <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
+                                          <p className="text-[0.75rem]! leading-[1.2] text-grey-04">
+                                            {result.description}
+                                          </p>
+                                        </Truncate>
+                                      </>
+                                    )}
                                   </button>
                                 </div>
-                              )}
-                            </div>
-                          ))}
+                                {withSelectSpace && (
+                                  <div className="-mt-2 p-1">
+                                    <button
+                                      onClick={() => setResult(result)}
+                                      className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <div className="inline-flex gap-0">
+                                          {(result.spaces ?? []).slice(0, 3).map(space => (
+                                            <div
+                                              key={space.spaceId}
+                                              className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
+                                            >
+                                              <NativeGeoImage
+                                                value={space.image}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="text-[0.875rem] text-text">
+                                          {(result.spaces ?? []).length}{' '}
+                                          {pluralize('space', (result.spaces ?? []).length)}
+                                        </div>
+                                      </div>
+                                      <div className="text-[0.875rem] text-grey-04">Select space</div>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </ResizableContainer>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between border-b border-divider bg-white">
+                        <div className="w-1/3">
+                          <button onClick={() => setResult(null)} className="p-2">
+                            <ArrowLeft color="grey-04" />
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  </ResizableContainer>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between border-b border-divider bg-white">
-                      <div className="w-1/3">
-                        <button onClick={() => setResult(null)} className="p-2">
-                          <ArrowLeft color="grey-04" />
-                        </button>
+                        <div className="flex w-1/3 items-center justify-center p-2 text-center text-resultTitle text-text">
+                          <span>Select space</span>
+                        </div>
+                        <div className="flex w-1/3 justify-end px-2">
+                          <Tooltip
+                            trigger={
+                              <div className="*:size-[12px]">
+                                <InfoSmall color="grey-04" />
+                              </div>
+                            }
+                            label={`Selecting a specific space will mean that any time anyone clicks this link, it’ll take them to that space’s view of this entity.`}
+                            position="top"
+                            variant="light"
+                          />
+                        </div>
                       </div>
-                      <div className="flex w-1/3 items-center justify-center p-2 text-center text-resultTitle text-text">
-                        <span>Select space</span>
+                      <div
+                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto bg-white"
+                        style={{
+                          // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
+                          maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                          minHeight: '100px',
+                        }}
+                      >
+                        {(result.spaces ?? []).map((space, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setResult(null);
+                              onDone?.({
+                                id: result.id,
+                                name: result.name,
+                                space: space.spaceId,
+                              });
+                              onQueryChange('');
+                              setSelectedIndex(0);
+                            }}
+                            className="flex w-full items-center gap-3 px-3 py-2 hover:bg-grey-01"
+                          >
+                            <div>
+                              <div className="h-[24px] w-[24px] overflow-clip rounded-md">
+                                <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="truncate text-resultTitle text-text">{space.name}</div>
+                              <div className="mt-1.5">
+                                <Tag>Space</Tag>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      <div className="flex w-1/3 justify-end px-2">
-                        <Tooltip
-                          trigger={
-                            <div className="*:size-[12px]">
-                              <InfoSmall color="grey-04" />
-                            </div>
-                          }
-                          label={`Selecting a specific space will mean that any time anyone clicks this link, it’ll take them to that space’s view of this entity.`}
-                          position="top"
-                          variant="light"
-                        />
+                    </>
+                  )}
+                  {!result && (
+                    <div className="flex w-full items-center justify-between border-t border-grey-02 py-[5px] pr-3 pl-[5px]">
+                      <div className="flex items-center gap-3">
+                        {showIDs && (
+                          <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
+                            <Toggle checked={isShowingIds} />
+                            <div className="text-[0.875rem] text-grey-04">IDs</div>
+                          </button>
+                        )}
+                        {isCreatingProperty && (
+                          <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
+                        )}
                       </div>
+                      <button
+                        disabled={isCreatingProperty && !renderableType}
+                        onClick={onCreateNewEntity}
+                        className="text-resultLink text-ctaHover disabled:text-grey-03"
+                      >
+                        Create new
+                      </button>
                     </div>
-                    <div
-                      className="no-scrollbar flex flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white"
-                      style={{
-                        // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
-                        maxHeight:
-                          'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
-                        minHeight: '100px',
-                      }}
-                    >
-                      {(result.spaces ?? []).map((space, index) => (
-                        <button
-                          key={index}
-                          onClick={() => {
-                            setResult(null);
-                            onDone?.({
-                              id: result.id,
-                              name: result.name,
-                              space: space.spaceId,
-                            });
-                            onQueryChange('');
-                            setSelectedIndex(0);
-                          }}
-                          className="flex w-full items-center gap-3 px-3 py-2 hover:bg-grey-01"
-                        >
-                          <div>
-                            <div className="h-[24px] w-[24px] overflow-clip rounded-md">
-                              <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="truncate text-resultTitle text-text">{space.name}</div>
-                            <div className="mt-1.5">
-                              <Tag>Space</Tag>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-                {!result && (
-                  <div className="flex w-full items-center justify-between border-t border-grey-02 pl-[5px] pr-3 py-[5px]">
-                    <div className="flex items-center gap-3">
-                      {showIDs && (
-                        <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
-                          <Toggle checked={isShowingIds} />
-                          <div className="text-[0.875rem] text-grey-04">IDs</div>
-                        </button>
-                      )}
-                      {isCreatingProperty && (
-                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
-                      )}
-                    </div>
-                    <button
-                      disabled={isCreatingProperty && !renderableType}
-                      onClick={onCreateNewEntity}
-                      className="text-resultLink text-ctaHover disabled:text-grey-03"
-                    >
-                      Create new
-                    </button>
-                  </div>
-                )}
+                  )}
                 </div>
               </div>
             </Popover.Content>
@@ -659,13 +661,13 @@ export const SelectEntity = ({
 const inputStyles = cva('', {
   variants: {
     fixed: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     floating: {
-      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     tableCell: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     withSearchIcon: {
       true: 'pl-9',
@@ -709,7 +711,7 @@ const FilterPill = ({
   onDelete: () => void;
 }) => {
   return (
-    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pr-1 pl-2 text-metadata">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
@@ -757,35 +759,35 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               forceMount
             >
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
-                <ResizableContainer>
-                  <ResultsList>
-                    {results.map(result => (
-                      <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
-                        <div className="flex w-full items-center justify-between leading-[1rem]">
-                          <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.name ?? result.id}
-                          </Text>
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.name ?? result.id) && (
-                            <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
-                          )}
-                          <span style={{ rotate: '270deg' }}>
-                            <ChevronDownSmall color="grey-04" />
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <Tag>Space</Tag>
+                  <ResizableContainer>
+                    <ResultsList>
+                      {results.map(result => (
+                        <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
+                          <div className="flex w-full items-center justify-between leading-4">
+                            <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
+                              {result.name ?? result.id}
+                            </Text>
                           </div>
-                        </div>
-                      </ResultItem>
-                    ))}
-                  </ResultsList>
-                </ResizableContainer>
+                          <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
+                            {(result.name ?? result.id) && (
+                              <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
+                            )}
+                            <span style={{ rotate: '270deg' }}>
+                              <ChevronDownSmall color="grey-04" />
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <Tag>Space</Tag>
+                            </div>
+                          </div>
+                        </ResultItem>
+                      ))}
+                    </ResultsList>
+                  </ResizableContainer>
                 </div>
               </div>
             </Popover.Content>
@@ -818,84 +820,84 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               forceMount
             >
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
-                <ResizableContainer>
-                  <ResultsList>
-                    {!results?.length && isLoading && (
-                      <div className="w-full border-b border-divider bg-white px-3 py-2">
-                        <div className="truncate text-button text-text">Loading...</div>
-                      </div>
-                    )}
-                    {isEmpty ? (
-                      <div className="w-full border-b border-divider bg-white px-3 py-2">
-                        <div className="truncate text-button text-text">No results.</div>
-                      </div>
-                    ) : (
-                      <>
-                        {results.map((result, index) => (
-                          <ResultItem key={index}>
-                            <button
-                              onClick={() => {
-                                onSelect({
-                                  id: result.id,
-                                  name: result.name,
-                                });
-                                onQueryChange('');
-                              }}
-                              className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
-                            >
-                              <div className="relative w-full">
-                                <div className="relative z-0 max-w-full truncate text-button text-text">
-                                  {result.name}
+                  <ResizableContainer>
+                    <ResultsList>
+                      {!results?.length && isLoading && (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading...</div>
+                        </div>
+                      )}
+                      {isEmpty ? (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">No results.</div>
+                        </div>
+                      ) : (
+                        <>
+                          {results.map((result, index) => (
+                            <ResultItem key={index}>
+                              <button
+                                onClick={() => {
+                                  onSelect({
+                                    id: result.id,
+                                    name: result.name,
+                                  });
+                                  onQueryChange('');
+                                }}
+                                className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
+                              >
+                                <div className="relative w-full">
+                                  <div className="relative z-0 max-w-full truncate text-button text-text">
+                                    {result.name}
+                                  </div>
                                 </div>
-                              </div>
-                              {result.types.length > 0 && (
-                                <>
-                                  <Spacer height={4} />
-                                  <div className="flex items-center gap-1.5">
-                                    {result.types.map(type => (
-                                      <Tag key={type.id}>{type.name}</Tag>
+                                {result.types.length > 0 && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <div className="flex items-center gap-1.5">
+                                      {result.types.map(type => (
+                                        <Tag key={type.id}>{type.name}</Tag>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                {result.description && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <Truncate maxLines={3} shouldTruncate variant="footnote">
+                                      <p className="text-footnote text-grey-04">{result.description}</p>
+                                    </Truncate>
+                                  </>
+                                )}
+
+                                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                                  <div className="inline-flex gap-0">
+                                    {(result.spaces ?? []).slice(0, 3).map(space => (
+                                      <div
+                                        key={space.spaceId}
+                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                      >
+                                        <NativeGeoImage
+                                          value={space.image}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      </div>
                                     ))}
                                   </div>
-                                </>
-                              )}
-                              {result.description && (
-                                <>
-                                  <Spacer height={4} />
-                                  <Truncate maxLines={3} shouldTruncate variant="footnote">
-                                    <p className="text-footnote text-grey-04">{result.description}</p>
-                                  </Truncate>
-                                </>
-                              )}
-
-                              <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                                <div className="inline-flex gap-0">
-                                  {(result.spaces ?? []).slice(0, 3).map(space => (
-                                    <div
-                                      key={space.spaceId}
-                                      className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                    >
-                                      <NativeGeoImage
-                                        value={space.image}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                      />
-                                    </div>
-                                  ))}
+                                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
                                 </div>
-                                {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                              </div>
-                            </button>
-                          </ResultItem>
-                        ))}
-                      </>
-                    )}
-                  </ResultsList>
-                </ResizableContainer>
+                              </button>
+                            </ResultItem>
+                          ))}
+                        </>
+                      )}
+                    </ResultsList>
+                  </ResizableContainer>
                 </div>
               </div>
             </Popover.Content>

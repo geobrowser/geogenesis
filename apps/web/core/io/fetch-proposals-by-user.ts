@@ -28,10 +28,7 @@ type NetworkProposal = {
 };
 
 const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: string) => {
-  const filters = [
-    `proposedBy: { is: "${proposedBy}" }`,
-    spaceId && `spaceId: { is: "${spaceId}" }`,
-  ]
+  const filters = [`proposedBy: { is: "${proposedBy}" }`, spaceId && `spaceId: { is: "${spaceId}" }`]
     .filter(Boolean)
     .join('\n        ');
 

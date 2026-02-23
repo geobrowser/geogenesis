@@ -33,7 +33,7 @@ export const Dropdown = ({ trigger, align = 'end', options }: Props) => {
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <span className="shadow-button">
-        <DropdownPrimitive.Trigger className="flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
+        <DropdownPrimitive.Trigger className="flex grow items-center justify-between rounded bg-white px-3 py-2 text-button whitespace-nowrap text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text data-placeholder:text-text">
           {trigger}
           <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
@@ -46,7 +46,7 @@ export const Dropdown = ({ trigger, align = 'end', options }: Props) => {
               key={`dropdown-item-${index}`}
               disabled={option.disabled}
               onClick={option.onClick}
-              className="flex cursor-pointer select-none items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 last:border-none hover:bg-bg hover:text-text hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
+              className="flex cursor-pointer items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 select-none last:border-none hover:bg-bg hover:text-text hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
             >
               {option.label}
               {option.disabled && (

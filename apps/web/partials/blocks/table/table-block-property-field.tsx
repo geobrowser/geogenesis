@@ -95,7 +95,7 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="absolute right-0 top-0 -translate-y-full pb-1">
+      <div className="absolute top-0 right-0 -translate-y-full pb-1">
         <div
           className={cx(
             'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',

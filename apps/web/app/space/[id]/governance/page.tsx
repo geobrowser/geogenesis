@@ -13,8 +13,6 @@ import { Environment } from '~/core/environment';
 import { cachedFetchProposal } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { cachedFetchSpace } from '../cached-fetch-space';
-
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import {
   type GovernanceProposalType,
@@ -22,6 +20,8 @@ import {
 } from '~/partials/governance/governance-proposal-type-filter';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
+
+import { cachedFetchSpace } from '../cached-fetch-space';
 
 interface Props {
   params: Promise<{ id: string }>;

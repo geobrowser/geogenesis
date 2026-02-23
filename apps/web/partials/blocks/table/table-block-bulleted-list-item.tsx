@@ -46,14 +46,16 @@ export function TableBlockBulletedListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
-  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
+  const name =
+    useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
+      ?.value ?? null;
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full gap-2 px-1 py-0.5">
-        <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
+        <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
         <div className="w-full">
           {isPlaceholder && source.type === 'COLLECTION' ? (
             <SelectEntity
@@ -110,7 +112,7 @@ export function TableBlockBulletedListItem({
 
   return (
     <div className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
-      <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
+      <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       {source.type !== 'COLLECTION' ? (
         <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
           {name}
@@ -136,4 +138,3 @@ export function TableBlockBulletedListItem({
     </div>
   );
 }
-

@@ -24,7 +24,11 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { createPropertyRelation, createTypeRelationForNewEntity, writeValue } from '~/partials/blocks/table/change-entry';
+import {
+  createPropertyRelation,
+  createTypeRelationForNewEntity,
+  writeValue,
+} from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
 type Props = {
@@ -104,7 +108,7 @@ export function EditableEntityTableCell({
                 onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute right-0 top-1/2 hidden -translate-y-1/2 group-hover/name-cell:block">
+            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
               <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
             </div>
           </div>
