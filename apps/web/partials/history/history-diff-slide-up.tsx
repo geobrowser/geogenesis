@@ -10,21 +10,21 @@ import { Close } from '~/design-system/icons/close';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
-import { ChangedEntity } from '~/partials/review/review-changes';
+import { ChangedEntity } from '~/partials/diffs/changed-entity';
 
-export interface HistoryDiffSelection {
+export type HistoryDiffSelection = {
   entityId: string;
   spaceId: string;
   /** When omitted, shows the entity's creation as an all-added diff. */
   fromEditId?: string;
   toEditId: string;
   label: string;
-}
+};
 
-interface Props {
+type Props = {
   selection: HistoryDiffSelection | null;
   onClose: () => void;
-}
+};
 
 export function HistoryDiffSlideUp({ selection, onClose }: Props) {
   const isOpen = selection !== null;

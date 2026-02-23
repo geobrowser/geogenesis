@@ -3,7 +3,7 @@ import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
 
 import { Text } from '~/design-system/text';
 
-import { ChangedEntity } from '~/partials/review/review-changes';
+import { ChangedEntity } from '~/partials/diffs/changed-entity';
 
 export async function ContentProposal({ proposal, spaceId }: { proposal: Proposal; spaceId: string }) {
   const changes = await fetchProposalDiffs(proposal.id, proposal.space.id);
