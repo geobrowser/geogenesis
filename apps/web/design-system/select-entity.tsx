@@ -11,7 +11,6 @@ import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
@@ -223,18 +222,29 @@ export const SelectEntity = ({
     }
   }, [hasResults, selectedIndex]);
 
-  const containerRef = useRef(null!);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  useOnClickOutside(() => {
-    onQueryChange('');
-    setSelectedIndex(0);
-  }, containerRef);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const target = event.target as Node | null;
+      const container = containerRef.current;
+      const popover = popoverRef.current;
+      if (target && container && container.contains(target)) return;
+      if (target && popover && popover.contains(target)) return;
+      onQueryChange('');
+      setSelectedIndex(0);
+      setResult(null);
+    };
 
-  const popoverRef = useRef(null!);
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
 
-  useOnClickOutside(() => {
-    setResult(null);
-  }, popoverRef);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [onQueryChange]);
 
   return (
     <div
@@ -267,24 +277,25 @@ export const SelectEntity = ({
           />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            ref={popoverRef}
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            collisionPadding={10}
-            forceMount
-          >
-            <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
-              <div
-                className={cx(
-                  '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
-                  width === 'clamped' ? 'w-[400px]' : '-mr-px',
-                  withSearchIcon && 'rounded-t-none'
-                )}
-              >
+          <Popover.Portal>
+            <Popover.Content
+              ref={popoverRef}
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              collisionPadding={10}
+              forceMount
+            >
+              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
+                <div
+                  className={cx(
+                    '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+                    width === 'clamped' ? 'w-[400px]' : '-mr-px',
+                    withSearchIcon && 'rounded-t-none'
+                  )}
+                >
                 {advanced && (
                   <div className="w-full">
                     <button
@@ -635,9 +646,10 @@ export const SelectEntity = ({
                     </button>
                   </div>
                 )}
+                </div>
               </div>
-            </div>
-          </Popover.Content>
+            </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>
@@ -739,16 +751,17 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
           <Input value={query} onChange={e => setQuery(e.target.value)} />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            forceMount
-          >
-            <div className="pt-1">
-              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+          <Popover.Portal>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
@@ -773,9 +786,10 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                     ))}
                   </ResultsList>
                 </ResizableContainer>
+                </div>
               </div>
-            </div>
-          </Popover.Content>
+            </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>
@@ -798,16 +812,17 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
           <Input value={query} onChange={e => onQueryChange(e.target.value)} />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            forceMount
-          >
-            <div className="pt-1">
-              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+          <Popover.Portal>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (
@@ -881,9 +896,10 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                     )}
                   </ResultsList>
                 </ResizableContainer>
+                </div>
               </div>
-            </div>
-          </Popover.Content>
+            </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>
