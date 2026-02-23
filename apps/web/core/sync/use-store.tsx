@@ -16,7 +16,7 @@ import { Properties } from '../utils/property';
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
-import { GeoStore, reactiveRelations, reactiveValues } from './store';
+import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
@@ -515,15 +515,16 @@ export function useRelations(options: UseRelationsParams = {}) {
   const values = useSelector(
     reactiveRelations,
     relations => {
-      if (mergeWith.length === 0) {
-        return relations.filter(r =>
-          selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
-        );
-      }
+      const filtered =
+        mergeWith.length === 0
+          ? relations.filter(r =>
+              selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+            )
+          : mergeRelations(relations, mergeWith).filter(r =>
+              selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+            );
 
-      return mergeRelations(relations, mergeWith).filter(r =>
-        selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
-      );
+      return filtered.map(resolveRelationNames);
     },
     equal
   );
@@ -537,12 +538,13 @@ export function getRelations(options: UseRelationsParams = {}) {
   if (mergeWith.length === 0) {
     return reactiveRelations
       .get()
-      .filter(r => (selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true));
+      .filter(r => (selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true))
+      .map(resolveRelationNames);
   }
 
-  return mergeRelations(reactiveRelations.get(), mergeWith).filter(r =>
-    selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
-  );
+  return mergeRelations(reactiveRelations.get(), mergeWith)
+    .filter(r => (selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true))
+    .map(resolveRelationNames);
 }
 
 type UseRelationParams = {
@@ -560,19 +562,19 @@ export function useRelation(options: UseRelationParams) {
     relations => {
       const searchableRelations = mergeWith.length === 0 ? relations : mergeRelations(relations, mergeWith);
 
+      let found: Relation | null = null;
+
       if (id) {
-        return (
-          searchableRelations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null
-        );
+        found =
+          searchableRelations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ??
+          null;
+      } else if (selector) {
+        found =
+          searchableRelations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ??
+          null;
       }
 
-      if (selector) {
-        return (
-          searchableRelations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null
-        );
-      }
-
-      return null;
+      return found ? resolveRelationNames(found) : null;
     },
     equal
   );
@@ -586,13 +588,13 @@ export function getRelation(options: UseRelationParams) {
   const relations =
     mergeWith.length === 0 ? reactiveRelations.get() : mergeRelations(reactiveRelations.get(), mergeWith);
 
+  let found: Relation | null = null;
+
   if (id) {
-    return relations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
+    found = relations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
+  } else if (selector) {
+    found = relations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
   }
 
-  if (selector) {
-    return relations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
-  }
-
-  return null;
+  return found ? resolveRelationNames(found) : null;
 }
