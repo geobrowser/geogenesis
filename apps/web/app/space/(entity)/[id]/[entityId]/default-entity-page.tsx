@@ -1,12 +1,11 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { redirect } from 'next/navigation';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { reportBoundaryError } from '~/core/telemetry/logger';
+import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -86,11 +85,11 @@ export default async function DefaultEntityPage({
              boundary. We don't want to show any referenced by loading states but do want to
              stream it in
           */}
-          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={reportBoundaryError}>
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
             <React.Suspense fallback={<div />}>
               <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>
-          </ErrorBoundary>
+          </TrackedErrorBoundary>
         </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
