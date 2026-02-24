@@ -1,5 +1,5 @@
-import * as Resource from '@effect/opentelemetry/Resource';
-import * as Tracer from '@effect/opentelemetry/Tracer';
+import { WebSdk } from '@effect/opentelemetry';
+import { SentrySpanProcessor } from '@sentry/opentelemetry';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import * as Layer from 'effect/Layer';
@@ -7,16 +7,15 @@ import * as ManagedRuntime from 'effect/ManagedRuntime';
 
 import { isTelemetryEnabled } from './config';
 
-const EffectTelemetry = Tracer.layerGlobal.pipe(
-  Layer.provideMerge(
-    Resource.layer({
-      serviceName: 'web',
-      attributes: {
-        'deployment.environment': process.env.NEXT_PUBLIC_APP_ENV || 'development',
-      },
-    })
-  )
-);
+const EffectTelemetry = WebSdk.layer(() => ({
+  spanProcessor: new SentrySpanProcessor(),
+  resource: {
+    serviceName: 'web',
+    attributes: {
+      'deployment.environment': process.env.NEXT_PUBLIC_APP_ENV || 'development',
+    },
+  },
+}));
 
 const telemetryLayer = isTelemetryEnabled ? EffectTelemetry : Layer.empty;
 
