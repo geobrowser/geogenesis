@@ -111,14 +111,14 @@ export class PersistenceEngine {
    * reactive atoms. Server data (already in memory) wins — we skip
    * any IDs that already exist.
    */
-  async restore() {
+  async restore(): Promise<boolean> {
     try {
       const [storedValues, storedRelations] = await Promise.all([db.values.toArray(), db.relations.toArray()]);
 
       const localValues = storedValues.filter(v => v.isLocal && !v.hasBeenPublished);
       const localRelations = storedRelations.filter(r => r.isLocal && !r.hasBeenPublished);
 
-      if (localValues.length === 0 && localRelations.length === 0) return;
+      if (localValues.length === 0 && localRelations.length === 0) return false;
 
       if (localValues.length > 0) {
         reactiveValues.set(prev => {
@@ -147,8 +147,11 @@ export class PersistenceEngine {
           return merged;
         });
       }
+
+      return true;
     } catch (err) {
       console.warn('[PersistenceEngine] restore failed:', err);
+      return false;
     }
   }
 }
