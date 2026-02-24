@@ -806,10 +806,10 @@ function useBlockViewEntityId(blockEntityId: string, spaceId: string): string | 
 }
 
 const VIEW_NAMES: Record<string, string> = {
-  [SystemIds.TABLE_VIEW]: 'Table',
-  [SystemIds.LIST_VIEW]: 'List',
-  [SystemIds.GALLERY_VIEW]: 'Gallery',
-  [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List',
+  [SystemIds.TABLE_VIEW]: 'Table view',
+  [SystemIds.LIST_VIEW]: 'List view',
+  [SystemIds.GALLERY_VIEW]: 'Gallery view',
+  [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
 };
 
 type DataBlockCellProps = {
@@ -1084,10 +1084,16 @@ type ViewInfo = { name: string; entityId: string };
 function getViewInfo(viewRelations: RelationChange[], side: 'before' | 'after'): ViewInfo | null {
   for (const r of viewRelations) {
     if (side === 'before' && (r.changeType === 'REMOVE' || r.changeType === 'UPDATE') && r.before) {
-      return { name: r.before.toEntityName ?? 'Unknown', entityId: r.before.toEntityId };
+      return {
+        name: VIEW_NAMES[r.before.toEntityId] ?? r.before.toEntityName ?? 'Unknown',
+        entityId: r.before.toEntityId,
+      };
     }
     if (side === 'after' && (r.changeType === 'ADD' || r.changeType === 'UPDATE') && r.after) {
-      return { name: r.after.toEntityName ?? 'Unknown', entityId: r.after.toEntityId };
+      return {
+        name: VIEW_NAMES[r.after.toEntityId] ?? r.after.toEntityName ?? 'Unknown',
+        entityId: r.after.toEntityId,
+      };
     }
   }
   return null;
