@@ -3,12 +3,28 @@ import { Duration, Effect, Either } from 'effect';
 import * as Schedule from 'effect/Schedule';
 import { GraphQLClient } from 'graphql-request';
 
+import {
+  classifyTransportFailure,
+  isIngressUnavailableHtml,
+  isRetryableCategory,
+  parseRetryAfterMs,
+  type RetryCategory,
+  withRetryAfterJitter,
+} from './errors/retry-utils';
 import { getConfig } from '~/core/environment/environment';
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 200;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function createClientRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function isUUID(str: string): boolean {
   return UUID_PATTERN.test(str);
@@ -34,6 +50,31 @@ function transformVariables<T extends Record<string, unknown>>(variables: T | un
   return result as T;
 }
 
+function getOperationName(document: TypedDocumentNode<any, any>): string | undefined {
+  const op = document.definitions.find(def => def.kind === 'OperationDefinition');
+  if (!op || op.kind !== 'OperationDefinition') {
+    return undefined;
+  }
+
+  return op.name?.value;
+}
+
+function summarizeResponseForLog(response: any) {
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+
+  const body = (response as any).body;
+  const errors = (response as any).errors;
+
+  return {
+    status: typeof (response as any).status === 'number' ? (response as any).status : undefined,
+    hasErrors: Array.isArray(errors) ? errors.length > 0 : undefined,
+    errorsCount: Array.isArray(errors) ? errors.length : undefined,
+    bodyLength: typeof body === 'string' ? body.length : undefined,
+  };
+}
+
 class GraphqlRequestError extends Error {
   readonly _tag = 'GraphqlRequestError';
   readonly status?: number;
@@ -41,10 +82,30 @@ class GraphqlRequestError extends Error {
   readonly request?: any;
   readonly isAbort: boolean;
   readonly retryAfterMs?: number;
+  readonly retryCategory?: RetryCategory;
+  readonly source?: 'api' | 'ingress' | 'unknown';
+  readonly requestId?: string;
+  readonly clientRequestId?: string;
+  readonly transportCode?: string;
+  readonly transportErrno?: string;
+  readonly transportSyscall?: string;
 
   constructor(
     message: string,
-    details?: { status?: number; response?: any; request?: any; isAbort?: boolean; retryAfterMs?: number }
+    details?: {
+      status?: number;
+      response?: any;
+      request?: any;
+      isAbort?: boolean;
+      retryAfterMs?: number;
+      retryCategory?: RetryCategory;
+      source?: 'api' | 'ingress' | 'unknown';
+      requestId?: string;
+      clientRequestId?: string;
+      transportCode?: string;
+      transportErrno?: string;
+      transportSyscall?: string;
+    }
   ) {
     super(message);
     this.status = details?.status;
@@ -52,7 +113,82 @@ class GraphqlRequestError extends Error {
     this.request = details?.request;
     this.isAbort = details?.isAbort ?? false;
     this.retryAfterMs = details?.retryAfterMs;
+    this.retryCategory = details?.retryCategory;
+    this.source = details?.source;
+    this.requestId = details?.requestId;
+    this.clientRequestId = details?.clientRequestId;
+    this.transportCode = details?.transportCode;
+    this.transportErrno = details?.transportErrno;
+    this.transportSyscall = details?.transportSyscall;
   }
+}
+
+type GraphqlRetryLogContext = {
+  category: RetryCategory;
+  status?: number;
+  source?: 'api' | 'ingress' | 'unknown';
+  requestId?: string;
+  clientRequestId: string;
+  retryAfterMs?: number;
+  transportCode?: string;
+  transportErrno?: string;
+  transportSyscall?: string;
+};
+
+function toGraphqlRetryLogContext(
+  error: GraphqlRequestError,
+  fallbackClientRequestId: string
+): GraphqlRetryLogContext {
+  return {
+    category: error.retryCategory ?? (error.status === undefined ? 'transport_unknown' : 'http_5xx_other'),
+    status: error.status,
+    source: error.source,
+    requestId: error.requestId,
+    clientRequestId: error.clientRequestId ?? fallbackClientRequestId,
+    retryAfterMs: error.retryAfterMs,
+    transportCode: error.transportCode,
+    transportErrno: error.transportErrno,
+    transportSyscall: error.transportSyscall,
+  };
+}
+
+function classifyStatusCategory(status: number, source: 'api' | 'ingress' | 'unknown', body: string): RetryCategory {
+  const normalizedBody = body.toLowerCase();
+  if (status === 503 && normalizedBody.includes('database temporarily overloaded')) {
+    return 'http_503_api_overloaded';
+  }
+
+  if (status === 503 && source === 'ingress') {
+    return 'http_503_ingress_unavailable';
+  }
+
+  if (status === 429) {
+    return 'http_429';
+  }
+
+  if (status === 408) {
+    return 'http_408';
+  }
+
+  if (status >= 500) {
+    return 'http_5xx_other';
+  }
+
+  return 'http_4xx_non_retryable';
+}
+
+function detectResponseSource(contentType: string | null, body: string): 'api' | 'ingress' | 'unknown' {
+  const normalizedContentType = (contentType ?? '').toLowerCase();
+
+  if (isIngressUnavailableHtml(contentType, body)) {
+    return 'ingress';
+  }
+
+  if (normalizedContentType.includes('application/json')) {
+    return 'api';
+  }
+
+  return 'unknown';
 }
 
 function getHeaderValue(headers: unknown, name: string): string | null {
@@ -79,45 +215,32 @@ function getHeaderValue(headers: unknown, name: string): string | null {
   return null;
 }
 
-function parseRetryAfterMs(value: string | null): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const trimmedValue = value.trim();
-
-  if (/^\d+$/.test(trimmedValue)) {
-    return Number.parseInt(trimmedValue, 10) * 1_000;
-  }
-
-  const parsedDate = Date.parse(trimmedValue);
-
-  if (Number.isNaN(parsedDate)) {
-    return undefined;
-  }
-
-  return Math.max(0, parsedDate - Date.now());
-}
-
 function isRetryableGraphqlError(error: GraphqlRequestError): boolean {
   if (error.isAbort) {
     return false;
   }
 
+  if (error.retryCategory !== undefined) {
+    return isRetryableCategory(error.retryCategory);
+  }
+
   if (error.status === undefined) {
-    return true;
+    return false;
   }
 
   return error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
-function withRetry<T>(operation: Effect.Effect<T, GraphqlRequestError>): Effect.Effect<T, GraphqlRequestError> {
+function withRetry<T>(
+  operation: Effect.Effect<T, GraphqlRequestError>,
+  context: { operationName?: string; clientRequestId: string }
+): Effect.Effect<T, GraphqlRequestError> {
   const retrySchedule = Schedule.exponential(Duration.millis(BASE_RETRY_DELAY_MS)).pipe(
     Schedule.jittered,
     Schedule.intersect(Schedule.identity<GraphqlRequestError>()),
     Schedule.modifyDelay(([_, error], duration) => {
       if (error.retryAfterMs !== undefined) {
-        return Duration.millis(error.retryAfterMs);
+        return Duration.millis(withRetryAfterJitter(error.retryAfterMs));
       }
 
       return duration;
@@ -130,7 +253,22 @@ function withRetry<T>(operation: Effect.Effect<T, GraphqlRequestError>): Effect.
     Effect.tapError(error =>
       Effect.sync(() => {
         if (isRetryableGraphqlError(error)) {
-          console.warn('[GRAPHQL] Exhausted retries');
+          const retryLogContext = toGraphqlRetryLogContext(error, context.clientRequestId);
+
+          console.warn('[GRAPHQL] Exhausted retries', {
+            operationName: context.operationName,
+            clientRequestId: retryLogContext.clientRequestId,
+            category: retryLogContext.category,
+            status: retryLogContext.status,
+            source: retryLogContext.source,
+            requestId: retryLogContext.requestId,
+            retryAfterMs: retryLogContext.retryAfterMs,
+            maxRetries: MAX_RETRIES,
+            transportCode: retryLogContext.transportCode,
+            transportErrno: retryLogContext.transportErrno,
+            transportSyscall: retryLogContext.transportSyscall,
+            correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${context.operationName ?? 'unknown'}`,
+          });
         }
       })
     )
@@ -154,8 +292,15 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
   signal?: AbortController['signal'];
 }) {
   return Effect.gen(function* () {
+    const clientRequestId = createClientRequestId();
+    const operationName = getOperationName(query);
+
     const client = new GraphQLClient(getConfig().api, {
       signal,
+      headers: {
+        'x-request-id': clientRequestId,
+        'x-correlation-id': clientRequestId,
+      },
     });
 
     const transformedVariables = transformVariables(variables as Record<string, unknown> | undefined);
@@ -181,13 +326,36 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
             errorDetails.retryAfterMs = parseRetryAfterMs(
               getHeaderValue((error as any).response?.headers, 'retry-after')
             );
+            const contentType = getHeaderValue((error as any).response?.headers, 'content-type');
+            const body =
+              typeof (error as any).response?.body === 'string'
+                ? (error as any).response.body
+                : JSON.stringify((error as any).response?.errors ?? (error as any).response ?? '');
+            const source = detectResponseSource(contentType, body);
+            errorDetails.source = source;
+            errorDetails.requestId = getHeaderValue((error as any).response?.headers, 'x-request-id') ?? undefined;
+            errorDetails.clientRequestId = clientRequestId;
+            errorDetails.retryCategory =
+              typeof errorDetails.status === 'number'
+                ? classifyStatusCategory(errorDetails.status, source, body)
+                : undefined;
+          }
+
+          if (errorDetails.status === undefined) {
+            const transport = classifyTransportFailure(error);
+            errorDetails.retryCategory = transport.category;
+            errorDetails.clientRequestId = clientRequestId;
+            errorDetails.transportCode = transport.code;
+            errorDetails.transportErrno = transport.errno;
+            errorDetails.transportSyscall = transport.syscall;
           }
 
           if ('request' in error) {
             errorDetails.request = {
-              query: query,
-              variables: variables,
+              operationName,
+              variableKeys: variables ? Object.keys(variables as Record<string, unknown>) : [],
               url: getConfig().api,
+              clientRequestId,
             };
           }
         }
@@ -196,30 +364,35 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       },
     });
 
-    const dataResult = yield* Effect.either(withRetry(run));
+    const dataResult = yield* Effect.either(
+      withRetry(run, {
+        operationName,
+        clientRequestId,
+      })
+    );
 
     if (Either.isLeft(dataResult)) {
       const error = dataResult.left;
 
       // Abort errors are expected during navigation/unmount — don't log them as errors
       if (!error.isAbort) {
-        console.error('GraphQL request failed:', error.message);
+        const retryLogContext = toGraphqlRetryLogContext(error, clientRequestId);
 
-        if (error.status) {
-          console.error('Status code:', error.status);
-        }
-
-        if (error.response) {
-          console.error('Response:', error.response);
-        }
-
-        if (error.request) {
-          console.error('Request details:', {
-            url: error.request.url,
-            query: error.request.query,
-            variables: error.request.variables,
-          });
-        }
+        console.error('GraphQL request failed', {
+          message: error.message,
+          category: retryLogContext.category,
+          status: retryLogContext.status,
+          source: retryLogContext.source,
+          requestId: retryLogContext.requestId,
+          clientRequestId: retryLogContext.clientRequestId,
+          retryAfterMs: retryLogContext.retryAfterMs,
+          transportCode: retryLogContext.transportCode,
+          transportErrno: retryLogContext.transportErrno,
+          transportSyscall: retryLogContext.transportSyscall,
+          request: error.request,
+          response: summarizeResponseForLog(error.response),
+          correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${operationName ?? 'unknown'}`,
+        });
       }
 
       return yield* Effect.fail(error);
