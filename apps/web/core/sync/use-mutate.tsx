@@ -1,7 +1,7 @@
 import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, PDF_TYPE, PDF_URL, RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, Relation, Value } from '../types';
@@ -96,6 +96,16 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ videoId: string; relationId: string }>;
+  };
+  pdfs: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ imageId: string; relationId: string }>;
   };
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
@@ -417,7 +427,7 @@ function createMutator(store: GeoStore): Mutator {
         let ipfsUrl: string | undefined;
         for (const op of createVideoOps) {
           if (op.type === 'createEntity') {
-            const ipfsValue = op.values.find(pv => {
+            const ipfsValue = op.values.find((pv: any) => {
               const valStr = extractValueString(pv.value);
               return valStr.startsWith('ipfs://');
             });
@@ -500,6 +510,98 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { videoId: videoIdStr, relationId };
+      },
+    },
+    pdfs: {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
+        // Create the image entity using the Graph API
+        // Use TESTNET network to upload to Pinata via alternative gateway
+        const { id: pdfId, ops: createImageOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        // Process the operations returned by Graph.createImage
+        for (const op of createImageOps) {
+          if (op.type === 'createRelation') {
+            store.setRelation({
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+              fromEntity: {
+                id: toHexId(op.from),
+                name: null,
+              },
+              type: {
+                id: toHexId(op.relationType),
+                name: 'PDF',
+              },
+              toEntity: {
+                id: toHexId(op.to),
+                name: 'PDF',
+                value: toHexId(op.to),
+              },
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              renderableType: 'RELATION',
+            });
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
+              store.setValue({
+                id: ID.createValueId({
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
+                  spaceId,
+                }),
+                entity: {
+                  id: toHexId(op.id),
+                  name: null,
+                },
+                property: {
+                  id: PDF_URL,
+                  name: 'PDF Property',
+                  dataType: 'TEXT',
+                  renderableType: 'URL',
+                },
+                spaceId,
+                value: extractValueString(pv.value),
+              });
+            }
+          }
+        }
+
+        // Create relation from parent entity to pdf entity
+        const relationId = ID.createEntityId();
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: pdfId,
+            name: null,
+            value: pdfId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'PDF',
+        });
+
+        return { imageId: pdfId, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {

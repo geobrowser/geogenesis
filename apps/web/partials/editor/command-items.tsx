@@ -1,6 +1,10 @@
+import { Graph } from '@geoprotocol/geo-sdk';
 import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
+
+import { getImagePath } from '~/core/utils/utils';
+import { extractValueString } from '~/core/utils/value';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -10,6 +14,7 @@ import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorTable } from '~/design-system/icons/editor-table';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 
 export interface CommandSuggestionItem {
   title: string;
@@ -88,6 +93,55 @@ export const commandItems: CommandSuggestionItem[] = [
     title: 'Heading 3',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+    },
+  },
+  {
+    icon: <PdfFile />,
+    title: 'PDF',
+    command: async ({ editor, range }) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/pdf';
+      input.className = 'hidden';
+      input.onchange = async (e: any) => {
+        if (!e?.target?.files?.[0]) return;
+        const file = e.target.files[0];
+        // Use TESTNET network to upload to Pinata via alternative gateway
+        const { id, ops } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        // Extract the pdf URL from the ops - look for createEntity with ipfs:// value
+        let ipfsUrl: string | undefined;
+        for (const op of ops) {
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find((v: any) => v.value.value.startsWith('ipfs://'));
+
+            if (ipfsValue) {
+              ipfsUrl = extractValueString(ipfsValue.value);
+              break;
+            }
+          }
+        }
+
+        const src = ipfsUrl ? getImagePath(ipfsUrl) : '';
+
+        if (src) {
+          editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent({
+              type: 'pdf',
+              attrs: {
+                src,
+              },
+            })
+            .run();
+        }
+      };
+      input.click();
     },
   },
   {

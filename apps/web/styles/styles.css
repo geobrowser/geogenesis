@@ -473,3 +473,14 @@
 [data-radix-popper-content-wrapper] {
   width: var(--radix-popper-anchor-width);
 }
+
+/* Multiline text truncation (2 lines):
+   Limits text to 2 lines and adds ellipsis when content overflows.
+   Uses -webkit-line-clamp for cross-browser support.
+*/
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

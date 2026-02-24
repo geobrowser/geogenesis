@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 
 import { DataType, RawRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';

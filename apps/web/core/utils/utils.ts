@@ -401,10 +401,10 @@ export const getImageHash = (value: string) => {
 // e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getImagePath = (value: string) => {
   // Use Pinata gateway as the primary source for IPFS images
-  if (value.startsWith('ipfs://')) {
+  if (value?.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
-  } else if (value.startsWith('http')) {
+  } else if (value?.startsWith('http')) {
     return value;
   } else {
     // The image is likely a static, bundled path

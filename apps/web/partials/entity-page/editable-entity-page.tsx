@@ -10,6 +10,7 @@ import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
+  PDF_TYPE,
   RENDERABLE_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
@@ -33,20 +34,23 @@ import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-e
 import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
+import { LinkableMediaChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import {
   ImageZoom,
   PageImageField,
   PageStringField,
   PageVideoField,
+  PdfField,
   VideoPlayer,
 } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
+import { Upload } from '~/design-system/icons/upload';
 import { InputPlace } from '~/design-system/input-address';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
@@ -271,7 +275,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   });
 
   // For IMAGE properties, get the image URL from related image entities
-  const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
+  const imageRelation = relations.find(r => r.renderableType === 'IMAGE' || r.renderableType === 'PDF');
   const imageEntityId = imageRelation?.toEntity.id;
 
   // Use the efficient hook to get only the image URL for this specific entity
@@ -303,7 +307,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const valueType = relationValueTypes?.[0];
   const isEmpty = relations.length === 0;
 
-  // Handler for file upload (images and videos)
+  // Handler for file upload (images/videos/pdfs)
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
     try {
@@ -316,8 +320,17 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           relationPropertyName: typeOfName,
           spaceId,
         });
-      } else {
+      } else if (property.renderableTypeStrict === 'IMAGE') {
         await storage.images.createAndLink({
+          file,
+          fromEntityId: id,
+          fromEntityName: name,
+          relationPropertyId: propertyId,
+          relationPropertyName: typeOfName,
+          spaceId,
+        });
+      } else if (property.renderableTypeStrict === 'PDF') {
+        await storage.pdfs.createAndLink({
           file,
           fromEntityId: id,
           fromEntityName: name,
@@ -345,7 +358,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   if (isEmpty) {
     return (
-      <div className="flex flex-wrap items-center gap-1 pr-1">
+      <div className="flex flex-wrap gap-1 pr-1">
         {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
@@ -378,6 +391,23 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   spaceId,
                 });
               }}
+            />
+          </div>
+        ) : property.renderableTypeStrict === 'PDF' ? (
+          <div key="relation-upload-pdf">
+            <PdfField
+              imageSrc={imageSrc}
+              onFileChange={async file => {
+                await storage.pdfs.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
+              }}
+              onImageRemove={() => console.log(`remove`)}
             />
           </div>
         ) : propertyId === VENUE_PROPERTY ? (
@@ -550,34 +580,58 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const fileAccept =
     property.renderableTypeStrict === 'VIDEO'
       ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
-      : 'image/png,image/jpeg';
+      : property.renderableTypeStrict === 'PDF'
+        ? 'application/pdf'
+        : 'image/png,image/jpeg';
 
   return (
-    <div className="flex flex-wrap items-center gap-1 pr-1">
+    <div className="flex flex-wrap gap-1 pr-1">
       {/* Hidden file input for upload */}
       <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 
-      {property.renderableTypeStrict === 'IMAGE' ? (
-        relations.map(r => {
+      {property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'PDF' ? (
+        relations.map((r, index) => {
           const relationId = r.id;
           const relationValue = r.toEntity.id;
 
-          return (
-            <ImageRelationChipWrapper
-              key={`relation-${relationId}-${relationValue}`}
-              relation={r}
-              spaceId={spaceId}
-              isUploading={isUploading}
-              onDelete={() => storage.relations.delete(r)}
-              onDone={result => {
-                storage.relations.update(r, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
-              }}
-              onUpload={triggerFileUpload}
-            />
-          );
+          if (property.renderableTypeStrict === 'IMAGE') {
+            return (
+              <ImageRelationChipWrapper
+                key={`relation-${relationId}-${relationValue}`}
+                relation={r}
+                spaceId={spaceId}
+                isUploading={isUploading}
+                onDelete={() => storage.relations.delete(r)}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
+                onUpload={triggerFileUpload}
+              />
+            );
+          } else {
+            return (
+              <div key={`relation-${relationId}-${relationValue}`}>
+                <PdfRelationChipWrapper
+                  key={`relation-${relationId}-${relationValue}`}
+                  relation={r}
+                  index={index}
+                  spaceId={spaceId}
+                  isUploading={isUploading}
+                  onDelete={() => storage.relations.delete(r)}
+                  onDone={result => {
+                    storage.relations.update(r, draft => {
+                      draft.toSpaceId = result.space;
+                      draft.verified = result.verified;
+                    });
+                  }}
+                  onUpload={triggerFileUpload}
+                />
+              </div>
+            );
+          }
         })
       ) : property.renderableTypeStrict === 'VIDEO' ? (
         relations.map(r => {
@@ -613,37 +667,21 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         />
       )}
 
-      {property.renderableType !== SystemIds.IMAGE && property.renderableTypeStrict !== 'VIDEO' && (
-        <div>
-          <SelectEntityAsPopover
-            trigger={
-              isType ? (
-                <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
-              ) : (
-                <SquareButton icon={<Create />} />
-              )
-            }
-            placeholder={isType ? 'Find or create type...' : undefined}
-            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-            onCreateEntity={result => {
-              // Check if we're creating a Property entity
-              const isCreatingProperty = valueType?.id === SystemIds.PROPERTY;
-
-              if (isCreatingProperty) {
-                // Use the proper property creation flow which sets dataType correctly
-                const renderableType = result.renderableType || 'TEXT';
-                const { baseDataType, renderableTypeId } = mapPropertyType(renderableType);
-                storage.properties.create({
-                  entityId: result.id,
-                  spaceId,
-                  name: result.name ?? '',
-                  dataType: baseDataType,
-                  renderableTypeId,
-                  verified: result.verified,
-                  toSpaceId: result.space,
-                });
-              } else {
-                // Standard entity creation
+      {property.renderableType !== SystemIds.IMAGE &&
+        property.renderableTypeStrict !== 'VIDEO' &&
+        property.renderableType !== PDF_TYPE && (
+          <div>
+            <SelectEntityAsPopover
+              trigger={
+                isType ? (
+                  <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
+                ) : (
+                  <SquareButton icon={<Create />} />
+                )
+              }
+              placeholder={isType ? 'Find or create type...' : undefined}
+              relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+              onCreateEntity={result => {
                 storage.values.set({
                   id: ID.createValueId({
                     entityId: result.id,
@@ -685,51 +723,50 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                     },
                   });
                 }
-              }
-            }}
-            onDone={async result => {
-              const newRelationId = ID.createEntityId();
-              // @TODO(migration): lightweight relation pointing to entity id
-              const newEntityId = ID.createEntityId();
+              }}
+              onDone={async result => {
+                const newRelationId = ID.createEntityId();
+                // @TODO(migration): lightweight relation pointing to entity id
+                const newEntityId = ID.createEntityId();
 
-              const newRelation: Relation = {
-                id: newRelationId,
-                spaceId: spaceId,
-                position: Position.generate(),
-                renderableType: 'RELATION',
-                verified: false,
-                entityId: newEntityId,
-                type: {
-                  id: typeOfId,
-                  name: typeOfName,
-                },
-                fromEntity: {
-                  id: id,
-                  name: name,
-                },
-                toEntity: {
-                  id: result.id,
-                  name: result.name,
-                  value: result.id,
-                },
-              };
+                const newRelation: Relation = {
+                  id: newRelationId,
+                  spaceId: spaceId,
+                  position: Position.generate(),
+                  renderableType: 'RELATION',
+                  verified: false,
+                  entityId: newEntityId,
+                  type: {
+                    id: typeOfId,
+                    name: typeOfName,
+                  },
+                  fromEntity: {
+                    id: id,
+                    name: name,
+                  },
+                  toEntity: {
+                    id: result.id,
+                    name: result.name,
+                    value: result.id,
+                  },
+                };
 
-              if (result.space) {
-                newRelation.toSpaceId = result.space;
-              }
+                if (result.space) {
+                  newRelation.toSpaceId = result.space;
+                }
 
-              if (result.verified) {
-                newRelation.verified = true;
-              }
+                if (result.verified) {
+                  newRelation.verified = true;
+                }
 
-              storage.relations.set(newRelation);
+                storage.relations.set(newRelation);
 
-              await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
-            }}
-            spaceId={spaceId}
-          />
-        </div>
-      )}
+                await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
+              }}
+              spaceId={spaceId}
+            />
+          </div>
+        )}
 
       {/* Show geo location map for the first Address or Venue relation */}
       {shouldShowMap && firstRelation && (
@@ -786,6 +823,55 @@ function ImageRelationChipWrapper({
       onDone={onDone}
       onUpload={onUpload}
     />
+  );
+}
+
+// Wrapper component for pdf relations in edit mode
+function PdfRelationChipWrapper({
+  relation,
+  spaceId,
+  isUploading,
+  onDelete,
+  onDone,
+  onUpload,
+  index,
+}: {
+  relation: Relation;
+  spaceId: string;
+  isUploading?: boolean;
+  onDelete: () => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onUpload: () => void;
+  index: number;
+}) {
+  const entityId = relation.toEntity.id;
+  const imageSrc = useImageUrlFromEntity(entityId, spaceId);
+
+  return (
+    <div className="flex flex-col">
+      <LinkableMediaChip
+        isEditing
+        mediaType="PDF"
+        mediaSrc={imageSrc}
+        isUploading={isUploading}
+        currentSpaceId={spaceId}
+        entityId={entityId}
+        spaceId={relation.toSpaceId}
+        relationId={relation.id}
+        relationEntityId={relation.entityId}
+        verified={relation.verified}
+        onDelete={onDelete}
+        onDone={onDone}
+        onUpload={onUpload}
+      />
+      {index === 0 && !isUploading && (
+        <div className="mt-2 h-6 w-[75px]">
+          <SmallButton onClick={onUpload} icon={<Upload />}>
+            Upload
+          </SmallButton>
+        </div>
+      )}
+    </div>
   );
 }
 

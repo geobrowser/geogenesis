@@ -6,6 +6,7 @@ import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/c
 import { Address } from '~/design-system/icons/address';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
@@ -37,6 +38,7 @@ export const TYPE_ICONS: Record<SwitchableRenderableType, TypeIconComponent> = {
   GEO_LOCATION: GeoLocation,
   PLACE: Place,
   ADDRESS: Address,
+  PDF: PdfFile,
 };
 
 const LABEL_TO_KEY: Record<string, SwitchableRenderableType> = Object.fromEntries(

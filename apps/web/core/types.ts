@@ -86,10 +86,10 @@ export type DataType =
 // Renderable Types
 // ==============================================================================
 
-export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE'; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE' | 'PDF'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
-export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
+export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT' | 'PDF';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -135,7 +135,7 @@ export type SwitchableRenderableType =
   | 'POINT'
   | 'GEO_LOCATION'
   | 'PLACE'
-  | 'ADDRESS';
+  | 'ADDRESS' | 'PDF';
 
 /**
  * Human-readable labels for switchable renderable types
@@ -157,6 +157,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   GEO_LOCATION: 'Geo Location',
   PLACE: 'Place',
   ADDRESS: 'Address',
+  PDF: 'PDF'
 };
 
 // ==============================================================================

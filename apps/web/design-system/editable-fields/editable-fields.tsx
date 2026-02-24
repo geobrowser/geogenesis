@@ -15,6 +15,7 @@ import { Relation } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
+import { UploadingPdfState } from '~/design-system/uploading-pdf-state';
 
 import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
@@ -617,6 +618,60 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
       <div className="relative max-h-[90vh] max-w-[90vw]" onClick={e => e.stopPropagation()}>
         <video src={videoSrc} controls autoPlay className="max-h-[90vh] max-w-[90vw] rounded-lg" />
       </div>
+    </div>
+  );
+}
+
+export function PdfField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && onFileChange) {
+      const file = e.target.files[0];
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const cancelUploading = () => {
+    // TODO add cancel uploading logic
+    console.log('Cancel uploading PDF file');
+  };
+
+  return (
+    <div>
+      {imageSrc && (
+        <div className="pt-1">
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      )}
+      {isUploading && <UploadingPdfState cancelUploading={cancelUploading} />}
+      <div className="flex gap-2 pt-2">
+        <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
+          Upload
+        </SmallButton>
+        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        accept="application/pdf"
+        id="pdf-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -23,6 +24,10 @@ import { VideoSmall as VideoSmallIcon } from '~/design-system/icons/video-small'
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
+
+const PdfZoom = dynamic(() => import('./editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 type LinkableChipProps = {
   href: string;
@@ -318,7 +323,7 @@ function RelationDots({ color }: RelationDotsProps) {
 
 type LinkableMediaChipProps = {
   isEditing: boolean;
-  mediaType: 'IMAGE' | 'VIDEO';
+  mediaType: 'IMAGE' | 'VIDEO' | 'PDF';
   mediaSrc?: string;
   isUploading?: boolean;
 
@@ -402,7 +407,7 @@ export function LinkableMediaChip({
         href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
         className="block"
       >
-        <div className="relative h-20 w-20">
+        <div className={`relative ${mediaType === 'PDF' ? 'h-[200px] w-[173px]' : 'h-20 w-20'}`}>
           {mediaType === 'VIDEO' ? (
             videoSrc ? (
               <video
@@ -418,8 +423,10 @@ export function LinkableMediaChip({
                 <VideoSmallIcon color="grey-04" />
               </div>
             )
-          ) : mediaSrc ? (
+          ) : mediaSrc && mediaType === 'IMAGE' ? (
             <GeoImage fill value={mediaSrc} alt="" className="object-cover" />
+          ) : mediaSrc && mediaType === 'PDF' ? (
+            <PdfZoom pdfSrc={mediaSrc} isEditing />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-grey-01">
               <ImageIcon color="grey-04" />
@@ -429,7 +436,7 @@ export function LinkableMediaChip({
       </Link>
 
       {/* Upload button overlay - only in edit mode */}
-      {isEditing && onUpload && !isUploading && (
+      {isEditing && mediaType !== 'PDF' && onUpload && !isUploading && (
         <button
           onClick={e => {
             e.stopPropagation();

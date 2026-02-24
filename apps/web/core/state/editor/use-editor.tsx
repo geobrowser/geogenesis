@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { PDF_TYPE } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
@@ -99,6 +100,8 @@ function makeNewBlockRelation({
         return 'IMAGE';
       case 'video':
         return 'VIDEO';
+      case 'pdf':
+        return 'PDF';
     }
   })();
 
@@ -316,6 +319,20 @@ export function useEditorStore() {
           ];
         }
 
+        if (toEntity?.type === 'PDF') {
+          return {
+            type: 'pdf',
+            attrs: {
+              id: block.block.id,
+              src: getImagePath(toEntity.value),
+              relationId: block.relationId,
+              spaceId,
+              alt: '',
+              title: '',
+            },
+          };
+        }
+
         if (toEntity?.type === 'VIDEO') {
           // Read video URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
           const videoUrlValues = getValues({
@@ -466,6 +483,8 @@ export function useEditorStore() {
               return SystemIds.IMAGE_TYPE;
             case 'video':
               return SystemIds.VIDEO_TYPE;
+            case 'pdf':
+              return PDF_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }

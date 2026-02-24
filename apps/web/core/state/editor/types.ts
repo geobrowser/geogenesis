@@ -38,6 +38,14 @@ export type Content =
         id: string;
         src: string;
       };
+    }
+  | {
+      type: 'pdf';
+      content: Content[];
+      attrs: {
+        id: string;
+        src: string;
+      };
     };
 
 type Mark = {
