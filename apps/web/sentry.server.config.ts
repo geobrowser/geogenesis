@@ -11,5 +11,16 @@ if (isTelemetryEnabled) {
 
     // 100% of traces in development, 20% in production
     tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.2,
+
+    beforeSend(event) {
+      if (event.request?.headers) {
+        delete event.request.headers.authorization;
+        delete event.request.headers.Authorization;
+        delete event.request.headers.cookie;
+        delete event.request.headers.Cookie;
+      }
+
+      return event;
+    },
   });
 }

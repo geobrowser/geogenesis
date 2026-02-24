@@ -40,3 +40,5 @@ if (isTelemetryEnabled) {
     tracePropagationTargets,
   });
 }
+
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
