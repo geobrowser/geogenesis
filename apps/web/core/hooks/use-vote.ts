@@ -9,6 +9,7 @@ import { useCallback } from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { SubstreamVote } from '~/core/io/substream-schema';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { VoteOption, encodeProposalVotedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
@@ -88,8 +89,15 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         action: 'PROPOSAL_VOTED',
       });
 
-      const txEffect = tx(callData);
-      const result = await Effect.runPromise(Effect.either(txEffect));
+      const txEffect = tx(callData).pipe(
+        Effect.withSpan('web.write.vote'),
+        Effect.annotateSpans({
+          'io.operation': 'vote',
+          'space.type': 'DAO',
+          'governance.action': 'proposal_voted',
+        })
+      );
+      const result = await runEffectEither(txEffect);
 
       if (Either.isLeft(result)) {
         const error = result.left;

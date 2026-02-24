@@ -12,6 +12,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
   type SubspaceRelationType,
   encodeProposalCreatedData,
@@ -169,16 +170,39 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
             });
           }
 
-          const hash = yield* tx(callData);
+          const telemetryAttributes =
+            space.type === 'DAO'
+              ? {
+                  'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
+                  'space.type': 'DAO',
+                  'governance.action': 'proposal_created',
+                  'governance.proposal_action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
+                  'governance.subspace_relation_type': relationType,
+                }
+              : {
+                  'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
+                  'space.type': 'PERSONAL',
+                  'governance.action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
+                  'governance.subspace_relation_type': relationType,
+                };
+
+          const hash = yield* tx(callData).pipe(
+            Effect.withSpan(`web.write.subspace.${direction}`),
+            Effect.annotateSpans(telemetryAttributes)
+          );
           console.log('Transaction hash: ', hash);
           return hash;
         });
 
-        const result = await Effect.runPromise(Effect.either(writeTxEffect));
+        const result = await runEffectEither(writeTxEffect);
 
         Either.match(result, {
           onLeft: error => {
-            console.error(error);
+            console.error(
+              'Failed to update subspace relationship',
+              { spaceId, subspaceId, relationType, direction },
+              error
+            );
             dispatch({
               type: 'ERROR',
               payload: String(error),

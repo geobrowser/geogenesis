@@ -2,10 +2,11 @@
 
 import { personalSpace } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { getImagePath } from '~/core/utils/utils';
@@ -32,9 +33,26 @@ export function useCreatePersonalSpace() {
 
       // 1. Register space ID using SDK
       const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
-      await smartAccount.sendUserOperation({
-        calls: [{ to: registryTo, value: 0n, data: registryCalldata }],
-      });
+      const registerResult = await runEffectEither(
+        Effect.tryPromise({
+          try: () =>
+            smartAccount.sendUserOperation({
+              calls: [{ to: registryTo, value: 0n, data: registryCalldata }],
+            }),
+          catch: error => new Error('Failed to register personal space', { cause: error }),
+        }).pipe(
+          Effect.withSpan('web.write.createPersonalSpace.register'),
+          Effect.annotateSpans({
+            'io.operation': 'create_personal_space',
+            'space.type': 'PERSONAL',
+            'governance.action': 'space_created',
+          })
+        )
+      );
+
+      if (Either.isLeft(registerResult)) {
+        throw registerResult.left;
+      }
 
       // 2. Wait for space ID to be available (transaction confirmation)
       const spaceId = await waitForSpaceId(walletAddress);
@@ -62,9 +80,26 @@ export function useCreatePersonalSpace() {
       });
 
       // 5. Submit to space registry
-      await smartAccount.sendUserOperation({
-        calls: [{ to: publishTo, value: 0n, data: publishCalldata }],
-      });
+      const submitResult = await runEffectEither(
+        Effect.tryPromise({
+          try: () =>
+            smartAccount.sendUserOperation({
+              calls: [{ to: publishTo, value: 0n, data: publishCalldata }],
+            }),
+          catch: error => new Error('Failed to submit personal space publish edit', { cause: error }),
+        }).pipe(
+          Effect.withSpan('web.write.createPersonalSpace.submitUserOperation'),
+          Effect.annotateSpans({
+            'io.operation': 'submit_user_operation',
+            'space.type': 'PERSONAL',
+            'governance.action': 'space_content_published',
+          })
+        )
+      );
+
+      if (Either.isLeft(submitResult)) {
+        throw submitResult.left;
+      }
 
       // 6. Wait for content to be indexed
       await waitForSpaceContent(spaceId);

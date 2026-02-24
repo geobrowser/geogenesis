@@ -2,11 +2,12 @@
 
 import { Ipfs, personalSpace } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { type Hex, createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import {
   DAO_SPACE_FACTORY_ADDRESS,
@@ -39,6 +40,16 @@ const PUBLIC_GOVERNANCE_TYPES: SpaceType[] = [
   'region',
   'protocol',
 ];
+
+async function runWriteEffect<A>(effect: Effect.Effect<A, Error>): Promise<A> {
+  const result = await runEffectEither(effect);
+
+  if (Either.isLeft(result)) {
+    throw result.left;
+  }
+
+  return result.right;
+}
 
 export function useDeploySpace() {
   const { smartAccount } = useSmartAccount();
@@ -139,12 +150,26 @@ async function createDaoSpace({
     entityId,
   });
 
-  const { cid } = await Ipfs.publishEdit({
-    name: `Create ${spaceName} space`,
-    ops,
-    author: personalSpaceId,
-    network: 'TESTNET',
-  });
+  const { cid } = await runWriteEffect(
+    Effect.tryPromise({
+      try: () =>
+        Ipfs.publishEdit({
+          name: `Create ${spaceName} space`,
+          ops,
+          author: personalSpaceId,
+          network: 'TESTNET',
+        }),
+      catch: error => new Error('Failed to publish DAO space edit to IPFS', { cause: error }),
+    }).pipe(
+      Effect.withSpan('web.write.createSpace.dao.publishEdit'),
+      Effect.annotateSpans({
+        'io.operation': 'publish_edit',
+        'io.path': 'dao',
+        'space.type': 'DAO',
+        'governance.action': 'space_created',
+      })
+    )
+  );
 
   if (!cid) {
     throw new Error('Failed to upload space content to IPFS');
@@ -192,10 +217,23 @@ async function createDaoSpace({
     ],
   });
 
-  const txHash = await smartAccount.sendTransaction({
-    to: DAO_SPACE_FACTORY_ADDRESS,
-    data: calldata,
-  });
+  const txHash = await runWriteEffect(
+    Effect.tryPromise({
+      try: () =>
+        smartAccount.sendTransaction({
+          to: DAO_SPACE_FACTORY_ADDRESS,
+          data: calldata,
+        }),
+      catch: error => new Error('Failed to submit DAO space creation transaction', { cause: error }),
+    }).pipe(
+      Effect.withSpan('web.write.createSpace.dao.sendTransaction'),
+      Effect.annotateSpans({
+        'io.operation': 'create_space',
+        'space.type': 'DAO',
+        'governance.action': 'space_created',
+      })
+    )
+  );
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -244,9 +282,22 @@ async function createPersonalStyleSpace({
 
   if (!spaceId) {
     const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
-    await smartAccount.sendUserOperation({
-      calls: [{ to: registryTo, value: 0n, data: registryCalldata }],
-    });
+    await runWriteEffect(
+      Effect.tryPromise({
+        try: () =>
+          smartAccount.sendUserOperation({
+            calls: [{ to: registryTo, value: 0n, data: registryCalldata }],
+          }),
+        catch: error => new Error('Failed to register personal-style space', { cause: error }),
+      }).pipe(
+        Effect.withSpan('web.write.createSpace.personal.register'),
+        Effect.annotateSpans({
+          'io.operation': 'create_space',
+          'space.type': 'PERSONAL',
+          'governance.action': 'space_created',
+        })
+      )
+    );
 
     spaceId = await waitForSpaceId(walletAddress);
     if (!spaceId) {
@@ -263,17 +314,44 @@ async function createPersonalStyleSpace({
     entityId,
   });
 
-  const { to: publishTo, calldata: publishCalldata } = await personalSpace.publishEdit({
-    name: spaceName,
-    spaceId,
-    ops,
-    author: spaceId,
-    network: 'TESTNET',
-  });
+  const { to: publishTo, calldata: publishCalldata } = await runWriteEffect(
+    Effect.tryPromise({
+      try: () =>
+        personalSpace.publishEdit({
+          name: spaceName,
+          spaceId,
+          ops,
+          author: spaceId,
+          network: 'TESTNET',
+        }),
+      catch: error => new Error('Failed to build personal-style publish edit', { cause: error }),
+    }).pipe(
+      Effect.withSpan('web.write.createSpace.personal.publishEdit'),
+      Effect.annotateSpans({
+        'io.operation': 'publish_edit',
+        'io.path': 'personal',
+        'space.type': 'PERSONAL',
+        'governance.action': 'space_content_published',
+      })
+    )
+  );
 
-  await smartAccount.sendUserOperation({
-    calls: [{ to: publishTo, value: 0n, data: publishCalldata }],
-  });
+  await runWriteEffect(
+    Effect.tryPromise({
+      try: () =>
+        smartAccount.sendUserOperation({
+          calls: [{ to: publishTo, value: 0n, data: publishCalldata }],
+        }),
+      catch: error => new Error('Failed to submit personal-style publish transaction', { cause: error }),
+    }).pipe(
+      Effect.withSpan('web.write.createSpace.personal.submitUserOperation'),
+      Effect.annotateSpans({
+        'io.operation': 'submit_user_operation',
+        'space.type': 'PERSONAL',
+        'governance.action': 'space_content_published',
+      })
+    )
+  );
 
   await waitForSpaceContent(spaceId);
 
