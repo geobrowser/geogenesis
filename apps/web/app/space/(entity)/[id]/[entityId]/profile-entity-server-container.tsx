@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -41,7 +42,7 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
         spaceId={params.id}
         relations={[]}
         referencedByComponent={
-          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
             <React.Suspense fallback={<div />}>
               <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>
@@ -85,7 +86,7 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
       spaceId={params.id}
       relations={person.relations}
       referencedByComponent={
-        <ErrorBoundary fallback={<EmptyErrorComponent />}>
+        <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
           <React.Suspense fallback={<div />}>
             <BacklinksServerContainer entityId={params.entityId} />
           </React.Suspense>

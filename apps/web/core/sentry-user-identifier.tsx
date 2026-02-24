@@ -1,0 +1,27 @@
+'use client';
+
+import * as Sentry from '@sentry/nextjs';
+
+import * as React from 'react';
+
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+
+/**
+ * Synchronizes Sentry user context with the current user's personal space ID.
+ * Sets the user when authenticated, clears it on logout.
+ *
+ * Rendered inside the provider tree where wallet/react-query hooks are available.
+ */
+export function SentryUserIdentifier() {
+  const { personalSpaceId } = usePersonalSpaceId();
+
+  React.useEffect(() => {
+    if (personalSpaceId) {
+      Sentry.setUser({ id: personalSpaceId });
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [personalSpaceId]);
+
+  return null;
+}

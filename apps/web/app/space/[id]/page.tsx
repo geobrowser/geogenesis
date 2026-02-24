@@ -1,4 +1,5 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import * as Sentry from '@sentry/nextjs';
 import { notFound } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -98,7 +99,7 @@ export default async function SpacePage(props0: Props) {
         boundary. We don't want to show any referenced by loading states but do want to
         stream it in
       */}
-      <ErrorBoundary fallback={<EmptyErrorComponent />}>
+      <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
         <React.Suspense fallback={<div />}>
           <BacklinksServerContainer entityId={props.id} />
         </React.Suspense>

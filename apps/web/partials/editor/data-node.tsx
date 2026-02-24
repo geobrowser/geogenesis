@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import { Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -72,7 +73,10 @@ function DataNodeChildren({
   relationId: string;
 }) {
   return (
-    <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
+    <ErrorBoundary
+      fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}
+      onError={e => Sentry.captureException(e)}
+    >
       <DataBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
         <TableBlock spaceId={spaceId} />
       </DataBlockProvider>

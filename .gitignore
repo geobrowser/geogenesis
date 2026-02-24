@@ -6,6 +6,7 @@ build
 .turbo
 dist
 .env
+.env.sentry-build-plugin
 pgdata
 replay.log
 .output
