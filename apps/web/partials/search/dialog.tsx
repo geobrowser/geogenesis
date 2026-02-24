@@ -10,6 +10,7 @@ import * as React from 'react';
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -288,11 +289,20 @@ type CreateNewEntityInSpaceProps = {
 
 const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: CreateNewEntityInSpaceProps) => {
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
+  const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
-  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+  const allSpaces = React.useMemo(() => {
+    const spaces = [...memberSpaces];
+    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
+      spaces.unshift(personalSpace);
+    }
+    return spaces;
+  }, [personalSpace, memberSpaces]);
+
+  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
 
   const renderedSpaces =
     query.length === 0

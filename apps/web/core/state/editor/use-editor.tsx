@@ -302,16 +302,18 @@ export function useEditorStore() {
           });
           const titleValue = titleValues?.[0]?.value || '';
 
-          return [{
-            type: 'image',
-            attrs: {
-              id: block.block.id,
-              src: getImagePath(imageUrlValue),
-              title: titleValue,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'image',
+              attrs: {
+                id: block.block.id,
+                src: getImagePath(imageUrlValue),
+                title: titleValue,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          }];
+          ];
         }
 
         if (toEntity?.type === 'VIDEO') {
@@ -329,27 +331,31 @@ export function useEditorStore() {
           });
           const titleValue = titleValues?.[0]?.value || '';
 
-          return [{
-            type: 'video',
-            attrs: {
-              id: block.block.id,
-              src: getVideoPath(videoUrlValue),
-              title: titleValue,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'video',
+              attrs: {
+                id: block.block.id,
+                src: getVideoPath(videoUrlValue),
+                title: titleValue,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          }];
+          ];
         }
 
         if (toEntity?.type === 'DATA') {
-          return [{
-            type: 'tableNode',
-            attrs: {
-              id: block.block.id,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'tableNode',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          }];
+          ];
         }
 
         const html = markdownValueForBlockId ? Parser.markdownToHtml(markdownValueForBlockId.value || '') : '';
@@ -360,14 +366,16 @@ export function useEditorStore() {
         // A single block's markdown can produce multiple Tiptap nodes (e.g. heading + paragraph + list).
         // Return all of them so multi-element content renders fully.
         if (!json.content || json.content.length === 0) {
-          return [{
-            type: 'paragraph',
-            attrs: {
-              id: block.block.id,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'paragraph',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          }];
+          ];
         }
 
         return json.content.map((nodeData: JSONContent, index: number) => ({

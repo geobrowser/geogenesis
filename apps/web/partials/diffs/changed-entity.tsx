@@ -829,16 +829,16 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
 
   const viewRelations = allRelations.filter(r => r.typeId === SystemIds.VIEW_PROPERTY);
   const columnRelations = allRelations.filter(r => r.typeId === SystemIds.SHOWN_COLUMNS);
-  const collectionItemRelations = allRelations.filter(
-    r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE
-  );
+  const collectionItemRelations = allRelations.filter(r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE);
   const hasConfigChanges = allRelations.length > 0 || configValues.length > 0;
 
   const storeViewEntityId = useBlockViewEntityId(dataBlock.id, spaceId);
   const diffViewInfo = getViewInfo(viewRelations, side);
-  const viewInfo = diffViewInfo ?? (storeViewEntityId
-    ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
-    : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
+  const viewInfo =
+    diffViewInfo ??
+    (storeViewEntityId
+      ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
+      : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
   const filterValue = getFilterValue(configValues, side);
 
   const hasViewChange = viewRelations.some(
@@ -1015,7 +1015,9 @@ const CollectionTableItems = ({ items }: { items: CollectionItem[] }) => (
         {items.map((item, i) => (
           <tr key={i} className="border-b border-grey-02 last:border-b-0">
             <td className="p-[10px]">
-              <span className={cx('rounded text-body text-text', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}>
+              <span
+                className={cx('rounded text-body text-text', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}
+              >
                 {item.entityName ?? item.entityId}
               </span>
             </td>
@@ -1031,7 +1033,10 @@ const CollectionGalleryItems = ({ items }: { items: CollectionItem[] }) => (
     {items.map((item, i) => (
       <div
         key={i}
-        className={cx('flex flex-col gap-2 rounded-[17px] p-[5px]', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}
+        className={cx(
+          'flex flex-col gap-2 rounded-[17px] p-[5px]',
+          item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType]
+        )}
       >
         <div className="aspect-2/1 w-full rounded-lg bg-grey-02" />
         <div className="px-1">
@@ -1047,7 +1052,10 @@ const CollectionListItems = ({ items }: { items: CollectionItem[] }) => (
     {items.map((item, i) => (
       <div
         key={i}
-        className={cx('flex items-start gap-6 rounded-[17px] p-1', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}
+        className={cx(
+          'flex items-start gap-6 rounded-[17px] p-1',
+          item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType]
+        )}
       >
         <div className="h-16 w-16 shrink-0 rounded-lg bg-grey-02" />
         <div className="flex flex-col justify-center pt-2">
