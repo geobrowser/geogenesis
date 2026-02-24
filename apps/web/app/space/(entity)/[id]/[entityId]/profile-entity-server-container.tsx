@@ -1,11 +1,11 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { redirect } from 'next/navigation';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/substream-schema';
+import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -41,11 +41,11 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
         spaceId={params.id}
         relations={[]}
         referencedByComponent={
-          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
             <React.Suspense fallback={<div />}>
               <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>
-          </ErrorBoundary>
+          </TrackedErrorBoundary>
         }
       />
     );
@@ -85,11 +85,11 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
       spaceId={params.id}
       relations={person.relations}
       referencedByComponent={
-        <ErrorBoundary fallback={<EmptyErrorComponent />}>
+        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
           <React.Suspense fallback={<div />}>
             <BacklinksServerContainer entityId={params.entityId} />
           </React.Suspense>
-        </ErrorBoundary>
+        </TrackedErrorBoundary>
       }
     />
   );

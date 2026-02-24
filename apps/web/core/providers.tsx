@@ -6,6 +6,7 @@ import { Provider as JotaiProvider } from 'jotai';
 import * as React from 'react';
 
 import { ReactQueryProvider } from './query-client';
+import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
@@ -22,6 +23,7 @@ export function Providers({ children }: Props) {
     <PrivyProvider>
       <ReactQueryProvider>
         <WalletProvider>
+          <SentryUserIdentifier />
           <JotaiProvider store={store}>
             <SyncEngineProvider>
               <StatusBarContextProvider>

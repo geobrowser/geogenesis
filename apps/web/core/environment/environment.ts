@@ -9,6 +9,7 @@ import {
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   RPC_ENDPOINT_TESTNET,
+  SENTRY_DSN,
   TEST_ENV,
   WALLETCONNECT_PROJECT_ID,
 } from './config';
@@ -36,6 +37,7 @@ type IVars = Readonly<{
   isTestEnv: boolean;
   onboardFlag: string;
   onboardCode: string;
+  sentryDsn?: string;
 }>;
 
 export const variables: IVars = {
@@ -52,6 +54,7 @@ export const variables: IVars = {
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   onboardFlag: ONBOARD_FLAG!,
   onboardCode: ONBOARD_CODE!,
+  sentryDsn: SENTRY_DSN,
 };
 
 export const getConfig = (): AppConfig => {
