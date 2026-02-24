@@ -554,6 +554,7 @@ export function useEditorStore() {
   return {
     upsertEditorState,
     editorJson,
+    activeEntityId,
     blockIds,
     blockRelations,
     hasContent,
