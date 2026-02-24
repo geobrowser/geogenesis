@@ -1,8 +1,8 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
-
 import * as React from 'react';
+
+import { reportError } from '~/core/telemetry/logger';
 
 type GlobalErrorProps = {
   error: Error & { digest?: string };
@@ -19,7 +19,7 @@ type GlobalErrorProps = {
  */
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   React.useEffect(() => {
-    Sentry.captureException(error);
+    reportError(error);
   }, [error]);
 
   return (

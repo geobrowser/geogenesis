@@ -2,6 +2,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 import type { NextConfig } from 'next';
 
+import { ServerEnvironment } from './app/api/environment';
+
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: true,
@@ -123,9 +125,9 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
+  org: ServerEnvironment.sentryBuild?.org,
+  project: ServerEnvironment.sentryBuild?.project,
+  authToken: ServerEnvironment.sentryBuild?.authToken,
 
   // Route Sentry requests through the app to avoid ad-blockers
   tunnelRoute: '/monitoring',

@@ -1,5 +1,4 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -7,6 +6,7 @@ import * as React from 'react';
 
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { reportBoundaryError } from '~/core/telemetry/logger';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -86,7 +86,7 @@ export default async function DefaultEntityPage({
              boundary. We don't want to show any referenced by loading states but do want to
              stream it in
           */}
-          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
+          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={reportBoundaryError}>
             <React.Suspense fallback={<div />}>
               <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>

@@ -1,8 +1,8 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
-
 import * as React from 'react';
+
+import { reportError } from '~/core/telemetry/logger';
 
 import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
@@ -15,7 +15,7 @@ type ErrorProps = {
 
 export default function SpaceError({ error, reset }: ErrorProps) {
   React.useEffect(() => {
-    Sentry.captureException(error);
+    reportError(error);
   }, [error]);
   return (
     <div className="relative flex min-h-[75vh] flex-col items-center justify-center">

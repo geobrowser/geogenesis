@@ -1,12 +1,12 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
+import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
@@ -27,7 +27,7 @@ export function NavbarLinkMenu() {
   };
 
   return (
-    <ErrorBoundary fallback={null} onError={e => Sentry.captureException(e)}>
+    <ErrorBoundary fallback={null} onError={reportBoundaryError}>
       <Menu
         open={open}
         onOpenChange={onOpenChange}

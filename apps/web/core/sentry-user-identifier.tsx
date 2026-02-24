@@ -1,10 +1,9 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
-
 import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { setTelemetryUser } from '~/core/telemetry/logger';
 
 /**
  * Synchronizes Sentry user context with the current user's personal space ID.
@@ -17,9 +16,9 @@ export function SentryUserIdentifier() {
 
   React.useEffect(() => {
     if (personalSpaceId) {
-      Sentry.setUser({ id: personalSpaceId });
+      setTelemetryUser({ id: personalSpaceId });
     } else {
-      Sentry.setUser(null);
+      setTelemetryUser(null);
     }
   }, [personalSpaceId]);
 

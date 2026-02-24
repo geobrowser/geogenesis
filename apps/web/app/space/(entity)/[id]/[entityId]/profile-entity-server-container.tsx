@@ -1,5 +1,4 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -7,6 +6,7 @@ import * as React from 'react';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/substream-schema';
+import { reportBoundaryError } from '~/core/telemetry/logger';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -42,7 +42,7 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
         spaceId={params.id}
         relations={[]}
         referencedByComponent={
-          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
+          <ErrorBoundary fallback={<EmptyErrorComponent />} onError={reportBoundaryError}>
             <React.Suspense fallback={<div />}>
               <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>
@@ -86,7 +86,7 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
       spaceId={params.id}
       relations={person.relations}
       referencedByComponent={
-        <ErrorBoundary fallback={<EmptyErrorComponent />} onError={e => Sentry.captureException(e)}>
+        <ErrorBoundary fallback={<EmptyErrorComponent />} onError={reportBoundaryError}>
           <React.Suspense fallback={<div />}>
             <BacklinksServerContainer entityId={params.entityId} />
           </React.Suspense>

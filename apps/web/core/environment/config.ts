@@ -67,6 +67,20 @@ if (!ONBOARD_CODE) {
   throw new Error('NEXT_PUBLIC_ONBOARD_CODE is not set');
 }
 
+const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+if (SENTRY_DSN) {
+  try {
+    const parsedDsn = new URL(SENTRY_DSN);
+
+    if (parsedDsn.protocol !== 'http:' && parsedDsn.protocol !== 'https:') {
+      throw new Error('NEXT_PUBLIC_SENTRY_DSN must use http or https');
+    }
+  } catch {
+    throw new Error('NEXT_PUBLIC_SENTRY_DSN is not a valid URL');
+  }
+}
+
 export {
   TEST_ENV,
   PRIVY_APP_ID,
@@ -80,4 +94,5 @@ export {
   ACCOUNT_ABSTRACTION_API_KEY,
   ONBOARD_FLAG,
   ONBOARD_CODE,
+  SENTRY_DSN,
 };
