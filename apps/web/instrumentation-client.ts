@@ -33,6 +33,14 @@ if (isTelemetryEnabled) {
       return event;
     },
 
+    // Keep only errors with stack frames from first-party origins.
+    allowUrls: [
+      /^https:\/\/([\w-]+\.)*geobrowser\.io(?:\/|$)/i,
+      /^https:\/\/.*\.vercel\.app(?:\/|$)/i,
+      /^https?:\/\/localhost(?::\d+)?(?:\/|$)/i,
+      /^https?:\/\/127\.0\.0\.1(?::\d+)?(?:\/|$)/i,
+    ],
+
     // Block errors from proxied third-party origins
     denyUrls: [/geo\.framer\.website/, /geo-blog\.vercel\.app/, /geobrowser-v2\.vercel\.app/],
 
