@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/nextjs';
 
 import { Environment } from '~/core/environment';
 import { isTelemetryEnabled, telemetryDsn } from '~/core/telemetry/config';
-import { getBrowserTracingIntegration } from '~/core/telemetry/tracer';
 
 const tracePropagationTargets = [
   /^\/api\//,
@@ -39,7 +38,5 @@ if (isTelemetryEnabled) {
 
     // Only propagate tracing headers to app-owned/API routes.
     tracePropagationTargets,
-
-    integrations: [getBrowserTracingIntegration()],
   });
 }
