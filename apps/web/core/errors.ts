@@ -5,11 +5,3 @@ export class TransactionWriteFailedError extends Error {
 export class PrepareOpsError extends Error {
   readonly _tag = 'PrepareOpsError';
 }
-
-export class IpfsUploadError extends Error {
-  readonly _tag = 'IpfsUploadError';
-}
-
-export class IpfsParseResponseError extends Error {
-  readonly _tag = 'IpfsParseResponseError';
-}

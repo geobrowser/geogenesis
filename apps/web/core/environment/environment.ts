@@ -1,4 +1,3 @@
-import { IPFS_GATEWAY_PATH } from '../constants';
 import {
   ACCOUNT_ABSTRACTION_API_KEY,
   API_ENDPOINT,
@@ -19,7 +18,6 @@ type SupportedChainId = '31337' | '80451' | '19411';
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
-  ipfs: string;
   api: string;
   bundler: string;
 };
@@ -64,7 +62,6 @@ export const getConfig = (): AppConfig => {
   return {
     chainId: variables.chainId,
     rpc,
-    ipfs: IPFS_GATEWAY_PATH,
     api,
     bundler: `${bundler}?apikey=${variables.accountAbstractionApiKey}`,
   };
