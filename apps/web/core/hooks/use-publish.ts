@@ -11,6 +11,7 @@ import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
+import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
@@ -93,7 +94,7 @@ export function usePublish() {
         );
       });
 
-      const result = await Effect.runPromise(Effect.either(publish));
+      const result = await runEffectEither(publish);
 
       if (Either.isLeft(result)) {
         onError?.();
@@ -174,7 +175,7 @@ export function useBulkPublish() {
         });
       });
 
-      const result = await Effect.runPromise(Effect.either(publish));
+      const result = await runEffectEither(publish);
 
       if (Either.isLeft(result)) {
         onError?.();
@@ -287,7 +288,15 @@ function makeProposal(args: MakeProposalArgs) {
             console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
             return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
           },
-        }),
+        }).pipe(
+          Effect.withSpan('web.write.publishEdit.dao'),
+          Effect.annotateSpans({
+            'io.operation': 'publish_edit',
+            'io.path': 'dao',
+            'space.type': 'DAO',
+            'governance.action': 'proposal_created',
+          })
+        ),
         retrySchedule('proposeEdit', Duration.minutes(1))
       );
 
@@ -309,7 +318,14 @@ function makeProposal(args: MakeProposalArgs) {
             console.error('[PUBLISH] personalSpace.publishEdit failed:', error);
             return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
           },
-        }),
+        }).pipe(
+          Effect.withSpan('web.write.publishEdit.personal'),
+          Effect.annotateSpans({
+            'io.operation': 'publish_edit',
+            'io.path': 'personal',
+            'space.type': 'PERSONAL',
+          })
+        ),
         retrySchedule('publishEdit', Duration.minutes(1))
       );
 
@@ -329,7 +345,12 @@ function makeProposal(args: MakeProposalArgs) {
           console.error('[PUBLISH] sendUserOperation failed:', error);
           return new TransactionWriteFailedError('Publish failed', { cause: error });
         },
-      }),
+      }).pipe(
+        Effect.withSpan('web.write.submitUserOperation'),
+        Effect.annotateSpans({
+          'io.operation': 'submit_user_operation',
+        })
+      ),
       retrySchedule('sendUserOperation', Duration.seconds(10))
     );
 
