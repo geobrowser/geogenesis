@@ -25,6 +25,7 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.212.0",
     "@opentelemetry/sdk-trace-base": "^2.5.1",
     "@opentelemetry/sdk-trace-node": "^2.5.1",
+    "@opentelemetry/sdk-trace-web": "^2.5.0",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-dialog": "^1.1.5",
     "@radix-ui/react-dropdown-menu": "^2.1.5",
