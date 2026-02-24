@@ -23,7 +23,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -187,10 +187,68 @@ export const ReviewChanges = () => {
     },
   });
 
+  const allBountyIds = React.useMemo(() => {
+    const remoteIds = remoteBountyEntities.map(entity => entity.id);
+    return [...new Set([...bountyEntityIds, ...remoteIds])];
+  }, [bountyEntityIds, remoteBountyEntities]);
+
+  const { data: bountySubmissionRelations = [] } = useQuery({
+    queryKey: ['bounty-submission-relations', allBountyIds],
+    enabled: allBountyIds.length > 0,
+    queryFn: async () => {
+      return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE));
+    },
+  });
+
+  const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
+    queryKey: ['bounty-submission-relations-personal', allBountyIds, personalSpaceId],
+    enabled: allBountyIds.length > 0 && Boolean(personalSpaceId),
+    queryFn: async () => {
+      if (!personalSpaceId) return [];
+      return await Effect.runPromise(
+        getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE, personalSpaceId)
+      );
+    },
+  });
+
+  const bountySubmissionCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const relation of bountySubmissionRelations) {
+      const id = relation.toEntityId;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [bountySubmissionRelations]);
+
+  const bountyPersonalSubmissionCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const relation of bountyPersonalSubmissionRelations) {
+      const id = relation.toEntityId;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [bountyPersonalSubmissionRelations]);
+
   const { bounties, bountiesById } = React.useMemo(() => {
-    const localResult = buildBounties(bountyEntityIds, bountyValues, bountyRelations);
+    const localResult = buildBounties(
+      bountyEntityIds,
+      bountyValues,
+      bountyRelations,
+      bountySubmissionCounts,
+      bountyPersonalSubmissionCounts,
+      activeSpace
+    );
     const remoteBounties = remoteBountyEntities.map(entity =>
-      buildBounty(entity.id, entity.values ?? [], entity.relations ?? [])
+      buildBounty(
+        entity.id,
+        entity.values ?? [],
+        entity.relations ?? [],
+        bountySubmissionCounts,
+        bountyPersonalSubmissionCounts,
+        activeSpace
+      )
     );
 
     const merged = new Map<string, Bounty>();
@@ -198,7 +256,15 @@ export const ReviewChanges = () => {
     for (const bounty of localResult.bounties) merged.set(bounty.id, bounty);
 
     return { bounties: Array.from(merged.values()), bountiesById: merged };
-  }, [bountyEntityIds, bountyValues, bountyRelations, remoteBountyEntities]);
+  }, [
+    bountyEntityIds,
+    bountyValues,
+    bountyRelations,
+    remoteBountyEntities,
+    bountySubmissionCounts,
+    bountyPersonalSubmissionCounts,
+    activeSpace,
+  ]);
 
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
 
@@ -557,7 +623,10 @@ function isBountyTypeRelation(relation: StoreRelation): boolean {
 function buildBounties(
   entityIds: string[],
   values: StoreValue[],
-  relations: StoreRelation[]
+  relations: StoreRelation[],
+  submissionCounts: Map<string, number>,
+  personalSubmissionCounts: Map<string, number>,
+  spaceId?: string
 ): { bounties: Bounty[]; bountiesById: Map<string, Bounty> } {
   const valuesByEntity = new Map<string, StoreValue[]>();
   const relationsByEntity = new Map<string, StoreRelation[]>();
@@ -578,7 +647,7 @@ function buildBounties(
     const entityValues = valuesByEntity.get(entityId) ?? [];
     const entityRelations = relationsByEntity.get(entityId) ?? [];
 
-    return buildBounty(entityId, entityValues, entityRelations);
+    return buildBounty(entityId, entityValues, entityRelations, submissionCounts, personalSubmissionCounts, spaceId);
   });
 
   const bountiesById = new Map(bounties.map(bounty => [bounty.id, bounty]));
@@ -589,7 +658,10 @@ function buildBounties(
 function buildBounty(
   entityId: string,
   entityValues: StoreValue[],
-  entityRelations: StoreRelation[]
+  entityRelations: StoreRelation[],
+  submissionCounts: Map<string, number>,
+  personalSubmissionCounts: Map<string, number>,
+  spaceId?: string
 ): Bounty {
   const name =
     Entities.name(entityValues) ??
@@ -625,6 +697,9 @@ function buildBounty(
       findRelationValueByNames(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_NAMES)
   );
 
+  const submissionsCount = submissionCounts.get(entityId) ?? 0;
+  const userSubmissionsCount = personalSubmissionCounts.get(entityId) ?? 0;
+
   const difficulty = parseDifficulty(
     findValueByNames(entityValues, BOUNTY_DIFFICULTY_NAMES) ??
       findRelationValueByNames(entityRelations, BOUNTY_DIFFICULTY_NAMES)
@@ -647,12 +722,15 @@ function buildBounty(
 
   return {
     id: entityId,
+    spaceId,
     name,
     description,
     maxPayout,
     budget,
     maxContributors,
     submissionsPerPerson,
+    submissionsCount,
+    userSubmissionsCount,
     difficulty,
     status,
     deadline,

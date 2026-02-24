@@ -5,6 +5,7 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { Gem } from '~/design-system/icons/gem';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Bounty, BountyDifficulty, BountyStatus } from './types';
 
@@ -29,11 +30,19 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
     bounty.budget != null ||
     bounty.maxContributors != null ||
     bounty.submissionsPerPerson != null ||
+    bounty.submissionsCount != null ||
+    bounty.userSubmissionsCount != null ||
     formattedPayout ||
     bounty.difficulty ||
     bounty.status ||
     bounty.yourSubmissions ||
     formattedDeadline;
+
+  const handleOpenBounty = () => {
+    if (!bounty.spaceId) return;
+    const url = NavUtils.toEntity(bounty.spaceId, bounty.id);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div
@@ -72,7 +81,13 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       </label>
 
       {/* Title */}
-      <h4 className="mt-3 text-[15px] font-semibold leading-tight text-text">{bounty.name}</h4>
+      <button
+        type="button"
+        onClick={handleOpenBounty}
+        className="mt-3 text-left text-[15px] font-semibold leading-tight text-text hover:underline"
+      >
+        {bounty.name}
+      </button>
 
       {/* Description */}
       {bounty.description ? (
@@ -83,7 +98,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
 
       {/* Details table */}
       {hasDetails && (
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-0">
           {bounty.budget != null && (
             <DetailRow label="Bounty budget">
               <span className="inline-flex items-center gap-1">
@@ -106,14 +121,19 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
           )}
 
           {bounty.maxContributors != null && (
-            <DetailRow label="Max contributors">
-              <span className="text-[14px] text-text">{bounty.maxContributors.toLocaleString('en-US')}</span>
+            <DetailRow label="Submissions">
+              <span className="text-[14px] text-text">
+                {(bounty.submissionsCount ?? 0).toLocaleString('en-US')} / {bounty.maxContributors.toLocaleString('en-US')}
+              </span>
             </DetailRow>
           )}
 
           {bounty.submissionsPerPerson != null && (
-            <DetailRow label="Submissions per person">
-              <span className="text-[14px] text-text">{bounty.submissionsPerPerson.toLocaleString('en-US')}</span>
+            <DetailRow label="Your submissions">
+              <span className="text-[14px] text-text">
+                {(bounty.userSubmissionsCount ?? 0).toLocaleString('en-US')} /{' '}
+                {bounty.submissionsPerPerson.toLocaleString('en-US')}
+              </span>
             </DetailRow>
           )}
 
