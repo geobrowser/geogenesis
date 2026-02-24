@@ -1,7 +1,15 @@
 import * as Sentry from '@sentry/nextjs';
 
+import { Environment } from '~/core/environment';
 import { isTelemetryEnabled, telemetryDsn } from '~/core/telemetry/config';
 import { getBrowserTracingIntegration } from '~/core/telemetry/tracer';
+
+const tracePropagationTargets = [
+  /^\/api\//,
+  /^\/monitoring$/,
+  Environment.variables.apiEndpoint,
+  Environment.variables.apiEndpointTestnet,
+];
 
 if (isTelemetryEnabled) {
   Sentry.init({
@@ -28,6 +36,9 @@ if (isTelemetryEnabled) {
 
     // Block errors from proxied third-party origins
     denyUrls: [/geo\.framer\.website/, /geo-blog\.vercel\.app/, /geobrowser-v2\.vercel\.app/],
+
+    // Only propagate tracing headers to app-owned/API routes.
+    tracePropagationTargets,
 
     integrations: [getBrowserTracingIntegration()],
   });
