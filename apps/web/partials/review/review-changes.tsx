@@ -9,7 +9,13 @@ import { useSetAtom } from 'jotai';
 import * as React from 'react';
 
 import { editorContentVersionAtom } from '~/atoms';
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID } from '~/core/constants';
+import {
+  BOUNTIES_RELATION_TYPE,
+  BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID,
+  BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID,
+  BOUNTY_TYPE_ID,
+} from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -44,6 +50,13 @@ type Proposals = Record<string, { name: string; description: string }>;
 
 const BOUNTY_DESCRIPTION_NAMES = new Set(['description', 'details', 'summary']);
 const BOUNTY_MAX_PAYOUT_NAMES = new Set(['max payout', 'maximum payout', 'payout', 'reward', 'reward amount']);
+const BOUNTY_BUDGET_NAMES = new Set(['bounty budget', 'budget']);
+const BOUNTY_MAX_CONTRIBUTORS_NAMES = new Set(['max contributors', 'maximum contributors', 'contributors']);
+const BOUNTY_SUBMISSIONS_PER_PERSON_NAMES = new Set([
+  'submissions per person',
+  'submissions per contributor',
+  'submissions per user',
+]);
 const BOUNTY_DIFFICULTY_NAMES = new Set(['difficulty', 'difficulty level', 'level']);
 const BOUNTY_STATUS_NAMES = new Set(['status', 'state']);
 const BOUNTY_DEADLINE_NAMES = new Set(['deadline', 'due date', 'due']);
@@ -448,7 +461,7 @@ export const ReviewChanges = () => {
               )}
             >
               <Gem color="purple" />
-              <span>{selectedBountyIds.size}</span>
+              {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
             </button>
             <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
               <Pending isPending={isPublishing}>
@@ -594,6 +607,24 @@ function buildBounty(
       findRelationValueByNames(entityRelations, BOUNTY_MAX_PAYOUT_NAMES)
   );
 
+  const budget = parseNumber(
+    findValueById(entityValues, BOUNTY_BUDGET_PROPERTY_ID) ??
+      findValueByNames(entityValues, BOUNTY_BUDGET_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_BUDGET_NAMES)
+  );
+
+  const maxContributors = parseNumber(
+    findValueById(entityValues, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID) ??
+      findValueByNames(entityValues, BOUNTY_MAX_CONTRIBUTORS_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_MAX_CONTRIBUTORS_NAMES)
+  );
+
+  const submissionsPerPerson = parseNumber(
+    findValueById(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID) ??
+      findValueByNames(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_NAMES) ??
+      findRelationValueByNames(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_NAMES)
+  );
+
   const difficulty = parseDifficulty(
     findValueByNames(entityValues, BOUNTY_DIFFICULTY_NAMES) ??
       findRelationValueByNames(entityRelations, BOUNTY_DIFFICULTY_NAMES)
@@ -619,6 +650,9 @@ function buildBounty(
     name,
     description,
     maxPayout,
+    budget,
+    maxContributors,
+    submissionsPerPerson,
     difficulty,
     status,
     deadline,
@@ -631,6 +665,11 @@ function findValueByNames(values: StoreValue[], names: Set<string>): string | nu
     const normalized = normalizeName(value.property.name);
     return normalized ? names.has(normalized) : false;
   });
+  return match?.value ?? null;
+}
+
+function findValueById(values: StoreValue[], propertyId: string): string | null {
+  const match = values.find(value => value.property.id === propertyId);
   return match?.value ?? null;
 }
 

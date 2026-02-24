@@ -15,6 +15,9 @@ export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 // Bounty linking - relation type used to link proposals to bounties
 export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
 export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';
+export const BOUNTY_BUDGET_PROPERTY_ID = '9ece325c592d42d5b2e785e8e6fe05b6';
+export const BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID = '1d7bb89ec2854df7afac28cec9007e38';
+export const BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID = '21c06b6d7f7846f1ac65e4fc4eadc615';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [

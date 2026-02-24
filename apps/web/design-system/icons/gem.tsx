@@ -11,15 +11,16 @@ export function Gem({ color }: Props) {
 
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="7" fill={themeColor} />
       <path
-        d="M8 1L14 5L8 15L2 5L8 1Z"
-        fill={themeColor}
-        stroke={themeColor}
-        strokeWidth="1"
+        d="M8 5.1L11.2 10.4H4.8L8 5.1Z"
+        stroke="white"
+        strokeWidth="1.4"
         strokeLinejoin="round"
+        strokeLinecap="round"
+        strokeMiterlimit="1"
+        fill="none"
       />
-      <path d="M2 5H14" stroke="white" strokeWidth="0.5" strokeOpacity="0.5" />
-      <path d="M8 1V15" stroke="white" strokeWidth="0.5" strokeOpacity="0.3" />
     </svg>
   );
 }

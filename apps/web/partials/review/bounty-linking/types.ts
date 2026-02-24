@@ -7,6 +7,9 @@ export type Bounty = {
   name: string;
   description: string | null;
   maxPayout: number | null;
+  budget?: number | null;
+  maxContributors?: number | null;
+  submissionsPerPerson?: number | null;
   difficulty: BountyDifficulty | null;
   status: BountyStatus | null;
   deadline: string | null;

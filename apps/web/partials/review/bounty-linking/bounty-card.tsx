@@ -26,6 +26,9 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
   const formattedPayout = bounty.maxPayout != null ? bounty.maxPayout.toLocaleString('en-US') : null;
 
   const hasDetails =
+    bounty.budget != null ||
+    bounty.maxContributors != null ||
+    bounty.submissionsPerPerson != null ||
     formattedPayout ||
     bounty.difficulty ||
     bounty.status ||
@@ -73,7 +76,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
 
       {/* Description */}
       {bounty.description ? (
-        <p className="mt-2 text-[14px] leading-snug text-grey-04">{bounty.description}</p>
+        <p className="mt-2 line-clamp-3 text-[14px] leading-snug text-grey-04">{bounty.description}</p>
       ) : (
         <p className="mt-2 text-[14px] italic leading-snug text-grey-03">No description</p>
       )}
@@ -81,6 +84,16 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       {/* Details table */}
       {hasDetails && (
         <div className="mt-4 flex flex-col gap-2">
+          {bounty.budget != null && (
+            <DetailRow label="Bounty budget">
+              <span className="inline-flex items-center gap-1">
+                <span className="text-purple">
+                  <Gem color="purple" />
+                </span>
+                <span className="text-[14px] text-text">{bounty.budget.toLocaleString('en-US')}</span>
+              </span>
+            </DetailRow>
+          )}
           {formattedPayout && (
             <DetailRow label="Max payout">
               <span className="inline-flex items-center gap-1">
@@ -89,6 +102,18 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
                 </span>
                 <span className="text-[14px] text-text">{formattedPayout}</span>
               </span>
+            </DetailRow>
+          )}
+
+          {bounty.maxContributors != null && (
+            <DetailRow label="Max contributors">
+              <span className="text-[14px] text-text">{bounty.maxContributors.toLocaleString('en-US')}</span>
+            </DetailRow>
+          )}
+
+          {bounty.submissionsPerPerson != null && (
+            <DetailRow label="Submissions per person">
+              <span className="text-[14px] text-text">{bounty.submissionsPerPerson.toLocaleString('en-US')}</span>
             </DetailRow>
           )}
 
