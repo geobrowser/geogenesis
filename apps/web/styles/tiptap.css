@@ -58,6 +58,20 @@
   @apply text-body;
 }
 
+/* Heading placeholders: is-empty is on the decoration wrapper, not the h1/h2/h3.
+   Target the wrapper that contains a heading so "Heading..." matches the cursor size. */
+.ProseMirror .is-empty:has(h1)::before {
+  @apply text-largeTitle;
+}
+
+.ProseMirror .is-empty:has(h2)::before {
+  @apply text-mediumTitle;
+}
+
+.ProseMirror .is-empty:has(h3)::before {
+  @apply text-smallTitle;
+}
+
 /* Display a Placeholder only for the first line in an empty editor. */
 .ProseMirror p.is-editor-empty:first-child::before {
   color: #adb5bd;
