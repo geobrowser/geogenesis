@@ -271,11 +271,11 @@ export const ReviewChanges = () => {
 
       const bountyTargetSpaceId = activeSpace !== personalSpaceId ? activeSpace : undefined;
 
-      const bountyLinkRelations: StoreRelation[] = Array.from(selectedBountyIds)
-        .map(bountyId => {
-          const bounty = bountiesById.get(bountyId);
-          if (!bounty) return null;
-          return {
+      const bountyLinkRelations: StoreRelation[] = Array.from(selectedBountyIds).flatMap(bountyId => {
+        const bounty = bountiesById.get(bountyId);
+        if (!bounty) return [];
+        return [
+          {
             id: ID.createEntityId(),
             entityId: ID.createEntityId(),
             spaceId: personalSpaceId,
@@ -296,9 +296,9 @@ export const ReviewChanges = () => {
               name: bounty.name,
               value: bounty.id,
             },
-          };
-        })
-        .filter((relation): relation is StoreRelation => relation !== null);
+          },
+        ];
+      });
 
       if (bountyLinkRelations.length > 0) {
         console.info('[bounty-linking] Published relation ids', bountyLinkRelations.map(r => r.id), {
