@@ -5,8 +5,11 @@ import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react'
 import { LayoutGroup } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import { useAtomValue } from 'jotai';
+
 import * as React from 'react';
 
+import { editorContentVersionAtom } from '~/atoms';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -40,17 +43,22 @@ interface Props {
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
-  const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
+  const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
   useInterceptEditorLinks(spaceId);
 
+  // Ref keeps the blur handler fresh without requiring editor recreation.
+  const upsertEditorStateRef = React.useRef(upsertEditorState);
+  upsertEditorStateRef.current = upsertEditorState;
+
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
       // Responsible for converting all editor blocks to Geo knowledge graph state
-      upsertEditorState(params.editor.getJSON());
+      upsertEditorStateRef.current(params.editor.getJSON());
     }
   };
 
@@ -117,7 +125,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         }
       },
     },
-    [editorJson, editable]
+    // NOTE: `editorJson` is intentionally excluded — including it destroys and
+    // recreates the editor on every block addition, wiping data block state.
+    // `activeEntityId` handles tab switches; `editorContentVersion` handles
+    // external resets (discard, IndexedDB restore).
+    [editable, activeEntityId, editorContentVersion]
   );
 
   // We are in browse mode and there is no content.

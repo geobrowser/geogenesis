@@ -1,9 +1,11 @@
 'use client';
 
 import { Effect } from 'effect';
+import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { editorContentVersionAtom } from '~/atoms';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -33,6 +35,7 @@ export const ReviewChanges = () => {
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
+  const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
 
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
@@ -151,6 +154,8 @@ export const ReviewChanges = () => {
   const handleDeleteAll = () => {
     if (!activeSpace) return;
     store.clearLocalChangesForSpace(activeSpace);
+    // Force the TipTap editor to recreate with fresh server content.
+    bumpEditorContentVersion(v => v + 1);
   };
 
   const spaceOptions = spaces.map(space => ({
