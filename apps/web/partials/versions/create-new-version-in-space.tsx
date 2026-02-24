@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -37,11 +38,20 @@ export const CreateNewVersionInSpace = ({
   const { storage } = useMutate();
 
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
+  const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
-  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+  const allSpaces = React.useMemo(() => {
+    const spaces = [...memberSpaces];
+    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
+      spaces.unshift(personalSpace);
+    }
+    return spaces;
+  }, [personalSpace, memberSpaces]);
+
+  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
 
   const renderedSpaces =
     query.length === 0

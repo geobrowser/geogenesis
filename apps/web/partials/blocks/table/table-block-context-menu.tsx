@@ -17,7 +17,6 @@ import { Copy } from '~/design-system/icons/copy';
 import { Relation } from '~/design-system/icons/relation';
 import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 
@@ -85,32 +84,23 @@ export function TableBlockContextMenu() {
                   </MenuItem>
                 </>
               )}
-              <MenuItem>
-                <Link
-                  href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-                  className="flex w-full items-center justify-between gap-2"
-                >
+              <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
+                <div className="flex w-full items-center justify-between gap-2">
                   <span>Open fullscreen</span>
                   <TableView />
-                </Link>
+                </div>
               </MenuItem>
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, entityId)}
-                  className="flex w-full items-center justify-between gap-2"
-                >
+              <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
+                <div className="flex w-full items-center justify-between gap-2">
                   <span>View config</span>
                   <Cog />
-                </Link>
+                </div>
               </MenuItem>
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, relationId)}
-                  className="flex w-full items-center justify-between gap-2"
-                >
+              <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
+                <div className="flex w-full items-center justify-between gap-2">
                   <span>View block relation</span>
                   <Relation />
-                </Link>
+                </div>
               </MenuItem>
               <MenuItem onClick={onCopyBlockId}>
                 <div className="flex w-full items-center justify-between gap-2">

@@ -40,23 +40,18 @@ export const DataBlockSourceMenu = ({
               <span className="text-smallButton text-grey-04">Back</span>
             </button>
           </div>
-          <MenuItem active={source.type === 'COLLECTION'}>
-            <button
-              type="button"
-              onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
-              className="flex w-full items-center justify-between gap-2"
-            >
+          <MenuItem
+            active={source.type === 'COLLECTION'}
+            onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
+          >
+            <div className="flex w-full items-center justify-between gap-2">
               <span className="text-button text-text">{collectionName || 'New collection'}</span>
               {source.type === 'COLLECTION' && <Check />}
-            </button>
+            </div>
           </MenuItem>
 
-          <MenuItem active={source.type === 'SPACES'}>
-            <button
-              type="button"
-              onClick={() => setView('spaces')}
-              className="flex w-full items-center justify-between gap-2"
-            >
+          <MenuItem active={source.type === 'SPACES'} onClick={() => setView('spaces')}>
+            <div className="flex w-full items-center justify-between gap-2">
               <div>
                 <div className="text-button text-text">Spaces</div>
                 {source.type === 'SPACES' && source.value.length > 0 && (
@@ -85,18 +80,10 @@ export const DataBlockSourceMenu = ({
                 )}
               </div>
               <ChevronRight />
-            </button>
+            </div>
           </MenuItem>
-          <MenuItem active={source.type === 'GEO'}>
-            <button
-              type="button"
-              onClick={() => {
-                setSource({
-                  type: 'GEO',
-                });
-              }}
-              className="flex w-full flex-col gap-1"
-            >
+          <MenuItem active={source.type === 'GEO'} onClick={() => setSource({ type: 'GEO' })}>
+            <div className="flex w-full flex-col gap-1">
               <div className="flex w-full justify-between gap-2">
                 <div className="text-button text-text">All of Geo</div>
                 {source.type === 'GEO' && <Check />}
@@ -104,7 +91,7 @@ export const DataBlockSourceMenu = ({
               <div className="mt-0.5 text-footnote text-grey-04">
                 Fields limited to Name, Description, Types, Cover and Avatar
               </div>
-            </button>
+            </div>
           </MenuItem>
         </>
       )}
