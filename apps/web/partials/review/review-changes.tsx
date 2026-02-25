@@ -576,7 +576,7 @@ export const ReviewChanges = () => {
               onClick={() => setIsBountyLinkingOpen(prev => !prev)}
               disabled={bounties.length === 0}
               className={cx(
-                'inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button transition-colors',
+                'group inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button transition-colors',
                 bounties.length === 0
                   ? 'cursor-not-allowed border-grey-02 bg-grey-01 text-grey-03'
                   : 'border-grey-02 bg-white text-text hover:border-text'
