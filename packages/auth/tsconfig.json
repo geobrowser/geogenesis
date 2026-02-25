@@ -24,9 +24,7 @@
     // "module": "ESNext",
     // "noEmit": true,
     /* Lib when not targeting the browser */
-    "lib": [
-      "ES2022"
-    ],
+    "lib": ["ES2022"],
     /* Lib when targeting the browser */
     // "lib": ["ES2022", "DOM", "DOM.Iterable"]
     /* When building a library */
@@ -35,12 +33,8 @@
     "declarationMap": true,
     "jsx": "react-jsx",
     "paths": {
-      "~/*": [
-        "./*"
-      ],
-      "@geogenesis/*": [
-        "../*"
-      ]
+      "~/*": ["./*"],
+      "@geogenesis/*": ["../*"]
     }
   }
 }

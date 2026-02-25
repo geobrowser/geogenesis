@@ -14,13 +14,13 @@
     "lint": "turbo run lint",
     "format": "turbo run format",
     "dev": "turbo run dev",
-    "clean": "turbo run clean && rimraf \"**/.turbo\"",
+    "clean": "turbo run clean && rimraf --glob \"**/.turbo\"",
     "docker:build": "docker compose build --build-arg TURBO_TEAM --build-arg TURBO_TOKEN",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down -v --rmi all",
     "docker:clean": "rimraf build",
     "docker": "bun docker:down && bun docker:clean && bun docker:build && bun docker:up",
-    "clean-node-modules": "rimraf \"**/node_modules\""
+    "clean-node-modules": "rimraf --glob \"**/node_modules\""
   },
   "author": "Byron Guina",
   "license": "ISC",
@@ -31,17 +31,17 @@
   },
   "devDependencies": {
     "@graphql-codegen/client-preset": "^5.2.3",
-    "eslint": "^9.39.2",
-    "eslint-config-turbo": "^2.8.10",
-    "prettier": "^3.7.4",
-    "rimraf": "^3.0.2",
-    "turbo": "^2.5.6",
+    "eslint": "^10.0.2",
+    "eslint-config-turbo": "^2.8.11",
+    "prettier": "^3.8.1",
+    "rimraf": "^6.1.3",
+    "turbo": "^2.8.11",
     "web": "workspace:*"
   },
   "overrides": {
     "axios": "^1.13.5",
     "hono": "^4.11.7",
-    "viem": "^2.46.2"
+    "viem": "^2.46.3"
   },
   "packageManager": "bun@1.3.9"
 }

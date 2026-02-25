@@ -3,7 +3,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import produce from 'immer';
+import { produce } from 'immer';
 
 import * as React from 'react';
 
