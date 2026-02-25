@@ -1,14 +1,10 @@
-import '@testing-library/jest-dom/extend-expect';
-import matchers from '@testing-library/jest-dom/matchers';
+import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import indexedDB from 'fake-indexeddb';
-import { afterEach, expect, vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
 // Add support for IndexedDB testing
 globalThis.indexedDB = indexedDB;
-
-// extends Vitest's expect method with methods from react-testing-library
-expect.extend(matchers);
 
 // runs a cleanup after each test case (e.g. clearing jsdom)
 afterEach(() => {
@@ -46,7 +42,6 @@ class MockPointerEvent extends Event {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.PointerEvent = MockPointerEvent as any;
 
 // https://github.com/radix-ui/primitives/issues/420#issuecomment-771615182
@@ -67,5 +62,4 @@ class ResizeObserver {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.ResizeObserver = ResizeObserver as any;

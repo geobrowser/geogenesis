@@ -2,6 +2,7 @@
 
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Provider as JotaiProvider } from 'jotai';
+import { CookiesProvider } from 'react-cookie';
 
 import * as React from 'react';
 
@@ -20,20 +21,22 @@ interface Props {
 
 export function Providers({ children }: Props) {
   return (
-    <PrivyProvider>
-      <ReactQueryProvider>
-        <WalletProvider>
-          <SentryUserIdentifier />
-          <JotaiProvider store={store}>
-            <SyncEngineProvider>
-              <StatusBarContextProvider>
-                <DiffProvider>{children}</DiffProvider>
-              </StatusBarContextProvider>
-              <ReactQueryDevtools initialIsOpen={false} />
-            </SyncEngineProvider>
-          </JotaiProvider>
-        </WalletProvider>
-      </ReactQueryProvider>
-    </PrivyProvider>
+    <CookiesProvider>
+      <PrivyProvider>
+        <ReactQueryProvider>
+          <WalletProvider>
+            <SentryUserIdentifier />
+            <JotaiProvider store={store}>
+              <SyncEngineProvider>
+                <StatusBarContextProvider>
+                  <DiffProvider>{children}</DiffProvider>
+                </StatusBarContextProvider>
+                <ReactQueryDevtools initialIsOpen={false} />
+              </SyncEngineProvider>
+            </JotaiProvider>
+          </WalletProvider>
+        </ReactQueryProvider>
+      </PrivyProvider>
+    </CookiesProvider>
   );
 }

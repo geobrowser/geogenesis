@@ -55,6 +55,7 @@ export class SyncEngine {
      */
     this.batcher = new AsyncBatcher(this.processSyncQueue.bind(this), {
       wait: Duration.toMillis('100 millis'),
+      started: true,
       onSuccess: (result: Entity[]) => {
         if (result.length > 0) {
           /**
@@ -73,8 +74,6 @@ export class SyncEngine {
         }
       },
     });
-
-    this.batcher.start();
 
     const onEntityUpdated = this.stream.on(GeoEventStream.ENTITY_UPDATED, event => {
       if (shouldLog) {
@@ -137,7 +136,8 @@ export class SyncEngine {
   }
 
   public stop() {
-    this.batcher.stop();
+    this.batcher.cancel();
+    this.batcher.abort();
     this.subs.forEach(unsub => unsub());
   }
 
