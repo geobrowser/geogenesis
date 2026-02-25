@@ -18,7 +18,7 @@ export function reportError(error: unknown): void {
   }
 }
 
-export function reportBoundaryError(error: Error): void {
+export function reportBoundaryError(error: unknown): void {
   reportError(error);
 }
 
