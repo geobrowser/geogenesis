@@ -18,6 +18,7 @@ export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';
 export const BOUNTY_BUDGET_PROPERTY_ID = '9ece325c592d42d5b2e785e8e6fe05b6';
 export const BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID = '1d7bb89ec2854df7afac28cec9007e38';
 export const BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID = '21c06b6d7f7846f1ac65e4fc4eadc615';
+export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [

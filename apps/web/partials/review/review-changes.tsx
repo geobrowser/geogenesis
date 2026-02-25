@@ -12,15 +12,18 @@ import { editorContentVersionAtom } from '~/atoms';
 import {
   BOUNTIES_RELATION_TYPE,
   BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_ALLOCATED_PROPERTY_ID,
   BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID,
   BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID,
   BOUNTY_TYPE_ID,
 } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
@@ -69,6 +72,10 @@ export const ReviewChanges = () => {
   const { store } = useSyncEngine();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const { personalSpaceId } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const address = smartAccount?.account.address;
+  const { profile } = useGeoProfile(address);
+  const personalPageEntityId = profile?.id ?? null;
 
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
@@ -232,28 +239,75 @@ export const ReviewChanges = () => {
   }, [bountyPersonalSubmissionRelations]);
 
   const { bounties, bountiesById } = React.useMemo(() => {
+    if (!personalSpaceId) {
+      return { bounties: [], bountiesById: new Map<string, Bounty>() };
+    }
+
+    const allocationTargets = [personalSpaceId, personalPageEntityId].filter(
+      (id): id is string => Boolean(id)
+    );
     const localResult = buildBounties(
       bountyEntityIds,
       bountyValues,
       bountyRelations,
       bountySubmissionCounts,
       bountyPersonalSubmissionCounts,
-      activeSpace
+      allocationTargets,
+      activeSpace,
+      personalSpaceId
     );
-    const remoteBounties = remoteBountyEntities.map(entity =>
-      buildBounty(
-        entity.id,
-        entity.values ?? [],
-        entity.relations ?? [],
-        bountySubmissionCounts,
-        bountyPersonalSubmissionCounts,
-        activeSpace
-      )
-    );
+    const remoteBounties = remoteBountyEntities
+      .filter(entity => isAllocatedToUser(entity.relations ?? [], allocationTargets))
+      .map(entity =>
+        buildBounty(
+          entity.id,
+          entity.values ?? [],
+          entity.relations ?? [],
+          bountySubmissionCounts,
+          bountyPersonalSubmissionCounts,
+          activeSpace,
+          personalSpaceId
+        )
+      );
+
+    console.info('[bounty-linking] Allocation pre-filter', {
+      activeSpace,
+      personalSpaceId,
+      personalPageEntityId,
+      allocationTargets,
+      localBounties: bountyEntityIds.map(entityId => {
+        const relations = (bountyRelations ?? []).filter(r => r.fromEntity.id === entityId);
+        return {
+          id: entityId,
+          allocatedTo: relations
+            .filter(r => r.type.id === BOUNTY_ALLOCATED_PROPERTY_ID)
+            .map(r => r.toEntity?.id ?? (r as StoreRelation & { toEntityId?: string }).toEntityId ?? null)
+            .filter((id): id is string => Boolean(id)),
+        };
+      }),
+      remoteBounties: remoteBountyEntities.map(entity => ({
+        id: entity.id,
+        allocatedTo: (entity.relations ?? [])
+          .filter(r => r.type?.id === BOUNTY_ALLOCATED_PROPERTY_ID)
+          .map(r => r.toEntity?.id ?? (r as StoreRelation & { toEntityId?: string }).toEntityId ?? null)
+          .filter((id): id is string => Boolean(id)),
+      })),
+    });
 
     const merged = new Map<string, Bounty>();
     for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
     for (const bounty of localResult.bounties) merged.set(bounty.id, bounty);
+
+    console.info('[bounty-linking] Linkable bounties', {
+      activeSpace,
+      personalSpaceId,
+      personalPageEntityId,
+      localCount: localResult.bounties.length,
+      remoteCount: remoteBounties.length,
+      totalCount: merged.size,
+      localIds: localResult.bounties.map(bounty => bounty.id),
+      remoteIds: remoteBounties.map(bounty => bounty.id),
+    });
 
     return { bounties: Array.from(merged.values()), bountiesById: merged };
   }, [
@@ -264,6 +318,8 @@ export const ReviewChanges = () => {
     bountySubmissionCounts,
     bountyPersonalSubmissionCounts,
     activeSpace,
+    personalSpaceId,
+    personalPageEntityId,
   ]);
 
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
@@ -626,7 +682,9 @@ function buildBounties(
   relations: StoreRelation[],
   submissionCounts: Map<string, number>,
   personalSubmissionCounts: Map<string, number>,
-  spaceId?: string
+  allocationTargets: string[],
+  spaceId?: string,
+  personalSpaceId?: string
 ): { bounties: Bounty[]; bountiesById: Map<string, Bounty> } {
   const valuesByEntity = new Map<string, StoreValue[]>();
   const relationsByEntity = new Map<string, StoreRelation[]>();
@@ -643,11 +701,21 @@ function buildBounties(
     relationsByEntity.set(relation.fromEntity.id, existing);
   }
 
-  const bounties = entityIds.map(entityId => {
+  const bounties = entityIds
+    .filter(entityId => isAllocatedToUser(relationsByEntity.get(entityId) ?? [], allocationTargets))
+    .map(entityId => {
     const entityValues = valuesByEntity.get(entityId) ?? [];
     const entityRelations = relationsByEntity.get(entityId) ?? [];
 
-    return buildBounty(entityId, entityValues, entityRelations, submissionCounts, personalSubmissionCounts, spaceId);
+    return buildBounty(
+      entityId,
+      entityValues,
+      entityRelations,
+      submissionCounts,
+      personalSubmissionCounts,
+      spaceId,
+      personalSpaceId
+    );
   });
 
   const bountiesById = new Map(bounties.map(bounty => [bounty.id, bounty]));
@@ -661,7 +729,8 @@ function buildBounty(
   entityRelations: StoreRelation[],
   submissionCounts: Map<string, number>,
   personalSubmissionCounts: Map<string, number>,
-  spaceId?: string
+  spaceId?: string,
+  personalSpaceId?: string
 ): Bounty {
   const name =
     Entities.name(entityValues) ??
@@ -806,4 +875,17 @@ function parseSubmissions(value: string | null): { current: number; max: number 
   const max = Number(match[2]);
   if (!Number.isFinite(current) || !Number.isFinite(max)) return null;
   return { current, max };
+}
+
+function isAllocatedToUser(relations: StoreRelation[], allocationTargets: string[]): boolean {
+  if (allocationTargets.length === 0) return false;
+  const targetIds = new Set(allocationTargets);
+  return relations.some(relation => {
+    if (relation.type.id !== BOUNTY_ALLOCATED_PROPERTY_ID) return false;
+    const toEntityId =
+      relation.toEntity?.id ??
+      (relation as StoreRelation & { toEntityId?: string }).toEntityId ??
+      null;
+    return toEntityId ? targetIds.has(toEntityId) : false;
+  });
 }
