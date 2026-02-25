@@ -281,17 +281,12 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     equal
   );
 
-  // Merge relationValueTypes from the hydrated entity into the remote property
+  // Local property data takes precedence over remote
   const finalProperty = React.useMemo(() => {
     if (!remoteProperty) return property;
     if (!property) return remoteProperty;
 
-    const localRelationValueTypes = property.relationValueTypes;
-    if (localRelationValueTypes && localRelationValueTypes.length > 0) {
-      return { ...remoteProperty, relationValueTypes: localRelationValueTypes };
-    }
-
-    return remoteProperty;
+    return { ...remoteProperty, ...property };
   }, [remoteProperty, property]);
 
   return {

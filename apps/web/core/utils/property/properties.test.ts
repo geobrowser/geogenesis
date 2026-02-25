@@ -187,7 +187,7 @@ describe('Properties', () => {
         relationValueTypes: [],
         renderableType: null,
         renderableTypeStrict: undefined,
-        isDataTypeEditable: true,
+
         format: null,
         unit: null,
       });
@@ -245,7 +245,7 @@ describe('Properties', () => {
         relationValueTypes: [],
         renderableType: SystemIds.URL,
         renderableTypeStrict: 'URL',
-        isDataTypeEditable: true,
+
         format: null,
         unit: null,
       });

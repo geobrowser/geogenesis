@@ -300,11 +300,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const stableDataType = this.getStableDataType(id);
     const pendingDataType = this.pendingDataTypes.get(id);
 
-    /**
-     * Always favor the stable data type. The stable data type should
-     * come from the server. If the property already exists in the
-     * knowledge graph then the data type is immutable.
-     */
     const dataType = stableDataType ?? pendingDataType ?? null;
 
     if (!dataType) {
@@ -334,12 +329,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
       format: formatValue?.value ?? null,
       unit: unitRelation?.toEntity.id ?? null,
-
-      /**
-       * A data type is still editable as long as there's no
-       * stable representation of the property on the server.
-       */
-      isDataTypeEditable: !stableDataType,
     };
   }
 
