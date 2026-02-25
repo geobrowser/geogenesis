@@ -72,15 +72,16 @@
   outline: none;
 }
 
+/* Top margin only when there is a block above; no extra space for first block */
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
   @apply mt-10;
 }
 
-.ProseMirror > h1:first-child,
-.ProseMirror > h2:first-child,
-.ProseMirror > h3:first-child {
+.ProseMirror > *:first-child h1,
+.ProseMirror > *:first-child h2,
+.ProseMirror > *:first-child h3 {
   @apply mt-0;
 }
 
