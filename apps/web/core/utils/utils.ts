@@ -84,6 +84,12 @@ export class GeoNumber {
 }
 
 export class GeoPoint {
+  static readonly MAX_MAP_LAT = 85.051129;
+
+  static clampLatForMap(lat: number): number {
+    return Math.max(-GeoPoint.MAX_MAP_LAT, Math.min(GeoPoint.MAX_MAP_LAT, lat));
+  }
+
   /**
    * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
    * @param value - String containing latitude and longitude separated by a comma
@@ -101,7 +107,10 @@ export class GeoPoint {
 
       if (isNaN(latitude) || isNaN(longitude)) return null;
 
-      return { latitude, longitude };
+      return {
+        latitude: GeoPoint.clampLatForMap(latitude),
+        longitude,
+      };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;

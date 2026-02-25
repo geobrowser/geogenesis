@@ -3,7 +3,10 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+import { GeoPoint } from '~/core/utils/utils';
 import { Skeleton } from './skeleton';
+
+const DEFAULT_ZOOM = 9;
 
 interface MapProps {
   latitude?: number;
@@ -16,30 +19,34 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
   const markerRef = useRef<mapboxgl.Marker | null>(null);
   const [isMapboxLoaded, setIsMapboxLoaded] = useState(false);
 
-  // Initialize map when component mounts
+  // GeoPoint owns max map latitude; Map only uses it (single source of truth in utils).
+  const lat = GeoPoint.clampLatForMap(latitude);
+  const lng = longitude;
+  const center: [number, number] = [lng, lat];
+
+  // Initialize map once on mount
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const loadMapbox = async () => {
-      // Dynamically import mapbox only when needed
       const mapboxgl = (await import('mapbox-gl')).default;
 
       mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
-      if (mapContainerRef.current) {
-        const map = new mapboxgl.Map({
-          container: mapContainerRef.current,
-          style: 'mapbox://styles/mapbox/streets-v11',
-          center: [longitude, latitude],
-          zoom: 9,
-        });
+      if (!mapContainerRef.current) return;
 
-        const marker = new mapboxgl.Marker().setLngLat([longitude, latitude]).addTo(map);
+      const map = new mapboxgl.Map({
+        container: mapContainerRef.current,
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center,
+        zoom: DEFAULT_ZOOM,
+      });
 
-        mapRef.current = map;
-        markerRef.current = marker;
-        setIsMapboxLoaded(true);
-      }
+      const marker = new mapboxgl.Marker().setLngLat(center).addTo(map);
+
+      mapRef.current = map;
+      markerRef.current = marker;
+      setIsMapboxLoaded(true);
     };
 
     loadMapbox();
@@ -51,7 +58,7 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
         markerRef.current = null;
       }
     };
-  }, [latitude, longitude]);
+  }, []);
 
   // Update map when coordinates change
   useEffect(() => {
@@ -61,8 +68,9 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
     const validLng = longitude !== undefined && !isNaN(longitude);
 
     if (validLat && validLng) {
-      mapRef.current.setCenter([longitude, latitude]);
-      markerRef.current.setLngLat([longitude, latitude]);
+      mapRef.current.setCenter(center);
+      mapRef.current.setZoom(DEFAULT_ZOOM);
+      markerRef.current.setLngLat(center);
     }
   }, [latitude, longitude]);
 
