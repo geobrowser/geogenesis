@@ -1,9 +1,11 @@
 import Heading, { Level } from '@tiptap/extension-heading';
-import { NodeViewContent, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+
+import { Content } from './node-view-content';
 
 export const HeadingNode = Heading.extend({
   ...Heading,
@@ -44,7 +46,7 @@ function HeadingNodeComponent({ node }: NodeViewRendererProps) {
 
   return (
     <NodeViewWrapper>
-      <NodeViewContent as={tag} contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
+      <Content as={tag} contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
     </NodeViewWrapper>
   );
 }

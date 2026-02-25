@@ -31,10 +31,8 @@ export const VideoNode = Node.create({
   name: 'video',
   group: 'block',
   atom: true,
-  spanning: false,
   allowGapCursor: false,
   defining: true,
-  exitable: true,
 
   // Note: id and spaceId are defined by id-extension as global attributes
   // We only define video-specific attributes here

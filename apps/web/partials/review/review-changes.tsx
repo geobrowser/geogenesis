@@ -5,7 +5,6 @@ import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { editorContentVersionAtom } from '~/atoms';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -27,6 +26,8 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
+
+import { editorContentVersionAtom } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
 

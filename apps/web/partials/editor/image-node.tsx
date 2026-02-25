@@ -31,10 +31,8 @@ export const ImageNode = Node.create({
   name: 'image',
   group: 'block',
   atom: true,
-  spanning: false,
   allowGapCursor: false,
   defining: true,
-  exitable: true,
 
   // Note: id and spaceId are defined by id-extension as global attributes
   // We only define image-specific attributes here

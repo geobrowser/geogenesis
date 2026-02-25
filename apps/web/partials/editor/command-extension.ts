@@ -1,8 +1,7 @@
+import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions } from '@tiptap/suggestion';
-import tippy from 'tippy.js';
-import type { Instance } from 'tippy.js';
 
 import { CommandSuggestionItem, commandItems } from './command-items';
 import { CommandList } from './command-list';
@@ -44,7 +43,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
     },
     render() {
       let reactRenderer: ReactRenderer<any, any>;
-      let popup: Instance[];
+      let popup: HTMLDivElement;
 
       return {
         onStart: props => {
@@ -55,29 +54,27 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           if (!props.clientRect) {
             return;
           }
-          popup = tippy('body', {
-            getReferenceClientRect: props.clientRect as any, // fixme
-            appendTo: () => document.body,
-            content: reactRenderer.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: 'manual',
-            placement: 'bottom-start',
-          });
+
+          popup = document.createElement('div');
+          popup.style.position = 'absolute';
+          popup.style.zIndex = '9999';
+          popup.appendChild(reactRenderer.element);
+          document.body.appendChild(popup);
+
+          updatePosition(popup, props.clientRect as () => DOMRect | null);
         },
 
         onUpdate(props) {
           reactRenderer.updateProps(props);
 
-          popup[0].setProps({
-            getReferenceClientRect: props.clientRect as any, // fixme
-          });
+          if (props.clientRect) {
+            updatePosition(popup, props.clientRect as () => DOMRect | null);
+          }
         },
 
         onKeyDown(props) {
           if (props.event.key === 'Escape') {
-            popup[0].hide();
-
+            popup.style.display = 'none';
             return true;
           }
 
@@ -85,10 +82,30 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         },
 
         onExit() {
-          popup[0].destroy();
+          popup.remove();
           reactRenderer.destroy();
         },
       };
     },
   },
 });
+
+function updatePosition(popup: HTMLDivElement, clientRect: () => DOMRect | null) {
+  const rect = clientRect();
+  if (!rect) return;
+
+  const virtualEl = {
+    getBoundingClientRect: () => rect,
+  };
+
+  computePosition(virtualEl, popup, {
+    placement: 'bottom-start',
+    middleware: [offset(6), flip(), shift({ padding: 8 })],
+  }).then(({ x, y }) => {
+    Object.assign(popup.style, {
+      left: `${x}px`,
+      top: `${y}px`,
+      display: 'block',
+    });
+  });
+}

@@ -3,13 +3,11 @@
 import { GraphUrl } from '@geoprotocol/geo-sdk';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-
 import { useAtomValue } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
-import { editorContentVersionAtom } from '~/atoms';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -21,6 +19,7 @@ import { NoContent } from '../space-tabs/no-content';
 import { tiptapExtensions } from './extensions';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
+import { editorContentVersionAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -258,21 +257,19 @@ function useInterceptEditorLinks(spaceId: string) {
   }, [router, spaceId]);
 }
 
-// Suppress TipTap's flushSync warning in dev - this is a known issue with TipTap + React 18
+// ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
 // https://github.com/ueberdosis/tiptap/issues/3764
 const useSuppressFlushSyncWarning = () => {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-
-    const originalError = console.error;
+    const orig = console.error;
     console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
         return;
-      }
-      originalError.apply(console, args);
+      orig.apply(console, args);
     };
     return () => {
-      console.error = originalError;
+      console.error = orig;
     };
   }, []);
 };
