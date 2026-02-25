@@ -421,7 +421,6 @@ describe('GeoStore', () => {
       expect(property).toBeDefined();
       expect(property!.id).toBe('prop-1');
       expect(property!.dataType).toBe(mockDataType);
-      expect(property!.isDataTypeEditable).toBe(true);
     });
 
     it('should include relation value types', () => {

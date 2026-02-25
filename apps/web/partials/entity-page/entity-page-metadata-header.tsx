@@ -84,9 +84,6 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       r.isLocal === true
   );
 
-  // Check if property data type is editable (simpler than checking publish status)
-  const isDataTypeEditable = propertyData?.isDataTypeEditable ?? false;
-
   // Find renderableType relation
   const renderableTypeRelation = relations.find(
     r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
@@ -152,13 +149,6 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       const mapping = Properties.mapPropertyType(newType);
       const baseDataType = mapping.baseDataType;
       const renderableTypeId = mapping.renderableTypeId;
-
-      // Non-editable properties can't change their base dataType
-      if (!isDataTypeEditable && propertyData && propertyData.dataType !== baseDataType) {
-        console.warn('Cannot change property dataType from', propertyData.dataType, 'to', baseDataType);
-        console.warn('Non-editable properties cannot change their base dataType');
-        return;
-      }
 
       // Register the data type so store.getProperty() returns the updated type
       storage.properties.setDataType(entityId, baseDataType);
@@ -248,7 +238,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, allRelations, isDataTypeEditable, name]
+    [entityId, spaceId, storage, propertyData, allRelations, name]
   );
 
   // Create property data when Property type is manually added to an existing entity
@@ -277,11 +267,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     <div className="flex items-center gap-1 text-text">
       {isPropertyEntity && editable && (
         <>
-          <RenderableTypeDropdown
-            value={currentRenderableType}
-            onChange={handlePropertyTypeChange}
-            baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
-          />
+          <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
           <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
         </>
       )}

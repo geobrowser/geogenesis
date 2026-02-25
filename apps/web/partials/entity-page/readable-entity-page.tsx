@@ -4,7 +4,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
-import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import { ADDRESS_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
@@ -39,6 +39,7 @@ const SKIPPED_PROPERTIES: string[] = [
   SystemIds.NAME_PROPERTY,
   SystemIds.COVER_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
+  DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
 ];
 
@@ -181,6 +182,7 @@ export function RelationsGroup({
     propertyId === SystemIds.COVER_PROPERTY ||
     propertyId === ContentIds.AVATAR_PROPERTY ||
     (propertyId === SystemIds.TYPES_PROPERTY && !isMetadataHeader) ||
+    propertyId === DATA_TYPE_PROPERTY ||
     propertyId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;

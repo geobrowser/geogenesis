@@ -234,7 +234,6 @@ export function reconstructFromStore(
     relationValueTypes, // Added: missing field
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
-    isDataTypeEditable: true, // Added: local properties are editable by default
     format: formatValue?.value || null,
     unit: unitRelation?.toEntity.id || null,
   };
