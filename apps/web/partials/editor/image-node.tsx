@@ -53,7 +53,7 @@ export const ImageNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['image-node', mergeAttributes(HTMLAttributes), 0];
+    return ['image-node', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {
