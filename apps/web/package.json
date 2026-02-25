@@ -10,8 +10,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "NODE_ENV=test bunx playwright test",
-    "test:e2e:install": "bunx playwright install --with-deps",
+    "test:e2e": "NODE_ENV=test bun playwright test",
+    "test:e2e:install": "bun playwright install --with-deps",
     "gql:codegen": "graphql-codegen"
   },
   "dependencies": {

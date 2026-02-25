@@ -75,20 +75,6 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       NEXT_PUBLIC_IS_TEST_ENV: 'true',
-      NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? 'playwright-privy-app-id',
-      NEXT_PUBLIC_GEOGENESIS_RPC: process.env.NEXT_PUBLIC_GEOGENESIS_RPC ?? 'https://rpc.geogenesis.io',
-      NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET:
-        process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET ?? 'https://rpc-testnet.geogenesis.io',
-      NEXT_PUBLIC_API_ENDPOINT: process.env.NEXT_PUBLIC_API_ENDPOINT ?? 'https://api.geogenesis.io',
-      NEXT_PUBLIC_API_ENDPOINT_TESTNET: process.env.NEXT_PUBLIC_API_ENDPOINT_TESTNET ?? 'https://api-testnet.geogenesis.io',
-      NEXT_PUBLIC_BUNDLER_RPC: process.env.NEXT_PUBLIC_BUNDLER_RPC ?? 'https://bundler.geogenesis.io',
-      NEXT_PUBLIC_BUNDLER_RPC_TESTNET:
-        process.env.NEXT_PUBLIC_BUNDLER_RPC_TESTNET ?? 'https://bundler-testnet.geogenesis.io',
-      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
-        process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? 'playwright-walletconnect-project-id',
-      NEXT_PUBLIC_PIMLICO_API_KEY: process.env.NEXT_PUBLIC_PIMLICO_API_KEY ?? 'playwright-pimlico-key',
-      NEXT_PUBLIC_ONBOARD_FLAG: process.env.NEXT_PUBLIC_ONBOARD_FLAG ?? 'false',
-      NEXT_PUBLIC_ONBOARD_CODE: process.env.NEXT_PUBLIC_ONBOARD_CODE ?? 'playwright-onboard-code',
     },
   },
 });
