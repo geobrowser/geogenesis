@@ -14,10 +14,8 @@ export const DataNode = Node.create({
   name: 'tableNode',
   group: 'block',
   atom: true,
-  spanning: false,
   allowGapCursor: false,
   defining: true,
-  exitable: true,
 
   parseHTML() {
     return [

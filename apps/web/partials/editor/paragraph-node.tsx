@@ -6,12 +6,13 @@ import * as React from 'react';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 
+// Widen NodeViewContent's `as` prop — v3 defaults to NoInfer<'div'> which blocks other tags
+const Content = NodeViewContent as React.FC<{ as?: string } & React.HTMLAttributes<HTMLElement>>;
+
 export const ParagraphNode = Paragraph.extend({
   ...Paragraph,
   name: 'paragraph',
-  spanning: true,
   defining: true,
-  exitable: true,
   content: 'inline*',
   code: false,
 
@@ -40,7 +41,7 @@ function ParagraphNodeComponent() {
   return (
     <NodeViewWrapper>
       <div className="paragraph-node">
-        <NodeViewContent as="p" contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
+        <Content as="p" contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
       </div>
     </NodeViewWrapper>
   );

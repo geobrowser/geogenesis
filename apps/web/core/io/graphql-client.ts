@@ -3,15 +3,16 @@ import { Duration, Effect, Either } from 'effect';
 import * as Schedule from 'effect/Schedule';
 import { GraphQLClient } from 'graphql-request';
 
+import { getConfig } from '~/core/environment/environment';
+
 import {
+  type RetryCategory,
   classifyTransportFailure,
   isIngressUnavailableHtml,
   isRetryableCategory,
   parseRetryAfterMs,
-  type RetryCategory,
   withRetryAfterJitter,
 } from './errors/retry-utils';
-import { getConfig } from '~/core/environment/environment';
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 200;
@@ -135,10 +136,7 @@ type GraphqlRetryLogContext = {
   transportSyscall?: string;
 };
 
-function toGraphqlRetryLogContext(
-  error: GraphqlRequestError,
-  fallbackClientRequestId: string
-): GraphqlRetryLogContext {
+function toGraphqlRetryLogContext(error: GraphqlRequestError, fallbackClientRequestId: string): GraphqlRetryLogContext {
   return {
     category: error.retryCategory ?? (error.status === undefined ? 'transport_unknown' : 'http_5xx_other'),
     status: error.status,

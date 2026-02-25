@@ -5,6 +5,9 @@ import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
+// Widen NodeViewContent's `as` prop — v3 defaults to NoInfer<'div'> which blocks other tags
+const Content = NodeViewContent as React.FC<{ as?: string } & React.HTMLAttributes<HTMLElement>>;
+
 export const HeadingNode = Heading.extend({
   ...Heading,
   parseHTML() {
@@ -44,7 +47,7 @@ function HeadingNodeComponent({ node }: NodeViewRendererProps) {
 
   return (
     <NodeViewWrapper>
-      <NodeViewContent as={tag} contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
+      <Content as={tag} contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
     </NodeViewWrapper>
   );
 }

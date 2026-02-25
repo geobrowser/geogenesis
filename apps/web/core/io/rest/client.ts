@@ -4,11 +4,11 @@ import * as Either from 'effect/Either';
 import * as Schedule from 'effect/Schedule';
 
 import {
+  type RetryCategory,
   classifyTransportFailure,
   isIngressUnavailableHtml,
   isRetryableCategory,
   parseRetryAfterMs,
-  type RetryCategory,
   withRetryAfterJitter,
 } from '../errors/retry-utils';
 import { AbortError, JsonParseError } from '../subgraph/errors';
