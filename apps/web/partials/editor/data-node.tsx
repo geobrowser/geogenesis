@@ -37,7 +37,7 @@ export const DataNode = Node.create({
   // },
 
   renderHTML({ HTMLAttributes }) {
-    return ['table-node', mergeAttributes(HTMLAttributes), 0];
+    return ['table-node', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {

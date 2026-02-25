@@ -53,7 +53,7 @@ export const VideoNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['video-node', mergeAttributes(HTMLAttributes), 0];
+    return ['video-node', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {
