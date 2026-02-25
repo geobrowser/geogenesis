@@ -11,7 +11,7 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -202,9 +202,18 @@ export const TableBlockTable = ({
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
 
+  // Order columns by shownColumnIds (block relation order) so view/edit match Power Tools and persisted order
+  const orderedColumns = React.useMemo(() => {
+    const ordered = shownColumnIds
+      .map(id => properties.find(p => p.id === id))
+      .filter((c): c is Property => Boolean(c));
+    const hidden = properties.filter(p => !shownColumnIds.includes(p.id));
+    return [...ordered, ...hidden];
+  }, [properties, shownColumnIds]);
+
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], space),
+    columns: formatColumns(orderedColumns, isEditing, [], space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -258,7 +267,7 @@ export const TableBlockTable = ({
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
             <tr className="border-b border-grey-02">
-              {properties.map((column, i) => {
+              {orderedColumns.map((column, i) => {
                 const isShown = shownColumnIds.includes(column.id);
                 const headerClassNames = isShown
                   ? null
@@ -283,7 +292,7 @@ export const TableBlockTable = ({
                         key={column.id}
                         column={column}
                         isEditMode={isEditing}
-                        isLastColumn={i === properties.length - 1}
+                        isLastColumn={i === orderedColumns.length - 1}
                         spaceId={space}
                       />
                     </div>

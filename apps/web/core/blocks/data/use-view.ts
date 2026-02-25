@@ -1,4 +1,7 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { produce } from 'immer';
+
+import * as React from 'react';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -6,7 +9,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { getImagePath, sortRelations } from '~/core/utils/utils';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
@@ -42,12 +45,14 @@ export function useView() {
       relation => relation.type.id === SystemIds.SHOWN_COLUMNS || relation.type.id === SystemIds.PROPERTIES
     ) ?? [];
 
+  const sortedShownColumnRelations = sortRelations(shownColumnRelations);
+
   const { mapping, isLoading, isFetched } = useMapping(
     entityId,
-    shownColumnRelations.map(r => r.id)
+    sortedShownColumnRelations.map(r => r.id)
   );
 
-  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...shownColumnRelations.map(r => r.toEntity.id)];
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...sortedShownColumnRelations.map(r => r.toEntity.id)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -226,6 +231,29 @@ export function useView() {
     }
   };
 
+  const setColumnOrder = React.useCallback(
+    (orderedPropertyIds: string[], onPersist?: (updatedRelations: Relation[]) => void) => {
+      if (orderedPropertyIds.length <= 1) return;
+      const sorted = sortRelations(shownColumnRelations);
+      const rest = orderedPropertyIds.slice(1);
+      const newOrderedRelations = rest
+        .map(id => sorted.find(r => r.toEntity.id === id))
+        .filter((r): r is Relation => Boolean(r));
+      const updatedRelations = newOrderedRelations.map((relation, i) =>
+        produce(relation, draft => {
+          draft.position = sorted[i]?.position ?? undefined;
+        })
+      );
+      updatedRelations.forEach((_, i) =>
+        storage.relations.update(newOrderedRelations[i], draft => {
+          draft.position = sorted[i]?.position ?? undefined;
+        })
+      );
+      onPersist?.(updatedRelations);
+    },
+    [shownColumnRelations, storage.relations]
+  );
+
   return {
     isLoading,
     isFetched,
@@ -236,6 +264,7 @@ export function useView() {
     shownColumnIds,
     shownColumnRelations,
     toggleProperty,
+    setColumnOrder,
     mapping,
   };
 }
