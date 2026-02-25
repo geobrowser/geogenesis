@@ -130,7 +130,7 @@ export function PowerToolsScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { spaceId, name: blockName } = useDataBlock();
+  const { spaceId, name: blockName, relationId } = useDataBlock();
   const { source } = useSource();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
@@ -389,6 +389,7 @@ export function PowerToolsScreen() {
             onLinkEntry={onLinkEntry}
             onOpenEntityPanel={handleOpenEntityPanel}
             source={source}
+            columnOrderKey={relationId}
           />
         )}
         {panelEntityId && (

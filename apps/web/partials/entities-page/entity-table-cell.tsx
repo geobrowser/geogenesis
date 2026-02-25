@@ -133,7 +133,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
     return (
       <LinkableRelationChip
         small
-        key={relation.toEntity.value}
+        key={relation.id}
         isEditing={false}
         currentSpaceId={spaceId}
         entityId={relationValue}
