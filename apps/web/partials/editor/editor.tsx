@@ -264,7 +264,8 @@ const useSuppressFlushSyncWarning = () => {
     if (process.env.NODE_ENV !== 'development') return;
     const orig = console.error;
     console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) return;
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
+        return;
       orig.apply(console, args);
     };
     return () => {

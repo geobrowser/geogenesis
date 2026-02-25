@@ -1,12 +1,11 @@
 import Heading, { Level } from '@tiptap/extension-heading';
-import { NodeViewContent, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
-// Widen NodeViewContent's `as` prop — v3 defaults to NoInfer<'div'> which blocks other tags
-const Content = NodeViewContent as React.FC<{ as?: string } & React.HTMLAttributes<HTMLElement>>;
+import { Content } from './node-view-content';
 
 export const HeadingNode = Heading.extend({
   ...Heading,
