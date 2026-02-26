@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { Filter } from '~/core/blocks/data/filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -42,7 +43,10 @@ function buildRowMeta(
   };
 }
 
-export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsData & {
+export function usePowerToolsData(options?: {
+  pageSize?: number;
+  filterStateOverride?: Filter[];
+}): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
 } {
@@ -53,7 +57,9 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
-  const where = React.useMemo(() => filterStateToWhere(filterState), [filterState]);
+  const effectiveFilterState = options?.filterStateOverride ?? filterState;
+  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [effectiveFilterState]);
+
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const [page, setPage] = React.useState(0);
