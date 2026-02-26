@@ -76,6 +76,7 @@ export function EditableEntityTableCell({
         <SelectEntity
           onCreateEntity={result => {
             onChangeEntry(entityId, spaceId, { type: 'CREATE_ENTITY', name: result.name });
+            return entityId;
           }}
           onDone={(result, fromCreateFn) => {
             if (fromCreateFn) {
