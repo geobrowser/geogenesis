@@ -70,8 +70,7 @@ export function BountyLinkingPanel({
 
         {bounties.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-body text-grey-04">No bounties available</p>
-            <p className="mt-1 text-metadata text-grey-03">There are no bounties in this space yet.</p>
+            <p className="text-body text-grey-04">No allocated bounties available to link in current space</p>
           </div>
         )}
       </div>
