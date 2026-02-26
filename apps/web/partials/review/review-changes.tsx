@@ -9,7 +9,7 @@ import { useSetAtom } from 'jotai';
 import * as React from 'react';
 
 import { editorContentVersionAtom } from '~/atoms';
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID } from '~/core/constants';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -175,12 +175,12 @@ export const ReviewChanges = () => {
 
   const allBountyIds = React.useMemo(() => {
     const remoteIds = remoteBountyEntities.map(entity => entity.id);
-    return [...new Set([...bountyEntityIds, ...remoteIds])];
+    return [...new Set([...bountyEntityIds, ...remoteIds])].sort();
   }, [bountyEntityIds, remoteBountyEntities]);
 
   const { data: bountySubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations', allBountyIds],
-    enabled: allBountyIds.length > 0,
+    enabled: allBountyIds.length > 0 && isReviewOpen,
     staleTime: 60_000,
     queryFn: async () => {
       return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE));
@@ -189,7 +189,7 @@ export const ReviewChanges = () => {
 
   const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations-personal', allBountyIds, personalSpaceId],
-    enabled: allBountyIds.length > 0 && Boolean(personalSpaceId),
+    enabled: allBountyIds.length > 0 && isReviewOpen && Boolean(personalSpaceId),
     staleTime: 60_000,
     queryFn: async () => {
       if (!personalSpaceId) return [];
@@ -291,6 +291,8 @@ export const ReviewChanges = () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
+    const proposalEntityId = ID.createEntityId();
+
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
       const settle = (value: boolean) => {
@@ -305,6 +307,7 @@ export const ReviewChanges = () => {
         relations: relationsFromSpace,
         spaceId: activeSpace,
         name: proposalName,
+        proposalId: proposalEntityId,
         onSuccess: () => {
           setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
           settle(true);
@@ -317,11 +320,12 @@ export const ReviewChanges = () => {
         // (e.g. missing smart account, empty values), resolve false
         // so the UI doesn't stay stuck in the publishing state.
         settle(false);
+      }).catch(() => {
+        settle(false);
       });
     });
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
-      const proposalEntityId = ID.createEntityId();
       const bountyLinkValues: StoreValue[] = [
         {
           id: ID.createValueId({
@@ -349,34 +353,59 @@ export const ReviewChanges = () => {
 
       const bountyTargetSpaceId = activeSpace !== personalSpaceId ? activeSpace : undefined;
 
-      const bountyLinkRelations: StoreRelation[] = Array.from(selectedBountyIds).flatMap(bountyId => {
-        const bounty = bountiesById.get(bountyId);
-        if (!bounty) return [];
-        return [
-          {
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            spaceId: personalSpaceId,
-            toSpaceId: bountyTargetSpaceId,
-            renderableType: 'RELATION',
-            verified: false,
-            position: Position.generate(),
-            type: {
-              id: BOUNTIES_RELATION_TYPE,
-              name: 'Bounties',
+      const proposalTypeRelation: StoreRelation = {
+        id: ID.createEntityId(),
+        entityId: ID.createEntityId(),
+        spaceId: personalSpaceId,
+        renderableType: 'RELATION',
+        verified: false,
+        position: Position.generate(),
+        type: {
+          id: SystemIds.TYPES_PROPERTY,
+          name: 'Types',
+        },
+        fromEntity: {
+          id: proposalEntityId,
+          name: proposalName,
+        },
+        toEntity: {
+          id: PROPOSAL_TYPE_ID,
+          name: 'Proposal',
+          value: PROPOSAL_TYPE_ID,
+        },
+      };
+
+      const bountyLinkRelations: StoreRelation[] = [
+        proposalTypeRelation,
+        ...Array.from(selectedBountyIds).flatMap<StoreRelation>(bountyId => {
+          const bounty = bountiesById.get(bountyId);
+          if (!bounty) return [];
+          return [
+            {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId: personalSpaceId,
+              toSpaceId: bountyTargetSpaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: BOUNTIES_RELATION_TYPE,
+                name: 'Bounties',
+              },
+              fromEntity: {
+                id: proposalEntityId,
+                name: proposalName,
+              },
+              toEntity: {
+                id: bounty.id,
+                name: bounty.name,
+                value: bounty.id,
+              },
             },
-            fromEntity: {
-              id: proposalEntityId,
-              name: proposalName,
-            },
-            toEntity: {
-              id: bounty.id,
-              name: bounty.name,
-              value: bounty.id,
-            },
-          },
-        ];
-      });
+          ];
+        }),
+      ];
 
       await makeProposal({
         values: bountyLinkValues,

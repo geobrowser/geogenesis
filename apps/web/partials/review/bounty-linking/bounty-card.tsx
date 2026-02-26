@@ -7,7 +7,7 @@ import * as React from 'react';
 import { Gem } from '~/design-system/icons/gem';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Bounty, BountyDifficulty, BountyStatus } from './types';
+import type { Bounty, BountyDifficulty, BountyStatus } from './types';
 
 interface BountyCardProps {
   bounty: Bounty;
@@ -24,15 +24,12 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       year: 'numeric',
     });
 
-  const formattedPayout = bounty.maxPayout != null ? bounty.maxPayout.toLocaleString('en-US') : null;
-
   const hasDetails =
     bounty.budget != null ||
     bounty.maxContributors != null ||
     bounty.submissionsPerPerson != null ||
     bounty.submissionsCount != null ||
     bounty.userSubmissionsCount != null ||
-    formattedPayout ||
     bounty.difficulty ||
     bounty.status ||
     formattedDeadline;
@@ -103,17 +100,6 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
               </span>
             </DetailRow>
           )}
-          {formattedPayout && (
-            <DetailRow label="Max payout">
-              <span className="inline-flex items-center gap-1">
-                <span className="text-purple">
-                  <Gem color="purple" />
-                </span>
-                <span className="text-[14px] text-text">{formattedPayout}</span>
-              </span>
-            </DetailRow>
-          )}
-
           {bounty.maxContributors != null && (
             <DetailRow label="Submissions">
               <span className="text-[14px] text-text">
