@@ -45,6 +45,32 @@ export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
 
+export function resolveRelationNames(r: Relation): Relation {
+  const resolvedFromName = r.fromEntity.name ?? resolveEntityName(r.fromEntity.id);
+  const resolvedToName = r.toEntity.name ?? resolveEntityName(r.toEntity.id);
+
+  if (resolvedFromName === r.fromEntity.name && resolvedToName === r.toEntity.name) {
+    return r;
+  }
+
+  return {
+    ...r,
+    fromEntity: { ...r.fromEntity, name: resolvedFromName },
+    toEntity: { ...r.toEntity, name: resolvedToName },
+  };
+}
+
+function resolveEntityName(entityId: string): string | null {
+  const synced = syncedEntities.get(entityId);
+  if (synced?.name != null) return synced.name;
+
+  const values = reactiveValues.get();
+  const nameValue = values.find(
+    v => v.entity.id === entityId && v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
+  );
+  return nameValue?.value ?? null;
+}
+
 /**
  * The GeoStore is a local cache of data representing entities in the application.
  * When users write local data it is written to the store. In the background
@@ -238,24 +264,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       ),
     };
 
-    const resolvedRelations = resolvedEntity.relations.map(r => {
-      let maybeToEntity: Entity | null = null;
-
-      if (r.toEntity.id !== id) {
-        maybeToEntity = syncedEntities.get(r.toEntity.id) ?? null;
-      }
-
-      return {
-        ...r,
-        position: r.position,
-        toEntity: {
-          ...r.toEntity,
-          name: maybeToEntity?.name ?? r.toEntity.name,
-        },
-      };
-    });
-
-    resolvedEntity.relations = resolvedRelations;
+    resolvedEntity.relations = resolvedEntity.relations.map(resolveRelationNames);
 
     return resolvedEntity;
   }
