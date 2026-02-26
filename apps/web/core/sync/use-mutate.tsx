@@ -1,9 +1,17 @@
 import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
+import {
+  ADDRESS,
+  DATA_TYPE_ENTITY_IDS,
+  DATA_TYPE_PROPERTY,
+  GEO_LOCATION,
+  PLACE,
+  RENDERABLE_TYPE_PROPERTY,
+  VIDEO_RENDERABLE_TYPE,
+} from '../constants';
 import { ID } from '../id';
-import { OmitStrict } from '../types';
+import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
@@ -27,6 +35,15 @@ function toHexId(id: unknown): string {
   }
   return String(id);
 }
+
+const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
+  [SystemIds.URL]: 'Url',
+  [SystemIds.IMAGE]: 'Image',
+  [VIDEO_RENDERABLE_TYPE]: 'Video',
+  [GEO_LOCATION]: 'Geo Location',
+  [PLACE]: 'Place',
+  [ADDRESS]: 'Address',
+};
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
@@ -189,7 +206,7 @@ function createMutator(store: GeoStore): Mutator {
               },
               toEntity: {
                 id: dataTypeEntityId,
-                name: dataType,
+                name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[dataType] ?? dataType,
                 value: dataTypeEntityId,
               },
             });
@@ -257,7 +274,7 @@ function createMutator(store: GeoStore): Mutator {
               },
               toEntity: {
                 id: renderableTypeId,
-                name: renderableTypeId,
+                name: RENDERABLE_TYPE_ENTITY_LABELS[renderableTypeId] ?? renderableTypeId,
                 value: renderableTypeId,
               },
             };

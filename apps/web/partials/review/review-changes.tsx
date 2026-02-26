@@ -8,7 +8,6 @@ import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { editorContentVersionAtom } from '~/atoms';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -38,8 +37,15 @@ import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
-import { BountyLinkingPanel, buildBounties, buildBounty, isBountyTypeRelation, isAllocatedToUser } from './bounty-linking';
+import {
+  BountyLinkingPanel,
+  buildBounties,
+  buildBounty,
+  isAllocatedToUser,
+  isBountyTypeRelation,
+} from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
+import { editorContentVersionAtom } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
 
@@ -104,16 +110,12 @@ export const ReviewChanges = () => {
   }, [spacesKey]);
 
   React.useEffect(() => {
-    if (
-      dedupedSpacesWithActions.length === 0 &&
-      statusBarState.reviewState !== 'publish-complete' &&
-      statusBarState.reviewState !== 'publishing-contract'
-    ) {
+    if (dedupedSpacesWithActions.length === 0 && statusBarState.reviewState !== 'publishing-contract') {
       setIsReviewOpen(false);
-    } else if (dedupedSpacesWithActions.length === 1) {
+    } else if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
       setActiveSpace(dedupedSpacesWithActions[0] ?? '');
     }
-  }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, activeSpace, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
@@ -129,16 +131,11 @@ export const ReviewChanges = () => {
   });
 
   const bountyTypeRelations = useRelations({
-    selector: r =>
-      r.spaceId === activeSpace &&
-      r.type.id === SystemIds.TYPES_PROPERTY &&
-      r.isDeleted !== true,
+    selector: r => r.spaceId === activeSpace && r.type.id === SystemIds.TYPES_PROPERTY && r.isDeleted !== true,
   });
 
   const bountyEntityIds = React.useMemo(() => {
-    const ids = bountyTypeRelations
-      .filter(isBountyTypeRelation)
-      .map(relation => relation.fromEntity.id);
+    const ids = bountyTypeRelations.filter(isBountyTypeRelation).map(relation => relation.fromEntity.id);
     return [...new Set(ids)];
   }, [bountyTypeRelations]);
 
@@ -146,16 +143,12 @@ export const ReviewChanges = () => {
 
   const bountyValues = useValues({
     selector: value =>
-      value.spaceId === activeSpace &&
-      bountyEntityIdSet.has(value.entity.id) &&
-      value.isDeleted !== true,
+      value.spaceId === activeSpace && bountyEntityIdSet.has(value.entity.id) && value.isDeleted !== true,
   });
 
   const bountyRelations = useRelations({
     selector: relation =>
-      relation.spaceId === activeSpace &&
-      bountyEntityIdSet.has(relation.fromEntity.id) &&
-      relation.isDeleted !== true,
+      relation.spaceId === activeSpace && bountyEntityIdSet.has(relation.fromEntity.id) && relation.isDeleted !== true,
   });
 
   const { data: remoteBountyEntities = [] } = useQuery({
@@ -193,9 +186,7 @@ export const ReviewChanges = () => {
     staleTime: 60_000,
     queryFn: async () => {
       if (!personalSpaceId) return [];
-      return await Effect.runPromise(
-        getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE, personalSpaceId)
-      );
+      return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE, personalSpaceId));
     },
   });
 
@@ -224,9 +215,7 @@ export const ReviewChanges = () => {
       return { bounties: [], bountiesById: new Map<string, Bounty>() };
     }
 
-    const allocationTargets = [personalSpaceId, personalPageEntityId].filter(
-      (id): id is string => Boolean(id)
-    );
+    const allocationTargets = [personalSpaceId, personalPageEntityId].filter((id): id is string => Boolean(id));
     const localResult = buildBounties(
       bountyEntityIds,
       bountyValues,
@@ -278,6 +267,7 @@ export const ReviewChanges = () => {
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
+  const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
   const handleProposalNameChange = (name: string) => {
@@ -315,14 +305,16 @@ export const ReviewChanges = () => {
         onError: () => {
           settle(false);
         },
-      }).then(() => {
-        // If makeProposal returned without calling onSuccess/onError
-        // (e.g. missing smart account, empty values), resolve false
-        // so the UI doesn't stay stuck in the publishing state.
-        settle(false);
-      }).catch(() => {
-        settle(false);
-      });
+      })
+        .then(() => {
+          // If makeProposal returned without calling onSuccess/onError
+          // (e.g. missing smart account, empty values), resolve false
+          // so the UI doesn't stay stuck in the publishing state.
+          settle(false);
+        })
+        .catch(() => {
+          settle(false);
+        });
     });
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
@@ -438,9 +430,7 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing
-          ? [{ key: 'Enter', callback: () => handleSubmit() }]
-          : [],
+        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
       [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
     )
   );
@@ -529,93 +519,99 @@ export const ReviewChanges = () => {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            {activeSpaceMetadata?.type !== 'PERSONAL' && (
-              <button
-                onClick={() => setIsBountyLinkingOpen(prev => !prev)}
-                className={cx(
-                  'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-                  'border-grey-02 bg-white text-text hover:border-text'
-                )}
-              >
-                <Gem color="purple" />
-                {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
-              </button>
-            )}
-            <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-              <Pending isPending={isPublishing}>
-                {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
-              </Pending>
-            </Button>
-          </div>
+          {hasRemainingSpaces && (
+            <div className="flex items-center gap-2">
+              {activeSpaceMetadata?.type !== 'PERSONAL' && (
+                <button
+                  onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+                  className={cx(
+                    'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+                    'border-grey-02 bg-white text-text hover:border-text'
+                  )}
+                >
+                  <Gem color="purple" />
+                  {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
+                </button>
+              )}
+              <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+                <Pending isPending={isPublishing}>
+                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
+                </Pending>
+              </Button>
+            </div>
+          )}
         </div>
         <div className="flex grow overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-            <div className="px-2">
-              <div className="rounded-xl bg-white px-4 py-10">
-                <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="text-body">Proposal name</div>
-                      <input
-                        ref={proposalNameRef}
-                        type="text"
-                        value={rawProposalName}
-                        onChange={e => handleProposalNameChange(e.target.value)}
-                        placeholder="Name your proposal..."
-                        className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-2">
-                      <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+          {hasRemainingSpaces ? (
+            <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+              <div className="px-2">
+                <div className="rounded-xl bg-white px-4 py-10">
+                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="text-body">Proposal name</div>
+                        <input
+                          ref={proposalNameRef}
+                          type="text"
+                          value={rawProposalName}
+                          onChange={e => handleProposalNameChange(e.target.value)}
+                          placeholder="Name your proposal..."
+                          className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 pt-2">
+                        <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
-              {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
-                <div className="rounded-xl bg-white p-4">
-                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                    <div className="mb-4 flex items-center gap-3">
-                      <Skeleton className="h-8 w-8" />
-                      <Skeleton className="h-6 w-48" />
-                    </div>
-                    <div className="mb-4 grid grid-cols-2 gap-20">
-                      <Skeleton className="h-4 w-20" />
-                      <Skeleton className="h-4 w-28" />
-                    </div>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-20">
-                        <Skeleton className="h-24 w-full" />
-                        <Skeleton className="h-24 w-full" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-20">
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : !hasVisibleEntities ? (
-                <div className="rounded-xl bg-white p-4">
-                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                    <Text as="p" variant="body" className="text-grey-04">
-                      No changes to review. Make some edits to see them here.
-                    </Text>
-                  </div>
-                </div>
-              ) : (
-                visibleEntities.map(entity => (
-                  <div key={entity.entityId} className="rounded-xl bg-white p-4">
+              <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
+                {isLoadingChanges ? (
+                  <div className="rounded-xl bg-white p-4">
                     <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                      <ChangedEntity entity={entity} spaceId={activeSpace} />
+                      <div className="mb-4 flex items-center gap-3">
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-6 w-48" />
+                      </div>
+                      <div className="mb-4 grid grid-cols-2 gap-20">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-20">
+                          <Skeleton className="h-24 w-full" />
+                          <Skeleton className="h-24 w-full" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-20">
+                          <Skeleton className="h-16 w-full" />
+                          <Skeleton className="h-16 w-full" />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
+                ) : !hasVisibleEntities ? (
+                  <div className="rounded-xl bg-white p-4">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                      <Text as="p" variant="body" className="text-grey-04">
+                        No changes to review. Make some edits to see them here.
+                      </Text>
+                    </div>
+                  </div>
+                ) : (
+                  visibleEntities.map(entity => (
+                    <div key={entity.entityId} className="rounded-xl bg-white p-4">
+                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                        <ChangedEntity entity={entity} spaceId={activeSpace} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex min-w-0 flex-1" />
+          )}
           <BountyLinkingPanel
             isOpen={isBountyLinkingOpen}
             setIsOpen={setIsBountyLinkingOpen}

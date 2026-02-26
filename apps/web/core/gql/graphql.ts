@@ -51,6 +51,121 @@ export type Scalars = {
   UUID: { input: any; output: any; }
 };
 
+export type AtlasCheckpoint = Node & {
+  __typename?: 'AtlasCheckpoint';
+  blockNumber: Scalars['BigInt']['output'];
+  cursor: Scalars['String']['output'];
+  graphStateBlob: Scalars['JSON']['output'];
+  graphStateVersion: Scalars['Int']['output'];
+  indexerId: Scalars['String']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  rootSpaceId: Scalars['String']['output'];
+  runtimeCompatibilityMarker: Scalars['String']['output'];
+  schemaVersion: Scalars['Int']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `AtlasCheckpoint` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type AtlasCheckpointCondition = {
+  /** Checks for equality with the object’s `blockNumber` field. */
+  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `cursor` field. */
+  cursor?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `graphStateBlob` field. */
+  graphStateBlob?: InputMaybe<Scalars['JSON']['input']>;
+  /** Checks for equality with the object’s `graphStateVersion` field. */
+  graphStateVersion?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `indexerId` field. */
+  indexerId?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `rootSpaceId` field. */
+  rootSpaceId?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `runtimeCompatibilityMarker` field. */
+  runtimeCompatibilityMarker?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `schemaVersion` field. */
+  schemaVersion?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `AtlasCheckpoint` object types. All fields are combined with a logical ‘and.’ */
+export type AtlasCheckpointFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<AtlasCheckpointFilter>>;
+  /** Filter by the object’s `blockNumber` field. */
+  blockNumber?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `cursor` field. */
+  cursor?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `graphStateBlob` field. */
+  graphStateBlob?: InputMaybe<JsonFilter>;
+  /** Filter by the object’s `graphStateVersion` field. */
+  graphStateVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `indexerId` field. */
+  indexerId?: InputMaybe<StringFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<AtlasCheckpointFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<AtlasCheckpointFilter>>;
+  /** Filter by the object’s `rootSpaceId` field. */
+  rootSpaceId?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `runtimeCompatibilityMarker` field. */
+  runtimeCompatibilityMarker?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `schemaVersion` field. */
+  schemaVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `AtlasCheckpoint` values. */
+export type AtlasCheckpointsConnection = {
+  __typename?: 'AtlasCheckpointsConnection';
+  /** A list of edges which contains the `AtlasCheckpoint` and cursor to aid in pagination. */
+  edges: Array<AtlasCheckpointsEdge>;
+  /** A list of `AtlasCheckpoint` objects. */
+  nodes: Array<AtlasCheckpoint>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `AtlasCheckpoint` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `AtlasCheckpoint` edge in the connection. */
+export type AtlasCheckpointsEdge = {
+  __typename?: 'AtlasCheckpointsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `AtlasCheckpoint` at the end of the edge. */
+  node: AtlasCheckpoint;
+};
+
+/** Methods to use when ordering `AtlasCheckpoint`. */
+export enum AtlasCheckpointsOrderBy {
+  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
+  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
+  CursorAsc = 'CURSOR_ASC',
+  CursorDesc = 'CURSOR_DESC',
+  GraphStateBlobAsc = 'GRAPH_STATE_BLOB_ASC',
+  GraphStateBlobDesc = 'GRAPH_STATE_BLOB_DESC',
+  GraphStateVersionAsc = 'GRAPH_STATE_VERSION_ASC',
+  GraphStateVersionDesc = 'GRAPH_STATE_VERSION_DESC',
+  IndexerIdAsc = 'INDEXER_ID_ASC',
+  IndexerIdDesc = 'INDEXER_ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  RootSpaceIdAsc = 'ROOT_SPACE_ID_ASC',
+  RootSpaceIdDesc = 'ROOT_SPACE_ID_DESC',
+  RuntimeCompatibilityMarkerAsc = 'RUNTIME_COMPATIBILITY_MARKER_ASC',
+  RuntimeCompatibilityMarkerDesc = 'RUNTIME_COMPATIBILITY_MARKER_DESC',
+  SchemaVersionAsc = 'SCHEMA_VERSION_ASC',
+  SchemaVersionDesc = 'SCHEMA_VERSION_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
+
 /** A filter to be used against BigFloat fields. All fields are combined with a logical ‘and.’ */
 export type BigFloatFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
@@ -1668,6 +1783,13 @@ export enum ProposalsOrderBy {
 /** The root query type which gives access points into the data universe. */
 export type Query = Node & {
   __typename?: 'Query';
+  atlasCheckpoint?: Maybe<AtlasCheckpoint>;
+  /** Reads a single `AtlasCheckpoint` using its globally unique `ID`. */
+  atlasCheckpointByNodeId?: Maybe<AtlasCheckpoint>;
+  /** Reads a set of `AtlasCheckpoint`. */
+  atlasCheckpoints?: Maybe<Array<AtlasCheckpoint>>;
+  /** Reads and enables pagination through a set of `AtlasCheckpoint`. */
+  atlasCheckpointsConnection?: Maybe<AtlasCheckpointsConnection>;
   buildPropertyInfo?: Maybe<PropertyInfo>;
   editVersion?: Maybe<EditVersion>;
   editVersionByBlockNumberAndSequence?: Maybe<EditVersion>;
@@ -1843,6 +1965,41 @@ export type Query = Node & {
   votesCounts?: Maybe<Array<VotesCount>>;
   /** Reads and enables pagination through a set of `VotesCount`. */
   votesCountsConnection?: Maybe<VotesCountsConnection>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAtlasCheckpointArgs = {
+  indexerId: Scalars['String']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAtlasCheckpointByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAtlasCheckpointsArgs = {
+  condition?: InputMaybe<AtlasCheckpointCondition>;
+  filter?: InputMaybe<AtlasCheckpointFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<AtlasCheckpointsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAtlasCheckpointsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<AtlasCheckpointCondition>;
+  filter?: InputMaybe<AtlasCheckpointFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<AtlasCheckpointsOrderBy>>;
 };
 
 

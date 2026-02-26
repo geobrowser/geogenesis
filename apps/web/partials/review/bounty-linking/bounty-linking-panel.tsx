@@ -41,7 +41,7 @@ export function BountyLinkingPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="mb-2 mr-2 flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-white">
+    <div className="mr-2 mb-2 flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-white">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-3">
         <div className="flex items-center gap-2">
