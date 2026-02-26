@@ -224,6 +224,7 @@ export const SelectEntity = ({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -264,6 +265,7 @@ export const SelectEntity = ({
       <Popover.Root open={!!query}>
         <Popover.Anchor asChild>
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={({ currentTarget: { value } }) => {
@@ -283,6 +285,7 @@ export const SelectEntity = ({
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
+                inputRef.current?.focus();
               }}
               className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               collisionPadding={10}

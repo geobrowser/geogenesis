@@ -116,9 +116,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    // We are in a component internally within react-table. eslint isn't
-    // able to infer that this is a valid React component.
-    // eslint-disable-next-line
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
@@ -298,20 +295,15 @@ export const TableBlockTable = ({
           <tbody>
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.propertyId;
 
               return (
-                <tr key={entityId ?? index} className="hover:bg-bg">
+                <tr key={row.original.entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (
-                      <TableCell
-                        key={`${cellId}-${index}-${row.original.entityId}`}
-                        isShown={isShown}
-                        isEditMode={isEditing}
-                      >
+                      <TableCell key={cellId} isShown={isShown} isEditMode={isEditing}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     );
