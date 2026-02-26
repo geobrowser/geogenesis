@@ -530,19 +530,18 @@ export const ReviewChanges = () => {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsBountyLinkingOpen(prev => !prev)}
-              disabled={bounties.length === 0}
-              className={cx(
-                'group inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button font-normal transition-colors',
-                bounties.length === 0
-                  ? 'cursor-not-allowed border-grey-02 bg-grey-01 text-grey-03'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <Gem color="purple" />
-              {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
-            </button>
+            {activeSpaceMetadata?.type !== 'PERSONAL' && (
+              <button
+                onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+                className={cx(
+                  'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+                  'border-grey-02 bg-white text-text hover:border-text'
+                )}
+              >
+                <Gem color="purple" />
+                {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
+              </button>
+            )}
             <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
               <Pending isPending={isPublishing}>
                 {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
