@@ -56,9 +56,15 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         ...pointValues,
         [label]: newValue,
       };
-      setPointsValues(updatedPoints);
-      const lat = parseFloat(updatedPoints.latitude) || 0;
-      const lon = parseFloat(updatedPoints.longitude) || 0;
+      const latNum = parseFloat(updatedPoints.latitude);
+      const lonNum = parseFloat(updatedPoints.longitude);
+      const lat = Number.isNaN(latNum) ? 0 : GeoPoint.clampLatForMap(latNum);
+      const lon = Number.isNaN(lonNum) ? 0 : GeoPoint.clampLngForMap(lonNum);
+      const displayLat =
+        updatedPoints.latitude !== '' && !Number.isNaN(latNum) && lat !== latNum ? lat.toString() : updatedPoints.latitude;
+      const displayLon =
+        updatedPoints.longitude !== '' && !Number.isNaN(lonNum) && lon !== lonNum ? lon.toString() : updatedPoints.longitude;
+      setPointsValues({ latitude: displayLat, longitude: displayLon });
       props.onChange(GeoPoint.formatCoordinates(lat, lon));
     } else {
       console.error(`Invalid ${label} input: "${newValue}". Coordinate values must be numeric.`);
