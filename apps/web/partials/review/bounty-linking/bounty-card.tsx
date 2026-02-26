@@ -4,8 +4,9 @@ import cx from 'classnames';
 
 import * as React from 'react';
 
-import { Gem } from '~/design-system/icons/gem';
 import { NavUtils } from '~/core/utils/utils';
+
+import { Gem } from '~/design-system/icons/gem';
 
 import type { Bounty, BountyDifficulty, BountyStatus } from './types';
 
@@ -44,12 +45,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
     <div className="py-4">
       {/* Checkbox row */}
       <label className="flex cursor-pointer items-center gap-2">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggle(bounty.id)}
-          className="sr-only"
-        />
+        <input type="checkbox" checked={isSelected} onChange={() => onToggle(bounty.id)} className="sr-only" />
         <div
           className={cx(
             'flex h-4 w-4 items-center justify-center rounded border transition-all',
@@ -58,13 +54,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
         >
           {isSelected && (
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M2 5L4 7L8 3"
-                stroke="white"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </div>
@@ -75,7 +65,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       <button
         type="button"
         onClick={handleOpenBounty}
-        className="mt-3 text-left text-[15px] font-semibold leading-tight text-text hover:underline"
+        className="mt-3 text-left text-[15px] leading-tight font-semibold text-text hover:underline"
       >
         {bounty.name}
       </button>
@@ -84,7 +74,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       {bounty.description ? (
         <p className="mt-2 line-clamp-3 text-[14px] leading-snug text-grey-04">{bounty.description}</p>
       ) : (
-        <p className="mt-2 text-[14px] italic leading-snug text-grey-03">No description</p>
+        <p className="mt-2 text-[14px] leading-snug text-grey-03 italic">No description</p>
       )}
 
       {/* Details table */}
@@ -103,7 +93,8 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
           {bounty.maxContributors != null && (
             <DetailRow label="Submissions">
               <span className="text-[14px] text-text">
-                {(bounty.submissionsCount ?? 0).toLocaleString('en-US')} / {bounty.maxContributors.toLocaleString('en-US')}
+                {(bounty.submissionsCount ?? 0).toLocaleString('en-US')} /{' '}
+                {bounty.maxContributors.toLocaleString('en-US')}
               </span>
             </DetailRow>
           )}

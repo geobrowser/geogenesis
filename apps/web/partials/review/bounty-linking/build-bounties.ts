@@ -74,15 +74,10 @@ export function buildBounty(
   spaceId?: string,
   personalSpaceId?: string
 ): Bounty {
-  const name =
-    Entities.name(entityValues) ??
-    entityValues[0]?.entity.name ??
-    'Untitled bounty';
+  const name = Entities.name(entityValues) ?? entityValues[0]?.entity.name ?? 'Untitled bounty';
 
   const description =
-    Entities.description(entityValues) ??
-    findValueById(entityValues, BOUNTY_DESCRIPTION_PROPERTY_ID) ??
-    null;
+    Entities.description(entityValues) ?? findValueById(entityValues, BOUNTY_DESCRIPTION_PROPERTY_ID) ?? null;
 
   const budget = parseNumber(
     findValueById(entityValues, BOUNTY_BUDGET_PROPERTY_ID) ??
@@ -141,9 +136,7 @@ export function isAllocatedToUser(relations: StoreRelation[], allocationTargets:
     // Some relation variants only carry a top-level toEntityId without a
     // nested toEntity object, so fall back to that field when present.
     const toEntityId =
-      relation.toEntity?.id ??
-      (relation as StoreRelation & { toEntityId?: string }).toEntityId ??
-      null;
+      relation.toEntity?.id ?? (relation as StoreRelation & { toEntityId?: string }).toEntityId ?? null;
     return toEntityId ? targetIds.has(toEntityId) : false;
   });
 }

@@ -44,7 +44,15 @@ export function usePublish() {
    * side effects.
    */
   const make = React.useCallback(
-    async ({ values: valuesToPublish, relations, name, spaceId, proposalId, onSuccess, onError }: MakeProposalOptions) => {
+    async ({
+      values: valuesToPublish,
+      relations,
+      name,
+      spaceId,
+      proposalId,
+      onSuccess,
+      onError,
+    }: MakeProposalOptions) => {
       if (!smartAccount) return;
       if (!personalSpaceId) {
         onError?.();

@@ -164,7 +164,8 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         if (existingDataTypeRelation) {
           storage.relations.update(existingDataTypeRelation, draft => {
             draft.toEntity.id = dataTypeEntityId;
-            draft.toEntity.name = baseDataType;
+            draft.toEntity.name =
+              (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType;
             draft.toEntity.value = dataTypeEntityId;
           });
         } else {
@@ -181,7 +182,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
             },
             toEntity: {
               id: dataTypeEntityId,
-              name: baseDataType,
+              name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
               value: dataTypeEntityId,
             },
             spaceId,

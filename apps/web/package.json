@@ -95,7 +95,6 @@
     "react-use-measure": "^2.1.7",
     "showdown": "^2.1.0",
     "viem": "^2.46.3",
-    "vinext": "^0.0.9",
     "wagmi": "^3.5.0"
   },
   "devDependencies": {
