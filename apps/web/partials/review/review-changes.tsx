@@ -9,14 +9,7 @@ import { useSetAtom } from 'jotai';
 import * as React from 'react';
 
 import { editorContentVersionAtom } from '~/atoms';
-import {
-  BOUNTIES_RELATION_TYPE,
-  BOUNTY_BUDGET_PROPERTY_ID,
-  BOUNTY_ALLOCATED_PROPERTY_ID,
-  BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID,
-  BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID,
-  BOUNTY_TYPE_ID,
-} from '~/core/constants';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -32,7 +25,6 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -46,24 +38,10 @@ import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
-import { BountyLinkingPanel } from './bounty-linking';
-import type { Bounty, BountyDifficulty, BountyStatus } from './bounty-linking/types';
+import { BountyLinkingPanel, buildBounties, buildBounty, isBountyTypeRelation, isAllocatedToUser } from './bounty-linking';
+import type { Bounty } from './bounty-linking/types';
 
 type Proposals = Record<string, { name: string; description: string }>;
-
-const BOUNTY_DESCRIPTION_NAMES = new Set(['description', 'details', 'summary']);
-const BOUNTY_MAX_PAYOUT_NAMES = new Set(['max payout', 'maximum payout', 'payout', 'reward', 'reward amount']);
-const BOUNTY_BUDGET_NAMES = new Set(['bounty budget', 'budget']);
-const BOUNTY_MAX_CONTRIBUTORS_NAMES = new Set(['max contributors', 'maximum contributors', 'contributors']);
-const BOUNTY_SUBMISSIONS_PER_PERSON_NAMES = new Set([
-  'submissions per person',
-  'submissions per contributor',
-  'submissions per user',
-]);
-const BOUNTY_DIFFICULTY_NAMES = new Set(['difficulty', 'difficulty level', 'level']);
-const BOUNTY_STATUS_NAMES = new Set(['status', 'state']);
-const BOUNTY_DEADLINE_NAMES = new Set(['deadline', 'due date', 'due']);
-const BOUNTY_SUBMISSIONS_NAMES = new Set(['submissions', 'your submissions']);
 
 export const ReviewChanges = () => {
   const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
@@ -183,6 +161,7 @@ export const ReviewChanges = () => {
   const { data: remoteBountyEntities = [] } = useQuery({
     queryKey: ['bounties-by-type', activeSpace, BOUNTY_TYPE_ID],
     enabled: Boolean(activeSpace && isReviewOpen),
+    staleTime: 60_000,
     queryFn: async () => {
       if (!activeSpace) return [];
       return await Effect.runPromise(
@@ -202,6 +181,7 @@ export const ReviewChanges = () => {
   const { data: bountySubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations', allBountyIds],
     enabled: allBountyIds.length > 0,
+    staleTime: 60_000,
     queryFn: async () => {
       return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE));
     },
@@ -210,6 +190,7 @@ export const ReviewChanges = () => {
   const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations-personal', allBountyIds, personalSpaceId],
     enabled: allBountyIds.length > 0 && Boolean(personalSpaceId),
+    staleTime: 60_000,
     queryFn: async () => {
       if (!personalSpaceId) return [];
       return await Effect.runPromise(
@@ -270,44 +251,9 @@ export const ReviewChanges = () => {
         )
       );
 
-    console.info('[bounty-linking] Allocation pre-filter', {
-      activeSpace,
-      personalSpaceId,
-      personalPageEntityId,
-      allocationTargets,
-      localBounties: bountyEntityIds.map(entityId => {
-        const relations = (bountyRelations ?? []).filter(r => r.fromEntity.id === entityId);
-        return {
-          id: entityId,
-          allocatedTo: relations
-            .filter(r => r.type.id === BOUNTY_ALLOCATED_PROPERTY_ID)
-            .map(r => r.toEntity?.id ?? (r as StoreRelation & { toEntityId?: string }).toEntityId ?? null)
-            .filter((id): id is string => Boolean(id)),
-        };
-      }),
-      remoteBounties: remoteBountyEntities.map(entity => ({
-        id: entity.id,
-        allocatedTo: (entity.relations ?? [])
-          .filter(r => r.type?.id === BOUNTY_ALLOCATED_PROPERTY_ID)
-          .map(r => r.toEntity?.id ?? (r as StoreRelation & { toEntityId?: string }).toEntityId ?? null)
-          .filter((id): id is string => Boolean(id)),
-      })),
-    });
-
     const merged = new Map<string, Bounty>();
     for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
     for (const bounty of localResult.bounties) merged.set(bounty.id, bounty);
-
-    console.info('[bounty-linking] Linkable bounties', {
-      activeSpace,
-      personalSpaceId,
-      personalPageEntityId,
-      localCount: localResult.bounties.length,
-      remoteCount: remoteBounties.length,
-      totalCount: merged.size,
-      localIds: localResult.bounties.map(bounty => bounty.id),
-      remoteIds: remoteBounties.map(bounty => bounty.id),
-    });
 
     return { bounties: Array.from(merged.values()), bountiesById: merged };
   }, [
@@ -345,37 +291,34 @@ export const ReviewChanges = () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
-    console.info('[bounty-linking] Submit start', {
-      activeSpace,
-      proposalName,
-      selectedBountyIds: Array.from(selectedBountyIds),
-      personalSpaceId,
+    let resolved = false;
+    const publishSucceeded = await new Promise<boolean>(resolve => {
+      const settle = (value: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
+      makeProposal({
+        values: valuesFromSpace,
+        relations: relationsFromSpace,
+        spaceId: activeSpace,
+        name: proposalName,
+        onSuccess: () => {
+          setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
+          settle(true);
+        },
+        onError: () => {
+          settle(false);
+        },
+      }).then(() => {
+        // If makeProposal returned without calling onSuccess/onError
+        // (e.g. missing smart account, empty values), resolve false
+        // so the UI doesn't stay stuck in the publishing state.
+        settle(false);
+      });
     });
-
-    let publishPromiseResolve: (value: boolean) => void = () => {};
-    const publishPromise = new Promise<boolean>(resolve => {
-      publishPromiseResolve = resolve;
-    });
-
-    const makePromise = makeProposal({
-      values: valuesFromSpace,
-      relations: relationsFromSpace,
-      spaceId: activeSpace,
-      name: proposalName,
-      onSuccess: () => {
-        setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
-        console.info('[bounty-linking] Proposal publish success', { activeSpace });
-        publishPromiseResolve(true);
-      },
-      onError: () => {
-        console.info('[bounty-linking] Proposal publish error', { activeSpace });
-        publishPromiseResolve(false);
-      },
-    });
-
-    const publishSucceeded = await Promise.race([publishPromise, makePromise.then(() => false)]);
-
-    console.info('[bounty-linking] Proposal publish finished', { publishSucceeded });
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
       const proposalEntityId = ID.createEntityId();
@@ -435,14 +378,6 @@ export const ReviewChanges = () => {
         ];
       });
 
-      if (bountyLinkRelations.length > 0) {
-        console.info('[bounty-linking] Published relation ids', bountyLinkRelations.map(r => r.id), {
-          proposalEntityId,
-          personalSpaceId,
-          bountyTargetSpaceId,
-        });
-      }
-
       await makeProposal({
         values: bountyLinkValues,
         relations: bountyLinkRelations,
@@ -450,10 +385,10 @@ export const ReviewChanges = () => {
         name: `Bounty links for: ${proposalName}`,
         onSuccess: () => {
           setSelectedBountyIds(new Set());
-          console.info('[bounty-linking] Link publish success', { personalSpaceId });
         },
         onError: () => {
-          console.info('[bounty-linking] Link publish error', { personalSpaceId });
+          // usePublish dispatches the error to the status bar internally.
+          // Keep selectedBountyIds so the user can retry.
         },
       });
     }
@@ -503,13 +438,7 @@ export const ReviewChanges = () => {
           next.add(id);
         }
       }
-      if (next.size === prev.size) {
-        for (const id of next) {
-          if (!prev.has(id)) return next;
-        }
-        return prev;
-      }
-      return next;
+      return next.size === prev.size ? prev : next;
     });
   }, [bountyIdSet, selectedBountyIds.size]);
 
@@ -576,7 +505,7 @@ export const ReviewChanges = () => {
               onClick={() => setIsBountyLinkingOpen(prev => !prev)}
               disabled={bounties.length === 0}
               className={cx(
-                'group inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button transition-colors',
+                'group inline-flex items-center gap-1.5 rounded border px-2 py-1.5 text-button font-normal transition-colors',
                 bounties.length === 0
                   ? 'cursor-not-allowed border-grey-02 bg-grey-01 text-grey-03'
                   : 'border-grey-02 bg-white text-text hover:border-text'
@@ -671,221 +600,3 @@ export const ReviewChanges = () => {
     </SlideUp>
   );
 };
-
-function isBountyTypeRelation(relation: StoreRelation): boolean {
-  return relation.toEntity.id === BOUNTY_TYPE_ID;
-}
-
-function buildBounties(
-  entityIds: string[],
-  values: StoreValue[],
-  relations: StoreRelation[],
-  submissionCounts: Map<string, number>,
-  personalSubmissionCounts: Map<string, number>,
-  allocationTargets: string[],
-  spaceId?: string,
-  personalSpaceId?: string
-): { bounties: Bounty[]; bountiesById: Map<string, Bounty> } {
-  const valuesByEntity = new Map<string, StoreValue[]>();
-  const relationsByEntity = new Map<string, StoreRelation[]>();
-
-  for (const value of values) {
-    const existing = valuesByEntity.get(value.entity.id) ?? [];
-    existing.push(value);
-    valuesByEntity.set(value.entity.id, existing);
-  }
-
-  for (const relation of relations) {
-    const existing = relationsByEntity.get(relation.fromEntity.id) ?? [];
-    existing.push(relation);
-    relationsByEntity.set(relation.fromEntity.id, existing);
-  }
-
-  const bounties = entityIds
-    .filter(entityId => isAllocatedToUser(relationsByEntity.get(entityId) ?? [], allocationTargets))
-    .map(entityId => {
-    const entityValues = valuesByEntity.get(entityId) ?? [];
-    const entityRelations = relationsByEntity.get(entityId) ?? [];
-
-    return buildBounty(
-      entityId,
-      entityValues,
-      entityRelations,
-      submissionCounts,
-      personalSubmissionCounts,
-      spaceId,
-      personalSpaceId
-    );
-  });
-
-  const bountiesById = new Map(bounties.map(bounty => [bounty.id, bounty]));
-
-  return { bounties, bountiesById };
-}
-
-function buildBounty(
-  entityId: string,
-  entityValues: StoreValue[],
-  entityRelations: StoreRelation[],
-  submissionCounts: Map<string, number>,
-  personalSubmissionCounts: Map<string, number>,
-  spaceId?: string,
-  personalSpaceId?: string
-): Bounty {
-  const name =
-    Entities.name(entityValues) ??
-    findValueByNames(entityValues, new Set(['name', 'title'])) ??
-    entityValues[0]?.entity.name ??
-    'Untitled bounty';
-
-  const description =
-    Entities.description(entityValues) ??
-    findValueByNames(entityValues, BOUNTY_DESCRIPTION_NAMES) ??
-    null;
-
-  const maxPayout = parseNumber(
-    findValueByNames(entityValues, BOUNTY_MAX_PAYOUT_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_MAX_PAYOUT_NAMES)
-  );
-
-  const budget = parseNumber(
-    findValueById(entityValues, BOUNTY_BUDGET_PROPERTY_ID) ??
-      findValueByNames(entityValues, BOUNTY_BUDGET_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_BUDGET_NAMES)
-  );
-
-  const maxContributors = parseNumber(
-    findValueById(entityValues, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID) ??
-      findValueByNames(entityValues, BOUNTY_MAX_CONTRIBUTORS_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_MAX_CONTRIBUTORS_NAMES)
-  );
-
-  const submissionsPerPerson = parseNumber(
-    findValueById(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID) ??
-      findValueByNames(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_NAMES)
-  );
-
-  const submissionsCount = submissionCounts.get(entityId) ?? 0;
-  const userSubmissionsCount = personalSubmissionCounts.get(entityId) ?? 0;
-
-  const difficulty = parseDifficulty(
-    findValueByNames(entityValues, BOUNTY_DIFFICULTY_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_DIFFICULTY_NAMES)
-  );
-
-  const status = parseStatus(
-    findValueByNames(entityValues, BOUNTY_STATUS_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_STATUS_NAMES)
-  );
-
-  const deadline =
-    findValueByNames(entityValues, BOUNTY_DEADLINE_NAMES) ??
-    findRelationValueByNames(entityRelations, BOUNTY_DEADLINE_NAMES) ??
-    null;
-
-  const submissions = parseSubmissions(
-    findValueByNames(entityValues, BOUNTY_SUBMISSIONS_NAMES) ??
-      findRelationValueByNames(entityRelations, BOUNTY_SUBMISSIONS_NAMES)
-  );
-
-  return {
-    id: entityId,
-    spaceId,
-    name,
-    description,
-    maxPayout,
-    budget,
-    maxContributors,
-    submissionsPerPerson,
-    submissionsCount,
-    userSubmissionsCount,
-    difficulty,
-    status,
-    deadline,
-    yourSubmissions: submissions,
-  };
-}
-
-function findValueByNames(values: StoreValue[], names: Set<string>): string | null {
-  const match = values.find(value => {
-    const normalized = normalizeName(value.property.name);
-    return normalized ? names.has(normalized) : false;
-  });
-  return match?.value ?? null;
-}
-
-function findValueById(values: StoreValue[], propertyId: string): string | null {
-  const match = values.find(value => value.property.id === propertyId);
-  return match?.value ?? null;
-}
-
-function findRelationValueByNames(relations: StoreRelation[], names: Set<string>): string | null {
-  const match = relations.find(relation => {
-    const normalized = normalizeName(relation.type.name);
-    return normalized ? names.has(normalized) : false;
-  });
-  return match?.toEntity.name ?? null;
-}
-
-function normalizeName(name: string | null | undefined): string | null {
-  if (!name) return null;
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function parseNumber(value: string | null): number | null {
-  if (!value) return null;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  if (!cleaned) return null;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseDifficulty(value: string | null): BountyDifficulty | null {
-  if (!value) return null;
-  const normalized = value.trim().toUpperCase();
-  if (normalized.startsWith('LOW')) return 'LOW';
-  if (normalized.startsWith('MED')) return 'MEDIUM';
-  if (normalized.startsWith('HARD')) return 'HARD';
-  if (normalized.startsWith('EXP')) return 'EXPERT';
-  return null;
-}
-
-function parseStatus(value: string | null): BountyStatus | null {
-  if (!value) return null;
-  const normalized = value.trim().toUpperCase();
-  if (normalized.includes('OPEN')) return 'OPEN';
-  if (normalized.includes('ALLOCATED')) return 'ALLOCATED';
-  if (normalized.includes('SELF')) return 'SELF_ASSIGNED';
-  if (normalized.includes('PROGRESS')) return 'IN_PROGRESS';
-  if (normalized.includes('COMPLETE')) return 'COMPLETED';
-  if (normalized.includes('CANCEL')) return 'CANCELLED';
-  return null;
-}
-
-function parseSubmissions(value: string | null): { current: number; max: number } | null {
-  if (!value) return null;
-  const match = value.match(/(\d+)\s*\/\s*(\d+)/);
-  if (!match) return null;
-  const current = Number(match[1]);
-  const max = Number(match[2]);
-  if (!Number.isFinite(current) || !Number.isFinite(max)) return null;
-  return { current, max };
-}
-
-function isAllocatedToUser(relations: StoreRelation[], allocationTargets: string[]): boolean {
-  if (allocationTargets.length === 0) return false;
-  const targetIds = new Set(allocationTargets);
-  return relations.some(relation => {
-    if (relation.type.id !== BOUNTY_ALLOCATED_PROPERTY_ID) return false;
-    const toEntityId =
-      relation.toEntity?.id ??
-      (relation as StoreRelation & { toEntityId?: string }).toEntityId ??
-      null;
-    return toEntityId ? targetIds.has(toEntityId) : false;
-  });
-}

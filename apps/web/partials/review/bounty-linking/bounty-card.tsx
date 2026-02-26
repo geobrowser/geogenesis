@@ -35,7 +35,6 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
     formattedPayout ||
     bounty.difficulty ||
     bounty.status ||
-    bounty.yourSubmissions ||
     formattedDeadline;
 
   const handleOpenBounty = () => {
@@ -45,12 +44,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
   };
 
   return (
-    <div
-      className={cx(
-        'rounded-lg border bg-bg p-4 transition-all duration-150',
-        isSelected ? 'border-grey-02' : 'border-transparent'
-      )}
-    >
+    <div className="py-4">
       {/* Checkbox row */}
       <label className="flex cursor-pointer items-center gap-2">
         <input
@@ -146,14 +140,6 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
           {bounty.status && (
             <DetailRow label="Status">
               <span className="text-[14px] text-text">{formatStatus(bounty.status)}</span>
-            </DetailRow>
-          )}
-
-          {bounty.yourSubmissions && (
-            <DetailRow label="Your submissions">
-              <span className="text-[14px] text-text">
-                {bounty.yourSubmissions.current} / {bounty.yourSubmissions.max}
-              </span>
             </DetailRow>
           )}
 

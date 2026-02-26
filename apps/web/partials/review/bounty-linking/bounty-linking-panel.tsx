@@ -32,10 +32,6 @@ export function BountyLinkingPanel({
       } else {
         next.add(bountyId);
       }
-      console.info('[bounty-linking] Toggle bounty', {
-        bountyId,
-        selectedCount: next.size,
-      });
       return next;
     });
   };
@@ -45,7 +41,7 @@ export function BountyLinkingPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-grey-02 bg-white">
+    <div className="mb-2 mr-2 flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg bg-white">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -61,7 +57,7 @@ export function BountyLinkingPanel({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col divide-y divide-grey-02">
           {bounties.map(bounty => (
             <BountyCard
               key={bounty.id}
