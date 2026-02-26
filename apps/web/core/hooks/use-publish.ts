@@ -23,6 +23,8 @@ interface MakeProposalOptions {
   relations: Relation[];
   spaceId: string;
   name: string;
+  /** Optional proposal ID (Geo entity ID format). For DAO spaces this is forwarded to daoSpace.proposeEdit. */
+  proposalId?: string;
   onSuccess?: () => void;
   onError?: () => void;
 }
@@ -42,7 +44,7 @@ export function usePublish() {
    * side effects.
    */
   const make = React.useCallback(
-    async ({ values: valuesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+    async ({ values: valuesToPublish, relations, name, spaceId, proposalId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount) return;
       if (!personalSpaceId) {
         onError?.();
@@ -73,6 +75,7 @@ export function usePublish() {
         yield* makeProposal({
           name,
           author: personalSpaceId,
+          proposalId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -224,6 +227,8 @@ interface MakeProposalArgs {
   /** The author's personal space ID. */
   author: string;
   ops: Op[];
+  /** Optional proposal ID (Geo entity ID format, 32 hex chars). Forwarded to daoSpace.proposeEdit as `0x${proposalId}`. */
+  proposalId?: string;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
@@ -249,7 +254,7 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, smartAccount, space, onChangePublishState } = args;
+  const { name, author, ops, proposalId, smartAccount, space, onChangePublishState } = args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -282,6 +287,7 @@ function makeProposal(args: MakeProposalArgs) {
               callerSpaceId: `0x${author}`,
               daoSpaceId: `0x${space.id}`,
               votingMode,
+              ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
               network: 'TESTNET',
             }),
           catch: error => {

@@ -362,6 +362,23 @@ export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
+  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID) {
+    relations(
+      filter: {
+        toEntityId: { in: $toEntityIds }
+        typeId: { is: $typeId }
+        spaceId: { is: $spaceId }
+      }
+    ) {
+      id
+      toEntityId
+      spaceId
+      fromEntityId
+    }
+  }
+`);
+
 export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {

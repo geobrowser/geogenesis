@@ -461,8 +461,10 @@ export function getRandomArrayItem(array: string[]) {
 
 export const sleepWithCallback = async (callback: () => void, ms: number) => {
   await new Promise(resolve => {
-    setTimeout(callback, ms);
-    resolve(null);
+    setTimeout(() => {
+      callback();
+      resolve(null);
+    }, ms);
   });
 };
 

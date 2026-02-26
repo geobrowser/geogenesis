@@ -21,6 +21,7 @@ import {
   propertyQuery,
   relationEntityQuery,
   relationEntityRelationsQuery,
+  relationsByToEntityIdsQuery,
   resultQuery,
   resultsQuery,
   spaceQuery,
@@ -121,6 +122,20 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
     query: relationEntityRelationsQuery,
     decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
     variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getRelationsByToEntityIds(
+  toEntityIds: string[],
+  typeId?: string,
+  spaceId?: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: relationsByToEntityIdsQuery,
+    decoder: data => data.relations ?? [],
+    variables: { toEntityIds, typeId, spaceId },
     signal,
   });
 }
