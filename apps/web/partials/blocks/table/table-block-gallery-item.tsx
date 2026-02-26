@@ -141,6 +141,7 @@ export function TableBlockGalleryItem({
               <SelectEntity
                 onCreateEntity={result => {
                   onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
+                  return rowEntityId;
                 }}
                 onDone={(result, fromCreateFn) => {
                   if (fromCreateFn) return;

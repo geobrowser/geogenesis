@@ -61,6 +61,7 @@ export function TableBlockBulletedListItem({
             <SelectEntity
               onCreateEntity={result => {
                 onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
+                return rowEntityId;
               }}
               onDone={(result, fromCreateFn) => {
                 if (fromCreateFn) return;
