@@ -19,9 +19,8 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
   const markerRef = useRef<mapboxgl.Marker | null>(null);
   const [isMapboxLoaded, setIsMapboxLoaded] = useState(false);
 
-  // GeoPoint owns max map latitude; Map only uses it (single source of truth in utils).
   const lat = GeoPoint.clampLatForMap(latitude);
-  const lng = longitude;
+  const lng = GeoPoint.clampLngForMap(longitude);
   const center: [number, number] = [lng, lat];
 
   // Initialize map once on mount

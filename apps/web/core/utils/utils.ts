@@ -84,10 +84,17 @@ export class GeoNumber {
 }
 
 export class GeoPoint {
-  static readonly MAX_MAP_LAT = 85.051129;
+  static readonly MIN_LAT = -90;
+  static readonly MAX_LAT = 90;
+  static readonly MIN_LNG = -180;
+  static readonly MAX_LNG = 180;
 
   static clampLatForMap(lat: number): number {
-    return Math.max(-GeoPoint.MAX_MAP_LAT, Math.min(GeoPoint.MAX_MAP_LAT, lat));
+    return Math.max(GeoPoint.MIN_LAT, Math.min(GeoPoint.MAX_LAT, lat));
+  }
+
+  static clampLngForMap(lng: number): number {
+    return Math.max(GeoPoint.MIN_LNG, Math.min(GeoPoint.MAX_LNG, lng));
   }
 
   /**
@@ -109,7 +116,7 @@ export class GeoPoint {
 
       return {
         latitude: GeoPoint.clampLatForMap(latitude),
-        longitude,
+        longitude: GeoPoint.clampLngForMap(longitude),
       };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
