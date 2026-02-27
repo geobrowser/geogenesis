@@ -5,7 +5,6 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Providers } from '~/core/providers';
 
 import '../styles/fonts.css';
@@ -43,7 +42,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
   title: 'Geo Genesis',
   description:
-    "Browse and organize the world's public knowledge and information in a decentralized way. Forcing CI to run",
+    "Browse and organize the world's public knowledge and information in a decentralized way.",
   manifest: '/static/site.webmanifest',
   icons: {
     icon: '/static/favicon.png',
@@ -73,29 +72,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Geo Genesis',
-    description: "Browse and organize the world's public knowledge and information in a decentralized way.",
     site: '@geobrowser',
     creator: '@geobrowser',
-    images: [
-      {
-        url: DEFAULT_OPENGRAPH_IMAGE,
-      },
-    ],
-  },
-  openGraph: {
-    title: 'Geo Genesis',
-    type: 'website',
-    description: "Browse and organize the world's public knowledge and information in a decentralized way.",
-    url: 'https://geobrowser.io/',
-    siteName: 'geobrowser.io',
-    images: [
-      {
-        url: DEFAULT_OPENGRAPH_IMAGE,
-        width: 1200,
-        height: 675,
-      },
-    ],
   },
   appleWebApp: {
     title: 'Geo Genesis',
@@ -112,9 +90,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${calibre.variable}`} suppressHydrationWarning>
-      <head>
-        <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
-      </head>
       <body>
         <div className="relative">
           <Providers>

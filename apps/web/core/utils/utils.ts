@@ -352,42 +352,6 @@ export class GeoDate {
   };
 }
 
-// We rewrite the URL to use the geobrowser preview API in vercel.json.
-// This forces the image to be fetched with a file extension as a workaround
-// for some services not parsing images without a file extension. Looking at
-// you TWITTER.
-// https://geobrowser.io/preview/{hash}.png -> https://geobrowser.io/api/og?hash=
-export const getOpenGraphImageUrl = (value: string) => {
-  if (value.startsWith('https://api.thegraph.com/ipfs')) {
-    const hash = value.split('=')[1];
-    return `https://www.geobrowser.io/preview/${hash}.png`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else if (value.startsWith('ipfs://')) {
-    return `https://www.geobrowser.io/preview/${getImageHash(value)}.png`;
-  } else if (value) {
-    return `https://www.geobrowser.io/preview/${value}.png`;
-  }
-
-  return null;
-};
-
-export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
-  const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entities.avatar(entity?.relations) ?? null;
-  const serverCoverUrl = Entities.cover(entity?.relations);
-
-  const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entities.description(entity?.values ?? []);
-
-  return {
-    entityName,
-    openGraphImageUrl,
-    description,
-  };
-};
-
 // Get the image hash from an image path
 // e.g., https://gateway.lighthouse.storage/ipfs/HASH
 // e.g., https://magenta-naval-crow-536.mypinata.cloud/files/HASH
