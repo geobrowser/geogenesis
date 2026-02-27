@@ -10,9 +10,7 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -123,6 +121,7 @@ export function PowerToolsScreen() {
   const { spaceId, name: blockName } = useDataBlock();
   const { source } = useSource();
   const isEditing = useUserIsEditing(spaceId);
+  const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
 
   const {
@@ -130,22 +129,16 @@ export function PowerToolsScreen() {
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
-  } = useFilters(isEditing);
+  } = useFilters(canEdit);
 
-  // Editors use persisted filters, non-editors use local temporary filters
-  const effectiveFilterState = isEditing ? filterState : temporaryFilters;
-  const effectiveSetFilterState = isEditing ? setFilterState : setTemporaryFilters;
+  // Editors (by permission) use persisted filters; non-editors use local temporary filters.
+  // This matches TableBlock's behavior and is independent of the edit mode toggle.
+  const effectiveFilterState = canEdit ? filterState : temporaryFilters;
+  const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
 
   const data = usePowerToolsData({
-    filterStateOverride: isEditing ? undefined : temporaryFilters,
+    filterStateOverride: canEdit ? undefined : temporaryFilters,
   });
-
-  const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
-
-  const editableSpaceIds = React.useMemo(() => {
-    return new Set(spaces.map(space => space.id));
-  }, [spaces]);
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
