@@ -5,12 +5,13 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { firstLine } from '~/core/opengraph';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, getOpenGraphMetadataForEntity, sortRelations } from '~/core/utils/utils';
+import { sortRelations } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -38,35 +39,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const result = await cachedFetchEntityPage(entityId, params.id);
 
-  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(result?.entity ?? null);
-  const title = entityName ?? 'Entity';
+  const entity = result?.entity ?? null;
+  const title = entity?.name ?? 'Entity';
+  const description = firstLine(Entities.description(entity?.values ?? []));
 
   return {
     title,
     description,
-    openGraph: {
-      title,
-      description: description ?? undefined,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
-      images: openGraphImageUrl
-        ? [
-            {
-              url: openGraphImageUrl,
-            },
-          ]
-        : undefined,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      description: description ?? undefined,
-      images: openGraphImageUrl
-        ? [
-            {
-              url: openGraphImageUrl,
-            },
-          ]
-        : undefined,
-    },
   };
 }
 

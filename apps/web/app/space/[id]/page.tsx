@@ -7,7 +7,8 @@ import type { Metadata } from 'next';
 
 import { Subspace } from '~/core/io/dto/subspaces';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
-import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { firstLine } from '~/core/opengraph';
+import { Entities } from '~/core/utils/entity';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
@@ -42,34 +43,12 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     };
   }
 
-  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+  const entityName = entity.name ?? null;
+  const description = firstLine(Entities.description(entity.values ?? []));
 
   return {
     title: entityName ?? spaceId,
     description,
-    openGraph: {
-      title: entityName ?? spaceId,
-      description: description ?? undefined,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entity.id)}`,
-      images: openGraphImageUrl
-        ? [
-            {
-              url: openGraphImageUrl,
-            },
-          ]
-        : undefined,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      description: description ?? undefined,
-      images: openGraphImageUrl
-        ? [
-            {
-              url: openGraphImageUrl,
-            },
-          ]
-        : undefined,
-    },
   };
 }
 

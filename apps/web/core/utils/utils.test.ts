@@ -13,7 +13,6 @@ import {
   formatShortAddress,
   getImageHash,
   getImagePath,
-  getOpenGraphImageUrl,
   getPaginationPages,
   validateSpaceId,
 } from './utils';
@@ -286,32 +285,6 @@ describe('getImageHash', () => {
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {
     expect(getImageHash('QmBananaSandwich')).toBe('QmBananaSandwich');
-  });
-});
-
-describe('getOpenGraphImageUrl', () => {
-  it('a Geo IPFS gateway path returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe(
-      'https://www.geobrowser.io/preview/QmBananaSandwich.png'
-    );
-  });
-
-  it('an HTTP path returns the same string', () => {
-    expect(getOpenGraphImageUrl('https://banana.sandwich')).toBe('https://banana.sandwich');
-  });
-
-  it('an IPFS-prefixed path returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('ipfs://QmBananaSandwich')).toBe(
-      'https://www.geobrowser.io/preview/QmBananaSandwich.png'
-    );
-  });
-
-  it('a non-empty string that does not match the other values returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('QmBananaSandwich')).toBe('https://www.geobrowser.io/preview/QmBananaSandwich.png');
-  });
-
-  it('an empty string returns the default OG image', () => {
-    expect(getOpenGraphImageUrl('')).toBe(null);
   });
 });
 
