@@ -15,8 +15,8 @@ import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Relation } from '~/design-system/icons/relation';
+import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 
@@ -31,9 +31,11 @@ export function TableBlockContextMenu() {
 
   const isEditing = useUserIsEditing(spaceId);
 
-  if (!isEditing) {
-    setIsEditingProperties(false);
-  }
+  React.useEffect(() => {
+    if (!isEditing) {
+      setIsEditingProperties(false);
+    }
+  }, [isEditing, setIsEditingProperties]);
 
   const onCopyBlockId = async () => {
     try {
@@ -64,7 +66,7 @@ export function TableBlockContextMenu() {
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-[1001] block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-1001 block w-[200px]! overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="start"
         >
           {isInitialState && (
@@ -82,23 +84,23 @@ export function TableBlockContextMenu() {
                   </MenuItem>
                 </>
               )}
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, entityId)}
-                  className="flex w-full items-center justify-between gap-2"
-                >
+              <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span>Open fullscreen</span>
+                  <TableView />
+                </div>
+              </MenuItem>
+              <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
+                <div className="flex w-full items-center justify-between gap-2">
                   <span>View config</span>
                   <Cog />
-                </Link>
+                </div>
               </MenuItem>
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, relationId)}
-                  className="flex w-full items-center justify-between gap-2"
-                >
+              <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
+                <div className="flex w-full items-center justify-between gap-2">
                   <span>View block relation</span>
                   <Relation />
-                </Link>
+                </div>
               </MenuItem>
               <MenuItem onClick={onCopyBlockId}>
                 <div className="flex w-full items-center justify-between gap-2">

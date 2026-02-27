@@ -15,12 +15,12 @@ export function CellContent({ isExpanded, value, href }: Props) {
   const content = href ? (
     <Link
       href={href}
-      className="block min-h-[22px] break-words text-tableCell text-ctaHover hover:underline hover:decoration-ctaHover"
+      className="block min-h-[22px] text-tableCell wrap-break-word text-ctaHover hover:underline hover:decoration-ctaHover"
     >
       {value}
     </Link>
   ) : (
-    <Text variant="tableCell" className="block min-h-[22px] break-words">
+    <Text variant="tableCell" className="block min-h-[22px] wrap-break-word">
       {value}
     </Text>
   );

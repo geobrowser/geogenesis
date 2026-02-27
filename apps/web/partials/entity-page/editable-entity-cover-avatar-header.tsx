@@ -27,7 +27,13 @@ const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
 // When there's no cover the extra width is invisible (height is 0 or 40).
 function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean) {
   return {
-    height: hasCover ? (hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT) : hasAvatar ? AVATAR_OVERFLOW : 0,
+    height: hasCover
+      ? hasCoverImage
+        ? COVER_IMAGE_HEIGHT
+        : COVER_PLACEHOLDER_HEIGHT
+      : hasAvatar
+        ? AVATAR_OVERFLOW
+        : 0,
     maxWidth: 1192,
     marginBottom: hasCover ? (hasAvatar ? 80 : 32) : hasAvatar ? 64 : 0,
     marginTop: hasCover ? -24 : 0,
@@ -60,12 +66,7 @@ export const EditableCoverAvatarHeader = ({
   const coverHeight = hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT;
 
   return (
-    <motion.div
-      initial={false}
-      animate={layout}
-      transition={TRANSITION}
-      className="relative mx-auto w-full"
-    >
+    <motion.div initial={false} animate={layout} transition={TRANSITION} className="relative mx-auto w-full">
       {/* Cover — fixed size, fades in/out. The inner div clips it via overflow-hidden
           so during the height animation the cover is revealed, not scaled. */}
       <div className="absolute inset-0 overflow-hidden rounded-lg">
@@ -80,7 +81,12 @@ export const EditableCoverAvatarHeader = ({
               className="flex items-center justify-center"
               style={{ height: coverHeight, width: '100%' }}
             >
-              <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
+              <AvatarCoverInput
+                entityId={id}
+                typeOfId={SystemIds.COVER_PROPERTY}
+                inputId="cover-input"
+                imgUrl={coverUrl}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -94,7 +100,7 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="absolute left-0 right-0 mx-auto flex max-w-[880px] justify-start"
+            className="absolute right-0 left-0 mx-auto flex max-w-[880px] justify-start"
             style={{ bottom: -AVATAR_OVERFLOW }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
@@ -231,7 +237,7 @@ const AvatarCoverInput = ({
         )}
         {editable && (
           <div
-            className={`absolute ${imgUrl && isCover ? 'right-4 top-4 justify-end' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
+            className={`absolute ${imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
           >
             {isUploading ? (
               <SquareButton disabled className="pointer-events-none border-none bg-white/85">

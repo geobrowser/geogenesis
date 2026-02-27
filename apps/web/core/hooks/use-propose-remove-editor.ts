@@ -12,6 +12,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
@@ -127,16 +128,25 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
           args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
         });
 
-        const hash = yield* tx(callData);
+        const hash = yield* tx(callData).pipe(
+          Effect.withSpan('web.write.createProposal.removeEditor'),
+          Effect.annotateSpans({
+            'io.operation': 'create_proposal',
+            'space.type': 'DAO',
+            'governance.action': 'proposal_created',
+            'governance.proposal_action': 'remove_editor',
+            'governance.voting_mode': 'SLOW',
+          })
+        );
         console.log('Transaction hash: ', hash);
         return hash;
       });
 
-      const result = await Effect.runPromise(Effect.either(writeTxEffect));
+      const result = await runEffectEither(writeTxEffect);
 
       Either.match(result, {
         onLeft: error => {
-          console.error(error);
+          console.error('Failed to propose remove editor', { spaceId, targetEditorSpaceId, personalSpaceId }, error);
           dispatch({
             type: 'ERROR',
             payload: String(error),

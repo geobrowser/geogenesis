@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  VoteOption,
-  encodeProposalVotedData,
-  encodeProposalExecutedData,
-  padBytes16ToBytes32,
-} from './governance';
+import { VoteOption, encodeProposalExecutedData, encodeProposalVotedData, padBytes16ToBytes32 } from './governance';
 
 describe('VoteOption', () => {
   it('should have correct enum values matching Solidity contract', () => {
@@ -42,31 +37,23 @@ describe('padBytes16ToBytes32', () => {
   it('should throw error for too short input', () => {
     const input = '1234567890abcdef'; // Only 16 chars, should be 32
 
-    expect(() => padBytes16ToBytes32(input)).toThrow(
-      'Invalid bytes16 hex string: expected 32 hex characters, got 16'
-    );
+    expect(() => padBytes16ToBytes32(input)).toThrow('Invalid bytes16 hex string: expected 32 hex characters, got 16');
   });
 
   it('should throw error for too long input', () => {
     const input = '1234567890abcdef1234567890abcdef1234'; // 36 chars, should be 32
 
-    expect(() => padBytes16ToBytes32(input)).toThrow(
-      'Invalid bytes16 hex string: expected 32 hex characters, got 36'
-    );
+    expect(() => padBytes16ToBytes32(input)).toThrow('Invalid bytes16 hex string: expected 32 hex characters, got 36');
   });
 
   it('should throw error for non-hex characters', () => {
     const input = '1234567890abcdefghijklmnopqrstuv'; // Contains non-hex chars
 
-    expect(() => padBytes16ToBytes32(input)).toThrow(
-      'Invalid bytes16 hex string: contains non-hex characters'
-    );
+    expect(() => padBytes16ToBytes32(input)).toThrow('Invalid bytes16 hex string: contains non-hex characters');
   });
 
   it('should throw error for empty input', () => {
-    expect(() => padBytes16ToBytes32('')).toThrow(
-      'Invalid bytes16 hex string: expected 32 hex characters, got 0'
-    );
+    expect(() => padBytes16ToBytes32('')).toThrow('Invalid bytes16 hex string: expected 32 hex characters, got 0');
   });
 });
 

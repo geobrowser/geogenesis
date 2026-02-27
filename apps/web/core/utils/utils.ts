@@ -19,7 +19,8 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
-  toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
+  toProposal: (spaceId: string, proposalId: string, from?: string) =>
+    `/space/${spaceId}/governance?proposalId=${proposalId}${from ? `&from=${from}` : ''}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },
@@ -83,6 +84,19 @@ export class GeoNumber {
 }
 
 export class GeoPoint {
+  static readonly MIN_LAT = -90;
+  static readonly MAX_LAT = 90;
+  static readonly MIN_LNG = -180;
+  static readonly MAX_LNG = 180;
+
+  static clampLatForMap(lat: number): number {
+    return Math.max(GeoPoint.MIN_LAT, Math.min(GeoPoint.MAX_LAT, lat));
+  }
+
+  static clampLngForMap(lng: number): number {
+    return Math.max(GeoPoint.MIN_LNG, Math.min(GeoPoint.MAX_LNG, lng));
+  }
+
   /**
    * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
    * @param value - String containing latitude and longitude separated by a comma
@@ -100,7 +114,10 @@ export class GeoPoint {
 
       if (isNaN(latitude) || isNaN(longitude)) return null;
 
-      return { latitude, longitude };
+      return {
+        latitude: GeoPoint.clampLatForMap(latitude),
+        longitude: GeoPoint.clampLngForMap(longitude),
+      };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
@@ -460,8 +477,10 @@ export function getRandomArrayItem(array: string[]) {
 
 export const sleepWithCallback = async (callback: () => void, ms: number) => {
   await new Promise(resolve => {
-    setTimeout(callback, ms);
-    resolve(null);
+    setTimeout(() => {
+      callback();
+      resolve(null);
+    }, ms);
   });
 };
 

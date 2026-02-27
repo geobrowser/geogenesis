@@ -1,9 +1,10 @@
 import { SearchResult } from '~/core/types';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { RemoteSearchResult } from '../schema';
 
 export function SearchResultDto(result: RemoteSearchResult): SearchResult {
-  const spaces = [...result.spaceIds]; // @TODO(migration): Richer spaces
+  const spaces = sortSpaceIdsByRank([...result.spaceIds]);
 
   return {
     id: result.id,

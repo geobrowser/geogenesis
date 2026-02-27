@@ -2,8 +2,9 @@
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
 import type { EditorView } from '@tiptap/pm/view';
-import { EditorContent, Editor as TiptapEditor, useEditor, JSONContent } from '@tiptap/react';
+import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
@@ -16,13 +17,14 @@ import { NavUtils } from '~/core/utils/utils';
 import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
+import { createCommandExtension } from './command-extension';
+import { createEntityMentionExtension } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
+import { FloatingToolbarExtension } from './floating-toolbar-extension';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
-import { createEntityMentionExtension } from './entity-mention-extension';
-import { createCommandExtension } from './command-extension';
-import { FloatingToolbarExtension } from './floating-toolbar-extension';
+import { editorContentVersionAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -46,8 +48,9 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
-  const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
+  const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const editorContentVersion = useAtomValue(editorContentVersionAtom);
   const [isTransitioning, setIsTransitioning] = React.useState(false);
 
   // Track when editable state is changing to prevent flushSync errors
@@ -57,15 +60,13 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     return () => clearTimeout(timer);
   }, [editable]);
 
-  // Debounced save handler 
+  // Debounced save handler
   const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Track upsertEditorState with a ref to avoid stale closures
   const upsertEditorStateRef = React.useRef(upsertEditorState);
-
-  React.useLayoutEffect(() => {
-    upsertEditorStateRef.current = upsertEditorState;
-  }, [upsertEditorState]);
+  // Ref keeps the blur handler fresh without requiring editor recreation.
+  upsertEditorStateRef.current = upsertEditorState;
 
   const debouncedSave = React.useCallback((json: JSONContent) => {
     if (saveTimeoutRef.current) {
@@ -108,15 +109,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   useInterceptEditorLinks(spaceId);
 
-  const onBlur = React.useCallback(
-    (params: { editor: TiptapEditor }) => {
-      if (editableRef.current) {
-        // Responsible for converting all editor blocks to Geo knowledge graph state
-        upsertEditorStateRef.current(params.editor.getJSON());
-      }
-    },
-    []
-  );
+  const onBlur = (params: { editor: TiptapEditor }) => {
+    if (editable) {
+      // Responsible for converting all editor blocks to Geo knowledge graph state
+      upsertEditorStateRef.current(params.editor.getJSON());
+    }
+  };
 
   const editorProps = React.useMemo(
     () => ({
@@ -182,20 +180,8 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         }
       },
     },
-    [extensions, editorProps, onBlur]
+    [editorJson, editable]
   );
-
-  // Update editor editable state without recreating the editor
-  React.useEffect(() => {
-    if (editor && !isTransitioning) {
-      editor.setEditable(editable);
-
-      // Force save when switching to view mode to ensure latest state is persisted
-      if (!editable) {
-        upsertEditorState(editor.getJSON());
-      }
-    }
-  }, [editor, editable, isTransitioning, upsertEditorState]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -331,21 +317,19 @@ function useInterceptEditorLinks(spaceId: string) {
   }, [router, spaceId]);
 }
 
-// Suppress TipTap's flushSync warning in dev - this is a known issue with TipTap + React 18
+// ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
 // https://github.com/ueberdosis/tiptap/issues/3764
 const useSuppressFlushSyncWarning = () => {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-
-    const originalError = console.error;
+    const orig = console.error;
     console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
         return;
-      }
-      originalError.apply(console, args);
+      orig.apply(console, args);
     };
     return () => {
-      console.error = originalError;
+      console.error = orig;
     };
   }, []);
 };

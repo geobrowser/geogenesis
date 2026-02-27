@@ -12,14 +12,7 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import {
-  DataType,
-  Entity,
-  Property,
-  Relation,
-  SwitchableRenderableType,
-  Value,
-} from '~/core/types';
+import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 
 /** Reverse mapping: data type entity ID → DataType string */
 const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
@@ -241,7 +234,6 @@ export function reconstructFromStore(
     relationValueTypes, // Added: missing field
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
-    isDataTypeEditable: true, // Added: local properties are editable by default
     format: formatValue?.value || null,
     unit: unitRelation?.toEntity.id || null,
   };

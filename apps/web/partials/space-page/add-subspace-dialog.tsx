@@ -227,7 +227,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               }}
               // Doing some fixed positioning to be able to break out the results list
               // from the height and flow of the dialog component
-              className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
+              className="fixed z-102 mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
               {queriedSpaces?.map(s => (
                 <SpaceQueryResult key={s.address} subspace={s} spaceId={spaceId} spaceType={spaceType} />
@@ -316,7 +316,10 @@ function SubspaceRelationActions({
     setSubspace({ subspaceId, relationType: selectedRelation });
   };
 
-  const buttonLabel = spaceType === 'DAO' ? `Propose ${RELATION_TYPE_LABELS[selectedRelation]}` : `Set ${RELATION_TYPE_LABELS[selectedRelation]}`;
+  const buttonLabel =
+    spaceType === 'DAO'
+      ? `Propose ${RELATION_TYPE_LABELS[selectedRelation]}`
+      : `Set ${RELATION_TYPE_LABELS[selectedRelation]}`;
 
   return (
     <div className="flex items-center gap-1.5">

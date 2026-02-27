@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/types';
 
-import { prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect, Publish } from './publish';
+import { Publish, prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect } from './publish';
 
 /** Unwrap the Effect for test assertions */
 function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {

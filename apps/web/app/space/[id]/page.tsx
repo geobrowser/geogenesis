@@ -1,12 +1,12 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import { notFound } from 'next/navigation';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
 import { Subspace } from '~/core/io/dto/subspaces';
+import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -16,7 +16,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
 import { cachedFetchSpace } from './cached-fetch-space';
@@ -83,11 +82,9 @@ export default async function SpacePage(props0: Props) {
   }
 
   const props = await getSpaceFrontPage(spaceId);
-  const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
-      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={props.id} />}
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
@@ -101,11 +98,11 @@ export default async function SpacePage(props0: Props) {
         boundary. We don't want to show any referenced by loading states but do want to
         stream it in
       */}
-      <ErrorBoundary fallback={<EmptyErrorComponent />}>
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
         <React.Suspense fallback={<div />}>
           <BacklinksServerContainer entityId={props.id} />
         </React.Suspense>
-      </ErrorBoundary>
+      </TrackedErrorBoundary>
     </>
   );
 }

@@ -66,7 +66,7 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
         className="z-10 w-[250px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
       >
         <DropdownPrimitive.Item
-          className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 hover:!bg-bg focus:outline-none"
+          className="flex h-[28px] w-full gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 select-none hover:bg-bg! focus:outline-hidden"
           // Suppress default to prevent the dropdown from closing when clicking the percentage toggle
           onClick={suppressDefault}
         >
@@ -83,8 +83,8 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
               key={`triple-type-dropdown-${index}`}
               onClick={() => onSelect(value, option.value)}
               className={cx(
-                'flex w-full select-none items-center justify-between px-3 py-2 text-button text-grey-04 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                format === option.value && '!bg-bg !text-text'
+                'flex w-full items-center justify-between px-3 py-2 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg! focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                format === option.value && 'bg-bg! text-text!'
               )}
             >
               {option.label}

@@ -23,7 +23,7 @@ module.exports = {
     // Every import starting with ./ or ~/
     '^[./|~/]',
   ],
-  tailwindConfig: './tailwind.config.js',
+  tailwindStylesheet: './styles/styles.css',
   tailwindFunctions: ['cx', 'cva'],
   plugins: ['@trivago/prettier-plugin-sort-imports', 'prettier-plugin-tailwindcss'],
 };

@@ -43,7 +43,7 @@ export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, classNa
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
         className={cx(
-          'inline-flex w-48 items-center justify-between whitespace-nowrap rounded px-3 py-2 text-button shadow-inner-grey-02 placeholder:!text-text focus:outline-none',
+          'inline-flex w-48 items-center justify-between rounded px-3 py-2 text-button whitespace-nowrap shadow-inner-grey-02 placeholder:text-text! focus:outline-hidden',
           className
         )}
       />

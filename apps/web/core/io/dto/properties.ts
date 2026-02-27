@@ -21,7 +21,6 @@ export function PropertyDto(queryResult: RemoteProperty): Property {
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
     format: queryResult.format ?? null,
     unit: null,
-    isDataTypeEditable: false, // Remote properties are not editable
   };
 }
 

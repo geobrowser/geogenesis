@@ -40,19 +40,18 @@ export const DataBlockSourceMenu = ({
               <span className="text-smallButton text-grey-04">Back</span>
             </button>
           </div>
-          <MenuItem active={source.type === 'COLLECTION'}>
-            <button
-              type="button"
-              onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
-              className="flex w-full items-center justify-between gap-2"
-            >
+          <MenuItem
+            active={source.type === 'COLLECTION'}
+            onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
+          >
+            <div className="flex w-full items-center justify-between gap-2">
               <span className="text-button text-text">{collectionName || 'New collection'}</span>
               {source.type === 'COLLECTION' && <Check />}
-            </button>
+            </div>
           </MenuItem>
 
-          <MenuItem active={source.type === 'SPACES'}>
-            <button type="button" onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
+          <MenuItem active={source.type === 'SPACES'} onClick={() => setView('spaces')}>
+            <div className="flex w-full items-center justify-between gap-2">
               <div>
                 <div className="text-button text-text">Spaces</div>
                 {source.type === 'SPACES' && source.value.length > 0 && (
@@ -63,7 +62,7 @@ export const DataBlockSourceMenu = ({
                         if (!selectedSpace) return null;
 
                         return (
-                          <div key={selectedSpace.id} className="-ml-1.5 rounded-sm border border-white first:-ml-0">
+                          <div key={selectedSpace.id} className="-ml-1.5 rounded-sm border border-white first:ml-0">
                             {selectedSpace.entity?.image ? (
                               <NativeGeoImage
                                 value={selectedSpace.entity.image}
@@ -81,18 +80,10 @@ export const DataBlockSourceMenu = ({
                 )}
               </div>
               <ChevronRight />
-            </button>
+            </div>
           </MenuItem>
-          <MenuItem active={source.type === 'GEO'}>
-            <button
-              type="button"
-              onClick={() => {
-                setSource({
-                  type: 'GEO',
-                });
-              }}
-              className="flex w-full flex-col gap-1"
-            >
+          <MenuItem active={source.type === 'GEO'} onClick={() => setSource({ type: 'GEO' })}>
+            <div className="flex w-full flex-col gap-1">
               <div className="flex w-full justify-between gap-2">
                 <div className="text-button text-text">All of Geo</div>
                 {source.type === 'GEO' && <Check />}
@@ -100,7 +91,7 @@ export const DataBlockSourceMenu = ({
               <div className="mt-0.5 text-footnote text-grey-04">
                 Fields limited to Name, Description, Types, Cover and Avatar
               </div>
-            </button>
+            </div>
           </MenuItem>
         </>
       )}
@@ -136,32 +127,34 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
         <Input withSearchIcon placeholder="Search..." value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
-        {queriedSpaces.filter(space => space.name?.trim()).map(space => {
-          const active = source.type === 'SPACES' && source.value.includes(space.id);
+        {queriedSpaces
+          .filter(space => space.name?.trim())
+          .map(space => {
+            const active = source.type === 'SPACES' && source.value.includes(space.id);
 
-          return (
-            <MenuItem key={space.id} onClick={() => handleToggleSpace(space.id)} active={active} className="group">
-              <div className="flex items-center gap-2">
-                <div className="flex-shrink-0">
-                  {space.image ? (
-                    <NativeGeoImage value={space.image} className="h-[12px] w-[12px] rounded-sm" />
-                  ) : (
-                    <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="h-[12px] w-[12px] rounded-sm" />
+            return (
+              <MenuItem key={space.id} onClick={() => handleToggleSpace(space.id)} active={active} className="group">
+                <div className="flex items-center gap-2">
+                  <div className="shrink-0">
+                    {space.image ? (
+                      <NativeGeoImage value={space.image} className="h-[12px] w-[12px] rounded-sm" />
+                    ) : (
+                      <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="h-[12px] w-[12px] rounded-sm" />
+                    )}
+                  </div>
+                  <div className="grow truncate text-button text-text">{space.name}</div>
+                  {active && (
+                    <div className="relative text-grey-04">
+                      <Check />
+                      <div className="absolute inset-0 flex items-center justify-center bg-grey-01 opacity-0 group-hover:opacity-100">
+                        <Close />
+                      </div>
+                    </div>
                   )}
                 </div>
-                <div className="flex-grow truncate text-button text-text">{space.name}</div>
-                {active && (
-                  <div className="relative text-grey-04">
-                    <Check />
-                    <div className="absolute inset-0 flex items-center justify-center bg-grey-01 opacity-0 group-hover:opacity-100">
-                      <Close />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </MenuItem>
-          );
-        })}
+              </MenuItem>
+            );
+          })}
       </div>
     </>
   );

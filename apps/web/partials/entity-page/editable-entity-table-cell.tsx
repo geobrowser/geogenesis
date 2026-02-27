@@ -15,16 +15,20 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageStringField, TableImageField } from '~/design-system/editable-fields/editable-fields';
-import { TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField, TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { createPropertyRelation, createTypeRelationForNewEntity, writeValue } from '~/partials/blocks/table/change-entry';
+import {
+  createPropertyRelation,
+  createTypeRelationForNewEntity,
+  writeValue,
+} from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
 type Props = {
@@ -72,6 +76,7 @@ export function EditableEntityTableCell({
         <SelectEntity
           onCreateEntity={result => {
             onChangeEntry(entityId, spaceId, { type: 'CREATE_ENTITY', name: result.name });
+            return entityId;
           }}
           onDone={(result, fromCreateFn) => {
             if (fromCreateFn) {
@@ -104,7 +109,7 @@ export function EditableEntityTableCell({
                 onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute right-0 top-1/2 hidden -translate-y-1/2 group-hover/name-cell:block">
+            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
               <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
             </div>
           </div>
@@ -304,14 +309,16 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
   const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
   const value = rawValue?.value ?? '';
 
-  const renderableType = property.renderableType ?? property.dataType;
+  const renderableType = property.renderableTypeStrict ?? property.dataType;
 
   const onWriteValue = (newValue: string) => {
     writeValue(storage, entityId, spaceId, property, newValue, rawValue);
   };
 
   switch (renderableType) {
-    case 'NUMBER':
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL':
       return (
         <NumberField
           variant="tableCell"
@@ -325,11 +332,25 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
       );
     case 'TEXT':
       return <TableStringField placeholder="Add value..." value={value} onChange={onWriteValue} />;
-    case 'CHECKBOX': {
+    case 'URL': {
+      return (
+        <WebUrlField
+          variant="tableCell"
+          isEditing={true}
+          spaceId={spaceId}
+          value={value}
+          format={property.format}
+          onBlur={e => onWriteValue(e.currentTarget.value)}
+        />
+      );
+    }
+    case 'BOOLEAN': {
       const checked = getChecked(value);
 
       return <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />;
     }
+    case 'DATE':
+    case 'DATETIME':
     case 'TIME':
       return (
         <DateField

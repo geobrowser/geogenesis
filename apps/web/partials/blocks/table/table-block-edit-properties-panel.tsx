@@ -91,11 +91,11 @@ function RelationsPropertySelector() {
 
   return (
     <>
-      <MenuItem className="border-b border-grey-02">
-        <button onClick={onBack} className="flex w-full items-center gap-2 text-smallButton">
+      <MenuItem className="border-b border-grey-02" onClick={onBack}>
+        <div className="flex w-full items-center gap-2 text-smallButton">
           <LeftArrowLong />
           <span>Back</span>
-        </button>
+        </div>
       </MenuItem>
       {selectedEntities ? (
         <PropertySelector where={selectedEntities.type} entityIds={selectedEntities.entityIds} />
@@ -176,14 +176,11 @@ function DefaultPropertySelector() {
 
   return (
     <>
-      <MenuItem className="border-b border-grey-02">
-        <button
-          onClick={() => setIsEditingProperties(false)}
-          className="flex w-full items-center gap-2 text-smallButton"
-        >
+      <MenuItem className="border-b border-grey-02" onClick={() => setIsEditingProperties(false)}>
+        <div className="flex w-full items-center gap-2 text-smallButton">
           <LeftArrowLong />
           <span>Back</span>
-        </button>
+        </div>
       </MenuItem>
       {availableColumns?.map((column: Column, index: number) => {
         // do not show name column
@@ -290,14 +287,11 @@ function ToggleColumn({ column }: ToggleColumnProps) {
   };
 
   return (
-    <MenuItem>
-      <button
-        onClick={onToggleColumn}
-        className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}
-      >
+    <MenuItem onClick={onToggleColumn}>
+      <div className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}>
         <span>{column.name}</span>
         {isShown ? <Eye /> : <EyeHide />}
-      </button>
+      </div>
     </MenuItem>
   );
 }

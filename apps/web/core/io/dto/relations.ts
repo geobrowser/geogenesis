@@ -5,8 +5,7 @@ import { Relation, RenderableEntityType } from '~/core/types';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
-  const mediaEntityUrlValue =
-    relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
   const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   const toEntityId = relation.toEntity.id;

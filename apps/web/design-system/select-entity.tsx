@@ -11,7 +11,6 @@ import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
@@ -100,7 +99,6 @@ export const SelectEntity = ({
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -245,18 +243,30 @@ export const SelectEntity = ({
     }
   }, [hasResults, selectedIndex]);
 
-  const containerRef = useRef(null!);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useOnClickOutside(() => {
-    onQueryChange('');
-    setSelectedIndex(0);
-  }, containerRef);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const target = event.target as Node | null;
+      const container = containerRef.current;
+      const popover = popoverRef.current;
+      if (target && container && container.contains(target)) return;
+      if (target && popover && popover.contains(target)) return;
+      onQueryChange('');
+      setSelectedIndex(0);
+      setResult(null);
+    };
 
-  const popoverRef = useRef(null!);
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
 
-  useOnClickOutside(() => {
-    setResult(null);
-  }, popoverRef);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [onQueryChange]);
 
   return (
     <div
@@ -269,7 +279,7 @@ export const SelectEntity = ({
       })}
     >
       {withSearchIcon && (
-        <div className="absolute bottom-0 left-3 top-0 z-10 flex items-center">
+        <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
           <Search />
         </div>
       )}
@@ -435,7 +445,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -649,13 +659,13 @@ export const SelectEntity = ({
 const inputStyles = cva('', {
   variants: {
     fixed: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     floating: {
-      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     tableCell: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     withSearchIcon: {
       true: 'pl-9',
@@ -699,7 +709,7 @@ const FilterPill = ({
   onDelete: () => void;
 }) => {
   return (
-    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pr-1 pl-2 text-metadata">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
@@ -741,43 +751,45 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
           <Input value={query} onChange={e => setQuery(e.target.value)} />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            forceMount
-          >
-            <div className="pt-1">
-              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
-                <ResizableContainer>
-                  <ResultsList>
-                    {results.map(result => (
-                      <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
-                        <div className="flex w-full items-center justify-between leading-[1rem]">
-                          <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.name ?? result.id}
-                          </Text>
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.name ?? result.id) && (
-                            <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
-                          )}
-                          <span style={{ rotate: '270deg' }}>
-                            <ChevronDownSmall color="grey-04" />
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <Tag>Space</Tag>
+          <Popover.Portal>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+                  <ResizableContainer>
+                    <ResultsList>
+                      {results.map(result => (
+                        <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
+                          <div className="flex w-full items-center justify-between leading-4">
+                            <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
+                              {result.name ?? result.id}
+                            </Text>
                           </div>
-                        </div>
-                      </ResultItem>
-                    ))}
-                  </ResultsList>
-                </ResizableContainer>
+                          <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
+                            {(result.name ?? result.id) && (
+                              <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
+                            )}
+                            <span style={{ rotate: '270deg' }}>
+                              <ChevronDownSmall color="grey-04" />
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <Tag>Space</Tag>
+                            </div>
+                          </div>
+                        </ResultItem>
+                      ))}
+                    </ResultsList>
+                  </ResizableContainer>
+                </div>
               </div>
-            </div>
-          </Popover.Content>
+            </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>
@@ -800,92 +812,94 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
           <Input value={query} onChange={e => onQueryChange(e.target.value)} />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            forceMount
-          >
-            <div className="pt-1">
-              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
-                <ResizableContainer>
-                  <ResultsList>
-                    {!results?.length && isLoading && (
-                      <div className="w-full border-b border-divider bg-white px-3 py-2">
-                        <div className="truncate text-button text-text">Loading...</div>
-                      </div>
-                    )}
-                    {isEmpty ? (
-                      <div className="w-full border-b border-divider bg-white px-3 py-2">
-                        <div className="truncate text-button text-text">No results.</div>
-                      </div>
-                    ) : (
-                      <>
-                        {results.map((result, index) => (
-                          <ResultItem key={index}>
-                            <button
-                              onClick={() => {
-                                onSelect({
-                                  id: result.id,
-                                  name: result.name,
-                                });
-                                onQueryChange('');
-                              }}
-                              className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
-                            >
-                              <div className="relative w-full">
-                                <div className="relative z-0 max-w-full truncate text-button text-text">
-                                  {result.name}
+          <Popover.Portal>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+                  <ResizableContainer>
+                    <ResultsList>
+                      {!results?.length && isLoading && (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading...</div>
+                        </div>
+                      )}
+                      {isEmpty ? (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">No results.</div>
+                        </div>
+                      ) : (
+                        <>
+                          {results.map((result, index) => (
+                            <ResultItem key={index}>
+                              <button
+                                onClick={() => {
+                                  onSelect({
+                                    id: result.id,
+                                    name: result.name,
+                                  });
+                                  onQueryChange('');
+                                }}
+                                className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
+                              >
+                                <div className="relative w-full">
+                                  <div className="relative z-0 max-w-full truncate text-button text-text">
+                                    {result.name}
+                                  </div>
                                 </div>
-                              </div>
-                              {result.types.length > 0 && (
-                                <>
-                                  <Spacer height={4} />
-                                  <div className="flex items-center gap-1.5">
-                                    {result.types.map(type => (
-                                      <Tag key={type.id}>{type.name}</Tag>
+                                {result.types.length > 0 && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <div className="flex items-center gap-1.5">
+                                      {result.types.map(type => (
+                                        <Tag key={type.id}>{type.name}</Tag>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                {result.description && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <Truncate maxLines={3} shouldTruncate variant="footnote">
+                                      <p className="text-footnote text-grey-04">{result.description}</p>
+                                    </Truncate>
+                                  </>
+                                )}
+
+                                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                                  <div className="inline-flex gap-0">
+                                    {(result.spaces ?? []).slice(0, 3).map(space => (
+                                      <div
+                                        key={space.spaceId}
+                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                      >
+                                        <NativeGeoImage
+                                          value={space.image}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      </div>
                                     ))}
                                   </div>
-                                </>
-                              )}
-                              {result.description && (
-                                <>
-                                  <Spacer height={4} />
-                                  <Truncate maxLines={3} shouldTruncate variant="footnote">
-                                    <p className="text-footnote text-grey-04">{result.description}</p>
-                                  </Truncate>
-                                </>
-                              )}
-
-                              <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                                <div className="inline-flex gap-0">
-                                  {(result.spaces ?? []).slice(0, 3).map(space => (
-                                    <div
-                                      key={space.spaceId}
-                                      className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                    >
-                                      <NativeGeoImage
-                                        value={space.image}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                      />
-                                    </div>
-                                  ))}
+                                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
                                 </div>
-                                {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                              </div>
-                            </button>
-                          </ResultItem>
-                        ))}
-                      </>
-                    )}
-                  </ResultsList>
-                </ResizableContainer>
+                              </button>
+                            </ResultItem>
+                          ))}
+                        </>
+                      )}
+                    </ResultsList>
+                  </ResizableContainer>
+                </div>
               </div>
-            </div>
-          </Popover.Content>
+            </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>

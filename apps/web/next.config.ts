@@ -1,4 +1,8 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 import type { NextConfig } from 'next';
+
+import { ServerEnvironment } from './app/api/environment';
 
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
@@ -120,4 +124,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: ServerEnvironment.sentryBuild?.org,
+  project: ServerEnvironment.sentryBuild?.project,
+  authToken: ServerEnvironment.sentryBuild?.authToken,
+
+  // Route Sentry requests through the app to avoid ad-blockers
+  tunnelRoute: '/monitoring',
+
+  // Only log source map upload output in CI
+  silent: !process.env.CI,
+});

@@ -25,28 +25,28 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 
 const buttonClassNames = (className = '') =>
   cva(
-    `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
+    `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-hidden ${className}`,
     {
       variants: {
         variant: {
           primary:
             'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
-            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
+            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:text-text! focus:border-text focus:shadow-inner-text',
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
-            'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
+            'border-transparent bg-white text-grey-04! shadow-none hover:border-text hover:bg-bg hover:text-text! hover:shadow-button focus:border-text focus:shadow-inner-text',
           transparent:
-            'border-text bg-transparent !text-text shadow-none hover:border-text hover:!text-text focus:border-text focus:shadow-inner-text',
-          success: 'border-white bg-green text-white shadow-none transition-colors duration-150 hover:bg-opacity-80',
-          error: 'border-white bg-red-01 text-white shadow-none transition-colors duration-150 hover:bg-opacity-80',
-          done: 'border-green bg-green text-text transition-colors duration-150 hover:bg-opacity-80',
+            'border-text bg-transparent text-text! shadow-none hover:border-text hover:text-text! focus:border-text focus:shadow-inner-text',
+          success: 'border-white bg-green text-white shadow-none transition-colors duration-150 hover:bg-green/80',
+          error: 'border-white bg-red-01 text-white shadow-none transition-colors duration-150 hover:bg-red-01/80',
+          done: 'border-green bg-green text-text transition-colors duration-150 hover:bg-green/80',
           // using a variant for disabled to overwrite the background/text styles
           disabled: 'border-transparent bg-divider text-grey-03 hover:bg-divider',
         },
         small: {
-          false: 'gap-2 px-3 py-2 text-[1.0625rem] text-button leading-[1.125rem]',
-          true: 'h-6 gap-1.5 px-1.5 !text-metadata leading-none text-text',
+          false: 'gap-2 px-3 py-2 text-button text-[1.0625rem] leading-4.5',
+          true: 'h-6 gap-1.5 px-1.5 text-metadata! leading-none text-text',
         },
         disabled: {
           true: 'cursor-pointer',
@@ -86,16 +86,16 @@ type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 };
 
 const squareButtonClassNames = cva(
-  'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
+  'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text! focus:border-text focus:shadow-inner-text focus:outline-hidden',
   {
     variants: {
       isActive: {
-        true: 'border-text !bg-bg !text-text',
+        true: 'border-text bg-bg! text-text!',
         false: 'border-grey-02',
       },
       disabled: {
         true: 'cursor-pointer',
-        false: '!hover:border-divider !hover:bg-divider cursor-pointer border-divider',
+        false: 'cursor-pointer border-divider hover:border-divider! hover:bg-divider!',
       },
     },
     defaultVariants: {

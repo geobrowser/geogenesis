@@ -121,7 +121,7 @@ export const OnboardingDialog = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
-            className="fixed inset-0 z-[1000] flex h-full w-full items-start justify-center"
+            className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center"
           >
             <ModalCard childKey="card">
               <StepHeader />
@@ -179,7 +179,7 @@ const StepHeader = () => {
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
         {showBack && (
-          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
+          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
         )}
       </div>
     </div>
@@ -214,10 +214,10 @@ function StepStart() {
       <div className="space-y-8">
         <StepContents childKey="start">
           <div className="w-full">
-            <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
+            <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
               Create your first space
             </Text>
-            <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
+            <Text as="p" variant="body" className="mx-auto mt-2 text-center text-base!">
               This space will represent you. After, you can create spaces on any topic - including projects or groups
               you're a part of - linked with any Geo accounts.
             </Text>
@@ -332,7 +332,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
-        <div className="absolute left-0 right-0 top-0 z-100 flex -translate-y-full justify-center pb-4">
+        <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
               <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
@@ -387,10 +387,10 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
     <>
       <StepContents childKey="start">
         <div className="flex w-full flex-col items-center pt-3">
-          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center !text-2xl')}>
+          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
             {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
+          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
           {step !== 'completed' && (
@@ -409,7 +409,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">
-        <div className="absolute left-0 right-0 top-0 z-10 flex -translate-y-1/2 justify-center">
+        <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
           <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
             <Dots />
           </div>
@@ -424,27 +424,27 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
 
 export const Animation = ({ active = false }) => {
   return (
-    <div className="bg-gradient-geo relative flex h-[272px] w-[328px] items-center justify-center overflow-clip rounded">
-      <div className="absolute -left-5 top-3">
+    <div className="relative flex h-[272px] w-[328px] items-center justify-center overflow-clip rounded bg-gradient-geo">
+      <div className="absolute top-3 -left-5">
         <div
           className={cx('transition duration-300', active ? 'translate-x-2 translate-y-2 opacity-50' : 'opacity-20')}
         >
           <img src="/images/onboarding/top-left.png" alt="" className="w-1/2" />
         </div>
       </div>
-      <div className="absolute -right-20 -top-6">
+      <div className="absolute -top-6 -right-20">
         <div
           className={cx('transition duration-300', active ? '-translate-x-2 translate-y-2 opacity-50' : 'opacity-20')}
         >
           <img src="/images/onboarding/top-right.png" alt="" className="w-1/2" />
         </div>
       </div>
-      <div className="absolute -right-16 bottom-0 top-0 flex items-center">
+      <div className="absolute top-0 -right-16 bottom-0 flex items-center">
         <div className={cx('transition duration-300', active ? '-translate-x-2 opacity-50' : 'opacity-20')}>
           <img src="/images/onboarding/right-middle.png" alt="" className="w-1/2" />
         </div>
       </div>
-      <div className="absolute -bottom-8 -right-48">
+      <div className="absolute -right-48 -bottom-8">
         <div
           className={cx('transition duration-300', active ? '-translate-x-2 -translate-y-2 opacity-50' : 'opacity-20')}
         >
@@ -453,12 +453,12 @@ export const Animation = ({ active = false }) => {
       </div>
       <div className="absolute -bottom-4 -left-4">
         <div
-          className={cx('transition duration-300', active ? '-translate-y-2 translate-x-2 opacity-50' : 'opacity-20')}
+          className={cx('transition duration-300', active ? 'translate-x-2 -translate-y-2 opacity-50' : 'opacity-20')}
         >
           <img src="/images/onboarding/left-bottom.png" alt="" className="w-1/2" />
         </div>
       </div>
-      <div className="z-1000 relative -mb-6">
+      <div className="relative z-1000 -mb-6">
         <img src="/images/onboarding/main.png" alt="" className="h-auto w-[246px]" />
       </div>
       <div className="absolute bottom-8 left-3">
@@ -466,7 +466,7 @@ export const Animation = ({ active = false }) => {
           <img src="/images/onboarding/left-middle-float.png" alt="" className="w-1/2" />
         </div>
       </div>
-      <div className="absolute -right-16 top-12">
+      <div className="absolute top-12 -right-16">
         <div className={cx('transition duration-300', active ? 'translate-y-2 opacity-100' : 'opacity-0')}>
           <img src="/images/onboarding/right-middle-float.png" alt="" className="w-1/2" />
         </div>
@@ -493,7 +493,7 @@ const OnboardingAvatarPreview = ({ avatar, onRemove }: { avatar: string; onRemov
         {/* Hidden img to trigger fallback if needed */}
         <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
       </div>
-      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+      <div className="absolute top-0 right-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
         <SquareButton disabled={avatar === ''} onClick={onRemove} icon={<Trash />} />
       </div>
     </>

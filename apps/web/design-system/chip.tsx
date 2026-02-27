@@ -30,7 +30,7 @@ type LinkableChipProps = {
 };
 
 const linkableChipStyles = cva(
-  'inline-flex break-words rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'inline-flex rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium leading-4.5! font-normal! wrap-break-word hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -74,7 +74,7 @@ type LinkableRelationChipProps = {
 };
 
 const linkableRelationChipStyles = cva(
-  'group inline-flex items-center break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'group inline-flex items-center rounded border border-grey-02 bg-white pl-1.5 text-metadata wrap-break-word tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -82,16 +82,16 @@ const linkableRelationChipStyles = cva(
         true: 'line-clamp-4 items-start',
       },
       isDotsHovered: {
-        true: '!border-grey-02',
+        true: 'border-grey-02!',
       },
       isSpaceHovered: {
-        true: '!border-text !text-text',
+        true: 'border-text! text-text!',
       },
       isRelationHovered: {
-        true: '!border-text !text-text',
+        true: 'border-text! text-text!',
       },
       isDeleteHovered: {
-        true: '!border-text !text-text',
+        true: 'border-text! text-text!',
       },
       small: {
         true: 'py-px',
@@ -111,10 +111,10 @@ const linkableRelationChipStyles = cva(
 const relationChipDeleteIconStyles = cva('p-1 text-grey-04', {
   variants: {
     isRelationHovered: {
-      true: '!text-grey-03',
+      true: 'text-grey-03!',
     },
     isDeleteHovered: {
-      true: '!text-text',
+      true: 'text-text!',
     },
   },
   defaultVariants: {
@@ -126,10 +126,10 @@ const relationChipDeleteIconStyles = cva('p-1 text-grey-04', {
 const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
   variants: {
     isRelationHovered: {
-      true: '!text-text',
+      true: 'text-text!',
     },
     isDeleteHovered: {
-      true: '!text-grey-03',
+      true: 'text-grey-03!',
     },
   },
 
@@ -140,17 +140,17 @@ const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
 });
 
 const relationChipPopoverTriggerStyles = cva(
-  'relative flex items-start px-1.5 py-1 text-grey-03 focus-within:text-text group-hover:text-text',
+  'relative flex items-start px-1.5 py-1 text-grey-03 group-hover:text-text focus-within:text-text',
   {
     variants: {
       isSpaceHovered: {
-        true: '!text-text',
+        true: 'text-text!',
       },
       isDeleteHovered: {
-        true: '!text-text',
+        true: 'text-text!',
       },
       isRelationHovered: {
-        true: '!text-text',
+        true: 'text-text!',
       },
     },
     defaultVariants: {
@@ -231,7 +231,7 @@ export function LinkableRelationChip({
             })}
           >
             {/* Expands hoverable area */}
-            <div className="absolute -top-2 bottom-0 left-0 right-0" />
+            <div className="absolute -top-2 right-0 bottom-0 left-0" />
             <RelationDots color="current" />
           </button>
         </Popover.Trigger>
@@ -257,7 +257,7 @@ export function LinkableRelationChip({
                   }}
                   trigger={
                     <button className="inline-flex items-center p-1">
-                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
+                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
                             <GeoImage fill value={space.entity.image} alt="" />
@@ -339,16 +339,16 @@ const linkableMediaChipStyles = cva(
   {
     variants: {
       isPopoverOpen: {
-        true: '!border-text',
+        true: 'border-text!',
       },
       isSpaceHovered: {
-        true: '!border-text',
+        true: 'border-text!',
       },
       isRelationHovered: {
-        true: '!border-text',
+        true: 'border-text!',
       },
       isDeleteHovered: {
-        true: '!border-text',
+        true: 'border-text!',
       },
     },
     defaultVariants: {
@@ -435,7 +435,7 @@ export function LinkableMediaChip({
             e.stopPropagation();
             onUpload();
           }}
-          className="shadow-sm absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 transition-colors hover:bg-white"
+          className="shadow-sm absolute right-1 bottom-1 flex h-5 w-5 items-center justify-center rounded bg-white/90 transition-colors hover:bg-white"
         >
           <CreateIcon color="grey-04" className="h-3 w-3" />
         </button>
@@ -450,7 +450,7 @@ export function LinkableMediaChip({
 
       {/* Verified badge */}
       {verified && (
-        <span className="absolute left-1 top-1">
+        <span className="absolute top-1 left-1">
           <CheckCircle color="text" />
         </span>
       )}
@@ -460,7 +460,7 @@ export function LinkableMediaChip({
         <Popover.Trigger asChild>
           <button
             onMouseEnter={() => setIsPopoverOpen(true)}
-            className="shadow-sm absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 transition-opacity group-hover:opacity-100"
+            className="shadow-sm absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded bg-white/90 text-grey-03 opacity-0 transition-opacity group-hover:opacity-100"
           >
             <RelationDots color="grey-04" />
           </button>
@@ -487,7 +487,7 @@ export function LinkableMediaChip({
                   }}
                   trigger={
                     <button className="inline-flex items-center p-1">
-                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
+                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
                             <GeoImage fill value={space.entity.image} alt="" />

@@ -59,7 +59,7 @@ export const PositionBox = ({
             value={newPosition ?? ''}
             onChange={e => setNewPosition(e.target.value === '' ? null : Number(e.target.value))}
             placeholder={`${pageNumber * pageSize + position}`}
-            className="flex h-9 w-full items-center justify-center rounded border border-grey-02 text-center focus:outline-none"
+            className="flex h-9 w-full items-center justify-center rounded border border-grey-02 text-center focus:outline-hidden"
           />
           <button
             onClick={handleClick}
@@ -68,9 +68,9 @@ export const PositionBox = ({
           >
             Move
           </button>
-          <div className="flex h-[34px] flex-grow flex-col items-center justify-center rounded-md bg-divider p-1">
-            <span className="text-center text-[11px] font-normal leading-[13px]">Current position</span>
-            <span className="text-[11px] font-medium leading-[13px]">
+          <div className="flex h-[34px] grow flex-col items-center justify-center rounded-md bg-divider p-1">
+            <span className="text-center text-[11px] leading-[13px] font-normal">Current position</span>
+            <span className="text-[11px] leading-[13px] font-medium">
               {pageNumber * pageSize + position}/{totalEntries}
             </span>
           </div>

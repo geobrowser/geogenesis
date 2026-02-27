@@ -33,13 +33,13 @@ const AccordionTrigger = ({ className, children, ...rest }: AccordionTriggerProp
   <AccordionPrimitive.Header className="flex">
     <AccordionPrimitive.Trigger
       className={cx(
-        'group flex flex-1 items-center justify-between py-6 transition duration-300 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-25',
+        'group flex flex-1 items-center justify-between py-6 transition duration-300 data-disabled:cursor-not-allowed data-disabled:opacity-25',
         className
       )}
       {...rest}
     >
       <div>{children}</div>
-      <div className="transition duration-300 group-data-[state=open]:rotate-180 group-data-[disabled]:grayscale">
+      <div className="transition duration-300 group-data-disabled:grayscale group-data-[state=open]:rotate-180">
         <ChevronDownSmall color="ctaPrimary" />
       </div>
     </AccordionPrimitive.Trigger>

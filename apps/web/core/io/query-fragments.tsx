@@ -76,6 +76,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   query AllEntities(
     $spaceId: UUID
     $spaceIds: UUIDFilter
+    $typeId: UUID
     $typeIds: UUIDFilter
     $limit: Int
     $offset: Int
@@ -89,6 +90,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       orderBy: $orderBy
       spaceId: $spaceId
       spaceIds: $spaceIds
+      typeId: $typeId
       typeIds: $typeIds
     ) {
       id
@@ -356,6 +358,17 @@ export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
   query RelationEntityRelations($id: UUID!, $spaceId: UUID) {
     relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
       ...FullRelation
+    }
+  }
+`);
+
+export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
+  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID) {
+    relations(filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
+      id
+      toEntityId
+      spaceId
+      fromEntityId
     }
   }
 `);

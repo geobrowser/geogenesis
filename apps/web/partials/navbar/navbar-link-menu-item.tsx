@@ -25,7 +25,7 @@ export function NavbarLinkMenuItem({ children, onClick, img }: NavbarLinkMenuIte
           <Spacer width={8} />
         </>
       )}
-      <Text variant="button" className="hover:!text-text">
+      <Text variant="button" className="hover:text-text!">
         {children}
       </Text>
     </button>

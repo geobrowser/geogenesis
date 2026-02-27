@@ -7,11 +7,7 @@ import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttri
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import {
-  MAX_VIDEO_SIZE_BYTES,
-  VALID_VIDEO_TYPES,
-  VIDEO_ACCEPT,
-} from '~/core/constants';
+import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -35,10 +31,8 @@ export const VideoNode = Node.create({
   name: 'video',
   group: 'block',
   atom: true,
-  spanning: false,
   allowGapCursor: false,
   defining: true,
-  exitable: true,
 
   // Note: id and spaceId are defined by id-extension as global attributes
   // We only define video-specific attributes here
@@ -59,7 +53,7 @@ export const VideoNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['video-node', mergeAttributes(HTMLAttributes), 0];
+    return ['video-node', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {
@@ -77,7 +71,7 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="video-node my-4">
+      <div contentEditable="false" suppressContentEditableWarning className="video-node my-4">
         <VideoNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
@@ -351,7 +345,7 @@ function VideoNodeChildren({
           onBlur={handleNameBlur}
           placeholder="Video title..."
           readOnly={!isEditing}
-          className="flex-1 bg-transparent text-mediumTitle text-text placeholder:text-grey-03 focus:outline-none"
+          className="flex-1 bg-transparent text-mediumTitle text-text placeholder:text-grey-03 focus:outline-hidden"
         />
         <Dropdown.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
           <Dropdown.Trigger className="ml-2 flex h-6 w-6 items-center justify-center rounded hover:bg-grey-01">
@@ -360,7 +354,7 @@ function VideoNodeChildren({
           <Dropdown.Portal>
             <Dropdown.Content
               sideOffset={8}
-              className="z-[1001] block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+              className="z-1001 block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
               align="end"
             >
               {isEditing && relationEntityId && (

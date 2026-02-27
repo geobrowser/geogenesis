@@ -4,7 +4,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
-import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import { ADDRESS_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
@@ -15,8 +15,8 @@ import {
   useValues,
 } from '~/core/sync/use-store';
 import { DataType, RenderableType } from '~/core/types';
-import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { isUrlTemplate } from '~/core/utils/url-template';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -39,6 +39,7 @@ const SKIPPED_PROPERTIES: string[] = [
   SystemIds.NAME_PROPERTY,
   SystemIds.COVER_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
+  DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
 ];
 
@@ -121,7 +122,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
           return null;
         }
         return (
-          <div key={`${entityId}-${propertyId}-${index}`} className="break-words">
+          <div key={`${entityId}-${propertyId}-${index}`} className="wrap-break-word">
             <Link href={NavUtils.toEntity(spaceId, propertyId)}>
               <Text as="p" variant="bodySemibold">
                 {property.name || propertyId}
@@ -181,6 +182,7 @@ export function RelationsGroup({
     propertyId === SystemIds.COVER_PROPERTY ||
     propertyId === ContentIds.AVATAR_PROPERTY ||
     (propertyId === SystemIds.TYPES_PROPERTY && !isMetadataHeader) ||
+    propertyId === DATA_TYPE_PROPERTY ||
     propertyId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;
@@ -192,7 +194,7 @@ export function RelationsGroup({
 
   return (
     <>
-      <div key={`${propertyId}-${property.name}`} className="break-words">
+      <div key={`${propertyId}-${property.name}`} className="wrap-break-word">
         {propertyId !== SystemIds.TYPES_PROPERTY && (
           <Link href={NavUtils.toEntity(spaceId, propertyId)}>
             <Text as="p" variant="bodySemibold">
@@ -204,7 +206,7 @@ export function RelationsGroup({
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
             const linkedEntityId = r.toEntity.id;
-            const linkedSpaceId = r.spaceId;
+            const linkedSpaceId = r.toSpaceId ?? r.spaceId;
             const relationName = r.toEntity.name;
             const relationEntityId = r.entityId;
             const relationId = r.id;
@@ -394,7 +396,15 @@ function RenderedValue({
     case 'DATE':
     case 'DATETIME':
     case 'TIME': {
-      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} dataType={renderableType} />;
+      return (
+        <DateField
+          key={`time-${propertyId}-${value}`}
+          isEditing={false}
+          value={value}
+          propertyId={propertyId}
+          dataType={renderableType}
+        />
+      );
     }
   }
 }

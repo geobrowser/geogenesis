@@ -122,7 +122,7 @@ export const CollectionMetadata = ({
             {name || placeholder}
           </span>
           {verified && (
-            <span className="inline-block pl-2 pt-0.5">
+            <span className="inline-block pt-0.5 pl-2">
               <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />
             </span>
           )}
@@ -172,7 +172,7 @@ export const CollectionMetadata = ({
                         }}
                         trigger={
                           <button className="inline-flex items-center p-1" onMouseDown={e => e.preventDefault()}>
-                            <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
+                            <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
                                   <GeoImage fill value={space.entity.image} alt="" />
@@ -187,7 +187,7 @@ export const CollectionMetadata = ({
                     )}
                     <PrefetchLink
                       href={`/space/${currentSpaceId}/${relationId}`}
-                      className="p-1 hover:!text-text group-hover:text-grey-03"
+                      className="p-1 group-hover:text-grey-03 hover:text-text!"
                     >
                       <RelationSmall />
                     </PrefetchLink>
@@ -195,7 +195,7 @@ export const CollectionMetadata = ({
                       <button
                         onClick={onDeleteEntry}
                         onMouseDown={e => e.preventDefault()}
-                        className="p-1 hover:!text-text group-hover:text-grey-03"
+                        className="p-1 group-hover:text-grey-03 hover:text-text!"
                       >
                         <CheckCloseSmall />
                       </button>
@@ -232,5 +232,3 @@ export const CollectionMetadata = ({
     </div>
   );
 };
-
-

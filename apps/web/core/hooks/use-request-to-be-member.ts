@@ -11,6 +11,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeMembershipRequestData } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
@@ -74,16 +75,23 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
         args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
       });
 
-      const hash = yield* tx(callData);
+      const hash = yield* tx(callData).pipe(
+        Effect.withSpan('web.write.requestMembership'),
+        Effect.annotateSpans({
+          'io.operation': 'request_membership',
+          'space.type': 'DAO',
+          'governance.action': 'membership_requested',
+        })
+      );
       console.log('Transaction hash: ', hash);
       return hash;
     });
 
-    const result = await Effect.runPromise(Effect.either(writeTxEffect));
+    const result = await runEffectEither(writeTxEffect);
 
     Either.match(result, {
       onLeft: error => {
-        console.error(error);
+        console.error('Failed to request membership', { spaceId, personalSpaceId }, error);
         dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
         // Necessary to propagate error status to useMutation
         throw error;

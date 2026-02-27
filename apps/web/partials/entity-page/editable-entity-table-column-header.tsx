@@ -1,6 +1,7 @@
 'use client';
 
 import cx from 'classnames';
+
 import * as React from 'react';
 import { memo, useState } from 'react';
 
@@ -44,7 +45,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
     <div className={cx('inline-flex items-center', isLastColumn ? 'pr-12' : '')}>
       <input
         size={Math.max((localName || 'Column name...').length, 1)}
-        className="h-[1.3125rem] bg-transparent p-0 text-smallTitle leading-[1.3125rem] placeholder:text-grey-02 focus:outline-none"
+        className="h-5.25 bg-transparent p-0 text-smallTitle leading-5.25 placeholder:text-grey-02 focus:outline-hidden"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
         onBlur={e => {

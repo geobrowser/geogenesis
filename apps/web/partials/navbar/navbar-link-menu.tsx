@@ -6,6 +6,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
+import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
@@ -16,7 +17,7 @@ import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
-  const urlComponents = useSelectedLayoutSegments();
+  const urlComponents = useSelectedLayoutSegments()?.filter(s => !s.startsWith('('));
   const routeSpaceId = urlComponents?.[1];
   const { space: routeSpace } = useSpace(routeSpaceId);
 
@@ -26,7 +27,7 @@ export function NavbarLinkMenu() {
   };
 
   return (
-    <ErrorBoundary fallback={null} onError={e => console.error(e.message)}>
+    <ErrorBoundary fallback={null} onError={reportBoundaryError}>
       <Menu
         open={open}
         onOpenChange={onOpenChange}
@@ -66,7 +67,12 @@ type ComponentRoute = {
   img: string | null;
 };
 
-function getComponentRoute({ urlComponents, index, routeSpaceName, routeSpaceImage }: GetComponentRouteConfig): ComponentRoute {
+function getComponentRoute({
+  urlComponents,
+  index,
+  routeSpaceName,
+  routeSpaceImage,
+}: GetComponentRouteConfig): ComponentRoute {
   const component = urlComponents[index];
 
   switch (index) {

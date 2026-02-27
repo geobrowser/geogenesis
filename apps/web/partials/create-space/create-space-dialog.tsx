@@ -212,7 +212,7 @@ const StepHeader = () => {
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
         {showBack ? (
-          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
+          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
         ) : (
           <div className="h-1 w-4" />
         )}
@@ -220,7 +220,7 @@ const StepHeader = () => {
       <h3 className="text-smallTitle">{headerText[step]}</h3>
       {step !== 'create-space' && step !== 'completed' ? (
         <Dialog.Close asChild>
-          <SquareButton icon={<Close color="grey-04" />} className="!border-none !bg-transparent" />
+          <SquareButton icon={<Close color="grey-04" />} className="border-none! bg-transparent!" />
         </Dialog.Close>
       ) : (
         // Render an empty span to position header text in the middle
@@ -243,7 +243,7 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative flex flex-grow flex-col"
+      className="relative flex grow flex-col"
     >
       {children}
     </motion.div>
@@ -271,9 +271,9 @@ function StepSelectType() {
                   }
                   setStep('enter-profile');
                 }}
-                className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pl-2 pr-3 transition-colors duration-150 ease-in-out hover:bg-divider"
+                className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pr-3 pl-2 transition-colors duration-150 ease-in-out hover:bg-divider"
               >
-                <div className="size-8 flex-shrink-0 overflow-clip rounded">
+                <div className="size-8 shrink-0 overflow-clip rounded">
                   <img src={spaceType.image} alt="" className="block h-full w-full object-cover" />
                 </div>
                 <div className="text-button">{spaceType.label}</div>
@@ -438,7 +438,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
-        <div className="absolute left-0 right-0 top-0 z-100 flex -translate-y-full justify-center pb-4">
+        <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
               <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
@@ -498,10 +498,10 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
     <>
       <StepContents childKey="start">
         <div className="flex w-full flex-col items-center pt-3">
-          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center !text-2xl')}>
+          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
             {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
+          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
           {step !== 'completed' && (
@@ -520,7 +520,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">
-        <div className="absolute left-0 right-0 top-0 z-10 flex -translate-y-1/2 justify-center">
+        <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
           <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
             <Dots />
           </div>
@@ -558,7 +558,7 @@ const CreateSpaceImagePreview = ({ image, height, width, onRemove }: CreateSpace
         {/* Hidden img to trigger fallback if needed */}
         <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
       </div>
-      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+      <div className="absolute top-0 right-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
         <SquareButton disabled={image === ''} onClick={onRemove} icon={<Trash />} />
       </div>
     </>

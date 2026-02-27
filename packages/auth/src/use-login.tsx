@@ -1,7 +1,7 @@
-import {useLogin as usePrivyLogin, useWallets} from '@privy-io/react-auth'
+import { useLogin as usePrivyLogin, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 
-type UseLoginParams = Parameters<typeof usePrivyLogin>[0]
+type UseLoginParams = Parameters<typeof usePrivyLogin>[0];
 
 /**
  * Custom login hook that wraps Privy's useLogin with automatic wallet activation.
@@ -25,7 +25,7 @@ export function useGeoLogin(params: UseLoginParams): ReturnType<typeof usePrivyL
    */
   return usePrivyLogin({
     ...params,
-    onComplete: async (args) => {
+    onComplete: async args => {
       const userWallet = args.user.wallet;
 
       if (userWallet !== undefined) {
@@ -35,8 +35,8 @@ export function useGeoLogin(params: UseLoginParams): ReturnType<typeof usePrivyL
           await setActiveWallet(wallet);
         }
 
-        params?.onComplete?.(args)
+        params?.onComplete?.(args);
       }
-    }
-  })
+    },
+  });
 }

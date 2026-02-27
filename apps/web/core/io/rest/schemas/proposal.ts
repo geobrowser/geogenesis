@@ -15,11 +15,7 @@ import { ProposalStatus, ProposalType } from '../../substream-schema';
 /**
  * API vote option values.
  */
-export const ApiVoteOptionSchema = Schema.Union(
-  Schema.Literal('YES'),
-  Schema.Literal('NO'),
-  Schema.Literal('ABSTAIN')
-);
+export const ApiVoteOptionSchema = Schema.Union(Schema.Literal('YES'), Schema.Literal('NO'), Schema.Literal('ABSTAIN'));
 
 export type ApiVoteOption = Schema.Schema.Type<typeof ApiVoteOptionSchema>;
 
@@ -177,18 +173,11 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
   }
 }
 
-/**
- * Map API proposal status to internal ProposalStatus.
- *
- * Note: EXECUTABLE is mapped to PROPOSED because the internal type
- * doesn't distinguish between "voting active" and "ready to execute".
- */
 export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']): ProposalStatus {
   switch (apiStatus) {
     case 'PROPOSED':
       return 'PROPOSED';
     case 'EXECUTABLE':
-      // EXECUTABLE means voting ended and ready to execute - treat as PROPOSED until executed
       return 'PROPOSED';
     case 'ACCEPTED':
       return 'ACCEPTED';

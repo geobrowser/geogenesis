@@ -15,8 +15,8 @@ import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Cell, Property, Row } from '~/core/types';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
+import { Cell, Property, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -45,7 +45,13 @@ const ColumnHeader = ({
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
   return isEditMode && !isNameColumn ? (
-    <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} isLastColumn={isLastColumn} />
+    <EditableEntityTableColumnHeader
+      unpublishedColumns={[]}
+      column={column}
+      entityId={column.id}
+      spaceId={spaceId}
+      isLastColumn={isLastColumn}
+    />
   ) : (
     <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
   );
@@ -110,9 +116,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    // We are in a component internally within react-table. eslint isn't
-    // able to infer that this is a valid React component.
-    // eslint-disable-next-line
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
@@ -233,7 +236,7 @@ export const TableBlockTable = ({
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-resultLink">
           <div>{placeholder.text}</div>
           <div>
-            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
+            <img src={placeholder.image} className="h-[64px]! w-auto object-contain" alt="" />
           </div>
         </div>
       </div>
@@ -261,7 +264,7 @@ export const TableBlockTable = ({
                   ? null
                   : !isEditingColumns || !isEditing
                     ? 'hidden'
-                    : '!bg-grey-01 !text-grey-03';
+                    : 'bg-grey-01! text-grey-03!';
 
                 const isEditingDateTime = column.dataType === 'TIME';
 
@@ -292,20 +295,15 @@ export const TableBlockTable = ({
           <tbody>
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.propertyId;
 
               return (
-                <tr key={entityId ?? index} className="hover:bg-bg">
+                <tr key={row.original.entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (
-                      <TableCell
-                        key={`${cellId}-${index}-${row.original.entityId}`}
-                        isShown={isShown}
-                        isEditMode={isEditing}
-                      >
+                      <TableCell key={cellId} isShown={isShown} isEditMode={isEditing}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     );

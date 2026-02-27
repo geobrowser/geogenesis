@@ -14,7 +14,7 @@ export const Divider = ({ className = '', style = 'solid', ...rest }: Props) => 
         rest.type === 'horizontal' && 'justify-stretch',
         rest.type === 'vertical' && 'items-stretch',
         style === 'solid' && 'border-[0.5px] border-divider',
-        style === 'dashed' && 'border-t-[1px] border-dashed border-grey-02',
+        style === 'dashed' && 'border-t border-dashed border-grey-02',
         className
       )}
       {...rest}

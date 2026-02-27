@@ -4,6 +4,7 @@ import { getResult, getSpaces } from '../io/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../types';
+import { sortSpaceIdsByRank } from '../utils/space/space-ranking';
 
 interface FetchResultOptions {
   id: string;
@@ -52,10 +53,10 @@ export async function mergeSearchResult(args: FetchResultOptions) {
 
   const spaceEntitiesBySpaceId = Object.fromEntries(spaceEntities.map(s => [s.id, s.entity]));
 
-  // Map space IDs to space entities
+  const sortedSpaceIds = sortSpaceIdsByRank(uniqueSpaceIds);
   merged = {
     ...merged,
-    spaces: uniqueSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
+    spaces: sortedSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
   };
 
   return merged as SearchResult;

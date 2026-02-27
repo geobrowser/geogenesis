@@ -32,7 +32,7 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'd
             <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
               <motion.div
                 className={cx(
-                  'relative w-full focus:outline-none',
+                  'relative w-full focus:outline-hidden',
                   positionClassName[position],
                   variantClassName[variant]
                 )}

@@ -484,7 +484,7 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }:
         onChange={e => autocomplete.onQueryChange(e.target.value)}
       />
       {autocomplete.query && (
-        <div className="absolute top-10 z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+        <div className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
           <ResizableContainer duration={0.125}>
             <ResultsList>
               {autocomplete.results.map((result, i) => (
@@ -534,7 +534,7 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
     <div className="relative w-full">
       <Input value={query === '' ? selectedValue : query} onChange={e => setQuery(e.target.value)} />
       {query && (
-        <div className="absolute top-10 z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+        <div className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
           <ResizableContainer duration={0.125}>
             <ResultsList>
               {results.map((result, i) => (
@@ -545,8 +545,8 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                   key={result.id}
                 >
                   <ResultItem onClick={() => onSelectSpace(result)}>
-                    <div className="flex w-full items-center justify-between leading-[1rem]">
-                      <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
+                    <div className="flex w-full items-center justify-between leading-4">
+                      <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
                         {result.name ?? result.id}
                       </Text>
                     </div>

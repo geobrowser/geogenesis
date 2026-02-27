@@ -60,10 +60,10 @@ type SearchPlaceEntityProps = {
 const inputStyles = cva('', {
   variants: {
     fixed: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     floating: {
-      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-hidden focus:placeholder:text-grey-03',
     },
     withSearchIcon: {
       true: 'pl-9',
@@ -327,7 +327,7 @@ export const InputPlace = ({
       })}
     >
       {withSearchIcon && (
-        <div className="absolute bottom-0 left-3 top-0 z-10 flex items-center">
+        <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
           <Search />
         </div>
       )}
@@ -349,7 +349,7 @@ export const InputPlace = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
@@ -362,7 +362,7 @@ export const InputPlace = ({
                 >
                   {!result ? (
                     <ResizableContainer>
-                      <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                      <div className="no-scrollbar flex max-h-[219px] flex-col overflow-x-clip overflow-y-auto bg-white">
                         {isEntitiesLoading && (
                           <div className="w-full bg-white px-3 py-2">
                             <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -381,7 +381,7 @@ export const InputPlace = ({
                                     onClick={() => {
                                       onDone?.({ id: resultEn.id as EntityId, name: resultEn.name }, true);
                                     }}
-                                    className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                                    className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                                   >
                                     {isShowingIds && (
                                       <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {resultEn.id}</div>
@@ -427,7 +427,7 @@ export const InputPlace = ({
                                     {resultEn.description && (
                                       <>
                                         <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
-                                          <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
+                                          <p className="text-[0.75rem]! leading-[1.2] text-grey-04">
                                             {resultEn.description}
                                           </p>
                                         </Truncate>
@@ -472,7 +472,7 @@ export const InputPlace = ({
                                       await createPlaceWithAddress(result);
                                       onQueryChange('');
                                     }}
-                                    className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                                    className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                                   >
                                     <div className="flex w-full justify-between">
                                       <div className="max-w-full truncate text-resultTitle text-text">
@@ -484,7 +484,7 @@ export const InputPlace = ({
                                     {result.text && (
                                       <>
                                         <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-1">
-                                          <p className="!text-[0.875rem] leading-[1.2] text-text">{result.text}</p>
+                                          <p className="text-[0.875rem]! leading-[1.2] text-text">{result.text}</p>
                                         </Truncate>
                                       </>
                                     )}

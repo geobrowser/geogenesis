@@ -6,7 +6,17 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
 
-const renderItem = ({ row, isEditing, spaceId, onChangeEntry, onLinkEntry, properties, source, isPlaceholder, autoFocus }: RenderItemProps) => (
+const renderItem = ({
+  row,
+  isEditing,
+  spaceId,
+  onChangeEntry,
+  onLinkEntry,
+  properties,
+  source,
+  isPlaceholder,
+  autoFocus,
+}: RenderItemProps) => (
   <TableBlockBulletedListItem
     isEditing={isEditing}
     columns={row.columns}

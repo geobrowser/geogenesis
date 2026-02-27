@@ -1,13 +1,10 @@
 import Bold from '@tiptap/extension-bold';
-import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
-import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
-import History from '@tiptap/extension-history';
 import Italic from '@tiptap/extension-italic';
-import ListItem from '@tiptap/extension-list-item';
-import Placeholder from '@tiptap/extension-placeholder';
+import { BulletList, ListItem } from '@tiptap/extension-list';
 import Text from '@tiptap/extension-text';
+import { Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import Underline from '@tiptap/extension-underline';
 
 import { DataNode } from './data-node';
@@ -55,5 +52,5 @@ export const tiptapExtensions = [
       return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
-  History,
+  UndoRedo,
 ];

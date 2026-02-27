@@ -12,7 +12,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { ColorName } from '~/design-system/theme/colors';
 
-import { TypeIconComponent, TYPE_ICONS } from './type-icons';
+import { TYPE_ICONS, TypeIconComponent } from './type-icons';
+
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
@@ -117,8 +118,8 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
                   onChange?.(option.value);
                 }}
                 className={cx(
-                  'flex w-full select-none items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text hover:cursor-pointer hover:bg-divider focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  selectedValue === option.value && '!bg-divider'
+                  'flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                  selectedValue === option.value && 'bg-divider!'
                 )}
               >
                 <TypeIcon color="grey-04" />

@@ -7,8 +7,8 @@ import { Fragment } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { isUrlTemplate } from '~/core/utils/url-template';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -60,7 +60,7 @@ export const EntityTableCell = ({
           <Link
             entityId={entityId}
             href={href}
-            className="break-words text-tableCell text-ctaHover hover:underline"
+            className="text-tableCell wrap-break-word text-ctaHover hover:underline"
           >
             {name || entityId}
           </Link>
@@ -81,7 +81,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="break-words text-tableCell text-ctaHover hover:underline"
+              className="text-tableCell wrap-break-word text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -194,7 +194,16 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
   }
 
   if (renderableType === 'DATE' || renderableType === 'DATETIME' || renderableType === 'TIME') {
-    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} dataType={property.dataType} />;
+    return (
+      <DateField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        value={value}
+        propertyId={property.id}
+        dataType={property.dataType}
+      />
+    );
   }
 
   if (renderableType === 'BOOLEAN') {

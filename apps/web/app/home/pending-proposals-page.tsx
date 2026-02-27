@@ -174,13 +174,14 @@ async function PendingContentProposal({
   const yesVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.yesCount / votesCount) * 100) : 0;
   const noVotesPercentage = votesCount > 0 ? Math.floor((proposal.proposalVotes.noCount / votesCount) * 100) : 0;
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const isProposalExecutable = isProposalEnded && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED';
-  const userVote = proposal.userVote ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') } : undefined;
+  const userVote = proposal.userVote
+    ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
+    : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id)}>
+      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home')}>
         <div className="text-smallTitle">{proposalName}</div>
       </Link>
       <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">
@@ -213,12 +214,12 @@ async function PendingContentProposal({
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
           ) : (
-            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
               <TickSmall />
             </div>
           )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
+            <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
           </div>
           <p>{yesVotesPercentage}%</p>
         </div>
@@ -228,12 +229,12 @@ async function PendingContentProposal({
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
           ) : (
-            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
               <CloseSmall />
             </div>
           )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
+            <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
           </div>
           <p>{noVotesPercentage}%</p>
         </div>
@@ -245,7 +246,7 @@ async function PendingContentProposal({
           spaceId={proposal.space.id}
           proposalId={proposal.id}
           isProposalEnded={isProposalEnded}
-          isProposalExecutable={isProposalExecutable}
+          canExecute={proposal.canExecute}
           status={proposal.status}
           userVote={userVote}
         />

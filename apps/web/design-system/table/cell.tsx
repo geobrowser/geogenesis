@@ -19,7 +19,7 @@ export function TableCell({ children, isShown, isEditMode }: Props) {
   return (
     <td
       className={cx(
-        !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : '!bg-grey-01 !text-grey-03') : null,
+        !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : 'bg-grey-01! text-grey-03!') : null,
         'min-h-[40px] border-b border-grey-02 bg-transparent p-[10px] align-middle'
       )}
     >

@@ -29,8 +29,8 @@ import { Truncate } from '~/design-system/truncate';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
-import { HistoryEmpty } from '../history/history-empty';
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
+import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
@@ -93,8 +93,13 @@ export function EditableSpaceHeading({
     <>
       <div className="relative flex items-center justify-between">
         {isEditing ? (
-          <div className="flex-grow">
-            <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
+          <div className="grow">
+            <PageStringField
+              variant="mainPage"
+              placeholder="Entity name..."
+              value={name ?? ''}
+              onChange={onNameChange}
+            />
             {/* Manual spacing to match the <Text /> height and avoid layout shift */}
             <Spacer height={3.5} />
           </div>
@@ -141,7 +146,7 @@ export function EditableSpaceHeading({
                 </div>
               )}
               {hasNextPage && (
-                <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+                <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
                   {isFetchingNextPage ? (
                     <Dots />
                   ) : (

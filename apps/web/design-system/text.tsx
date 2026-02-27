@@ -24,7 +24,7 @@ const textStyles = cva('', {
       smallTitle: 'text-smallTitle',
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: '!text-tableProperty',
+      tableProperty: 'text-tableProperty!',
       textLink: 'text-textLink',
       quote: 'text-quote',
       listItem: 'text-listItem',
