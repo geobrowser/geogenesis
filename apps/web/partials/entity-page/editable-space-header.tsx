@@ -27,6 +27,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
@@ -38,11 +39,9 @@ import { useEntityHistory } from '../history/use-entity-history';
 export function EditableSpaceHeading({
   spaceId,
   entityId,
-  addSubspaceComponent,
 }: {
   spaceId: string;
   entityId: string;
-  addSubspaceComponent?: React.ReactElement<any>;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
@@ -53,6 +52,7 @@ export function EditableSpaceHeading({
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
   const [isCreatingNewVersion, setIsCreatingNewVersion] = React.useState<boolean>(false);
+  const [isSubtopicsOpen, setIsSubtopicsOpen] = React.useState(false);
 
   const {
     allVersions,
@@ -177,6 +177,20 @@ export function EditableSpaceHeading({
               )}
               {!isCreatingNewVersion && (
                 <>
+                  <MenuItem onClick={() => setIsContextMenuOpen(false)}>
+                    <p>Set space topic</p>
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setIsContextMenuOpen(false);
+                      setIsSubtopicsOpen(true);
+                    }}
+                  >
+                    <p>Subtopics</p>
+                  </MenuItem>
+                  <MenuItem onClick={() => setIsContextMenuOpen(false)}>
+                    <p>Space relationships</p>
+                  </MenuItem>
                   <MenuItem onClick={onCopySpaceId}>
                     <Copy color="grey-04" />
                     <p>Copy Space ID</p>
@@ -191,7 +205,6 @@ export function EditableSpaceHeading({
                     </div>
                     <p>Create in space</p>
                   </MenuItem>
-                  {addSubspaceComponent}
                 </>
               )}
             </Menu>
@@ -200,6 +213,7 @@ export function EditableSpaceHeading({
       </div>
 
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
+      <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} />
     </>
   );
 }
