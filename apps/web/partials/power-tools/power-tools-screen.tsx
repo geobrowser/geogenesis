@@ -10,9 +10,7 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -28,6 +26,8 @@ import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { writeValue } from '~/partials/blocks/table/change-entry';
+import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
+import { TableBlockFilterPill } from '~/partials/blocks/table/table-block-filter-pill';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { usePowerToolsData } from './hooks/use-power-tools-data';
@@ -120,18 +120,25 @@ export function PowerToolsScreen() {
   const searchParams = useSearchParams();
   const { spaceId, name: blockName } = useDataBlock();
   const { source } = useSource();
-  const { filterState } = useFilters();
   const isEditing = useUserIsEditing(spaceId);
+  const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
 
-  const data = usePowerToolsData();
+  const {
+    filterState,
+    temporaryFilters,
+    setFilterState,
+    setTemporaryFilters,
+  } = useFilters(canEdit);
 
-  const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  // Editors (by permission) use persisted filters; non-editors use local temporary filters.
+  // This matches TableBlock's behavior and is independent of the edit mode toggle.
+  const effectiveFilterState = canEdit ? filterState : temporaryFilters;
+  const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
 
-  const editableSpaceIds = React.useMemo(() => {
-    return new Set(spaces.map(space => space.id));
-  }, [spaces]);
+  const data = usePowerToolsData({
+    filterStateOverride: canEdit ? undefined : temporaryFilters,
+  });
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
@@ -218,7 +225,7 @@ export function PowerToolsScreen() {
         setPendingEntityId(entityId);
         createEntityWithTypes({
           name: maybeName,
-          filters: filterState,
+          filters: effectiveFilterState,
         });
       }
     }
@@ -237,6 +244,14 @@ export function PowerToolsScreen() {
   const handleAddPlaceholder = () => {
     setHasPlaceholderRow(true);
   };
+
+  const handleDeleteFilter = React.useCallback(
+    (index: number) => {
+      const newFilters = effectiveFilterState.filter((_, i) => i !== index);
+      effectiveSetFilterState(newFilters);
+    },
+    [effectiveFilterState, effectiveSetFilterState]
+  );
 
   const handleOpenEntityPanel = React.useCallback(
     (entityId: string, entitySpaceId: string) => {
@@ -271,13 +286,17 @@ export function PowerToolsScreen() {
     );
   }
 
+  const hasActiveFilters = effectiveFilterState.length > 0;
+
   return (
     <div
       className="fixed inset-0 z-50 bg-white"
       style={{
         top: '60px',
         display: 'grid',
-        gridTemplateRows: 'auto auto 1fr',
+        gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
+          .filter(Boolean)
+          .join(' '),
       }}
     >
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
@@ -295,6 +314,10 @@ export function PowerToolsScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <TableBlockEditableFilters
+            filterState={effectiveFilterState}
+            setFilterState={effectiveSetFilterState}
+          />
           {isEditing && (
             <button
               onClick={handleAddPlaceholder}
@@ -318,6 +341,20 @@ export function PowerToolsScreen() {
           <Text variant="metadata" color="grey-04">
             Enable edit mode in the global toolbar to make changes.
           </Text>
+        </div>
+      )}
+
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {effectiveFilterState.map((filter, index) => (
+              <TableBlockFilterPill
+                key={`${filter.columnId}-${filter.value}-${index}`}
+                filter={filter}
+                onDelete={() => handleDeleteFilter(index)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
