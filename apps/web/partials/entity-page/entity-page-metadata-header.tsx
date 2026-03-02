@@ -107,6 +107,15 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     return Properties.getCurrentRenderableType(propertyDataType);
   }, [propertyDataType]);
 
+  // @TODO: When a property's dataType changes (e.g. TEXT → RELATION or vice versa),
+  // this function only updates the property entity's own metadata (Data Type and
+  // Renderable Type relations). It does not clean up existing value or relation entries
+  // on consumer entities that use this property. For example, switching TEXT → RELATION
+  // leaves orphaned value entries (with value: '') on those entities, and switching
+  // RELATION → TEXT would leave orphaned relation entries. These orphans persist in
+  // IndexedDB and can surface at publish time. The publish flow has a defensive filter
+  // for RELATION values (see publish.ts), but the proper fix would be to clean up
+  // stale entries here — needs careful testing to avoid cascading issues.
   const handlePropertyTypeChange = React.useCallback(
     (newType: SwitchableRenderableType) => {
       if (!entityId || !spaceId) return;

@@ -53,6 +53,21 @@ export function useCreateProperty(spaceId: string) {
     [nextPropertyId, spaceId, storage]
   );
 
+  // @TODO: When dataType resolves to RELATION, this function should not write to
+  // storage.values.set(). RELATION-type properties are represented by entries in
+  // the relations store, not the values store. Currently this creates phantom value
+  // entries with { dataType: 'RELATION', value: '' } which are harmless at render
+  // time (the UI renders RelationsGroup for RELATION properties, ignoring values)
+  // but caused crashes in the publish flow until a defensive filter was added in
+  // publish.ts. Gating on `if (dataType === 'RELATION') return;` here would be the
+  // proper upstream fix but needs testing to ensure it doesn't break property
+  // visibility or schema placeholder resolution.
+  //
+  // Additionally, handlePropertyTypeChange in entity-page-metadata-header.tsx does
+  // not clean up existing value/relation entries on consumer entities when a property's
+  // dataType changes (e.g. TEXT → RELATION leaves orphaned value entries, RELATION → TEXT
+  // would leave orphaned relation entries). Those orphaned entries persist in IndexedDB
+  // and surface at publish time.
   const addPropertyToEntity = React.useCallback(
     ({ entityId, propertyId, propertyName, entityName, defaultValue }: AddPropertyToEntityParams) => {
       // Try to resolve the property's dataType from the store
