@@ -91,7 +91,7 @@ type ChangedEntityProps = {
   spaceId: string;
 };
 
-export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
+export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId }: ChangedEntityProps) {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
@@ -275,7 +275,7 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
       </div>
     </div>
   );
-};
+});
 
 type MediaChangeRowProps = {
   avatarRelations: RelationChange[];
