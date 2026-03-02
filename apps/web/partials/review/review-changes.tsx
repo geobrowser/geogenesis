@@ -2,6 +2,7 @@
 
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
@@ -269,6 +270,15 @@ export const ReviewChanges = () => {
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: visibleEntities.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 300,
+    overscan: 3,
+    gap: 8,
+  });
 
   const handleProposalNameChange = (name: string) => {
     setProposals(prev => ({
@@ -566,7 +576,7 @@ export const ReviewChanges = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
+              <div ref={scrollContainerRef} className="grow overflow-y-scroll px-2 pb-2">
                 {isLoadingChanges ? (
                   <div className="rounded-xl bg-white p-4">
                     <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
@@ -599,13 +609,31 @@ export const ReviewChanges = () => {
                     </div>
                   </div>
                 ) : (
-                  visibleEntities.map(entity => (
-                    <div key={entity.entityId} className="rounded-xl bg-white p-4">
-                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                        <ChangedEntity entity={entity} spaceId={activeSpace} />
-                      </div>
-                    </div>
-                  ))
+                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                      const entity = visibleEntities[virtualRow.index];
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={node => rowVirtualizer.measureElement(node)}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <div className="rounded-xl bg-white p-4">
+                            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                              <ChangedEntity entity={entity} spaceId={activeSpace} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
