@@ -22,12 +22,17 @@ import { Close } from '~/design-system/icons/close';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterPill } from '~/partials/blocks/table/table-block-filter-pill';
+import { Editor } from '~/partials/editor/editor';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { usePowerToolsData } from './hooks/use-power-tools-data';
@@ -90,7 +95,7 @@ function PowerToolsEntityPanel({
           </button>
         </div>
       </div>
-      <div className="h-full overflow-y-auto p-4">
+      <div className="h-full overflow-y-auto">
         {isPanelLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="body" color="grey-04">
@@ -105,7 +110,14 @@ function PowerToolsEntityPanel({
               initialBlocks={blocks ?? []}
               initialBlockRelations={blockRelations}
             >
-              <ToggleEntityPage id={entityId} spaceId={spaceId} />
+              <EntityPageCover avatarUrl={null} coverUrl={null} />
+              <div className="px-4">
+                <EditableHeading spaceId={spaceId} entityId={entityId} />
+                <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+                <Spacer height={16} />
+                <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+                <ToggleEntityPage id={entityId} spaceId={spaceId} />
+              </div>
             </EditorProvider>
           </EntityStoreProvider>
         )}
