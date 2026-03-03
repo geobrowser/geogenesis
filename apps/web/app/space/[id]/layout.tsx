@@ -20,8 +20,9 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
+import { ConditionalSpaceTabs } from '~/partials/space-page/conditional-space-tabs';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
-import { SpaceTabs } from '~/partials/space-page/space-tabs';
+import { SpaceLayoutChrome } from '~/partials/space-page/space-layout-chrome';
 
 import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from './cached-fetch-space';
@@ -55,50 +56,55 @@ export default async function Layout(props0: LayoutProps) {
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
       >
-        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            <EditableSpaceHeading
-              spaceId={spaceId}
-              entityId={props.id}
-              addSubspaceComponent={
-                <AddSubspaceDialog
+        <SpaceLayoutChrome
+          cover={<EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />}
+          headerBlock={
+            <>
+              <div className="space-y-2">
+                <EditableSpaceHeading
                   spaceId={spaceId}
-                  trigger={
-                    <MenuItem>
-                      <Create />
-                      <p>Add subspace</p>
-                    </MenuItem>
+                  entityId={props.id}
+                  addSubspaceComponent={
+                    <AddSubspaceDialog
+                      spaceId={spaceId}
+                      trigger={
+                        <MenuItem>
+                          <Create />
+                          <p>Add subspace</p>
+                        </MenuItem>
+                      }
+                      spaceType={props.space?.type ?? 'PERSONAL'}
+                    />
                   }
-                  spaceType={props.space?.type ?? 'PERSONAL'}
                 />
-              }
-            />
-            <SpacePageMetadataHeader
-              spaceId={spaceId}
-              entityId={props.id}
-              membersComponent={
-                <React.Suspense fallback={<MembersSkeleton />}>
-                  <SpaceEditors spaceId={spaceId} />
-                  <SpaceMembers spaceId={spaceId} />
-                </React.Suspense>
-              }
-            />
-          </div>
+                <SpacePageMetadataHeader
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  membersComponent={
+                    <React.Suspense fallback={<MembersSkeleton />}>
+                      <SpaceEditors spaceId={spaceId} />
+                      <SpaceMembers spaceId={spaceId} />
+                    </React.Suspense>
+                  }
+                />
+              </div>
 
-          <Spacer height={40} />
-          <React.Suspense fallback={null}>
-            <SpaceTabs
-              spaceId={spaceId}
-              entityId={props.id}
-              initialTabRelations={props.tabRelations ?? []}
-              tabEntities={props.tabEntities}
-              typeIds={typeIds}
-            />
-          </React.Suspense>
-          <Spacer height={20} />
+              <Spacer height={40} />
+              <React.Suspense fallback={null}>
+                <ConditionalSpaceTabs
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                  typeIds={typeIds}
+                />
+              </React.Suspense>
+              <Spacer height={20} />
+            </>
+          }
+        >
           {children}
-        </EntityPageContentContainer>
+        </SpaceLayoutChrome>
       </EditorProvider>
     </EntityStoreProvider>
   );

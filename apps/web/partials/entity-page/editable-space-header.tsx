@@ -21,6 +21,7 @@ import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
 import { MoveSpace } from '~/design-system/icons/move-space';
+import { Upload } from '~/design-system/icons/upload';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
@@ -190,6 +191,10 @@ export function EditableSpaceHeading({
                       <MoveSpace />
                     </div>
                     <p>Create in space</p>
+                  </MenuItem>
+                  <MenuItem href={NavUtils.toImport(spaceId)}>
+                    <Upload color="grey-04" />
+                    <p>Upload data</p>
                   </MenuItem>
                   {addSubspaceComponent}
                 </>

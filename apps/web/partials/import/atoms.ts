@@ -9,6 +9,18 @@ export const stepAtom = atom<string>('step1');
 
 export const recordsAtom = atom<Array<Array<string>>>([]);
 
+/** Name of the uploaded CSV file */
+export const fileNameAtom = atom<string | undefined>(undefined);
+
+/** Type entity selected for all rows (when CSV has no Types column). id and name. */
+export const selectedTypeAtom = atom<{ id: string; name: string | null } | null>(null);
+
+/** If CSV has a "Types" column, its 0-based index; otherwise undefined */
+export const typesColumnIndexAtom = atom<number | undefined>(undefined);
+
+/** Column index -> property id. Must include one column mapped to NAME_PROPERTY. */
+export const columnMappingAtom = atom<Record<number, string>>({});
+
 export const headersAtom = atom(get => {
   const records = get(recordsAtom);
   return records?.[0] ?? [];
@@ -53,6 +65,9 @@ export const entityCountByTypeAtom = atom(get => {
 });
 
 export const valuesAtom = atom<Array<Value>>([]);
+
+/** Generated relations (e.g. Types) for the import. Passed to makeBulkProposal with values. */
+export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 
 export const actionsCountAtom = atom(get => {
   const actions = get(valuesAtom);

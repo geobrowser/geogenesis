@@ -67,6 +67,12 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     priority: 3 as const,
   };
 
+  const IMPORT_TAB = {
+    label: 'Import',
+    href: NavUtils.toImport(spaceId),
+    priority: 4 as const,
+  };
+
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
@@ -83,6 +89,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   }
 
   tabs.push(ACTIVITY_TAB);
+  tabs.push(IMPORT_TAB);
 
   const seen = new Map<string, (typeof tabs)[0]>();
 

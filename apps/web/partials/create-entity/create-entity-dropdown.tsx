@@ -62,6 +62,13 @@ export function CreateEntityDropdown() {
           >
             <p className="text-center text-button">New property</p>
           </MenuItem>
+          <MenuItem
+            onClick={() => {
+              router.push(NavUtils.toImport(spaceId));
+            }}
+          >
+            <p className="text-center text-button">Upload data</p>
+          </MenuItem>
         </>
       )}
     </Menu>
