@@ -32,12 +32,6 @@ import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-
 
 import { PowerToolsRow } from './types';
 
-const COLUMN_ORDER_STORAGE_KEY = 'power-tools-column-order';
-
-function dedupeOrder(ids: string[]): string[] {
-  return ids.filter((id, i) => ids.indexOf(id) === i);
-}
-
 interface Props {
   rows: PowerToolsRow[];
   properties: Property[];
@@ -49,9 +43,6 @@ interface Props {
   onLinkEntry: onLinkEntryFn;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
-  columnOrderKey?: string | null;
-  onColumnOrderChange?: (orderedPropertyIds: string[]) => void;
-  initialOrderedPropertyIds?: string[];
 }
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -294,9 +285,6 @@ export function PowerToolsTable({
   onLinkEntry,
   onOpenEntityPanel,
   source,
-  columnOrderKey,
-  onColumnOrderChange,
-  initialOrderedPropertyIds,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -307,55 +295,15 @@ export function PowerToolsTable({
 
   const propertyIds = React.useMemo(() => properties.map(p => p.id), [properties]);
 
-  const mergedOrderFromBackend = React.useMemo(() => {
-    if (!initialOrderedPropertyIds?.length) return dedupeOrder(propertyIds);
-    const idsSet = new Set(propertyIds);
-    const ordered = dedupeOrder(initialOrderedPropertyIds.filter(id => idsSet.has(id)));
-    const appended = propertyIds.filter(id => !ordered.includes(id));
-    return ordered.length > 0 ? [...ordered, ...appended] : dedupeOrder(propertyIds);
-  }, [initialOrderedPropertyIds, propertyIds]);
-
-  const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => mergedOrderFromBackend);
-
-  const hasRestoredFromStorageRef = React.useRef(false);
-  React.useLayoutEffect(() => {
-    if (propertyIds.length === 0 || !columnOrderKey || typeof window === 'undefined') return;
-    try {
-      const raw = localStorage.getItem(`${COLUMN_ORDER_STORAGE_KEY}-${columnOrderKey}`);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return;
-      const saved = dedupeOrder(parsed as string[]);
-      if (saved.length === 0) return;
-      const idsSet = new Set(propertyIds);
-      const ordered = saved.filter(id => idsSet.has(id));
-      const appended = propertyIds.filter(id => !saved.includes(id));
-      const next = dedupeOrder([...ordered, ...appended]);
-      if (next.length > 0) {
-        setOrderedPropertyIds(next);
-        hasRestoredFromStorageRef.current = true;
-      }
-    } catch {
-      // ignore
-    }
-  }, [columnOrderKey, propertyIds]);
-
-  const backendOrderKey = initialOrderedPropertyIds?.join(',') ?? '';
-  React.useEffect(() => {
-    if (backendOrderKey.length === 0 || hasRestoredFromStorageRef.current) return;
-    setOrderedPropertyIds(prev => {
-      const next = dedupeOrder(mergedOrderFromBackend);
-      return next.length > 0 ? next : prev;
-    });
-  }, [backendOrderKey, mergedOrderFromBackend]);
+  const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
 
   React.useEffect(() => {
     setOrderedPropertyIds(prev => {
       const idsSet = new Set(propertyIds);
-      const ordered = dedupeOrder(prev.filter(id => idsSet.has(id)));
+      const ordered = prev.filter(id => idsSet.has(id));
       const appended = propertyIds.filter(id => !ordered.includes(id));
-      if (appended.length === 0) return prev;
-      return dedupeOrder([...ordered, ...appended]);
+      if (appended.length === 0 && ordered.length === prev.length) return prev;
+      return [...ordered, ...appended];
     });
   }, [propertyIds.join(',')]);
 
@@ -377,14 +325,9 @@ export function PowerToolsTable({
       const oldIndex = orderedPropertyIds.indexOf(active.id as string);
       const newIndex = orderedPropertyIds.indexOf(over.id as string);
       if (oldIndex === -1 || newIndex === -1) return;
-      const next = arrayMove(orderedPropertyIds, oldIndex, newIndex);
-      setOrderedPropertyIds(next);
-      if (columnOrderKey && typeof window !== 'undefined') {
-        localStorage.setItem(`${COLUMN_ORDER_STORAGE_KEY}-${columnOrderKey}`, JSON.stringify(next));
-      }
-      onColumnOrderChange?.(next);
+      setOrderedPropertyIds(arrayMove(orderedPropertyIds, oldIndex, newIndex));
     },
-    [orderedPropertyIds, onColumnOrderChange, columnOrderKey]
+    [orderedPropertyIds]
   );
 
   React.useEffect(() => {
