@@ -2,6 +2,17 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import * as React from 'react';
 
@@ -11,6 +22,7 @@ import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
+import { OrderDots } from '~/design-system/icons/order-dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -220,6 +232,49 @@ function PowerToolsCell({
   );
 }
 
+function SortableHeaderCell({
+  property,
+  onResizeMouseDown,
+}: {
+  property: Property;
+  onResizeMouseDown: (event: React.MouseEvent, propertyId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: property.id,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.85 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative flex h-full min-w-0 items-center border-r border-grey-02 bg-grey-01 px-3"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-grey-05 active:cursor-grabbing"
+        title="Drag to reorder column"
+      >
+        <OrderDots color="currentColor" />
+      </div>
+      <Text variant="metadata" className="min-w-0 flex-1 truncate">
+        {property.name || property.id}
+      </Text>
+      <div
+        className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
+        onMouseDown={e => onResizeMouseDown(e, property.id)}
+      />
+    </div>
+  );
+}
+
 export function PowerToolsTable({
   rows,
   properties,
@@ -239,10 +294,50 @@ export function PowerToolsTable({
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
 
+  const propertyIds = React.useMemo(() => properties.map(p => p.id), [properties]);
+
+  const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
+
+  React.useEffect(() => {
+    setOrderedPropertyIds(prev => {
+      const idsSet = new Set(propertyIds);
+      const ordered = prev.filter(id => idsSet.has(id));
+      const appended = propertyIds.filter(id => !ordered.includes(id));
+      if (appended.length === 0 && ordered.length === prev.length) return prev;
+      return [...ordered, ...appended];
+    });
+  }, [propertyIds]);
+
+  const orderedProperties = React.useMemo(() => {
+    const byId = new Map(properties.map(p => [p.id, p]));
+    return orderedPropertyIds.map(id => byId.get(id)).filter((p): p is Property => Boolean(p));
+  }, [properties, orderedPropertyIds]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleColumnReorder = React.useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active?.id === over?.id) return;
+      const oldIndex = orderedPropertyIds.indexOf(active.id as string);
+      const newIndex = orderedPropertyIds.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+      setOrderedPropertyIds(arrayMove(orderedPropertyIds, oldIndex, newIndex));
+    },
+    [orderedPropertyIds]
+  );
+
   React.useEffect(() => {
     setColumnWidths(prev => {
       const widths: Record<string, number> = {};
-      for (const prop of properties) {
+      for (const prop of orderedProperties) {
         if (!prev[prop.id]) {
           const renderableType = prop.renderableTypeStrict ?? prop.dataType;
           const isDateColumn = renderableType === 'TIME' || renderableType === 'DATE' || renderableType === 'DATETIME';
@@ -252,7 +347,7 @@ export function PowerToolsTable({
       if (Object.keys(widths).length === 0) return prev;
       return { ...prev, ...widths };
     });
-  }, [properties]);
+  }, [orderedProperties]);
 
   const handleMouseDown = (event: React.MouseEvent, propertyId: string) => {
     event.preventDefault();
@@ -297,7 +392,7 @@ export function PowerToolsTable({
   const virtualRows = rowVirtualizer.getVirtualItems();
   const columnLayout = React.useMemo(() => {
     let offset = 0;
-    const layout = properties.map(property => {
+    const layout = orderedProperties.map(property => {
       const width = columnWidths[property.id] || 200;
       const left = offset;
       offset += width;
@@ -309,7 +404,7 @@ export function PowerToolsTable({
       template,
       columns: layout,
     };
-  }, [properties, columnWidths]);
+  }, [orderedProperties, columnWidths]);
 
   React.useEffect(() => {
     const lastItem = virtualRows[virtualRows.length - 1];
@@ -323,31 +418,26 @@ export function PowerToolsTable({
   return (
     <div ref={tableRef} className="h-full w-full overflow-auto">
       <div className="shadow-sm sticky top-0 z-10 bg-white">
-        <div
-          className="grid border-b border-grey-02 bg-grey-01"
-          style={{
-            height: HEADER_HEIGHT,
-            minWidth: columnLayout.totalWidth,
-            gridTemplateColumns: columnLayout.template,
-          }}
-        >
-          {columnLayout.columns.map(({ property }) => {
-            return (
-              <div
-                key={property.id}
-                className="relative flex h-full items-center border-r border-grey-02 bg-grey-01 px-3"
-              >
-                <Text variant="metadata" className="truncate">
-                  {property.name || property.id}
-                </Text>
-                <div
-                  className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
-                  onMouseDown={event => handleMouseDown(event, property.id)}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnReorder}>
+          <SortableContext items={orderedPropertyIds} strategy={horizontalListSortingStrategy}>
+            <div
+              className="grid border-b border-grey-02 bg-grey-01"
+              style={{
+                height: HEADER_HEIGHT,
+                minWidth: columnLayout.totalWidth,
+                gridTemplateColumns: columnLayout.template,
+              }}
+            >
+              {columnLayout.columns.map(({ property }) => (
+                <SortableHeaderCell
+                  key={property.id}
+                  property={property}
+                  onResizeMouseDown={handleMouseDown}
                 />
-              </div>
-            );
-          })}
-        </div>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       <div
