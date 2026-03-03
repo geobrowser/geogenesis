@@ -115,11 +115,9 @@ export default function ReorderableRelationChipsDnd({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={sortedRelations.map(r => r.id)} strategy={horizontalListSortingStrategy}>
-        <div className={`flex flex-wrap gap-1`}>
           {sortedRelations.map(relation => (
             <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
           ))}
-        </div>
       </SortableContext>
 
       <DragOverlay>
