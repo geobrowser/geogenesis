@@ -25,6 +25,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+import { Close } from '~/design-system/icons/close';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
@@ -42,6 +43,7 @@ interface Props {
   fetchNextPage: () => void;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
+  onDismissPlaceholder?: () => void;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
 }
@@ -284,6 +286,7 @@ export function PowerToolsTable({
   fetchNextPage,
   onChangeEntry,
   onLinkEntry,
+  onDismissPlaceholder,
   onOpenEntityPanel,
   source,
 }: Props) {
@@ -474,6 +477,7 @@ export function PowerToolsTable({
                 }}
               >
                 {columnLayout.columns.map(({ property }) => {
+                  const isPlaceholderNameCell = row.placeholder && isEditing && property.id === SystemIds.NAME_PROPERTY;
                   return (
                     <div key={`${rowId}-${property.id}`} className="border-r border-grey-02 px-4 py-2">
                       <div className="flex w-full items-start gap-2 overflow-visible">
@@ -488,6 +492,17 @@ export function PowerToolsTable({
                           onOpenEntityPanel={onOpenEntityPanel}
                           source={source}
                         />
+                        {isPlaceholderNameCell && onDismissPlaceholder && (
+                          <button
+                            type="button"
+                            onClick={onDismissPlaceholder}
+                            className="mt-0.5 ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-sm hover:bg-grey-02"
+                            title="Cancel new row"
+                            aria-label="Cancel new row"
+                          >
+                            <Close />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

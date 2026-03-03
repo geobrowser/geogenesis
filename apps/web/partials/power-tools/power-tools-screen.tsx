@@ -257,6 +257,11 @@ export function PowerToolsScreen() {
     setHasPlaceholderRow(true);
   };
 
+  const handleDismissPlaceholder = React.useCallback(() => {
+    setHasPlaceholderRow(false);
+    setPendingEntityId(null);
+  }, []);
+
   const handleDeleteFilter = React.useCallback(
     (index: number) => {
       const newFilters = effectiveFilterState.filter((_, i) => i !== index);
@@ -387,6 +392,7 @@ export function PowerToolsScreen() {
             fetchNextPage={data.loadMore}
             onChangeEntry={onChangeEntry}
             onLinkEntry={onLinkEntry}
+            onDismissPlaceholder={handleDismissPlaceholder}
             onOpenEntityPanel={handleOpenEntityPanel}
             source={source}
           />
