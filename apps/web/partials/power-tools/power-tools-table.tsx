@@ -5,12 +5,13 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   DndContext,
   DragEndEvent,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 import * as React from 'react';
@@ -305,7 +306,7 @@ export function PowerToolsTable({
       if (appended.length === 0 && ordered.length === prev.length) return prev;
       return [...ordered, ...appended];
     });
-  }, [propertyIds.join(',')]);
+  }, [propertyIds]);
 
   const orderedProperties = React.useMemo(() => {
     const byId = new Map(properties.map(p => [p.id, p]));
@@ -315,6 +316,9 @@ export function PowerToolsTable({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
@@ -415,7 +419,7 @@ export function PowerToolsTable({
     <div ref={tableRef} className="h-full w-full overflow-auto">
       <div className="shadow-sm sticky top-0 z-10 bg-white">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnReorder}>
-          <SortableContext key={orderedPropertyIds.length} items={orderedPropertyIds} strategy={horizontalListSortingStrategy}>
+          <SortableContext items={orderedPropertyIds} strategy={horizontalListSortingStrategy}>
             <div
               className="grid border-b border-grey-02 bg-grey-01"
               style={{
@@ -471,10 +475,7 @@ export function PowerToolsTable({
               >
                 {columnLayout.columns.map(({ property }) => {
                   return (
-                    <div
-                      key={`${virtualRow.index}-${property.id}`}
-                      className="border-r border-grey-02 px-4 py-2"
-                    >
+                    <div key={`${rowId}-${property.id}`} className="border-r border-grey-02 px-4 py-2">
                       <div className="flex w-full items-start gap-2 overflow-visible">
                         <PowerToolsCell
                           row={row}
