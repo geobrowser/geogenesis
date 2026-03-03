@@ -1,16 +1,23 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import * as Dialog from '@radix-ui/react-dialog';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAtom, useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { ID } from '~/core/id';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { Space } from '~/core/io/dto/spaces';
+import { useMutate } from '~/core/sync/use-mutate';
+import type { SwitchableRenderableType } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Text } from '~/design-system/text';
 
 import {
@@ -51,11 +58,75 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
     }
   }, [canGenerate, values.length, generate]);
 
+  const queryClient = useQueryClient();
+  const { storage } = useMutate();
+  const { createProperty } = useCreateProperty(spaceId);
+  const [createPropertyForColumn, setCreatePropertyForColumn] = useState<number | null>(null);
+
   const { data: schema = [] } = useQuery({
-    queryKey: ['import-schema', selectedType?.id, spaceId],
-    queryFn: () => getSchemaFromTypeIds([{ id: selectedType!.id, spaceId }]),
-    enabled: Boolean(selectedType?.id && spaceId),
+    queryKey: ['import-schema', selectedType?.id],
+    queryFn: () => getSchemaFromTypeIds([{ id: selectedType!.id }]),
+    enabled: Boolean(selectedType?.id),
   });
+
+  const handleCreatePropertyDone = useCallback(
+    (result: { id: string; name: string | null } | null) => {
+      if (createPropertyForColumn === null) return;
+      if (result) {
+        setColumnMapping(prev => ({ ...prev, [createPropertyForColumn]: result.id }));
+        queryClient.invalidateQueries({ queryKey: ['import-schema', selectedType?.id] });
+      }
+      setCreatePropertyForColumn(null);
+    },
+    [createPropertyForColumn, selectedType?.id, setColumnMapping, queryClient]
+  );
+
+  const handleCreatePropertyCreate = useCallback(
+    (result: {
+      id: string;
+      name: string | null;
+      space?: string;
+      verified?: boolean;
+      renderableType?: SwitchableRenderableType;
+    }) => {
+      if (createPropertyForColumn === null || !selectedType) return undefined;
+      const renderableType = result.renderableType ?? 'TEXT';
+      const createdPropertyId = createProperty({
+        name: result.name ?? 'New property',
+        propertyType: renderableType,
+        verified: result.verified ?? false,
+        space: result.space,
+      });
+      storage.relations.set({
+        id: ID.createEntityId(),
+        entityId: ID.createEntityId(),
+        spaceId,
+        position: Position.generate(),
+        renderableType: 'RELATION',
+        type: { id: SystemIds.PROPERTIES, name: 'Properties' },
+        fromEntity: { id: selectedType.id, name: selectedType.name },
+        toEntity: {
+          id: createdPropertyId,
+          name: result.name ?? 'New property',
+          value: createdPropertyId,
+        },
+        isLocal: true,
+      });
+      setColumnMapping(prev => ({ ...prev, [createPropertyForColumn]: createdPropertyId }));
+      queryClient.invalidateQueries({ queryKey: ['import-schema', selectedType.id] });
+      setCreatePropertyForColumn(null);
+      return createdPropertyId;
+    },
+    [
+      createPropertyForColumn,
+      selectedType,
+      createProperty,
+      storage.relations,
+      spaceId,
+      setColumnMapping,
+      queryClient,
+    ]
+  );
 
   const columns: ColumnConfig[] = useMemo(() => {
     const propIdToName = new Map(schema.map(p => [p.id, p.name ?? p.id]));
@@ -129,7 +200,34 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             onSelectProperty={(csvColumnIndex, propertyId) =>
               setColumnMapping(prev => ({ ...prev, [csvColumnIndex]: propertyId }))
             }
+            onRequestCreateProperty={setCreatePropertyForColumn}
           />
+          <Dialog.Root
+            open={createPropertyForColumn !== null}
+            onOpenChange={open => !open && setCreatePropertyForColumn(null)}
+          >
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-50 bg-black/20" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-[434px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
+                <div className="p-2">
+                  <Text variant="smallButton" className="mb-2 text-grey-04">
+                    Find or create property
+                  </Text>
+                  <SelectEntity
+                    spaceId={spaceId}
+                    relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                    placeholder="Search properties..."
+                    onDone={handleCreatePropertyDone}
+                    onCreateEntity={handleCreatePropertyCreate}
+                    variant="floating"
+                    advanced={false}
+                    showIDs={false}
+                    withSearchIcon
+                  />
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </>
       )}
     </div>

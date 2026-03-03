@@ -6,8 +6,12 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 
+import { Breadcrumb } from '~/design-system/breadcrumb';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
+import { Warning } from '~/design-system/icons/warning';
+import { Spacer } from '~/design-system/spacer';
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -78,11 +82,11 @@ function MappingColumnDropdown({
       <DropdownPrimitive.Content
           align="start"
           sideOffset={2}
-          className="z-10 min-w-[280px] origin-top-left overflow-hidden rounded border border-grey-02 bg-white shadow-lg"
+          className="z-10 min-w-[320px] w-[384px] max-h-[400px] origin-top-left overflow-hidden rounded border border-grey-02 bg-white shadow-lg"
           onCloseAutoFocus={e => e.preventDefault()}
         >
           <div className="border-b border-grey-02 p-2">
-            <div className="flex items-center gap-2 rounded bg-grey-01 px-2 py-1.5">
+            <div className="flex items-center gap-2 rounded px-3 py-2 shadow-inner-grey-02">
               <span className="shrink-0">
                 <Search color="grey-04" />
               </span>
@@ -96,15 +100,24 @@ function MappingColumnDropdown({
               />
             </div>
           </div>
-          <DropdownPrimitive.Group className="max-h-[240px] overflow-y-auto">
+          <DropdownPrimitive.Group className="max-h-[340px] overflow-y-auto">
             {filtered.map(p => (
               <DropdownPrimitive.Item
                 key={p.id}
                 onSelect={() => handleSelect(p.id)}
-                className="flex cursor-pointer items-center gap-2 border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 last:border-none hover:bg-grey-01 hover:text-text focus:bg-grey-01 focus:text-text focus:outline-none"
+                className="flex cursor-pointer flex-col p-2 text-left transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
               >
-                <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
-                {p.name ?? p.id}
+                <Text variant="metadataMedium" ellipsize className="leading-4.5">
+                  {p.name ?? p.id}
+                </Text>
+                <Spacer height={4} />
+                <div className="flex items-center gap-1.5 overflow-hidden">
+                  <Breadcrumb img={null}>Geo</Breadcrumb>
+                  <span style={{ rotate: '270deg' }}>
+                    <ChevronDownSmall color="grey-04" />
+                  </span>
+                  <Tag>Property</Tag>
+                </div>
               </DropdownPrimitive.Item>
             ))}
           </DropdownPrimitive.Group>
@@ -204,9 +217,9 @@ export function ImportPreviewTable({
                   onSelectProperty={onSelectProperty}
                   onRequestCreateProperty={onRequestCreateProperty}
                   trigger={
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                        !
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                      <span className="shrink-0">
+                        <Warning color="red-01" />
                       </span>
                       <Text variant="metadata" className="text-text">Needs mapping</Text>
                     </span>
@@ -214,8 +227,8 @@ export function ImportPreviewTable({
                 />
               ) : (
                 <span className="mt-0.5 flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                    !
+                  <span className="shrink-0">
+                    <Warning color="red-01" />
                   </span>
                   <Text variant="metadata" className="text-text">Needs mapping</Text>
                 </span>
