@@ -8,12 +8,12 @@ import { dedupeWith } from 'effect/Array';
 import { useMemo } from 'react';
 
 import { DATA_TYPE_PROPERTY } from '../constants';
-import { getProperties } from '../io/queries';
+import { getBatchEntities, getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { EntityWithSchema, Property, Relation } from '../types';
+import { Entity, EntityWithSchema, Property, Relation } from '../types';
 import { Entities } from '../utils/entity';
 
 type UseEntityOptions = {
@@ -124,25 +124,56 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
  * Invariant: each type ID should appear at most once. If the same type ID
  * appears with different spaceIds, only the last entry's space is kept
  * (Map insertion order). Callers are expected to dedupe by ID upstream.
+ *
+ * Type entities are fetched with their spaceId so the batch API returns
+ * their PROPERTIES relations (it filters relations by spaceId).
  */
+async function fetchTypeEntitiesWithSpace(
+  typeIds: string[],
+  spaceByType: Map<string, string | undefined>
+): Promise<(Entity | null)[]> {
+  const spaceToIds = new Map<string | undefined, string[]>();
+  for (const id of typeIds) {
+    const spaceId = spaceByType.get(id);
+    if (!spaceToIds.has(spaceId)) spaceToIds.set(spaceId, []);
+    spaceToIds.get(spaceId)!.push(id);
+  }
+
+  const batchesBySpace = new Map<string | undefined, Entity[]>();
+  await Promise.all(
+    [...spaceToIds.entries()].map(async ([spaceId, ids]) => {
+      const batch = await queryClient.fetchQuery({
+        queryKey: ['network', 'entities', ids, spaceId],
+        queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(ids, spaceId, signal)),
+      });
+      batchesBySpace.set(spaceId, batch);
+    })
+  );
+
+  const mergedByTypeId = new Map<string, Entity | null>();
+  for (const id of typeIds) {
+    const spaceId = spaceByType.get(id);
+    const batch = batchesBySpace.get(spaceId) ?? [];
+    const remote = batch.find(e => e.id === id);
+    const merged = E.merge({
+      id,
+      store: geoStore,
+      spaceId: spaceId ?? undefined,
+      mergeWith: remote ?? undefined,
+    });
+    mergedByTypeId.set(id, merged);
+  }
+  return typeIds.map(id => mergedByTypeId.get(id) ?? null);
+}
+
 export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string }[]): Promise<Property[]> {
   const dedupedTypeIds = [...new Set(types.map(t => t.id))];
   const spaceByType = new Map(types.map(t => [t.id, t.spaceId]));
 
-  // @TODO(migration): Should generate schema by syncing types
-  const typeEntities = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: {
-      id: {
-        in: dedupedTypeIds,
-      },
-    },
-    first: 100,
-    skip: 0,
-  });
+  const typeEntities = await fetchTypeEntitiesWithSpace(dedupedTypeIds, spaceByType);
 
   const propertyIds = typeEntities
+    .filter((e): e is Entity => e !== null)
     .flatMap(entity => {
       const typeSpaceId = spaceByType.get(entity.id);
       return entity.relations.filter(
@@ -243,16 +274,11 @@ export async function getSchemaFromTypeIdsAndRelations(
   const targetIds = [...new Set(isTypeRelations.map(r => r.toEntity.id))];
   const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
 
-  // Fetch target entities to get their PROPERTIES relations
-  const targetEntities = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: { id: { in: targetIds } },
-    first: 100,
-    skip: 0,
-  });
+  // Fetch target entities with relations scoped to each target's space
+  const targetEntities = await fetchTypeEntitiesWithSpace(targetIds, spaceByTarget);
 
   const additionalPropertyIds = targetEntities
+    .filter((e): e is Entity => e !== null)
     .flatMap(entity => {
       const targetSpaceId = spaceByTarget.get(entity.id);
       return entity.relations.filter(
