@@ -41,8 +41,7 @@ const calibre = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
   title: 'Geo Genesis',
-  description:
-    "Browse and organize the world's public knowledge and information in a decentralized way.",
+  description: "Browse and organize the world's public knowledge and information in a decentralized way.",
   manifest: '/static/site.webmanifest',
   icons: {
     icon: '/static/favicon.png',

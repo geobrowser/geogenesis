@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { GeoPoint } from '~/core/utils/utils';
+
 import { Skeleton } from './skeleton';
 
 const DEFAULT_ZOOM = 9;

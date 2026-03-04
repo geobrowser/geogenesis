@@ -263,7 +263,7 @@ interface ResultsArgs {
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
   const filter: EntityFilter | undefined = args.typeIds?.length
-    ? { typeIds: { in: args.typeIds } }
+    ? { and: [...BLOCK_TYPE_EXCLUSION_FILTERS, { typeIds: { in: args.typeIds } }] }
     : { and: BLOCK_TYPE_EXCLUSION_FILTERS };
 
   return graphql({

@@ -30,6 +30,10 @@ import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
 import { Toggle } from '~/design-system/toggle';
 
+export interface TableBlockFilterPromptHandle {
+  openWithColumn: (columnId: string) => void;
+}
+
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
@@ -92,6 +96,7 @@ type PromptAction =
   | { type: 'close' }
   | { type: 'onOpenChange'; payload: { open: boolean } }
   | { type: 'selectColumn'; payload: { columnId: string } }
+  | { type: 'openWithColumn'; payload: { columnId: string } }
   | {
       type: 'selectEntityValue' | 'selectSpaceValue';
       payload: { id: string; name: string | null };
@@ -129,6 +134,13 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
       return {
         ...state,
         selectedColumn: action.payload.columnId,
+      };
+    case 'openWithColumn':
+      return {
+        ...state,
+        open: true,
+        selectedColumn: action.payload.columnId,
+        value: { type: 'string', value: '' },
       };
     case 'selectEntityValue':
       return {
@@ -238,112 +250,122 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
   );
 }
 
-export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { id: fromId, spaceId } = useEntityStoreInstance();
-  const fromName = useName(fromId, spaceId);
+export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
+  function TableBlockFilterPrompt({ trigger, onCreate, options }, ref) {
+    const { id: fromId, spaceId } = useEntityStoreInstance();
+    const fromName = useName(fromId, spaceId);
 
-  const { source } = useSource();
-  const { filterState } = useFilters();
-  const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
-  const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
-    source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
-  );
-
-  const [from, setFrom] = React.useState<Source | null>({
-    type: 'RELATIONS',
-    name: fromName,
-    value: fromId,
-  });
-  const [relationType, setRelationType] = React.useState<Filter | null>(
-    filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
-  );
-
-  const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
-    if (queryMode === 'RELATIONS') {
-      setFrom(null);
-      setRelationType(null);
-    } else {
-      dispatch({ type: 'reset' });
-    }
-
-    setQueryMode(newQueryMode);
-  };
-
-  const onEntitiesDone = () => {
-    const selectedOption = options.find(o => o.columnId === state.selectedColumn);
-    onCreate({
-      columnId: state.selectedColumn,
-      value: getFilterValue(state.value),
-      valueType: selectedOption?.valueType ?? 'TEXT',
-      valueName: getFilterValueName(state.value),
-      columnName: selectedOption?.columnName ?? '',
-    });
-    dispatch({ type: 'done' });
-  };
-
-  const filters =
-    queryMode === 'RELATIONS' ? (
-      <StaticRelationsFilters
-        from={from}
-        setFrom={setFrom}
-        relationType={relationType}
-        setRelationType={setRelationType}
-      />
-    ) : (
-      <DynamicFilters options={options} state={state} dispatch={dispatch} />
+    const { source } = useSource();
+    const { filterState } = useFilters();
+    const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
+    const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
+      source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
     );
 
-  const done =
-    queryMode !== 'RELATIONS' ? (
-      <AnimatePresence>
-        {getFilterValue(state.value) !== '' && (
-          <motion.span
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.1 }}
-          >
-            <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
-              Done
-            </TextButton>
-          </motion.span>
-        )}
-      </AnimatePresence>
-    ) : null;
+    React.useImperativeHandle(ref, () => ({
+      openWithColumn: (columnId: string) => {
+        setQueryMode('ENTITIES');
+        dispatch({ type: 'openWithColumn', payload: { columnId } });
+      },
+    }));
 
-  const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
+    const [from, setFrom] = React.useState<Source | null>({
+      type: 'RELATIONS',
+      name: fromName,
+      value: fromId,
+    });
+    const [relationType, setRelationType] = React.useState<Filter | null>(
+      filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
+    );
 
-  return (
-    <Root open={state.open} onOpenChange={onOpenChange}>
-      <Trigger asChild>{trigger}</Trigger>
-      <Portal>
+    const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
+      if (queryMode === 'RELATIONS') {
+        setFrom(null);
+        setRelationType(null);
+      } else {
+        dispatch({ type: 'reset' });
+      }
+
+      setQueryMode(newQueryMode);
+    };
+
+    const onEntitiesDone = () => {
+      const selectedOption = options.find(o => o.columnId === state.selectedColumn);
+      onCreate({
+        columnId: state.selectedColumn,
+        value: getFilterValue(state.value),
+        valueType: selectedOption?.valueType ?? 'TEXT',
+        valueName: getFilterValueName(state.value),
+        columnName: selectedOption?.columnName ?? '',
+      });
+      dispatch({ type: 'done' });
+    };
+
+    const filters =
+      queryMode === 'RELATIONS' ? (
+        <StaticRelationsFilters
+          from={from}
+          setFrom={setFrom}
+          relationType={relationType}
+          setRelationType={setRelationType}
+        />
+      ) : (
+        <DynamicFilters options={options} state={state} dispatch={dispatch} />
+      );
+
+    const done =
+      queryMode !== 'RELATIONS' ? (
         <AnimatePresence>
-          {state.open && (
-            <Content
-              forceMount={true}
-              avoidCollisions={true}
-              className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white py-2 shadow-lg"
-              sideOffset={8}
-              align="start"
+          {getFilterValue(state.value) !== '' && (
+            <motion.span
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.1 }}
             >
-              <div className="flex items-center justify-between px-2 pb-2 text-smallButton text-grey-04">
-                <p>New filter</p>
-                {done}
-              </div>
-              <Divider type="horizontal" className="bg-grey-04" />
-              {source.type !== 'COLLECTION' && (
-                <ToggleQueryMode queryMode={queryMode} setQueryMode={onToggleQueryMode} localSource={from} />
-              )}
-
-              <Spacer height={12} />
-              {filters}
-            </Content>
+              <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
+                Done
+              </TextButton>
+            </motion.span>
           )}
         </AnimatePresence>
-      </Portal>
-    </Root>
-  );
-}
+      ) : null;
+
+    const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
+
+    return (
+      <Root open={state.open} onOpenChange={onOpenChange}>
+        <Trigger asChild>{trigger}</Trigger>
+        <Portal>
+          <AnimatePresence>
+            {state.open && (
+              <Content
+                forceMount={true}
+                avoidCollisions={true}
+                className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white py-2 shadow-lg"
+                sideOffset={8}
+                align="start"
+                onOpenAutoFocus={e => e.preventDefault()}
+              >
+                <div className="flex items-center justify-between px-2 pb-2 text-smallButton text-grey-04">
+                  <p>New filter</p>
+                  {done}
+                </div>
+                <Divider type="horizontal" className="bg-grey-04" />
+                {source.type !== 'COLLECTION' && (
+                  <ToggleQueryMode queryMode={queryMode} setQueryMode={onToggleQueryMode} localSource={from} />
+                )}
+
+                <Spacer height={12} />
+                {filters}
+              </Content>
+            )}
+          </AnimatePresence>
+        </Portal>
+      </Root>
+    );
+  }
+);
 
 interface DynamicFiltersProps {
   options: TableBlockFilterPromptProps['options'];

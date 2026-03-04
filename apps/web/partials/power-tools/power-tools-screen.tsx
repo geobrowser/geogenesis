@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -28,7 +29,7 @@ import { Text } from '~/design-system/text';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
-import { TableBlockFilterPill } from '~/partials/blocks/table/table-block-filter-pill';
+import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -141,15 +142,28 @@ export function PowerToolsScreen() {
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
+    filterMode,
+    setFilterMode,
+    temporaryFilterMode,
+    setTemporaryFilterMode,
   } = useFilters(canEdit);
 
   // Editors (by permission) use persisted filters; non-editors use local temporary filters.
   // This matches TableBlock's behavior and is independent of the edit mode toggle.
   const effectiveFilterState = canEdit ? filterState : temporaryFilters;
   const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
+  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
+  const setActiveFilterMode = React.useCallback(
+    (mode: FilterMode) => {
+      if (canEdit) setFilterMode(mode);
+      else setTemporaryFilterMode(mode);
+    },
+    [canEdit, setFilterMode, setTemporaryFilterMode]
+  );
 
   const data = usePowerToolsData({
     filterStateOverride: canEdit ? undefined : temporaryFilters,
+    filterModeOverride: canEdit ? undefined : temporaryFilterMode,
   });
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -305,6 +319,16 @@ export function PowerToolsScreen() {
 
   const hasActiveFilters = effectiveFilterState.length > 0;
 
+  const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
+
+  const serverFilterKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of filterState) {
+      keys.add(`${f.columnId}:${f.value}`);
+    }
+    return keys;
+  }, [filterState]);
+
   return (
     <div
       className="fixed inset-0 z-50 bg-white"
@@ -331,10 +355,7 @@ export function PowerToolsScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <TableBlockEditableFilters
-            filterState={effectiveFilterState}
-            setFilterState={effectiveSetFilterState}
-          />
+          <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
           {isEditing && (
             <button
               onClick={handleAddPlaceholder}
@@ -364,12 +385,18 @@ export function PowerToolsScreen() {
       {hasActiveFilters && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            {effectiveFilterState.map((filter, index) => (
-              <TableBlockFilterPill
-                key={`${filter.columnId}-${filter.value}-${index}`}
-                filter={filter}
-                onDelete={() => handleDeleteFilter(index)}
-              />
+            {filterGroups.map((group, groupIndex) => (
+              <React.Fragment key={group.columnId}>
+                {groupIndex > 0 && <span className="text-metadata text-grey-04">and</span>}
+                <TableBlockFilterGroupPill
+                  group={group}
+                  mode={activeFilterMode}
+                  onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                  onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                  isEditing={isEditing}
+                  serverFilterKeys={serverFilterKeys}
+                />
+              </React.Fragment>
             ))}
           </div>
         </div>
@@ -386,6 +413,7 @@ export function PowerToolsScreen() {
           <PowerToolsTable
             rows={rowsWithPlaceholder}
             properties={data.properties}
+            propertiesById={data.propertiesById}
             spaceId={spaceId}
             hasNextPage={data.hasMore}
             isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
