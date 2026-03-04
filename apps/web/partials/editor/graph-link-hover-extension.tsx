@@ -1,8 +1,9 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { Mark } from '@tiptap/pm/model';
 import { ReactRenderer } from '@tiptap/react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import tippy, { Instance } from 'tippy.js';
+import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import { NavUtils } from '~/core/utils/utils';
 
@@ -20,11 +21,12 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
           key: new PluginKey(this.name),
           view(editorView) {
             let component: ReactRenderer | null = null;
-            let popup: Instance | null = null;
+            let popupElement: HTMLDivElement | null = null;
             let currentLinkElement: HTMLAnchorElement | null = null;
             let lastHoverId: string | null = null;
             let isDestroyed = false;
             let showTimeout: ReturnType<typeof setTimeout> | null = null;
+            let cleanupAutoUpdate: (() => void) | null = null;
 
             const shouldShow = (target: Element): HTMLAnchorElement | null => {
               // Check if we're hovering over a graph:// link
@@ -37,15 +39,37 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               return null;
             };
 
+            const updatePosition = () => {
+              if (!popupElement || !currentLinkElement) return;
+
+              // strategy:'fixed' is required because the popup uses
+              // `position:fixed`. Without it, computePosition returns
+              // document-relative coordinates that cause the tooltip to drift
+              // during scroll.
+              computePosition(currentLinkElement, popupElement, {
+                placement: 'top',
+                strategy: 'fixed',
+                middleware: [offset(8), flip(), shift({ padding: 8 })],
+              }).then(({ x, y }) => {
+                if (popupElement) {
+                  popupElement.style.left = `${x}px`;
+                  popupElement.style.top = `${y}px`;
+                }
+              });
+            };
+
             const show = (linkElement: HTMLAnchorElement, linkUrl: string) => {
               if (isDestroyed || !editorView) return;
+
+              // Check if editor is in edit mode
+              if (!editor.isEditable) return;
 
               if (showTimeout) {
                 clearTimeout(showTimeout);
                 showTimeout = null;
               }
 
-              if (currentLinkElement === linkElement && popup && popup.state.isVisible) {
+              if (currentLinkElement === linkElement && popupElement) {
                 return; // Already showing for this link
               }
 
@@ -57,9 +81,13 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 if (currentLinkElement !== linkElement) return;
 
                 // Destroy existing popup and component
-                if (popup) {
-                  popup.destroy();
-                  popup = null;
+                if (cleanupAutoUpdate) {
+                  cleanupAutoUpdate();
+                  cleanupAutoUpdate = null;
+                }
+                if (popupElement) {
+                  popupElement.remove();
+                  popupElement = null;
                 }
                 if (component) {
                   component.destroy();
@@ -73,6 +101,16 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 const cachedEntitySpaceId = linkElement.getAttribute('data-space-id');
 
                 try {
+                  // Create popup container. top/left are initialised to 0 so
+                  // the fixed element is placed at the origin before
+                  // computePosition applies the final coordinates.
+                  popupElement = document.createElement('div');
+                  popupElement.style.position = 'fixed';
+                  popupElement.style.top = '0';
+                  popupElement.style.left = '0';
+                  popupElement.style.zIndex = '9999';
+                  document.body.appendChild(popupElement);
+
                   component = new ReactRenderer(GraphLinkTooltip, {
                     props: {
                       linkUrl,
@@ -83,14 +121,13 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                       onShowConnection: () => {
                         // Validate entity ID before navigation
                         if (!entityId) {
-                          console.error('Invalid graph link: empty entity ID');
                           return;
                         }
 
                         try {
                           router.push(NavUtils.toEntity(spaceId, entityId));
                         } catch (error) {
-                          console.error('Navigation failed:', error);
+                          // Navigation failed silently
                         }
 
                         hide();
@@ -111,7 +148,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                               if (node && node.isText) {
                                 // Find and remove the link mark from this specific node
-                                node.marks.forEach((mark: any) => {
+                                node.marks.forEach((mark: Mark) => {
                                   if (mark.type.name === 'link' && mark.attrs.href === linkUrl) {
                                     // Remove the link mark but keep the text
                                     const from = pos;
@@ -126,7 +163,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                           // Apply the transaction
                           dispatch(transaction);
                         } catch (error) {
-                          console.error('Error removing link:', error);
+                          // Error removing link silently
                         }
 
                         hide();
@@ -134,8 +171,8 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                       onCopy: () => {
                         // Copy link URL to clipboard
                         if (navigator.clipboard) {
-                          navigator.clipboard.writeText(linkUrl).catch(err => {
-                            console.error('Failed to copy link:', err);
+                          navigator.clipboard.writeText(linkUrl).catch(() => {
+                            // Failed to copy silently
                           });
                         } else {
                           // Fallback for older browsers
@@ -155,48 +192,20 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                     editor,
                   });
 
-                  if (!popup && component?.element) {
-                    popup = tippy(linkElement, {
-                      content: component.element,
-                      interactive: true,
-                      interactiveBorder: 10,
-                      placement: 'top',
-                      theme: 'light',
-                      arrow: false,
-                      offset: [0, 0],
-                      maxWidth: 300,
-                      zIndex: 9999,
-                      appendTo: document.body,
-                      delay: [0, 0],
-                      duration: [100, 150],
-                      trigger: 'mouseenter',
-                      hideOnClick: false,
-                      onShow: () => {
-                        // Prevent showing tooltip in read mode
-                        if (!editor.isEditable) {
-                          return false;
-                        }
-                      },
-                      onHide: () => {
-                        if (
-                          popup &&
-                          popup.popper.getAttribute('data-link-href') === currentLinkElement?.getAttribute('href')
-                        ) {
-                          currentLinkElement = null;
-                        }
-                      },
-                    });
-
-                    // Set data attribute to identify the popup
-                    popup.popper.setAttribute('data-link-href', linkUrl);
+                  // Append the renderer element to our popup container
+                  if (popupElement && component?.element) {
+                    popupElement.appendChild(component.element);
                   }
 
-                  if (popup) {
-                    popup.show();
-                    currentLinkElement = linkElement;
-                  }
+                  // Position the popup
+                  updatePosition();
+
+                  // Set up auto-update for position
+                  cleanupAutoUpdate = autoUpdate(linkElement, popupElement, updatePosition);
+
+                  currentLinkElement = linkElement;
                 } catch (error) {
-                  console.warn('GraphLinkHover error:', error);
+                  // GraphLinkHover error silently
                 }
               }, 50); // End setTimeout
             };
@@ -207,20 +216,14 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 showTimeout = null;
               }
 
-              if (popup) {
-                if (immediate) {
-                  popup.destroy();
-                  popup = null;
-                } else {
-                  popup.hide();
-                  // Don't destroy immediately, let tippy handle it
-                  setTimeout(() => {
-                    if (popup && !popup.state.isVisible) {
-                      popup.destroy();
-                      popup = null;
-                    }
-                  }, 50);
-                }
+              if (cleanupAutoUpdate) {
+                cleanupAutoUpdate();
+                cleanupAutoUpdate = null;
+              }
+
+              if (popupElement) {
+                popupElement.remove();
+                popupElement = null;
               }
 
               // Reset component to ensure fresh state
@@ -242,7 +245,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               const target = event.target as Element;
               const linkElement = shouldShow(target);
 
-              //add early exit when link element null
+              // Early exit when link element is null
               if (!linkElement) return;
 
               const linkId = linkElement.getAttribute('href');
@@ -257,7 +260,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
             // Listen for editor editable state changes to hide tooltip in read mode
             const handleEditableChange = () => {
-              if (!editor.isEditable && popup && popup.state.isVisible) {
+              if (!editor.isEditable && popupElement) {
                 hide(true);
               }
             };
@@ -272,7 +275,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               const linkElement = shouldShow(target);
 
               if (linkElement === currentLinkElement) {
-                // Don't hide immediately - let tippy handle the interactive logic
+                // Don't hide immediately - check if mouse moved to popup
                 setTimeout(() => {
                   // Check if we have moved to another link in the meantime
                   if (currentLinkElement !== linkElement) {
@@ -280,9 +283,9 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                   }
 
                   // Check if mouse is still over the link or the popup content
-                  if (popup && popup.state.isVisible) {
+                  if (popupElement) {
                     const isHoveringLink = linkElement?.matches(':hover');
-                    const isHoveringPopup = popup.popper?.matches(':hover');
+                    const isHoveringPopup = popupElement?.matches(':hover');
 
                     // Only hide if not hovering over link or popup
                     if (!isHoveringLink && !isHoveringPopup) {
@@ -313,39 +316,17 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                   // Clean up tooltip immediately
                   hide(true);
 
-                  // Clean up component
-                  if (component) {
-                    component.destroy();
-                    component = null;
-                  }
-
                   currentLinkElement = null;
                   lastHoverId = null;
                 } catch (error) {
-                  console.warn('GraphLinkHover destroy cleanup warning:', error);
+                  console.error('Error during cleanup:', error);
+                  // Destroy cleanup error silently
                 }
               },
             };
           },
         }),
       ];
-    },
-
-    onDestroy() {
-      // Additional cleanup when extension is destroyed
-      // Only remove tippy instances that are related to our graph links
-      const floatingElements = document.querySelectorAll('[data-tippy-root]');
-      floatingElements.forEach(element => {
-        try {
-          // Check if the popper has our specific attribute
-          const popper = element.querySelector('[data-link-href]');
-          if (popper && element.parentNode) {
-            element.parentNode.removeChild(element);
-          }
-        } catch (error) {
-          console.warn('GraphLinkHover cleanup warning:', error);
-        }
-      });
     },
   });
 };

@@ -1,10 +1,7 @@
-import { Extension, InputRule, PasteRule, Range as TipTapRange, ChainedCommands } from '@tiptap/core';
-import { EditorState } from '@tiptap/pm/state';
+import { ChainedCommands, Extension, InputRule, PasteRule, Range as TipTapRange } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
-
+import { EditorState } from '@tiptap/pm/state';
 import { insertGraphLink } from './insert-graph-link';
-
-export { insertGraphLink };
 
 // Extend Link to add custom data attributes for entity caching
 const GraphLinkExtended = Link.extend({

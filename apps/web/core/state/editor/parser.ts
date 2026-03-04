@@ -51,6 +51,11 @@ export function htmlToMarkdown(html: string): string {
       case 'i':
         result = `*${processChildren(element, indent)}*`;
         break;
+      case 'u':
+        // Standard markdown has no underline syntax, so preserve as HTML <u> tags.
+        // The markdownToHtml parser already handles <u>...</u> passthrough.
+        result = `<u>${processChildren(element, indent)}</u>`;
+        break;
       case 'a': {
         const href = element.getAttribute('href') || '';
         const text = processChildren(element, indent);

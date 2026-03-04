@@ -1,11 +1,22 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
-import tippy, { Instance } from 'tippy.js';
+import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import React from 'react';
 
 import { FloatingSelectionToolbar } from './floating-selection-toolbar';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const TOOLTIP_OFFSET = 10;
+const POPUP_Z_INDEX = 9999;
+
+// ============================================================================
+// React Component
+// ============================================================================
 
 // React component for the floating toolbar content
 const FloatingToolbarContent: React.FC<{ editor: any }> = ({ editor }) => {
@@ -15,6 +26,10 @@ const FloatingToolbarContent: React.FC<{ editor: any }> = ({ editor }) => {
     </div>
   );
 };
+
+// ============================================================================
+// Extension
+// ============================================================================
 
 export const FloatingToolbarExtension = Extension.create({
   name: 'floatingToolbar',
@@ -27,10 +42,14 @@ export const FloatingToolbarExtension = Extension.create({
         key: new PluginKey(this.name),
         view() {
           let component: ReactRenderer | null = null;
-          let popup: Instance | null = null;
+          let popupElement: HTMLDivElement | null = null;
+          let cleanupAutoUpdate: (() => void) | null = null;
+          let lastFrom = -1;
+          let lastTo = -1;
 
           const shouldShow = ({ editor, state }: { editor: any; state: any }) => {
             // Don't show if not editable or editor is destroyed
+            // Use editor.isEditable (TipTap v3 API)
             if (!editor || editor.isDestroyed || !editor.isEditable) {
               return false;
             }
@@ -53,7 +72,43 @@ export const FloatingToolbarExtension = Extension.create({
             return true;
           };
 
-          const show = () => {
+          const updatePosition = (view: any, from: number, to: number) => {
+            if (!popupElement) return;
+
+            // Create a virtual element based on the live selection coordinates.
+            // Coordinates are recomputed on every call so scroll does not
+            // produce stale values.
+            const start = view.coordsAtPos(from);
+            const end = view.coordsAtPos(to);
+
+            const virtualElement = {
+              getBoundingClientRect: () =>
+                new DOMRect(start.left, start.top, end.left - start.left, end.bottom - start.top),
+            };
+
+            // strategy:'fixed' is required because the popup uses
+            // `position:fixed`. Without it, computePosition returns
+            // document-relative coordinates that cause the toolbar to drift
+            // during scroll.
+            computePosition(virtualElement, popupElement, {
+              placement: 'top',
+              strategy: 'fixed',
+              middleware: [offset(TOOLTIP_OFFSET), flip(), shift({ padding: 8 })],
+            }).then(({ x, y }) => {
+              if (popupElement) {
+                popupElement.style.left = `${x}px`;
+                popupElement.style.top = `${y}px`;
+              }
+            });
+          };
+
+          const show = (view: any, from: number, to: number) => {
+            // Clean up existing autoUpdate
+            if (cleanupAutoUpdate) {
+              cleanupAutoUpdate();
+              cleanupAutoUpdate = null;
+            }
+
             if (!component) {
               component = new ReactRenderer(FloatingToolbarContent, {
                 props: { editor },
@@ -61,27 +116,54 @@ export const FloatingToolbarExtension = Extension.create({
               });
             }
 
-            if (!popup && component?.element) {
-              popup = tippy(document.body, {
-                getReferenceClientRect: null,
-                content: component.element,
-                interactive: true,
-                trigger: 'manual',
-                placement: 'top',
-                hideOnClick: 'toggle',
-                offset: [0, 10],
-                duration: 200,
-                animation: 'fade',
-                appendTo: () => document.body,
+            if (!popupElement && component?.element) {
+              // Create popup container
+              popupElement = document.createElement('div');
+              popupElement.style.position = 'fixed';
+              popupElement.style.top = '0';
+              popupElement.style.left = '0';
+              popupElement.style.zIndex = String(POPUP_Z_INDEX);
+              document.body.appendChild(popupElement);
+
+              // Append the renderer element to our popup container
+              popupElement.appendChild(component.element);
+            }
+
+            // Update position immediately
+            updatePosition(view, from, to);
+
+            // Set up auto-update for position (updates on scroll/resize).
+            // The virtual element's getBoundingClientRect is kept dynamic so
+            // that every scroll-triggered recompute reflects the real cursor
+            // position rather than the stale snapshot taken at show() time.
+            // contextElement points autoUpdate at the correct scroll-ancestor
+            // chain so it fires on any container scroll, not just window.
+            if (popupElement) {
+              const autoUpdateRef = {
+                getBoundingClientRect: () => {
+                  const s = view.coordsAtPos(from);
+                  const e = view.coordsAtPos(to);
+                  return new DOMRect(s.left, s.top, e.left - s.left, e.bottom - s.top);
+                },
+                contextElement: view.dom as Element,
+              };
+
+              cleanupAutoUpdate = autoUpdate(autoUpdateRef, popupElement, () => {
+                if (popupElement && view && !view.isDestroyed) {
+                  updatePosition(view, from, to);
+                }
               });
             }
           };
 
           const hide = () => {
-            if (popup) {
-              popup.hide();
-              popup.destroy();
-              popup = null;
+            if (cleanupAutoUpdate) {
+              cleanupAutoUpdate();
+              cleanupAutoUpdate = null;
+            }
+            if (popupElement) {
+              popupElement.remove();
+              popupElement = null;
             }
           };
 
@@ -90,22 +172,17 @@ export const FloatingToolbarExtension = Extension.create({
             const { selection } = state;
 
             if (shouldShow({ editor, state })) {
-              show();
+              const { from, to } = selection;
 
-              if (popup) {
-                // Position the popup based on selection
-                const { from, to } = selection;
-                popup.setProps({
-                  getReferenceClientRect: () => {
-                    const start = view.coordsAtPos(from);
-                    const end = view.coordsAtPos(to);
-
-                    return new DOMRect(start.left, start.top, end.left - start.left, end.bottom - start.top);
-                  },
-                });
-                popup.show();
+              // Only update position if selection changed
+              if (from !== lastFrom || to !== lastTo) {
+                lastFrom = from;
+                lastTo = to;
+                show(view, from, to);
               }
             } else {
+              lastFrom = -1;
+              lastTo = -1;
               hide();
             }
           };
@@ -127,11 +204,15 @@ export const FloatingToolbarExtension = Extension.create({
 
   onDestroy() {
     // Cleanup floating elements when extension is destroyed
-    const floatingElements = document.querySelectorAll('[data-tippy-root]');
-    floatingElements.forEach(element => {
+    // This is a safety net for any orphaned elements
+    const floatingToolbars = document.querySelectorAll('.floating-toolbar');
+    floatingToolbars.forEach(element => {
       try {
         if (element.parentNode) {
-          element.parentNode.removeChild(element);
+          const parent = element.parentNode;
+          if (parent.parentNode) {
+            parent.parentNode.removeChild(parent);
+          }
         }
       } catch (error) {
         console.warn('FloatingToolbar cleanup warning:', error);

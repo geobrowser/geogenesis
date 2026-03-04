@@ -15,6 +15,7 @@ import { TrailingNode } from './trailing-node';
 import { VideoNode } from './video-node';
 import { Web2URLExtension } from './web2-url-extension';
 import { GraphLinkExtension, MarkdownLinkExtension } from './graph-link-extension';
+import { FloatingToolbarExtension } from './floating-toolbar-extension';
 
 export const tiptapExtensions = [
   Document,
@@ -53,4 +54,5 @@ export const tiptapExtensions = [
     },
   }),
   UndoRedo,
+  FloatingToolbarExtension,
 ];

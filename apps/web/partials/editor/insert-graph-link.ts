@@ -37,10 +37,8 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
   const linkUrl = url || (entityId ? `graph://${entityId}` : '');
   const text = linkText || entityId || '';
 
-  // Build link attributes including data attributes for entity name and space ID
   const linkAttrs: Record<string, string> = {
     href: linkUrl,
-    type:'this is changes'
   };
 
   // Add data attributes for hover tooltip (entity name and space ID)
@@ -58,22 +56,25 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
     return;
   }
 
+  const linkContent = {
+    type: 'text',
+    text: text,
+    marks: [
+      {
+        type: 'link',
+        attrs: linkAttrs,
+      },
+    ],
+  };
+
   // If we have a range to delete (from/to) and a chain function (handler use case)
   if (chain && from !== undefined && to !== undefined) {
-    // First delete the range, then insert content at the current selection
-    // After deleteRange, the cursor will be at the 'from' position, so insertContent will insert there
+    // Delete the range, then insert content at the explicit 'from' position.
+    // Using insertContentAt with the explicit position avoids TipTap v3's
+    // position adjustment logic in insertContent that can shift the cursor.
     chain()
       .deleteRange({ from, to })
-      .insertContent({
-        type: 'text',
-        text: text,
-        marks: [
-          {
-            type: 'link',
-            attrs: linkAttrs,
-          },
-        ],
-      })
+      .insertContentAt(from, linkContent)
       .run();
     return;
   }
@@ -82,38 +83,22 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
   if (editor) {
     // If we have a selection range, delete it first (e.g., for @mention replacement)
     if (from !== undefined && to !== undefined) {
-      // Use a single chain to ensure atomic operation
-      // After deleteRange, insertContent will insert at the current cursor position
+      // Delete the @mention trigger text and insert the link at the explicit 'from' position.
+      // Using insertContentAt with the explicit position is more reliable in TipTap v3
+      // than chaining deleteRange + insertContent, because insertContent uses tr.selection
+      // which may be affected by TipTap v3's internal position adjustment logic.
       editor
         .chain()
         .focus()
         .deleteRange({ from, to })
-        .insertContent({
-          type: 'text',
-          text: text,
-          marks: [
-            {
-              type: 'link',
-              attrs: linkAttrs,
-            },
-          ],
-        })
+        .insertContentAt(from, linkContent)
         .run();
     } else {
       // Insert new link at cursor position
       editor
         .chain()
         .focus()
-        .insertContent({
-          type: 'text',
-          text: text,
-          marks: [
-            {
-              type: 'link',
-              attrs: linkAttrs,
-            },
-          ],
-        })
+        .insertContent(linkContent)
         .run();
     }
   }

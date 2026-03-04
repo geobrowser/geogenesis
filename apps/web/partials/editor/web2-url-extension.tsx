@@ -1,10 +1,25 @@
 import { Extension, Mark } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { Node as PMNode } from '@tiptap/pm/model';
 import { ReactRenderer } from '@tiptap/react';
-import tippy, { Instance } from 'tippy.js';
+import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import { detectWeb2URLsInMarkdown } from '~/core/utils/url-detection';
 import { Web2LinkHoverCard } from './web2-link-tooltip';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const HOVER_SHOW_DELAY_MS = 100;
+const HOVER_HIDE_DELAY_MS = 150;
+const UPDATE_DEBOUNCE_MS = 150;
+const TOOLTIP_OFFSET = 8;
+const TOOLTIP_Z_INDEX = 9999;
+
+// ============================================================================
+// Custom Mark for Web2 URLs
+// ============================================================================
 
 // Custom mark for web2 URLs that renders as spans with hover cards
 const Web2URLMark = Mark.create({
@@ -78,7 +93,11 @@ const Web2URLMark = Mark.create({
   },
 });
 
-//Links aren't clickable in browse mode but still appear in text; add external links in the properties panel.
+// ============================================================================
+// Web2 URL Extension
+// ============================================================================
+
+// Links aren't clickable in browse mode but still appear in text; add external links in the properties panel.
 export const Web2URLExtension = Extension.create({
   name: 'web2URLHighlight',
 
@@ -92,19 +111,106 @@ export const Web2URLExtension = Extension.create({
     const { editor } = this;
 
     return [
-      // Plugin for hover card functionality using Tippy
+      // Plugin for hover card functionality using Floating UI
       new Plugin({
-        key: new PluginKey(this.name),
+        key: new PluginKey('web2URLHoverCard'),
         view(editorView) {
-          let currentTippyInstance: Instance | null = null;
-          let isDestroyed = false;
-          const tippyInstances = new Map<Element, Instance>();
-          const reactRenderers = new Map<Element, ReactRenderer>();
-
-          // Timeout management for better hover stability
-          let showTimeout: NodeJS.Timeout | null = null;
-          let hideTimeout: NodeJS.Timeout | null = null;
+          let component: ReactRenderer | null = null;
+          let popupElement: HTMLDivElement | null = null;
           let currentHoveredSpan: Element | null = null;
+          let isDestroyed = false;
+          let showTimeout: ReturnType<typeof setTimeout> | null = null;
+          let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+          let cleanupAutoUpdate: (() => void) | null = null;
+
+          const updatePosition = () => {
+            if (!popupElement || !currentHoveredSpan) return;
+
+            // strategy:'fixed' is required because the popup uses
+            // `position:fixed`. Without it, computePosition returns
+            // document-relative coordinates that cause the tooltip to drift
+            // during scroll.
+            computePosition(currentHoveredSpan, popupElement, {
+              placement: 'top',
+              strategy: 'fixed',
+              middleware: [offset(TOOLTIP_OFFSET), flip(), shift({ padding: 8 })],
+            }).then(({ x, y }) => {
+              if (popupElement) {
+                popupElement.style.left = `${x}px`;
+                popupElement.style.top = `${y}px`;
+              }
+            });
+          };
+
+          const showHoverCard = (element: Element) => {
+            if (isDestroyed || !editorView) return;
+
+            // Check if editor is in edit mode
+            if (!editor.isEditable) return;
+
+            // Clean up existing popup
+            if (cleanupAutoUpdate) {
+              cleanupAutoUpdate();
+              cleanupAutoUpdate = null;
+            }
+            if (popupElement) {
+              popupElement.remove();
+              popupElement = null;
+            }
+            if (component) {
+              component.destroy();
+              component = null;
+            }
+
+            try {
+              // Create popup container. top/left are initialised to 0 so the
+              // fixed element is placed at the origin before computePosition
+              // applies the final coordinates, preventing a flash at an
+              // arbitrary browser-default scroll position.
+              popupElement = document.createElement('div');
+              popupElement.style.position = 'fixed';
+              popupElement.style.top = '0';
+              popupElement.style.left = '0';
+              popupElement.style.zIndex = String(TOOLTIP_Z_INDEX);
+              document.body.appendChild(popupElement);
+
+              // Create ReactRenderer component
+              component = new ReactRenderer(Web2LinkHoverCard, {
+                props: {},
+                editor,
+              });
+
+              // Append the renderer element to our popup container
+              if (popupElement && component?.element) {
+                popupElement.appendChild(component.element);
+              }
+
+              // Position the popup
+              currentHoveredSpan = element;
+              updatePosition();
+
+              // Set up auto-update for position
+              cleanupAutoUpdate = autoUpdate(element, popupElement, updatePosition);
+            } catch (error) {
+              console.warn('Web2URLExtension hover card error:', error);
+            }
+          };
+
+          const hideHoverCard = () => {
+            if (cleanupAutoUpdate) {
+              cleanupAutoUpdate();
+              cleanupAutoUpdate = null;
+            }
+            if (popupElement) {
+              popupElement.remove();
+              popupElement = null;
+            }
+            if (component) {
+              component.destroy();
+              component = null;
+            }
+            currentHoveredSpan = null;
+          };
 
           const clearTimeouts = () => {
             if (showTimeout) {
@@ -117,69 +223,9 @@ export const Web2URLExtension = Extension.create({
             }
           };
 
-          const showHoverCard = (element: Element) => {
-            if (isDestroyed) return;
-
-            // Check if this element already has a tippy instance
-            if (tippyInstances.has(element)) {
-              const instance = tippyInstances.get(element)!;
-              instance.show();
-              currentTippyInstance = instance;
-              return;
-            }
-
-            try {
-              // Create ReactRenderer component
-              const reactRenderer = new ReactRenderer(Web2LinkHoverCard, {
-                props: {},
-                editor,
-              });
-
-              // Create tippy instance with improved configuration
-              const tippyInstance = tippy(element as Element, {
-                content: reactRenderer.element,
-                trigger: 'manual',
-                interactive: true,
-                placement: 'top',
-                theme: 'light-border',
-                arrow: true,
-                appendTo: document.body,
-                zIndex: 9999,
-                delay: [0, 100], // No show delay (handled by our timeout), short hide delay
-                // Add offset to prevent overlap issues
-                offset: [0, 3],
-                // Allow mouse to move between element and tooltip
-                interactiveBorder: 10,
-                onShow() {
-                  // Component already rendered by ReactRenderer
-                },
-                onHide() {
-                  // Clean up when hiding
-                  if (currentTippyInstance === tippyInstance) {
-                    currentTippyInstance = null;
-                  }
-                },
-              });
-
-              tippyInstances.set(element, tippyInstance);
-              reactRenderers.set(element, reactRenderer);
-              tippyInstance.show();
-              currentTippyInstance = tippyInstance;
-            } catch (error) {
-              console.warn('Web2URLExtension Tippy error:', error);
-            }
-          };
-
-          const hideCurrentHoverCard = () => {
-            if (currentTippyInstance) {
-              currentTippyInstance.hide();
-              currentTippyInstance = null;
-            }
-          };
-
           const handleMouseEnter = (event: Event) => {
-            // Disable hover card in View Mode
-            if (!editorView.editable) return;
+            // Disable hover card in View Mode - check dynamically
+            if (!editor.isEditable) return;
 
             const target = event.target as Element;
             const web2Span = target.closest('span[data-web2-url]');
@@ -200,25 +246,18 @@ export const Web2URLExtension = Extension.create({
                 }
 
                 // Hide current card immediately if showing different element
-                if (currentTippyInstance && currentHoveredSpan) {
-                  hideCurrentHoverCard();
+                if (currentHoveredSpan) {
+                  hideHoverCard();
                 }
-
-                currentHoveredSpan = web2Span;
 
                 // Debounce show to prevent flickering on rapid hover changes
                 showTimeout = setTimeout(() => {
                   // Double-check the element is still hovered before showing
-                  if (web2Span.matches(':hover') && currentHoveredSpan === web2Span) {
+                  if (web2Span.matches(':hover') && editor.isEditable) {
                     showHoverCard(web2Span);
                   }
                   showTimeout = null;
-                }, 100); // Short delay to stabilize hover
-              } else {
-                // Same element - ensure card is showing
-                if (currentTippyInstance) {
-                  currentTippyInstance.show();
-                }
+                }, HOVER_SHOW_DELAY_MS);
               }
             }
           };
@@ -243,16 +282,27 @@ export const Web2URLExtension = Extension.create({
               hideTimeout = setTimeout(() => {
                 // Check if mouse is over the span or the tooltip
                 const isStillHovering = web2Span?.matches(':hover');
-                const isTooltipHovered = currentTippyInstance?.popper?.matches(':hover');
+                const isTooltipHovered = popupElement?.matches(':hover');
 
                 if (!isStillHovering && !isTooltipHovered) {
-                  hideCurrentHoverCard();
-                  currentHoveredSpan = null;
+                  hideHoverCard();
                 }
                 hideTimeout = null;
-              }, 150);
+              }, HOVER_HIDE_DELAY_MS);
             }
           };
+
+          // Listen for editor editable state changes to hide tooltip in read mode
+          const handleEditableChange = () => {
+            if (!editor.isEditable && popupElement) {
+              hideHoverCard();
+            }
+          };
+
+          // Listen to events to catch state changes
+          editor.on('update', handleEditableChange);
+          editor.on('focus', handleEditableChange);
+          editor.on('blur', handleEditableChange);
 
           editorView.dom.addEventListener('mouseenter', handleMouseEnter, true);
           editorView.dom.addEventListener('mouseleave', handleMouseLeave, true);
@@ -266,29 +316,12 @@ export const Web2URLExtension = Extension.create({
 
                 editorView.dom.removeEventListener('mouseenter', handleMouseEnter, true);
                 editorView.dom.removeEventListener('mouseleave', handleMouseLeave, true);
+                editor.off('update', handleEditableChange);
+                editor.off('focus', handleEditableChange);
+                editor.off('blur', handleEditableChange);
 
-                // Destroy all tippy instances
-                tippyInstances.forEach(instance => {
-                  try {
-                    instance.destroy();
-                  } catch (error) {
-                    console.warn('Error destroying tippy instance:', error);
-                  }
-                });
-                tippyInstances.clear();
-
-                // Destroy all ReactRenderer instances
-                reactRenderers.forEach(renderer => {
-                  try {
-                    renderer.destroy();
-                  } catch (error) {
-                    console.warn('Error destroying ReactRenderer:', error);
-                  }
-                });
-                reactRenderers.clear();
-
-                currentTippyInstance = null;
-                currentHoveredSpan = null;
+                // Clean up hover card
+                hideHoverCard();
               } catch (error) {
                 console.warn('Web2URLExtension destroy cleanup warning:', error);
               }
@@ -298,12 +331,18 @@ export const Web2URLExtension = Extension.create({
       }),
       // Plugin for URL detection and marking
       new Plugin({
-        key: new PluginKey(this.name),
+        key: new PluginKey('web2URLDetection'),
         view(editorView) {
           let rafId: number | null = null;
-          let updateTimeout: NodeJS.Timeout | null = null;
+          let updateTimeout: ReturnType<typeof setTimeout> | null = null;
           let isDestroyed = false;
-          let previousEditableState = editorView.editable;
+          let previousEditableState = editor.isEditable;
+
+          interface TextNodeInfo {
+            node: PMNode;
+            startPos: number;
+            endPos: number;
+          }
 
           const updateLinkClasses = () => {
             if (isDestroyed) return;
@@ -333,6 +372,9 @@ export const Web2URLExtension = Extension.create({
                   const { schema } = state;
                   let hasChanges = false;
 
+                  // Get current edit mode dynamically
+                  const isInEditMode = editor.isEditable;
+
                   // Create a new transaction to avoid conflicts
                   const newTr = state.tr;
 
@@ -346,7 +388,7 @@ export const Web2URLExtension = Extension.create({
                       }
 
                       // Check for web2URL marks that need reversion to Markdown in Edit Mode
-                      if (editorView.editable) {
+                      if (isInEditMode) {
                         let relativePosTracker = 0;
                         node.content.forEach((child) => {
                           const childSize = child.nodeSize;
@@ -390,7 +432,7 @@ export const Web2URLExtension = Extension.create({
 
                       // Collect all text content from the paragraph
                       let paragraphText = '';
-                      const textNodePositions: Array<{ node: any; startPos: number; endPos: number }> = [];
+                      const textNodePositions: TextNodeInfo[] = [];
 
                       node.descendants((textNode, relativePos) => {
                         if (textNode.isText && textNode.text) {
@@ -422,6 +464,8 @@ export const Web2URLExtension = Extension.create({
 
                             for (const textNodeInfo of textNodePositions) {
                               const nodeText = textNodeInfo.node.text;
+                              if (!nodeText) continue;
+                              
                               const nodeEndPos = currentTextPos + nodeText.length;
 
                               // Check if URL starts within this text node
@@ -459,6 +503,7 @@ export const Web2URLExtension = Extension.create({
                               // If mark exists, check if it needs mode update
                               if (hasWeb2Mark) {
                                 // Get existing mark to check its mode
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 let existingMark: any = null;
                                 newTr.doc.nodesBetween(from, to, node => {
                                   if (node.isText) {
@@ -472,7 +517,7 @@ export const Web2URLExtension = Extension.create({
 
                                 if (existingMark) {
                                   const isCurrentlyEditMode = !!existingMark.attrs?.editMode;
-                                  const shouldBeEditMode = editorView.editable;
+                                  const shouldBeEditMode = isInEditMode;
 
                                   // Extract current URL from markdown for comparison
                                   const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
@@ -505,7 +550,7 @@ export const Web2URLExtension = Extension.create({
 
                                   if (isMarkdownLink) {
                                     // MARKDOWN LINK: Mode-aware rendering
-                                    if (!editorView.editable) {
+                                    if (!isInEditMode) {
                                       // VIEW MODE: Convert to styled span
                                       const web2Mark = schema.marks.web2URL.create({
                                         url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
@@ -530,7 +575,7 @@ export const Web2URLExtension = Extension.create({
                                     // STANDALONE URL: Mode-aware rendering
                                     const web2Mark = schema.marks.web2URL.create({
                                       url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
-                                      editMode: editorView.editable,
+                                      editMode: isInEditMode,
                                     });
 
                                     // Replace standalone URL with styled text
@@ -557,7 +602,7 @@ export const Web2URLExtension = Extension.create({
                 }
               });
               updateTimeout = null;
-            }, 150); // Debounce delay: 150ms
+            }, UPDATE_DEBOUNCE_MS);
           };
 
           // Update classes on initial load

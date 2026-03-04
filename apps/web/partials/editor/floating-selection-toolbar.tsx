@@ -1,17 +1,29 @@
+import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Editor } from '@tiptap/core';
 import { ReactRenderer } from '@tiptap/react';
-import tippy from 'tippy.js';
 
 import React from 'react';
 
+import { useSelectionFormatting } from '~/core/hooks/use-selection-formatting';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
+
 import { SquareButton } from '~/design-system/button';
 import { Link } from '~/design-system/icons/link';
-import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { MentionList } from './mention-list';
-import { useSelectionFormatting } from './use-selection-formatting';
-import { insertGraphLink } from './insert-graph-link';
 
-// Toolbar component
+import { insertGraphLink } from './insert-graph-link';
+import { MentionList } from './mention-list';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const POPUP_OFFSET = 8;
+const POPUP_Z_INDEX = 9999;
+
+// ============================================================================
+// Toolbar Component
+// ============================================================================
+
 interface FloatingToolbarProps {
   editor: Editor;
 }
@@ -22,19 +34,27 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
   // Get spaceId from EditorProvider context
   const { spaceId } = useEditorInstance();
 
-  const handleBold = () => {
+  const handleBold = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     editor.chain().focus().toggleBold().run();
   };
 
-  const handleItalic = () => {
+  const handleItalic = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     editor.chain().focus().toggleItalic().run();
   };
 
-  const handleUnderline = () => {
+  const handleUnderline = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     editor.chain().focus().toggleUnderline?.().run();
   };
 
-  const handleLink = () => {
+  const handleLink = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     // Use spaceId from EditorProvider context
     const currentSpaceId = spaceId;
 
@@ -49,6 +69,18 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
     // Extract selected text if there is a selection
     const selectedText = from !== to ? editor.state.doc.textBetween(from, to) : '';
 
+    // Create popup container
+    const popupElement = document.createElement('div');
+    popupElement.style.position = 'fixed';
+    popupElement.style.zIndex = String(POPUP_Z_INDEX);
+    document.body.appendChild(popupElement);
+
+    // Cleanup function
+    const cleanup = () => {
+      popupElement.remove();
+      reactRenderer.destroy();
+    };
+
     // Create ReactRenderer for MentionList
     const reactRenderer = new ReactRenderer(MentionList, {
       props: {
@@ -58,62 +90,58 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
           // Use selected text as linkText if available, otherwise use entityName
           const linkText = selectedText;
           // Use shared function to insert graph link with spaceId for data attributes
-          insertGraphLink({ editor, entityId, linkText, entityName, spaceId: entitySpaceId ?? currentSpaceId, from, to });
+          insertGraphLink({
+            editor,
+            entityId,
+            linkText,
+            entityName,
+            spaceId: entitySpaceId ?? currentSpaceId,
+            from,
+            to,
+          });
 
-          // Hide the tippy
-          if (tippyInstance) {
-            tippyInstance.hide();
-          }
+          // Cleanup popup
+          cleanup();
         },
         onEscape: () => {
-          // Hide the tippy when escape is pressed
-          if (tippyInstance) {
-            tippyInstance.hide();
-          }
+          // Cleanup popup when escape is pressed
+          cleanup();
         },
       },
       editor,
     });
 
-    // Create tippy instance for the mention list
-    const tippyInstance = tippy(document.body as Element, {
-      content: reactRenderer.element,
-      trigger: 'manual',
-      interactive: true,
+    // Append the renderer element to our popup container
+    if (reactRenderer?.element) {
+      popupElement.appendChild(reactRenderer.element);
+    }
+
+    // Create a virtual element for the cursor position
+    const { view } = editor;
+    const start = view.coordsAtPos(from);
+
+    const virtualElement = {
+      getBoundingClientRect: () => ({
+        width: 0,
+        height: 0,
+        top: start.top + 24,
+        bottom: start.bottom,
+        left: start.left + 24,
+        right: start.right,
+        x: start.left + 24,
+        y: start.top + 24,
+        toJSON: () => ({}),
+      }),
+    };
+
+    // Position the popup using Floating UI
+    computePosition(virtualElement as HTMLElement, popupElement, {
       placement: 'bottom',
-      theme: 'light-border',
-      arrow: false,
-      appendTo: document.body,
-      zIndex: 9999,
-      offset: [0, 0],
-      // Allow mouse to move between element and tooltip
-      interactiveBorder: 10,
-      getReferenceClientRect: () => {
-        // Position the tippy near the current selection
-        const { view } = editor;
-        const { from } = view.state.selection;
-        const start = view.coordsAtPos(from);
-
-        return {
-          width: 0,
-          height: 0,
-          top: start.top + 24,
-          bottom: start.bottom,
-          left: start.left + 24,
-          right: start.right,
-          x: start.left + 24,
-          y: start.top + 24,
-          toJSON: () => ({}),
-        } as DOMRect;
-      },
-      onHide: () => {
-        // Clean up ReactRenderer when hiding
-        reactRenderer.destroy();
-      },
+      middleware: [offset(POPUP_OFFSET), flip(), shift({ padding: 8 })],
+    }).then(({ x, y }) => {
+      popupElement.style.left = `${x}px`;
+      popupElement.style.top = `${y}px`;
     });
-
-    // Show the tippy
-    tippyInstance.show();
   };
 
   // Don't render if editor is not ready
@@ -121,12 +149,11 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
     return null;
   }
 
-
   return (
     <div className="flex items-center gap-1 rounded-lg border border-divider bg-white p-2 text-sm text-text shadow-lg">
       <SquareButton
         onClick={handleBold}
-        className={`border-transparent font-bold hover:border-transparent hover:bg-divider ${isBold ? '!bg-divider' : ''}`}
+        className={`border-transparent font-bold hover:border-transparent hover:bg-divider ${isBold ? 'bg-divider!' : ''}`}
         isActive={isBold}
         title="Bold"
       >
@@ -134,7 +161,7 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
       </SquareButton>
       <SquareButton
         onClick={handleItalic}
-        className={`border-transparent font-bold italic hover:border-transparent hover:bg-divider ${isItalic ? '!bg-divider' : ''}`}
+        className={`border-transparent font-bold italic hover:border-transparent hover:bg-divider ${isItalic ? 'bg-divider!' : ''}`}
         isActive={isItalic}
         title="Italic"
       >
@@ -142,7 +169,7 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
       </SquareButton>
       <SquareButton
         onClick={handleUnderline}
-        className={`border-transparent font-bold underline hover:border-transparent hover:bg-divider ${isUnderline ? '!bg-divider' : ''}`}
+        className={`border-transparent font-bold underline hover:border-transparent hover:bg-divider ${isUnderline ? 'bg-divider!' : ''}`}
         isActive={isUnderline}
         title="Underline"
       >
@@ -151,7 +178,7 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
       <div className="mx-1 h-5 w-px bg-divider" />
       <SquareButton
         onClick={handleLink}
-        className={`font-bold hover:bg-divider ${isLink ? '!bg-divider' : ''}`}
+        className={`font-bold hover:bg-divider ${isLink ? 'bg-divider!' : ''}`}
         isActive={isLink}
         title="Add Link"
       >
@@ -160,4 +187,3 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
     </div>
   );
 };
-

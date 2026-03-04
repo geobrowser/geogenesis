@@ -2,7 +2,7 @@
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
 import type { EditorView } from '@tiptap/pm/view';
-import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
@@ -20,7 +20,6 @@ import { NoContent } from '../space-tabs/no-content';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
-import { FloatingToolbarExtension } from './floating-toolbar-extension';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
@@ -51,50 +50,19 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
-  const [isTransitioning, setIsTransitioning] = React.useState(false);
 
-  // Track when editable state is changing to prevent flushSync errors
-  React.useEffect(() => {
-    setIsTransitioning(true);
-    const timer = setTimeout(() => setIsTransitioning(false), 100);
-    return () => clearTimeout(timer);
-  }, [editable]);
-
-  // Debounced save handler
-  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  // Track upsertEditorState with a ref to avoid stale closures
-  const upsertEditorStateRef = React.useRef(upsertEditorState);
-  // Ref keeps the blur handler fresh without requiring editor recreation.
-  upsertEditorStateRef.current = upsertEditorState;
-
-  const debouncedSave = React.useCallback((json: JSONContent) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      // We check the ref here to ensure we don't save if unmounted or if logic changes
-      upsertEditorStateRef.current(json);
-    }, 1000);
-  }, []);
-
-  // Clean up timeout on unmount
-  React.useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Track editable state with a ref to avoid stale closures in callbacks
+  // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
 
+  // Keep editableRef.current updated for callbacks
   React.useLayoutEffect(() => {
     editableRef.current = editable;
   }, [editable]);
 
+  // Use editable state for editor - this will be passed to extensions via editor.isEditable
+
+  // Use useMemo with stable deps to prevent extension recreation on sync engine updates
+  // This is critical for suggestion plugins (like entity mention) to maintain state
   const extensions = React.useMemo(
     () => [
       ...tiptapExtensions,
@@ -102,12 +70,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       createGraphLinkHoverExtension(spaceId, router),
       createEntityMentionExtension(spaceId),
       createCommandExtension(spaceId),
-      FloatingToolbarExtension,
     ],
+    // Only recreate when spaceId changes - router is stable
     [spaceId, router]
   );
 
   useInterceptEditorLinks(spaceId);
+
+  // Ref keeps the blur handler fresh without requiring editor recreation.
+  const upsertEditorStateRef = React.useRef(upsertEditorState);
+  upsertEditorStateRef.current = upsertEditorState;
 
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
@@ -116,72 +88,99 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     }
   };
 
-  const editorProps = React.useMemo(
-    () => ({
-      transformPastedHTML: (html: string) => {
-        // Remove id attributes and prevent emoji conversion to images
-        let cleanHtml = removeIdAttributes(html);
+  // Ref to hold the current editor instance for use in effects
+  const editorRef = React.useRef<TiptapEditor | null>(null);
 
-        // Apply all patterns to convert emoji images back to Unicode
-        EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
-          cleanHtml = cleanHtml.replace(pattern, '$1');
-        });
-
-        return cleanHtml;
-      },
-      // Handle emoji conversion on paste
-      handleDOMEvents: {
-        paste: (view: EditorView, event: ClipboardEvent) => {
-          // Get pasted content
-          const clipboardData = event.clipboardData;
-          if (clipboardData) {
-            const htmlData = clipboardData.getData('text/html');
-            const textData = clipboardData.getData('text/plain');
-            // If there's HTML data that might contain emoji images, prevent default and handle manually
-            if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
-              event.preventDefault();
-
-              // Insert as plain text to avoid emoji image conversion
-              if (textData) {
-                view.dispatch(view.state.tr.insertText(textData));
-              }
-              return true;
-            }
-            // For plain text or HTML without emoji images, let TipTap handle normally
-            // This allows lists and other formatted content to be processed correctly
-            return false;
-          }
-          return false;
-        },
-      },
-    }),
-    []
-  );
+  // Track the previous editable state to detect transitions from edit → read mode
+  const prevEditableRef = React.useRef(editable);
 
   const editor = useEditor(
     {
       extensions,
-      editable: true, // Keep editor always editable to prevent recreation
+      editable: editable,
       content: editorJson,
-      editorProps,
+      editorProps: {
+        transformPastedHTML: (html: string) => {
+          // Remove id attributes and prevent emoji conversion to images
+          let cleanHtml = removeIdAttributes(html);
+
+          // Apply all patterns to convert emoji images back to Unicode
+          EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
+            cleanHtml = cleanHtml.replace(pattern, '$1');
+          });
+
+          return cleanHtml;
+        },
+        // Handle emoji conversion on paste
+        handleDOMEvents: {
+          paste: (view, event) => {
+            // Get pasted content
+            const clipboardData = event.clipboardData;
+            if (clipboardData) {
+              const textData = clipboardData.getData('text/plain');
+
+              // Always prevent default and handle manually to avoid emoji conversion
+              event.preventDefault();
+
+              // Use plain text to preserve emoji as Unicode
+              if (textData) {
+                const lines = textData.split('\n');
+                let tr = view.state.tr;
+
+                lines.forEach((line, index) => {
+                  if (index > 0) {
+                    tr = tr.split(tr.selection.head);
+                  }
+                  if (line.trim()) {
+                    tr = tr.insertText(line);
+                  }
+                });
+
+                view.dispatch(tr);
+                return true;
+              }
+            }
+            return false;
+          },
+        },
+      },
       immediatelyRender: false,
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
-        if (editableRef.current) {
+        if (editable) {
           const hasContent =
             editor.getText().trim().length > 0 ||
             (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
-
-          // Trigger debounced save
-          debouncedSave(editor.getJSON());
         }
       },
     },
-    [editorJson, editable]
+    // NOTE: `editorJson` is intentionally excluded — including it destroys and
+    // recreates the editor on every block addition, wiping data block state.
+    // `activeEntityId` handles tab switches; `editorContentVersion` handles
+    // external resets (discard, IndexedDB restore).
+    [editable, activeEntityId, editorContentVersion]
   );
+
+  // Keep editorRef in sync with the current editor instance
+  React.useLayoutEffect(() => {
+    editorRef.current = editor ?? null;
+  });
+
+  // Save editor state synchronously when switching from edit mode to read mode.
+  // This ensures formatting changes (like underline) are persisted even if
+  // the editor doesn't fire onBlur before being recreated on mode switch.
+  React.useLayoutEffect(() => {
+    const wasEditable = prevEditableRef.current;
+    prevEditableRef.current = editable;
+
+    // Only save when transitioning from edit → read mode
+    if (wasEditable && !editable && editorRef.current && !editorRef.current.isDestroyed) {
+      upsertEditorStateRef.current(editorRef.current.getJSON());
+    }
+  }, [editable]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -273,12 +272,11 @@ function useInterceptEditorLinks(spaceId: string) {
     }
 
     function handleClick(event: MouseEvent) {
-      const target = event.target;
+      const target = event.target as Element | null;
       if (!target) {
         return;
       }
 
-      // @ts-expect-error target doesn't have "closest" method in types
       const link = target.closest('a');
 
       if (!link) {
@@ -301,7 +299,7 @@ function useInterceptEditorLinks(spaceId: string) {
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();
-          const entityId = GraphUrl.toEntityId(originalUrl);
+          const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
           router.prefetch(NavUtils.toEntity(spaceId, entityId));
           router.push(NavUtils.toEntity(spaceId, entityId));
         }
@@ -323,9 +321,14 @@ const useSuppressFlushSyncWarning = () => {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
     const orig = console.error;
-    console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
+    console.error = (...args: unknown[]) => {
+      // Only suppress the specific TipTap flushSync warning
+      if (
+        typeof args[0] === 'string' &&
+        args[0].includes('flushSync was called from inside a lifecycle method')
+      ) {
         return;
+      }
       orig.apply(console, args);
     };
     return () => {

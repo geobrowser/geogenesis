@@ -46,7 +46,9 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
   if (person && spaces.length > 0 && !spaces.includes(spaceId)) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(person);
 
-    return redirect(NavUtils.toEntity(newSpaceId, entityId));
+    if (newSpaceId) {
+      return redirect(NavUtils.toEntity(newSpaceId, entityId));
+    }
   }
 
   // @TODO: Real error handling

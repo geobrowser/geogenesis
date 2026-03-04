@@ -16,7 +16,6 @@ import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
-import { detectWeb2URLs } from '~/core/utils/url-detection';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
@@ -131,9 +130,6 @@ export const SelectEntity = ({
     filterByTypes,
     filterBySpace,
   });
-
-  // Check if URL is detected
-  const isUrlDetected = showUrlWarning && query.trim() !== '' && detectWeb2URLs(query).length > 0;
 
   // Auto focus input when component mounts
   useEffect(() => {
