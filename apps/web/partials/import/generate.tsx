@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Space } from '~/core/io/dto/spaces';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -20,6 +21,7 @@ import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
+import { Spinner } from '~/design-system/spinner';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Select } from '~/design-system/select';
 import { Text } from '~/design-system/text';
@@ -27,6 +29,7 @@ import { Text } from '~/design-system/text';
 import {
   columnMappingAtom,
   examplesAtom,
+  extraPropertiesAtom,
   fileNameAtom,
   headersAtom,
   loadingAtom,
@@ -38,6 +41,7 @@ import {
   valuesAtom,
   selectedTypeAtom,
 } from './atoms';
+import { useAutoMapColumns } from './use-auto-map-columns';
 type GenerateProps = {
   spaceId: string;
   space: Space;
@@ -48,6 +52,7 @@ const TYPES_HEADER_NORMALIZED = 'types';
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
+  const { store } = useSyncEngine();
   const [records, setRecords] = useAtom(recordsAtom);
   const [step, setStep] = useAtom(stepAtom);
   const [fileName, setFileName] = useAtom(fileNameAtom);
@@ -58,11 +63,15 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const setValues = useSetAtom(valuesAtom);
   const setRelations = useSetAtom(relationsAtom);
   const setIsPublishOpen = useSetAtom(publishAtom);
+  const setExtraProperties = useSetAtom(extraPropertiesAtom);
   const headers = useAtomValue(headersAtom);
   const examples = useAtomValue(examplesAtom);
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/space';
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { autoMap, isAutoMapping } = useAutoMapColumns(spaceId);
+  const hasAutoMappedRef = useRef(false);
 
   const hasTypesColumn = useMemo(() => {
     const normalized = headers.map(h => h?.trim().toLowerCase() ?? '');
@@ -113,6 +122,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       return changed ? next : prev;
     });
   }, [headers, schema, setColumnMapping, HIGH_CONFIDENCE_HEADER_NORMALIZATIONS]);
+
+  // Auto-map unmapped columns via space-wide property search after schema matching
+  useEffect(() => {
+    if (headers.length === 0) return;
+    // Wait for schema matching to finish first when a selectedType is set
+    if (selectedType && schema.length === 0) return;
+    if (hasAutoMappedRef.current || isAutoMapping) return;
+
+    // Check if there are unmapped columns
+    const hasUnmapped = headers.some((_, i) => columnMapping[i] === undefined);
+    if (!hasUnmapped) return;
+
+    hasAutoMappedRef.current = true;
+    autoMap();
+  }, [headers, schema, selectedType, columnMapping, autoMap, isAutoMapping]);
 
   const MAX_FILE_SIZE_MB = 100;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -192,16 +216,19 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   };
 
   const handleReset = useCallback(() => {
+    store.clearLocalChangesForSpace(spaceId);
     setStep('step1');
     setSelectedType(null);
     setTypesColumnIndex(undefined);
     setColumnMapping({});
+    setExtraProperties({});
     setFileName(undefined);
     setFileSizeBytes(undefined);
     setRecords([]);
     setValues([]);
     setRelations([]);
-  }, [setColumnMapping, setRecords, setRelations, setSelectedType, setStep, setValues, setTypesColumnIndex]);
+    hasAutoMappedRef.current = false;
+  }, [store, spaceId, setColumnMapping, setExtraProperties, setRecords, setRelations, setSelectedType, setStep, setValues, setTypesColumnIndex]);
 
   const handleDeleteFile = useCallback(() => {
     setFileName(undefined);
@@ -218,7 +245,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const handleOpenPublish = () => setIsPublishOpen(true);
 
   const isMappingComplete =
-    selectedType &&
+    (selectedType || typesColumnIndex !== undefined) &&
     records.length > 0 &&
     nameColIdx !== undefined &&
     Object.keys(columnMapping).length > 0;
@@ -366,9 +393,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
             <p className="text-metadata text-grey-04">Upload a file to continue</p>
           </div>
-        ) : !selectedType ? (
+        ) : !selectedType && typesColumnIndex === undefined ? (
           <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
             <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
+          </div>
+        ) : isAutoMapping ? (
+          <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+            <Spinner />
+            <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
           </div>
         ) : (() => {
           const step3DataRows = records.slice(1).filter(
