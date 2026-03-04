@@ -6,8 +6,8 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { Subspace } from '~/core/io/dto/subspaces';
-import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { firstLine } from '~/core/opengraph';
+import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';

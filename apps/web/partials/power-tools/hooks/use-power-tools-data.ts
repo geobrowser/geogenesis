@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -46,6 +46,7 @@ function buildRowMeta(
 export function usePowerToolsData(options?: {
   pageSize?: number;
   filterStateOverride?: Filter[];
+  filterModeOverride?: FilterMode;
 }): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
@@ -53,12 +54,16 @@ export function usePowerToolsData(options?: {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const { spaceId } = useDataBlockInstance();
   const { source } = useSource();
-  const { filterState } = useFilters();
+  const { filterState, filterMode } = useFilters();
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
   const effectiveFilterState = options?.filterStateOverride ?? filterState;
-  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [effectiveFilterState]);
+  const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
+  const where = React.useMemo(
+    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
+    [effectiveFilterState, effectiveFilterMode]
+  );
 
   const queryEntitiesAsync = useQueryEntitiesAsync();
 

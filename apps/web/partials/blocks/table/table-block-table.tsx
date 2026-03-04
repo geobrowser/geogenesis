@@ -11,12 +11,14 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
+import * as React from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
+import { ColumnSortState, sortRowsByColumn } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -28,6 +30,7 @@ import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
+import { SortableColumnHeader } from './sortable-column-header';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -37,23 +40,31 @@ const ColumnHeader = ({
   isEditMode,
   spaceId,
   isLastColumn,
+  sort,
+  onSort,
 }: {
   column: Property;
   isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
+  sort: ColumnSortState;
+  onSort: (next: ColumnSortState) => void;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
-  return isEditMode && !isNameColumn ? (
-    <EditableEntityTableColumnHeader
-      unpublishedColumns={[]}
-      column={column}
-      entityId={column.id}
-      spaceId={spaceId}
-      isLastColumn={isLastColumn}
-    />
-  ) : (
-    <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
+  const label = isNameColumn ? 'Name' : (column.name ?? column.id);
+
+  return (
+    <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
+      {isEditMode && !isNameColumn ? (
+        <EditableEntityTableColumnHeader
+          unpublishedColumns={[]}
+          column={column}
+          entityId={column.id}
+          spaceId={spaceId}
+          isLastColumn={isLastColumn}
+        />
+      ) : undefined}
+    </SortableColumnHeader>
   );
 };
 
@@ -201,9 +212,15 @@ export const TableBlockTable = ({
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
+  const [sortState, setSortState] = React.useState<ColumnSortState>(null);
+
+  const displayRows = React.useMemo(() => {
+    if (!sortState) return rows;
+    return sortRowsByColumn(rows, sortState, propertiesSchema ?? {}, space);
+  }, [rows, sortState, propertiesSchema, space]);
 
   const table = useReactTable({
-    data: rows,
+    data: displayRows,
     columns: formatColumns(properties, isEditing, [], space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
@@ -277,7 +294,7 @@ export const TableBlockTable = ({
                       !isEditingDateTime ? 'min-w-[250px]' : 'min-w-[300px]'
                     )}
                   >
-                    <div className="flex h-full w-full items-center gap-[10px]">
+                    <div className="group/header flex h-full w-full items-center gap-[10px]">
                       {isEditing && !isShown ? <EyeHide /> : null}
                       <ColumnHeader
                         key={column.id}
@@ -285,6 +302,8 @@ export const TableBlockTable = ({
                         isEditMode={isEditing}
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
+                        sort={sortState}
+                        onSort={setSortState}
                       />
                     </div>
                   </th>

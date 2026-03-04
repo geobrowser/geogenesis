@@ -20,6 +20,8 @@ export type Filter = {
   relationValueTypes?: { id: string; name: string | null }[];
 };
 
+export type FilterMode = 'AND' | 'OR';
+
 /**
  * We support two types of filters, either a filter on a set of entities,
  * or a filter on a specific entity. These each have different filter
@@ -43,6 +45,7 @@ const PropertyFilter = Schema.Struct({
 type PropertyFilter = Schema.Schema.Type<typeof PropertyFilter>;
 
 const FilterString = Schema.Struct({
+  mode: Schema.optional(Schema.Literal('AND', 'OR')),
   spaceId: Schema.optional(
     Schema.Struct({
       in: Schema.Array(Schema.String),
@@ -52,9 +55,13 @@ const FilterString = Schema.Struct({
     Schema.Record({
       key: Schema.String,
       value: Schema.Union(
-        // Property filter
+        // Property filter (single value)
         Schema.Struct({
           is: Schema.String,
+        }),
+        // Property filter (multiple values for OR)
+        Schema.Struct({
+          in: Schema.Array(Schema.String),
         }),
         // Entity filter
         Schema.Struct({
@@ -86,6 +93,9 @@ const FilterMap = Schema.mutable(
         is: Schema.String,
       }),
       Schema.Struct({
+        in: Schema.mutable(Schema.Array(Schema.String)),
+      }),
+      Schema.Struct({
         fromEntity: Schema.Struct({
           is: Schema.String,
         }),
@@ -104,7 +114,7 @@ const FilterMap = Schema.mutable(
 
 type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
-export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): string {
+export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mode: FilterMode = 'AND'): string {
   const spaces = filters.filter(f => ID.equals(f.columnId, SystemIds.SPACE_FILTER)).map(f => f.value);
 
   const filterMap: FilterMap = {};
@@ -118,11 +128,21 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): st
           type: { is: f.columnId },
         };
       } else {
-        filterMap[f.columnId] = { is: f.value };
+        const existing = filterMap[f.columnId];
+        if (existing && 'is' in existing) {
+          // Convert single value to multi-value (OR)
+          filterMap[f.columnId] = { in: [existing.is, f.value] };
+        } else if (existing && 'in' in existing) {
+          // Append to existing multi-value
+          existing.in.push(f.value);
+        } else {
+          filterMap[f.columnId] = { is: f.value };
+        }
       }
     });
 
   const filter: FilterString = {
+    ...(mode === 'OR' && { mode: 'OR' as const }),
     ...(spaces.length > 0 && { spaceId: { in: spaces } }),
     ...(Object.keys(filterMap).length > 0 && { filter: filterMap }),
   };
@@ -140,9 +160,14 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): st
   });
 }
 
-export async function fromGeoFilterString(filterString: string | null): Promise<Filter[]> {
+export type FilterStateResult = {
+  filters: Filter[];
+  mode: FilterMode;
+};
+
+export async function fromGeoFilterString(filterString: string | null): Promise<FilterStateResult> {
   if (!filterString) {
-    return [];
+    return { filters: [], mode: 'AND' };
   }
 
   const where = JSON.parse(filterString);
@@ -171,7 +196,15 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
               property: filterValue.type.is,
               is: filterValue.type.is,
             });
-            // Property filter
+            // Property filter (multiple values for OR)
+          } else if ('in' in filterValue) {
+            for (const value of filterValue.in) {
+              filters.push({
+                property: key,
+                is: value,
+              });
+            }
+            // Property filter (single value)
           } else if ('is' in filterValue) {
             filters.push({
               property: key,
@@ -182,6 +215,7 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
       }
 
       return {
+        mode: value.mode,
         spaces: value.spaceId?.in ?? [],
         filters,
         entity: entity as { fromEntity: string; typeOf: string } | undefined,
@@ -191,8 +225,10 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
 
   if (!filtersFromString) {
     console.log('No filters from string', filtersFromString);
-    return [];
+    return { filters: [], mode: 'AND' };
   }
+
+  const mode: FilterMode = filtersFromString.mode ?? 'AND';
 
   const filters: Filter[] = [];
 
@@ -236,7 +272,7 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
     filters.push(entityFilter);
   }
 
-  return filters;
+  return { filters, mode };
 }
 
 async function getSpaceName(spaceId: string) {

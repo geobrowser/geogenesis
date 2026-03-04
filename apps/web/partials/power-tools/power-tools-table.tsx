@@ -1,7 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   DndContext,
   DragEndEvent,
@@ -11,8 +9,16 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { SystemIds } from '@geoprotocol/geo-sdk';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
@@ -20,15 +26,17 @@ import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { ColumnSortState, sortPowerToolsRowsByColumn } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Close } from '~/design-system/icons/close';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
-import { Close } from '~/design-system/icons/close';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { SortableColumnHeader } from '~/partials/blocks/table/sortable-column-header';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 
@@ -37,6 +45,7 @@ import { PowerToolsRow } from './types';
 interface Props {
   rows: PowerToolsRow[];
   properties: Property[];
+  propertiesById: Record<string, Property>;
   spaceId: string;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -236,9 +245,13 @@ function PowerToolsCell({
 
 function SortableHeaderCell({
   property,
+  sortState,
+  onSort,
   onResizeMouseDown,
 }: {
   property: Property;
+  sortState: ColumnSortState;
+  onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
   onResizeMouseDown: (event: React.MouseEvent, propertyId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -256,19 +269,23 @@ function SortableHeaderCell({
     <div
       ref={setNodeRef}
       style={style}
-      className="relative flex h-full min-w-0 items-center border-r border-grey-02 bg-grey-01 px-3"
+      className="group/header relative flex h-full min-w-0 items-center border-r border-grey-02 bg-grey-01 px-3"
     >
       <div
         {...attributes}
         {...listeners}
-        className="mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-grey-05 active:cursor-grabbing"
+        className="hover:text-grey-05 mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 hover:bg-grey-02 active:cursor-grabbing"
         title="Drag to reorder column"
       >
         <OrderDots color="currentColor" />
       </div>
-      <Text variant="metadata" className="min-w-0 flex-1 truncate">
-        {property.name || property.id}
-      </Text>
+      <SortableColumnHeader
+        columnId={property.id}
+        label={property.name || property.id}
+        sort={sortState}
+        onSort={onSort}
+        variant="metadata"
+      />
       <div
         className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
         onMouseDown={e => onResizeMouseDown(e, property.id)}
@@ -280,6 +297,7 @@ function SortableHeaderCell({
 export function PowerToolsTable({
   rows,
   properties,
+  propertiesById,
   spaceId,
   hasNextPage,
   isFetchingNextPage,
@@ -294,6 +312,7 @@ export function PowerToolsTable({
   const isEditing = useUserIsEditing(spaceId);
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [isResizing, setIsResizing] = React.useState<string | null>(null);
+  const [sortState, setSortState] = React.useState<ColumnSortState>(null);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
 
@@ -385,8 +404,13 @@ export function PowerToolsTable({
     };
   }, [isResizing]);
 
+  const sortedRows = React.useMemo(() => {
+    if (!sortState) return rows;
+    return sortPowerToolsRowsByColumn(rows, sortState, propertiesById, spaceId);
+  }, [rows, sortState, propertiesById, spaceId]);
+
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: sortedRows.length,
     getScrollElement: () => tableRef.current,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
     overscan: 6,
@@ -413,10 +437,10 @@ export function PowerToolsTable({
     const lastItem = virtualRows[virtualRows.length - 1];
     if (!lastItem) return;
 
-    if (lastItem.index >= rows.length - 1 && hasNextPage && !isFetchingNextPage) {
+    if (lastItem.index >= sortedRows.length - 1 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
-  }, [virtualRows, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [virtualRows, sortedRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div ref={tableRef} className="h-full w-full overflow-auto">
@@ -435,6 +459,8 @@ export function PowerToolsTable({
                 <SortableHeaderCell
                   key={property.id}
                   property={property}
+                  sortState={sortState}
+                  onSort={setSortState}
                   onResizeMouseDown={handleMouseDown}
                 />
               ))}
@@ -452,7 +478,7 @@ export function PowerToolsTable({
         }}
       >
         {virtualRows.map(virtualRow => {
-          const row = rows[virtualRow.index];
+          const row = sortedRows[virtualRow.index];
           const rowId = row.entityId;
 
           return (
