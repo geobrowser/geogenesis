@@ -1,19 +1,28 @@
 'use client';
 
-import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Effect } from 'effect';
 
 import * as React from 'react';
-import { useMemo, useState } from 'react';
 
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Search } from '~/design-system/icons/search';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
+import { getProperty } from '~/core/io/queries';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { Property } from '~/core/types';
+
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 const ROW_HEIGHT_ESTIMATE = 56;
 /** Two-line header: property name + CSV column / Needs mapping */
 const HEADER_HEIGHT = 56;
 const DEFAULT_COLUMN_WIDTH = 200;
+
+/** Split a relation cell on common multi-value separators (, ; |) and trim each part. */
+function splitRelationCell(raw: string): string[] {
+  return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+}
 
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
@@ -23,104 +32,68 @@ export type ColumnConfig = {
   headerLabel: string;
   /** Mapped schema property name, or null to show "Needs mapping" */
   propertyName: string | null;
+  /** Data type of the mapped property, used to render relation cells as chips */
+  dataType?: string;
 };
 
-export type SchemaProperty = { id: string; name: string | null };
-
-function MappingColumnDropdown({
-  headerLabel,
-  schema,
+function PropertyMappingPopover({
+  spaceId,
   csvColumnIndex,
   onSelectProperty,
-  onRequestCreateProperty,
+  onCreateProperty,
   trigger,
 }: {
-  headerLabel: string;
-  schema: SchemaProperty[];
+  spaceId: string;
   csvColumnIndex: number;
-  onSelectProperty: (csvColumnIndex: number, propertyId: string) => void;
-  onRequestCreateProperty?: (csvColumnIndex: number) => void;
+  onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
+  onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   trigger: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return schema;
-    return schema.filter(
-      p => (p.name ?? p.id).toLowerCase().includes(q)
-    );
-  }, [schema, search]);
-
-  const handleSelect = (propertyId: string) => {
-    onSelectProperty(csvColumnIndex, propertyId);
-    setOpen(false);
-    setSearch('');
-  };
-
-  const handleCreate = () => {
-    onRequestCreateProperty?.(csvColumnIndex);
-    setOpen(false);
-    setSearch('');
-  };
+  const { store } = useSyncEngine();
+  const { createProperty } = useCreateProperty(spaceId);
 
   return (
-    <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
-      <DropdownPrimitive.Trigger asChild>
+    <SelectEntityAsPopover
+      trigger={
         <span className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50">
           {trigger}
-          <span className="shrink-0">
-            <ChevronDownSmall color="ctaPrimary" />
-          </span>
         </span>
-      </DropdownPrimitive.Trigger>
-      <DropdownPrimitive.Content
-          align="start"
-          sideOffset={2}
-          className="z-10 min-w-[280px] origin-top-left overflow-hidden rounded border border-grey-02 bg-white shadow-lg"
-          onCloseAutoFocus={e => e.preventDefault()}
-        >
-          <div className="border-b border-grey-02 p-2">
-            <div className="flex items-center gap-2 rounded bg-grey-01 px-2 py-1.5">
-              <span className="shrink-0">
-                <Search color="grey-04" />
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={headerLabel}
-                className="min-w-0 flex-1 bg-transparent text-button text-text placeholder:text-grey-04 focus:outline-none"
-                autoFocus
-              />
-            </div>
-          </div>
-          <DropdownPrimitive.Group className="max-h-[240px] overflow-y-auto">
-            {filtered.map(p => (
-              <DropdownPrimitive.Item
-                key={p.id}
-                onSelect={() => handleSelect(p.id)}
-                className="flex cursor-pointer items-center gap-2 border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 last:border-none hover:bg-grey-01 hover:text-text focus:bg-grey-01 focus:text-text focus:outline-none"
-              >
-                <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
-                {p.name ?? p.id}
-              </DropdownPrimitive.Item>
-            ))}
-          </DropdownPrimitive.Group>
-          {onRequestCreateProperty && (
-            <div className="border-t border-grey-02 p-2">
-              <button
-                type="button"
-                onClick={handleCreate}
-                className="w-full rounded px-3 py-2 text-left text-button text-text hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
-              >
-                Create new
-              </button>
-            </div>
-          )}
-        </DropdownPrimitive.Content>
-    </DropdownPrimitive.Root>
+      }
+      spaceId={spaceId}
+      relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+      placeholder="Find or create property..."
+      advanced={false}
+      showIDs={false}
+      onDone={async result => {
+        let property: Property | null = store.getProperty(result.id);
+        if (!property) {
+          property = await Effect.runPromise(getProperty(result.id));
+        }
+        onSelectProperty(csvColumnIndex, result.id, property ?? {
+          id: result.id,
+          name: result.name,
+          dataType: 'TEXT',
+        });
+      }}
+      onCreateEntity={result => {
+        const propertyId = createProperty({
+          name: result.name || '',
+          propertyType: result.renderableType || 'TEXT',
+        });
+
+        // Resolve the full property from the store after creation
+        const property = store.getProperty(propertyId);
+        if (property) {
+          onCreateProperty?.(csvColumnIndex, propertyId, property);
+        } else {
+          onCreateProperty?.(csvColumnIndex, propertyId, {
+            id: propertyId,
+            name: result.name,
+            dataType: 'TEXT',
+          });
+        }
+      }}
+    />
   );
 }
 
@@ -130,20 +103,19 @@ type Props = {
   columns: ColumnConfig[];
   /** Optional min height for the scroll container (e.g. 400px) */
   minHeight?: number;
-  /** When provided, "Needs mapping" columns show a dropdown to pick or create a property */
-  schema?: SchemaProperty[];
-  onSelectProperty?: (csvColumnIndex: number, propertyId: string) => void;
-  /** When provided, dropdown shows "Create new property" and calls this when selected */
-  onRequestCreateProperty?: (csvColumnIndex: number) => void;
+  /** Space ID for property search/creation */
+  spaceId: string;
+  onSelectProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
+  onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
 };
 
 export function ImportPreviewTable({
   dataRows,
   columns,
   minHeight = 400,
-  schema = [],
+  spaceId,
   onSelectProperty,
-  onRequestCreateProperty,
+  onCreateProperty,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
 
@@ -190,19 +162,35 @@ export function ImportPreviewTable({
                 {col.headerLabel}
               </Text>
               {col.propertyName !== null ? (
-                <span className="mt-0.5 flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
-                  <Text variant="metadata" className="truncate text-purple">
-                    {col.propertyName}
-                  </Text>
-                </span>
-              ) : onSelectProperty && schema.length > 0 ? (
-                <MappingColumnDropdown
-                  headerLabel={col.headerLabel}
-                  schema={schema}
+                onSelectProperty ? (
+                  <PropertyMappingPopover
+                    spaceId={spaceId}
+                    csvColumnIndex={col.csvColumnIndex}
+                    onSelectProperty={onSelectProperty}
+                    onCreateProperty={onCreateProperty}
+                    trigger={
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
+                        <Text variant="metadata" className="truncate text-purple">
+                          {col.propertyName}
+                        </Text>
+                      </span>
+                    }
+                  />
+                ) : (
+                  <span className="mt-0.5 flex items-center gap-1.5">
+                    <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
+                    <Text variant="metadata" className="truncate text-purple">
+                      {col.propertyName}
+                    </Text>
+                  </span>
+                )
+              ) : onSelectProperty ? (
+                <PropertyMappingPopover
+                  spaceId={spaceId}
                   csvColumnIndex={col.csvColumnIndex}
                   onSelectProperty={onSelectProperty}
-                  onRequestCreateProperty={onRequestCreateProperty}
+                  onCreateProperty={onCreateProperty}
                   trigger={
                     <span className="flex items-center gap-1.5">
                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
@@ -255,16 +243,30 @@ export function ImportPreviewTable({
               >
                 {columns.map(col => {
                   const value = row[col.csvColumnIndex] ?? '';
+                  const isRelation = col.dataType === 'RELATION';
                   return (
                     <div
                       key={`${virtualRow.index}-${col.csvColumnIndex}`}
                       className="border-r border-grey-02 px-4 py-2"
                     >
-                      <div className="flex w-full items-start gap-2 overflow-hidden">
-                        <Text variant="metadata" className="min-w-0 truncate text-text">
-                          {value || '—'}
-                        </Text>
-                      </div>
+                      {isRelation && value ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {splitRelationCell(value).map((part, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center rounded border border-grey-02 px-1.5 py-0.5 text-metadata text-text"
+                            >
+                              {part}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex w-full items-start gap-2 overflow-hidden">
+                          <Text variant="metadata" className="min-w-0 truncate text-text">
+                            {value || '—'}
+                          </Text>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

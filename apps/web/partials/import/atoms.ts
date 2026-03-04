@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { atom } from 'jotai';
 
-import { Value } from '~/core/types';
+import { Property, Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -20,6 +20,9 @@ export const typesColumnIndexAtom = atom<number | undefined>(undefined);
 
 /** Column index -> property id. Must include one column mapped to NAME_PROPERTY. */
 export const columnMappingAtom = atom<Record<number, string>>({});
+
+/** Properties selected/created during mapping that aren't in the type's schema. */
+export const extraPropertiesAtom = atom<Record<string, Property>>({});
 
 export const headersAtom = atom(get => {
   const records = get(recordsAtom);
