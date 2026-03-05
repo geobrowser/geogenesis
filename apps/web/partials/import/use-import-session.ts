@@ -10,10 +10,12 @@ import {
   extraPropertiesAtom,
   fileNameAtom,
   recordsAtom,
+  relationOverridesAtom,
   relationsAtom,
   selectedTypeAtom,
   stepAtom,
   typesColumnIndexAtom,
+  unresolvedLinksAtom,
   valuesAtom,
 } from './atoms';
 import type { ImportStep } from './atoms';
@@ -24,6 +26,8 @@ export function useImportSession(spaceId: string) {
   const relations = useAtomValue(relationsAtom);
   const setValues = useSetAtom(valuesAtom);
   const setRelations = useSetAtom(relationsAtom);
+  const setRelationOverrides = useSetAtom(relationOverridesAtom);
+  const setUnresolvedLinks = useSetAtom(unresolvedLinksAtom);
   const setSelectedType = useSetAtom(selectedTypeAtom);
   const setTypesColumnIndex = useSetAtom(typesColumnIndexAtom);
   const setColumnMapping = useSetAtom(columnMappingAtom);
@@ -40,10 +44,12 @@ export function useImportSession(spaceId: string) {
     });
     setValues([]);
     setRelations([]);
-  }, [relations, setRelations, setValues, spaceId, store, values]);
+    setUnresolvedLinks({});
+  }, [relations, setRelations, setUnresolvedLinks, setValues, spaceId, store, values]);
 
   const resetMappedState = useCallback(() => {
     clearGeneratedChanges();
+    setRelationOverrides({});
     setSelectedType(null);
     setTypesColumnIndex(undefined);
     setColumnMapping({});
@@ -52,6 +58,7 @@ export function useImportSession(spaceId: string) {
     clearGeneratedChanges,
     setColumnMapping,
     setExtraProperties,
+    setRelationOverrides,
     setSelectedType,
     setTypesColumnIndex,
   ]);

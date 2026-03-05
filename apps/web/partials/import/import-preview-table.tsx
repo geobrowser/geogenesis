@@ -14,6 +14,7 @@ import { Property } from '~/core/types';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+import type { UnresolvedImportCell } from './atoms';
 import { splitRelationCell } from './relation-cell';
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -31,6 +32,10 @@ export type ColumnConfig = {
   propertyName: string | null;
   /** Data type of the mapped property, used to render relation cells as chips */
   dataType?: string;
+  /** Mapped property id for this CSV column (null when unmapped) */
+  propertyId?: string | null;
+  /** Allowed relation target types for this relation property */
+  relationValueTypes?: Property['relationValueTypes'];
 };
 
 function PropertyMappingPopover({
@@ -104,6 +109,8 @@ type Props = {
   spaceId: string;
   onSelectProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
+  unresolvedLinks?: Record<string, UnresolvedImportCell>;
+  onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }) => void;
 };
 
 export function ImportPreviewTable({
@@ -113,6 +120,8 @@ export function ImportPreviewTable({
   spaceId,
   onSelectProperty,
   onCreateProperty,
+  unresolvedLinks = {},
+  onResolveRelationToken,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
 
@@ -241,6 +250,10 @@ export function ImportPreviewTable({
                 {columns.map(col => {
                   const value = row[col.csvColumnIndex] ?? '';
                   const isRelation = col.dataType === 'RELATION';
+                  const unresolved = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
+                  const unresolvedSet =
+                    unresolved?.kind === 'relation' ? new Set(unresolved.unresolvedValues) : null;
+
                   return (
                     <div
                       key={`${virtualRow.index}-${col.csvColumnIndex}`}
@@ -248,20 +261,67 @@ export function ImportPreviewTable({
                     >
                       {isRelation && value ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          {splitRelationCell(value).map((part, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center rounded border border-grey-02 px-1.5 py-0.5 text-metadata text-text"
-                            >
-                              {part}
+                          {splitRelationCell(value).map((part, i) => {
+                            if (
+                              unresolvedSet?.has(part) &&
+                              onResolveRelationToken
+                            ) {
+                              return (
+                                <SelectEntityAsPopover
+                                  key={i}
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className="inline-flex cursor-pointer items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01 hover:bg-red-01/10"
+                                    >
+                                      {part}
+                                    </button>
+                                  }
+                                  spaceId={spaceId}
+                                  relationValueTypes={col.relationValueTypes}
+                                  placeholder="Find or create entity..."
+                                  advanced={false}
+                                  showIDs={false}
+                                  onCreateEntity={() => undefined}
+                                  onDone={result =>
+                                    onResolveRelationToken(col.csvColumnIndex, part, {
+                                      id: result.id,
+                                      name: result.name ?? part,
+                                    })
+                                  }
+                                />
+                              );
+                            }
+
+                            return (
+                              <span
+                                key={i}
+                                className={
+                                  unresolvedSet?.has(part)
+                                    ? 'inline-flex items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01'
+                                    : 'inline-flex items-center rounded border border-grey-02 px-1.5 py-0.5 text-metadata text-text'
+                                }
+                              >
+                                {part}
+                              </span>
+                            );
+                          })}
+                          {unresolved?.kind === 'relation' ? (
+                            <span className="inline-flex items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
+                              Unresolved link
                             </span>
-                          ))}
+                          ) : null}
                         </div>
                       ) : (
                         <div className="flex w-full items-start gap-2 overflow-hidden">
                           <Text variant="metadata" className="min-w-0 truncate text-text">
                             {value || '—'}
                           </Text>
+                          {unresolved?.kind === 'entity' ? (
+                            <span className="inline-flex shrink-0 items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
+                              Unresolved entity
+                            </span>
+                          ) : null}
                         </div>
                       )}
                     </div>

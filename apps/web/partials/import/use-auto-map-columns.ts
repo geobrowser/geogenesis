@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 import { useAtom, useAtomValue } from 'jotai';
 import { useCallback, useState } from 'react';
 
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { getProperty, getResults } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
@@ -19,14 +18,13 @@ import { columnMappingAtom, extraPropertiesAtom, headersAtom } from './atoms';
  * Rules:
  * - Exact match, 1 result → auto-map
  * - Exact match, 2+ results → leave unmapped (manual review)
- * - No match → create new TEXT property and map
+ * - No match → leave unmapped (manual review)
  */
 export function useAutoMapColumns(spaceId: string) {
   const headers = useAtomValue(headersAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const [, setExtraProperties] = useAtom(extraPropertiesAtom);
   const { store } = useSyncEngine();
-  const { createProperty } = useCreateProperty(spaceId);
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
   const autoMap = useCallback(async () => {
@@ -81,25 +79,8 @@ export function useAutoMapColumns(spaceId: string) {
               mappedByColumn[colIndex] = propertyId;
               mappedProperties[propertyId] = property;
             }
-          } else if (exactMatches.length === 0) {
-            // No match → create a new TEXT property
-            const propertyId = createProperty({ name: headerName, propertyType: 'TEXT' });
-
-            // Resolve from store (createProperty writes to local store synchronously)
-            let property: Property | null = store.getProperty(propertyId);
-            if (!property) {
-              // Fallback: construct a minimal Property
-              property = {
-                id: propertyId,
-                name: headerName,
-                dataType: 'TEXT',
-              };
-            }
-
-            mappedByColumn[colIndex] = propertyId;
-            mappedProperties[propertyId] = property;
           }
-          // exactMatches.length >= 2 → skip, leave for manual review
+          // exactMatches.length === 0 or >= 2 → skip, leave for manual review
         } catch (error) {
           console.warn(`[import] Auto-map failed for column "${headerName}"`, error);
         }
@@ -124,7 +105,7 @@ export function useAutoMapColumns(spaceId: string) {
     } finally {
       setIsAutoMapping(false);
     }
-  }, [headers, columnMapping, spaceId, store, createProperty, setColumnMapping, setExtraProperties]);
+  }, [headers, columnMapping, spaceId, store, setColumnMapping, setExtraProperties]);
 
   return { autoMap, isAutoMapping };
 }

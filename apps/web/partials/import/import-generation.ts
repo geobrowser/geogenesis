@@ -24,8 +24,8 @@ export type ResolvedEntity = { id: string; name: string; status: 'found' | 'crea
 
 export type BuildRowsInput = {
   dataRows: string[][];
-  nameColIdx: number;
   columnMapping: Record<number, string>;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
   selectedType: { id: string; name: string | null } | null;
   typesColumnIndex: number | undefined;
   resolvedTypes: Map<string, { id: string; name: string }>;
@@ -33,6 +33,56 @@ export type BuildRowsInput = {
   spaceId: string;
   propertyLookup: PropertyLookup;
 };
+
+export function toImportCellKey(rowIndex: number, csvColumnIndex: number): string {
+  return `${rowIndex}:${csvColumnIndex}`;
+}
+
+export function buildUnresolvedLinksByCell(params: {
+  dataRows: string[][];
+  columnMapping: Record<number, string>;
+  nameColIdx: number;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
+  resolvedEntities: Map<string, ResolvedEntity>;
+  propertyLookup: PropertyLookup;
+}): Record<string, { kind: 'entity' } | { kind: 'relation'; unresolvedValues: string[] }> {
+  const { dataRows, columnMapping, nameColIdx, resolvedRows, resolvedEntities, propertyLookup } = params;
+  const unresolved: Record<string, { kind: 'entity' } | { kind: 'relation'; unresolvedValues: string[] }> = {};
+
+  for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
+    const row = dataRows[rowIndex];
+
+    if (!resolvedRows.has(rowIndex)) {
+      const rowName = (row[nameColIdx] ?? '').trim();
+      if (rowName) {
+        unresolved[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'entity' };
+      }
+    }
+
+    for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
+      if (propertyId === SystemIds.NAME_PROPERTY) continue;
+      const colIdx = parseInt(colIdxStr, 10);
+      const raw = (row[colIdx] ?? '').trim();
+      if (!raw) continue;
+
+      const property = getPropertyFromSources(propertyId, propertyLookup);
+      if (!property || property.dataType !== 'RELATION') continue;
+
+      const unresolvedValues = splitRelationCell(raw).filter(part => {
+        const resolved = resolvedEntities.get(`${propertyId}::${part}`);
+        return !resolved || resolved.status === 'ambiguous';
+      });
+
+      if (unresolvedValues.length === 0) continue;
+      unresolved[toImportCellKey(rowIndex, colIdx)] = {
+        kind: 'relation',
+        unresolvedValues: Array.from(new Set(unresolvedValues)),
+      };
+    }
+  }
+
+  return unresolved;
+}
 
 export function createGenerationTracker() {
   let current = 0;
@@ -87,8 +137,8 @@ export function collectRelationCells(params: {
 export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; relations: Relation[] } {
   const {
     dataRows,
-    nameColIdx,
     columnMapping,
+    resolvedRows,
     selectedType,
     typesColumnIndex,
     resolvedTypes,
@@ -99,10 +149,14 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
 
   const values: Value[] = [];
   const relations: Relation[] = [];
+  const createdRelationEntityNameValueIds = new Set<string>();
 
-  for (const row of dataRows) {
-    const entityId = ID.createEntityId();
-    const rowName = (row[nameColIdx] ?? '').trim() || 'Unnamed';
+  for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
+    const row = dataRows[rowIndex];
+    const resolvedRow = resolvedRows.get(rowIndex);
+    if (!resolvedRow) continue;
+    const entityId = resolvedRow.entityId;
+    const rowName = resolvedRow.name;
 
     let rowType: { id: string; name: string | null } | null = selectedType;
     if (typesColumnIndex !== undefined) {
@@ -153,6 +207,25 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
         for (const part of splitRelationCell(raw)) {
           const resolved = resolvedEntities.get(`${propertyId}::${part}`);
           if (!resolved || resolved.status === 'ambiguous') continue;
+
+          if (resolved.status === 'created') {
+            const createdNameValueId = ID.createValueId({
+              entityId: resolved.id,
+              propertyId: SystemIds.NAME_PROPERTY,
+              spaceId,
+            });
+            if (!createdRelationEntityNameValueIds.has(createdNameValueId)) {
+              createdRelationEntityNameValueIds.add(createdNameValueId);
+              values.push({
+                id: createdNameValueId,
+                entity: { id: resolved.id, name: resolved.name },
+                property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
+                spaceId,
+                value: resolved.name,
+                isLocal: true,
+              });
+            }
+          }
 
           relations.push({
             id: ID.createEntityId(),
