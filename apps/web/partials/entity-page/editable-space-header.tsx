@@ -18,9 +18,7 @@ import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
-import { MoveSpace } from '~/design-system/icons/move-space';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
@@ -177,6 +175,9 @@ export function EditableSpaceHeading({
               )}
               {!isCreatingNewVersion && (
                 <>
+                  <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                    <p>Create in space</p>
+                  </MenuItem>
                   <MenuItem onClick={() => setIsContextMenuOpen(false)}>
                     <p>Set space topic</p>
                   </MenuItem>
@@ -188,22 +189,11 @@ export function EditableSpaceHeading({
                   >
                     <p>Subtopics</p>
                   </MenuItem>
-                  <MenuItem onClick={() => setIsContextMenuOpen(false)}>
-                    <p>Space relationships</p>
+                  <MenuItem onClick={onCopyEntityId}>
+                    <p>Copy entity ID</p>
                   </MenuItem>
                   <MenuItem onClick={onCopySpaceId}>
-                    <Copy color="grey-04" />
-                    <p>Copy Space ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={onCopyEntityId}>
-                    <Copy color="grey-04" />
-                    <p>Copy Entity ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
-                    <div className="shrink-0">
-                      <MoveSpace />
-                    </div>
-                    <p>Create in space</p>
+                    <p>Copy space ID</p>
                   </MenuItem>
                 </>
               )}
