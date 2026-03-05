@@ -5,7 +5,6 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { ID } from '~/core/id';
 
 import {
   columnMappingAtom,
@@ -16,6 +15,7 @@ import {
   relationsAtom,
   selectedTypeAtom,
   stepAtom,
+  typeOverridesAtom,
   typesColumnIndexAtom,
   unresolvedLinksAtom,
   valuesAtom,
@@ -37,6 +37,7 @@ export function useImportGenerate(spaceId: string) {
   const extraProperties = useAtomValue(extraPropertiesAtom);
   const selectedType = useAtomValue(selectedTypeAtom);
   const relationOverrides = useAtomValue(relationOverridesAtom);
+  const typeOverrides = useAtomValue(typeOverridesAtom);
   const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const [isLoading, setIsLoading] = useAtom(loadingAtom);
   const setValues = useSetAtom(valuesAtom);
@@ -101,14 +102,17 @@ export function useImportGenerate(spaceId: string) {
         guard: { isCurrent: () => generationTrackerRef.current.isCurrent(generationId) },
       });
       if (typeResolution.aborted) return;
+      const mergedResolvedTypes = new Map(typeResolution.resolvedTypes);
+      for (const [rawType, override] of Object.entries(typeOverrides)) {
+        mergedResolvedTypes.set(rawType, override);
+      }
 
       const rowResolution = await resolveRowsByNameAndType({
         dataRows,
         nameColIdx,
         selectedType,
         typesColumnIndex,
-        resolvedTypes: typeResolution.resolvedTypes,
-        spaceId,
+        resolvedTypes: mergedResolvedTypes,
         guard: { isCurrent: () => generationTrackerRef.current.isCurrent(generationId) },
       });
       if (rowResolution.aborted) return;
@@ -117,27 +121,20 @@ export function useImportGenerate(spaceId: string) {
         dataRows,
         columnMapping,
         nameColIdx,
+        typesColumnIndex,
+        resolvedTypes: mergedResolvedTypes,
         resolvedRows: rowResolution.resolvedRows,
         resolvedEntities: mergedResolvedEntities,
         propertyLookup,
       });
 
-      // Fallback: create a row entity when no confident existing match is found.
-      // This preserves import behavior and ensures store diffs are generated.
-      const resolvedRows = new Map(rowResolution.resolvedRows);
-      for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
-        if (resolvedRows.has(rowIndex)) continue;
-        const rowName = (dataRows[rowIndex][nameColIdx] ?? '').trim() || 'Unnamed';
-        resolvedRows.set(rowIndex, { entityId: ID.createEntityId(), name: rowName });
-      }
-
       const built = buildGeneratedRows({
         dataRows,
         columnMapping,
-        resolvedRows,
+        resolvedRows: rowResolution.resolvedRows,
         selectedType,
         typesColumnIndex,
-        resolvedTypes: typeResolution.resolvedTypes,
+        resolvedTypes: mergedResolvedTypes,
         resolvedEntities: mergedResolvedEntities,
         spaceId,
         propertyLookup,
@@ -175,6 +172,7 @@ export function useImportGenerate(spaceId: string) {
     relationOverrides,
     schema,
     selectedType,
+    typeOverrides,
     typesColumnIndex,
     setRelations,
     setValues,

@@ -42,15 +42,24 @@ export function buildUnresolvedLinksByCell(params: {
   dataRows: string[][];
   columnMapping: Record<number, string>;
   nameColIdx: number;
+  typesColumnIndex: number | undefined;
+  resolvedTypes: Map<string, { id: string; name: string }>;
   resolvedRows: Map<number, { entityId: string; name: string }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
-}): Record<string, { kind: 'entity' } | { kind: 'relation'; unresolvedValues: string[] }> {
-  const { dataRows, columnMapping, nameColIdx, resolvedRows, resolvedEntities, propertyLookup } = params;
-  const unresolved: Record<string, { kind: 'entity' } | { kind: 'relation'; unresolvedValues: string[] }> = {};
+}): Record<string, { kind: 'entity' } | { kind: 'type'; rawType: string } | { kind: 'relation'; unresolvedValues: string[] }> {
+  const { dataRows, columnMapping, nameColIdx, typesColumnIndex, resolvedTypes, resolvedRows, resolvedEntities, propertyLookup } = params;
+  const unresolved: Record<string, { kind: 'entity' } | { kind: 'type'; rawType: string } | { kind: 'relation'; unresolvedValues: string[] }> = {};
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
+
+    if (typesColumnIndex !== undefined) {
+      const rawType = (row[typesColumnIndex] ?? '').trim();
+      if (rawType && !resolvedTypes.has(rawType)) {
+        unresolved[toImportCellKey(rowIndex, typesColumnIndex)] = { kind: 'type', rawType };
+      }
+    }
 
     if (!resolvedRows.has(rowIndex)) {
       const rowName = (row[nameColIdx] ?? '').trim();

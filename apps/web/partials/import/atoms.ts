@@ -71,6 +71,7 @@ export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 
 export type UnresolvedImportCell =
   | { kind: 'entity' }
+  | { kind: 'type'; rawType: string }
   | { kind: 'relation'; unresolvedValues: string[] };
 
 /** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
@@ -80,6 +81,11 @@ export type RelationResolutionOverride = { id: string; name: string; status: 'fo
 
 /** Manual relation token resolution keyed by `${propertyId}::${token}`. */
 export const relationOverridesAtom = atom<Record<string, RelationResolutionOverride>>({});
+
+export type TypeResolutionOverride = { id: string; name: string };
+
+/** Manual type resolution keyed by raw CSV type value. */
+export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({});
 
 export const actionsCountAtom = atom(get => {
   const values = get(valuesAtom);

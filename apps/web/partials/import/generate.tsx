@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { parse } from 'csv/sync';
 import { useAtom, useAtomValue } from 'jotai';
 
@@ -64,7 +65,25 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   }, [headers]);
 
   const { schema } = useImportSchema({ selectedTypeId: selectedType?.id, spaceId });
-  const { resetMappedState } = useImportSession(spaceId);
+  const { resetMappedState, clearGeneratedChanges } = useImportSession(spaceId);
+
+  useEffect(() => {
+    if (headers.length === 0) return;
+    const normalizedHeaders = headers.map(h => normalizeHeaderForMatch(normalizeHeader(h ?? '')));
+    setColumnMapping(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (let i = 0; i < normalizedHeaders.length; i++) {
+        if (typesColumnIndex !== undefined && i === typesColumnIndex) continue;
+        if (next[i] !== undefined) continue;
+        if (normalizedHeaders[i] === 'name') {
+          next[i] = SystemIds.NAME_PROPERTY;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [headers, setColumnMapping, typesColumnIndex]);
 
   useEffect(() => {
     if (headers.length === 0 || schema.length === 0) return;
@@ -76,6 +95,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       let changed = false;
       const next = { ...prev };
       for (let i = 0; i < normalizedHeaders.length; i++) {
+        if (typesColumnIndex !== undefined && i === typesColumnIndex) continue;
         if (next[i] !== undefined) continue;
         const raw = normalizedHeaders[i];
         const normalized = normalizeHeaderForMatch(raw);
@@ -87,7 +107,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       }
       return changed ? next : prev;
     });
-  }, [headers, schema, setColumnMapping]);
+  }, [headers, schema, setColumnMapping, typesColumnIndex]);
 
   // Auto-map unmapped columns via space-wide property search after schema matching
   useEffect(() => {
@@ -97,14 +117,16 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     if (isAutoMapping) return;
 
     // Check if there are unmapped columns
-    const hasUnmapped = headers.some((_, i) => columnMapping[i] === undefined);
+    const hasUnmapped = headers.some(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    );
     if (!hasUnmapped) return;
 
     const signature = `${fileName ?? ''}::${headers.join('|')}`;
     if (autoMappedSignatureRef.current === signature) return;
     autoMappedSignatureRef.current = signature;
     autoMap();
-  }, [headers, schema, selectedType, columnMapping, autoMap, isAutoMapping, fileName]);
+  }, [headers, schema, selectedType, typesColumnIndex, columnMapping, autoMap, isAutoMapping, fileName]);
 
   const MAX_FILE_SIZE_MB = 100;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -295,7 +317,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 {selectedType ? (
                   <>
                     <span className="text-smallButton font-medium text-text">{selectedType.name}</span>
-                    <SmallButton variant="ghost" onClick={() => setSelectedType(null)} className="text-grey-04">
+                    <SmallButton
+                      variant="ghost"
+                      onClick={() => {
+                        clearGeneratedChanges();
+                        setSelectedType(null);
+                      }}
+                      className="text-grey-04"
+                    >
                       Change type
                     </SmallButton>
                   </>
@@ -305,6 +334,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                       placeholder="Project"
                       dropdownClassName="!w-[384px] min-w-[320px]"
                       onDone={(result) => {
+                        clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });
                         setTypesColumnIndex(undefined);
                         setStep('step3');
@@ -328,8 +358,15 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                     value: String(index),
                     disabled: false,
                     onClick: () => {
+                      clearGeneratedChanges();
                       setTypesColumnIndex(index);
                       setSelectedType(null);
+                      setColumnMapping(prev => {
+                        if (prev[index] === undefined) return prev;
+                        const next = { ...prev };
+                        delete next[index];
+                        return next;
+                      });
                       setStep('step3');
                     },
                   }))}
@@ -365,7 +402,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           const step3DataRows = records.slice(1).filter(
             (row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== '')
           );
-          const unmappedCount = headers.filter((_, i) => columnMapping[i] === undefined).length;
+          const unmappedCount = headers.filter(
+            (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+          ).length;
           const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
           const hasUnmapped = unmappedCount > 0;
           return (
