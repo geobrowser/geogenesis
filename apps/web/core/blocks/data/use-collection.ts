@@ -72,6 +72,8 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
+    // Fetch all matching IDs so client-side filtering/pagination isn't truncated by the default limit.
+    first: entityIdsToFetch.length || undefined,
     placeholderData: keepPreviousData,
   });
 
