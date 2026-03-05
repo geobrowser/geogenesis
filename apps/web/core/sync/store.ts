@@ -309,7 +309,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const stableDataType = this.getStableDataType(id);
     const pendingDataType = this.pendingDataTypes.get(id);
 
-    const dataType = stableDataType ?? pendingDataType ?? null;
+    const dataType = pendingDataType ?? stableDataType ?? null;
 
     if (!dataType) {
       return null;
