@@ -1,47 +1,38 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
 import { parse } from 'csv/sync';
-import { useQuery } from '@tanstack/react-query';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Space } from '~/core/io/dto/spaces';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
-import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Select } from '~/design-system/select';
 import { Text } from '~/design-system/text';
 
 import {
   columnMappingAtom,
-  examplesAtom,
-  extraPropertiesAtom,
   fileNameAtom,
   headersAtom,
-  loadingAtom,
-  publishAtom,
   recordsAtom,
-  relationsAtom,
   stepAtom,
   typesColumnIndexAtom,
-  valuesAtom,
   selectedTypeAtom,
 } from './atoms';
+import { normalizeHeader, normalizeHeaderForMatch } from './header-normalization';
 import { useAutoMapColumns } from './use-auto-map-columns';
+import { useImportSchema } from './use-import-schema';
+import { useImportSession } from './use-import-session';
 type GenerateProps = {
   spaceId: string;
   space: Space;
@@ -52,26 +43,19 @@ const TYPES_HEADER_NORMALIZED = 'types';
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
-  const { store } = useSyncEngine();
   const [records, setRecords] = useAtom(recordsAtom);
-  const [step, setStep] = useAtom(stepAtom);
+  const [, setStep] = useAtom(stepAtom);
   const [fileName, setFileName] = useAtom(fileNameAtom);
   const [selectedType, setSelectedType] = useAtom(selectedTypeAtom);
   const [typesColumnIndex, setTypesColumnIndex] = useAtom(typesColumnIndexAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
-  const [isLoading, setIsLoading] = useAtom(loadingAtom);
-  const setValues = useSetAtom(valuesAtom);
-  const setRelations = useSetAtom(relationsAtom);
-  const setIsPublishOpen = useSetAtom(publishAtom);
-  const setExtraProperties = useSetAtom(extraPropertiesAtom);
   const headers = useAtomValue(headersAtom);
-  const examples = useAtomValue(examplesAtom);
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/space';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { autoMap, isAutoMapping } = useAutoMapColumns(spaceId);
-  const hasAutoMappedRef = useRef(false);
+  const autoMappedSignatureRef = useRef<string | null>(null);
 
   const hasTypesColumn = useMemo(() => {
     const normalized = headers.map(h => h?.trim().toLowerCase() ?? '');
@@ -79,32 +63,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     return idx >= 0 ? idx : undefined;
   }, [headers]);
 
-  const { data: schema = [] } = useQuery({
-    queryKey: ['import-schema', selectedType?.id, spaceId],
-    queryFn: () => getSchemaFromTypeIds([{ id: selectedType!.id, spaceId }]),
-    enabled: Boolean(selectedType?.id && spaceId),
-  });
-
-  const HIGH_CONFIDENCE_HEADER_NORMALIZATIONS: Record<string, string> = useMemo(
-    () => ({
-      descripton: 'description',
-      desciption: 'description',
-      desc: 'description',
-      imagecover: 'image cover',
-      'image cover': 'image cover',
-      founded: 'founded',
-      founders: 'founders',
-      relatedprojects: 'related projects',
-      'related projects': 'related projects',
-    }),
-    []
-  );
+  const { schema } = useImportSchema({ selectedTypeId: selectedType?.id, spaceId });
+  const { resetMappedState } = useImportSession(spaceId);
 
   useEffect(() => {
     if (headers.length === 0 || schema.length === 0) return;
-    const normalizedHeaders = headers.map(h => (h ?? '').trim().toLowerCase().replace(/\s+/g, ' '));
+    const normalizedHeaders = headers.map(h => normalizeHeader(h ?? ''));
     const propNameToId = new Map(
-      schema.map(p => [((p.name ?? p.id) ?? '').trim().toLowerCase().replace(/\s+/g, ' '), p.id])
+      schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id])
     );
     setColumnMapping(prev => {
       let changed = false;
@@ -112,7 +78,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       for (let i = 0; i < normalizedHeaders.length; i++) {
         if (next[i] !== undefined) continue;
         const raw = normalizedHeaders[i];
-        const normalized = HIGH_CONFIDENCE_HEADER_NORMALIZATIONS[raw] ?? raw;
+        const normalized = normalizeHeaderForMatch(raw);
         const propId = propNameToId.get(normalized) ?? propNameToId.get(raw);
         if (propId) {
           next[i] = propId;
@@ -121,28 +87,35 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       }
       return changed ? next : prev;
     });
-  }, [headers, schema, setColumnMapping, HIGH_CONFIDENCE_HEADER_NORMALIZATIONS]);
+  }, [headers, schema, setColumnMapping]);
 
   // Auto-map unmapped columns via space-wide property search after schema matching
   useEffect(() => {
     if (headers.length === 0) return;
     // Wait for schema matching to finish first when a selectedType is set
     if (selectedType && schema.length === 0) return;
-    if (hasAutoMappedRef.current || isAutoMapping) return;
+    if (isAutoMapping) return;
 
     // Check if there are unmapped columns
     const hasUnmapped = headers.some((_, i) => columnMapping[i] === undefined);
     if (!hasUnmapped) return;
 
-    hasAutoMappedRef.current = true;
+    const signature = `${fileName ?? ''}::${headers.join('|')}`;
+    if (autoMappedSignatureRef.current === signature) return;
+    autoMappedSignatureRef.current = signature;
     autoMap();
-  }, [headers, schema, selectedType, columnMapping, autoMap, isAutoMapping]);
+  }, [headers, schema, selectedType, columnMapping, autoMap, isAutoMapping, fileName]);
 
   const MAX_FILE_SIZE_MB = 100;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(undefined);
+
+  const resetSessionState = useCallback(() => {
+    resetMappedState();
+    autoMappedSignatureRef.current = null;
+  }, [resetMappedState]);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes}b`;
@@ -155,6 +128,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       setFileError(null);
       if (!file) return;
       if (file.size > MAX_FILE_SIZE_BYTES) {
+        resetSessionState();
         setFileError(`File must be under ${MAX_FILE_SIZE_MB}mb`);
         setFileName(undefined);
         setFileSizeBytes(undefined);
@@ -165,6 +139,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       }
       const ext = file.name.toLowerCase().split('.').pop();
       if (ext !== 'csv') {
+        resetSessionState();
         setFileError('Only CSV files are supported');
         setFileName(undefined);
         setFileSizeBytes(undefined);
@@ -173,24 +148,35 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
+      resetSessionState();
       setFileName(file.name);
       setFileSizeBytes(file.size);
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e?.target?.result;
         if (typeof result !== 'string') return;
-        const newRecords = parse(result, {
-          delimiter: ',',
-          skip_empty_lines: true,
-          trim: true,
-        });
-        setRecords(newRecords);
+        try {
+          const newRecords = parse(result, {
+            delimiter: ',',
+            skip_empty_lines: true,
+            trim: true,
+          });
+          setRecords(newRecords);
+        } catch (error) {
+          console.warn('[import] Failed to parse CSV file', error);
+          resetSessionState();
+          setFileError('Unable to parse CSV. Please check the file format and try again.');
+          setFileName(undefined);
+          setFileSizeBytes(undefined);
+          setRecords([]);
+          setStep('step1');
+        }
       };
       reader.readAsText(file);
       setStep('step2');
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    [setFileName, setRecords, setStep]
+    [resetSessionState, setFileName, setRecords, setStep]
   );
 
   const handleFileInputClick = () => fileInputRef.current?.click();
@@ -215,40 +201,13 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     processFile(file ?? null);
   };
 
-  const handleReset = useCallback(() => {
-    store.clearLocalChangesForSpace(spaceId);
-    setStep('step1');
-    setSelectedType(null);
-    setTypesColumnIndex(undefined);
-    setColumnMapping({});
-    setExtraProperties({});
-    setFileName(undefined);
-    setFileSizeBytes(undefined);
-    setRecords([]);
-    setValues([]);
-    setRelations([]);
-    hasAutoMappedRef.current = false;
-  }, [store, spaceId, setColumnMapping, setExtraProperties, setRecords, setRelations, setSelectedType, setStep, setValues, setTypesColumnIndex]);
-
   const handleDeleteFile = useCallback(() => {
+    resetSessionState();
     setFileName(undefined);
     setFileSizeBytes(undefined);
     setRecords([]);
     setStep('step1');
-  }, [setFileName, setStep]);
-
-  const nameColumnIndex = columnMapping
-    ? Object.entries(columnMapping).find(([, propId]) => propId === SystemIds.NAME_PROPERTY)?.[0]
-    : undefined;
-  const nameColIdx = nameColumnIndex != null ? parseInt(nameColumnIndex, 10) : undefined;
-
-  const handleOpenPublish = () => setIsPublishOpen(true);
-
-  const isMappingComplete =
-    (selectedType || typesColumnIndex !== undefined) &&
-    records.length > 0 &&
-    nameColIdx !== undefined &&
-    Object.keys(columnMapping).length > 0;
+  }, [resetSessionState, setFileName, setRecords, setStep]);
 
   if (!isEditor) return null;
 

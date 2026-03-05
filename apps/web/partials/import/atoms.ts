@@ -1,11 +1,12 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
 import { atom } from 'jotai';
 
 import { Property, Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
-export const stepAtom = atom<string>('step1');
+export type ImportStep = 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'done';
+
+export const stepAtom = atom<ImportStep>('step1');
 
 export const recordsAtom = atom<Array<Array<string>>>([]);
 
@@ -39,11 +40,7 @@ export const entityCountAtom = atom(get => {
   return ((records?.length || 1) - 1).toLocaleString('en-US', { style: 'decimal' });
 });
 
-export const entityCountByTypeAtom = atom(get => {
-  const actions = get(valuesAtom);
-
-  const typeActions = actions.filter(action => action.property.id === SystemIds.TYPES_PROPERTY);
-
+export const entityCountByTypeAtom = atom(() => {
   const entitySetByType: Record<string, Set<string>> = {};
 
   // @TODO disabling for now to remove ENTITY values. We aren't supporting
@@ -73,8 +70,9 @@ export const valuesAtom = atom<Array<Value>>([]);
 export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 
 export const actionsCountAtom = atom(get => {
-  const actions = get(valuesAtom);
-  return actions.length.toLocaleString('en-US', { style: 'decimal' });
+  const values = get(valuesAtom);
+  const relations = get(relationsAtom);
+  return (values.length + relations.length).toLocaleString('en-US', { style: 'decimal' });
 });
 
 export const publishAtom = atom<boolean>(false);

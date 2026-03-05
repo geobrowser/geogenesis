@@ -564,6 +564,56 @@ describe('GeoStore', () => {
     });
   });
 
+  describe('clearLocalChangesByIds', () => {
+    it('should only clear matching local changes and emit hydrate + cleared events', () => {
+      const localValue: Value = {
+        ...mockValue1,
+        id: 'local-value-1',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const syncedValue: Value = {
+        ...mockValue1,
+        id: 'synced-value-1',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      const localRelation: Relation = {
+        ...mockRelation1,
+        id: 'local-relation-1',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const syncedRelation: Relation = {
+        ...mockRelation1,
+        id: 'synced-relation-1',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+
+      reactiveValues.set([localValue, syncedValue]);
+      reactiveRelations.set([localRelation, syncedRelation]);
+
+      store.clearLocalChangesByIds({
+        spaceId: 'space-1',
+        valueIds: ['local-value-1', 'synced-value-1'],
+        relationIds: ['local-relation-1', 'synced-relation-1'],
+      });
+
+      expect(reactiveValues.get().map(v => v.id)).toEqual(['synced-value-1']);
+      expect(reactiveRelations.get().map(r => r.id)).toEqual(['synced-relation-1']);
+
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.HYDRATE,
+        entities: ['entity-1'],
+      });
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.LOCAL_CHANGES_CLEARED,
+        spaceId: 'space-1',
+      });
+    });
+  });
+
   describe('findReferencingEntities', () => {
     beforeEach(() => {
       reactiveRelations.set([

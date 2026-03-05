@@ -24,7 +24,7 @@ import { columnMappingAtom, extraPropertiesAtom, headersAtom } from './atoms';
 export function useAutoMapColumns(spaceId: string) {
   const headers = useAtomValue(headersAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
-  const [extraProperties, setExtraProperties] = useAtom(extraPropertiesAtom);
+  const [, setExtraProperties] = useAtom(extraPropertiesAtom);
   const { store } = useSyncEngine();
   const { createProperty } = useCreateProperty(spaceId);
   const [isAutoMapping, setIsAutoMapping] = useState(false);
@@ -43,59 +43,83 @@ export function useAutoMapColumns(spaceId: string) {
     setIsAutoMapping(true);
 
     try {
+      const mappedByColumn: Record<number, string> = {};
+      const mappedProperties: Record<string, Property> = {};
+
       // Process sequentially to avoid race conditions with createProperty
       for (const colIndex of unmappedIndices) {
         const headerName = (headers[colIndex] ?? '').trim();
         if (!headerName) continue;
 
-        // Search for properties with this name across the space
-        const results = await Effect.runPromise(
-          getResults({
-            query: headerName,
-            typeIds: [SystemIds.PROPERTY],
-            spaceId,
-          })
-        );
+        try {
+          // Search for properties with this name across the space
+          const results = await Effect.runPromise(
+            getResults({
+              query: headerName,
+              typeIds: [SystemIds.PROPERTY],
+              spaceId,
+            })
+          );
 
-        // Filter to exact name matches (case-insensitive, trimmed)
-        const exactMatches = results.filter(
-          r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
-        );
+          // Filter to exact name matches (case-insensitive, trimmed)
+          const exactMatches = results.filter(
+            r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
+          );
 
-        if (exactMatches.length === 1) {
-          // Single exact match → auto-map
-          const match = exactMatches[0];
-          const propertyId = match.id;
+          if (exactMatches.length === 1) {
+            // Single exact match → auto-map
+            const match = exactMatches[0];
+            const propertyId = match.id;
 
-          // Resolve the full Property object
-          let property: Property | null = store.getProperty(propertyId);
-          if (!property) {
-            property = await Effect.runPromise(getProperty(propertyId));
+            // Resolve the full Property object
+            let property: Property | null = store.getProperty(propertyId);
+            if (!property) {
+              property = await Effect.runPromise(getProperty(propertyId));
+            }
+
+            if (property) {
+              mappedByColumn[colIndex] = propertyId;
+              mappedProperties[propertyId] = property;
+            }
+          } else if (exactMatches.length === 0) {
+            // No match → create a new TEXT property
+            const propertyId = createProperty({ name: headerName, propertyType: 'TEXT' });
+
+            // Resolve from store (createProperty writes to local store synchronously)
+            let property: Property | null = store.getProperty(propertyId);
+            if (!property) {
+              // Fallback: construct a minimal Property
+              property = {
+                id: propertyId,
+                name: headerName,
+                dataType: 'TEXT',
+              };
+            }
+
+            mappedByColumn[colIndex] = propertyId;
+            mappedProperties[propertyId] = property;
           }
-
-          if (property) {
-            setColumnMapping(prev => ({ ...prev, [colIndex]: propertyId }));
-            setExtraProperties(prev => ({ ...prev, [propertyId]: property }));
-          }
-        } else if (exactMatches.length === 0) {
-          // No match → create a new TEXT property
-          const propertyId = createProperty({ name: headerName, propertyType: 'TEXT' });
-
-          // Resolve from store (createProperty writes to local store synchronously)
-          let property: Property | null = store.getProperty(propertyId);
-          if (!property) {
-            // Fallback: construct a minimal Property
-            property = {
-              id: propertyId,
-              name: headerName,
-              dataType: 'TEXT',
-            };
-          }
-
-          setColumnMapping(prev => ({ ...prev, [colIndex]: propertyId }));
-          setExtraProperties(prev => ({ ...prev, [propertyId]: property }));
+          // exactMatches.length >= 2 → skip, leave for manual review
+        } catch (error) {
+          console.warn(`[import] Auto-map failed for column "${headerName}"`, error);
         }
-        // exactMatches.length >= 2 → skip, leave for manual review
+      }
+
+      if (Object.keys(mappedByColumn).length > 0) {
+        setColumnMapping(prev => {
+          const next = { ...prev };
+          for (const [column, propertyId] of Object.entries(mappedByColumn)) {
+            const index = Number(column);
+            if (next[index] === undefined) {
+              next[index] = propertyId;
+            }
+          }
+          return next;
+        });
+      }
+
+      if (Object.keys(mappedProperties).length > 0) {
+        setExtraProperties(prev => ({ ...prev, ...mappedProperties }));
       }
     } finally {
       setIsAutoMapping(false);
