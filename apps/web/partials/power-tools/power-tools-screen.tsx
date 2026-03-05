@@ -387,7 +387,6 @@ export function PowerToolsScreen() {
           <div className="flex flex-wrap items-center gap-1.5">
             {filterGroups.map((group, groupIndex) => (
               <React.Fragment key={group.columnId}>
-                {groupIndex > 0 && <span className="text-metadata text-grey-04">and</span>}
                 <TableBlockFilterGroupPill
                   group={group}
                   mode={activeFilterMode}
