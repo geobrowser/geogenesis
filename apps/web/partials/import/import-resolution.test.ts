@@ -239,7 +239,7 @@ describe('import resolution helpers', () => {
     expect(result.resolvedTypes.get('Company')).toEqual({ id: 'Company-id', name: 'Company' });
   });
 
-  it('resolves rows by exact name + type with current-space preference', async () => {
+  it('resolves rows by exact name + type using SPACE_RANK priority', async () => {
     getResultsMock.mockImplementation(() =>
       Effect.succeed([
         {
@@ -265,12 +265,45 @@ describe('import resolution helpers', () => {
       selectedType: { id: 'type-project', name: 'Project' },
       typesColumnIndex: undefined,
       resolvedTypes: new Map(),
-      spaceId: 'space-1',
       guard: { isCurrent: () => true },
     });
 
     expect(result.aborted).toBe(false);
     expect(result.unresolvedRowCount).toBe(0);
-    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-current');
+    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-root');
+  });
+
+  it('resolves row ties deterministically instead of leaving unresolved', async () => {
+    getResultsMock.mockImplementation(() =>
+      Effect.succeed([
+        {
+          id: 'entity-b',
+          name: 'Alpha',
+          description: null,
+          types: [{ id: 'type-project', name: 'Project' }],
+          spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
+        },
+        {
+          id: 'entity-a',
+          name: 'Alpha',
+          description: null,
+          types: [{ id: 'type-project', name: 'Project' }],
+          spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
+        },
+      ])
+    );
+    getRelationsByToEntityIdsMock.mockImplementation(() => Effect.succeed([]));
+
+    const result = await resolveRowsByNameAndType({
+      dataRows: [['Alpha']],
+      nameColIdx: 0,
+      selectedType: { id: 'type-project', name: 'Project' },
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      guard: { isCurrent: () => true },
+    });
+
+    expect(result.unresolvedRowCount).toBe(0);
+    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-a');
   });
 });

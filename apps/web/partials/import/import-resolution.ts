@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
 
-import { ROOT_SPACE } from '~/core/constants';
 import { ID } from '~/core/id';
 import { getRelationsByToEntityIds, getResults } from '~/core/io/queries';
-import { SearchResult } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { RelationPropertyMeta, ResolvedEntity } from './import-generation';
@@ -53,31 +51,17 @@ async function resolveExactRelationMatch(params: {
   };
 }
 
-function getCandidateSpaceForRanking(candidate: SearchResult, currentSpaceId: string): { tier: 0 | 1 | 2; spaceId: string | null } {
-  const spaceIds = candidate.spaces.map(s => s.spaceId);
-  if (spaceIds.includes(currentSpaceId)) {
-    return { tier: 0, spaceId: currentSpaceId };
-  }
-  if (spaceIds.includes(ROOT_SPACE)) {
-    return { tier: 1, spaceId: ROOT_SPACE };
-  }
-  return { tier: 2, spaceId: spaceIds[0] ?? null };
-}
-
-function getSpaceBucketRank(spaceId: string | null, tier: 0 | 1 | 2): number {
-  if (!spaceId) return Number.MAX_SAFE_INTEGER;
-  if (tier === 0) return 0;
-  if (tier === 1) return 1;
-  return 2 + getSpaceRank(spaceId);
+function getCandidateTopSpaceRank(spaceIds: string[]): number {
+  if (spaceIds.length === 0) return Number.MAX_SAFE_INTEGER;
+  return Math.min(...spaceIds.map(getSpaceRank));
 }
 
 async function resolveBestEntityMatch(params: {
   name: string;
   typeIds: string[];
-  currentSpaceId: string;
   guard: ResolutionGuard;
 }): Promise<ResolvedEntityMatch> {
-  const { name, typeIds, currentSpaceId, guard } = params;
+  const { name, typeIds, guard } = params;
   const normalizedName = name.trim().toLowerCase();
 
   const results = await Effect.runPromise(
@@ -100,30 +84,24 @@ async function resolveBestEntityMatch(params: {
   }
 
   const withSpaceRank = exactMatches.map(candidate => {
-    const rankedSpace = getCandidateSpaceForRanking(candidate, currentSpaceId);
     return {
       candidate,
-      rankedSpace,
-      bucketRank: getSpaceBucketRank(rankedSpace.spaceId, rankedSpace.tier),
+      spaceRank: getCandidateTopSpaceRank(candidate.spaces.map(s => s.spaceId)),
     };
   });
 
-  const bestBucketRank = Math.min(...withSpaceRank.map(c => c.bucketRank));
-  const inBestBucket = withSpaceRank.filter(c => c.bucketRank === bestBucketRank);
+  const bestSpaceRank = Math.min(...withSpaceRank.map(c => c.spaceRank));
+  const inBestRank = withSpaceRank.filter(c => c.spaceRank === bestSpaceRank);
 
-  const bestSpaceId = inBestBucket[0]?.rankedSpace.spaceId ?? null;
-  const inBestSpace = inBestBucket.filter(c => c.rankedSpace.spaceId === bestSpaceId);
-
-  if (inBestSpace.length === 1) {
-    const only = inBestSpace[0].candidate;
+  if (inBestRank.length === 1) {
+    const only = inBestRank[0].candidate;
     return { status: 'resolved', entity: { id: only.id, name: only.name ?? name } };
   }
 
   const backlinks = await Effect.runPromise(
     getRelationsByToEntityIds(
-      inBestSpace.map(c => c.candidate.id),
-      undefined,
-      bestSpaceId ?? undefined
+      inBestRank.map(c => c.candidate.id),
+      undefined
     )
   );
   if (!guard.isCurrent()) return { status: 'unresolved', reason: 'ambiguous' };
@@ -133,23 +111,27 @@ async function resolveBestEntityMatch(params: {
     backlinksByEntityId.set(relation.toEntityId, (backlinksByEntityId.get(relation.toEntityId) ?? 0) + 1);
   }
 
-  let winner: (typeof inBestSpace)[number] | null = null;
+  let winner: (typeof inBestRank)[number] | null = null;
   let winnerCount = -1;
-  let hasTie = false;
 
-  for (const candidate of inBestSpace) {
+  for (const candidate of inBestRank) {
     const count = backlinksByEntityId.get(candidate.candidate.id) ?? 0;
     if (count > winnerCount) {
       winner = candidate;
       winnerCount = count;
-      hasTie = false;
-    } else if (count === winnerCount) {
-      hasTie = true;
     }
   }
 
-  if (!winner || hasTie) {
-    return { status: 'unresolved', reason: 'tie' };
+  if (!winner) {
+    return { status: 'unresolved', reason: 'ambiguous' };
+  }
+
+  // Deterministic fallback in backlink ties: smallest entity id wins.
+  const tied = inBestRank.filter(
+    candidate => (backlinksByEntityId.get(candidate.candidate.id) ?? 0) === winnerCount
+  );
+  if (tied.length > 1) {
+    winner = tied.sort((a, b) => a.candidate.id.localeCompare(b.candidate.id))[0];
   }
 
   return {
@@ -261,14 +243,13 @@ export async function resolveRowsByNameAndType(params: {
   selectedType: { id: string; name: string | null } | null;
   typesColumnIndex: number | undefined;
   resolvedTypes: Map<string, { id: string; name: string }>;
-  spaceId: string;
   guard: ResolutionGuard;
 }): Promise<{
   aborted: boolean;
   resolvedRows: Map<number, { entityId: string; name: string }>;
   unresolvedRowCount: number;
 }> {
-  const { dataRows, nameColIdx, selectedType, typesColumnIndex, resolvedTypes, spaceId, guard } = params;
+  const { dataRows, nameColIdx, selectedType, typesColumnIndex, resolvedTypes, guard } = params;
   const resolvedRows = new Map<number, { entityId: string; name: string }>();
   let unresolvedRowCount = 0;
 
@@ -307,7 +288,6 @@ export async function resolveRowsByNameAndType(params: {
     const match = await resolveBestEntityMatch({
       name: rowName,
       typeIds: [rowTypeId],
-      currentSpaceId: spaceId,
       guard,
     });
     if (!guard.isCurrent()) {

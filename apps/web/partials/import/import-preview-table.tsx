@@ -36,6 +36,8 @@ export type ColumnConfig = {
   propertyId?: string | null;
   /** Allowed relation target types for this relation property */
   relationValueTypes?: Property['relationValueTypes'];
+  /** True when this column mapping is implicit/derived and should not open mapping popover. */
+  mappingLocked?: boolean;
 };
 
 function PropertyMappingPopover({
@@ -111,6 +113,7 @@ type Props = {
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   unresolvedLinks?: Record<string, UnresolvedImportCell>;
   onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }) => void;
+  onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }) => void;
 };
 
 export function ImportPreviewTable({
@@ -122,6 +125,7 @@ export function ImportPreviewTable({
   onCreateProperty,
   unresolvedLinks = {},
   onResolveRelationToken,
+  onResolveTypeValue,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
 
@@ -168,7 +172,7 @@ export function ImportPreviewTable({
                 {col.headerLabel}
               </Text>
               {col.propertyName !== null ? (
-                onSelectProperty ? (
+                onSelectProperty && !col.mappingLocked ? (
                   <PropertyMappingPopover
                     spaceId={spaceId}
                     csvColumnIndex={col.csvColumnIndex}
@@ -314,12 +318,41 @@ export function ImportPreviewTable({
                         </div>
                       ) : (
                         <div className="flex w-full items-start gap-2 overflow-hidden">
-                          <Text variant="metadata" className="min-w-0 truncate text-text">
-                            {value || '—'}
-                          </Text>
+                          {unresolved?.kind === 'type' && onResolveTypeValue ? (
+                            <SelectEntityAsPopover
+                              trigger={
+                                <button
+                                  type="button"
+                                  className="inline-flex cursor-pointer items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01 hover:bg-red-01/10"
+                                >
+                                  {value || unresolved.rawType}
+                                </button>
+                              }
+                              spaceId={spaceId}
+                              placeholder="Find or create type..."
+                              advanced={false}
+                              showIDs={false}
+                              onCreateEntity={() => undefined}
+                              onDone={result =>
+                                onResolveTypeValue(unresolved.rawType, {
+                                  id: result.id,
+                                  name: result.name ?? unresolved.rawType,
+                                })
+                              }
+                            />
+                          ) : (
+                            <Text variant="metadata" className="min-w-0 truncate text-text">
+                              {value || '—'}
+                            </Text>
+                          )}
                           {unresolved?.kind === 'entity' ? (
                             <span className="inline-flex shrink-0 items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
                               Unresolved entity
+                            </span>
+                          ) : null}
+                          {unresolved?.kind === 'type' ? (
+                            <span className="inline-flex shrink-0 items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
+                              Unresolved type
                             </span>
                           ) : null}
                         </div>

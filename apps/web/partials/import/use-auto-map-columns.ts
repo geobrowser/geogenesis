@@ -9,7 +9,7 @@ import { getProperty, getResults } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
-import { columnMappingAtom, extraPropertiesAtom, headersAtom } from './atoms';
+import { columnMappingAtom, extraPropertiesAtom, headersAtom, typesColumnIndexAtom } from './atoms';
 
 /**
  * Auto-maps unmapped CSV columns to existing properties in the space (by exact name match)
@@ -22,6 +22,7 @@ import { columnMappingAtom, extraPropertiesAtom, headersAtom } from './atoms';
  */
 export function useAutoMapColumns(spaceId: string) {
   const headers = useAtomValue(headersAtom);
+  const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const [, setExtraProperties] = useAtom(extraPropertiesAtom);
   const { store } = useSyncEngine();
@@ -31,6 +32,7 @@ export function useAutoMapColumns(spaceId: string) {
     // Collect unmapped column indices
     const unmappedIndices: number[] = [];
     for (let i = 0; i < headers.length; i++) {
+      if (typesColumnIndex !== undefined && i === typesColumnIndex) continue;
       if (columnMapping[i] === undefined) {
         unmappedIndices.push(i);
       }
@@ -105,7 +107,7 @@ export function useAutoMapColumns(spaceId: string) {
     } finally {
       setIsAutoMapping(false);
     }
-  }, [headers, columnMapping, spaceId, store, setColumnMapping, setExtraProperties]);
+  }, [headers, typesColumnIndex, columnMapping, spaceId, store, setColumnMapping, setExtraProperties]);
 
   return { autoMap, isAutoMapping };
 }

@@ -103,6 +103,8 @@ describe('import generation helpers', () => {
       dataRows: [['Project X', 'Alice, Bob']],
       columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-rel' },
       nameColIdx: 0,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
       resolvedRows: new Map(),
       resolvedEntities: new Map([['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }]]),
       propertyLookup: {
@@ -114,5 +116,24 @@ describe('import generation helpers', () => {
 
     expect(unresolved['0:0']).toEqual({ kind: 'entity' });
     expect(unresolved['0:1']).toEqual({ kind: 'relation', unresolvedValues: ['Bob'] });
+  });
+
+  it('marks unresolved type cells when CSV types cannot be resolved', () => {
+    const unresolved = buildUnresolvedLinksByCell({
+      dataRows: [['Project X', 'Unresolved Type']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY },
+      nameColIdx: 0,
+      typesColumnIndex: 1,
+      resolvedTypes: new Map(),
+      resolvedRows: new Map([[0, { entityId: 'project-x', name: 'Project X' }]]),
+      resolvedEntities: new Map(),
+      propertyLookup: {
+        schema: [],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    expect(unresolved['0:1']).toEqual({ kind: 'type', rawType: 'Unresolved Type' });
   });
 });

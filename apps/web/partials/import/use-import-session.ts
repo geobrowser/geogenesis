@@ -14,6 +14,7 @@ import {
   relationsAtom,
   selectedTypeAtom,
   stepAtom,
+  typeOverridesAtom,
   typesColumnIndexAtom,
   unresolvedLinksAtom,
   valuesAtom,
@@ -27,6 +28,7 @@ export function useImportSession(spaceId: string) {
   const setValues = useSetAtom(valuesAtom);
   const setRelations = useSetAtom(relationsAtom);
   const setRelationOverrides = useSetAtom(relationOverridesAtom);
+  const setTypeOverrides = useSetAtom(typeOverridesAtom);
   const setUnresolvedLinks = useSetAtom(unresolvedLinksAtom);
   const setSelectedType = useSetAtom(selectedTypeAtom);
   const setTypesColumnIndex = useSetAtom(typesColumnIndexAtom);
@@ -50,6 +52,7 @@ export function useImportSession(spaceId: string) {
   const resetMappedState = useCallback(() => {
     clearGeneratedChanges();
     setRelationOverrides({});
+    setTypeOverrides({});
     setSelectedType(null);
     setTypesColumnIndex(undefined);
     setColumnMapping({});
@@ -59,6 +62,7 @@ export function useImportSession(spaceId: string) {
     setColumnMapping,
     setExtraProperties,
     setRelationOverrides,
+    setTypeOverrides,
     setSelectedType,
     setTypesColumnIndex,
   ]);
