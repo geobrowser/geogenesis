@@ -190,6 +190,43 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
   }
 
+  /**
+   * Clear specific local (unpublished) changes by ID.
+   * Only local rows are removed so synced server state is preserved.
+   */
+  clearLocalChangesByIds(params: { spaceId: string; valueIds: string[]; relationIds: string[] }) {
+    const { spaceId, valueIds, relationIds } = params;
+    if (valueIds.length === 0 && relationIds.length === 0) return;
+
+    const valueIdsSet = new Set(valueIds);
+    const relationIdsSet = new Set(relationIds);
+    const affectedEntityIds = new Set<string>();
+
+    const currentValues = reactiveValues.get();
+    const currentRelations = reactiveRelations.get();
+
+    for (const value of currentValues) {
+      if (valueIdsSet.has(value.id) && value.isLocal === true) {
+        affectedEntityIds.add(value.entity.id);
+      }
+    }
+
+    for (const relation of currentRelations) {
+      if (relationIdsSet.has(relation.id) && relation.isLocal === true) {
+        affectedEntityIds.add(relation.fromEntity.id);
+      }
+    }
+
+    reactiveValues.set(prev => prev.filter(v => !(valueIdsSet.has(v.id) && v.isLocal === true)));
+    reactiveRelations.set(prev => prev.filter(r => !(relationIdsSet.has(r.id) && r.isLocal === true)));
+
+    if (affectedEntityIds.size > 0) {
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
+    }
+
+    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
+  }
+
   public hydrateWith(entities: Entity[]) {
     /**
      * We set the synced entities before we update values and relations

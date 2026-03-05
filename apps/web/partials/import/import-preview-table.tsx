@@ -14,15 +14,12 @@ import { Property } from '~/core/types';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+import { splitRelationCell } from './relation-cell';
+
 const ROW_HEIGHT_ESTIMATE = 56;
 /** Two-line header: property name + CSV column / Needs mapping */
 const HEADER_HEIGHT = 56;
 const DEFAULT_COLUMN_WIDTH = 200;
-
-/** Split a relation cell on common multi-value separators (, ; |) and trim each part. */
-function splitRelationCell(raw: string): string[] {
-  return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
-}
 
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
