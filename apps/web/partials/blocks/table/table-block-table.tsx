@@ -249,8 +249,8 @@ export const TableBlockTable = ({
 
   if (isEmpty) {
     return (
-      <div className="block rounded-lg bg-grey-01">
-        <div className="flex flex-col items-center justify-center gap-4 p-4 text-resultLink">
+      <div className="block flex min-h-[568px] flex-col justify-center rounded-lg bg-grey-01">
+        <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>
             <img src={placeholder.image} className="h-[64px]! w-auto object-contain" alt="" />
