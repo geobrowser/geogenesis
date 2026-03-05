@@ -69,6 +69,18 @@ export const valuesAtom = atom<Array<Value>>([]);
 /** Generated relations (e.g. Types) for the import. Passed to makeBulkProposal with values. */
 export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 
+export type UnresolvedImportCell =
+  | { kind: 'entity' }
+  | { kind: 'relation'; unresolvedValues: string[] };
+
+/** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
+export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});
+
+export type RelationResolutionOverride = { id: string; name: string; status: 'found' | 'created' };
+
+/** Manual relation token resolution keyed by `${propertyId}::${token}`. */
+export const relationOverridesAtom = atom<Record<string, RelationResolutionOverride>>({});
+
 export const actionsCountAtom = atom(get => {
   const values = get(valuesAtom);
   const relations = get(relationsAtom);

@@ -1,7 +1,12 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { buildGeneratedRows, collectRelationCells, createGenerationTracker } from './import-generation';
+import {
+  buildGeneratedRows,
+  buildUnresolvedLinksByCell,
+  collectRelationCells,
+  createGenerationTracker,
+} from './import-generation';
 
 describe('import generation helpers', () => {
   it('tracks superseded generations', () => {
@@ -44,8 +49,8 @@ describe('import generation helpers', () => {
   it('creates relations with distinct relation entityId (not the row entity id)', () => {
     const built = buildGeneratedRows({
       dataRows: [['Project X', 'Alice']],
-      nameColIdx: 0,
       columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-rel' },
+      resolvedRows: new Map([[0, { entityId: 'project-x', name: 'Project X' }]]),
       selectedType: null,
       typesColumnIndex: undefined,
       resolvedTypes: new Map(),
@@ -65,5 +70,49 @@ describe('import generation helpers', () => {
     expect(built.relations).toHaveLength(1);
     expect(built.relations[0].entityId).toBeTruthy();
     expect(built.relations[0].entityId).not.toEqual(built.relations[0].fromEntity.id);
+  });
+
+  it('writes a Name value for auto-created relation target entities', () => {
+    const built = buildGeneratedRows({
+      dataRows: [['Project X', 'New Person']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-rel' },
+      resolvedRows: new Map([[0, { entityId: 'project-x', name: 'Project X' }]]),
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedEntities: new Map([
+        ['prop-rel::New Person', { id: 'created-person-id', name: 'New Person', status: 'created' as const }],
+      ]),
+      spaceId: 'space-1',
+      propertyLookup: {
+        schema: [
+          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+        ],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    expect(
+      built.values.find(v => v.entity.id === 'created-person-id' && v.property.id === SystemIds.NAME_PROPERTY)?.value
+    ).toBe('New Person');
+  });
+
+  it('marks unresolved entity-name and relation cells for review UI', () => {
+    const unresolved = buildUnresolvedLinksByCell({
+      dataRows: [['Project X', 'Alice, Bob']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-rel' },
+      nameColIdx: 0,
+      resolvedRows: new Map(),
+      resolvedEntities: new Map([['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }]]),
+      propertyLookup: {
+        schema: [{ id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [] }],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    expect(unresolved['0:0']).toEqual({ kind: 'entity' });
+    expect(unresolved['0:1']).toEqual({ kind: 'relation', unresolvedValues: ['Bob'] });
   });
 });
