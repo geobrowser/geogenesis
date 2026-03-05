@@ -45,8 +45,8 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
 
-  // Include deleted relations so handlePropertyTypeChange can reuse/update
-  // them instead of creating new ones each time the dropdown changes.
+  // Include deleted relations so handlePropertyTypeChange can find existing
+  // relations to delete before creating replacements.
   const allRelations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
     includeDeleted: true,
@@ -153,8 +153,8 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       // Register the data type so store.getProperty() returns the updated type
       storage.properties.setDataType(entityId, baseDataType);
 
-      // Update the data type relation. Every property gets an explicit Data Type relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      // Replace the data type relation. We delete + create rather than update in-place
+      // because GRC-20 createRelation with an existing ID won't update the `to` target.
       const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
       if (dataTypeEntityId) {
         const existingDataTypeRelation = allRelations.find(
@@ -162,76 +162,62 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         );
 
         if (existingDataTypeRelation) {
-          storage.relations.update(existingDataTypeRelation, draft => {
-            draft.toEntity.id = dataTypeEntityId;
-            draft.toEntity.name =
-              (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType;
-            draft.toEntity.value = dataTypeEntityId;
-          });
-        } else {
-          storage.relations.set({
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: name || '',
-            },
-            type: {
-              id: DATA_TYPE_PROPERTY,
-              name: 'Data Type',
-            },
-            toEntity: {
-              id: dataTypeEntityId,
-              name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
-              value: dataTypeEntityId,
-            },
-            spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
-          });
+          storage.relations.delete(existingDataTypeRelation);
         }
+
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: entityId,
+            name: name || '',
+          },
+          type: {
+            id: DATA_TYPE_PROPERTY,
+            name: 'Data Type',
+          },
+          toEntity: {
+            id: dataTypeEntityId,
+            name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
+            value: dataTypeEntityId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
       }
 
-      // Handle the renderableType relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
       const existingRelation = allRelations.find(
         r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
       );
 
       if (renderableTypeId) {
-        // Need to set or update the renderableType relation
         if (existingRelation) {
-          // Update existing relation
-          storage.relations.update(existingRelation, draft => {
-            draft.toEntity.id = renderableTypeId;
-            draft.toEntity.name = SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType;
-            draft.toEntity.value = renderableTypeId;
-          });
-        } else {
-          // Create new relation
-          storage.relations.set({
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: propertyData?.name || '',
-            },
-            type: {
-              id: RENDERABLE_TYPE_PROPERTY,
-              name: 'Renderable Type',
-            },
-            toEntity: {
-              id: renderableTypeId,
-              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
-              value: renderableTypeId,
-            },
-            spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
-          });
+          storage.relations.delete(existingRelation);
         }
+
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: entityId,
+            name: propertyData?.name || '',
+          },
+          type: {
+            id: RENDERABLE_TYPE_PROPERTY,
+            name: 'Renderable Type',
+          },
+          toEntity: {
+            id: renderableTypeId,
+            name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
+            value: renderableTypeId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
       } else {
         // Remove renderableType relation if it exists
         if (existingRelation) {
