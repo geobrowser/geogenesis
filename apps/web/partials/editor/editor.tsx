@@ -1,7 +1,7 @@
 'use client';
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
-import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import { EditorContent, Editor as TiptapEditor, JSONContent, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
@@ -133,17 +133,20 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
-  const handleGutterClick = React.useCallback(
-    (e: React.MouseEvent) => {
-      if (!editor || !editable) return;
-      const target = e.target as Element;
-      if (target.closest('.ProseMirror')) return;
-      // Ignore clicks from portals outside the editor's DOM tree.
-      if (editorWrapperRef.current && !editorWrapperRef.current.contains(target)) return;
-      editor.commands.focus('end');
-    },
-    [editor, editable]
-  );
+  React.useEffect(() => {
+    if (!editor) return;
+
+    const currentDoc = normalizeEditorContent(editor.getJSON());
+    const nextDoc = normalizeEditorContent(editorJson);
+
+    if (JSON.stringify(currentDoc) === JSON.stringify(nextDoc)) {
+      return;
+    }
+
+    // Keep the editor instance alive for data blocks, but sync external store
+    // changes like entity/block deletion into the active ProseMirror document.
+    editor.commands.setContent(editorJson, false);
+  }, [editor, editorJson]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -292,3 +295,25 @@ const useSuppressFlushSyncWarning = () => {
     };
   }, []);
 };
+
+function normalizeEditorContent(content: JSONContent): JSONContent {
+  const normalizedAttrs = content.attrs
+    ? Object.fromEntries(
+        Object.entries(content.attrs).filter(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          return key !== 'spaceId' && key !== 'relationId';
+        })
+      )
+    : undefined;
+
+  return {
+    ...content,
+    ...(normalizedAttrs && Object.keys(normalizedAttrs).length > 0 ? { attrs: normalizedAttrs } : {}),
+    ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
+    ...(content.content
+      ? {
+          content: content.content.map(child => normalizeEditorContent(child)),
+        }
+      : {}),
+  };
+}
