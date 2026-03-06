@@ -75,7 +75,9 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
     el.className = 'elevated-popover';
     document.body.appendChild(el);
     setPortalContainer(el);
-    return () => { document.body.removeChild(el); };
+    return () => {
+      document.body.removeChild(el);
+    };
   }, []);
 
   const { space, isLoading } = useSpace(spaceId);
@@ -159,7 +161,12 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
               >
                 <div className="p-1 text-smallButton text-grey-04">View entity in</div>
                 <div className="flex flex-col gap-1">
-                  <Input value={query} onChange={event => setQuery(event.target.value)} withSearchIcon autoFocus={false} />
+                  <Input
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    withSearchIcon
+                    autoFocus={false}
+                  />
                   {showCurrentSpace && (
                     <div className="flex items-center gap-2 rounded-md bg-grey-01 p-2">
                       <div className="relative h-4 w-4 overflow-hidden rounded-sm">

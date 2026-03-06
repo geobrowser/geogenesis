@@ -3,10 +3,13 @@
 
 const SPACE_RANK: Record<string, number> = {
   a19c345ab9866679b001d7d2138d88a1: 0, // Root
-  '720eb279c64d56735dccd17a2a416ba2': 1, // Geo Education
+  '784bfddae3f3976118c561bf28195b44': 1, // Geo Education
   c9f267dcb0d270718c2a3c45a64afd32: 2, // Crypto
   '41e851610e13a19441c4d980f2f2ce6b': 3, // AI
   '52c7ae149838b6d47ce0f3b2a5974546': 4, // Health
+  '9b611b848b12491b9b6b43f3cf019b8b': 5, // Software
+  '870e3b3068661e6280fad2ab456829bc': 6, // Technology
+  d69608290513c2a91102c939b3265bd7: 7, // Industries
 };
 
 const UNRANKED = Number.MAX_SAFE_INTEGER;
