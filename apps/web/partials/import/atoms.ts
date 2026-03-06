@@ -1,13 +1,29 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
 import { atom } from 'jotai';
 
-import { Value } from '~/core/types';
+import { Property, Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
-export const stepAtom = atom<string>('step1');
+export type ImportStep = 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'done';
+
+export const stepAtom = atom<ImportStep>('step1');
 
 export const recordsAtom = atom<Array<Array<string>>>([]);
+
+/** Name of the uploaded CSV file */
+export const fileNameAtom = atom<string | undefined>(undefined);
+
+/** Type entity selected for all rows (when CSV has no Types column). id and name. */
+export const selectedTypeAtom = atom<{ id: string; name: string | null } | null>(null);
+
+/** If CSV has a "Types" column, its 0-based index; otherwise undefined */
+export const typesColumnIndexAtom = atom<number | undefined>(undefined);
+
+/** Column index -> property id. Must include one column mapped to NAME_PROPERTY. */
+export const columnMappingAtom = atom<Record<number, string>>({});
+
+/** Properties selected/created during mapping that aren't in the type's schema. */
+export const extraPropertiesAtom = atom<Record<string, Property>>({});
 
 export const headersAtom = atom(get => {
   const records = get(recordsAtom);
@@ -24,11 +40,7 @@ export const entityCountAtom = atom(get => {
   return ((records?.length || 1) - 1).toLocaleString('en-US', { style: 'decimal' });
 });
 
-export const entityCountByTypeAtom = atom(get => {
-  const actions = get(valuesAtom);
-
-  const typeActions = actions.filter(action => action.property.id === SystemIds.TYPES_PROPERTY);
-
+export const entityCountByTypeAtom = atom(() => {
   const entitySetByType: Record<string, Set<string>> = {};
 
   // @TODO disabling for now to remove ENTITY values. We aren't supporting
@@ -54,9 +66,31 @@ export const entityCountByTypeAtom = atom(get => {
 
 export const valuesAtom = atom<Array<Value>>([]);
 
+/** Generated relations (e.g. Types) for the import. Passed to makeBulkProposal with values. */
+export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
+
+export type UnresolvedImportCell =
+  | { kind: 'entity' }
+  | { kind: 'type'; rawType: string }
+  | { kind: 'relation'; unresolvedValues: string[] };
+
+/** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
+export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});
+
+export type RelationResolutionOverride = { id: string; name: string; status: 'found' | 'created' };
+
+/** Manual relation token resolution keyed by `${propertyId}::${token}`. */
+export const relationOverridesAtom = atom<Record<string, RelationResolutionOverride>>({});
+
+export type TypeResolutionOverride = { id: string; name: string };
+
+/** Manual type resolution keyed by raw CSV type value. */
+export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({});
+
 export const actionsCountAtom = atom(get => {
-  const actions = get(valuesAtom);
-  return actions.length.toLocaleString('en-US', { style: 'decimal' });
+  const values = get(valuesAtom);
+  const relations = get(relationsAtom);
+  return (values.length + relations.length).toLocaleString('en-US', { style: 'decimal' });
 });
 
 export const publishAtom = atom<boolean>(false);
