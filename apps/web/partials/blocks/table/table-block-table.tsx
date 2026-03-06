@@ -189,6 +189,8 @@ type TableBlockTableProps = {
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
+  isLoading: boolean;
+  isFetched: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   onAddPlaceholder?: () => void;
@@ -203,6 +205,8 @@ export const TableBlockTable = ({
   propertiesSchema,
   shownColumnIds,
   placeholder,
+  isLoading,
+  isFetched,
   onChangeEntry,
   onLinkEntry,
   onAddPlaceholder,
@@ -247,7 +251,7 @@ export const TableBlockTable = ({
 
   const isEmpty = rows.length === 0;
 
-  if (isEmpty) {
+  if (isEmpty && isFetched && !isLoading) {
     return (
       <div className="block flex min-h-[568px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">

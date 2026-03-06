@@ -95,7 +95,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     };
   }, [collectionItems, collectionRelations, collectionLength]);
 
-  const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryEntitiesLoading,
+    isFetched: isQueryEntitiesFetched,
+  } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
@@ -257,6 +261,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading = isQueryEntitiesLoading || isSharedDataLoading;
   }
 
+  let isFetched = false;
+  if (source.type === 'COLLECTION') {
+    isFetched = isCollectionFetched && !isSharedDataLoading;
+  } else if (source.type === 'RELATIONS') {
+    isFetched = isRelationDataFetched && !isSharedDataLoading;
+  } else if (source.type === 'GEO' || source.type === 'SPACES') {
+    isFetched = isQueryEntitiesFetched && !isSharedDataLoading;
+  }
+
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For collections, check if there are more items beyond the current page
   const hasNextPage =
@@ -283,6 +296,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setPage,
 
     isLoading,
+    isFetched,
 
     name: entity?.name ?? null,
     setName,
