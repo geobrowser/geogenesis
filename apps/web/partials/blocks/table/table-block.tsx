@@ -290,6 +290,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     rows,
     setPage,
     isLoading,
+    isFetched,
     hasNextPage,
     hasPreviousPage,
     pageNumber,
@@ -326,7 +327,7 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations);
-
+    
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
@@ -386,6 +387,8 @@ export const TableBlock = ({ spaceId }: Props) => {
       propertiesSchema={propertiesSchema}
       rows={entries}
       placeholder={placeholder}
+      isLoading={isLoading}
+      isFetched={isFetched}
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
@@ -456,10 +459,9 @@ export const TableBlock = ({ spaceId }: Props) => {
       />
     );
   }
-
-  if (source.type !== 'COLLECTION' && entries.length === 0) {
+  if (source.type !== 'COLLECTION' && entries.length === 0 && isFetched && !isLoading) {
     EntriesComponent = (
-      <div className="block flex min-h-[568px] flex-col justify-center rounded-lg bg-grey-01">
+      <div className="block flex min-h-[468px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>
@@ -539,7 +541,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       )}
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
-        {isLoading ? (
+        {(isLoading || !isFetched) ? (
           <>
             <TableBlockLoadingPlaceholder />
           </>
