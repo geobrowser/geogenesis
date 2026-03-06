@@ -327,7 +327,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations);
-    
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
