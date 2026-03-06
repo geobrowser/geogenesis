@@ -238,6 +238,7 @@ export function useQueryEntities({
   return {
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
+    isFetched: isFetched && enabled,
   };
 }
 
