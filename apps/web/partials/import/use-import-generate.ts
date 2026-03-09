@@ -13,6 +13,7 @@ import {
   recordsAtom,
   relationOverridesAtom,
   relationsAtom,
+  rowOverridesAtom,
   selectedTypeAtom,
   stepAtom,
   typeOverridesAtom,
@@ -37,6 +38,7 @@ export function useImportGenerate(spaceId: string) {
   const extraProperties = useAtomValue(extraPropertiesAtom);
   const selectedType = useAtomValue(selectedTypeAtom);
   const relationOverrides = useAtomValue(relationOverridesAtom);
+  const rowOverrides = useAtomValue(rowOverridesAtom);
   const typeOverrides = useAtomValue(typeOverridesAtom);
   const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const [isLoading, setIsLoading] = useAtom(loadingAtom);
@@ -116,6 +118,10 @@ export function useImportGenerate(spaceId: string) {
         guard: { isCurrent: () => generationTrackerRef.current.isCurrent(generationId) },
       });
       if (rowResolution.aborted) return;
+      const mergedResolvedRows = new Map(rowResolution.resolvedRows);
+      for (const [rowIndexStr, override] of Object.entries(rowOverrides)) {
+        mergedResolvedRows.set(Number(rowIndexStr), override);
+      }
 
       const unresolvedLinks = buildUnresolvedLinksByCell({
         dataRows,
@@ -123,7 +129,7 @@ export function useImportGenerate(spaceId: string) {
         nameColIdx,
         typesColumnIndex,
         resolvedTypes: mergedResolvedTypes,
-        resolvedRows: rowResolution.resolvedRows,
+        resolvedRows: mergedResolvedRows,
         resolvedEntities: mergedResolvedEntities,
         propertyLookup,
       });
@@ -131,7 +137,7 @@ export function useImportGenerate(spaceId: string) {
       const built = buildGeneratedRows({
         dataRows,
         columnMapping,
-        resolvedRows: rowResolution.resolvedRows,
+        resolvedRows: mergedResolvedRows,
         selectedType,
         typesColumnIndex,
         resolvedTypes: mergedResolvedTypes,
@@ -170,6 +176,7 @@ export function useImportGenerate(spaceId: string) {
     nameColIdx,
     records,
     relationOverrides,
+    rowOverrides,
     schema,
     selectedType,
     typeOverrides,

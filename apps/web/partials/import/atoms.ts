@@ -69,6 +69,9 @@ export type TypeResolutionOverride = { id: string; name: string; isNew?: boolean
 /** Manual type resolution keyed by raw CSV type value. */
 export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({});
 
+/** Manual row-entity resolution keyed by row index. Overrides auto-resolved or unresolved rows. */
+export const rowOverridesAtom = atom<Record<number, { entityId: string; name: string }>>({});
+
 export const actionsCountAtom = atom(get => {
   const values = get(valuesAtom);
   const relations = get(relationsAtom);

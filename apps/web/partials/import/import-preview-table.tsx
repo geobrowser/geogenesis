@@ -193,6 +193,7 @@ type Props = {
   unresolvedLinks?: Record<string, UnresolvedImportCell>;
   onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }, isNew?: boolean, relationType?: { id: string; name: string | null }) => void;
   onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }, isNew?: boolean) => void;
+  onResolveEntityRow?: (rowIndex: number, entity: { id: string; name: string }) => void;
   /** When true and dataRows exist, show empty state message instead of rows */
   hasUnmappedColumns?: boolean;
 };
@@ -207,6 +208,7 @@ export function ImportPreviewTable({
   unresolvedLinks = {},
   onResolveRelationToken,
   onResolveTypeValue,
+  onResolveEntityRow,
   hasUnmappedColumns = false,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
@@ -448,13 +450,30 @@ export function ImportPreviewTable({
                                   }
                                 />
                               </>
-                            ) : unresolved?.kind === 'entity' ? (
-                              <div className="flex items-center gap-1.5">
-                                <WarningIcon />
-                                <Text variant="tableCell" className="wrap-break-word">
-                                  {value || '—'}
-                                </Text>
-                              </div>
+                            ) : unresolved?.kind === 'entity' && onResolveEntityRow ? (
+                              <SelectEntityAsPopover
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                  >
+                                    <WarningIcon />
+                                    <span>{value || '—'}</span>
+                                    <ChipSeparator />
+                                  </button>
+                                }
+                                spaceId={spaceId}
+                                placeholder="Find or create entity..."
+                                advanced={false}
+                                showIDs={false}
+                                onCreateEntity={() => undefined}
+                                onDone={result =>
+                                  onResolveEntityRow(virtualRow.index, {
+                                    id: result.id,
+                                    name: result.name ?? value,
+                                  })
+                                }
+                              />
                             ) : (
                               <Text variant="tableCell" className="wrap-break-word">
                                 {value || '—'}

@@ -240,7 +240,7 @@ describe('import resolution helpers', () => {
     expect(result.resolvedTypes.get('Company')).toEqual({ id: 'Company-id', name: 'Company' });
   });
 
-  it('resolves rows by exact name + type using SPACE_RANK priority', async () => {
+  it('marks rows unresolved when multiple exact name+type matches exist', async () => {
     getResultsMock.mockImplementation(() =>
       Effect.succeed([
         {
@@ -270,30 +270,22 @@ describe('import resolution helpers', () => {
     });
 
     expect(result.aborted).toBe(false);
-    expect(result.unresolvedRowCount).toBe(0);
-    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-root');
+    expect(result.unresolvedRowCount).toBe(1);
+    expect(result.resolvedRows.has(0)).toBe(false);
   });
 
-  it('resolves row ties deterministically instead of leaving unresolved', async () => {
+  it('resolves row when exactly one exact name+type match exists', async () => {
     getResultsMock.mockImplementation(() =>
       Effect.succeed([
         {
-          id: 'entity-b',
+          id: 'entity-only',
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
-        },
-        {
-          id: 'entity-a',
-          name: 'Alpha',
-          description: null,
-          types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
+          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
         },
       ])
     );
-    getRelationsByToEntityIdsMock.mockImplementation(() => Effect.succeed([]));
 
     const result = await resolveRowsByNameAndType({
       dataRows: [['Alpha']],
@@ -305,6 +297,6 @@ describe('import resolution helpers', () => {
     });
 
     expect(result.unresolvedRowCount).toBe(0);
-    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-a');
+    expect(result.resolvedRows.get(0)?.entityId).toBe('entity-only');
   });
 });

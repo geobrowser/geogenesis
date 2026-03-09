@@ -302,7 +302,7 @@ export async function resolveRowsByNameAndType(params: {
       continue;
     }
 
-    const match = await resolveBestEntityMatch({
+    const match = await resolveExactRelationMatch({
       name: rowName,
       typeIds: [rowTypeId],
       guard,
