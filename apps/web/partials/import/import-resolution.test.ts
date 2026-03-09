@@ -166,6 +166,7 @@ describe('import resolution helpers', () => {
   });
 
   it('auto-creates relation entities when relation property has no type constraints', async () => {
+    getResultsMock.mockImplementation(() => Effect.succeed([]));
     const createIdSpy = vi.spyOn(ID, 'createEntityId').mockReturnValue('created-relation-id');
 
     const result = await resolveRelationEntities({

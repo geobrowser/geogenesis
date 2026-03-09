@@ -11,6 +11,11 @@ import { getProperty } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useSpace } from '~/core/hooks/use-space';
+import { useQueryEntity } from '~/core/sync/use-store';
+
+import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
@@ -21,6 +26,74 @@ const ROW_HEIGHT_ESTIMATE = 56;
 /** Two-line header: property name + CSV column / Needs mapping */
 const HEADER_HEIGHT = 56;
 const DEFAULT_COLUMN_WIDTH = 200;
+const MIN_COLUMN_WIDTH = 100;
+
+/** Small orange warning circle icon used for unresolved chips / entities */
+function WarningIcon() {
+  return (
+    <span
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-white"
+      aria-label="Unresolved"
+    >
+      i
+    </span>
+  );
+}
+
+/** Grey colon separator shown on right side of chips */
+function ChipSeparator() {
+  return <span className="ml-1 text-grey-04" aria-hidden="true">:</span>;
+}
+
+/** Renders the space image for a property's source space (like the breadcrumb avatar) */
+function PropertySpaceIcon({ propertyId }: { propertyId?: string | null }) {
+  const { entity } = useQueryEntity({ id: propertyId ?? '', enabled: Boolean(propertyId) });
+  const spaceId = entity?.spaces?.[0];
+  const { space } = useSpace(spaceId);
+  const image = space?.entity?.image;
+
+  return (
+    <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+      <GeoImage value={image || PLACEHOLDER_SPACE_IMAGE} alt="" style={{ objectFit: 'cover' }} fill />
+    </div>
+  );
+}
+
+/** Drag handle on the right edge of a column header to resize */
+function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWidthChange: (width: number) => void }) {
+  const handleMouseDown = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const widthAtStart = startWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const newWidth = Math.max(MIN_COLUMN_WIDTH, widthAtStart + (moveEvent.clientX - startX));
+        onWidthChange(newWidth);
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [startWidth, onWidthChange]
+  );
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-ctaPrimary/30"
+    />
+  );
+}
 
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
@@ -38,6 +111,8 @@ export type ColumnConfig = {
   relationValueTypes?: Property['relationValueTypes'];
   /** True when this column mapping is implicit/derived and should not open mapping popover. */
   mappingLocked?: boolean;
+  /** Renderable type strict — used to detect IMAGE columns for thumbnail rendering */
+  renderableTypeStrict?: string | null;
 };
 
 function PropertyMappingPopover({
@@ -101,6 +176,10 @@ function PropertyMappingPopover({
   );
 }
 
+function isImageUrl(value: string): boolean {
+  return value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://');
+}
+
 type Props = {
   /** CSV data rows (excluding header). records[row][columnIndex] */
   dataRows: Array<Array<string>>;
@@ -112,8 +191,10 @@ type Props = {
   onSelectProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   unresolvedLinks?: Record<string, UnresolvedImportCell>;
-  onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }) => void;
-  onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }) => void;
+  onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }, isNew?: boolean, relationType?: { id: string; name: string | null }) => void;
+  onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }, isNew?: boolean) => void;
+  /** When true and dataRows exist, show empty state message instead of rows */
+  hasUnmappedColumns?: boolean;
 };
 
 export function ImportPreviewTable({
@@ -126,14 +207,21 @@ export function ImportPreviewTable({
   unresolvedLinks = {},
   onResolveRelationToken,
   onResolveTypeValue,
+  hasUnmappedColumns = false,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
 
   const columnLayout = React.useMemo(() => {
-    const template = columns.map(() => `${DEFAULT_COLUMN_WIDTH}px`).join(' ');
-    const totalWidth = columns.length * DEFAULT_COLUMN_WIDTH;
+    const widths = columns.map(col => columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH);
+    const template = widths.map(w => `${w}px`).join(' ');
+    const totalWidth = widths.reduce((sum, w) => sum + w, 0);
     return { template, totalWidth };
-  }, [columns]);
+  }, [columns, columnWidths]);
+
+  const handleColumnWidthChange = React.useCallback((csvColumnIndex: number, width: number) => {
+    setColumnWidths(prev => ({ ...prev, [csvColumnIndex]: width }));
+  }, []);
 
   const rowVirtualizer = useVirtualizer({
     count: dataRows.length,
@@ -147,6 +235,8 @@ export function ImportPreviewTable({
   if (columns.length === 0) {
     return null;
   }
+
+  const showEmptyState = hasUnmappedColumns && dataRows.length > 0;
 
   return (
     <div
@@ -180,7 +270,7 @@ export function ImportPreviewTable({
                     onCreateProperty={onCreateProperty}
                     trigger={
                       <span className="flex items-center gap-1.5">
-                        <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
+                        <PropertySpaceIcon propertyId={col.propertyId} />
                         <Text variant="metadata" className="truncate text-purple">
                           {col.propertyName}
                         </Text>
@@ -189,7 +279,7 @@ export function ImportPreviewTable({
                   />
                 ) : (
                   <span className="mt-0.5 flex items-center gap-1.5">
-                    <span className="inline-flex h-4 w-4 shrink-0 rounded-full bg-purple/20" aria-hidden />
+                    <PropertySpaceIcon propertyId={col.propertyId} />
                     <Text variant="metadata" className="truncate text-purple">
                       {col.propertyName}
                     </Text>
@@ -218,153 +308,169 @@ export function ImportPreviewTable({
                   <Text variant="metadata" className="text-text">Needs mapping</Text>
                 </span>
               )}
+              <ResizeHandle
+                startWidth={columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH}
+                onWidthChange={width => handleColumnWidthChange(col.csvColumnIndex, width)}
+              />
             </div>
           ))}
         </div>
       </div>
 
-      <div
-        style={{
-          height: rowVirtualizer.getTotalSize(),
-          position: 'relative',
-          minWidth: columnLayout.totalWidth,
-        }}
-      >
-        {virtualRows.map(virtualRow => {
-          const row = dataRows[virtualRow.index];
-          return (
-            <div
-              key={virtualRow.key}
-              data-index={virtualRow.index}
-              ref={node => rowVirtualizer.measureElement(node)}
-              className="absolute left-0 top-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
-              style={{
-                transform: `translateY(${virtualRow.start}px)`,
-                width: '100%',
-                zIndex: 1,
-              }}
-            >
+      {showEmptyState ? (
+        <div className="flex items-center justify-center py-20" style={{ minWidth: columnLayout.totalWidth }}>
+          <Text variant="metadata" className="text-grey-04">
+            Your data will appear once you have mapped all of your column properties
+          </Text>
+        </div>
+      ) : (
+        <div
+          style={{
+            height: rowVirtualizer.getTotalSize(),
+            position: 'relative',
+            minWidth: columnLayout.totalWidth,
+          }}
+        >
+          {virtualRows.map(virtualRow => {
+            const row = dataRows[virtualRow.index];
+            return (
               <div
-                className="grid"
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={node => rowVirtualizer.measureElement(node)}
+                className="absolute left-0 top-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
                 style={{
-                  minWidth: columnLayout.totalWidth,
-                  gridTemplateColumns: columnLayout.template,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  width: '100%',
+                  zIndex: 1,
                 }}
               >
-                {columns.map(col => {
-                  const value = row[col.csvColumnIndex] ?? '';
-                  const isRelation = col.dataType === 'RELATION';
-                  const unresolved = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
-                  const unresolvedSet =
-                    unresolved?.kind === 'relation' ? new Set(unresolved.unresolvedValues) : null;
+                <div
+                  className="grid"
+                  style={{
+                    minWidth: columnLayout.totalWidth,
+                    gridTemplateColumns: columnLayout.template,
+                  }}
+                >
+                  {columns.map(col => {
+                    const value = row[col.csvColumnIndex] ?? '';
+                    const isRelation = col.dataType === 'RELATION';
+                    const isImageColumn = col.renderableTypeStrict === 'IMAGE';
+                    const unresolved = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
+                    const unresolvedSet =
+                      unresolved?.kind === 'relation' ? new Set(unresolved.unresolvedValues) : null;
 
-                  return (
-                    <div
-                      key={`${virtualRow.index}-${col.csvColumnIndex}`}
-                      className="border-r border-grey-02 px-4 py-2"
-                    >
-                      {isRelation && value ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {splitRelationCell(value).map((part, i) => {
-                            if (
-                              unresolvedSet?.has(part) &&
-                              onResolveRelationToken
-                            ) {
+                    return (
+                      <div
+                        key={`${virtualRow.index}-${col.csvColumnIndex}`}
+                        className="border-r border-grey-02 px-4 py-2"
+                      >
+                        {isRelation && value ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {splitRelationCell(value).map((part, i) => {
+                              if (
+                                unresolvedSet?.has(part) &&
+                                onResolveRelationToken
+                              ) {
+                                return (
+                                  <SelectEntityAsPopover
+                                    key={i}
+                                    trigger={
+                                      <button
+                                        type="button"
+                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                      >
+                                        <WarningIcon />
+                                        <span>{part}</span>
+                                        <ChipSeparator />
+                                      </button>
+                                    }
+                                    spaceId={spaceId}
+                                    relationValueTypes={col.relationValueTypes}
+                                    placeholder="Find or create entity..."
+                                    advanced={false}
+                                    showIDs={false}
+                                    onCreateEntity={() => undefined}
+                                    onDone={(result, fromCreateFn) =>
+                                      onResolveRelationToken(col.csvColumnIndex, part, {
+                                        id: result.id,
+                                        name: result.name ?? part,
+                                      }, fromCreateFn, col.relationValueTypes?.[0])
+                                    }
+                                  />
+                                );
+                              }
+
                               return (
-                                <SelectEntityAsPopover
+                                <span
                                   key={i}
+                                  className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text"
+                                >
+                                  <span>{part}</span>
+                                  <ChipSeparator />
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : isImageColumn && value && isImageUrl(value) ? (
+                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
+                            <NativeGeoImage
+                              value={value}
+                              alt=""
+                              className="h-auto w-[60px] object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex w-full items-start gap-2">
+                            {unresolved?.kind === 'type' && onResolveTypeValue ? (
+                              <>
+                                <SelectEntityAsPopover
                                   trigger={
                                     <button
                                       type="button"
-                                      className="inline-flex cursor-pointer items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01 hover:bg-red-01/10"
+                                      className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
                                     >
-                                      {part}
+                                      <WarningIcon />
+                                      <span>{value || unresolved.rawType}</span>
+                                      <ChipSeparator />
                                     </button>
                                   }
                                   spaceId={spaceId}
-                                  relationValueTypes={col.relationValueTypes}
-                                  placeholder="Find or create entity..."
+                                  placeholder="Find or create type..."
                                   advanced={false}
                                   showIDs={false}
                                   onCreateEntity={() => undefined}
-                                  onDone={result =>
-                                    onResolveRelationToken(col.csvColumnIndex, part, {
+                                  onDone={(result, fromCreateFn) =>
+                                    onResolveTypeValue(unresolved.rawType, {
                                       id: result.id,
-                                      name: result.name ?? part,
-                                    })
+                                      name: result.name ?? unresolved.rawType,
+                                    }, fromCreateFn)
                                   }
                                 />
-                              );
-                            }
-
-                            return (
-                              <span
-                                key={i}
-                                className={
-                                  unresolvedSet?.has(part)
-                                    ? 'inline-flex items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01'
-                                    : 'inline-flex items-center rounded border border-grey-02 px-1.5 py-0.5 text-metadata text-text'
-                                }
-                              >
-                                {part}
-                              </span>
-                            );
-                          })}
-                          {unresolved?.kind === 'relation' ? (
-                            <span className="inline-flex items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
-                              Unresolved link
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="flex w-full items-start gap-2 overflow-hidden">
-                          {unresolved?.kind === 'type' && onResolveTypeValue ? (
-                            <SelectEntityAsPopover
-                              trigger={
-                                <button
-                                  type="button"
-                                  className="inline-flex cursor-pointer items-center rounded border border-red-01 bg-red-01/5 px-1.5 py-0.5 text-metadata text-red-01 hover:bg-red-01/10"
-                                >
-                                  {value || unresolved.rawType}
-                                </button>
-                              }
-                              spaceId={spaceId}
-                              placeholder="Find or create type..."
-                              advanced={false}
-                              showIDs={false}
-                              onCreateEntity={() => undefined}
-                              onDone={result =>
-                                onResolveTypeValue(unresolved.rawType, {
-                                  id: result.id,
-                                  name: result.name ?? unresolved.rawType,
-                                })
-                              }
-                            />
-                          ) : (
-                            <Text variant="metadata" className="min-w-0 truncate text-text">
-                              {value || '—'}
-                            </Text>
-                          )}
-                          {unresolved?.kind === 'entity' ? (
-                            <span className="inline-flex shrink-0 items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
-                              Unresolved entity
-                            </span>
-                          ) : null}
-                          {unresolved?.kind === 'type' ? (
-                            <span className="inline-flex shrink-0 items-center rounded bg-red-01/10 px-1.5 py-0.5 text-metadata text-red-01">
-                              Unresolved type
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                              </>
+                            ) : unresolved?.kind === 'entity' ? (
+                              <div className="flex items-center gap-1.5">
+                                <WarningIcon />
+                                <Text variant="tableCell" className="wrap-break-word">
+                                  {value || '—'}
+                                </Text>
+                              </div>
+                            ) : (
+                              <Text variant="tableCell" className="wrap-break-word">
+                                {value || '—'}
+                              </Text>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

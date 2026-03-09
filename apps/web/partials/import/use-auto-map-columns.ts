@@ -46,47 +46,43 @@ export function useAutoMapColumns(spaceId: string) {
       const mappedByColumn: Record<number, string> = {};
       const mappedProperties: Record<string, Property> = {};
 
-      // Process sequentially to avoid race conditions with createProperty
-      for (const colIndex of unmappedIndices) {
-        const headerName = (headers[colIndex] ?? '').trim();
-        if (!headerName) continue;
+      await Promise.all(
+        unmappedIndices.map(async colIndex => {
+          const headerName = (headers[colIndex] ?? '').trim();
+          if (!headerName) return;
 
-        try {
-          // Search for properties with this name across the space
-          const results = await Effect.runPromise(
-            getResults({
-              query: headerName,
-              typeIds: [SystemIds.PROPERTY],
-              spaceId,
-            })
-          );
+          try {
+            const results = await Effect.runPromise(
+              getResults({
+                query: headerName,
+                typeIds: [SystemIds.PROPERTY],
+                spaceId,
+              })
+            );
 
-          // Filter to exact name matches (case-insensitive, trimmed)
-          const exactMatches = results.filter(
-            r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
-          );
+            const exactMatches = results.filter(
+              r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
+            );
 
-          if (exactMatches.length === 1) {
-            // Single exact match → auto-map
-            const match = exactMatches[0];
-            const propertyId = match.id;
+            if (exactMatches.length === 1) {
+              const match = exactMatches[0];
+              const propertyId = match.id;
 
-            // Resolve the full Property object
-            let property: Property | null = store.getProperty(propertyId);
-            if (!property) {
-              property = await Effect.runPromise(getProperty(propertyId));
+              let property: Property | null = store.getProperty(propertyId);
+              if (!property) {
+                property = await Effect.runPromise(getProperty(propertyId));
+              }
+
+              if (property) {
+                mappedByColumn[colIndex] = propertyId;
+                mappedProperties[propertyId] = property;
+              }
             }
-
-            if (property) {
-              mappedByColumn[colIndex] = propertyId;
-              mappedProperties[propertyId] = property;
-            }
+          } catch (error) {
+            console.warn(`[import] Auto-map failed for column "${headerName}"`, error);
           }
-          // exactMatches.length === 0 or >= 2 → skip, leave for manual review
-        } catch (error) {
-          console.warn(`[import] Auto-map failed for column "${headerName}"`, error);
-        }
-      }
+        })
+      );
 
       if (Object.keys(mappedByColumn).length > 0) {
         setColumnMapping(prev => {

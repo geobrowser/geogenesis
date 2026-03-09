@@ -1,162 +1,119 @@
-# CSV Import — Relation Resolution Handoff
+# CSV Import — Current Handoff
 
 ## Summary
 
-CSV import now supports full RELATION resolution with a refactored import pipeline:
+Import generation is now split into clear stages with strict matching rules and explicit unresolved UI:
 
-- RELATION cells are resolved to existing entities (exact match) or local entities are created.
-- Multi-value relation cells are split (`','`, `';'`, `'|'`) and emitted as multiple relations.
-- Types can come from either a constant selected type or a CSV types column.
-- Re-generation only clears import-generated local changes (not all local edits in the space).
-- Generation is protected against stale async runs (newer runs supersede older runs).
-- Import code has been split into shared hooks/utilities for maintainability.
-
----
-
-## What Changed
-
-### Core behavior upgrades
-
-1. RELATION import is now first-class in generation (`Relation` writes instead of raw `Value` strings).
-2. Auto-create for missing relation entities includes:
-   - `Name` value
-   - `Types` relation from `relationValueTypes[0]` when available
-3. Publish counts now include both values and relations (`actionsCountAtom`).
-4. Upload/re-upload/delete flows reset mapping state safely and clear only generated import edits.
-
-### Safety + correctness fixes
-
-1. Added per-generation supersession tracking to avoid stale async writes.
-2. Replaced broad `clearLocalChangesForSpace()` usage in import flow with scoped cleanup by IDs.
-3. Added CSV parse error handling with user-facing error messaging.
-4. Auto-map now applies deterministic batched updates and has per-column error isolation.
+- Property linking is strict: no auto-create during automap.
+- Row entity linking resolves exact `name + type`; no match creates a new row entity.
+- Relation cell linking resolves exact matches only:
+  - `0` exact matches => auto-create relation target entity
+  - `1` exact match => link to existing
+  - `>1` exact matches => unresolved and requires manual resolution
+- CSV Types-column values that cannot resolve are flagged per-cell in review and can be manually resolved.
+- Unresolved relation tokens are clickable in review and open find/create popover.
+- Auto-created relation targets are materialized with a `Name` value (not just referenced by relation ID).
+- Step 2 type-source changes clear generated actions to avoid stale publish state.
 
 ---
 
-## Current File Map
+## Matching Rules Implemented
 
-### Existing files updated
+### 1) Property mapping (`use-auto-map-columns.ts`)
 
-| File | Purpose |
-|------|---------|
-| `use-import-generate.ts` | Orchestrates generation: clears prior generated import changes, resolves relations/types, builds rows, commits values/relations |
-| `generate.tsx` | Upload + mapping UI; uses shared schema/session hooks; parse error handling; auto-map trigger lifecycle |
-| `import-review.tsx` | Review UI; manual mapping re-triggers generation using shared session clear helper |
-| `import-preview-table.tsx` | Preview table; uses shared relation split util and property mapping popover |
-| `use-auto-map-columns.ts` | Auto-map unmapped columns with batched mapping/property updates and resilient error handling |
-| `atoms.ts` | Import atoms; typed `stepAtom`; action counter now includes values + relations |
-| `core/sync/store.ts` | Added `clearLocalChangesByIds({ spaceId, valueIds, relationIds })` |
-| `core/sync/store.test.ts` | Coverage for scoped local-change cleanup |
+- Exact property-name match only.
+- `0` matches => leave unmapped for review (`Needs mapping`).
+- `>1` matches => leave unmapped for review.
+- No property auto-create in automap.
 
-### New files added
+### 2) Row entity resolution (`resolveRowsByNameAndType`)
 
-| File | Purpose |
-|------|---------|
-| `use-import-schema.ts` | Shared schema query hook for import flow (`selectedTypeId + spaceId`) |
-| `use-import-session.ts` | Shared import session state helpers (`clearGeneratedChanges`, `resetMappedState`, `resetImportState`) |
-| `relation-cell.ts` | Shared `splitRelationCell()` utility |
-| `header-normalization.ts` | Shared header normalization + typo normalization map |
-| `import-generation.ts` | Pure generation helpers (`collectRelationCells`, `buildGeneratedRows`, generation tracker) |
-| `import-resolution.ts` | Async resolution helpers for relation entities + types column |
-| `atoms.test.ts` | Ensures action count includes values + relations |
-| `relation-cell.test.ts` | Coverage for multi-separator relation splitting |
-| `header-normalization.test.ts` | Coverage for normalization + typo map |
-| `import-generation.test.ts` | Coverage for generation tracker + relation cell pre-collection |
-| `import-resolution.test.ts` | Coverage for relation/type resolution helpers |
+- Resolve by exact row name and type.
+- Uses `SPACE_RANK` priority (`core/utils/space/space-ranking.ts`) to pick the best existing match when multiple exist.
+- If multiple candidates remain in top-ranked spaces, prefers most backlinks; final tie-break is deterministic by entity ID.
+- `0` matches => create row entity ID for import row.
+- Missing row name or unresolved row type => unresolved.
+
+### 3) Relation target resolution (`resolveRelationEntities`)
+
+- Per relation token in mapped relation columns:
+  - query by token (and relation type constraints when present)
+  - filter to exact name (and type when configured)
+- Outcomes:
+  - exact count `0` => `created`
+  - exact count `1` => `found`
+  - exact count `>1` => `ambiguous` (manual resolution required)
+
+No ranking/backlink tie-break is used for relation-column tokens anymore.
+
+---
+
+## Unresolved UI + Manual Resolution
+
+### Data model
+
+- `unresolvedLinksAtom`: per-cell unresolved metadata keyed by `${rowIndex}:${csvColumnIndex}`.
+- `relationOverridesAtom`: manual token override map keyed by `${propertyId}::${token}`.
+- `typeOverridesAtom`: manual types-column override map keyed by raw CSV type value.
+
+### Review table behavior (`import-preview-table.tsx`)
+
+- Relation tokens that are unresolved render as warning chips.
+- Clicking unresolved token opens `SelectEntityAsPopover` (find/create).
+- Selection writes override and triggers regeneration.
+- Types-column unresolved values render `Unresolved type` and are clickable for manual type resolution.
+- Types source column is shown as `Types (from CSV)` and is mapping-locked (not treated as normal property mapping).
+- Name cell shows `Unresolved entity` only for rows that still cannot be resolved/materialized.
 
 ---
 
 ## Generation Pipeline (Current)
 
-**Entry point:** `useImportGenerate(spaceId)`
+Entry point: `useImportGenerate(spaceId)`
 
-1. **Guard + start generation token**
-   - Requires: type source (`selectedType` or `typesColumnIndex`), data rows, mapped name column.
-   - Starts a generation token (`createGenerationTracker`).
-
-2. **Clear prior generated import edits (scoped)**
-   - `useImportSession.clearGeneratedChanges()`:
-   - Calls `store.clearLocalChangesByIds(...)` with current generated `valuesAtom` + `relationsAtom` IDs.
-
-3. **Collect RELATION cells**
-   - `collectRelationCells(...)` scans mapped relation properties and pre-collects unique split cell parts.
-
-4. **Resolve relation entities**
-   - `resolveRelationEntities(...)`:
-   - Exact match => use existing entity
-   - No match => create local entity seed (Name + optional Types relation)
-   - Multiple exact matches => mark ambiguous and skip
-
-5. **Resolve per-row types (optional)**
-   - `resolveTypesForRows(...)` resolves unique values from `typesColumnIndex`.
-   - Exact match only; 0 or many matches are skipped.
-
-6. **Build row-level values/relations**
-   - `buildGeneratedRows(...)` creates:
-   - Name values
-   - Types relation per row (constant type or resolved type)
-   - Property values or relations by dataType
-
-7. **Commit if generation token is still current**
-   - Writes to store (`setValue`, `setRelation`) and updates atoms (`valuesAtom`, `relationsAtom`).
-   - Advances to `step5`.
+1. Clears prior generated values/relations in store via `clearLocalChangesByIds`.
+2. Resolves relation tokens (`resolveRelationEntities`).
+3. Merges manual relation overrides (`relationOverridesAtom`) onto resolved map.
+4. Resolves per-row types (`resolveTypesForRows`) when types column is used.
+5. Merges manual type overrides (`typeOverridesAtom`) into resolved types.
+6. Resolves rows (`resolveRowsByNameAndType`).
+6. Builds unresolved-cell metadata (`buildUnresolvedLinksByCell`).
+7. Builds values/relations (`buildGeneratedRows`) and writes to store.
 
 ---
 
-## Notable Design Decisions
+## Important Implementation Details
 
-1. **Scoped import cleanup**
-   - Import flow never clears unrelated local edits in the same space.
-
-2. **Separation of concerns**
-   - Async resolution is separated from pure generation transforms.
-   - Shared hooks/utilities remove duplicate logic across generate/review/table.
-
-3. **Deterministic automap writes**
-   - Auto-map collects results first, then performs batched atom updates.
-
-4. **Shared normalization and parsing**
-   - Header normalization and relation splitting are centralized and test-covered.
+- `buildGeneratedRows` now writes `Name` values for auto-created relation targets (`status: 'created'`) so those entities exist with a usable name.
+- Deduping prevents duplicate `Name` value writes for repeated created targets.
+- `clearGeneratedChanges` clears generated values/relations + unresolved-cell state, while keeping manual overrides.
+- Full import mapping reset clears both relation and type overrides.
+- `use-import-generate.ts` no longer force-creates entities for all unresolved rows (removes prior over-broad fallback).
+- Step 3 warning counts and auto-map logic exclude `typesColumnIndex`.
+- Step 2 type-source changes call `clearGeneratedChanges()` before switching source.
 
 ---
 
-## Remaining Known Gaps / Follow-ups
+## Relevant Files
 
-1. **Schema in types-column-only mode**
-   - `useImportSchema` is keyed off `selectedTypeId`; if only `typesColumnIndex` is chosen, schema is empty.
-   - Behavior currently relies on `extraProperties` / `store.getProperty()` fallback and works in practice.
+- `apps/web/partials/import/use-import-generate.ts`
+- `apps/web/partials/import/import-resolution.ts`
+- `apps/web/partials/import/import-generation.ts`
+- `apps/web/partials/import/import-review.tsx`
+- `apps/web/partials/import/import-preview-table.tsx`
+- `apps/web/partials/import/use-import-session.ts`
+- `apps/web/partials/import/use-auto-map-columns.ts`
+- `apps/web/partials/import/atoms.ts`
+- `apps/web/partials/import/generate.tsx`
 
-2. **Auto-generate trigger UX**
-   - `import-review.tsx` still relies on effect-driven auto-generate + `hasAutoGeneratedRef`.
-   - Functional now, but could be made more explicit/state-machine-driven if needed.
+Tests:
 
----
-
-## Test Coverage Added
-
-- `core/sync/store.test.ts`:
-  - `clearLocalChangesByIds` only removes matching local entries and emits hydrate/cleared events.
-- `partials/import/atoms.test.ts`:
-  - action count includes values + relations.
-- `partials/import/relation-cell.test.ts`:
-  - relation splitting behavior.
-- `partials/import/header-normalization.test.ts`:
-  - normalization + typo correction behavior.
-- `partials/import/import-generation.test.ts`:
-  - generation tracker supersession + relation pre-collection.
-- `partials/import/import-resolution.test.ts`:
-  - relation/type resolution exact-match behavior.
+- `apps/web/partials/import/import-resolution.test.ts`
+- `apps/web/partials/import/import-generation.test.ts`
 
 ---
 
-## Validation Commands
+## Notes
 
-Run from `apps/web`:
-
-```bash
-bun eslint partials/import/*.ts partials/import/*.tsx core/sync/store.ts core/sync/store.test.ts
-bun tsc --noEmit
-bun vitest run core/sync/store.test.ts partials/import/atoms.test.ts partials/import/relation-cell.test.ts partials/import/header-normalization.test.ts partials/import/import-generation.test.ts partials/import/import-resolution.test.ts
-```
-
-All pass in the current branch state.
+- In this environment, `apps/web/node_modules` is missing, so local lint/tsc/vitest execution was not possible here.
+- Behavior has been adjusted based on manual QA reports in this branch; this document reflects the current expected behavior.

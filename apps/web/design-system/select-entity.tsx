@@ -629,7 +629,7 @@ export const SelectEntity = ({
                       </div>
                     </>
                   )}
-                  {!result && (
+                  {!result && onCreateEntity && (
                     <div className="flex w-full items-center justify-between border-t border-grey-02 py-[5px] pr-3 pl-[5px]">
                       <div className="flex items-center gap-3">
                         {showIDs && (

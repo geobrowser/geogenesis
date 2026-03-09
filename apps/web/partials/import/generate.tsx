@@ -41,6 +41,12 @@ type GenerateProps = {
 
 const TYPES_HEADER_NORMALIZED = 'types';
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}b`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}kb`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
+}
+
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
@@ -67,30 +73,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const { schema } = useImportSchema({ selectedTypeId: selectedType?.id, spaceId });
   const { resetMappedState, clearGeneratedChanges } = useImportSession(spaceId);
 
+  // Map "Name" header to NAME_PROPERTY and match schema properties by header name
   useEffect(() => {
     if (headers.length === 0) return;
-    const normalizedHeaders = headers.map(h => normalizeHeaderForMatch(normalizeHeader(h ?? '')));
-    setColumnMapping(prev => {
-      let changed = false;
-      const next = { ...prev };
-      for (let i = 0; i < normalizedHeaders.length; i++) {
-        if (typesColumnIndex !== undefined && i === typesColumnIndex) continue;
-        if (next[i] !== undefined) continue;
-        if (normalizedHeaders[i] === 'name') {
-          next[i] = SystemIds.NAME_PROPERTY;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [headers, setColumnMapping, typesColumnIndex]);
-
-  useEffect(() => {
-    if (headers.length === 0 || schema.length === 0) return;
     const normalizedHeaders = headers.map(h => normalizeHeader(h ?? ''));
-    const propNameToId = new Map(
-      schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id])
-    );
+    const propNameToId = schema.length > 0
+      ? new Map(schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id]))
+      : new Map<string, string>();
+
     setColumnMapping(prev => {
       let changed = false;
       const next = { ...prev };
@@ -99,10 +89,15 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         if (next[i] !== undefined) continue;
         const raw = normalizedHeaders[i];
         const normalized = normalizeHeaderForMatch(raw);
-        const propId = propNameToId.get(normalized) ?? propNameToId.get(raw);
-        if (propId) {
-          next[i] = propId;
+        if (normalized === 'name') {
+          next[i] = SystemIds.NAME_PROPERTY;
           changed = true;
+        } else {
+          const propId = propNameToId.get(normalized) ?? propNameToId.get(raw);
+          if (propId) {
+            next[i] = propId;
+            changed = true;
+          }
         }
       }
       return changed ? next : prev;
@@ -138,12 +133,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     resetMappedState();
     autoMappedSignatureRef.current = null;
   }, [resetMappedState]);
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes}b`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}kb`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
-  };
 
   const processFile = useCallback(
     (file: File | null) => {
@@ -230,6 +219,80 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     setRecords([]);
     setStep('step1');
   }, [resetSessionState, setFileName, setRecords, setStep]);
+
+  const step3Content = useMemo(() => {
+    if (records.length === 0) {
+      return (
+        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <p className="text-metadata text-grey-04">Upload a file to continue</p>
+        </div>
+      );
+    }
+    if (!selectedType && typesColumnIndex === undefined) {
+      return (
+        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
+        </div>
+      );
+    }
+    if (isAutoMapping) {
+      return (
+        <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <Spinner />
+          <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
+        </div>
+      );
+    }
+    const step3DataRows = records.slice(1).filter(
+      (row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== '')
+    );
+    const unmappedCount = headers.filter(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    ).length;
+    const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
+    const hasUnmapped = unmappedCount > 0;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        {hasUnmapped ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex shrink-0 items-center" aria-hidden>
+                <Warning color="red-01" />
+              </span>
+              <Text variant="smallButton" className="text-text">
+                {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
+              </Text>
+              <span className="flex shrink-0 items-center" aria-hidden>
+                <Warning color="red-01" />
+              </span>
+              <Text variant="smallButton" className="text-text">
+                {dataPointsNeedLinking.toLocaleString('en-US')} data points need linking
+              </Text>
+            </div>
+            <SmallButton
+              type="button"
+              variant="secondary"
+              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+            >
+              Fix data
+            </SmallButton>
+          </>
+        ) : (
+          <>
+            <p className="text-metadata text-grey-04">All columns are mapped. Review your data before importing.</p>
+            <SmallButton
+              type="button"
+              variant="secondary"
+              className="shrink-0 rounded-full"
+              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+            >
+              Review
+            </SmallButton>
+          </>
+        )}
+      </div>
+    );
+  }, [records, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, router, spaceId]);
 
   if (!isEditor) return null;
 
@@ -331,7 +394,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 ) : (
                   <div className="relative w-[192px]">
                     <EntitySearchAutocomplete
-                      placeholder="Project"
+                      placeholder="Search for a type..."
                       dropdownClassName="!w-[384px] min-w-[320px]"
                       onDone={(result) => {
                         clearGeneratedChanges();
@@ -385,70 +448,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <span className="font-semibold text-purple">Step 3</span>
           <span className="text-button font-medium text-text">Map properties and data</span>
         </div>
-        {records.length === 0 ? (
-          <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-            <p className="text-metadata text-grey-04">Upload a file to continue</p>
-          </div>
-        ) : !selectedType && typesColumnIndex === undefined ? (
-          <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-            <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
-          </div>
-        ) : isAutoMapping ? (
-          <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-            <Spinner />
-            <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
-          </div>
-        ) : (() => {
-          const step3DataRows = records.slice(1).filter(
-            (row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== '')
-          );
-          const unmappedCount = headers.filter(
-            (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
-          ).length;
-          const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
-          const hasUnmapped = unmappedCount > 0;
-          return (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-              {hasUnmapped ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex shrink-0 items-center" aria-hidden>
-                      <Warning color="red-01" />
-                    </span>
-                    <Text variant="smallButton" className="text-text">
-                      {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
-                    </Text>
-                    <span className="flex shrink-0 items-center" aria-hidden>
-                      <Warning color="red-01" />
-                    </span>
-                    <Text variant="smallButton" className="text-text">
-                      {dataPointsNeedLinking.toLocaleString('en-US')} data points need linking
-                    </Text>
-                  </div>
-                  <SmallButton
-                    type="button"
-                    variant="secondary"
-                    onClick={() => router.push(`/space/${spaceId}/import/review`)}
-                  >
-                    Fix data
-                  </SmallButton>
-                </>
-              ) : (
-                <>
-                  <p className="text-metadata text-grey-04">All columns are mapped. Review your data before importing.</p>
-                  <SmallButton
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 rounded-full"
-                    onClick={() => router.push(`/space/${spaceId}/import/review`)}
-                  >
-                    Review
-                  </SmallButton>
-                </>
-              )}
-            </div>
-          );
-        })()}
+        {step3Content}
       </div>
     </div>
   );

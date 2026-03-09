@@ -46,7 +46,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const spaceName = Entities.name(space?.entity?.values ?? []);
   const spaceAvatar = Entities.avatar(space?.entity?.relations);
   const [proposalName, setProposalName] = useState('');
-  const isReadyToPublish = proposalName.length > 3;
+  const isReadyToPublish = proposalName.length > 0;
   const { smartAccount } = useSmartAccount();
   const { makeBulkProposal } = useBulkPublish();
 

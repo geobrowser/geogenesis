@@ -156,44 +156,59 @@ export async function resolveRelationEntities(params: {
   const resolvedEntities = new Map<string, ResolvedEntity>();
   let unresolvedCount = 0;
 
-  for (const relationProperty of relationProperties) {
-    for (const cellValue of relationProperty.uniqueCellValues) {
-      const cacheKey = `${relationProperty.propertyId}::${cellValue}`;
-      const relationTypeIds = relationProperty.typeIds;
+  // Flatten all (property, cellValue) pairs and resolve in parallel
+  const pairs = relationProperties.flatMap(rp =>
+    Array.from(rp.uniqueCellValues).map(cellValue => ({
+      cacheKey: `${rp.propertyId}::${cellValue}`,
+      cellValue,
+      typeIds: rp.typeIds,
+      propertyId: rp.propertyId,
+    }))
+  );
 
+  const results = await Promise.all(
+    pairs.map(async ({ cacheKey, cellValue, typeIds, propertyId }) => {
       try {
         const match = await resolveExactRelationMatch({
           name: cellValue,
-          typeIds: relationTypeIds,
+          typeIds,
           guard,
         });
-        if (!guard.isCurrent()) {
-          return { aborted: true, resolvedEntities, unresolvedCount };
-        }
-
-        if (match.status === 'resolved') {
-          resolvedEntities.set(cacheKey, {
-            id: match.entity.id,
-            name: match.entity.name,
-            status: 'found',
-          });
-        } else {
-          if (match.reason === 'none') {
-            resolvedEntities.set(cacheKey, {
-              id: ID.createEntityId(),
-              name: cellValue,
-              status: 'created',
-            });
-          } else {
-            unresolvedCount += 1;
-            resolvedEntities.set(cacheKey, { status: 'ambiguous' });
-          }
-        }
+        return { cacheKey, cellValue, match };
       } catch (error) {
         console.warn(
-          `[import] Failed to resolve relation value "${cellValue}" for property ${relationProperty.propertyId}`,
+          `[import] Failed to resolve relation value "${cellValue}" for property ${propertyId}`,
           error
         );
+        return null;
+      }
+    })
+  );
+
+  if (!guard.isCurrent()) {
+    return { aborted: true, resolvedEntities, unresolvedCount };
+  }
+
+  for (const result of results) {
+    if (!result) continue;
+    const { cacheKey, cellValue, match } = result;
+
+    if (match.status === 'resolved') {
+      resolvedEntities.set(cacheKey, {
+        id: match.entity.id,
+        name: match.entity.name,
+        status: 'found',
+      });
+    } else {
+      if (match.reason === 'none') {
+        resolvedEntities.set(cacheKey, {
+          id: ID.createEntityId(),
+          name: cellValue,
+          status: 'created',
+        });
+      } else {
+        unresolvedCount += 1;
+        resolvedEntities.set(cacheKey, { status: 'ambiguous' });
       }
     }
   }
@@ -220,19 +235,21 @@ export async function resolveTypesForRows(params: {
     if (raw) uniqueTypeNames.add(raw);
   }
 
-  for (const typeName of uniqueTypeNames) {
-    try {
-      const results = await Effect.runPromise(getResults({ query: typeName, spaceId }));
-      if (!guard.isCurrent()) return { aborted: true, resolvedTypes };
-
-      const exactMatches = results.filter(r => (r.name ?? '').trim().toLowerCase() === typeName.toLowerCase());
-      if (exactMatches.length === 1) {
-        resolvedTypes.set(typeName, { id: exactMatches[0].id, name: exactMatches[0].name ?? typeName });
+  await Promise.all(
+    Array.from(uniqueTypeNames).map(async typeName => {
+      try {
+        const results = await Effect.runPromise(getResults({ query: typeName, spaceId }));
+        const exactMatches = results.filter(r => (r.name ?? '').trim().toLowerCase() === typeName.toLowerCase());
+        if (exactMatches.length === 1) {
+          resolvedTypes.set(typeName, { id: exactMatches[0].id, name: exactMatches[0].name ?? typeName });
+        }
+      } catch (error) {
+        console.warn(`[import] Failed to resolve type "${typeName}"`, error);
       }
-    } catch (error) {
-      console.warn(`[import] Failed to resolve type "${typeName}"`, error);
-    }
-  }
+    })
+  );
+
+  if (!guard.isCurrent()) return { aborted: true, resolvedTypes };
 
   return { aborted: false, resolvedTypes };
 }

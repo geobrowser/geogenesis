@@ -1,6 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
-
-import { Position } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import { Property, Relation, RenderableEntityType, Value } from '~/core/types';
@@ -20,7 +18,7 @@ export type RelationPropertyMeta = {
   uniqueCellValues: Set<string>;
 };
 
-export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created' } | { status: 'ambiguous' };
+export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
 
 export type BuildRowsInput = {
   dataRows: string[][];
@@ -28,7 +26,7 @@ export type BuildRowsInput = {
   resolvedRows: Map<number, { entityId: string; name: string }>;
   selectedType: { id: string; name: string | null } | null;
   typesColumnIndex: number | undefined;
-  resolvedTypes: Map<string, { id: string; name: string }>;
+  resolvedTypes: Map<string, { id: string; name: string; isNew?: boolean }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   spaceId: string;
   propertyLookup: PropertyLookup;
@@ -159,6 +157,28 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
   const values: Value[] = [];
   const relations: Relation[] = [];
   const createdRelationEntityNameValueIds = new Set<string>();
+  const createdRelationEntityTypedIds = new Set<string>();
+
+  // Emit Name triples for newly-created type entities
+  for (const [, typeEntry] of resolvedTypes) {
+    if (!typeEntry.isNew) continue;
+    const typeNameValueId = ID.createValueId({
+      entityId: typeEntry.id,
+      propertyId: SystemIds.NAME_PROPERTY,
+      spaceId,
+    });
+    if (!createdRelationEntityNameValueIds.has(typeNameValueId)) {
+      createdRelationEntityNameValueIds.add(typeNameValueId);
+      values.push({
+        id: typeNameValueId,
+        entity: { id: typeEntry.id, name: typeEntry.name },
+        property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
+        spaceId,
+        value: typeEntry.name,
+        isLocal: true,
+      });
+    }
+  }
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
@@ -231,6 +251,22 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
                 property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
                 spaceId,
                 value: resolved.name,
+                isLocal: true,
+              });
+            }
+
+            // Emit a Types relation for the created entity based on the relation property's value types
+            if (resolved.typeId && !createdRelationEntityTypedIds.has(resolved.id)) {
+              createdRelationEntityTypedIds.add(resolved.id);
+              relations.push({
+                id: ID.createEntityId(),
+                entityId: ID.createEntityId(),
+                type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+                fromEntity: { id: resolved.id, name: resolved.name },
+                toEntity: { id: resolved.typeId, name: resolved.typeName ?? null, value: resolved.typeId },
+                renderableType: 'RELATION',
+                spaceId,
+                position: Position.generate(),
                 isLocal: true,
               });
             }
