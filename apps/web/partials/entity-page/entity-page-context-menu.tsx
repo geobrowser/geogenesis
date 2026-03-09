@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -9,7 +10,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -49,19 +50,38 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
     }
   };
 
+  const deleteEntityAndBlocks = () => {
+    // Block entities (e.g. text blocks) have their own values (including markdown content) and relations.
+    // Delete all block data first, then the entity's own values and relations.
+    const blockEntityIds = relations
+      .filter(r => r.type.id === SystemIds.BLOCKS)
+      .map(r => r.toEntity.id);
+
+    if (blockEntityIds.length > 0) {
+      const blockValues = getValues({
+        selector: v => blockEntityIds.includes(v.entity.id) && v.spaceId === spaceId,
+      });
+      const blockRelations = getRelations({
+        selector: r => blockEntityIds.includes(r.fromEntity.id) && r.spaceId === spaceId,
+      });
+      blockValues.forEach(t => storage.values.delete(t));
+      blockRelations.forEach(r => storage.relations.delete(r));
+    }
+
+    values.forEach(t => storage.values.delete(t));
+    relations.forEach(r => storage.relations.delete(r));
+    setIsMenuOpen(false);
+  };
+
   const onDelete = () => {
     if (editable) {
-      values.forEach(t => storage.values.delete(t));
-      relations.forEach(r => storage.relations.delete(r));
-      setIsMenuOpen(false);
+      deleteEntityAndBlocks();
     } else {
       setEditable(true);
 
       // Why?
       setTimeout(() => {
-        values.forEach(t => storage.values.delete(t));
-        relations.forEach(r => storage.relations.delete(r));
-        setIsMenuOpen(false);
+        deleteEntityAndBlocks();
       }, 500);
     }
   };
