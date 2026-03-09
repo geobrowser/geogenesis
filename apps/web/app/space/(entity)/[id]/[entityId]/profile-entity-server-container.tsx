@@ -11,6 +11,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
@@ -74,8 +75,11 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
     !preventRedirect &&
     deterministicSpaceId
   ) {
-    console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
-    return redirect(NavUtils.toSpace(deterministicSpaceId));
+    const space = await cachedFetchSpace(deterministicSpaceId);
+    if (space?.entity?.id === entityId) {
+      console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
+      return redirect(NavUtils.toSpace(deterministicSpaceId));
+    }
   }
 
   return (
