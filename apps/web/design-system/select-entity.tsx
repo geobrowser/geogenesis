@@ -165,10 +165,10 @@ export const SelectEntity = ({
           name: query,
           renderableType: isCreatingProperty ? renderableType : undefined,
         }) ?? newEntityId;
-    } else {
-      // Create new entity with name and types using internal id
-      storage.entities.name.set(newEntityId, spaceId, query);
     }
+
+    // Always set the name – duplicate writes are idempotent upserts.
+    storage.entities.name.set(newEntityId, spaceId, query);
     onDone?.({ id: newEntityId, name: query }, true);
     onQueryChange('');
     setSelectedIndex(0);
