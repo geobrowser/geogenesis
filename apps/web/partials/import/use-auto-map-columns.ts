@@ -8,6 +8,7 @@ import { useCallback, useState } from 'react';
 import { getProperty, getResults } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { columnMappingAtom, extraPropertiesAtom, headersAtom, typesColumnIndexAtom } from './atoms';
 
@@ -17,7 +18,7 @@ import { columnMappingAtom, extraPropertiesAtom, headersAtom, typesColumnIndexAt
  *
  * Rules:
  * - Exact match, 1 result → auto-map
- * - Exact match, 2+ results → leave unmapped (manual review)
+ * - Exact match, 2+ results → pick the one from the highest-ranked space; if tied, leave unmapped
  * - No match → leave unmapped (manual review)
  */
 export function useAutoMapColumns(spaceId: string) {
@@ -64,8 +65,22 @@ export function useAutoMapColumns(spaceId: string) {
               r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
             );
 
-            if (exactMatches.length === 1) {
-              const match = exactMatches[0];
+            let match = exactMatches.length === 1 ? exactMatches[0] : null;
+
+            if (!match && exactMatches.length > 1) {
+              // Rank each match by its best space
+              const ranked = exactMatches.map(m => ({
+                match: m,
+                rank: Math.min(...m.spaces.map(s => getSpaceRank(s.spaceId))),
+              }));
+              const bestRank = Math.min(...ranked.map(r => r.rank));
+              const atBest = ranked.filter(r => r.rank === bestRank);
+              if (atBest.length === 1) {
+                match = atBest[0].match;
+              }
+            }
+
+            if (match) {
               const propertyId = match.id;
 
               let property: Property | null = store.getProperty(propertyId);

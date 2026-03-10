@@ -18,7 +18,7 @@ export type RelationPropertyMeta = {
   uniqueCellValues: Set<string>;
 };
 
-export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
+export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created' | 'ranked'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
 
 export type BuildRowsInput = {
   dataRows: string[][];
@@ -42,12 +42,12 @@ export function buildUnresolvedLinksByCell(params: {
   nameColIdx: number;
   typesColumnIndex: number | undefined;
   resolvedTypes: Map<string, { id: string; name: string }>;
-  resolvedRows: Map<number, { entityId: string; name: string }>;
+  resolvedRows: Map<number, { entityId: string; name: string; ranked?: boolean }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
-}): Record<string, { kind: 'entity' } | { kind: 'type'; rawType: string } | { kind: 'relation'; unresolvedValues: string[] }> {
+}): Record<string, import('./atoms').UnresolvedImportCell> {
   const { dataRows, columnMapping, nameColIdx, typesColumnIndex, resolvedTypes, resolvedRows, resolvedEntities, propertyLookup } = params;
-  const unresolved: Record<string, { kind: 'entity' } | { kind: 'type'; rawType: string } | { kind: 'relation'; unresolvedValues: string[] }> = {};
+  const flags: Record<string, import('./atoms').UnresolvedImportCell> = {};
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
@@ -55,15 +55,18 @@ export function buildUnresolvedLinksByCell(params: {
     if (typesColumnIndex !== undefined) {
       const rawType = (row[typesColumnIndex] ?? '').trim();
       if (rawType && !resolvedTypes.has(rawType)) {
-        unresolved[toImportCellKey(rowIndex, typesColumnIndex)] = { kind: 'type', rawType };
+        flags[toImportCellKey(rowIndex, typesColumnIndex)] = { kind: 'type', rawType };
       }
     }
 
-    if (!resolvedRows.has(rowIndex)) {
+    const resolvedRow = resolvedRows.get(rowIndex);
+    if (!resolvedRow) {
       const rowName = (row[nameColIdx] ?? '').trim();
       if (rowName) {
-        unresolved[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'entity' };
+        flags[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'entity' };
       }
+    } else if (resolvedRow.ranked) {
+      flags[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'ranked-entity' };
     }
 
     for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
@@ -75,20 +78,33 @@ export function buildUnresolvedLinksByCell(params: {
       const property = getPropertyFromSources(propertyId, propertyLookup);
       if (!property || property.dataType !== 'RELATION') continue;
 
-      const unresolvedValues = splitRelationCell(raw).filter(part => {
-        const resolved = resolvedEntities.get(`${propertyId}::${part}`);
-        return !resolved || resolved.status === 'ambiguous';
-      });
+      const unresolvedValues: string[] = [];
+      const rankedValues: string[] = [];
 
-      if (unresolvedValues.length === 0) continue;
-      unresolved[toImportCellKey(rowIndex, colIdx)] = {
-        kind: 'relation',
-        unresolvedValues: Array.from(new Set(unresolvedValues)),
-      };
+      for (const part of splitRelationCell(raw)) {
+        const resolved = resolvedEntities.get(`${propertyId}::${part}`);
+        if (!resolved || resolved.status === 'ambiguous') {
+          unresolvedValues.push(part);
+        } else if (resolved.status === 'ranked') {
+          rankedValues.push(part);
+        }
+      }
+
+      if (unresolvedValues.length > 0) {
+        flags[toImportCellKey(rowIndex, colIdx)] = {
+          kind: 'relation',
+          unresolvedValues: Array.from(new Set(unresolvedValues)),
+        };
+      } else if (rankedValues.length > 0) {
+        flags[toImportCellKey(rowIndex, colIdx)] = {
+          kind: 'ranked-relation',
+          rankedValues: Array.from(new Set(rankedValues)),
+        };
+      }
     }
   }
 
-  return unresolved;
+  return flags;
 }
 
 export function createGenerationTracker() {

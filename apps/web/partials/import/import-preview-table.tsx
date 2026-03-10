@@ -28,15 +28,37 @@ const HEADER_HEIGHT = 56;
 const DEFAULT_COLUMN_WIDTH = 200;
 const MIN_COLUMN_WIDTH = 100;
 
-/** Small orange warning circle icon used for unresolved chips / entities */
+/** Red warning circle icon for truly unresolved items requiring manual resolution */
 function WarningIcon() {
   return (
     <span
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-white"
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-bold text-white"
       aria-label="Unresolved"
+    >
+      !
+    </span>
+  );
+}
+
+/** Yellow info circle icon for auto-ranked items the user can optionally review */
+function RankedIcon() {
+  return (
+    <span
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-white"
+      aria-label="Auto-selected"
     >
       i
     </span>
+  );
+}
+
+/** Small colored status dot shown next to entity names in the Name column */
+function StatusDot({ color }: { color: 'red' | 'orange' }) {
+  return (
+    <span
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${color === 'red' ? 'bg-red-01' : 'bg-orange'}`}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -121,12 +143,16 @@ function PropertyMappingPopover({
   onSelectProperty,
   onCreateProperty,
   trigger,
+  initialQuery,
+  selectedEntityId,
 }: {
   spaceId: string;
   csvColumnIndex: number;
   onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   trigger: React.ReactNode;
+  initialQuery?: string;
+  selectedEntityId?: string;
 }) {
   const { store } = useSyncEngine();
   const { createProperty } = useCreateProperty(spaceId);
@@ -143,6 +169,8 @@ function PropertyMappingPopover({
       placeholder="Find or create property..."
       advanced={false}
       showIDs={false}
+      initialQuery={initialQuery}
+      selectedEntityId={selectedEntityId}
       onDone={async result => {
         let property: Property | null = store.getProperty(result.id);
         if (!property) {
@@ -270,6 +298,8 @@ export function ImportPreviewTable({
                     csvColumnIndex={col.csvColumnIndex}
                     onSelectProperty={onSelectProperty}
                     onCreateProperty={onCreateProperty}
+                    initialQuery={col.headerLabel}
+                    selectedEntityId={col.propertyId ?? undefined}
                     trigger={
                       <span className="flex items-center gap-1.5">
                         <PropertySpaceIcon propertyId={col.propertyId} />
@@ -293,6 +323,7 @@ export function ImportPreviewTable({
                   csvColumnIndex={col.csvColumnIndex}
                   onSelectProperty={onSelectProperty}
                   onCreateProperty={onCreateProperty}
+                  initialQuery={col.headerLabel}
                   trigger={
                     <span className="flex items-center gap-1.5">
                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
@@ -358,9 +389,11 @@ export function ImportPreviewTable({
                     const value = row[col.csvColumnIndex] ?? '';
                     const isRelation = col.dataType === 'RELATION';
                     const isImageColumn = col.renderableTypeStrict === 'IMAGE';
-                    const unresolved = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
+                    const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
                     const unresolvedSet =
-                      unresolved?.kind === 'relation' ? new Set(unresolved.unresolvedValues) : null;
+                      cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
+                    const rankedSet =
+                      cellFlag?.kind === 'ranked-relation' ? new Set(cellFlag.rankedValues) : null;
 
                     return (
                       <div
@@ -392,6 +425,68 @@ export function ImportPreviewTable({
                                     placeholder="Find or create entity..."
                                     advanced={false}
                                     showIDs={false}
+                                    initialQuery={part}
+                                    onCreateEntity={() => undefined}
+                                    onDone={(result, fromCreateFn) =>
+                                      onResolveRelationToken(col.csvColumnIndex, part, {
+                                        id: result.id,
+                                        name: result.name ?? part,
+                                      }, fromCreateFn, col.relationValueTypes?.[0])
+                                    }
+                                  />
+                                );
+                              }
+
+                              if (rankedSet?.has(part) && onResolveRelationToken) {
+                                return (
+                                  <SelectEntityAsPopover
+                                    key={i}
+                                    trigger={
+                                      <button
+                                        type="button"
+                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                      >
+                                        <RankedIcon />
+                                        <span>{part}</span>
+                                        <ChipSeparator />
+                                      </button>
+                                    }
+                                    spaceId={spaceId}
+                                    relationValueTypes={col.relationValueTypes}
+                                    placeholder="Find or create entity..."
+                                    advanced={false}
+                                    showIDs={false}
+                                    initialQuery={part}
+                                    onCreateEntity={() => undefined}
+                                    onDone={(result, fromCreateFn) =>
+                                      onResolveRelationToken(col.csvColumnIndex, part, {
+                                        id: result.id,
+                                        name: result.name ?? part,
+                                      }, fromCreateFn, col.relationValueTypes?.[0])
+                                    }
+                                  />
+                                );
+                              }
+
+                              if (onResolveRelationToken) {
+                                return (
+                                  <SelectEntityAsPopover
+                                    key={i}
+                                    trigger={
+                                      <button
+                                        type="button"
+                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                      >
+                                        <span>{part}</span>
+                                        <ChipSeparator />
+                                      </button>
+                                    }
+                                    spaceId={spaceId}
+                                    relationValueTypes={col.relationValueTypes}
+                                    placeholder="Find or create entity..."
+                                    advanced={false}
+                                    showIDs={false}
+                                    initialQuery={part}
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
                                       onResolveRelationToken(col.csvColumnIndex, part, {
@@ -424,7 +519,7 @@ export function ImportPreviewTable({
                           </div>
                         ) : (
                           <div className="flex w-full items-start gap-2">
-                            {unresolved?.kind === 'type' && onResolveTypeValue ? (
+                            {cellFlag?.kind === 'type' && onResolveTypeValue ? (
                               <>
                                 <SelectEntityAsPopover
                                   trigger={
@@ -433,7 +528,7 @@ export function ImportPreviewTable({
                                       className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
                                     >
                                       <WarningIcon />
-                                      <span>{value || unresolved.rawType}</span>
+                                      <span>{value || cellFlag.rawType}</span>
                                       <ChipSeparator />
                                     </button>
                                   }
@@ -441,31 +536,79 @@ export function ImportPreviewTable({
                                   placeholder="Find or create type..."
                                   advanced={false}
                                   showIDs={false}
+                                  initialQuery={value || cellFlag.rawType}
                                   onCreateEntity={() => undefined}
                                   onDone={(result, fromCreateFn) =>
-                                    onResolveTypeValue(unresolved.rawType, {
+                                    onResolveTypeValue(cellFlag.rawType, {
                                       id: result.id,
-                                      name: result.name ?? unresolved.rawType,
+                                      name: result.name ?? cellFlag.rawType,
                                     }, fromCreateFn)
                                   }
                                 />
                               </>
-                            ) : unresolved?.kind === 'entity' && onResolveEntityRow ? (
+                            ) : cellFlag?.kind === 'entity' && onResolveEntityRow ? (
                               <SelectEntityAsPopover
                                 trigger={
                                   <button
                                     type="button"
-                                    className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
                                   >
-                                    <WarningIcon />
+                                    <StatusDot color="red" />
                                     <span>{value || '—'}</span>
-                                    <ChipSeparator />
                                   </button>
                                 }
                                 spaceId={spaceId}
                                 placeholder="Find or create entity..."
                                 advanced={false}
                                 showIDs={false}
+                                initialQuery={value}
+                                onCreateEntity={() => undefined}
+                                onDone={result =>
+                                  onResolveEntityRow(virtualRow.index, {
+                                    id: result.id,
+                                    name: result.name ?? value,
+                                  })
+                                }
+                              />
+                            ) : cellFlag?.kind === 'ranked-entity' && onResolveEntityRow ? (
+                              <SelectEntityAsPopover
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
+                                  >
+                                    <StatusDot color="orange" />
+                                    <span>{value || '—'}</span>
+                                  </button>
+                                }
+                                spaceId={spaceId}
+                                placeholder="Find or create entity..."
+                                advanced={false}
+                                showIDs={false}
+                                initialQuery={value}
+                                onCreateEntity={() => undefined}
+                                onDone={result =>
+                                  onResolveEntityRow(virtualRow.index, {
+                                    id: result.id,
+                                    name: result.name ?? value,
+                                  })
+                                }
+                              />
+                            ) : col.propertyId === SystemIds.NAME_PROPERTY && onResolveEntityRow ? (
+                              <SelectEntityAsPopover
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
+                                  >
+                                    <span>{value || '—'}</span>
+                                  </button>
+                                }
+                                spaceId={spaceId}
+                                placeholder="Find or create entity..."
+                                advanced={false}
+                                showIDs={false}
+                                initialQuery={value}
                                 onCreateEntity={() => undefined}
                                 onDone={result =>
                                   onResolveEntityRow(virtualRow.index, {

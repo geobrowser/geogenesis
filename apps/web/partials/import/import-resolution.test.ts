@@ -240,7 +240,7 @@ describe('import resolution helpers', () => {
     expect(result.resolvedTypes.get('Company')).toEqual({ id: 'Company-id', name: 'Company' });
   });
 
-  it('marks rows unresolved when multiple exact name+type matches exist', async () => {
+  it('auto-resolves to top-ranked space when multiple exact name+type matches exist', async () => {
     getResultsMock.mockImplementation(() =>
       Effect.succeed([
         {
@@ -256,6 +256,40 @@ describe('import resolution helpers', () => {
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
           spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
+        },
+      ])
+    );
+
+    const result = await resolveRowsByNameAndType({
+      dataRows: [['Alpha']],
+      nameColIdx: 0,
+      selectedType: { id: 'type-project', name: 'Project' },
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      guard: { isCurrent: () => true },
+    });
+
+    expect(result.aborted).toBe(false);
+    expect(result.unresolvedRowCount).toBe(0);
+    expect(result.resolvedRows.get(0)).toEqual({ entityId: 'entity-root', name: 'Alpha', ranked: true });
+  });
+
+  it('marks rows unresolved when multiple exact matches tie at the same space rank', async () => {
+    getResultsMock.mockImplementation(() =>
+      Effect.succeed([
+        {
+          id: 'entity-a',
+          name: 'Alpha',
+          description: null,
+          types: [{ id: 'type-project', name: 'Project' }],
+          spaces: [{ id: 'space-x', name: null, description: null, image: '', relations: [], spaceId: 'space-x', spaces: ['space-x'], values: [], types: [] }],
+        },
+        {
+          id: 'entity-b',
+          name: 'Alpha',
+          description: null,
+          types: [{ id: 'type-project', name: 'Project' }],
+          spaces: [{ id: 'space-y', name: null, description: null, image: '', relations: [], spaceId: 'space-y', spaces: ['space-y'], values: [], types: [] }],
         },
       ])
     );

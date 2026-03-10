@@ -11,7 +11,7 @@ type ResolutionGuard = {
 };
 
 type ResolvedEntityMatch =
-  | { status: 'resolved'; entity: { id: string; name: string } }
+  | { status: 'resolved'; entity: { id: string; name: string }; ranked?: boolean }
   | { status: 'unresolved'; reason: 'none' | 'tie' | 'ambiguous' };
 
 async function resolveExactRelationMatch(params: {
@@ -41,6 +41,19 @@ async function resolveExactRelationMatch(params: {
     return { status: 'unresolved', reason: 'none' };
   }
   if (exactMatches.length > 1) {
+    // Rank by best space and pick the winner if unique at the top rank
+    const ranked = exactMatches.map(m => ({
+      match: m,
+      rank: getCandidateTopSpaceRank(m.spaces.map(s => s.spaceId)),
+    }));
+    const bestRank = Math.min(...ranked.map(r => r.rank));
+    const atBest = ranked.filter(r => r.rank === bestRank);
+
+    if (atBest.length === 1) {
+      const winner = atBest[0].match;
+      return { status: 'resolved', entity: { id: winner.id, name: winner.name ?? name }, ranked: true };
+    }
+
     return { status: 'unresolved', reason: 'tie' };
   }
 
@@ -197,7 +210,7 @@ export async function resolveRelationEntities(params: {
       resolvedEntities.set(cacheKey, {
         id: match.entity.id,
         name: match.entity.name,
-        status: 'found',
+        status: match.ranked ? 'ranked' : 'found',
       });
     } else {
       if (match.reason === 'none') {
@@ -263,14 +276,14 @@ export async function resolveRowsByNameAndType(params: {
   guard: ResolutionGuard;
 }): Promise<{
   aborted: boolean;
-  resolvedRows: Map<number, { entityId: string; name: string }>;
+  resolvedRows: Map<number, { entityId: string; name: string; ranked?: boolean }>;
   unresolvedRowCount: number;
 }> {
   const { dataRows, nameColIdx, selectedType, typesColumnIndex, resolvedTypes, guard } = params;
-  const resolvedRows = new Map<number, { entityId: string; name: string }>();
+  const resolvedRows = new Map<number, { entityId: string; name: string; ranked?: boolean }>();
   let unresolvedRowCount = 0;
 
-  const cache = new Map<string, { status: 'resolved'; entityId: string; name: string } | { status: 'unresolved' }>();
+  const cache = new Map<string, { status: 'resolved'; entityId: string; name: string; ranked?: boolean } | { status: 'unresolved' }>();
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
@@ -295,7 +308,7 @@ export async function resolveRowsByNameAndType(params: {
     const cached = cache.get(cacheKey);
     if (cached) {
       if (cached.status === 'resolved') {
-        resolvedRows.set(rowIndex, { entityId: cached.entityId, name: cached.name });
+        resolvedRows.set(rowIndex, { entityId: cached.entityId, name: cached.name, ranked: cached.ranked });
       } else {
         unresolvedRowCount += 1;
       }
@@ -312,8 +325,8 @@ export async function resolveRowsByNameAndType(params: {
     }
 
     if (match.status === 'resolved') {
-      cache.set(cacheKey, { status: 'resolved', entityId: match.entity.id, name: match.entity.name });
-      resolvedRows.set(rowIndex, { entityId: match.entity.id, name: match.entity.name });
+      cache.set(cacheKey, { status: 'resolved', entityId: match.entity.id, name: match.entity.name, ranked: match.ranked });
+      resolvedRows.set(rowIndex, { entityId: match.entity.id, name: match.entity.name, ranked: match.ranked });
     } else {
       if (match.reason === 'none') {
         const createdEntityId = ID.createEntityId();

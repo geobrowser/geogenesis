@@ -48,7 +48,9 @@ export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 export type UnresolvedImportCell =
   | { kind: 'entity' }
   | { kind: 'type'; rawType: string }
-  | { kind: 'relation'; unresolvedValues: string[] };
+  | { kind: 'relation'; unresolvedValues: string[] }
+  | { kind: 'ranked-entity' }
+  | { kind: 'ranked-relation'; rankedValues: string[] };
 
 /** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
 export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});

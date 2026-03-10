@@ -25,6 +25,8 @@ type SelectEntityAsPopoverProps = {
   placeholder?: string;
   advanced?: boolean;
   showIDs?: boolean;
+  initialQuery?: string;
+  selectedEntityId?: string;
 };
 
 export function SelectEntityAsPopover({
@@ -36,6 +38,8 @@ export function SelectEntityAsPopover({
   placeholder,
   advanced = true,
   showIDs = true,
+  initialQuery,
+  selectedEntityId,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -62,6 +66,8 @@ export function SelectEntityAsPopover({
             variant="floating"
             advanced={advanced}
             showIDs={showIDs}
+            initialQuery={initialQuery}
+            selectedEntityId={selectedEntityId}
           />
         </Popover.Content>
       </Popover.Portal>
