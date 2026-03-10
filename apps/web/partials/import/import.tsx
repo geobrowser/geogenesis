@@ -21,17 +21,19 @@ export const Import = ({ spaceId, space }: ImportProps) => {
   const hasProcessedRef = useRef(false);
 
   useEffect(() => {
-    if (searchParams?.get('edit') !== 'true') return;
     if (hasProcessedRef.current) return;
     hasProcessedRef.current = true;
 
     setEditable(true);
 
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete('edit');
-    const query = next.toString();
-    const url = pathname + (query ? `?${query}` : '');
-    window.history.replaceState(null, '', url);
+    // Clean up ?edit param if present
+    if (searchParams?.get('edit') === 'true') {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('edit');
+      const query = next.toString();
+      const url = pathname + (query ? `?${query}` : '');
+      window.history.replaceState(null, '', url);
+    }
   }, [pathname, searchParams, setEditable]);
 
   return (

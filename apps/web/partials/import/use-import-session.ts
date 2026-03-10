@@ -12,6 +12,8 @@ import {
   recordsAtom,
   relationOverridesAtom,
   relationsAtom,
+  resolvedEntitiesSnapshotAtom,
+  resolvedRowsSnapshotAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   stepAtom,
@@ -32,6 +34,8 @@ export function useImportSession(spaceId: string) {
   const setRowOverrides = useSetAtom(rowOverridesAtom);
   const setTypeOverrides = useSetAtom(typeOverridesAtom);
   const setUnresolvedLinks = useSetAtom(unresolvedLinksAtom);
+  const setResolvedRowsSnapshot = useSetAtom(resolvedRowsSnapshotAtom);
+  const setResolvedEntitiesSnapshot = useSetAtom(resolvedEntitiesSnapshotAtom);
   const setSelectedType = useSetAtom(selectedTypeAtom);
   const setTypesColumnIndex = useSetAtom(typesColumnIndexAtom);
   const setColumnMapping = useSetAtom(columnMappingAtom);
@@ -49,7 +53,9 @@ export function useImportSession(spaceId: string) {
     setValues([]);
     setRelations([]);
     setUnresolvedLinks({});
-  }, [relations, setRelations, setUnresolvedLinks, setValues, spaceId, store, values]);
+    setResolvedRowsSnapshot(new Map());
+    setResolvedEntitiesSnapshot(new Map());
+  }, [relations, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedEntitiesSnapshot, setValues, spaceId, store, values]);
 
   const resetMappedState = useCallback(() => {
     clearGeneratedChanges();

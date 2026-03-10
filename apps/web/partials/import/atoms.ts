@@ -74,6 +74,12 @@ export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({}
 /** Manual row-entity resolution keyed by row index. Overrides auto-resolved or unresolved rows. */
 export const rowOverridesAtom = atom<Record<number, { entityId: string; name: string }>>({});
 
+/** Snapshot of merged resolved rows after generation, keyed by row index. */
+export const resolvedRowsSnapshotAtom = atom<Map<number, { entityId: string; name: string }>>(new Map());
+
+/** Snapshot of merged resolved relation entities after generation, keyed by `${propertyId}::${token}`. */
+export const resolvedEntitiesSnapshotAtom = atom<Map<string, { id: string; name: string; status: string }>>(new Map());
+
 export const actionsCountAtom = atom(get => {
   const values = get(valuesAtom);
   const relations = get(relationsAtom);

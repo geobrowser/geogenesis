@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { Space } from '~/core/io/dto/spaces';
+import { useEditable } from '~/core/state/editable-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
@@ -21,6 +22,8 @@ import {
   headersAtom,
   relationOverridesAtom,
   recordsAtom,
+  resolvedEntitiesSnapshotAtom,
+  resolvedRowsSnapshotAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   typeOverridesAtom,
@@ -42,6 +45,12 @@ type ImportReviewProps = {
 export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   const pathname = usePathname();
   const spacePath = pathname?.replace(/\/import\/review$/, '') ?? `/space/${spaceId}`;
+  const { setEditable } = useEditable();
+
+  // Ensure edit mode is active on the review screen
+  useEffect(() => {
+    setEditable(true);
+  }, [setEditable]);
 
   const records = useAtomValue(recordsAtom);
   const headers = useAtomValue(headersAtom);
@@ -53,6 +62,8 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   const selectedType = useAtomValue(selectedTypeAtom);
   const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const unresolvedLinks = useAtomValue(unresolvedLinksAtom);
+  const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
+  const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const entityCount = useAtomValue(entityCountAtom);
   const { store } = useSyncEngine();
   const values = useAtomValue(valuesAtom);
@@ -247,6 +258,9 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             onSelectProperty={handleSelectProperty}
             onCreateProperty={handleCreateProperty}
             hasUnmappedColumns={hasUnmappedColumns}
+            resolvedRows={resolvedRowsSnapshot}
+            resolvedEntities={resolvedEntitiesSnapshot}
+            columnMapping={columnMapping}
           />
         </>
       )}

@@ -13,6 +13,8 @@ import {
   recordsAtom,
   relationOverridesAtom,
   relationsAtom,
+  resolvedEntitiesSnapshotAtom,
+  resolvedRowsSnapshotAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   stepAtom,
@@ -45,6 +47,8 @@ export function useImportGenerate(spaceId: string) {
   const setValues = useSetAtom(valuesAtom);
   const setRelations = useSetAtom(relationsAtom);
   const setUnresolvedLinks = useSetAtom(unresolvedLinksAtom);
+  const setResolvedRowsSnapshot = useSetAtom(resolvedRowsSnapshotAtom);
+  const setResolvedEntitiesSnapshot = useSetAtom(resolvedEntitiesSnapshotAtom);
   const setStep = useSetAtom(stepAtom);
   const { clearGeneratedChanges } = useImportSession(spaceId);
 
@@ -157,6 +161,14 @@ export function useImportGenerate(spaceId: string) {
       setValues(newValues);
       setRelations(newRelations);
       setUnresolvedLinks(unresolvedLinks);
+      setResolvedRowsSnapshot(mergedResolvedRows);
+      const entitySnapshot = new Map<string, { id: string; name: string; status: string }>();
+      for (const [key, entity] of mergedResolvedEntities) {
+        if (entity.status !== 'ambiguous') {
+          entitySnapshot.set(key, { id: entity.id, name: entity.name, status: entity.status });
+        }
+      }
+      setResolvedEntitiesSnapshot(entitySnapshot);
       setStep('step5');
 
       if (rowResolution.unresolvedRowCount > 0 || relationResolution.unresolvedCount > 0) {
@@ -186,6 +198,8 @@ export function useImportGenerate(spaceId: string) {
     setStep,
     setIsLoading,
     setUnresolvedLinks,
+    setResolvedRowsSnapshot,
+    setResolvedEntitiesSnapshot,
     spaceId,
     store,
   ]);

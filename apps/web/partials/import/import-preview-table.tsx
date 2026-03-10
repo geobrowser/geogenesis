@@ -224,6 +224,12 @@ type Props = {
   onResolveEntityRow?: (rowIndex: number, entity: { id: string; name: string }) => void;
   /** When true and dataRows exist, show empty state message instead of rows */
   hasUnmappedColumns?: boolean;
+  /** Snapshot of resolved rows (row index → entity), used for "Currently selected" in popovers */
+  resolvedRows?: Map<number, { entityId: string; name: string }>;
+  /** Snapshot of resolved relation entities (`propertyId::token` → entity), used for "Currently selected" */
+  resolvedEntities?: Map<string, { id: string; name: string; status: string }>;
+  /** Column mapping (csvColumnIndex → propertyId), needed to look up resolved relation entities */
+  columnMapping?: Record<number, string>;
 };
 
 export function ImportPreviewTable({
@@ -238,6 +244,9 @@ export function ImportPreviewTable({
   onResolveTypeValue,
   onResolveEntityRow,
   hasUnmappedColumns = false,
+  resolvedRows,
+  resolvedEntities,
+  columnMapping: columnMappingProp,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
@@ -394,6 +403,8 @@ export function ImportPreviewTable({
                       cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
                     const rankedSet =
                       cellFlag?.kind === 'ranked-relation' ? new Set(cellFlag.rankedValues) : null;
+                    const resolvedRowEntity = resolvedRows?.get(virtualRow.index);
+                    const relationPropertyId = columnMappingProp?.[col.csvColumnIndex];
 
                     return (
                       <div
@@ -457,6 +468,7 @@ export function ImportPreviewTable({
                                     advanced={false}
                                     showIDs={false}
                                     initialQuery={part}
+                                    selectedEntityId={relationPropertyId ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id : undefined}
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
                                       onResolveRelationToken(col.csvColumnIndex, part, {
@@ -487,6 +499,7 @@ export function ImportPreviewTable({
                                     advanced={false}
                                     showIDs={false}
                                     initialQuery={part}
+                                    selectedEntityId={relationPropertyId ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id : undefined}
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
                                       onResolveRelationToken(col.csvColumnIndex, part, {
@@ -586,6 +599,7 @@ export function ImportPreviewTable({
                                 advanced={false}
                                 showIDs={false}
                                 initialQuery={value}
+                                selectedEntityId={resolvedRowEntity?.entityId}
                                 onCreateEntity={() => undefined}
                                 onDone={result =>
                                   onResolveEntityRow(virtualRow.index, {
@@ -609,6 +623,7 @@ export function ImportPreviewTable({
                                 advanced={false}
                                 showIDs={false}
                                 initialQuery={value}
+                                selectedEntityId={resolvedRowEntity?.entityId}
                                 onCreateEntity={() => undefined}
                                 onDone={result =>
                                   onResolveEntityRow(virtualRow.index, {
