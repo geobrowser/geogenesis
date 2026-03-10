@@ -253,7 +253,7 @@ export function ImportPreviewTable({
 
   const columnLayout = React.useMemo(() => {
     const widths = columns.map(col => columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH);
-    const template = widths.map(w => `${w}px`).join(' ');
+    const template = widths.map(w => `minmax(${w}px, 1fr)`).join(' ');
     const totalWidth = widths.reduce((sum, w) => sum + w, 0);
     return { template, totalWidth };
   }, [columns, columnWidths]);
@@ -360,7 +360,7 @@ export function ImportPreviewTable({
       </div>
 
       {showEmptyState ? (
-        <div className="flex items-center justify-center py-20" style={{ minWidth: columnLayout.totalWidth }}>
+        <div className="sticky left-0 flex items-center justify-center py-20">
           <Text variant="metadata" className="text-grey-04">
             Your data will appear once you have mapped all of your column properties
           </Text>
