@@ -11,11 +11,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string; entityId: string };

@@ -540,7 +540,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       )}
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
-        {(isLoading || !isFetched) ? (
+        {isLoading || !isFetched ? (
           <>
             <TableBlockLoadingPlaceholder />
           </>

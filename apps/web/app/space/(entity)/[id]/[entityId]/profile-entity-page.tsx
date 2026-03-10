@@ -22,7 +22,7 @@ interface Props {
 export function ProfilePageComponent(props: Props) {
   return (
     <>
-      <motion.div key="entity-page-entity-editor" layout="position">
+      <motion.div layout="position">
         <Editor
           spaceId={props.spaceId}
           placeholder={
@@ -34,7 +34,7 @@ export function ProfilePageComponent(props: Props) {
       </motion.div>
 
       <Spacer height={40} />
-      <motion.div key="entity-page-entity-attributes" layout="position">
+      <motion.div layout="position">
         <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
       </motion.div>
       <Spacer height={40} />

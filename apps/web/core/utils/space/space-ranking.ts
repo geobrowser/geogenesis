@@ -10,6 +10,7 @@ const SPACE_RANK: Record<string, number> = {
   '9b611b848b12491b9b6b43f3cf019b8b': 5, // Software
   '870e3b3068661e6280fad2ab456829bc': 6, // Technology
   d69608290513c2a91102c939b3265bd7: 7, // Industries
+  b5a31f8182b042437ede0f84ee02f104: 8, // Podcasts
 };
 
 const UNRANKED = Number.MAX_SAFE_INTEGER;
