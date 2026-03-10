@@ -20,6 +20,7 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import type { UnresolvedImportCell } from './atoms';
+import { hydrateRelationValueTypes } from './import-generation';
 import { splitRelationCell } from './relation-cell';
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -176,11 +177,13 @@ function PropertyMappingPopover({
         if (!property) {
           property = await Effect.runPromise(getProperty(result.id));
         }
-        onSelectProperty(csvColumnIndex, result.id, property ?? {
-          id: result.id,
-          name: result.name,
-          dataType: 'TEXT',
-        });
+        if (!property) {
+          property = { id: result.id, name: result.name, dataType: 'TEXT' };
+        }
+
+        property = await hydrateRelationValueTypes(property);
+
+        onSelectProperty(csvColumnIndex, result.id, property);
       }}
       onCreateEntity={result => {
         const propertyId = createProperty({
@@ -230,6 +233,8 @@ type Props = {
   resolvedEntities?: Map<string, { id: string; name: string; status: string }>;
   /** Column mapping (csvColumnIndex → propertyId), needed to look up resolved relation entities */
   columnMapping?: Record<number, string>;
+  /** Index of the CSV column used as the types source (from CSV), so resolved types render as chips */
+  typesColumnIndex?: number;
 };
 
 export function ImportPreviewTable({
@@ -247,6 +252,7 @@ export function ImportPreviewTable({
   resolvedRows,
   resolvedEntities,
   columnMapping: columnMappingProp,
+  typesColumnIndex,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
@@ -630,6 +636,30 @@ export function ImportPreviewTable({
                                     id: result.id,
                                     name: result.name ?? value,
                                   })
+                                }
+                              />
+                            ) : typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex && value && onResolveTypeValue ? (
+                              <SelectEntityAsPopover
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                  >
+                                    <span>{value}</span>
+                                    <ChipSeparator />
+                                  </button>
+                                }
+                                spaceId={spaceId}
+                                placeholder="Find or create type..."
+                                advanced={false}
+                                showIDs={false}
+                                initialQuery={value}
+                                onCreateEntity={() => undefined}
+                                onDone={(result, fromCreateFn) =>
+                                  onResolveTypeValue(value, {
+                                    id: result.id,
+                                    name: result.name ?? value,
+                                  }, fromCreateFn)
                                 }
                               />
                             ) : (

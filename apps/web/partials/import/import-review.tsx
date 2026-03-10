@@ -261,6 +261,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             resolvedRows={resolvedRowsSnapshot}
             resolvedEntities={resolvedEntitiesSnapshot}
             columnMapping={columnMapping}
+            typesColumnIndex={typesColumnIndex}
           />
         </>
       )}

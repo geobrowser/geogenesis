@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
@@ -245,10 +246,9 @@ export async function resolveRelationEntities(params: {
 export async function resolveTypesForRows(params: {
   dataRows: string[][];
   typesColumnIndex: number | undefined;
-  spaceId: string;
   guard: ResolutionGuard;
 }): Promise<{ aborted: boolean; resolvedTypes: Map<string, { id: string; name: string }> }> {
-  const { dataRows, typesColumnIndex, spaceId, guard } = params;
+  const { dataRows, typesColumnIndex, guard } = params;
   const resolvedTypes = new Map<string, { id: string; name: string }>();
 
   if (typesColumnIndex === undefined) {
@@ -264,10 +264,13 @@ export async function resolveTypesForRows(params: {
   await Promise.all(
     Array.from(uniqueTypeNames).map(async typeName => {
       try {
-        const results = await Effect.runPromise(getResults({ query: typeName, spaceId }));
-        const exactMatches = results.filter(r => (r.name ?? '').trim().toLowerCase() === typeName.toLowerCase());
-        if (exactMatches.length === 1) {
-          resolvedTypes.set(typeName, { id: exactMatches[0].id, name: exactMatches[0].name ?? typeName });
+        const match = await resolveExactRelationMatch({
+          name: typeName,
+          typeIds: [SystemIds.SCHEMA_TYPE],
+          guard,
+        });
+        if (match.status === 'resolved') {
+          resolvedTypes.set(typeName, { id: match.entity.id, name: match.entity.name });
         }
       } catch (error) {
         console.warn(`[import] Failed to resolve type "${typeName}"`, error);

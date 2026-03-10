@@ -11,6 +11,7 @@ import { Property } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { columnMappingAtom, extraPropertiesAtom, headersAtom, typesColumnIndexAtom } from './atoms';
+import { hydrateRelationValueTypes } from './import-generation';
 
 /**
  * Auto-maps unmapped CSV columns to existing properties in the space (by exact name match)
@@ -89,6 +90,7 @@ export function useAutoMapColumns(spaceId: string) {
               }
 
               if (property) {
+                property = await hydrateRelationValueTypes(property);
                 mappedByColumn[colIndex] = propertyId;
                 mappedProperties[propertyId] = property;
               }

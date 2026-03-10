@@ -1,6 +1,8 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
+import { getEntity } from '~/core/io/queries';
 import { Property, Relation, RenderableEntityType, Value } from '~/core/types';
 
 import { splitRelationCell } from './relation-cell';
@@ -122,7 +124,52 @@ export function createGenerationTracker() {
 }
 
 export function getPropertyFromSources(propertyId: string, sources: PropertyLookup): Property | null {
-  return sources.schema.find(p => p.id === propertyId) ?? sources.extraProperties[propertyId] ?? sources.getProperty(propertyId);
+  const schemaProperty = sources.schema.find(p => p.id === propertyId);
+  const extraProperty = sources.extraProperties[propertyId];
+  const storeProperty = sources.getProperty(propertyId);
+
+  const base = schemaProperty ?? extraProperty ?? storeProperty;
+  if (!base) return null;
+
+  // The schema/API properties have relationValueTypes: [] because the API doesn't
+  // fetch them. The store has them if the entity was hydrated. Merge them in.
+  if (storeProperty?.relationValueTypes?.length && !base.relationValueTypes?.length) {
+    return { ...base, relationValueTypes: storeProperty.relationValueTypes };
+  }
+
+  return base;
+}
+
+/**
+ * Hydrate `relationValueTypes` on a RELATION property by fetching the property
+ * entity and extracting its RELATION_VALUE_RELATIONSHIP_TYPE relations.
+ *
+ * The property API (`getProperty`/`getProperties`) always returns
+ * `relationValueTypes: []`. This helper fills them in from the entity's relations.
+ */
+export async function hydrateRelationValueTypes(property: Property): Promise<Property> {
+  if (property.dataType !== 'RELATION') return property;
+  if (property.relationValueTypes && property.relationValueTypes.length > 0) return property;
+
+  try {
+    const stub = await Effect.runPromise(getEntity(property.id));
+    const primarySpace = stub?.spaces[0];
+    const entity = primarySpace
+      ? await Effect.runPromise(getEntity(property.id, primarySpace))
+      : stub;
+    if (entity) {
+      const rvts = entity.relations
+        .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+        .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
+      if (rvts.length > 0) {
+        return { ...property, relationValueTypes: rvts };
+      }
+    }
+  } catch {
+    // Continue with empty relationValueTypes
+  }
+
+  return property;
 }
 
 export function collectRelationCells(params: {
@@ -146,10 +193,12 @@ export function collectRelationCells(params: {
       for (const part of splitRelationCell(raw)) uniqueCellValues.add(part);
     }
 
+    const typeIds = property.relationValueTypes?.map(t => t.id) ?? [];
+
     relationProps.push({
       propertyId,
       property,
-      typeIds: property.relationValueTypes?.map(t => t.id) ?? [],
+      typeIds,
       uniqueCellValues,
     });
   }

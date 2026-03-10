@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -229,13 +230,17 @@ describe('import resolution helpers', () => {
 
   it('resolves types by exact match', async () => {
     getResultsMock.mockImplementation(({ query }: { query: string }) =>
-      Effect.succeed([{ id: `${query}-id`, name: query }])
+      Effect.succeed([{
+        id: `${query}-id`,
+        name: query,
+        types: [{ id: SystemIds.SCHEMA_TYPE, name: 'Schema Type' }],
+        spaces: [{ id: 'space-1', spaceId: 'space-1' }],
+      }])
     );
 
     const result = await resolveTypesForRows({
       dataRows: [['Project A', 'Protocol'], ['Project B', 'Company']],
       typesColumnIndex: 1,
-      spaceId: 'space-1',
       guard: { isCurrent: () => true },
     });
 

@@ -104,7 +104,6 @@ export function useImportGenerate(spaceId: string) {
       const typeResolution = await resolveTypesForRows({
         dataRows,
         typesColumnIndex,
-        spaceId,
         guard: { isCurrent: () => generationTrackerRef.current.isCurrent(generationId) },
       });
       if (typeResolution.aborted) return;
