@@ -187,7 +187,7 @@ export async function resolveRelationEntities(params: {
           typeIds,
           guard,
         });
-        return { cacheKey, cellValue, match };
+        return { cacheKey, cellValue, match, typeIds };
       } catch (error) {
         console.warn(
           `[import] Failed to resolve relation value "${cellValue}" for property ${propertyId}`,
@@ -202,9 +202,19 @@ export async function resolveRelationEntities(params: {
     return { aborted: true, resolvedEntities, unresolvedCount };
   }
 
+  // Build a lookup for type names so auto-created entities can include typeName
+  const typeNameById = new Map<string, string | null>();
+  for (const rp of relationProperties) {
+    for (const vt of rp.property.relationValueTypes ?? []) {
+      if (!typeNameById.has(vt.id)) {
+        typeNameById.set(vt.id, vt.name ?? null);
+      }
+    }
+  }
+
   for (const result of results) {
     if (!result) continue;
-    const { cacheKey, cellValue, match } = result;
+    const { cacheKey, cellValue, match, typeIds } = result;
 
     if (match.status === 'resolved') {
       resolvedEntities.set(cacheKey, {
@@ -214,10 +224,13 @@ export async function resolveRelationEntities(params: {
       });
     } else {
       if (match.reason === 'none') {
+        const firstTypeId = typeIds[0];
         resolvedEntities.set(cacheKey, {
           id: ID.createEntityId(),
           name: cellValue,
           status: 'created',
+          typeId: firstTypeId,
+          typeName: firstTypeId ? typeNameById.get(firstTypeId) ?? null : undefined,
         });
       } else {
         unresolvedCount += 1;

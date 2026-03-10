@@ -98,6 +98,35 @@ describe('import generation helpers', () => {
     ).toBe('New Person');
   });
 
+  it('emits a Types relation for auto-created relation entities with typeId', () => {
+    const built = buildGeneratedRows({
+      dataRows: [['Project X', 'New Person']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-rel' },
+      resolvedRows: new Map([[0, { entityId: 'project-x', name: 'Project X' }]]),
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedEntities: new Map([
+        ['prop-rel::New Person', { id: 'created-person-id', name: 'New Person', status: 'created' as const, typeId: 'type-1', typeName: 'Person' }],
+      ]),
+      spaceId: 'space-1',
+      propertyLookup: {
+        schema: [
+          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+        ],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    const typesRelation = built.relations.find(
+      r => r.type.id === SystemIds.TYPES_PROPERTY && r.fromEntity.id === 'created-person-id'
+    );
+    expect(typesRelation).toBeDefined();
+    expect(typesRelation!.toEntity.id).toBe('type-1');
+    expect(typesRelation!.toEntity.name).toBe('Person');
+  });
+
   it('marks unresolved entity-name and relation cells for review UI', () => {
     const unresolved = buildUnresolvedLinksByCell({
       dataRows: [['Project X', 'Alice, Bob']],

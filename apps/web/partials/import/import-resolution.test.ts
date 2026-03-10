@@ -191,6 +191,8 @@ describe('import resolution helpers', () => {
       id: 'created-relation-id',
       name: 'New Relation Entity',
       status: 'created',
+      typeId: undefined,
+      typeName: undefined,
     });
 
     createIdSpy.mockRestore();
@@ -220,6 +222,8 @@ describe('import resolution helpers', () => {
     expect(result.resolvedEntities.get('prop-1::New Person')).toMatchObject({
       name: 'New Person',
       status: 'created',
+      typeId: 'type-person',
+      typeName: 'Person',
     });
   });
 
