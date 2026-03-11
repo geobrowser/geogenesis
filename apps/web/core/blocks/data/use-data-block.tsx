@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Cell, Property, Relation, Row } from '~/core/types';
+import { Cell, Property, Row } from '~/core/types';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
@@ -17,7 +17,7 @@ import { Filter, FilterMode } from './filters';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
-import { Mapping, mappingToCell, mappingToRows } from './use-mapping';
+import { mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useRelationsBlock } from './use-relations-block';
 import { useSource } from './use-source';
@@ -376,7 +376,46 @@ export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AN
   }
 
   if (groupConditions.length === 1) return groupConditions[0];
-  return { AND: groupConditions };
+
+  // Flat merge keeps `spaces`/`types` at the top level so they get promoted
+  // to fast top-level GraphQL query params instead of buried in a nested AND filter.
+  return mergeWhereConditions(groupConditions);
+}
+
+function mergeWhereConditions(conditions: WhereCondition[]): WhereCondition {
+  const arrayKeys = new Set(['spaces', 'types', 'values', 'relations', 'backlinks', 'AND', 'OR']);
+  const merged: WhereCondition = {};
+  const unmerged: WhereCondition[] = [];
+
+  for (const cond of conditions) {
+    const keys = Object.keys(cond) as (keyof WhereCondition)[];
+    let canMerge = true;
+
+    for (const key of keys) {
+      if (arrayKeys.has(key)) continue; // arrays are always mergeable
+      if (key in merged) {
+        canMerge = false;
+        break;
+      }
+    }
+
+    if (canMerge) {
+      for (const key of keys) {
+        if (arrayKeys.has(key)) {
+          const existing = (merged as any)[key] as unknown[] | undefined;
+          const incoming = (cond as any)[key] as unknown[];
+          (merged as any)[key] = existing ? [...existing, ...incoming] : [...incoming];
+        } else {
+          (merged as any)[key] = (cond as any)[key];
+        }
+      }
+    } else {
+      unmerged.push(cond);
+    }
+  }
+
+  if (unmerged.length === 0) return merged;
+  return { AND: [merged, ...unmerged] };
 }
 
 function buildSingleFilterWhere(f: Filter): WhereCondition {
@@ -458,6 +497,7 @@ function stableStringify(value: unknown): string {
 
   try {
     return JSON.stringify(walk(value));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_err) {
     return '"[unstringifiable]"';
   }
