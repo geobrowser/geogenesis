@@ -13,14 +13,14 @@ import { useSyncEngine } from '../sync/use-sync-engine';
 
 const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space type entities
 
-export function useSpacesQuery() {
+export function useSpacesQuery(enabled = true) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
   const { store } = useSyncEngine();
   const cache = useQueryClient();
 
-  const { data: fuzzyMatchedSpaces = [] } = useQuery({
+  const { data: fuzzyMatchedSpaces = [], isLoading } = useQuery({
     queryKey: ['spaces-by-name', debouncedQuery],
     queryFn: async () => {
       const fetchResultsEffect = Effect.either(
@@ -68,6 +68,7 @@ export function useSpacesQuery() {
 
       return resultOrError.right;
     },
+    enabled: enabled && debouncedQuery.length > 0,
   });
 
   const spaces = fuzzyMatchedSpaces.map(space => {
@@ -96,6 +97,7 @@ export function useSpacesQuery() {
       query,
       setQuery,
       spaces: [],
+      isLoading,
     };
   }
 
@@ -103,5 +105,6 @@ export function useSpacesQuery() {
     query,
     setQuery,
     spaces: uniqueSpacesById(spaces),
+    isLoading,
   };
 }

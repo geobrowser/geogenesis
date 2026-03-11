@@ -26,6 +26,7 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
+import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
@@ -51,6 +52,7 @@ export function EditableSpaceHeading({
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
   const [isCreatingNewVersion, setIsCreatingNewVersion] = React.useState<boolean>(false);
   const [isSubtopicsOpen, setIsSubtopicsOpen] = React.useState(false);
+  const [isSubspacesOpen, setIsSubspacesOpen] = React.useState(false);
 
   const {
     allVersions,
@@ -184,6 +186,14 @@ export function EditableSpaceHeading({
                   <MenuItem
                     onClick={() => {
                       setIsContextMenuOpen(false);
+                      setIsSubspacesOpen(true);
+                    }}
+                  >
+                    <p>Subspaces</p>
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setIsContextMenuOpen(false);
                       setIsSubtopicsOpen(true);
                     }}
                   >
@@ -203,6 +213,7 @@ export function EditableSpaceHeading({
       </div>
 
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
+      <SubspacesDialog open={isSubspacesOpen} onOpenChange={setIsSubspacesOpen} spaceId={spaceId} />
       <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} spaceId={spaceId} />
     </>
   );
