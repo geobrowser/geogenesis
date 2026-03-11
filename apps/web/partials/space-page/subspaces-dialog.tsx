@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import * as React from 'react';
 
 import { useActiveSubspaces } from '~/core/hooks/use-active-subspaces';
+import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useSubspace } from '~/core/hooks/use-subspace';
 import type { ActiveSubspace } from '~/core/io/subgraph/fetch-active-subspaces';
@@ -46,14 +47,15 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
     isError: isSubspacesError,
     error: subspacesError,
   } = useActiveSubspaces(spaceId, open);
-  const { setSubspace, setStatus, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
+  const { space } = useSpace(spaceId);
+  const { setSubspace, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
   const [removingKey, setRemovingKey] = React.useState<string | null>(null);
-  const [addingId, setAddingId] = React.useState<string | null>(null);
+  const [pendingKeys, setPendingKeys] = React.useState<Set<string>>(new Set());
+
   const [addRelationType, setAddRelationType] = React.useState<'related' | 'verified'>('related');
 
-  const isAdding = setStatus === 'pending';
+  const isDao = space?.type === 'DAO';
   const isRemoving = unsetStatus === 'pending';
-  const isBusy = isAdding || isRemoving;
 
   const existingSubspaceIds = React.useMemo(
     () =>
@@ -71,39 +73,53 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
   );
 
   const addSubspace = (subspace: { id: string; name: string | null; description: string | null; image: string }) => {
-    setAddingId(subspace.id);
+    const relationType = addRelationType;
+    const key = `${subspace.id}:${relationType}`;
+    const optimisticEntry: ActiveSubspace = {
+      id: subspace.id,
+      name: subspace.name ?? 'Untitled',
+      description: subspace.description,
+      image: subspace.image,
+      relationType,
+    };
+
+    // Optimistically add to cache and mark as pending immediately
+    queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
+      const currentSubspaces = current ?? [];
+      const alreadyExists = currentSubspaces.some(s => s.id === subspace.id && s.relationType === relationType);
+
+      if (alreadyExists) return currentSubspaces;
+
+      return sortSubspaces([...currentSubspaces, optimisticEntry]);
+    });
+    setPendingKeys(prev => new Set(prev).add(key));
+    setQuery('');
+
     setSubspace(
       {
         subspaceId: subspace.id,
-        relationType: addRelationType,
+        relationType,
       },
       {
-        onSuccess: async () => {
-          queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
-            const currentSubspaces = current ?? [];
-            const alreadyExists = currentSubspaces.some(
-              currentSubspace => currentSubspace.id === subspace.id && currentSubspace.relationType === addRelationType
-            );
-
-            if (alreadyExists) {
-              return currentSubspaces;
-            }
-
-            return sortSubspaces([
-              ...currentSubspaces,
-              {
-                id: subspace.id,
-                name: subspace.name ?? 'Untitled',
-                description: subspace.description,
-                image: subspace.image,
-                relationType: addRelationType,
-              },
-            ]);
+        onSuccess: () => {
+          // Transaction confirmed — remove pending state, entry stays in cache
+          setPendingKeys(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
           });
-          setQuery('');
         },
-        onSettled: () => {
-          setAddingId(null);
+        onError: () => {
+          // Transaction failed — roll back optimistic entry
+          queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
+            if (!current) return current;
+            return current.filter(s => !(s.id === subspace.id && s.relationType === relationType));
+          });
+          setPendingKeys(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
         },
       }
     );
@@ -237,11 +253,11 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                   </div>
                                   <button
                                     type="button"
-                                    disabled={isBusy}
+                                    disabled={isRemoving}
                                     className="ml-2 h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
                                     onClick={() => addSubspace({ id: result.id, name: result.name, description: result.description, image: result.image })}
                                   >
-                                    {isAdding && addingId === result.id ? 'Adding...' : 'Add subspace'}
+                                    Add subspace
                                   </button>
                                 </div>
                               </motion.div>
@@ -279,11 +295,12 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                 !isSubspacesError &&
                 activeSubspaces?.map(subspace => {
                   const key = `${subspace.id}:${subspace.relationType}`;
+                  const isPending = pendingKeys.has(key);
 
                   return (
                     <div key={key}>
                       <div className="h-px w-full bg-divider" />
-                      <div className="flex flex-col gap-1 py-3">
+                      <div className={`flex flex-col gap-1 py-3 ${isPending ? 'opacity-60' : ''}`}>
                         <div className="flex items-center justify-between gap-2.5">
                           <div className="flex items-center gap-2.5">
                             <div className="size-[22px] shrink-0 overflow-clip rounded-sm">
@@ -296,14 +313,20 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                               {subspace.relationType === 'verified' ? 'Verified' : 'Related'}
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className="h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={isBusy}
-                            onClick={() => removeSubspace(subspace.id, subspace.relationType)}
-                          >
-                            {isRemoving && removingKey === key ? 'Removing...' : 'Remove'}
-                          </button>
+                          {isPending ? (
+                            <span className="h-6 shrink-0 px-[7px] text-metadata text-grey-04">
+                              {isDao ? 'Proposing...' : 'Adding...'}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={isRemoving}
+                              onClick={() => removeSubspace(subspace.id, subspace.relationType)}
+                            >
+                              {isRemoving && removingKey === key ? 'Removing...' : 'Remove'}
+                            </button>
+                          )}
                         </div>
                         {subspace.description && (
                           <Truncate maxLines={2} shouldTruncate variant="footnote">
