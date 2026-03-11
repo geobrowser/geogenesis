@@ -27,7 +27,7 @@ import {
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
-import { validateSpaceId } from '~/core/utils/utils';
+import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 /**
  * Maps a subspace relation type to its corresponding governance action constants
@@ -254,13 +254,11 @@ function buildSubspaceTopic(
 }
 
 function parseTopicEntityId(topicEntityId?: string): string {
-  const strippedId = topicEntityId?.replace(/-/g, '').toLowerCase();
-
-  if (!strippedId || strippedId.length !== 32 || !/^[0-9a-fA-F]+$/.test(strippedId)) {
+  if (!validateEntityId(topicEntityId)) {
     throw new Error(`Invalid topic entity ID: expected UUID format, got ${topicEntityId}`);
   }
 
-  return strippedId;
+  return topicEntityId.replace(/-/g, '').toLowerCase();
 }
 
 /**
