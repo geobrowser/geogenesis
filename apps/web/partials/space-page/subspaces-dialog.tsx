@@ -48,6 +48,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
   } = useActiveSubspaces(spaceId, open);
   const { setSubspace, setStatus, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
   const [removingKey, setRemovingKey] = React.useState<string | null>(null);
+  const [addingId, setAddingId] = React.useState<string | null>(null);
   const [addRelationType, setAddRelationType] = React.useState<'related' | 'verified'>('related');
 
   const isAdding = setStatus === 'pending';
@@ -70,6 +71,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
   );
 
   const addSubspace = (subspace: { id: string; name: string | null; description: string | null; image: string }) => {
+    setAddingId(subspace.id);
     setSubspace(
       {
         subspaceId: subspace.id,
@@ -99,6 +101,9 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
             ]);
           });
           setQuery('');
+        },
+        onSettled: () => {
+          setAddingId(null);
         },
       }
     );
@@ -214,14 +219,8 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.02 * i }}
                               >
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  className="group relative flex w-full items-center px-3 py-2.5 text-left"
-                                  onClick={() => addSubspace({ id: result.id, name: result.name, description: result.description, image: result.image })}
-                                >
-                                  <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
-                                  <div className="relative z-10 flex w-full items-start gap-2.5">
+                                <div className="flex items-center justify-between px-3 py-2.5">
+                                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
                                     <div className="mt-0.5 size-[22px] shrink-0 overflow-clip rounded-sm">
                                       <NativeGeoImage value={result.image} alt="" width={22} height={22} className="h-[22px] w-[22px] object-cover" />
                                     </div>
@@ -236,7 +235,15 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                       )}
                                     </div>
                                   </div>
-                                </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    className="ml-2 h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
+                                    onClick={() => addSubspace({ id: result.id, name: result.name, description: result.description, image: result.image })}
+                                  >
+                                    {isAdding && addingId === result.id ? 'Adding...' : 'Add subspace'}
+                                  </button>
+                                </div>
                               </motion.div>
                             ))}
                         </div>
