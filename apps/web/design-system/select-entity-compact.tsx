@@ -105,9 +105,9 @@ export function SelectEntityCompact({
                 </Text>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {selected.map(item => (
+                {selected.map((item, idx) => (
                   <span
-                    key={item.id}
+                    key={`${item.id}-${item.primarySpace ?? ''}-${idx}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-grey-02 bg-white px-2 py-1 text-[0.8125rem] text-text"
                   >
                     {item.primarySpaceImage != null && (
