@@ -21,18 +21,23 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
+
+import { EditSmall } from '~/design-system/icons/edit-small';
+import { MoveSpace } from '~/design-system/icons/move-space';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
 import { Menu, MenuItem } from '~/design-system/menu';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { writeValue } from '~/partials/blocks/table/change-entry';
+import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -41,6 +46,11 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import {
+  EditEntitiesPopover,
+  type EditApplyPayload,
+  type EditDeleteApplyPayload,
+} from './edit-entities-popover';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
 import { PowerToolsRow } from './types';
@@ -221,6 +231,112 @@ export function PowerToolsScreen() {
 
     return data.rows;
   }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
+
+  const selectableRows = React.useMemo(
+    () => rowsWithPlaceholder.filter(r => !r.placeholder),
+    [rowsWithPlaceholder]
+  );
+  const selectableCount = selectableRows.length;
+  const [selectedEntityIds, setSelectedEntityIds] = React.useState<Set<string>>(() => new Set());
+  const [isSelectionModeActive, setIsSelectionModeActive] = React.useState(false);
+  const selectedCount = selectedEntityIds.size;
+  const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
+
+  const onRowClick = React.useCallback((entityId: string) => {
+    setIsSelectionModeActive(prev => {
+      if (!prev) {
+        setSelectedEntityIds(s => new Set(s).add(entityId));
+        return true;
+      }
+      return prev;
+    });
+  }, []);
+
+  const toggleRowSelection = React.useCallback((entityId: string) => {
+    setSelectedEntityIds(prev => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  }, []);
+
+  const selectAll = React.useCallback(() => {
+    setSelectedEntityIds(new Set(selectableRows.map(r => r.entityId)));
+  }, [selectableRows]);
+
+  const clearSelection = React.useCallback(() => {
+    setSelectedEntityIds(new Set());
+  }, []);
+
+  const handleEditApply = React.useCallback(
+    (payload: EditApplyPayload) => {
+      const { property, targetEntities } = payload;
+      selectedEntityIds.forEach(fromEntityId => {
+        targetEntities.forEach(target => {
+          createPropertyRelation(storage, spaceId, fromEntityId, property, {
+            id: target.id,
+            name: target.name,
+            space: target.primarySpace,
+          });
+        });
+      });
+    },
+    [storage, spaceId, selectedEntityIds]
+  );
+
+  const handleDeleteApply = React.useCallback(
+    (payload: EditDeleteApplyPayload) => {
+      const { property, targetKeys } = payload;
+      const targetKeySet = new Set(
+        targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`)
+      );
+      const relations = getRelations({
+        selector: r => {
+          if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id)
+            return false;
+          const relationKey = `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId ?? ''}`;
+          return targetKeySet.has(relationKey);
+        },
+      });
+      relations.forEach(relation => storage.relations.delete(relation));
+    },
+    [storage, selectedEntityIds]
+  );
+
+  const onMasterToggle = React.useCallback(() => {
+    if (isAllSelected) clearSelection();
+    else selectAll();
+  }, [isAllSelected, clearSelection, selectAll]);
+
+  const selectionProps = React.useMemo(
+    () =>
+      isEditing && selectableCount > 0 && isSelectionModeActive && selectedCount > 0
+        ? {
+            selectedEntityIds,
+            onToggleRowSelection: toggleRowSelection,
+            onMasterToggle,
+            selectableCount,
+            isAllSelected,
+          }
+        : undefined,
+    [
+      isEditing,
+      selectableCount,
+      isSelectionModeActive,
+      selectedCount,
+      selectedEntityIds,
+      toggleRowSelection,
+      onMasterToggle,
+      isAllSelected,
+    ]
+  );
+
+  React.useEffect(() => {
+    if (selectedCount === 0) {
+      setIsSelectionModeActive(false);
+    }
+  }, [selectedCount]);
 
   React.useEffect(() => {
     if (pendingEntityId && data.rows.find(r => r.entityId === pendingEntityId)) {
@@ -509,25 +625,41 @@ export function PowerToolsScreen() {
             </Text>
           </div>
         ) : (
-          <PowerToolsTable
-            rows={rowsWithPlaceholder}
-            properties={data.properties}
-            propertiesById={data.propertiesById}
-            spaceId={spaceId}
-            hasNextPage={data.hasMore}
-            isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
-            fetchNextPage={data.loadMore}
-            onChangeEntry={onChangeEntry}
-            onLinkEntry={onLinkEntry}
-            onDismissPlaceholder={handleDismissPlaceholder}
-            onDeleteRow={isEditing ? handleDeleteRow : undefined}
-            onOpenEntityPanel={handleOpenEntityPanel}
-            source={source}
-            hiddenColumnIds={hiddenColumnIds}
-            onHideColumn={toggleColumnVisibility}
-            orderedPropertyIds={orderedPropertyIds}
-            onReorderColumns={setOrderedPropertyIds}
-          />
+          <>
+            {isEditing && selectableCount > 0 && selectedCount > 0 && (
+              <div className="flex shrink-0 items-center gap-2 border-b border-grey-02 px-4 py-2">
+                <Checkbox
+                  checked={isAllSelected}
+                  onChange={onMasterToggle}
+                  aria-label={isAllSelected ? 'Deselect all' : 'Select all'}
+                />
+                <Text variant="metadataMedium" color="grey-04">
+                  {selectedCount} / {selectableCount} selected
+                </Text>
+              </div>
+            )}
+            <PowerToolsTable
+              rows={rowsWithPlaceholder}
+              properties={data.properties}
+              propertiesById={data.propertiesById}
+              spaceId={spaceId}
+              hasNextPage={data.hasMore}
+              isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
+              fetchNextPage={data.loadMore}
+              onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
+              onDismissPlaceholder={handleDismissPlaceholder}
+              onDeleteRow={isEditing ? handleDeleteRow : undefined}
+              onOpenEntityPanel={handleOpenEntityPanel}
+              source={source}
+              hiddenColumnIds={hiddenColumnIds}
+              onHideColumn={toggleColumnVisibility}
+              orderedPropertyIds={orderedPropertyIds}
+              onReorderColumns={setOrderedPropertyIds}
+              selection={selectionProps}
+              onRowClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
+            />
+          </>
         )}
         {panelEntityId && (
           <PowerToolsEntityPanel entityId={panelEntityId} spaceId={panelSpaceId} onClose={handleCloseEntityPanel} />
