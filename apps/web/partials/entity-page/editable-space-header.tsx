@@ -203,7 +203,7 @@ export function EditableSpaceHeading({
       </div>
 
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
-      <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} />
+      <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} spaceId={spaceId} />
     </>
   );
 }

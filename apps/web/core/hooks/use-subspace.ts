@@ -61,9 +61,9 @@ interface SubspaceParams {
   /** The type of relationship to set or remove */
   relationType: SubspaceRelationType;
   /**
-   * For 'subtopic' relation type when setting: the entity ID (UUID) in the knowledge
-   * graph that represents the topic. Encoded as bytes in the data field.
-   * Not used for 'verified' or 'related' types, or when unsetting.
+   * For 'subtopic' relation type: the entity ID (UUID) in the knowledge
+   * graph that represents the topic. Encoded in the lower 16 bytes of `topic`.
+   * Required for both set and unset.
    */
   topicEntityId?: string;
 }
@@ -129,7 +129,7 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
           throw new Error(message);
         }
 
-        if (direction === 'set' && relationType === 'subtopic' && !topicEntityId) {
+        if (relationType === 'subtopic' && !topicEntityId) {
           const message = 'A topic entity ID is required for subtopic relationships';
           console.error(message);
           dispatch({ type: 'ERROR', payload: message });
@@ -137,8 +137,8 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
         }
 
         const action = SUBSPACE_ACTION_MAP[relationType][direction];
-        const topic = padBytes16ToBytes32(subspaceId);
-        const actionData = encodeTopicEntityData(direction, topicEntityId);
+        const topic = buildSubspaceTopic(relationType, subspaceId, topicEntityId);
+        const actionData: Hex = '0x';
 
         console.log(`${direction === 'set' ? 'Setting' : 'Unsetting'} subspace relationship`, {
           fromSpaceId: personalSpaceId,
@@ -233,21 +233,34 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
 }
 
 /**
- * Encodes the topic entity ID as hex data for the contract call.
- * Only relevant when setting a subtopic relationship.
+ * Build the topic field for a subspace action.
+ *
+ * Subspace topic layout for all trust actions is `bytes32(bytes16 subspaceId, bytes16 target)`.
+ * For non-subtopic actions, target is zero bytes.
  */
-function encodeTopicEntityData(direction: SubspaceDirection, topicEntityId?: string): Hex {
-  if (direction !== 'set' || !topicEntityId) {
-    return '0x' as Hex;
+function buildSubspaceTopic(
+  relationType: SubspaceRelationType,
+  subspaceId: string,
+  topicEntityId?: string
+): Hex {
+  const normalizedSubspace = subspaceId;
+
+  if (relationType !== 'subtopic') {
+    return padBytes16ToBytes32(normalizedSubspace);
   }
 
-  const strippedId = topicEntityId.replace(/-/g, '');
+  const targetHex = parseTopicEntityId(topicEntityId);
+  return `0x${normalizedSubspace}${targetHex}` as Hex;
+}
 
-  if (strippedId.length !== 32 || !/^[0-9a-fA-F]+$/.test(strippedId)) {
+function parseTopicEntityId(topicEntityId?: string): string {
+  const strippedId = topicEntityId?.replace(/-/g, '').toLowerCase();
+
+  if (!strippedId || strippedId.length !== 32 || !/^[0-9a-fA-F]+$/.test(strippedId)) {
     throw new Error(`Invalid topic entity ID: expected UUID format, got ${topicEntityId}`);
   }
 
-  return `0x${strippedId}` as Hex;
+  return strippedId;
 }
 
 /**
