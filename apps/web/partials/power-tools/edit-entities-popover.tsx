@@ -63,9 +63,12 @@ export function EditEntitiesPopover({
   const [actionPickerOpen, setActionPickerOpen] = React.useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = React.useState(false);
   const [markedForDeleteKeys, setMarkedForDeleteKeys] = React.useState<Set<string>>(new Set());
+  const [showAllDeleteValues, setShowAllDeleteValues] = React.useState(false);
 
   type EditAction = 'add' | 'edit' | 'delete';
   const [action, setAction] = React.useState<EditAction>('add');
+
+  const INITIAL_DELETE_VALUES_VISIBLE = 5;
 
   useKey('Escape', () => {
     if (!open) return;
@@ -91,41 +94,36 @@ export function EditEntitiesPopover({
       r.type.id === effectiveProperty.id,
   });
 
+  /** All distinct values in the column across selected rows (union), with count of rows that have each value. */
   const currentColumnValues = React.useMemo(() => {
     if (currentColumnRelations.length === 0 || selectedEntityIds.length === 0) return [];
 
-    const rowIds = new Set(selectedEntityIds);
-    /** Entity ids per row (toEntity.id). */
-    const entityIdsPerRow = new Map<string, Set<string>>();
-    for (const r of currentColumnRelations) {
-      const eid = r.fromEntity.id;
-      if (!entityIdsPerRow.has(eid)) entityIdsPerRow.set(eid, new Set());
-      entityIdsPerRow.get(eid)!.add(r.toEntity.id);
-    }
-    const firstRowEntityIds = entityIdsPerRow.get(selectedEntityIds[0]) ?? new Set();
-    const entityIdsInAllRows = new Set(
-      [...firstRowEntityIds].filter(toId =>
-        [...rowIds].every(eid => entityIdsPerRow.get(eid)?.has(toId) ?? false)
-      )
-    );
-
-    /** Include space so same entity in different spaces show as separate rows with correct space image. */
-    const valueKeyFromRelation = (r: (typeof currentColumnRelations)[number]) =>
+    const key = (r: (typeof currentColumnRelations)[number]) =>
       `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId}`;
-    const seen = new Set<string>();
-    return currentColumnRelations
-      .filter(r => {
-        if (!entityIdsInAllRows.has(r.toEntity.id)) return false;
-        const k = valueKeyFromRelation(r);
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      })
-      .map(r => ({
-        toEntityId: r.toEntity.id,
-        toEntityName: r.toEntity.name,
-        toSpaceId: r.toSpaceId ?? r.spaceId,
-      }));
+    const byKey = new Map<
+      string,
+      { toEntityId: string; toEntityName: string | null; toSpaceId: string; rowIds: Set<string> }
+    >();
+    for (const r of currentColumnRelations) {
+      const k = key(r);
+      const existing = byKey.get(k);
+      if (existing) {
+        existing.rowIds.add(r.fromEntity.id);
+      } else {
+        byKey.set(k, {
+          toEntityId: r.toEntity.id,
+          toEntityName: r.toEntity.name,
+          toSpaceId: r.toSpaceId ?? r.spaceId,
+          rowIds: new Set([r.fromEntity.id]),
+        });
+      }
+    }
+    return [...byKey.entries()].map(([, v]) => ({
+      toEntityId: v.toEntityId,
+      toEntityName: v.toEntityName,
+      toSpaceId: v.toSpaceId,
+      count: v.rowIds.size,
+    }));
   }, [currentColumnRelations, selectedEntityIds]);
 
   const uniqueToSpaceIds = React.useMemo(() => {
@@ -165,6 +163,7 @@ export function EditEntitiesPopover({
       setActionPickerOpen(false);
       setColumnPickerOpen(false);
       setMarkedForDeleteKeys(new Set());
+      setShowAllDeleteValues(false);
     }
   }, [open]);
 
@@ -225,7 +224,7 @@ export function EditEntitiesPopover({
               </div>
               <Spacer height={8} />
               <div className="flex flex-col gap-0.5">
-                {(['add', 'edit', 'delete'] as const).map(a => (
+                {(['add', 'delete'] as const).map(a => (
                   <button
                     key={a}
                     type="button"
@@ -237,7 +236,7 @@ export function EditEntitiesPopover({
                       action === a ? 'bg-grey-01' : ''
                     }`}
                   >
-                    <span>{a === 'add' ? 'Add to' : a === 'edit' ? 'Edit to' : 'Delete'}</span>
+                    <span>{a === 'add' ? 'Add attribute to' : 'Remove'}</span>
                   </button>
                 ))}
               </div>
@@ -283,10 +282,10 @@ export function EditEntitiesPopover({
               </div>
             </div>
           ) : (
-            <div className="p-3">
-              <div className="flex items-center justify-between gap-2">
+            <div className="p-2">
+              <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">
                 <div>
-                  <Text variant="body" className="font-medium">
+                  <Text variant="body" color="grey-04" className="text-[14px] font-medium">
                     Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
                   </Text>
                   {canApply && (
@@ -316,7 +315,7 @@ export function EditEntitiesPopover({
                 onClick={() => setActionPickerOpen(true)}
                 className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-button text-text hover:bg-grey-01"
               >
-                <span>{action === 'add' ? 'Add to' : action === 'edit' ? 'Edit to' : 'Delete'}</span>
+                <span>{action === 'add' ? 'Add attribute to' : 'Remove'}</span>
                 <ChevronRight />
               </button>
               <button
@@ -331,83 +330,126 @@ export function EditEntitiesPopover({
               {action === 'delete' && effectiveProperty && (
                 <>
                   <Spacer height={6} />
-                  <div className="max-h-[min(40vh,200px)] overflow-y-auto rounded border border-grey-02">
-                    {currentColumnValues.length === 0 ? (
-                      <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
-                        No value in this column is shared by all selected rows.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-divider">
-                        {currentColumnValues.map((item, idx) => {
-                          const key = valueKey(item);
-                          const marked = markedForDeleteKeys.has(key);
-                          const space = spaceById[item.toSpaceId ?? spaceId] ?? null;
-                          return (
-                            <div
-                              key={`${item.toEntityId}-${item.toSpaceId ?? ''}-${idx}`}
-                              className={`flex items-center gap-2 px-2 py-1.5 ${marked ? 'bg-grey-01' : ''}`}
+                  {(() => {
+                    const unmarkedValues = currentColumnValues.filter(
+                      item => !markedForDeleteKeys.has(valueKey(item))
+                    );
+                    const visibleCount = showAllDeleteValues
+                      ? unmarkedValues.length
+                      : Math.min(INITIAL_DELETE_VALUES_VISIBLE, unmarkedValues.length);
+                    const visibleValues = unmarkedValues.slice(0, visibleCount);
+                    const hiddenCount = unmarkedValues.length - visibleCount;
+                    return (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <Text variant="metadata" className="text-text">
+                            All values
+                          </Text>
+                          {unmarkedValues.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMarkedForDeleteKeys(prev => {
+                                  const next = new Set(prev);
+                                  currentColumnValues.forEach(item => next.add(valueKey(item)));
+                                  return next;
+                                });
+                              }}
+                              className="text-button text-[0.8125rem] text-red-01 hover:underline"
                             >
-                              <span className="inline-flex size-[12px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
-                                {space?.image ? (
-                                  <NativeGeoImage
-                                    value={space.image}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="h-full w-full bg-grey-01" />
-                                )}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-text">
-                                {item.toEntityName ?? item.toEntityId}
-                              </span>
-                              {space?.name != null && (
-                                <span className="truncate text-[0.75rem] text-grey-04">
-                                  {space.name}
-                                </span>
-                              )}
+                              Remove all
+                            </button>
+                          )}
+                        </div>
+                        <Spacer height={6} />
+                        <div className="max-h-[min(40vh,240px)] overflow-y-auto">
+                          {unmarkedValues.length === 0 ? (
+                            <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
+                              {currentColumnValues.length === 0
+                                ? 'No values in this column for selected rows.'
+                                : 'All values removed. Click Apply to delete from all selected rows.'}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 p-2">
+                              {visibleValues.map((item, idx) => {
+                                const key = valueKey(item);
+                                const space = spaceById[item.toSpaceId ?? spaceId] ?? null;
+                                return (
+                                  <div
+                                    key={`${item.toEntityId}-${item.toSpaceId ?? ''}-${idx}`}
+                                    className="inline-flex items-center gap-1.5 rounded-m border border-grey-02 px-2 py-1.5 rounded-[5px]"
+                                  >
+                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-[10px] bg-black text-[0.75rem] font-medium text-white">
+                                      {item.count}
+                                    </span>
+                                    <span className="inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
+                                      {space?.image ? (
+                                        <NativeGeoImage
+                                          value={space.image}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <span className="h-full w-full bg-grey-02" />
+                                      )}
+                                    </span>
+                                    <span className="max-w-[120px] truncate text-[0.8125rem] text-text">
+                                      {item.toEntityName ?? item.toEntityId}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMarkedForDeleteKeys(prev => new Set(prev).add(key))
+                                      }
+                                      className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
+                                      aria-label={`Remove ${item.toEntityName ?? item.toEntityId}`}
+                                    >
+                                      <CloseSmall />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {!showAllDeleteValues && hiddenCount > 0 && (
+                            <>
+                              <Spacer height={6} />
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setMarkedForDeleteKeys(prev => {
-                                    const next = new Set(prev);
-                                    if (marked) next.delete(key);
-                                    else next.add(key);
-                                    return next;
-                                  })
-                                }
-                                className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-01 hover:text-text"
-                                aria-label={marked ? `Unmark ${item.toEntityName ?? item.toEntityId}` : `Remove ${item.toEntityName ?? item.toEntityId} from all selected rows`}
+                                onClick={() => setShowAllDeleteValues(true)}
+                                className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
                               >
-                                <CloseSmall />
+                                Show {hiddenCount} more
                               </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <Spacer height={12} />
+                            </>
+                          )}
+                        </div>
+                        <Spacer height={12} />
+                      </>
+                    );
+                  })()}
                 </>
               )}
-              <div className="block">
-                <Text variant="metadata" color="grey-04" className="block">
-                  Find attribute
-                </Text>
-                <Spacer height={6} />
-                <SelectEntityCompact
-                  spaceId={spaceId}
-                  selected={selectedAttributeEntities}
-                  onRemoveSelected={id =>
-                    setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
-                  }
-                  onDone={result => {
-                    setSelectedAttributeEntities(prev =>
-                      prev.some(e => e.id === result.id) ? prev : [...prev, result]
-                    );
-                  }}
-                />
-              </div>
+              {action !== 'delete' && (
+                <div className="block">
+                  <Text variant="metadata" color="grey-04" className="block">
+                    Find attribute
+                  </Text>
+                  <Spacer height={6} />
+                  <SelectEntityCompact
+                    spaceId={spaceId}
+                    selected={selectedAttributeEntities}
+                    onRemoveSelected={id =>
+                      setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
+                    }
+                    onDone={result => {
+                      setSelectedAttributeEntities(prev =>
+                        prev.some(e => e.id === result.id) ? prev : [...prev, result]
+                      );
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
         </Popover.Content>
