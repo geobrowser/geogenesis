@@ -46,36 +46,42 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
   } = useActiveSubspaces(spaceId, open);
   const { setSubspace, setStatus, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
   const [removingKey, setRemovingKey] = React.useState<string | null>(null);
+  const [addRelationType, setAddRelationType] = React.useState<'related' | 'verified'>('related');
 
   const isAdding = setStatus === 'pending';
   const isRemoving = unsetStatus === 'pending';
   const isBusy = isAdding || isRemoving;
 
-  const relatedSubspaceIds = React.useMemo(
-    () => new Set(activeSubspaces.filter(subspace => subspace.relationType === 'related').map(subspace => subspace.id)),
-    [activeSubspaces]
+  const existingSubspaceIds = React.useMemo(
+    () =>
+      new Set(
+        activeSubspaces
+          .filter(subspace => subspace.relationType === addRelationType)
+          .map(subspace => subspace.id)
+      ),
+    [activeSubspaces, addRelationType]
   );
 
   const filteredResults = React.useMemo(
-    () => results.filter(result => result.id !== spaceId && !relatedSubspaceIds.has(result.id)),
-    [results, relatedSubspaceIds, spaceId]
+    () => results.filter(result => result.id !== spaceId && !existingSubspaceIds.has(result.id)),
+    [results, existingSubspaceIds, spaceId]
   );
 
-  const addRelatedSubspace = (subspace: { id: string; name: string | null }) => {
+  const addSubspace = (subspace: { id: string; name: string | null }) => {
     setSubspace(
       {
         subspaceId: subspace.id,
-        relationType: 'related',
+        relationType: addRelationType,
       },
       {
         onSuccess: async () => {
           queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
             const currentSubspaces = current ?? [];
-            const hasRelatedSubspace = currentSubspaces.some(
-              currentSubspace => currentSubspace.id === subspace.id && currentSubspace.relationType === 'related'
+            const alreadyExists = currentSubspaces.some(
+              currentSubspace => currentSubspace.id === subspace.id && currentSubspace.relationType === addRelationType
             );
 
-            if (hasRelatedSubspace) {
+            if (alreadyExists) {
               return currentSubspaces;
             }
 
@@ -84,7 +90,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
               {
                 id: subspace.id,
                 name: subspace.name ?? 'Untitled',
-                relationType: 'related',
+                relationType: addRelationType,
               },
             ]);
           });
@@ -138,9 +144,45 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
               </div>
 
               <div className="flex flex-col gap-2">
-                <Text variant="metadata" as="p">
-                  Add related subspace
-                </Text>
+                <div className="flex items-center justify-between">
+                  <Text variant="metadata" as="p">
+                    Add subspace
+                  </Text>
+                  <div className="relative flex overflow-hidden rounded-md border border-grey-02">
+                    <button
+                      type="button"
+                      className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
+                        addRelationType === 'related' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
+                      }`}
+                      onClick={() => setAddRelationType('related')}
+                    >
+                      {addRelationType === 'related' && (
+                        <motion.span
+                          layoutId="subspace-type-indicator"
+                          className="absolute inset-0 bg-text"
+                          transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+                        />
+                      )}
+                      <span className="relative z-10">Related</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
+                        addRelationType === 'verified' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
+                      }`}
+                      onClick={() => setAddRelationType('verified')}
+                    >
+                      {addRelationType === 'verified' && (
+                        <motion.span
+                          layoutId="subspace-type-indicator"
+                          className="absolute inset-0 bg-text"
+                          transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+                        />
+                      )}
+                      <span className="relative z-10">Verified</span>
+                    </button>
+                  </div>
+                </div>
                 <div className="relative">
                   <Input
                     withSearchIcon
@@ -172,7 +214,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                   type="button"
                                   disabled={isBusy}
                                   className="group relative flex w-full items-center px-3 py-2.5 text-left"
-                                  onClick={() => addRelatedSubspace({ id: result.id, name: result.name })}
+                                  onClick={() => addSubspace({ id: result.id, name: result.name })}
                                 >
                                   <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
                                   <div className="relative z-10 flex w-full flex-col gap-0.5">
