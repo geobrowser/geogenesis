@@ -13,10 +13,12 @@ import type { ActiveSubspace } from '~/core/io/subgraph/fetch-active-subspaces';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Text } from '~/design-system/text';
+import { Truncate } from '~/design-system/truncate';
 
 interface SubspacesDialogProps {
   open: boolean;
@@ -67,7 +69,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
     [results, existingSubspaceIds, spaceId]
   );
 
-  const addSubspace = (subspace: { id: string; name: string | null }) => {
+  const addSubspace = (subspace: { id: string; name: string | null; description: string | null; image: string }) => {
     setSubspace(
       {
         subspaceId: subspace.id,
@@ -90,6 +92,8 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
               {
                 id: subspace.id,
                 name: subspace.name ?? 'Untitled',
+                description: subspace.description,
+                image: subspace.image,
                 relationType: addRelationType,
               },
             ]);
@@ -148,7 +152,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                   <Text variant="metadata" as="p">
                     Add subspace
                   </Text>
-                  <div className="relative flex overflow-hidden rounded-md border border-grey-02">
+                  <div className="relative flex overflow-hidden rounded-sm border border-grey-02">
                     <button
                       type="button"
                       className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
@@ -214,11 +218,23 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                   type="button"
                                   disabled={isBusy}
                                   className="group relative flex w-full items-center px-3 py-2.5 text-left"
-                                  onClick={() => addSubspace({ id: result.id, name: result.name })}
+                                  onClick={() => addSubspace({ id: result.id, name: result.name, description: result.description, image: result.image })}
                                 >
                                   <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
-                                  <div className="relative z-10 flex w-full flex-col gap-0.5">
-                                    <span className="text-button text-text">{result.name ?? 'Untitled'}</span>
+                                  <div className="relative z-10 flex w-full items-start gap-2.5">
+                                    <div className="mt-0.5 size-[22px] shrink-0 overflow-clip rounded-sm">
+                                      <NativeGeoImage value={result.image} alt="" width={22} height={22} className="h-[22px] w-[22px] object-cover" />
+                                    </div>
+                                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                      <span className="text-button text-text">{result.name ?? 'Untitled'}</span>
+                                      {result.description && (
+                                        <Truncate maxLines={2} shouldTruncate variant="footnote">
+                                          <Text variant="footnote" color="grey-04">
+                                            {result.description}
+                                          </Text>
+                                        </Truncate>
+                                      )}
+                                    </div>
                                   </div>
                                 </button>
                               </motion.div>
@@ -260,23 +276,35 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                   return (
                     <div key={key}>
                       <div className="h-px w-full bg-divider" />
-                      <div className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-2">
-                          <Text variant="button" as="p">
-                            {subspace.name}
-                          </Text>
-                          <span className="rounded-md border border-grey-02 px-1.5 py-0.5 text-tag text-grey-04">
-                            {subspace.relationType === 'verified' ? 'Verified' : 'Related'}
-                          </span>
+                      <div className="flex flex-col gap-1 py-3">
+                        <div className="flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="size-[22px] shrink-0 overflow-clip rounded-sm">
+                              <NativeGeoImage value={subspace.image} alt="" width={22} height={22} className="h-[22px] w-[22px] object-cover" />
+                            </div>
+                            <Text variant="button" as="p">
+                              {subspace.name}
+                            </Text>
+                            <span className="rounded-sm bg-grey-01 px-1 py-0.5 text-tag text-grey-04">
+                              {subspace.relationType === 'verified' ? 'Verified' : 'Related'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={isBusy}
+                            onClick={() => removeSubspace(subspace.id, subspace.relationType)}
+                          >
+                            {isRemoving && removingKey === key ? 'Removing...' : 'Remove'}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          className="h-6 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={isBusy}
-                          onClick={() => removeSubspace(subspace.id, subspace.relationType)}
-                        >
-                          {isRemoving && removingKey === key ? 'Removing...' : 'Remove'}
-                        </button>
+                        {subspace.description && (
+                          <Truncate maxLines={2} shouldTruncate variant="footnote">
+                            <Text variant="footnote" color="grey-04">
+                              {subspace.description}
+                            </Text>
+                          </Truncate>
+                        )}
                       </div>
                     </div>
                   );

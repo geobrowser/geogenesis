@@ -72,12 +72,18 @@ export function useSpacesQuery(enabled = true) {
   });
 
   const spaces = fuzzyMatchedSpaces.map(space => {
-    return { id: space.spaces[0].spaceId, name: space.name, image: space.spaces[0].image };
+    return {
+      id: space.spaces[0].spaceId,
+      name: space.name,
+      description: space.description,
+      image: space.spaces[0].image,
+    };
   });
 
   type SpaceItem = {
     id: string;
     name: string | null;
+    description: string | null;
     image: string;
   };
 

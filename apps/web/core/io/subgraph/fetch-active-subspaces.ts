@@ -1,5 +1,7 @@
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect, Either } from 'effect';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -14,10 +16,24 @@ interface SubspacesResult {
   subspaces: SubspaceNode[];
 }
 
+interface ValueNode {
+  propertyId: string;
+  text: string | null;
+}
+
+interface RelationNode {
+  typeId: string;
+  toEntity: {
+    valuesList: ValueNode[];
+  } | null;
+}
+
 interface SpaceNode {
   id: string;
   page: {
     name: string | null;
+    description: string | null;
+    relationsList: RelationNode[];
   } | null;
 }
 
@@ -27,9 +43,29 @@ interface SpacesResult {
 
 const SPACE_QUERY_BATCH_SIZE = 100;
 
+const toHex = (uuid: string) => uuid.replace(/-/g, '');
+
+const AVATAR_PROPERTY_ID = toHex(ContentIds.AVATAR_PROPERTY);
+const COVER_PROPERTY_ID = toHex(SystemIds.COVER_PROPERTY);
+const IMAGE_URL_PROPERTY_ID = toHex(SystemIds.IMAGE_URL_PROPERTY);
+
+function resolveSpaceImage(relations: RelationNode[]): string {
+  const avatar = relations.find(r => r.typeId === AVATAR_PROPERTY_ID);
+  const avatarUrl = avatar?.toEntity?.valuesList.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID)?.text;
+  if (avatarUrl) return avatarUrl;
+
+  const cover = relations.find(r => r.typeId === COVER_PROPERTY_ID);
+  const coverUrl = cover?.toEntity?.valuesList.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID)?.text;
+  if (coverUrl) return coverUrl;
+
+  return PLACEHOLDER_SPACE_IMAGE;
+}
+
 export interface ActiveSubspace {
   id: string;
   name: string;
+  description: string | null;
+  image: string;
   relationType: 'verified' | 'related';
 }
 
@@ -48,6 +84,16 @@ const spacesByIdsQuery = (spaceIds: string[]) => `
       id
       page {
         name
+        description
+        relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+          typeId
+          toEntity {
+            valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+              propertyId
+              text
+            }
+          }
+        }
       }
     }
   }
@@ -106,7 +152,7 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
 
   const uniqueSpaceIds = Array.from(new Set(subspaces.map(subspace => subspace.childSpaceId)));
 
-  const namesBySpaceId = new Map<string, string>();
+  const spaceMetaById = new Map<string, { name: string; description: string | null; image: string }>();
   const idChunks = chunkIds(uniqueSpaceIds, SPACE_QUERY_BATCH_SIZE);
 
   for (const idChunk of idChunks) {
@@ -126,13 +172,17 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
         case 'AbortError':
           throw error;
         default:
-          console.error(`${error._tag}: Unable to fetch active subspace names for space ${spaceId}`);
-          throw new Error(`Failed to fetch active subspace names for space ${spaceId}`);
+          console.error(`${error._tag}: Unable to fetch active subspace metadata for space ${spaceId}`);
+          throw new Error(`Failed to fetch active subspace metadata for space ${spaceId}`);
       }
     }
 
     for (const space of spacesResultOrError.right.spaces) {
-      namesBySpaceId.set(space.id, space.page?.name ?? 'Untitled');
+      spaceMetaById.set(space.id, {
+        name: space.page?.name ?? 'Untitled',
+        description: space.page?.description ?? null,
+        image: resolveSpaceImage(space.page?.relationsList ?? []),
+      });
     }
   }
 
@@ -145,9 +195,13 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
         return null;
       }
 
+      const meta = spaceMetaById.get(subspace.childSpaceId);
+
       return {
         id: subspace.childSpaceId,
-        name: namesBySpaceId.get(subspace.childSpaceId) ?? 'Untitled',
+        name: meta?.name ?? 'Untitled',
+        description: meta?.description ?? null,
+        image: meta?.image ?? PLACEHOLDER_SPACE_IMAGE,
         relationType,
       };
     })
