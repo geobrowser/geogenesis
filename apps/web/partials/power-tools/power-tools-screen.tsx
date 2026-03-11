@@ -15,6 +15,7 @@ import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editi
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -169,6 +170,7 @@ export function PowerToolsScreen() {
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
+  const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
 
   const shouldShowPlaceholder =
     isEditing &&
@@ -181,21 +183,36 @@ export function PowerToolsScreen() {
   const panelSpaceId = searchParams?.get(PANEL_SPACE_ID_PARAM) ?? spaceId;
 
   const rowsWithPlaceholder = React.useMemo<PowerToolsRow[]>(() => {
-    if (!shouldShowPlaceholder) return data.rows;
-    const placeholderRow: PowerToolsRow = {
-      entityId: placeholderEntityId,
-      spaceId,
-      placeholder: true,
-      collectionId: source.type === 'COLLECTION' ? source.value : undefined,
-    };
-    return [placeholderRow, ...data.rows];
-  }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue]);
+    if (shouldShowPlaceholder) {
+      const placeholderRow: PowerToolsRow = {
+        entityId: placeholderEntityId,
+        spaceId,
+        placeholder: true,
+        collectionId: source.type === 'COLLECTION' ? source.value : undefined,
+      };
+      return [placeholderRow, ...data.rows];
+    }
+
+    if (pinnedNewEntityId) {
+      const pinnedRow = data.rows.find(r => r.entityId === pinnedNewEntityId);
+      if (pinnedRow) {
+        return [pinnedRow, ...data.rows.filter(r => r.entityId !== pinnedNewEntityId)];
+      }
+    }
+
+    return data.rows;
+  }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
 
   React.useEffect(() => {
     if (pendingEntityId && data.rows.find(r => r.entityId === pendingEntityId)) {
+      setPinnedNewEntityId(pendingEntityId);
       setPendingEntityId(null);
     }
   }, [pendingEntityId, data.rows]);
+
+  React.useEffect(() => {
+    setPinnedNewEntityId(null);
+  }, [sourceValue, effectiveFilterState]);
 
   const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
     switch (action.type) {
@@ -269,12 +286,32 @@ export function PowerToolsScreen() {
 
   const handleAddPlaceholder = () => {
     setHasPlaceholderRow(true);
+    setPinnedNewEntityId(null);
   };
 
   const handleDismissPlaceholder = React.useCallback(() => {
     setHasPlaceholderRow(false);
     setPendingEntityId(null);
+    setPinnedNewEntityId(null);
   }, []);
+
+  const handleDeleteRow = React.useCallback(
+    (row: PowerToolsRow) => {
+      if (source.type === 'COLLECTION') {
+        if (row.relationId) {
+          const relation = getRelations({ selector: r => r.id === row.relationId })[0];
+          if (relation) storage.relations.delete(relation);
+        }
+      } else {
+        const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
+        const relations = reactiveRelations.get().filter(r => r.fromEntity.id === row.entityId);
+        for (const v of values) storage.values.delete(v);
+        for (const r of relations) storage.relations.delete(r);
+      }
+      if (pinnedNewEntityId === row.entityId) setPinnedNewEntityId(null);
+    },
+    [source.type, storage, pinnedNewEntityId]
+  );
 
   const handleDeleteFilter = React.useCallback(
     (index: number) => {
@@ -385,7 +422,7 @@ export function PowerToolsScreen() {
       {hasActiveFilters && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            {filterGroups.map((group, groupIndex) => (
+            {filterGroups.map(group => (
               <React.Fragment key={group.columnId}>
                 <TableBlockFilterGroupPill
                   group={group}
@@ -420,6 +457,7 @@ export function PowerToolsScreen() {
             onChangeEntry={onChangeEntry}
             onLinkEntry={onLinkEntry}
             onDismissPlaceholder={handleDismissPlaceholder}
+            onDeleteRow={isEditing ? handleDeleteRow : undefined}
             onOpenEntityPanel={handleOpenEntityPanel}
             source={source}
           />
