@@ -500,9 +500,17 @@ export type Entity = Node & {
   relationsWhereEntityList: Array<Relation>;
   spaceIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
   /** Reads and enables pagination through a set of `Space`. */
+  spacesByTopicId: Array<Space>;
+  /** Reads and enables pagination through a set of `Space`. */
+  spacesByTopicIdConnection: SpacesConnection;
+  /** Reads and enables pagination through a set of `Space`. */
   spacesIn?: Maybe<Array<Space>>;
   /** Reads and enables pagination through a set of `Space`. */
   spacesInConnection: SpacesConnection;
+  /** Reads and enables pagination through a set of `SubspaceTopic`. */
+  subspaceTopicsByTopicId: Array<SubspaceTopic>;
+  /** Reads and enables pagination through a set of `SubspaceTopic`. */
+  subspaceTopicsByTopicIdConnection: SubspaceTopicsConnection;
   typeIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
   /** Reads and enables pagination through a set of `Entity`. */
   types?: Maybe<Array<Entity>>;
@@ -580,6 +588,27 @@ export type EntityRelationsWhereEntityListArgs = {
 };
 
 
+export type EntitySpacesByTopicIdArgs = {
+  condition?: InputMaybe<SpaceCondition>;
+  filter?: InputMaybe<SpaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
+};
+
+
+export type EntitySpacesByTopicIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SpaceCondition>;
+  filter?: InputMaybe<SpaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
+};
+
+
 export type EntitySpacesInArgs = {
   filter?: InputMaybe<SpaceFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -594,6 +623,27 @@ export type EntitySpacesInConnectionArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type EntitySubspaceTopicsByTopicIdArgs = {
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
+};
+
+
+export type EntitySubspaceTopicsByTopicIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
 };
 
 
@@ -684,6 +734,14 @@ export type EntityFilter = {
   relationsWhereEntityExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `spaceIds` field. */
   spaceIds?: InputMaybe<UuidListFilter>;
+  /** Filter by the object’s `spacesByTopicIdConnection` relation. */
+  spacesByTopicIdConnection?: InputMaybe<EntityToManySpaceFilter>;
+  /** Some related `spacesByTopicIdConnection` exist. */
+  spacesByTopicIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspaceTopicsByTopicIdConnection` relation. */
+  subspaceTopicsByTopicIdConnection?: InputMaybe<EntityToManySubspaceTopicFilter>;
+  /** Some related `subspaceTopicsByTopicIdConnection` exist. */
+  subspaceTopicsByTopicIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `typeIds` field. */
   typeIds?: InputMaybe<UuidListFilter>;
   /** Filter by the object’s `updatedAt` field. */
@@ -708,6 +766,26 @@ export type EntityToManyRelationFilter = {
   none?: InputMaybe<RelationFilter>;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<RelationFilter>;
+};
+
+/** A filter to be used against many `Space` object types. All fields are combined with a logical ‘and.’ */
+export type EntityToManySpaceFilter = {
+  /** Every related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SpaceFilter>;
+  /** No related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SpaceFilter>;
+  /** Some related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SpaceFilter>;
+};
+
+/** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
+export type EntityToManySubspaceTopicFilter = {
+  /** Every related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SubspaceTopicFilter>;
+  /** No related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SubspaceTopicFilter>;
+  /** Some related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SubspaceTopicFilter>;
 };
 
 /** A filter to be used against many `Value` object types. All fields are combined with a logical ‘and.’ */
@@ -1355,6 +1433,12 @@ export enum ProposalActionType {
   Publish = 'PUBLISH',
   RemoveEditor = 'REMOVE_EDITOR',
   RemoveMember = 'REMOVE_MEMBER',
+  SubspaceRelated = 'SUBSPACE_RELATED',
+  SubspaceTopicDeclared = 'SUBSPACE_TOPIC_DECLARED',
+  SubspaceTopicRemoved = 'SUBSPACE_TOPIC_REMOVED',
+  SubspaceUnrelated = 'SUBSPACE_UNRELATED',
+  SubspaceUnverified = 'SUBSPACE_UNVERIFIED',
+  SubspaceVerified = 'SUBSPACE_VERIFIED',
   Unflag = 'UNFLAG',
   UnflagEditor = 'UNFLAG_EDITOR',
   Unknown = 'UNKNOWN',
@@ -1922,6 +2006,13 @@ export type Query = Node & {
   subspace?: Maybe<Subspace>;
   /** Reads a single `Subspace` using its globally unique `ID`. */
   subspaceByNodeId?: Maybe<Subspace>;
+  subspaceTopic?: Maybe<SubspaceTopic>;
+  /** Reads a single `SubspaceTopic` using its globally unique `ID`. */
+  subspaceTopicByNodeId?: Maybe<SubspaceTopic>;
+  /** Reads a set of `SubspaceTopic`. */
+  subspaceTopics?: Maybe<Array<SubspaceTopic>>;
+  /** Reads and enables pagination through a set of `SubspaceTopic`. */
+  subspaceTopicsConnection?: Maybe<SubspaceTopicsConnection>;
   /** Reads a set of `Subspace`. */
   subspaces?: Maybe<Array<Subspace>>;
   /** Reads and enables pagination through a set of `Subspace`. */
@@ -2642,12 +2733,49 @@ export type QuerySpacesConnectionArgs = {
 export type QuerySubspaceArgs = {
   childSpaceId: Scalars['UUID']['input'];
   parentSpaceId: Scalars['UUID']['input'];
+  type: SubspaceType;
 };
 
 
 /** The root query type which gives access points into the data universe. */
 export type QuerySubspaceByNodeIdArgs = {
   nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspaceTopicArgs = {
+  spaceId: Scalars['UUID']['input'];
+  topicId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspaceTopicByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspaceTopicsArgs = {
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspaceTopicsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
 };
 
 
@@ -3246,6 +3374,20 @@ export type Space = Node & {
   relationsByToSpaceIdConnection: RelationsConnection;
   /** Reads and enables pagination through a set of `Relation`. */
   relationsConnection: RelationsConnection;
+  /** Reads and enables pagination through a set of `SubspaceTopic`. */
+  subspaceTopics: Array<SubspaceTopic>;
+  /** Reads and enables pagination through a set of `SubspaceTopic`. */
+  subspaceTopicsConnection: SubspaceTopicsConnection;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceIdConnection: SubspacesConnection;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceIdConnection: SubspacesConnection;
+  /** Reads a single `Entity` that is related to this `Space`. */
+  topic?: Maybe<Entity>;
   topicId?: Maybe<Scalars['UUID']['output']>;
   type: SpaceTypes;
   /** Reads and enables pagination through a set of `Value`. */
@@ -3402,6 +3544,69 @@ export type SpaceRelationsConnectionArgs = {
 };
 
 
+export type SpaceSubspaceTopicsArgs = {
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
+};
+
+
+export type SpaceSubspaceTopicsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceTopicCondition>;
+  filter?: InputMaybe<SubspaceTopicFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
+};
+
+
+export type SpaceSubspacesByChildSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
 export type SpaceValuesArgs = {
   condition?: InputMaybe<ValueCondition>;
   filter?: InputMaybe<ValueFilter>;
@@ -3474,6 +3679,22 @@ export type SpaceFilter = {
   relationsConnection?: InputMaybe<SpaceToManyRelationFilter>;
   /** Some related `relationsConnection` exist. */
   relationsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspaceTopicsConnection` relation. */
+  subspaceTopicsConnection?: InputMaybe<SpaceToManySubspaceTopicFilter>;
+  /** Some related `subspaceTopicsConnection` exist. */
+  subspaceTopicsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspacesByChildSpaceIdConnection` relation. */
+  subspacesByChildSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByChildSpaceIdConnection` exist. */
+  subspacesByChildSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspacesByParentSpaceIdConnection` relation. */
+  subspacesByParentSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByParentSpaceIdConnection` exist. */
+  subspacesByParentSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `topic` relation. */
+  topic?: InputMaybe<EntityFilter>;
+  /** A related `topic` exists. */
+  topicExists?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `topicId` field. */
   topicId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `type` field. */
@@ -3605,6 +3826,26 @@ export type SpaceToManyRelationFilter = {
   none?: InputMaybe<RelationFilter>;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<RelationFilter>;
+};
+
+/** A filter to be used against many `Subspace` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManySubspaceFilter = {
+  /** Every related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SubspaceFilter>;
+  /** No related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SubspaceFilter>;
+  /** Some related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SubspaceFilter>;
+};
+
+/** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManySubspaceTopicFilter = {
+  /** Every related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SubspaceTopicFilter>;
+  /** No related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SubspaceTopicFilter>;
+  /** Some related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SubspaceTopicFilter>;
 };
 
 /** A filter to be used against many `Value` object types. All fields are combined with a logical ‘and.’ */
@@ -3765,10 +4006,15 @@ export type StringFilter = {
 
 export type Subspace = Node & {
   __typename?: 'Subspace';
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  childSpace?: Maybe<Space>;
   childSpaceId: Scalars['UUID']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  parentSpace?: Maybe<Space>;
   parentSpaceId: Scalars['UUID']['output'];
+  type: SubspaceType;
 };
 
 /**
@@ -3780,20 +4026,133 @@ export type SubspaceCondition = {
   childSpaceId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `parentSpaceId` field. */
   parentSpaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `type` field. */
+  type?: InputMaybe<SubspaceType>;
 };
 
 /** A filter to be used against `Subspace` object types. All fields are combined with a logical ‘and.’ */
 export type SubspaceFilter = {
   /** Checks for all expressions in this list. */
   and?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `childSpace` relation. */
+  childSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `childSpaceId` field. */
   childSpaceId?: InputMaybe<UuidFilter>;
   /** Negates the expression. */
   not?: InputMaybe<SubspaceFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `parentSpace` relation. */
+  parentSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `parentSpaceId` field. */
   parentSpaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `type` field. */
+  type?: InputMaybe<SubspaceTypeFilter>;
+};
+
+export type SubspaceTopic = Node & {
+  __typename?: 'SubspaceTopic';
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  /** Reads a single `Space` that is related to this `SubspaceTopic`. */
+  space?: Maybe<Space>;
+  spaceId: Scalars['UUID']['output'];
+  /** Reads a single `Entity` that is related to this `SubspaceTopic`. */
+  topic?: Maybe<Entity>;
+  topicId: Scalars['UUID']['output'];
+};
+
+/**
+ * A condition to be used against `SubspaceTopic` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type SubspaceTopicCondition = {
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `topicId` field. */
+  topicId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+/** A filter to be used against `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
+export type SubspaceTopicFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<SubspaceTopicFilter>>;
+  /** Negates the expression. */
+  not?: InputMaybe<SubspaceTopicFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<SubspaceTopicFilter>>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `topic` relation. */
+  topic?: InputMaybe<EntityFilter>;
+  /** Filter by the object’s `topicId` field. */
+  topicId?: InputMaybe<UuidFilter>;
+};
+
+/** A connection to a list of `SubspaceTopic` values. */
+export type SubspaceTopicsConnection = {
+  __typename?: 'SubspaceTopicsConnection';
+  /** A list of edges which contains the `SubspaceTopic` and cursor to aid in pagination. */
+  edges: Array<SubspaceTopicsEdge>;
+  /** A list of `SubspaceTopic` objects. */
+  nodes: Array<SubspaceTopic>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `SubspaceTopic` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `SubspaceTopic` edge in the connection. */
+export type SubspaceTopicsEdge = {
+  __typename?: 'SubspaceTopicsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `SubspaceTopic` at the end of the edge. */
+  node: SubspaceTopic;
+};
+
+/** Methods to use when ordering `SubspaceTopic`. */
+export enum SubspaceTopicsOrderBy {
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  TopicIdAsc = 'TOPIC_ID_ASC',
+  TopicIdDesc = 'TOPIC_ID_DESC'
+}
+
+export enum SubspaceType {
+  Related = 'RELATED',
+  Verified = 'VERIFIED'
+}
+
+/** A filter to be used against SubspaceType fields. All fields are combined with a logical ‘and.’ */
+export type SubspaceTypeFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<SubspaceType>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<SubspaceType>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<SubspaceType>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<SubspaceType>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<SubspaceType>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<SubspaceType>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<SubspaceType>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<SubspaceType>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<SubspaceType>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<SubspaceType>>;
 };
 
 /** A connection to a list of `Subspace` values. */
@@ -3826,7 +4185,9 @@ export enum SubspacesOrderBy {
   ParentSpaceIdAsc = 'PARENT_SPACE_ID_ASC',
   ParentSpaceIdDesc = 'PARENT_SPACE_ID_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  TypeAsc = 'TYPE_ASC',
+  TypeDesc = 'TYPE_DESC'
 }
 
 /** A filter to be used against Time fields. All fields are combined with a logical ‘and.’ */

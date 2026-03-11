@@ -7,15 +7,6 @@ import { validateSpaceId } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 
-interface SubspaceNode {
-  childSpaceId: string;
-  type: string;
-}
-
-interface SubspacesResult {
-  subspaces: SubspaceNode[];
-}
-
 interface ValueNode {
   propertyId: string;
   text: string | null;
@@ -28,7 +19,7 @@ interface RelationNode {
   } | null;
 }
 
-interface SpaceNode {
+interface ChildSpaceNode {
   id: string;
   page: {
     name: string | null;
@@ -37,11 +28,15 @@ interface SpaceNode {
   } | null;
 }
 
-interface SpacesResult {
-  spaces: SpaceNode[];
+interface SubspaceNode {
+  childSpaceId: string;
+  type: string;
+  childSpace: ChildSpaceNode | null;
 }
 
-const SPACE_QUERY_BATCH_SIZE = 100;
+interface SubspacesResult {
+  subspaces: SubspaceNode[];
+}
 
 const toHex = (uuid: string) => uuid.replace(/-/g, '');
 
@@ -74,23 +69,18 @@ const activeSubspacesQuery = (spaceId: string) => `
     subspaces(filter: { parentSpaceId: { is: ${JSON.stringify(spaceId)} }, type: { in: [VERIFIED, RELATED] } }) {
       childSpaceId
       type
-    }
-  }
-`;
-
-const spacesByIdsQuery = (spaceIds: string[]) => `
-  {
-    spaces(filter: { id: { in: ${JSON.stringify(spaceIds)} } }) {
-      id
-      page {
-        name
-        description
-        relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-          typeId
-          toEntity {
-            valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-              propertyId
-              text
+      childSpace {
+        id
+        page {
+          name
+          description
+          relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+            typeId
+            toEntity {
+              valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                propertyId
+                text
+              }
             }
           }
         }
@@ -111,22 +101,12 @@ function parseSubspaceType(type: string): ActiveSubspace['relationType'] | null 
   return null;
 }
 
-function chunkIds(ids: string[], chunkSize: number): string[][] {
-  const chunks: string[][] = [];
-
-  for (let i = 0; i < ids.length; i += chunkSize) {
-    chunks.push(ids.slice(i, i + chunkSize));
-  }
-
-  return chunks;
-}
-
 export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubspace[]> {
   if (!validateSpaceId(spaceId)) {
     throw new Error(`Invalid space ID provided for active subspaces fetch: ${spaceId}`);
   }
 
-  const subspacesResultOrError = await Effect.runPromise(
+  const resultOrError = await Effect.runPromise(
     Effect.either(
       graphql<SubspacesResult>({
         query: activeSubspacesQuery(spaceId),
@@ -135,8 +115,8 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
     )
   );
 
-  if (Either.isLeft(subspacesResultOrError)) {
-    const error = subspacesResultOrError.left;
+  if (Either.isLeft(resultOrError)) {
+    const error = resultOrError.left;
 
     switch (error._tag) {
       case 'AbortError':
@@ -147,44 +127,7 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
     }
   }
 
-  const subspaces = subspacesResultOrError.right.subspaces;
-  if (subspaces.length === 0) return [];
-
-  const uniqueSpaceIds = Array.from(new Set(subspaces.map(subspace => subspace.childSpaceId)));
-
-  const spaceMetaById = new Map<string, { name: string; description: string | null; image: string }>();
-  const idChunks = chunkIds(uniqueSpaceIds, SPACE_QUERY_BATCH_SIZE);
-
-  for (const idChunk of idChunks) {
-    const spacesResultOrError = await Effect.runPromise(
-      Effect.either(
-        graphql<SpacesResult>({
-          query: spacesByIdsQuery(idChunk),
-          endpoint: Environment.getConfig().api,
-        })
-      )
-    );
-
-    if (Either.isLeft(spacesResultOrError)) {
-      const error = spacesResultOrError.left;
-
-      switch (error._tag) {
-        case 'AbortError':
-          throw error;
-        default:
-          console.error(`${error._tag}: Unable to fetch active subspace metadata for space ${spaceId}`);
-          throw new Error(`Failed to fetch active subspace metadata for space ${spaceId}`);
-      }
-    }
-
-    for (const space of spacesResultOrError.right.spaces) {
-      spaceMetaById.set(space.id, {
-        name: space.page?.name ?? 'Untitled',
-        description: space.page?.description ?? null,
-        image: resolveSpaceImage(space.page?.relationsList ?? []),
-      });
-    }
-  }
+  const subspaces = resultOrError.right.subspaces;
 
   return subspaces
     .map(subspace => {
@@ -195,13 +138,13 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
         return null;
       }
 
-      const meta = spaceMetaById.get(subspace.childSpaceId);
+      const page = subspace.childSpace?.page;
 
       return {
         id: subspace.childSpaceId,
-        name: meta?.name ?? 'Untitled',
-        description: meta?.description ?? null,
-        image: meta?.image ?? PLACEHOLDER_SPACE_IMAGE,
+        name: page?.name ?? 'Untitled',
+        description: page?.description ?? null,
+        image: resolveSpaceImage(page?.relationsList ?? []),
         relationType,
       };
     })
