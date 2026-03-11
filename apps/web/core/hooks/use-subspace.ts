@@ -11,6 +11,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { uuidToHex } from '~/core/id/normalize';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
@@ -258,7 +259,7 @@ function parseTopicEntityId(topicEntityId?: string): string {
     throw new Error(`Invalid topic entity ID: expected UUID format, got ${topicEntityId}`);
   }
 
-  return topicEntityId.replace(/-/g, '').toLowerCase();
+  return uuidToHex(topicEntityId);
 }
 
 /**
