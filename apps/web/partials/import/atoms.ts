@@ -77,8 +77,11 @@ export const rowOverridesAtom = atom<Record<number, { entityId: string; name: st
 /** Snapshot of merged resolved rows after generation, keyed by row index. */
 export const resolvedRowsSnapshotAtom = atom<Map<number, { entityId: string; name: string }>>(new Map());
 
+/** Snapshot of merged resolved types after generation, keyed by raw CSV type string. */
+export const resolvedTypesSnapshotAtom = atom<Map<string, { id: string; name: string; isNew?: boolean }>>(new Map());
+
 /** Snapshot of merged resolved relation entities after generation, keyed by `${propertyId}::${token}`. */
-export const resolvedEntitiesSnapshotAtom = atom<Map<string, { id: string; name: string; status: string }>>(new Map());
+export const resolvedEntitiesSnapshotAtom = atom<Map<string, { id: string; name: string; status: string; typeId?: string; typeName?: string | null }>>(new Map());
 
 export const actionsCountAtom = atom(get => {
   const values = get(valuesAtom);

@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
-import { getRelationsByToEntityIds, getResults } from '~/core/io/queries';
+import { getResults } from '~/core/io/queries';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { RelationPropertyMeta, ResolvedEntity } from './import-generation';
@@ -68,93 +68,6 @@ async function resolveExactRelationMatch(params: {
 function getCandidateTopSpaceRank(spaceIds: string[]): number {
   if (spaceIds.length === 0) return Number.MAX_SAFE_INTEGER;
   return Math.min(...spaceIds.map(getSpaceRank));
-}
-
-async function resolveBestEntityMatch(params: {
-  name: string;
-  typeIds: string[];
-  guard: ResolutionGuard;
-}): Promise<ResolvedEntityMatch> {
-  const { name, typeIds, guard } = params;
-  const normalizedName = name.trim().toLowerCase();
-
-  const results = await Effect.runPromise(
-    getResults({
-      query: name,
-      typeIds,
-    })
-  );
-
-  if (!guard.isCurrent()) return { status: 'unresolved', reason: 'ambiguous' };
-
-  const exactMatches = results.filter(result => {
-    const matchesName = (result.name ?? '').trim().toLowerCase() === normalizedName;
-    const matchesType = result.types.some(t => typeIds.includes(t.id));
-    return matchesName && matchesType;
-  });
-
-  if (exactMatches.length === 0) {
-    return { status: 'unresolved', reason: 'none' };
-  }
-
-  const withSpaceRank = exactMatches.map(candidate => {
-    return {
-      candidate,
-      spaceRank: getCandidateTopSpaceRank(candidate.spaces.map(s => s.spaceId)),
-    };
-  });
-
-  const bestSpaceRank = Math.min(...withSpaceRank.map(c => c.spaceRank));
-  const inBestRank = withSpaceRank.filter(c => c.spaceRank === bestSpaceRank);
-
-  if (inBestRank.length === 1) {
-    const only = inBestRank[0].candidate;
-    return { status: 'resolved', entity: { id: only.id, name: only.name ?? name } };
-  }
-
-  const backlinks = await Effect.runPromise(
-    getRelationsByToEntityIds(
-      inBestRank.map(c => c.candidate.id),
-      undefined
-    )
-  );
-  if (!guard.isCurrent()) return { status: 'unresolved', reason: 'ambiguous' };
-
-  const backlinksByEntityId = new Map<string, number>();
-  for (const relation of backlinks) {
-    backlinksByEntityId.set(relation.toEntityId, (backlinksByEntityId.get(relation.toEntityId) ?? 0) + 1);
-  }
-
-  let winner: (typeof inBestRank)[number] | null = null;
-  let winnerCount = -1;
-
-  for (const candidate of inBestRank) {
-    const count = backlinksByEntityId.get(candidate.candidate.id) ?? 0;
-    if (count > winnerCount) {
-      winner = candidate;
-      winnerCount = count;
-    }
-  }
-
-  if (!winner) {
-    return { status: 'unresolved', reason: 'ambiguous' };
-  }
-
-  // Deterministic fallback in backlink ties: smallest entity id wins.
-  const tied = inBestRank.filter(
-    candidate => (backlinksByEntityId.get(candidate.candidate.id) ?? 0) === winnerCount
-  );
-  if (tied.length > 1) {
-    winner = tied.sort((a, b) => a.candidate.id.localeCompare(b.candidate.id))[0];
-  }
-
-  return {
-    status: 'resolved',
-    entity: {
-      id: winner.candidate.id,
-      name: winner.candidate.name ?? name,
-    },
-  };
 }
 
 export async function resolveRelationEntities(params: {

@@ -2,7 +2,7 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -15,6 +15,7 @@ import {
   relationsAtom,
   resolvedEntitiesSnapshotAtom,
   resolvedRowsSnapshotAtom,
+  resolvedTypesSnapshotAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   stepAtom,
@@ -49,6 +50,10 @@ export function useImportGenerate(spaceId: string) {
   const setUnresolvedLinks = useSetAtom(unresolvedLinksAtom);
   const setResolvedRowsSnapshot = useSetAtom(resolvedRowsSnapshotAtom);
   const setResolvedEntitiesSnapshot = useSetAtom(resolvedEntitiesSnapshotAtom);
+  const setResolvedTypesSnapshot = useSetAtom(resolvedTypesSnapshotAtom);
+  const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
+  const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
+  const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
   const setStep = useSetAtom(stepAtom);
   const { clearGeneratedChanges } = useImportSession(spaceId);
 
@@ -161,10 +166,17 @@ export function useImportGenerate(spaceId: string) {
       setRelations(newRelations);
       setUnresolvedLinks(unresolvedLinks);
       setResolvedRowsSnapshot(mergedResolvedRows);
-      const entitySnapshot = new Map<string, { id: string; name: string; status: string }>();
+      setResolvedTypesSnapshot(mergedResolvedTypes);
+      const entitySnapshot = new Map<string, { id: string; name: string; status: string; typeId?: string; typeName?: string | null }>();
       for (const [key, entity] of mergedResolvedEntities) {
         if (entity.status !== 'ambiguous') {
-          entitySnapshot.set(key, { id: entity.id, name: entity.name, status: entity.status });
+          entitySnapshot.set(key, {
+            id: entity.id,
+            name: entity.name,
+            status: entity.status,
+            typeId: entity.status === 'created' ? entity.typeId : undefined,
+            typeName: entity.status === 'created' ? entity.typeName : undefined,
+          });
         }
       }
       setResolvedEntitiesSnapshot(entitySnapshot);
@@ -199,9 +211,146 @@ export function useImportGenerate(spaceId: string) {
     setUnresolvedLinks,
     setResolvedRowsSnapshot,
     setResolvedEntitiesSnapshot,
+    setResolvedTypesSnapshot,
     spaceId,
     store,
   ]);
 
-  return { generate, isLoading, canGenerate };
+  const values = useAtomValue(valuesAtom);
+  const relations = useAtomValue(relationsAtom);
+
+  // Refs for values that change frequently so rebuild stays stable
+  const rebuildContextRef = useRef({
+    values,
+    relations,
+    relationOverrides,
+    typeOverrides,
+    rowOverrides,
+    resolvedEntitiesSnapshot,
+    resolvedTypesSnapshot,
+    resolvedRowsSnapshot,
+    records,
+    nameColIdx,
+    schema,
+    extraProperties,
+    columnMapping,
+    typesColumnIndex,
+    selectedType,
+  });
+  rebuildContextRef.current = {
+    values,
+    relations,
+    relationOverrides,
+    typeOverrides,
+    rowOverrides,
+    resolvedEntitiesSnapshot,
+    resolvedTypesSnapshot,
+    resolvedRowsSnapshot,
+    records,
+    nameColIdx,
+    schema,
+    extraProperties,
+    columnMapping,
+    typesColumnIndex,
+    selectedType,
+  };
+
+  /**
+   * Incremental rebuild: merge snapshots with overrides and re-run the pure
+   * build functions. No network calls — used when the user resolves a single
+   * relation token, type, or entity row.
+   *
+   * Reads all inputs from a ref so the callback identity is stable and does
+   * not trigger cascading re-renders.
+   */
+  const rebuild = useCallback(() => {
+    const ctx = rebuildContextRef.current;
+    const dataRows = ctx.records
+      .slice(1)
+      .filter(row => Array.isArray(row) && row.some(cell => (cell ?? '').trim() !== ''));
+    if (dataRows.length === 0 || ctx.nameColIdx === undefined) return;
+
+    const propertyLookup = {
+      schema: ctx.schema,
+      extraProperties: ctx.extraProperties,
+      getProperty: (propertyId: string) => store.getProperty(propertyId),
+    };
+
+    // Merge relation entity overrides into the snapshot
+    const mergedEntities = new Map<string, import('./import-generation').ResolvedEntity>(
+      ctx.resolvedEntitiesSnapshot as Map<string, import('./import-generation').ResolvedEntity>
+    );
+    for (const [key, override] of Object.entries(ctx.relationOverrides)) {
+      mergedEntities.set(key, override);
+    }
+
+    // Merge type overrides into the snapshot
+    const mergedTypes = new Map(ctx.resolvedTypesSnapshot);
+    for (const [rawType, override] of Object.entries(ctx.typeOverrides)) {
+      mergedTypes.set(rawType, override);
+    }
+
+    // Merge row overrides into the snapshot
+    const mergedRows = new Map(ctx.resolvedRowsSnapshot);
+    for (const [rowIdxStr, override] of Object.entries(ctx.rowOverrides)) {
+      mergedRows.set(Number(rowIdxStr), override);
+    }
+
+    const unresolvedLinks = buildUnresolvedLinksByCell({
+      dataRows,
+      columnMapping: ctx.columnMapping,
+      nameColIdx: ctx.nameColIdx,
+      typesColumnIndex: ctx.typesColumnIndex,
+      resolvedTypes: mergedTypes,
+      resolvedRows: mergedRows,
+      resolvedEntities: mergedEntities,
+      propertyLookup,
+    });
+
+    const built = buildGeneratedRows({
+      dataRows,
+      columnMapping: ctx.columnMapping,
+      resolvedRows: mergedRows,
+      selectedType: ctx.selectedType,
+      typesColumnIndex: ctx.typesColumnIndex,
+      resolvedTypes: mergedTypes,
+      resolvedEntities: mergedEntities,
+      spaceId,
+      propertyLookup,
+    });
+
+    // Clear previous GeoStore entries (without wiping snapshots)
+    store.clearLocalChangesByIds({
+      spaceId,
+      valueIds: ctx.values.map(v => v.id),
+      relationIds: ctx.relations.map(r => r.id),
+    });
+
+    // Write new entries to GeoStore
+    built.values.forEach(v => store.setValue(v));
+    built.relations.forEach(r => store.setRelation(r));
+
+    setValues(built.values);
+    setRelations(built.relations);
+    setUnresolvedLinks(unresolvedLinks);
+  }, [store, spaceId, setValues, setRelations, setUnresolvedLinks]);
+
+  // Track whether initial generation has completed so we know when snapshots
+  // are available for incremental rebuilds.
+  const hasGeneratedRef = useRef(false);
+
+  useEffect(() => {
+    if (resolvedRowsSnapshot.size > 0 || resolvedEntitiesSnapshot.size > 0 || resolvedTypesSnapshot.size > 0) {
+      hasGeneratedRef.current = true;
+    }
+  }, [resolvedRowsSnapshot, resolvedEntitiesSnapshot, resolvedTypesSnapshot]);
+
+  // When overrides change after initial generation, do an incremental rebuild
+  // instead of a full re-resolve.
+  useEffect(() => {
+    if (!hasGeneratedRef.current) return;
+    rebuild();
+  }, [relationOverrides, typeOverrides, rowOverrides, rebuild]);
+
+  return { generate, rebuild, isLoading, canGenerate };
 }
