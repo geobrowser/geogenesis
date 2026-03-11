@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import cx from 'classnames';
 
 import * as React from 'react';
 
@@ -31,6 +32,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
 import { OrderDots } from '~/design-system/icons/order-dots';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -53,6 +55,7 @@ interface Props {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   onDismissPlaceholder?: () => void;
+  onDeleteRow?: (row: PowerToolsRow) => void;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
 }
@@ -305,6 +308,7 @@ export function PowerToolsTable({
   onChangeEntry,
   onLinkEntry,
   onDismissPlaceholder,
+  onDeleteRow,
   onOpenEntityPanel,
   source,
 }: Props) {
@@ -486,9 +490,11 @@ export function PowerToolsTable({
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={node => rowVirtualizer.measureElement(node)}
-              className={`absolute top-0 left-0 border-b border-grey-02 ${
-                row.placeholder ? 'bg-grey-01' : !isEditing ? 'bg-grey-01/50' : 'hover:bg-grey-01'
-              }`}
+              className={cx('group absolute top-0 left-0 border-b border-grey-02', {
+                'bg-grey-01': row.placeholder,
+                'bg-grey-01/50': !row.placeholder && !isEditing,
+                'hover:bg-grey-01': !row.placeholder && isEditing,
+              })}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 width: '100%',
@@ -503,7 +509,9 @@ export function PowerToolsTable({
                 }}
               >
                 {columnLayout.columns.map(({ property }) => {
-                  const isPlaceholderNameCell = row.placeholder && isEditing && property.id === SystemIds.NAME_PROPERTY;
+                  const isNameCell = property.id === SystemIds.NAME_PROPERTY;
+                  const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;
+                  const isDeleteableNameCell = !row.placeholder && isEditing && isNameCell && onDeleteRow;
                   return (
                     <div key={`${rowId}-${property.id}`} className="border-r border-grey-02 px-4 py-2">
                       <div className="flex w-full items-start gap-2 overflow-visible">
@@ -527,6 +535,17 @@ export function PowerToolsTable({
                             aria-label="Cancel new row"
                           >
                             <Close />
+                          </button>
+                        )}
+                        {isDeleteableNameCell && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteRow(row)}
+                            className="mt-0.5 ml-auto hidden h-6 w-6 shrink-0 items-center justify-center rounded-sm text-grey-04 group-hover:flex hover:bg-grey-02 hover:text-red-01"
+                            title="Delete row"
+                            aria-label="Delete row"
+                          >
+                            <Trash />
                           </button>
                         )}
                       </div>
