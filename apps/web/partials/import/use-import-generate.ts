@@ -29,6 +29,7 @@ import {
   buildUnresolvedLinksByCell,
   collectRelationCells,
   createGenerationTracker,
+  crossReferenceRelationsWithRows,
 } from './import-generation';
 import { resolveRelationEntities, resolveRowsByNameAndType, resolveTypesForRows } from './import-resolution';
 import { useImportSchema } from './use-import-schema';
@@ -131,6 +132,19 @@ export function useImportGenerate(spaceId: string) {
         mergedResolvedRows.set(Number(rowIndexStr), override);
       }
 
+      // Unify relation entities that were auto-created with rows from the same import
+      crossReferenceRelationsWithRows({
+        dataRows,
+        nameColIdx,
+        resolvedEntities: mergedResolvedEntities,
+        resolvedRows: mergedResolvedRows,
+        selectedType,
+        typesColumnIndex,
+        resolvedTypes: mergedResolvedTypes,
+        columnMapping,
+        propertyLookup,
+      });
+
       const unresolvedLinks = buildUnresolvedLinksByCell({
         dataRows,
         columnMapping,
@@ -152,6 +166,7 @@ export function useImportGenerate(spaceId: string) {
         resolvedEntities: mergedResolvedEntities,
         spaceId,
         propertyLookup,
+        getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
       });
 
       if (!generationTrackerRef.current.isCurrent(generationId)) return;
@@ -296,6 +311,19 @@ export function useImportGenerate(spaceId: string) {
       mergedRows.set(Number(rowIdxStr), override);
     }
 
+    // Unify relation entities that were auto-created with rows from the same import
+    crossReferenceRelationsWithRows({
+      dataRows,
+      nameColIdx: ctx.nameColIdx,
+      resolvedEntities: mergedEntities,
+      resolvedRows: mergedRows,
+      selectedType: ctx.selectedType,
+      typesColumnIndex: ctx.typesColumnIndex,
+      resolvedTypes: mergedTypes,
+      columnMapping: ctx.columnMapping,
+      propertyLookup,
+    });
+
     const unresolvedLinks = buildUnresolvedLinksByCell({
       dataRows,
       columnMapping: ctx.columnMapping,
@@ -317,6 +345,7 @@ export function useImportGenerate(spaceId: string) {
       resolvedEntities: mergedEntities,
       spaceId,
       propertyLookup,
+      getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
     });
 
     // Clear previous GeoStore entries (without wiping snapshots)

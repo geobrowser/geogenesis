@@ -32,6 +32,8 @@ export type BuildRowsInput = {
   resolvedEntities: Map<string, ResolvedEntity>;
   spaceId: string;
   propertyLookup: PropertyLookup;
+  /** Look up existing relations for an entity to avoid creating duplicates. */
+  getExistingRelations?: (entityId: string) => Relation[];
 };
 
 export function toImportCellKey(rowIndex: number, csvColumnIndex: number): string {
@@ -206,6 +208,106 @@ export function collectRelationCells(params: {
   return relationProps;
 }
 
+/**
+ * Cross-reference resolved relation entities with resolved rows from the same
+ * import. When a relation cell value was auto-created (status `'created'`) but
+ * a row in the import has the same name (case-insensitive) and a compatible
+ * type, reuse the row's entity ID so we don't end up with two entities for the
+ * same thing.
+ *
+ * Mutates `resolvedEntities` in place for matched entries.
+ */
+export function crossReferenceRelationsWithRows(params: {
+  dataRows: string[][];
+  nameColIdx: number;
+  resolvedEntities: Map<string, ResolvedEntity>;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
+  selectedType: { id: string; name: string | null } | null;
+  typesColumnIndex: number | undefined;
+  resolvedTypes: Map<string, { id: string; name: string }>;
+  columnMapping: Record<number, string>;
+  propertyLookup: PropertyLookup;
+}): void {
+  const {
+    dataRows,
+    nameColIdx,
+    resolvedEntities,
+    resolvedRows,
+    selectedType,
+    typesColumnIndex,
+    resolvedTypes,
+    columnMapping,
+    propertyLookup,
+  } = params;
+
+  // Build a lookup: normalizedName → { entityId, typeIds[] } from resolved rows
+  const rowsByName = new Map<string, { entityId: string; name: string; typeIds: string[] }>();
+  for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
+    const resolved = resolvedRows.get(rowIndex);
+    if (!resolved) continue;
+
+    const row = dataRows[rowIndex];
+    const rowName = (row[nameColIdx] ?? '').trim();
+    if (!rowName) continue;
+
+    let rowTypeId: string | null = selectedType?.id ?? null;
+    if (typesColumnIndex !== undefined) {
+      const rawType = (row[typesColumnIndex] ?? '').trim();
+      rowTypeId = rawType ? (resolvedTypes.get(rawType)?.id ?? null) : null;
+    }
+
+    const normalized = rowName.toLowerCase();
+    const existing = rowsByName.get(normalized);
+    if (!existing) {
+      rowsByName.set(normalized, {
+        entityId: resolved.entityId,
+        name: resolved.name,
+        typeIds: rowTypeId ? [rowTypeId] : [],
+      });
+    } else if (rowTypeId && !existing.typeIds.includes(rowTypeId)) {
+      existing.typeIds.push(rowTypeId);
+    }
+  }
+
+  if (rowsByName.size === 0) return;
+
+  // Build a set of type IDs per relation property for matching
+  const propertyTypeIds = new Map<string, string[]>();
+  for (const [, propertyId] of Object.entries(columnMapping)) {
+    if (propertyTypeIds.has(propertyId)) continue;
+    const property = getPropertyFromSources(propertyId, propertyLookup);
+    if (property?.dataType === 'RELATION') {
+      propertyTypeIds.set(propertyId, property.relationValueTypes?.map(t => t.id) ?? []);
+    }
+  }
+
+  // Match created relation entities to import rows
+  for (const [cacheKey, entity] of resolvedEntities) {
+    if (entity.status !== 'created') continue;
+
+    const normalized = entity.name.toLowerCase();
+    const rowMatch = rowsByName.get(normalized);
+    if (!rowMatch) continue;
+
+    // Check type compatibility: the relation property's allowed types should
+    // overlap with the row's type(s)
+    const propertyId = cacheKey.split('::')[0];
+    const allowedTypeIds = propertyTypeIds.get(propertyId) ?? [];
+    const typesCompatible =
+      allowedTypeIds.length === 0 ||
+      rowMatch.typeIds.length === 0 ||
+      rowMatch.typeIds.some(t => allowedTypeIds.includes(t));
+
+    if (typesCompatible) {
+      resolvedEntities.set(cacheKey, {
+        id: rowMatch.entityId,
+        name: rowMatch.name,
+        status: 'found',
+      });
+    }
+  }
+}
+
 export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; relations: Relation[] } {
   const {
     dataRows,
@@ -217,7 +319,24 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
     resolvedEntities,
     spaceId,
     propertyLookup,
+    getExistingRelations,
   } = input;
+
+  // Cache existing relations per entity so we only look them up once
+  const existingRelationsCache = new Map<string, Relation[]>();
+  function getExisting(entityId: string): Relation[] {
+    if (!getExistingRelations) return [];
+    let cached = existingRelationsCache.get(entityId);
+    if (!cached) {
+      cached = getExistingRelations(entityId);
+      existingRelationsCache.set(entityId, cached);
+    }
+    return cached;
+  }
+
+  function hasExistingRelation(fromEntityId: string, typeId: string, toEntityId: string): boolean {
+    return getExisting(fromEntityId).some(r => r.type.id === typeId && r.toEntity.id === toEntityId);
+  }
 
   const values: Value[] = [];
   const relations: Relation[] = [];
@@ -258,7 +377,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
       rowType = rawType ? (resolvedTypes.get(rawType) ?? null) : null;
     }
 
-    if (rowType) {
+    if (rowType && !hasExistingRelation(entityId, SystemIds.TYPES_PROPERTY, rowType.id)) {
       relations.push({
         id: ID.createEntityId(),
         entityId: ID.createEntityId(),
@@ -337,17 +456,19 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
             }
           }
 
-          relations.push({
-            id: ID.createEntityId(),
-            entityId: ID.createEntityId(),
-            type: { id: propertyId, name: property.name ?? '' },
-            fromEntity: { id: entityId, name: rowName },
-            toEntity: { id: resolved.id, name: resolved.name, value: resolved.id },
-            renderableType,
-            spaceId,
-            position: Position.generate(),
-            isLocal: true,
-          });
+          if (!hasExistingRelation(entityId, propertyId, resolved.id)) {
+            relations.push({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              type: { id: propertyId, name: property.name ?? '' },
+              fromEntity: { id: entityId, name: rowName },
+              toEntity: { id: resolved.id, name: resolved.name, value: resolved.id },
+              renderableType,
+              spaceId,
+              position: Position.generate(),
+              isLocal: true,
+            });
+          }
         }
       } else {
         values.push({

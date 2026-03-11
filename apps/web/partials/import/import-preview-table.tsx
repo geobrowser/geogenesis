@@ -415,10 +415,10 @@ export function ImportPreviewTable({
                     return (
                       <div
                         key={`${virtualRow.index}-${col.csvColumnIndex}`}
-                        className="border-r border-grey-02 px-4 py-2"
+                        className="overflow-hidden border-r border-grey-02 px-4 py-2"
                       >
                         {isRelation && value ? (
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2 overflow-hidden">
                             {splitRelationCell(value).map((part, i) => {
                               if (
                                 unresolvedSet?.has(part) &&
@@ -537,7 +537,7 @@ export function ImportPreviewTable({
                             />
                           </div>
                         ) : (
-                          <div className="flex w-full items-start gap-2">
+                          <div className="flex w-full min-w-0 items-start gap-2">
                             {cellFlag?.kind === 'type' && onResolveTypeValue ? (
                               <>
                                 <SelectEntityAsPopover
@@ -663,7 +663,7 @@ export function ImportPreviewTable({
                                 }
                               />
                             ) : (
-                              <Text variant="tableCell" className="wrap-break-word">
+                              <Text variant="tableCell" className="truncate">
                                 {value || '—'}
                               </Text>
                             )}
