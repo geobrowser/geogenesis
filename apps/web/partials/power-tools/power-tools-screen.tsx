@@ -1,6 +1,7 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { cx } from 'class-variance-authority';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -21,8 +22,11 @@ import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
+import { Eye } from '~/design-system/icons/eye';
+import { EyeHide } from '~/design-system/icons/eye-hide';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
@@ -171,6 +175,8 @@ export function PowerToolsScreen() {
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
+  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
 
   const shouldShowPlaceholder =
     isEditing &&
@@ -340,6 +346,18 @@ export function PowerToolsScreen() {
     router.replace(query ? `${safePathname}?${query}` : safePathname);
   }, [pathname, router, searchParams]);
 
+  const toggleColumnVisibility = React.useCallback((propertyId: string) => {
+    setHiddenColumnIds(prev => {
+      const next = new Set(prev);
+      if (next.has(propertyId)) {
+        next.delete(propertyId);
+      } else {
+        next.add(propertyId);
+      }
+      return next;
+    });
+  }, []);
+
   const isLoading = data.isInitialLoading;
 
   if (data.sourceType === 'RELATIONS') {
@@ -393,6 +411,33 @@ export function PowerToolsScreen() {
         </div>
         <div className="flex items-center gap-2">
           <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
+          <Menu
+            open={isColumnMenuOpen}
+            onOpenChange={setIsColumnMenuOpen}
+            className="w-[200px]!"
+            trigger={
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
+                title="Toggle columns"
+              >
+                <Eye />
+              </div>
+            }
+          >
+            <div className="max-h-[320px] overflow-y-auto py-1">
+              {data.properties.map(property => {
+                const isHidden = hiddenColumnIds.has(property.id);
+                return (
+                  <MenuItem key={property.id} onClick={() => toggleColumnVisibility(property.id)}>
+                    <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
+                      <span>{property.name || property.id}</span>
+                      {isHidden ? <EyeHide /> : <Eye />}
+                    </div>
+                  </MenuItem>
+                );
+              })}
+            </div>
+          </Menu>
           {isEditing && (
             <button
               onClick={handleAddPlaceholder}
@@ -460,6 +505,8 @@ export function PowerToolsScreen() {
             onDeleteRow={isEditing ? handleDeleteRow : undefined}
             onOpenEntityPanel={handleOpenEntityPanel}
             source={source}
+            hiddenColumnIds={hiddenColumnIds}
+            onHideColumn={toggleColumnVisibility}
           />
         )}
         {panelEntityId && (

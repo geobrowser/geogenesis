@@ -357,6 +357,7 @@
 
   body {
     @apply overflow-x-clip overflow-y-scroll bg-white;
+    scrollbar-gutter: stable;
     font-family: var(--font-calibre), sans-serif;
     text-rendering: optimizeLegibility;
   }
