@@ -10,6 +10,7 @@ import { useSearch } from '~/core/hooks/use-search';
 
 import { NativeGeoImage } from './geo-image';
 import { Search } from './icons/search';
+import { Text } from './text';
 
 export type SelectEntityCompactResult = {
   id: string;
@@ -81,37 +82,6 @@ export function SelectEntityCompact({
     <Popover.Root open={query.trim().length > 0}>
       <Popover.Anchor asChild>
         <div className="w-full space-y-2">
-          {selected.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selected.map(item => (
-                <span
-                  key={item.id}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-grey-02 bg-grey-01 px-2 py-1 text-[0.8125rem] text-text"
-                >
-                  {item.primarySpaceImage != null && (
-                    <span className="inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
-                      <NativeGeoImage
-                        value={item.primarySpaceImage}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    </span>
-                  )}
-                  <span className="max-w-[120px] truncate">{item.name ?? item.id}</span>
-                  {onRemoveSelected && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveSelected(item.id)}
-                      className="shrink-0 rounded p-0.5 hover:bg-grey-02"
-                      aria-label={`Remove ${item.name ?? item.id}`}
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
           <div className="relative w-full">
             <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2">
               <Search />
@@ -127,6 +97,44 @@ export function SelectEntityCompact({
               className="w-full rounded-md border border-grey-02 bg-white py-2 pl-9 pr-3 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
             />
           </div>
+          {selected.length > 0 && (
+            <>
+              <div>
+                <Text variant="body" color="grey-04" className="text-[14px] font-medium">
+                  New attributes
+                </Text>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selected.map(item => (
+                  <span
+                    key={item.id}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-grey-02 bg-white px-2 py-1 text-[0.8125rem] text-text"
+                  >
+                    {item.primarySpaceImage != null && (
+                      <span className="inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
+                        <NativeGeoImage
+                          value={item.primarySpaceImage}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                    )}
+                    <span className="max-w-[120px] truncate">{item.name ?? item.id}</span>
+                    {onRemoveSelected && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveSelected(item.id)}
+                        className="shrink-0 rounded p-0.5 hover:bg-grey-02"
+                        aria-label={`Remove ${item.name ?? item.id}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </Popover.Anchor>
       <Popover.Portal>

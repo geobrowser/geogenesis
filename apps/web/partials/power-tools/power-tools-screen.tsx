@@ -657,7 +657,8 @@ export function PowerToolsScreen() {
               orderedPropertyIds={orderedPropertyIds}
               onReorderColumns={setOrderedPropertyIds}
               selection={selectionProps}
-              onRowClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
+              onRowClick={undefined}
+              onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
             />
           </>
         )}

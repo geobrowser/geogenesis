@@ -74,6 +74,7 @@ interface Props {
   onReorderColumns: (ids: string[]) => void;
   selection?: PowerToolsTableSelectionProps;
   onRowClick?: (entityId: string) => void;
+  onRowDoubleClick?: (entityId: string) => void;
 }
 
 const CHECKBOX_COLUMN_WIDTH = 40;
@@ -348,6 +349,7 @@ export function PowerToolsTable({
   onReorderColumns,
   selection,
   onRowClick,
+  onRowDoubleClick,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -529,11 +531,16 @@ export function PowerToolsTable({
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={node => rowVirtualizer.measureElement(node)}
-              role={onRowClick && !row.placeholder ? 'button' : undefined}
-              tabIndex={onRowClick && !row.placeholder ? 0 : undefined}
+              role={(onRowClick || onRowDoubleClick) && !row.placeholder ? 'button' : undefined}
+              tabIndex={(onRowClick || onRowDoubleClick) && !row.placeholder ? 0 : undefined}
               onClick={
                 onRowClick && !row.placeholder
                   ? () => onRowClick(row.entityId)
+                  : undefined
+              }
+              onDoubleClick={
+                onRowDoubleClick && !row.placeholder
+                  ? () => onRowDoubleClick(row.entityId)
                   : undefined
               }
               onKeyDown={
@@ -547,7 +554,13 @@ export function PowerToolsTable({
                   : undefined
               }
               className={`absolute top-0 left-0 border-b border-grey-02 ${
-                row.placeholder ? 'bg-grey-01' : !isEditing ? 'bg-grey-01/50' : 'hover:bg-grey-01 cursor-pointer'
+                row.placeholder
+                  ? 'bg-grey-01'
+                  : selection && selection.selectedEntityIds.has(row.entityId)
+                    ? 'bg-ctaTertiary'
+                    : !isEditing
+                      ? 'bg-grey-01/50'
+                      : 'hover:bg-grey-01 cursor-pointer'
               }`}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
