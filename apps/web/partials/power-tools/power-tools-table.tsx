@@ -31,6 +31,7 @@ import { ColumnSortState, sortPowerToolsRowsByColumn } from '~/core/utils/column
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
+import { EyeHide } from '~/design-system/icons/eye-hide';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -58,6 +59,8 @@ interface Props {
   onDeleteRow?: (row: PowerToolsRow) => void;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
+  hiddenColumnIds: Set<string>;
+  onHideColumn?: (propertyId: string) => void;
 }
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -251,11 +254,13 @@ function SortableHeaderCell({
   sortState,
   onSort,
   onResizeMouseDown,
+  onHideColumn,
 }: {
   property: Property;
   sortState: ColumnSortState;
   onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
   onResizeMouseDown: (event: React.MouseEvent, propertyId: string) => void;
+  onHideColumn?: (propertyId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: property.id,
@@ -277,7 +282,7 @@ function SortableHeaderCell({
       <div
         {...attributes}
         {...listeners}
-        className="hover:text-grey-05 mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 hover:bg-grey-02 active:cursor-grabbing"
+        className="hover:text-grey-05 mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 active:cursor-grabbing"
         title="Drag to reorder column"
       >
         <OrderDots color="currentColor" />
@@ -289,6 +294,17 @@ function SortableHeaderCell({
         onSort={onSort}
         variant="metadata"
       />
+      {onHideColumn && (
+        <button
+          type="button"
+          onClick={() => onHideColumn(property.id)}
+          className="ml-2 flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
+          title="Hide column"
+          aria-label="Hide column"
+        >
+          <EyeHide />
+        </button>
+      )}
       <div
         className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
         onMouseDown={e => onResizeMouseDown(e, property.id)}
@@ -311,6 +327,8 @@ export function PowerToolsTable({
   onDeleteRow,
   onOpenEntityPanel,
   source,
+  hiddenColumnIds,
+  onHideColumn,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -336,8 +354,11 @@ export function PowerToolsTable({
 
   const orderedProperties = React.useMemo(() => {
     const byId = new Map(properties.map(p => [p.id, p]));
-    return orderedPropertyIds.map(id => byId.get(id)).filter((p): p is Property => Boolean(p));
-  }, [properties, orderedPropertyIds]);
+    return orderedPropertyIds
+      .filter(id => !hiddenColumnIds.has(id))
+      .map(id => byId.get(id))
+      .filter((p): p is Property => Boolean(p));
+  }, [properties, orderedPropertyIds, hiddenColumnIds]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -466,6 +487,7 @@ export function PowerToolsTable({
                   sortState={sortState}
                   onSort={setSortState}
                   onResizeMouseDown={handleMouseDown}
+                  onHideColumn={onHideColumn}
                 />
               ))}
             </div>
@@ -541,7 +563,7 @@ export function PowerToolsTable({
                           <button
                             type="button"
                             onClick={() => onDeleteRow(row)}
-                            className="mt-0.5 ml-auto hidden h-6 w-6 shrink-0 items-center justify-center rounded-sm text-grey-04 group-hover:flex hover:bg-grey-02 hover:text-red-01"
+                            className="-my-1 mt-0.5 ml-auto hidden h-6 w-6 shrink-0 items-center justify-center rounded-sm text-grey-04 group-hover:flex hover:bg-grey-02 hover:text-red-01"
                             title="Delete row"
                             aria-label="Delete row"
                           >
