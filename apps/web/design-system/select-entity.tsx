@@ -484,7 +484,7 @@ export const SelectEntity = ({
                                     <div className="flex max-w-full items-center gap-1.5">
                                       <span className="truncate text-resultTitle text-text">{result.name}</span>
                                       {selectedEntityId === result.id && (
-                                        <span className="shrink-0 text-[0.6875rem] text-grey-04">Currently selected</span>
+                                        <span className="shrink-0 text-[0.6875rem] text-purple">Currently selected</span>
                                       )}
                                     </div>
                                     <div className="mt-1.5 flex items-center gap-1.5">

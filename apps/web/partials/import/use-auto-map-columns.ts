@@ -14,8 +14,7 @@ import { columnMappingAtom, extraPropertiesAtom, headersAtom, typesColumnIndexAt
 import { hydrateRelationValueTypes } from './import-generation';
 
 /**
- * Auto-maps unmapped CSV columns to existing properties in the space (by exact name match)
- * or creates new TEXT properties when no match is found.
+ * Auto-maps unmapped CSV columns to existing properties by exact name match.
  *
  * Rules:
  * - Exact match, 1 result → auto-map
