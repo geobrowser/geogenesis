@@ -10,12 +10,17 @@ type UseLocalChangesOptions = {
   mergeWithValues?: Value[];
   mergeWithRelations?: Relation[];
 };
+
+const EMPTY_VALUES: Value[] = [];
+const EMPTY_RELATIONS: Relation[] = [];
+
 export const useLocalChanges = (
   spaceId?: string,
   version = 0,
   options: UseLocalChangesOptions = {}
 ): readonly [EntityDiff[], boolean] => {
-  const { mergeWithValues = [], mergeWithRelations = [] } = options;
+  const mergeWithValues = options.mergeWithValues ?? EMPTY_VALUES;
+  const mergeWithRelations = options.mergeWithRelations ?? EMPTY_RELATIONS;
   const [diffs, setDiffs] = React.useState<EntityDiff[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 

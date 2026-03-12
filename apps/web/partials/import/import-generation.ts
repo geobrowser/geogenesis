@@ -5,6 +5,7 @@ import { ID } from '~/core/id';
 import { getEntity } from '~/core/io/queries';
 import { Property, Relation, RenderableEntityType, Value } from '~/core/types';
 
+import type { UnresolvedImportCell } from './atoms';
 import { splitRelationCell } from './relation-cell';
 
 type PropertyLookup = {
@@ -49,9 +50,9 @@ export function buildUnresolvedLinksByCell(params: {
   resolvedRows: Map<number, { entityId: string; name: string }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
-}): Record<string, import('./atoms').UnresolvedImportCell> {
+}): Record<string, UnresolvedImportCell> {
   const { dataRows, columnMapping, nameColIdx, typesColumnIndex, resolvedTypes, resolvedRows, resolvedEntities, propertyLookup } = params;
-  const flags: Record<string, import('./atoms').UnresolvedImportCell> = {};
+  const flags: Record<string, UnresolvedImportCell> = {};
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
@@ -478,4 +479,95 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
   }
 
   return { values, relations };
+}
+
+export type ImportPlan = {
+  values: Value[];
+  relations: Relation[];
+  unresolvedLinks: Record<string, UnresolvedImportCell>;
+  resolvedRowsSnapshot: Map<number, { entityId: string; name: string }>;
+  resolvedTypesSnapshot: Map<string, { id: string; name: string; isNew?: boolean }>;
+  resolvedEntitiesSnapshot: Map<string, { id: string; name: string; status: string; typeId?: string; typeName?: string | null }>;
+};
+
+export function buildEntitySnapshot(
+  resolvedEntities: Map<string, ResolvedEntity>
+): ImportPlan['resolvedEntitiesSnapshot'] {
+  const snapshot: ImportPlan['resolvedEntitiesSnapshot'] = new Map();
+  for (const [key, entity] of resolvedEntities) {
+    if (entity.status !== 'ambiguous') {
+      snapshot.set(key, {
+        id: entity.id,
+        name: entity.name,
+        status: entity.status,
+        typeId: entity.status === 'created' ? entity.typeId : undefined,
+        typeName: entity.status === 'created' ? entity.typeName : undefined,
+      });
+    }
+  }
+  return snapshot;
+}
+
+export function buildImportPlan(params: {
+  dataRows: string[][];
+  columnMapping: Record<number, string>;
+  nameColIdx: number;
+  selectedType: { id: string; name: string | null } | null;
+  typesColumnIndex: number | undefined;
+  resolvedEntities: Map<string, ResolvedEntity>;
+  resolvedTypes: Map<string, { id: string; name: string; isNew?: boolean }>;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
+  spaceId: string;
+  propertyLookup: PropertyLookup;
+  getExistingRelations?: (entityId: string) => Relation[];
+}): ImportPlan {
+  // Clone maps so callers' originals are never mutated
+  const resolvedEntities = new Map(params.resolvedEntities);
+  const resolvedTypes = new Map(params.resolvedTypes);
+  const resolvedRows = new Map(params.resolvedRows);
+
+  crossReferenceRelationsWithRows({
+    dataRows: params.dataRows,
+    nameColIdx: params.nameColIdx,
+    resolvedEntities,
+    resolvedRows,
+    selectedType: params.selectedType,
+    typesColumnIndex: params.typesColumnIndex,
+    resolvedTypes,
+    columnMapping: params.columnMapping,
+    propertyLookup: params.propertyLookup,
+  });
+
+  const unresolvedLinks = buildUnresolvedLinksByCell({
+    dataRows: params.dataRows,
+    columnMapping: params.columnMapping,
+    nameColIdx: params.nameColIdx,
+    typesColumnIndex: params.typesColumnIndex,
+    resolvedTypes,
+    resolvedRows,
+    resolvedEntities,
+    propertyLookup: params.propertyLookup,
+  });
+
+  const { values, relations } = buildGeneratedRows({
+    dataRows: params.dataRows,
+    columnMapping: params.columnMapping,
+    resolvedRows,
+    selectedType: params.selectedType,
+    typesColumnIndex: params.typesColumnIndex,
+    resolvedTypes,
+    resolvedEntities,
+    spaceId: params.spaceId,
+    propertyLookup: params.propertyLookup,
+    getExistingRelations: params.getExistingRelations,
+  });
+
+  return {
+    values,
+    relations,
+    unresolvedLinks,
+    resolvedRowsSnapshot: resolvedRows,
+    resolvedTypesSnapshot: resolvedTypes,
+    resolvedEntitiesSnapshot: buildEntitySnapshot(resolvedEntities),
+  };
 }

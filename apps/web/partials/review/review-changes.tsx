@@ -5,8 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useRouter } from 'next/navigation';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
@@ -48,15 +47,10 @@ import {
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
 import { editorContentVersionAtom } from '~/atoms';
-import {
-  relationsAtom as importRelationsAtom,
-  valuesAtom as importValuesAtom,
-} from '~/partials/import/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const router = useRouter();
   const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
@@ -67,11 +61,6 @@ export const ReviewChanges = () => {
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
-
-  const importValues = useAtomValue(importValuesAtom);
-  const importRelations = useAtomValue(importRelationsAtom);
-  const setImportValues = useSetAtom(importValuesAtom);
-  const setImportRelations = useSetAtom(importRelationsAtom);
 
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
@@ -92,13 +81,9 @@ export const ReviewChanges = () => {
   const dedupedSpacesWithActions = React.useMemo(() => {
     const valueSpaceIds = valuesWithChanges.map(t => t.spaceId);
     const relationSpaceIds = relationsWithChanges.map(r => r.spaceId);
-    const importSpaceIds = [
-      ...importValues.map(t => t.spaceId),
-      ...importRelations.map(r => r.spaceId),
-    ].filter(Boolean);
 
-    return [...new Set([...valueSpaceIds, ...relationSpaceIds, ...importSpaceIds])];
-  }, [valuesWithChanges, relationsWithChanges, importValues, importRelations]);
+    return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
+  }, [valuesWithChanges, relationsWithChanges]);
 
   const spacesKey = dedupedSpacesWithActions.sort().join(',');
   const [activeSpace, setActiveSpace] = React.useState<string>('');
@@ -110,6 +95,9 @@ export const ReviewChanges = () => {
   }, [spacesKey, activeSpace]);
 
   React.useEffect(() => {
+    // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
+    // publishing). The space name/image are still needed in the top bar during the
+    // publish-complete state. Stale metadata is harmless and gets replaced on the next fetch.
     if (dedupedSpacesWithActions.length === 0) {
       return;
     }
@@ -142,20 +130,6 @@ export const ReviewChanges = () => {
     selector: r => r.spaceId === activeSpace && r.isLocal === true,
     includeDeleted: true,
   });
-
-  const valuesToPublish = React.useMemo(() => {
-    const fromImport = importValues.filter(v => v.spaceId === activeSpace);
-    const storeIds = new Set(valuesFromSpace.map(v => v.id));
-    const extra = fromImport.filter(v => !storeIds.has(v.id));
-    return [...valuesFromSpace, ...extra];
-  }, [valuesFromSpace, importValues, activeSpace]);
-
-  const relationsToPublish = React.useMemo(() => {
-    const fromImport = importRelations.filter(r => r.spaceId === activeSpace);
-    const storeIds = new Set(relationsFromSpace.map(r => r.id));
-    const extra = fromImport.filter(r => !storeIds.has(r.id));
-    return [...relationsFromSpace, ...extra];
-  }, [relationsFromSpace, importRelations, activeSpace]);
 
   const bountyTypeRelations = useRelations({
     selector: r => r.spaceId === activeSpace && r.type.id === SystemIds.TYPES_PROPERTY && r.isDeleted !== true,
@@ -291,10 +265,7 @@ export const ReviewChanges = () => {
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
 
-  const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion, {
-    mergeWithValues: importValues,
-    mergeWithRelations: importRelations,
-  });
+  const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
@@ -332,16 +303,13 @@ export const ReviewChanges = () => {
       };
 
       makeProposal({
-        values: valuesToPublish,
-        relations: relationsToPublish,
+        values: valuesFromSpace,
+        relations: relationsFromSpace,
         spaceId: activeSpace,
         name: proposalName,
         proposalId: proposalEntityId,
         onSuccess: () => {
           setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
-          setImportValues([]);
-          setImportRelations([]);
-          router.refresh();
           settle(true);
         },
         onError: () => {
@@ -448,7 +416,6 @@ export const ReviewChanges = () => {
         name: `Bounty links for: ${proposalName}`,
         onSuccess: () => {
           setSelectedBountyIds(new Set());
-          router.refresh();
         },
         onError: () => {
           // usePublish dispatches the error to the status bar internally.

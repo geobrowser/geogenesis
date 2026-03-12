@@ -25,12 +25,11 @@ import {
   valuesAtom,
 } from './atoms';
 import {
-  buildGeneratedRows,
-  buildUnresolvedLinksByCell,
+  buildImportPlan,
   collectRelationCells,
   createGenerationTracker,
-  crossReferenceRelationsWithRows,
 } from './import-generation';
+import type { ImportPlan, ResolvedEntity } from './import-generation';
 import { resolveRelationEntities, resolveRowsByNameAndType, resolveTypesForRows } from './import-resolution';
 import { useImportSchema } from './use-import-schema';
 import { useImportSession } from './use-import-session';
@@ -78,9 +77,44 @@ export function useImportGenerate(spaceId: string) {
     Object.keys(columnMapping).length > 0;
   const generationTrackerRef = useRef(createGenerationTracker());
 
+  // ── Shared side-effect writer ─────────────────────────────────────────
+  const applyPlan = useCallback(
+    (plan: ImportPlan, options?: { previousValues?: { id: string }[]; previousRelations?: { id: string }[] }) => {
+      // If replacing previous entries, clear them from the store first
+      if (options?.previousValues && options?.previousRelations) {
+        store.clearLocalChangesByIds({
+          spaceId,
+          valueIds: options.previousValues.map(v => v.id),
+          relationIds: options.previousRelations.map(r => r.id),
+        });
+      }
+
+      // Write to GeoStore
+      plan.values.forEach(v => store.setValue(v));
+      plan.relations.forEach(r => store.setRelation(r));
+
+      // Write to atoms — single writer path for all 6
+      setValues(plan.values);
+      setRelations(plan.relations);
+      setUnresolvedLinks(plan.unresolvedLinks);
+      setResolvedRowsSnapshot(plan.resolvedRowsSnapshot);
+      setResolvedTypesSnapshot(plan.resolvedTypesSnapshot);
+      setResolvedEntitiesSnapshot(plan.resolvedEntitiesSnapshot);
+    },
+    [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]
+  );
+
+  // ── Loading + pending rebuild refs ────────────────────────────────────
+  const isLoadingRef = useRef(isLoading);
+  isLoadingRef.current = isLoading;
+
+  const pendingRebuildRef = useRef(false);
+
+  // ── Full async generation ─────────────────────────────────────────────
   const generate = useCallback(async () => {
     if ((!selectedType && typesColumnIndex === undefined) || records.length < 2 || nameColIdx === undefined) return;
     const generationId = generationTrackerRef.current.start();
+    isLoadingRef.current = true;
     setIsLoading(true);
 
     try {
@@ -132,38 +166,15 @@ export function useImportGenerate(spaceId: string) {
         mergedResolvedRows.set(Number(rowIndexStr), override);
       }
 
-      // Unify relation entities that were auto-created with rows from the same import
-      crossReferenceRelationsWithRows({
-        dataRows,
-        nameColIdx,
-        resolvedEntities: mergedResolvedEntities,
-        resolvedRows: mergedResolvedRows,
-        selectedType,
-        typesColumnIndex,
-        resolvedTypes: mergedResolvedTypes,
-        columnMapping,
-        propertyLookup,
-      });
-
-      const unresolvedLinks = buildUnresolvedLinksByCell({
+      const plan = buildImportPlan({
         dataRows,
         columnMapping,
         nameColIdx,
-        typesColumnIndex,
-        resolvedTypes: mergedResolvedTypes,
-        resolvedRows: mergedResolvedRows,
-        resolvedEntities: mergedResolvedEntities,
-        propertyLookup,
-      });
-
-      const built = buildGeneratedRows({
-        dataRows,
-        columnMapping,
-        resolvedRows: mergedResolvedRows,
         selectedType,
         typesColumnIndex,
-        resolvedTypes: mergedResolvedTypes,
         resolvedEntities: mergedResolvedEntities,
+        resolvedTypes: mergedResolvedTypes,
+        resolvedRows: mergedResolvedRows,
         spaceId,
         propertyLookup,
         getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
@@ -171,30 +182,7 @@ export function useImportGenerate(spaceId: string) {
 
       if (!generationTrackerRef.current.isCurrent(generationId)) return;
 
-      const newValues = built.values;
-      const newRelations = built.relations;
-
-      newValues.forEach(v => store.setValue(v));
-      newRelations.forEach(r => store.setRelation(r));
-
-      setValues(newValues);
-      setRelations(newRelations);
-      setUnresolvedLinks(unresolvedLinks);
-      setResolvedRowsSnapshot(mergedResolvedRows);
-      setResolvedTypesSnapshot(mergedResolvedTypes);
-      const entitySnapshot = new Map<string, { id: string; name: string; status: string; typeId?: string; typeName?: string | null }>();
-      for (const [key, entity] of mergedResolvedEntities) {
-        if (entity.status !== 'ambiguous') {
-          entitySnapshot.set(key, {
-            id: entity.id,
-            name: entity.name,
-            status: entity.status,
-            typeId: entity.status === 'created' ? entity.typeId : undefined,
-            typeName: entity.status === 'created' ? entity.typeName : undefined,
-          });
-        }
-      }
-      setResolvedEntitiesSnapshot(entitySnapshot);
+      applyPlan(plan);
       setStep('step5');
 
       if (rowResolution.unresolvedRowCount > 0 || relationResolution.unresolvedCount > 0) {
@@ -224,9 +212,7 @@ export function useImportGenerate(spaceId: string) {
     setStep,
     setIsLoading,
     setUnresolvedLinks,
-    setResolvedRowsSnapshot,
-    setResolvedEntitiesSnapshot,
-    setResolvedTypesSnapshot,
+    applyPlan,
     spaceId,
     store,
   ]);
@@ -279,6 +265,12 @@ export function useImportGenerate(spaceId: string) {
    * not trigger cascading re-renders.
    */
   const rebuild = useCallback(() => {
+    // If generate is in flight, defer this rebuild until it completes
+    if (isLoadingRef.current) {
+      pendingRebuildRef.current = true;
+      return;
+    }
+
     const ctx = rebuildContextRef.current;
     const dataRows = ctx.records
       .slice(1)
@@ -292,8 +284,8 @@ export function useImportGenerate(spaceId: string) {
     };
 
     // Merge relation entity overrides into the snapshot
-    const mergedEntities = new Map<string, import('./import-generation').ResolvedEntity>(
-      ctx.resolvedEntitiesSnapshot as Map<string, import('./import-generation').ResolvedEntity>
+    const mergedEntities = new Map<string, ResolvedEntity>(
+      ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>
     );
     for (const [key, override] of Object.entries(ctx.relationOverrides)) {
       mergedEntities.set(key, override);
@@ -311,58 +303,35 @@ export function useImportGenerate(spaceId: string) {
       mergedRows.set(Number(rowIdxStr), override);
     }
 
-    // Unify relation entities that were auto-created with rows from the same import
-    crossReferenceRelationsWithRows({
-      dataRows,
-      nameColIdx: ctx.nameColIdx,
-      resolvedEntities: mergedEntities,
-      resolvedRows: mergedRows,
-      selectedType: ctx.selectedType,
-      typesColumnIndex: ctx.typesColumnIndex,
-      resolvedTypes: mergedTypes,
-      columnMapping: ctx.columnMapping,
-      propertyLookup,
-    });
-
-    const unresolvedLinks = buildUnresolvedLinksByCell({
+    const plan = buildImportPlan({
       dataRows,
       columnMapping: ctx.columnMapping,
       nameColIdx: ctx.nameColIdx,
-      typesColumnIndex: ctx.typesColumnIndex,
-      resolvedTypes: mergedTypes,
-      resolvedRows: mergedRows,
-      resolvedEntities: mergedEntities,
-      propertyLookup,
-    });
-
-    const built = buildGeneratedRows({
-      dataRows,
-      columnMapping: ctx.columnMapping,
-      resolvedRows: mergedRows,
       selectedType: ctx.selectedType,
       typesColumnIndex: ctx.typesColumnIndex,
-      resolvedTypes: mergedTypes,
       resolvedEntities: mergedEntities,
+      resolvedTypes: mergedTypes,
+      resolvedRows: mergedRows,
       spaceId,
       propertyLookup,
       getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
     });
 
-    // Clear previous GeoStore entries (without wiping snapshots)
-    store.clearLocalChangesByIds({
-      spaceId,
-      valueIds: ctx.values.map(v => v.id),
-      relationIds: ctx.relations.map(r => r.id),
+    applyPlan(plan, {
+      previousValues: ctx.values,
+      previousRelations: ctx.relations,
     });
+  }, [store, spaceId, applyPlan]);
 
-    // Write new entries to GeoStore
-    built.values.forEach(v => store.setValue(v));
-    built.relations.forEach(r => store.setRelation(r));
-
-    setValues(built.values);
-    setRelations(built.relations);
-    setUnresolvedLinks(unresolvedLinks);
-  }, [store, spaceId, setValues, setRelations, setUnresolvedLinks]);
+  // Drain pending rebuild when isLoading transitions to false.
+  // Using an effect guarantees React has committed the state change,
+  // avoiding the race where a microtask runs before the ref updates.
+  useEffect(() => {
+    if (!isLoading && pendingRebuildRef.current) {
+      pendingRebuildRef.current = false;
+      rebuild();
+    }
+  }, [isLoading, rebuild]);
 
   // Track whether initial generation has completed so we know when snapshots
   // are available for incremental rebuilds.

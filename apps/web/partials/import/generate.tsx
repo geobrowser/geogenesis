@@ -123,7 +123,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     autoMap();
   }, [headers, schema, selectedType, typesColumnIndex, columnMapping, autoMap, isAutoMapping, fileName]);
 
-  const MAX_FILE_SIZE_MB = 100;
+  const MAX_FILE_SIZE_MB = 10;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);

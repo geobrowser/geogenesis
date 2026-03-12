@@ -52,7 +52,7 @@ export const Select = ({
           'z-2 overflow-hidden rounded border border-grey-02 bg-white',
           position === 'item-aligned'
             ? 'mt-10 max-w-[241px]'
-            : 'mt-1 max-h-[240px] w-(--radix-select-trigger-width) min-w-[320px] overflow-y-auto'
+            : 'mt-1 max-h-[240px] w-(--radix-select-trigger-width) overflow-y-auto'
         )}
         position={position}
       >
