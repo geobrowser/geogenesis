@@ -157,7 +157,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
         <Content className="fixed inset-0 z-100 flex items-start justify-center focus:outline-hidden">
-          <div className="mt-32 flex w-[460px] flex-col gap-4 overflow-hidden rounded-xl bg-white px-4 pt-4 shadow-lg">
+          <div className="mt-32 flex w-[460px] flex-col gap-4 rounded-xl bg-white px-4 pt-4 shadow-lg">
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <Title asChild>

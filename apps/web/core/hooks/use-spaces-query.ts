@@ -71,13 +71,13 @@ export function useSpacesQuery(enabled = true) {
     enabled: enabled && debouncedQuery.length > 0,
   });
 
-  const spaces = fuzzyMatchedSpaces.map(space => {
-    return {
-      id: space.spaces[0].spaceId,
-      name: space.name,
-      description: space.description,
-      image: space.spaces[0].image,
-    };
+  const spaces = fuzzyMatchedSpaces.flatMap(entity => {
+    return entity.spaces.map(space => ({
+      id: space.spaceId,
+      name: space.name ?? entity.name,
+      description: space.description ?? entity.description,
+      image: space.image,
+    }));
   });
 
   type SpaceItem = {
