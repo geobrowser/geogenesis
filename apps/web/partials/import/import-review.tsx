@@ -4,7 +4,6 @@ import { useAtom, useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { Space } from '~/core/io/dto/spaces';
 import { useEditable } from '~/core/state/editable-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
@@ -42,7 +41,6 @@ import { useImportSession } from './use-import-session';
 
 type ImportReviewProps = {
   spaceId: string;
-  space: Space;
 };
 
 export const ImportReview = ({ spaceId }: ImportReviewProps) => {

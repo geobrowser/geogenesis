@@ -1,8 +1,5 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
-
-import { getSpace } from '~/core/io/queries';
 
 import { ImportReview } from '~/partials/import/import-review';
 
@@ -18,9 +15,5 @@ export default async function ImportReviewPage(props: ImportReviewPageProps) {
     notFound();
   }
 
-  const space = await Effect.runPromise(getSpace(spaceId));
-
-  if (!space) return null;
-
-  return <ImportReview spaceId={spaceId} space={space} />;
+  return <ImportReview spaceId={spaceId} />;
 }
