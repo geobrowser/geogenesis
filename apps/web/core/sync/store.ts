@@ -14,6 +14,10 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
+function relationKey(r: Relation): string {
+  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
 /**
  * Stable JSON stringify that produces consistent output regardless of object key order.
  * This ensures query keys are deterministic for TanStack Query cache hits.
@@ -256,10 +260,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     reactiveRelations.set(prev => {
       const prevById = new Map(prev.map(r => [r.id, r]));
-      const mergedIncoming = newRelations.map(r => {
-        const local = prevById.get(r.id);
-        return local && local.isLocal && !local.hasBeenPublished ? local : r;
-      });
+      const deletedRelationKeys = new Set(
+        prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r))
+      );
+      const mergedIncoming = newRelations
+        .filter(r => !deletedRelationKeys.has(relationKey(r)))
+        .map(r => {
+          const local = prevById.get(r.id);
+          return local && local.isLocal && !local.hasBeenPublished ? local : r;
+        });
       const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
       return [...unchangedRelations, ...mergedIncoming];
     });

@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -9,7 +10,8 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -28,6 +30,7 @@ type Props = {
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
+  const { store } = useSyncEngine();
   const { isMember } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
@@ -36,9 +39,44 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
     selector: v => v.entity.id === entityId && v.spaceId === spaceId,
   });
 
-  const relations = useRelations({
-    selector: v => v.fromEntity.id === entityId && v.spaceId === spaceId,
+  const outgoingRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
+
+  const performDelete = React.useCallback(() => {
+    // 1. Find block entities (toEntity of BLOCKS relations). Orphaned = only this entity references them.
+    const blocksRelations = outgoingRelations.filter(r => r.type.id === SystemIds.BLOCKS);
+    const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
+    const orphanedBlockIds = blockIds.filter(blockId => {
+      const referencing = store.findReferencingEntities(blockId);
+      return referencing.length === 1 && referencing[0] === entityId;
+    });
+
+    // 2. Delete this entity: its values and all relations (outgoing + incoming).
+    values.forEach(v => storage.values.delete(v));
+    outgoingRelations.forEach(r => storage.relations.delete(r));
+    const incomingRelations = getRelations({ selector: r => r.toEntity.id === entityId });
+    incomingRelations.forEach(r => storage.relations.delete(r));
+
+    // 3. Delete each orphaned block entity (all values and relations from/to that block).
+    for (const blockId of orphanedBlockIds) {
+      const blockValues = getValues({ selector: v => v.entity.id === blockId });
+      blockValues.forEach(v => storage.values.delete(v));
+      const blockRelations = getRelations({
+        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
+      });
+      blockRelations.forEach(r => storage.relations.delete(r));
+    }
+
+    setIsMenuOpen(false);
+  }, [
+    entityId,
+    outgoingRelations,
+    store,
+    storage.relations,
+    storage.values,
+    values,
+  ]);
 
   const onCopyEntityId = async () => {
     try {
@@ -51,18 +89,10 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const onDelete = () => {
     if (editable) {
-      values.forEach(t => storage.values.delete(t));
-      relations.forEach(r => storage.relations.delete(r));
-      setIsMenuOpen(false);
+      performDelete();
     } else {
       setEditable(true);
-
-      // Why?
-      setTimeout(() => {
-        values.forEach(t => storage.values.delete(t));
-        relations.forEach(r => storage.relations.delete(r));
-        setIsMenuOpen(false);
-      }, 500);
+      setTimeout(() => performDelete(), 500);
     }
   };
 
