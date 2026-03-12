@@ -20,7 +20,7 @@ export type RelationPropertyMeta = {
   uniqueCellValues: Set<string>;
 };
 
-export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created' | 'ranked'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
+export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
 
 export type BuildRowsInput = {
   dataRows: string[][];
@@ -46,7 +46,7 @@ export function buildUnresolvedLinksByCell(params: {
   nameColIdx: number;
   typesColumnIndex: number | undefined;
   resolvedTypes: Map<string, { id: string; name: string }>;
-  resolvedRows: Map<number, { entityId: string; name: string; ranked?: boolean }>;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
 }): Record<string, import('./atoms').UnresolvedImportCell> {
@@ -69,12 +69,11 @@ export function buildUnresolvedLinksByCell(params: {
       if (rowName) {
         flags[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'entity' };
       }
-    } else if (resolvedRow.ranked) {
-      flags[toImportCellKey(rowIndex, nameColIdx)] = { kind: 'ranked-entity' };
     }
 
     for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
       if (propertyId === SystemIds.NAME_PROPERTY) continue;
+      if (propertyId === SystemIds.TYPES_PROPERTY) continue;
       const colIdx = parseInt(colIdxStr, 10);
       const raw = (row[colIdx] ?? '').trim();
       if (!raw) continue;
@@ -83,14 +82,11 @@ export function buildUnresolvedLinksByCell(params: {
       if (!property || property.dataType !== 'RELATION') continue;
 
       const unresolvedValues: string[] = [];
-      const rankedValues: string[] = [];
 
       for (const part of splitRelationCell(raw)) {
         const resolved = resolvedEntities.get(`${propertyId}::${part}`);
         if (!resolved || resolved.status === 'ambiguous') {
           unresolvedValues.push(part);
-        } else if (resolved.status === 'ranked') {
-          rankedValues.push(part);
         }
       }
 
@@ -98,11 +94,6 @@ export function buildUnresolvedLinksByCell(params: {
         flags[toImportCellKey(rowIndex, colIdx)] = {
           kind: 'relation',
           unresolvedValues: Array.from(new Set(unresolvedValues)),
-        };
-      } else if (rankedValues.length > 0) {
-        flags[toImportCellKey(rowIndex, colIdx)] = {
-          kind: 'ranked-relation',
-          rankedValues: Array.from(new Set(rankedValues)),
         };
       }
     }
@@ -184,6 +175,7 @@ export function collectRelationCells(params: {
 
   for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
     if (propertyId === SystemIds.NAME_PROPERTY) continue;
+    if (propertyId === SystemIds.TYPES_PROPERTY) continue;
     const property = getPropertyFromSources(propertyId, propertyLookup);
     if (!property || property.dataType !== 'RELATION') continue;
 
@@ -402,6 +394,8 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
 
     for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
       if (propertyId === SystemIds.NAME_PROPERTY) continue;
+      // Types relations are handled above via selectedType / typesColumnIndex — skip to avoid duplicates
+      if (propertyId === SystemIds.TYPES_PROPERTY) continue;
       const colIdx = parseInt(colIdxStr, 10);
       const raw = row[colIdx]?.trim() ?? '';
       if (!raw) continue;

@@ -304,7 +304,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         </Link>
       </div>
 
-      <h1 className="mb-10 text-mainPage font-semibold text-text">Upload data</h1>
+      <h1 className="mb-10 text-mainPage font-semibold text-text">Import data</h1>
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
@@ -396,6 +396,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                     <EntitySearchAutocomplete
                       placeholder="Search for a type..."
                       dropdownClassName="!w-[384px] min-w-[320px]"
+                      filterByTypes={[SystemIds.SCHEMA_TYPE]}
                       onDone={(result) => {
                         clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });

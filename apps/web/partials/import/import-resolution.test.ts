@@ -280,7 +280,7 @@ describe('import resolution helpers', () => {
 
     expect(result.aborted).toBe(false);
     expect(result.unresolvedRowCount).toBe(0);
-    expect(result.resolvedRows.get(0)).toEqual({ entityId: 'entity-root', name: 'Alpha', ranked: true });
+    expect(result.resolvedRows.get(0)).toEqual({ entityId: 'entity-root', name: 'Alpha' });
   });
 
   it('marks rows unresolved when multiple exact matches tie at the same space rank', async () => {

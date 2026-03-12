@@ -67,7 +67,7 @@ export function CreateEntityDropdown() {
               router.push(NavUtils.toImport(spaceId));
             }}
           >
-            <p className="text-center text-button">Upload data</p>
+            <p className="text-center text-button">Import data</p>
           </MenuItem>
         </>
       )}

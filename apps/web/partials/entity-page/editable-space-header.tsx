@@ -194,7 +194,7 @@ export function EditableSpaceHeading({
                   </MenuItem>
                   <MenuItem href={NavUtils.toImport(spaceId)}>
                     <Upload color="grey-04" />
-                    <p>Upload data</p>
+                    <p>Import data</p>
                   </MenuItem>
                   {addSubspaceComponent}
                 </>

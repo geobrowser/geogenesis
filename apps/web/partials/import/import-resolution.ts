@@ -12,7 +12,7 @@ type ResolutionGuard = {
 };
 
 type ResolvedEntityMatch =
-  | { status: 'resolved'; entity: { id: string; name: string }; ranked?: boolean }
+  | { status: 'resolved'; entity: { id: string; name: string } }
   | { status: 'unresolved'; reason: 'none' | 'tie' | 'ambiguous' };
 
 async function resolveExactRelationMatch(params: {
@@ -52,7 +52,7 @@ async function resolveExactRelationMatch(params: {
 
     if (atBest.length === 1) {
       const winner = atBest[0].match;
-      return { status: 'resolved', entity: { id: winner.id, name: winner.name ?? name }, ranked: true };
+      return { status: 'resolved', entity: { id: winner.id, name: winner.name ?? name } };
     }
 
     return { status: 'unresolved', reason: 'tie' };
@@ -134,7 +134,7 @@ export async function resolveRelationEntities(params: {
       resolvedEntities.set(cacheKey, {
         id: match.entity.id,
         name: match.entity.name,
-        status: match.ranked ? 'ranked' : 'found',
+        status: 'found',
       });
     } else {
       if (match.reason === 'none') {
@@ -205,14 +205,14 @@ export async function resolveRowsByNameAndType(params: {
   guard: ResolutionGuard;
 }): Promise<{
   aborted: boolean;
-  resolvedRows: Map<number, { entityId: string; name: string; ranked?: boolean }>;
+  resolvedRows: Map<number, { entityId: string; name: string }>;
   unresolvedRowCount: number;
 }> {
   const { dataRows, nameColIdx, selectedType, typesColumnIndex, resolvedTypes, guard } = params;
-  const resolvedRows = new Map<number, { entityId: string; name: string; ranked?: boolean }>();
+  const resolvedRows = new Map<number, { entityId: string; name: string }>();
   let unresolvedRowCount = 0;
 
-  const cache = new Map<string, { status: 'resolved'; entityId: string; name: string; ranked?: boolean } | { status: 'unresolved' }>();
+  const cache = new Map<string, { status: 'resolved'; entityId: string; name: string } | { status: 'unresolved' }>();
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
@@ -237,7 +237,7 @@ export async function resolveRowsByNameAndType(params: {
     const cached = cache.get(cacheKey);
     if (cached) {
       if (cached.status === 'resolved') {
-        resolvedRows.set(rowIndex, { entityId: cached.entityId, name: cached.name, ranked: cached.ranked });
+        resolvedRows.set(rowIndex, { entityId: cached.entityId, name: cached.name });
       } else {
         unresolvedRowCount += 1;
       }
@@ -254,8 +254,8 @@ export async function resolveRowsByNameAndType(params: {
     }
 
     if (match.status === 'resolved') {
-      cache.set(cacheKey, { status: 'resolved', entityId: match.entity.id, name: match.entity.name, ranked: match.ranked });
-      resolvedRows.set(rowIndex, { entityId: match.entity.id, name: match.entity.name, ranked: match.ranked });
+      cache.set(cacheKey, { status: 'resolved', entityId: match.entity.id, name: match.entity.name });
+      resolvedRows.set(rowIndex, { entityId: match.entity.id, name: match.entity.name });
     } else {
       if (match.reason === 'none') {
         const createdEntityId = ID.createEntityId();

@@ -20,10 +20,12 @@ interface Props {
   className?: string;
   /** Optional class for the dropdown panel (e.g. to constrain width on import step) */
   dropdownClassName?: string;
+  /** Optional type IDs to filter search results by */
+  filterByTypes?: string[];
 }
 
-export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '', dropdownClassName = '' }: Props) {
-  const { query, onQueryChange, isLoading, results } = useSearch();
+export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '', dropdownClassName = '', filterByTypes }: Props) {
+  const { query, onQueryChange, isLoading, results } = useSearch({ filterByTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 

@@ -11,6 +11,8 @@ import { Property } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { Check } from '~/design-system/icons/check';
+import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
@@ -24,6 +26,7 @@ import {
   recordsAtom,
   resolvedEntitiesSnapshotAtom,
   resolvedRowsSnapshotAtom,
+  resolvedTypesSnapshotAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   typeOverridesAtom,
@@ -63,6 +66,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const unresolvedLinks = useAtomValue(unresolvedLinksAtom);
   const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
+  const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
   const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const entityCount = useAtomValue(entityCountAtom);
   const { store } = useSyncEngine();
@@ -194,6 +198,8 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   );
 
   const hasUnmappedColumns = columns.some(c => c.propertyName === null && !c.mappingLocked);
+  const unmappedCount = columns.filter(c => c.propertyName === null && !c.mappingLocked).length;
+  const unresolvedDataCount = Object.keys(unresolvedLinks).length;
   const hasData = dataRows.length > 0 && columns.length > 0;
   const hasRecordsButNoDataRows = records.length >= 1 && dataRows.length === 0;
   const hasNoRecords = records.length === 0;
@@ -240,12 +246,44 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         </div>
       ) : (
         <>
-          {isLoading && (
+          {isLoading ? (
             <div className="mb-4 flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
               <Spinner />
               <Text variant="smallButton" className="text-text">Resolving relation data...</Text>
             </div>
-          )}
+          ) : (unmappedCount > 0 || unresolvedDataCount > 0) ? (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+              {unmappedCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="flex shrink-0 items-center" aria-hidden>
+                    <Warning color="red-01" />
+                  </span>
+                  <Text variant="smallButton" className="text-text">
+                    {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
+                  </Text>
+                </div>
+              )}
+              {unresolvedDataCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="flex shrink-0 items-center" aria-hidden>
+                    <Warning color="red-01" />
+                  </span>
+                  <Text variant="smallButton" className="text-text">
+                    {unresolvedDataCount.toLocaleString('en-US')} {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
+                  </Text>
+                </div>
+              )}
+            </div>
+          ) : values.length > 0 ? (
+            <div className="mb-4 flex items-center gap-1.5 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+              <span className="flex shrink-0 items-center" aria-hidden>
+                <Check color="green" />
+              </span>
+              <Text variant="smallButton" className="text-text">
+                All properties and data points are linked
+              </Text>
+            </div>
+          ) : null}
           <ImportPreviewTable
             dataRows={dataRows}
             columns={columns}
@@ -262,6 +300,8 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             resolvedEntities={resolvedEntitiesSnapshot}
             columnMapping={columnMapping}
             typesColumnIndex={typesColumnIndex}
+            selectedType={selectedType}
+            resolvedTypes={resolvedTypesSnapshot}
           />
         </>
       )}

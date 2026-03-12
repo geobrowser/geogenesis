@@ -41,23 +41,11 @@ function WarningIcon() {
   );
 }
 
-/** Yellow info circle icon for auto-ranked items the user can optionally review */
-function RankedIcon() {
+/** Small red status dot shown next to unresolved entity names in the Name column */
+function StatusDot() {
   return (
     <span
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-white"
-      aria-label="Auto-selected"
-    >
-      i
-    </span>
-  );
-}
-
-/** Small colored status dot shown next to entity names in the Name column */
-function StatusDot({ color }: { color: 'red' | 'orange' }) {
-  return (
-    <span
-      className={`inline-block h-2 w-2 shrink-0 rounded-full ${color === 'red' ? 'bg-red-01' : 'bg-orange'}`}
+      className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-01"
       aria-hidden="true"
     />
   );
@@ -235,6 +223,10 @@ type Props = {
   columnMapping?: Record<number, string>;
   /** Index of the CSV column used as the types source (from CSV), so resolved types render as chips */
   typesColumnIndex?: number;
+  /** The globally selected type (when all rows share a single type) */
+  selectedType?: { id: string; name: string | null } | null;
+  /** Resolved types snapshot (raw CSV type string → entity), used for per-row type filtering */
+  resolvedTypes?: Map<string, { id: string; name: string }>;
 };
 
 export function ImportPreviewTable({
@@ -253,6 +245,8 @@ export function ImportPreviewTable({
   resolvedEntities,
   columnMapping: columnMappingProp,
   typesColumnIndex,
+  selectedType: selectedTypeProp,
+  resolvedTypes: resolvedTypesProp,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
@@ -407,10 +401,18 @@ export function ImportPreviewTable({
                     const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
                     const unresolvedSet =
                       cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
-                    const rankedSet =
-                      cellFlag?.kind === 'ranked-relation' ? new Set(cellFlag.rankedValues) : null;
                     const resolvedRowEntity = resolvedRows?.get(virtualRow.index);
                     const relationPropertyId = columnMappingProp?.[col.csvColumnIndex];
+
+                    // Derive the row's type for entity-row resolution filtering
+                    const rowTypeForFilter: { id: string; name: string | null }[] | undefined = (() => {
+                      if (typesColumnIndex !== undefined && resolvedTypesProp) {
+                        const rawType = (row[typesColumnIndex] ?? '').trim();
+                        const resolved = rawType ? resolvedTypesProp.get(rawType) : undefined;
+                        return resolved ? [{ id: resolved.id, name: resolved.name }] : undefined;
+                      }
+                      return selectedTypeProp ? [{ id: selectedTypeProp.id, name: selectedTypeProp.name }] : undefined;
+                    })();
 
                     return (
                       <div
@@ -443,38 +445,6 @@ export function ImportPreviewTable({
                                     advanced={false}
                                     showIDs={false}
                                     initialQuery={part}
-                                    onCreateEntity={() => undefined}
-                                    onDone={(result, fromCreateFn) =>
-                                      onResolveRelationToken(col.csvColumnIndex, part, {
-                                        id: result.id,
-                                        name: result.name ?? part,
-                                      }, fromCreateFn, col.relationValueTypes?.[0])
-                                    }
-                                  />
-                                );
-                              }
-
-                              if (rankedSet?.has(part) && onResolveRelationToken) {
-                                return (
-                                  <SelectEntityAsPopover
-                                    key={i}
-                                    trigger={
-                                      <button
-                                        type="button"
-                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
-                                      >
-                                        <RankedIcon />
-                                        <span>{part}</span>
-                                        <ChipSeparator />
-                                      </button>
-                                    }
-                                    spaceId={spaceId}
-                                    relationValueTypes={col.relationValueTypes}
-                                    placeholder="Find or create entity..."
-                                    advanced={false}
-                                    showIDs={false}
-                                    initialQuery={part}
-                                    selectedEntityId={relationPropertyId ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id : undefined}
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
                                       onResolveRelationToken(col.csvColumnIndex, part, {
@@ -572,7 +542,7 @@ export function ImportPreviewTable({
                                     type="button"
                                     className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
                                   >
-                                    <StatusDot color="red" />
+                                    <StatusDot />
                                     <span>{value || '—'}</span>
                                   </button>
                                 }
@@ -581,31 +551,7 @@ export function ImportPreviewTable({
                                 advanced={false}
                                 showIDs={false}
                                 initialQuery={value}
-                                onCreateEntity={() => undefined}
-                                onDone={result =>
-                                  onResolveEntityRow(virtualRow.index, {
-                                    id: result.id,
-                                    name: result.name ?? value,
-                                  })
-                                }
-                              />
-                            ) : cellFlag?.kind === 'ranked-entity' && onResolveEntityRow ? (
-                              <SelectEntityAsPopover
-                                trigger={
-                                  <button
-                                    type="button"
-                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
-                                  >
-                                    <StatusDot color="orange" />
-                                    <span>{value || '—'}</span>
-                                  </button>
-                                }
-                                spaceId={spaceId}
-                                placeholder="Find or create entity..."
-                                advanced={false}
-                                showIDs={false}
-                                initialQuery={value}
-                                selectedEntityId={resolvedRowEntity?.entityId}
+                                relationValueTypes={rowTypeForFilter}
                                 onCreateEntity={() => undefined}
                                 onDone={result =>
                                   onResolveEntityRow(virtualRow.index, {
@@ -630,6 +576,7 @@ export function ImportPreviewTable({
                                 showIDs={false}
                                 initialQuery={value}
                                 selectedEntityId={resolvedRowEntity?.entityId}
+                                relationValueTypes={rowTypeForFilter}
                                 onCreateEntity={() => undefined}
                                 onDone={result =>
                                   onResolveEntityRow(virtualRow.index, {
