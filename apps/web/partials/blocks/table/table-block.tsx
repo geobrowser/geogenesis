@@ -477,7 +477,8 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
-      <div className="mb-2 flex h-8 items-center justify-between">
+      {/* Potentially stop highlight/click issues? */}
+      <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
           <IconButton
@@ -502,6 +503,7 @@ export const TableBlock = ({ spaceId }: Props) => {
             exit={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="overflow-hidden border-t border-divider py-4"
+            onMouseDown={e => e.stopPropagation()}
           >
             <motion.div
               initial={{ opacity: 0 }}
