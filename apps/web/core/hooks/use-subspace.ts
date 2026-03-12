@@ -5,12 +5,11 @@ import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { type Hex, encodeFunctionData } from 'viem';
 
-import { useCallback } from 'react';
-
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { uuidToHex } from '~/core/id/normalize';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
@@ -27,7 +26,7 @@ import {
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
-import { validateSpaceId } from '~/core/utils/utils';
+import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 /**
  * Maps a subspace relation type to its corresponding governance action constants
@@ -61,9 +60,9 @@ interface SubspaceParams {
   /** The type of relationship to set or remove */
   relationType: SubspaceRelationType;
   /**
-   * For 'subtopic' relation type when setting: the entity ID (UUID) in the knowledge
-   * graph that represents the topic. Encoded as bytes in the data field.
-   * Not used for 'verified' or 'related' types, or when unsetting.
+   * For 'subtopic' relation type: the entity ID (UUID) in the knowledge
+   * graph that represents the topic. Encoded in the lower 16 bytes of `topic`.
+   * Required for both set and unset.
    */
   topicEntityId?: string;
 }
@@ -91,135 +90,134 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
     address: SPACE_REGISTRY_ADDRESS,
   });
 
-  const handleSubspace = useCallback(
+  const handleSubspace =
     (direction: SubspaceDirection) =>
-      async ({ subspaceId, relationType, topicEntityId }: SubspaceParams) => {
-        if (!smartAccount) {
-          const message = 'Please connect your wallet to manage subspaces';
-          console.error('No smart account available');
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
+    async ({ subspaceId, relationType, topicEntityId }: SubspaceParams) => {
+      if (!smartAccount) {
+        const message = 'Please connect your wallet to manage subspaces';
+        console.error('No smart account available');
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      if (!personalSpaceId || !isRegistered) {
+        const message = 'You need a registered personal space to manage subspaces';
+        console.error('User does not have a registered personal space ID');
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      if (!validateSpaceId(spaceId)) {
+        const message = 'Invalid space ID format. Please try again.';
+        console.error('Invalid target space ID:', spaceId);
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      if (!space?.address) {
+        const message = 'Space information is still loading. Please try again.';
+        console.error('No space address found');
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      if (!validateSpaceId(subspaceId)) {
+        const message = 'Invalid subspace ID format. Please try again.';
+        console.error('Invalid subspace ID:', subspaceId);
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      if (relationType === 'subtopic' && !topicEntityId) {
+        const message = 'A topic entity ID is required for subtopic relationships';
+        console.error(message);
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      const action = SUBSPACE_ACTION_MAP[relationType][direction];
+      const topic = buildSubspaceTopic(relationType, subspaceId, topicEntityId);
+      const actionData: Hex = '0x';
+
+      console.log(`${direction === 'set' ? 'Setting' : 'Unsetting'} subspace relationship`, {
+        fromSpaceId: personalSpaceId,
+        toSpaceId: spaceId,
+        subspaceId,
+        relationType,
+        action,
+        topic,
+      });
+
+      const writeTxEffect = Effect.gen(function* () {
+        let callData: Hex;
+
+        if (space.type === 'DAO') {
+          callData = buildDaoSubspaceCalldata({
+            personalSpaceId,
+            spaceId: spaceId!,
+            spaceAddress: space.address as Hex,
+            action,
+            topic,
+            actionData,
+          });
+        } else {
+          callData = buildPersonalSubspaceCalldata({
+            personalSpaceId,
+            spaceId: spaceId!,
+            action,
+            topic,
+            actionData,
+          });
         }
 
-        if (!personalSpaceId || !isRegistered) {
-          const message = 'You need a registered personal space to manage subspaces';
-          console.error('User does not have a registered personal space ID');
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
-        }
+        const telemetryAttributes =
+          space.type === 'DAO'
+            ? {
+                'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
+                'space.type': 'DAO',
+                'governance.action': 'proposal_created',
+                'governance.proposal_action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
+                'governance.subspace_relation_type': relationType,
+              }
+            : {
+                'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
+                'space.type': 'PERSONAL',
+                'governance.action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
+                'governance.subspace_relation_type': relationType,
+              };
 
-        if (!validateSpaceId(spaceId)) {
-          const message = 'Invalid space ID format. Please try again.';
-          console.error('Invalid target space ID:', spaceId);
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
-        }
+        const hash = yield* tx(callData).pipe(
+          Effect.withSpan(`web.write.subspace.${direction}`),
+          Effect.annotateSpans(telemetryAttributes)
+        );
+        console.log('Transaction hash: ', hash);
+        return hash;
+      });
 
-        if (!space?.address) {
-          const message = 'Space information is still loading. Please try again.';
-          console.error('No space address found');
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
-        }
+      const result = await runEffectEither(writeTxEffect);
 
-        if (!validateSpaceId(subspaceId)) {
-          const message = 'Invalid subspace ID format. Please try again.';
-          console.error('Invalid subspace ID:', subspaceId);
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
-        }
-
-        if (direction === 'set' && relationType === 'subtopic' && !topicEntityId) {
-          const message = 'A topic entity ID is required for subtopic relationships';
-          console.error(message);
-          dispatch({ type: 'ERROR', payload: message });
-          throw new Error(message);
-        }
-
-        const action = SUBSPACE_ACTION_MAP[relationType][direction];
-        const topic = padBytes16ToBytes32(subspaceId);
-        const actionData = encodeTopicEntityData(direction, topicEntityId);
-
-        console.log(`${direction === 'set' ? 'Setting' : 'Unsetting'} subspace relationship`, {
-          fromSpaceId: personalSpaceId,
-          toSpaceId: spaceId,
-          subspaceId,
-          relationType,
-          action,
-        });
-
-        const writeTxEffect = Effect.gen(function* () {
-          let callData: Hex;
-
-          if (space.type === 'DAO') {
-            callData = buildDaoSubspaceCalldata({
-              personalSpaceId,
-              spaceId: spaceId!,
-              spaceAddress: space.address as Hex,
-              action,
-              topic,
-              actionData,
-            });
-          } else {
-            callData = buildPersonalSubspaceCalldata({
-              personalSpaceId,
-              spaceId: spaceId!,
-              action,
-              topic,
-              actionData,
-            });
-          }
-
-          const telemetryAttributes =
-            space.type === 'DAO'
-              ? {
-                  'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
-                  'space.type': 'DAO',
-                  'governance.action': 'proposal_created',
-                  'governance.proposal_action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
-                  'governance.subspace_relation_type': relationType,
-                }
-              : {
-                  'io.operation': direction === 'set' ? 'set_subspace' : 'unset_subspace',
-                  'space.type': 'PERSONAL',
-                  'governance.action': direction === 'set' ? 'subspace_set' : 'subspace_unset',
-                  'governance.subspace_relation_type': relationType,
-                };
-
-          const hash = yield* tx(callData).pipe(
-            Effect.withSpan(`web.write.subspace.${direction}`),
-            Effect.annotateSpans(telemetryAttributes)
+      Either.match(result, {
+        onLeft: error => {
+          console.error(
+            'Failed to update subspace relationship',
+            { spaceId, subspaceId, relationType, direction },
+            error
           );
-          console.log('Transaction hash: ', hash);
-          return hash;
-        });
-
-        const result = await runEffectEither(writeTxEffect);
-
-        Either.match(result, {
-          onLeft: error => {
-            console.error(
-              'Failed to update subspace relationship',
-              { spaceId, subspaceId, relationType, direction },
-              error
-            );
-            dispatch({
-              type: 'ERROR',
-              payload: String(error),
-              retry: () => handleSubspace(direction)({ subspaceId, relationType, topicEntityId }),
-            });
-            throw error;
-          },
-          onRight: () =>
-            console.log(
-              direction === 'set'
-                ? `Successfully set subspace as ${relationType}`
-                : `Successfully removed ${relationType} from subspace`
-            ),
-        });
-      },
-    [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]
-  );
+          dispatch({
+            type: 'ERROR',
+            payload: String(error),
+            retry: () => handleSubspace(direction)({ subspaceId, relationType, topicEntityId }),
+          });
+          throw error;
+        },
+        onRight: () =>
+          console.log(
+            direction === 'set'
+              ? `Successfully set subspace as ${relationType}`
+              : `Successfully removed ${relationType} from subspace`
+          ),
+      });
+    };
 
   const setMutation = useMutation({ mutationFn: handleSubspace('set') });
   const unsetMutation = useMutation({ mutationFn: handleSubspace('unset') });
@@ -233,21 +231,36 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
 }
 
 /**
- * Encodes the topic entity ID as hex data for the contract call.
- * Only relevant when setting a subtopic relationship.
+ * Build the topic field for a subspace action.
+ *
+ * Subspace topic layout for all trust actions is `bytes32(bytes16 subspaceId, bytes16 target)`.
+ * For non-subtopic actions, target is zero bytes.
  */
-function encodeTopicEntityData(direction: SubspaceDirection, topicEntityId?: string): Hex {
-  if (direction !== 'set' || !topicEntityId) {
-    return '0x' as Hex;
+function buildSubspaceTopic(
+  relationType: SubspaceRelationType,
+  subspaceId: string,
+  topicEntityId?: string
+): Hex {
+  const normalizedSubspace = subspaceId;
+
+  if (relationType !== 'subtopic') {
+    return padBytes16ToBytes32(normalizedSubspace);
   }
 
-  const strippedId = topicEntityId.replace(/-/g, '');
+  const targetHex = parseTopicEntityId(topicEntityId);
+  return `0x${normalizedSubspace}${targetHex}` as Hex;
+}
 
-  if (strippedId.length !== 32 || !/^[0-9a-fA-F]+$/.test(strippedId)) {
+function parseTopicEntityId(topicEntityId: string | undefined): string {
+  if (topicEntityId == null) {
+    throw new Error('Topic entity ID is required for subtopic relationships');
+  }
+
+  if (!validateEntityId(topicEntityId)) {
     throw new Error(`Invalid topic entity ID: expected UUID format, got ${topicEntityId}`);
   }
 
-  return `0x${strippedId}` as Hex;
+  return uuidToHex(topicEntityId);
 }
 
 /**

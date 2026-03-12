@@ -18,15 +18,15 @@ import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
-import { MoveSpace } from '~/design-system/icons/move-space';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
+import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
@@ -38,11 +38,9 @@ import { useEntityHistory } from '../history/use-entity-history';
 export function EditableSpaceHeading({
   spaceId,
   entityId,
-  addSubspaceComponent,
 }: {
   spaceId: string;
   entityId: string;
-  addSubspaceComponent?: React.ReactElement<any>;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
@@ -53,6 +51,8 @@ export function EditableSpaceHeading({
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
   const [isCreatingNewVersion, setIsCreatingNewVersion] = React.useState<boolean>(false);
+  const [isSubtopicsOpen, setIsSubtopicsOpen] = React.useState(false);
+  const [isSubspacesOpen, setIsSubspacesOpen] = React.useState(false);
 
   const {
     allVersions,
@@ -177,21 +177,38 @@ export function EditableSpaceHeading({
               )}
               {!isCreatingNewVersion && (
                 <>
-                  <MenuItem onClick={onCopySpaceId}>
-                    <Copy color="grey-04" />
-                    <p>Copy Space ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={onCopyEntityId}>
-                    <Copy color="grey-04" />
-                    <p>Copy Entity ID</p>
-                  </MenuItem>
                   <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
-                    <div className="shrink-0">
-                      <MoveSpace />
-                    </div>
                     <p>Create in space</p>
                   </MenuItem>
-                  {addSubspaceComponent}
+                  {isEditing && (
+                    <>
+                      <MenuItem onClick={() => setIsContextMenuOpen(false)}>
+                        <p>Set space topic</p>
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setIsContextMenuOpen(false);
+                          setIsSubspacesOpen(true);
+                        }}
+                      >
+                        <p>Subspaces</p>
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setIsContextMenuOpen(false);
+                          setIsSubtopicsOpen(true);
+                        }}
+                      >
+                        <p>Subtopics</p>
+                      </MenuItem>
+                    </>
+                  )}
+                  <MenuItem onClick={onCopyEntityId}>
+                    <p>Copy entity ID</p>
+                  </MenuItem>
+                  <MenuItem onClick={onCopySpaceId}>
+                    <p>Copy space ID</p>
+                  </MenuItem>
                 </>
               )}
             </Menu>
@@ -200,6 +217,8 @@ export function EditableSpaceHeading({
       </div>
 
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
+      <SubspacesDialog open={isSubspacesOpen} onOpenChange={setIsSubspacesOpen} spaceId={spaceId} />
+      <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} spaceId={spaceId} />
     </>
   );
 }
