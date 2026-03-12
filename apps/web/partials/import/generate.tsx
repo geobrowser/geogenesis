@@ -2,610 +2,455 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { parse } from 'csv/sync';
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import { Effect } from 'effect';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { usePathname } from 'next/navigation';
+import { useAtom, useAtomValue } from 'jotai';
 
+import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
-import { getEntity } from '~/core/io/queries';
-import { EntityId } from '~/core/io/substream-schema';
-import { Entity } from '~/core/types';
-import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
-import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
+import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
-import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
-import { Relation } from '~/design-system/icons/relation';
-import { RetrySmall } from '~/design-system/icons/retry-small';
-import { Text } from '~/design-system/icons/text';
-import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { Url } from '~/design-system/icons/url';
+import { Warning } from '~/design-system/icons/warning';
+import { Spinner } from '~/design-system/spinner';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Select } from '~/design-system/select';
+import { Text } from '~/design-system/text';
 
-import { examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom, valuesAtom } from './atoms';
-
-dayjs.extend(utc);
-
+import {
+  columnMappingAtom,
+  fileNameAtom,
+  headersAtom,
+  recordsAtom,
+  stepAtom,
+  typesColumnIndexAtom,
+  selectedTypeAtom,
+} from './atoms';
+import { normalizeHeader, normalizeHeaderForMatch } from './header-normalization';
+import { useAutoMapColumns } from './use-auto-map-columns';
+import { useImportSchema } from './use-import-schema';
+import { useImportSession } from './use-import-session';
 type GenerateProps = {
   spaceId: string;
   space: Space;
 };
 
-export type SupportedValueType = 'TEXT' | 'TIME' | 'URL' | 'ENTITY';
+const TYPES_HEADER_NORMALIZED = 'types';
 
-export type UnsupportedValueType = 'number' | 'image';
-
-type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}b`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}kb`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
+}
 
 export const Generate = ({ spaceId }: GenerateProps) => {
-  return null;
+  const router = useRouter();
+  const { isEditor } = useAccessControl(spaceId);
+  const [records, setRecords] = useAtom(recordsAtom);
+  const [, setStep] = useAtom(stepAtom);
+  const [fileName, setFileName] = useAtom(fileNameAtom);
+  const [selectedType, setSelectedType] = useAtom(selectedTypeAtom);
+  const [typesColumnIndex, setTypesColumnIndex] = useAtom(typesColumnIndexAtom);
+  const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
+  const headers = useAtomValue(headersAtom);
+  const pathname = usePathname();
+  const spacePath = pathname?.split('/import')[0] ?? '/space';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // const { isEditor } = useAccessControl(spaceId);
+  const { autoMap, isAutoMapping } = useAutoMapColumns(spaceId);
+  const autoMappedSignatureRef = useRef<string | null>(null);
 
-  // const [actions, setActions] = useAtom(valuesAtom);
-  // const [isLoading, setIsLoading] = useAtom(loadingAtom);
-  // const [step, setStep] = useAtom(stepAtom);
-  // const setIsPublishOpen = useSetAtom(publishAtom);
+  const hasTypesColumn = useMemo(() => {
+    const normalized = headers.map(h => h?.trim().toLowerCase() ?? '');
+    const idx = normalized.indexOf(TYPES_HEADER_NORMALIZED);
+    return idx >= 0 ? idx : undefined;
+  }, [headers]);
 
-  // const pathname = usePathname();
-  // const spacePath = pathname?.split('/import')[0] ?? '/spaces';
+  const { schema } = useImportSchema({ selectedTypeId: selectedType?.id, spaceId });
+  const { resetMappedState, clearGeneratedChanges } = useImportSession(spaceId);
 
-  // const [entityType, setEntityType] = useState<Entity | undefined>(undefined);
-  // const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
+  // Map "Name" header to NAME_PROPERTY and match schema properties by header name
+  useEffect(() => {
+    if (headers.length === 0) return;
+    const normalizedHeaders = headers.map(h => normalizeHeader(h ?? ''));
+    const propNameToId = schema.length > 0
+      ? new Map(schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id]))
+      : new Map<string, string>();
 
-  // const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
-  // const [entityIdIndex, setEntityIdIndex] = useState<number | undefined>(undefined);
-  // const [entityAttributes, setEntityAttributes] = useState<EntityAttributesType>({});
+    setColumnMapping(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (let i = 0; i < normalizedHeaders.length; i++) {
+        if (typesColumnIndex !== undefined && i === typesColumnIndex) continue;
+        if (next[i] !== undefined) continue;
+        const raw = normalizedHeaders[i];
+        const normalized = normalizeHeaderForMatch(raw);
+        if (normalized === 'name') {
+          next[i] = SystemIds.NAME_PROPERTY;
+          changed = true;
+        } else {
+          const propId = propNameToId.get(normalized) ?? propNameToId.get(raw);
+          if (propId) {
+            next[i] = propId;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [headers, schema, setColumnMapping, typesColumnIndex]);
 
-  // const [records, setRecords] = useAtom(recordsAtom);
-  // const headers = useAtomValue(headersAtom);
-  // const examples = useAtomValue(examplesAtom);
+  // Auto-map unmapped columns via space-wide property search after schema matching
+  useEffect(() => {
+    if (headers.length === 0) return;
+    // Wait for schema matching to finish first when a selectedType is set
+    if (selectedType && schema.length === 0) return;
+    if (isAutoMapping) return;
 
-  // const [file, setFile] = useState<string | undefined>(undefined);
+    // Check if there are unmapped columns
+    const hasUnmapped = headers.some(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    );
+    if (!hasUnmapped) return;
 
-  // const fileInputRef = useRef<HTMLInputElement>(null);
+    const signature = `${fileName ?? ''}::${headers.join('|')}`;
+    if (autoMappedSignatureRef.current === signature) return;
+    autoMappedSignatureRef.current = signature;
+    autoMap();
+  }, [headers, schema, selectedType, typesColumnIndex, columnMapping, autoMap, isAutoMapping, fileName]);
 
-  // const handleFileInputClick = () => {
-  //   if (fileInputRef.current) {
-  //     fileInputRef.current.click();
-  //   }
-  // };
+  const MAX_FILE_SIZE_MB = 10;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const [dragActive, setDragActive] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(undefined);
 
-  // const handleProcessFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-  //   setFile(event.currentTarget?.files?.[0]?.name);
+  const resetSessionState = useCallback(() => {
+    resetMappedState();
+    autoMappedSignatureRef.current = null;
+  }, [resetMappedState]);
 
-  //   const reader = new FileReader();
+  const processFile = useCallback(
+    (file: File | null) => {
+      setFileError(null);
+      if (!file) return;
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        resetSessionState();
+        setFileError(`File must be under ${MAX_FILE_SIZE_MB}mb`);
+        setFileName(undefined);
+        setFileSizeBytes(undefined);
+        setRecords([]);
+        setStep('step1');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      const ext = file.name.toLowerCase().split('.').pop();
+      if (ext !== 'csv') {
+        resetSessionState();
+        setFileError('Only CSV files are supported');
+        setFileName(undefined);
+        setFileSizeBytes(undefined);
+        setRecords([]);
+        setStep('step1');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      resetSessionState();
+      setFileName(file.name);
+      setFileSizeBytes(file.size);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e?.target?.result;
+        if (typeof result !== 'string') return;
+        try {
+          const newRecords = parse(result, {
+            delimiter: ',',
+            skip_empty_lines: true,
+            trim: true,
+          });
+          setRecords(newRecords);
+        } catch (error) {
+          console.warn('[import] Failed to parse CSV file', error);
+          resetSessionState();
+          setFileError('Unable to parse CSV. Please check the file format and try again.');
+          setFileName(undefined);
+          setFileSizeBytes(undefined);
+          setRecords([]);
+          setStep('step1');
+        }
+      };
+      reader.readAsText(file);
+      setStep('step2');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+    [resetSessionState, setFileName, setRecords, setStep]
+  );
 
-  //   reader.onload = event => {
-  //     if (!event?.target?.result) {
-  //       return;
-  //     }
+  const handleFileInputClick = () => fileInputRef.current?.click();
 
-  //     const { result } = event.target;
+  const handleProcessFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input?.files?.[0] ?? fileInputRef.current?.files?.[0] ?? null;
+    processFile(file);
+  };
 
-  //     const newRecords = parse(result as string, {
-  //       delimiter: ',',
-  //       skip_empty_lines: true,
-  //       trim: true,
-  //     });
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover');
+  };
 
-  //     setRecords(newRecords);
-  //   };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer?.files?.[0];
+    processFile(file ?? null);
+  };
 
-  //   if (event.currentTarget?.files?.[0]) {
-  //     reader.readAsBinaryString(event.currentTarget?.files?.[0]);
-  //   }
+  const handleDeleteFile = useCallback(() => {
+    resetSessionState();
+    setFileName(undefined);
+    setFileSizeBytes(undefined);
+    setRecords([]);
+    setStep('step1');
+  }, [resetSessionState, setFileName, setRecords, setStep]);
 
-  //   setStep('step3');
-  // };
+  const step3Content = useMemo(() => {
+    if (records.length === 0) {
+      return (
+        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <p className="text-metadata text-grey-04">Upload a file to continue</p>
+        </div>
+      );
+    }
+    if (!selectedType && typesColumnIndex === undefined) {
+      return (
+        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
+        </div>
+      );
+    }
+    if (isAutoMapping) {
+      return (
+        <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <Spinner />
+          <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
+        </div>
+      );
+    }
+    const step3DataRows = records.slice(1).filter(
+      (row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== '')
+    );
+    const unmappedCount = headers.filter(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    ).length;
+    const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
+    const hasUnmapped = unmappedCount > 0;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        {hasUnmapped ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex shrink-0 items-center" aria-hidden>
+                <Warning color="red-01" />
+              </span>
+              <Text variant="smallButton" className="text-text">
+                {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
+              </Text>
+              <span className="flex shrink-0 items-center" aria-hidden>
+                <Warning color="red-01" />
+              </span>
+              <Text variant="smallButton" className="text-text">
+                {dataPointsNeedLinking.toLocaleString('en-US')} data points need linking
+              </Text>
+            </div>
+            <SmallButton
+              type="button"
+              variant="secondary"
+              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+            >
+              Fix data
+            </SmallButton>
+          </>
+        ) : (
+          <>
+            <p className="text-metadata text-grey-04">All columns are mapped. Review your data before importing.</p>
+            <SmallButton
+              type="button"
+              variant="secondary"
+              className="shrink-0 rounded-full"
+              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+            >
+              Review
+            </SmallButton>
+          </>
+        )}
+      </div>
+    );
+  }, [records, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, router, spaceId]);
 
-  // const handleReset = useCallback(() => {
-  //   setStep('step1');
-  //   setEntityType(undefined);
-  //   setEntityNameIndex(undefined);
-  //   setEntityAttributes({});
-  //   setFile(undefined);
-  //   setRecords([]);
-  //   setActions([]);
-  // }, [setActions, setRecords, setStep]);
+  if (!isEditor) return null;
 
-  // const handleGenerateActions = useCallback(async () => {
-  //   setIsLoading(true);
+  return (
+    <div className="overflow-visible">
+      <div className="mb-6">
+        <Link href={spacePath}>
+          <SquareButton icon={<ArrowLeft />} />
+        </Link>
+      </div>
 
-  //   const [, ...entities] = records;
+      <h1 className="mb-10 text-mainPage font-semibold text-text">Import data</h1>
 
-  //   const generateActions = async () => {
-  //     const attributes = Object.keys(entityAttributes);
+      <div className="mb-8">
+        <div className="mb-3 flex flex-col">
+          <span className="font-semibold text-purple">Step 1</span>
+          <span className="text-button font-medium text-text">Upload your file</span>
+        </div>
+        <input
+          ref={fileInputRef}
+          id="csv-file"
+          type="file"
+          accept=".csv"
+          onChange={handleProcessFile}
+          className="sr-only"
+          aria-label="Select CSV file"
+        />
+        {fileName ? (
+          <div
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-bold text-text">{fileName}</span>
+              {fileSizeBytes != null && (
+                <span className="shrink-0 text-metadata text-grey-04">{formatFileSize(fileSizeBytes)}</span>
+              )}
+            </div>
+            <SmallButton type="button" variant="secondary" onClick={handleDeleteFile} className="shrink-0 rounded-full">
+              Delete
+            </SmallButton>
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            onClick={handleFileInputClick}
+            onKeyDown={(e) => e.key === 'Enter' && handleFileInputClick()}
+            className={`flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors ${
+              dragActive ? 'border-purple bg-ctaTertiary' : 'border-grey-02 bg-white'
+            }`}
+          >
+            <p className="text-button font-semibold text-text">Drag & drop or select a file</p>
+            <p className="text-metadata text-grey-04">Max {MAX_FILE_SIZE_MB}mb - CSV</p>
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <SmallButton type="button" icon={<Upload />} variant="secondary" onClick={handleFileInputClick}>
+                Select file
+              </SmallButton>
+            </div>
+          </div>
+        )}
+        {fileError && <p className="mt-2 text-smallButton text-red-01">{fileError}</p>}
+      </div>
 
-  //     // @TODO(relations)
-  //     const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'ENTITY');
-  //     const relatedEntityIdsSet: Set<string> = new Set();
+      <div className="mb-8">
+        <div className="mb-3 flex flex-col">
+          <span className="font-semibold text-purple">Step 2</span>
+          <span className="text-button font-medium text-text">Map types</span>
+        </div>
+        {!fileName || records.length === 0 ? (
+          <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+            <p className="text-metadata text-grey-04">Upload a file to continue</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
+            <p className="mb-2 text-metadata text-grey-04">
+              {fileName} · Type - Find or create a type to use
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                {selectedType ? (
+                  <>
+                    <span className="text-smallButton font-medium text-text">{selectedType.name}</span>
+                    <SmallButton
+                      variant="ghost"
+                      onClick={() => {
+                        clearGeneratedChanges();
+                        setSelectedType(null);
+                      }}
+                      className="text-grey-04"
+                    >
+                      Change type
+                    </SmallButton>
+                  </>
+                ) : (
+                  <div className="relative w-[192px]">
+                    <EntitySearchAutocomplete
+                      placeholder="Search for a type..."
+                      dropdownClassName="!w-[384px] min-w-[320px]"
+                      filterByTypes={[SystemIds.SCHEMA_TYPE]}
+                      onDone={(result) => {
+                        clearGeneratedChanges();
+                        setSelectedType({ id: result.id, name: result.name });
+                        setTypesColumnIndex(undefined);
+                        setStep('step3');
+                      }}
+                      itemIds={[]}
+                    />
+                  </div>
+                )}
+              </div>
+              <span className="shrink-0 text-button text-grey-04">or</span>
+              <div className="shrink-0">
+                <Dropdown
+                  align="start"
+                  trigger={
+                    <span>
+                      {typesColumnIndex !== undefined ? `Column: ${headers[typesColumnIndex] ?? ''}` : 'Select column from CSV'}
+                    </span>
+                  }
+                  options={headers.map((header, index) => ({
+                    label: header ?? `Column ${index + 1}`,
+                    value: String(index),
+                    disabled: false,
+                    onClick: () => {
+                      clearGeneratedChanges();
+                      setTypesColumnIndex(index);
+                      setSelectedType(null);
+                      setColumnMapping(prev => {
+                        if (prev[index] === undefined) return prev;
+                        const next = { ...prev };
+                        delete next[index];
+                        return next;
+                      });
+                      setStep('step3');
+                    },
+                  }))}
+                />
+              </div>
+            </div>
+            {hasTypesColumn !== undefined && (
+              <p className="mt-2 text-metadata text-grey-04">This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type above.</p>
+            )}
+          </div>
+        )}
+      </div>
 
-  //     entities.forEach(entity => {
-  //       relationAttributes.forEach(relation => {
-  //         const values = entity[relation.index].split(',');
-  //         values.forEach(value => {
-  //           if (!relatedEntityIdsSet.has(value)) {
-  //             relatedEntityIdsSet.add(value);
-  //           }
-  //         });
-  //       });
-  //     });
-
-  //     const relatedEntityIds: Array<string> = [...relatedEntityIdsSet.values()];
-  //     const relatedEntities = await Promise.all(
-  //       relatedEntityIds.map((entityId: string) => {
-  //         return Effect.runPromise(getEntity(entityId, ROOT_SPACE));
-  //       })
-  //     );
-
-  //     const filteredRelatedEntities: Array<Entity> = relatedEntities.filter(entity => entity !== null);
-
-  //     const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
-
-  //     if (typeof entityNameIndex === 'number' && typeof entityIdIndex === 'number') {
-  //       entities.forEach(entity => {
-  //         relatedEntitiesMap.set(EntityId(entity[entityIdIndex]), entity[entityNameIndex]);
-  //       });
-  //     }
-
-  //     // @TODO: Use actual type
-  //     const newTriples: Array<TripleType> = [];
-
-  //     entities.forEach(entity => {
-  //       const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
-
-  //       if (typeof entityNameIndex !== 'number' || !entityType) return;
-
-  //       // Create new entity + set entity name
-  //       newTriples.push({
-  //         space: spaceId,
-  //         entityId: newEntityId,
-  //         entityName: entity[entityNameIndex],
-  //         attributeId: SystemIds.NAME_PROPERTY,
-  //         attributeName: 'Name',
-  //         value: {
-  //           type: 'TEXT',
-  //           value: entity[entityNameIndex],
-  //         },
-  //       });
-
-  //       // Create entity type
-  //       // newTriples.push({
-  //       //   space: spaceId,
-  //       //   entityId: newEntityId,
-  //       //   entityName: entity[entityNameIndex],
-  //       //   attributeId: 'type',
-  //       //   attributeName: 'Types',
-  //       //   value: {
-  //       //     type: 'ENTITY',
-  //       //     value: entityType.id,
-  //       //     name: entityType.name,
-  //       //   },
-  //       // });
-
-  //       // Create entity attribute values
-  //       attributes.forEach(attributeId => {
-  //         if (entityAttributes[attributeId]?.type === 'TIME') {
-  //           const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
-
-  //           if (!date.isValid()) {
-  //             return null;
-  //           }
-
-  //           const dateValue = GeoDate.toISOStringUTC({
-  //             day: date.date().toString(),
-  //             month: (date.month() + 1).toString(),
-  //             year: date.year().toString(),
-  //             hour: '0',
-  //             minute: '0',
-  //           });
-
-  //           newTriples.push({
-  //             space: spaceId,
-  //             entityId: newEntityId,
-  //             entityName: entity[entityNameIndex],
-  //             attributeId,
-  //             attributeName: entityAttributes[attributeId]?.name ?? '',
-  //             value: {
-  //               type: 'TIME',
-  //               value: dateValue,
-  //             },
-  //           });
-  //         } else if (entityAttributes[attributeId]?.type === 'ENTITY') {
-  //           // const values = entity[entityAttributes[attributeId].index].split(',');
-  //           // values.forEach(value => {
-  //           //   newTriples.push({
-  //           //     space: spaceId,
-  //           //     entityId: newEntityId,
-  //           //     entityName: entity[entityNameIndex],
-  //           //     attributeId,
-  //           //     attributeName: entityAttributes[attributeId]?.name ?? '',
-  //           //     value: {
-  //           //       type: 'ENTITY',
-  //           //       value: value,
-  //           //       name: relatedEntitiesMap.get(EntityId(value)) ?? null,
-  //           //     },
-  //           //   });
-  //           // });
-  //         } else {
-  //           newTriples.push({
-  //             space: spaceId,
-  //             entityId: newEntityId,
-  //             entityName: entity[entityNameIndex],
-  //             attributeId,
-  //             attributeName: entityAttributes[attributeId]?.name ?? '',
-  //             value: {
-  //               type: entityAttributes[attributeId]?.type ?? 'TEXT',
-  //               value: entity[entityAttributes[attributeId].index],
-  //             } as Value,
-  //           });
-  //         }
-  //       });
-  //     });
-
-  //     setActions(newTriples);
-  //   };
-
-  //   try {
-  //     await generateActions();
-  //   } catch (error) {
-  //     console.error(error);
-  //   }
-
-  //   setIsLoading(false);
-  //   setStep('step4');
-  // }, [
-  //   entityAttributes,
-  //   entityIdIndex,
-  //   entityNameIndex,
-  //   entityType,
-  //   records,
-  //   setActions,
-  //   setIsLoading,
-  //   setStep,
-  //   spaceId,
-  // ]);
-
-  // const handlePublishActions = () => {
-  //   setIsPublishOpen(true);
-  // };
-
-  // const isGenerationReady =
-  //   !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number' && step !== 'step4';
-
-  // useEffect(() => {
-  //   if (step === 'done') {
-  //     handleReset();
-  //   }
-  // }, [step, handleReset]);
-
-  // if (!isEditor) {
-  //   return null;
-  // }
-
-  // return (
-  //   <div className="overflow-visible">
-  //     <div className="space-y-4">
-  //       <Link href={spacePath}>
-  //         <SquareButton icon={<ArrowLeft />} />
-  //       </Link>
-  //       <div className="flex w-full items-center justify-between">
-  //         <div className="text-mediumTitle">Import CSV data</div>
-  //         <SmallButton onClick={handleReset} variant="secondary" icon={<RetrySmall />}>
-  //           Reset form
-  //         </SmallButton>
-  //       </div>
-  //     </div>
-  //     <Accordion type="single" value={step} onValueChange={setStep}>
-  //       <Accordion.Item value="step1">
-  //         <Accordion.Trigger>
-  //           <div className="text-smallTitle">Step 1</div>
-  //           <div className="mt-1 text-metadata">
-  //             {!entityType ? `Choose a type to add data to` : `Type: ${entityType.name}`}
-  //           </div>
-  //         </Accordion.Trigger>
-  //         <Accordion.Content>
-  //           <div className="inline-flex items-center gap-1.5">
-  //             {entityType ? (
-  //               <>
-  //                 <div className="text-smallButton">{entityType.name}</div>
-  //                 <SquareButton onClick={() => setEntityType(undefined)} icon={<Trash />} />
-  //               </>
-  //             ) : (
-  //               <EntitySearchAutocomplete
-  //                 placeholder="Select entity type..."
-  //                 onDone={result => {
-  //                   setEntityType(result as Entity);
-  //                   setStep('step2');
-  //                 }}
-  //                 itemIds={[]}
-  //               />
-  //             )}
-  //           </div>
-  //         </Accordion.Content>
-  //       </Accordion.Item>
-  //       <Accordion.Item value="step2" disabled={!entityType}>
-  //         <Accordion.Trigger>
-  //           <div className="text-smallTitle">Step 2</div>
-  //           <div className="mt-1 text-metadata">{!file ? `Upload your CSV to add the data` : `Uploaded: ${file}`}</div>
-  //         </Accordion.Trigger>
-  //         <Accordion.Content>
-  //           <div className="inline-flex items-center gap-3">
-  //             <label htmlFor="csv-file">
-  //               <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
-  //                 Upload CSV
-  //               </SmallButton>
-  //             </label>
-  //             {file ? (
-  //               <div className="inline-flex items-center gap-1.5">
-  //                 <div className="text-smallButton text-grey-04">{file}</div>
-  //                 <SquareButton onClick={() => setFile(undefined)} icon={<Trash />} />
-  //               </div>
-  //             ) : (
-  //               <div>
-  //                 <span className="px-1.5 text-smallButton text-grey-04">No file selected</span>
-  //               </div>
-  //             )}
-  //             <input
-  //               ref={fileInputRef}
-  //               id="csv-file"
-  //               type="file"
-  //               accept="*.csv"
-  //               onChange={handleProcessFile}
-  //               className="hidden"
-  //             />
-  //           </div>
-  //         </Accordion.Content>
-  //       </Accordion.Item>
-  //       <Accordion.Item value="step3" disabled={!file}>
-  //         <Accordion.Trigger>
-  //           <div className="text-smallTitle">Step 3</div>
-  //           <div className="mt-1 text-metadata">
-  //             Match the attributes with the corresponding columns in your csv and specify their value types
-  //           </div>
-  //         </Accordion.Trigger>
-  //         <Accordion.Content>
-  //           <div className="grid grid-cols-3 gap-8">
-  //             <div>
-  //               <div className="flex items-center justify-between">
-  //                 <div className="text-metadataMedium">Name</div>
-  //                 <div className="text-footnoteMedium">Required</div>
-  //               </div>
-  //               <div className="mt-2 flex items-center gap-1">
-  //                 <Select
-  //                   value={entityNameIndex?.toString()}
-  //                   onChange={(value: string) => setEntityNameIndex(parseInt(value, 10))}
-  //                   placeholder="Select column..."
-  //                   options={headers.map((header: string, index: number) => {
-  //                     return {
-  //                       value: index.toString(),
-  //                       label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
-  //                     };
-  //                   })}
-  //                   className="max-w-full overflow-clip"
-  //                   position="popper"
-  //                 />
-  //               </div>
-  //             </div>
-  //             <div>
-  //               <div className="flex items-center justify-between">
-  //                 <div className="text-metadataMedium">Entity ID</div>
-  //                 <div className="text-footnoteMedium">Optional (advanced)</div>
-  //               </div>
-  //               <div className="mt-2 flex items-center gap-1">
-  //                 <Select
-  //                   value={entityIdIndex?.toString() ?? ''}
-  //                   onChange={(value: string) => {
-  //                     if (value) {
-  //                       setEntityIdIndex(parseInt(value, 10));
-  //                     } else {
-  //                       setEntityIdIndex(undefined);
-  //                     }
-  //                   }}
-  //                   placeholder="Select column..."
-  //                   options={[
-  //                     { value: '', label: 'Select column...' },
-  //                     ...headers.map((header: string, index: number) => {
-  //                       return {
-  //                         value: index.toString(),
-  //                         label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
-  //                         disabled: !uuidValidateV4(examples[index]),
-  //                       };
-  //                     }),
-  //                   ]}
-  //                   className="max-w-full overflow-clip"
-  //                   position="popper"
-  //                 />
-  //               </div>
-  //             </div>
-  //             {supportedAttributes.map((attribute: TripleType) => (
-  //               <div key={attribute.value.value}>
-  //                 <div className="flex items-center justify-between">
-  //                   <div className="text-metadataMedium">
-  //                     {/* {attribute.value.type === 'ENTITY' ? attribute.value.name : null} */}
-  //                   </div>
-  //                   <div className="text-footnoteMedium">Optional</div>
-  //                 </div>
-  //                 <div className="mt-2 flex items-center gap-1">
-  //                   <Select
-  //                     value={entityAttributes?.[attribute.value.value]?.type ?? 'string'}
-  //                     onChange={(value: string) => {
-  //                       const newEntityAttributes = {
-  //                         ...entityAttributes,
-  //                       };
-
-  //                       if (value) {
-  //                         newEntityAttributes[attribute.value.value] = {
-  //                           ...newEntityAttributes[attribute.value.value],
-  //                           type: value as SupportedValueType,
-  //                         };
-  //                       } else {
-  //                         newEntityAttributes[attribute.value.value] = {
-  //                           ...newEntityAttributes[attribute.value.value],
-  //                           type: 'string' as SupportedValueType,
-  //                         };
-  //                       }
-
-  //                       setEntityAttributes(newEntityAttributes);
-  //                     }}
-  //                     options={[
-  //                       { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
-  //                       { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
-  //                       { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
-  //                       {
-  //                         value: 'image',
-  //                         label: 'Image',
-  //                         render: <Image />,
-  //                         disabled: true,
-  //                         className: `items-center`,
-  //                       },
-  //                       { value: 'entity', label: 'Relation', render: <Relation />, className: `items-center` },
-  //                     ]}
-  //                     className="flex-0!"
-  //                     position="popper"
-  //                   />
-  //                   <Select
-  //                     value={entityAttributes?.[attribute.value.value]?.index?.toString() ?? ''}
-  //                     onChange={(value: string) => {
-  //                       const newEntityAttributes = {
-  //                         ...entityAttributes,
-  //                       };
-
-  //                       if (value) {
-  //                         newEntityAttributes[attribute.value.value] = {
-  //                           ...newEntityAttributes[attribute.value.value],
-  //                           index: parseInt(value, 10),
-  //                           // name: attribute.value.type === 'ENTITY' ? attribute.value.name ?? '' : '',
-  //                         };
-  //                       } else {
-  //                         delete newEntityAttributes[attribute.value.value];
-  //                       }
-
-  //                       setEntityAttributes(newEntityAttributes);
-  //                     }}
-  //                     options={[
-  //                       { value: '', label: 'Select column...' },
-  //                       ...headers.map((header: string, index: number) => {
-  //                         return {
-  //                           value: index.toString(),
-  //                           label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
-  //                         };
-  //                       }),
-  //                     ]}
-  //                     className="max-w-full overflow-clip"
-  //                     position="popper"
-  //                   />
-  //                 </div>
-  //               </div>
-  //             ))}
-  //           </div>
-  //           {unsupportedAttributes.length > 0 && (
-  //             <div className="pt-16">
-  //               <div className="text-breadcrumb">
-  //                 Geo does not currently support data uploads to these type attribute data types
-  //               </div>
-  //               <div className="mt-4 grid grid-cols-3 gap-8">
-  //                 {unsupportedAttributes.map((attribute: TripleType) => (
-  //                   <div key={attribute.value.value}>
-  //                     <div className="flex items-center justify-between">
-  //                       <div className="text-metadataMedium">
-  //                         {/* {attribute.value.type === 'ENTITY' && attribute.value.name} */}
-  //                       </div>
-  //                       <div className="text-footnoteMedium">Optional</div>
-  //                     </div>
-  //                     <div className="mt-2 flex items-center gap-1">
-  //                       <Select
-  //                         value={entityAttributes?.[attribute.value.value]?.type ?? 'TEXT'}
-  //                         onChange={() => null}
-  //                         options={[
-  //                           { value: 'TEXT', label: 'Text', render: <Text />, className: `items-center` },
-  //                           { value: 'TIME', label: 'Date', render: <Date />, className: `items-center` },
-  //                           { value: 'URL', label: 'Web URL', render: <Url />, className: `items-center` },
-  //                           {
-  //                             value: 'IMAGE',
-  //                             label: 'Image',
-  //                             render: <Image />,
-  //                             disabled: true,
-  //                             className: `items-center`,
-  //                           },
-  //                           { value: 'RELATION', label: 'Relation', render: <Relation />, className: `items-center` },
-  //                         ]}
-  //                         className="flex-0!"
-  //                         disabled
-  //                       />
-  //                       <Select
-  //                         value=""
-  //                         onChange={() => null}
-  //                         placeholder="Select column..."
-  //                         options={[{ value: '', label: 'Select column...' }]}
-  //                         className="max-w-full overflow-clip"
-  //                         disabled
-  //                       />
-  //                     </div>
-  //                   </div>
-  //                 ))}
-  //               </div>
-  //             </div>
-  //           )}
-  //           <div className="mt-8">
-  //             <Button
-  //               onClick={handleGenerateActions}
-  //               variant="primary"
-  //               disabled={!isGenerationReady || actions.length > 0 || isLoading}
-  //             >
-  //               {!isLoading ? 'Generate' : 'Generating...'}
-  //             </Button>
-  //           </div>
-  //         </Accordion.Content>
-  //       </Accordion.Item>
-  //       <Accordion.Item value="step4" disabled={step !== 'step4' && actions.length === 0}>
-  //         <Accordion.Trigger>
-  //           <div className="text-smallTitle">Step 4</div>
-  //           <div className="mt-1 text-metadata">Publish generated actions</div>
-  //         </Accordion.Trigger>
-  //         <Accordion.Content>
-  //           <Button onClick={handlePublishActions} variant="primary" disabled={actions.length === 0}>
-  //             Review and publish
-  //           </Button>
-  //         </Accordion.Content>
-  //       </Accordion.Item>
-  //     </Accordion>
-  //   </div>
-  // );
+      <div className="mb-8">
+        <div className="mb-3 flex flex-col">
+          <span className="font-semibold text-purple">Step 3</span>
+          <span className="text-button font-medium text-text">Map properties and data</span>
+        </div>
+        {step3Content}
+      </div>
+    </div>
+  );
 };
-
-// const getAttributes = (entityType: Entity | undefined) => {
-//   const supportedAttributes: TripleType[] = [];
-//   const unsupportedAttributes: TripleType[] = [];
-
-//   // @TODO(migration): Do we still need this?
-//   if (entityType) {
-//     // entityType?.values.forEach((triple: TripleType) => {
-//     // if (triple.attributeName === 'Attributes') {
-//     // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_PROPERTYS.includes(triple.value.name)) {
-//     //   unsupportedAttributes.push(triple);
-//     // } else {
-//     //   supportedAttributes.push(triple);
-//     // }
-//     // }
-//     // });
-//   }
-
-//   return { supportedAttributes, unsupportedAttributes };
-// };
-
-// // @TODO(migration): Do we still need this?
-// // const UNSUPPORTED_PROPERTYS = ['Avatar', 'Cover'];

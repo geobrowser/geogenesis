@@ -20,11 +20,11 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
-import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
+import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
-import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
-import { cachedFetchSpace } from './cached-fetch-space';
+import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
+import { cachedFetchSpace } from '../cached-fetch-space';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
