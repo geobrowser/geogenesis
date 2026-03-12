@@ -131,11 +131,15 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     [editable, activeEntityId, editorContentVersion]
   );
 
+  const editorWrapperRef = React.useRef<HTMLDivElement>(null);
+
   const handleGutterClick = React.useCallback(
     (e: React.MouseEvent) => {
       if (!editor || !editable) return;
       const target = e.target as Element;
       if (target.closest('.ProseMirror')) return;
+      // Ignore clicks from portals outside the editor's DOM tree.
+      if (editorWrapperRef.current && !editorWrapperRef.current.contains(target)) return;
       editor.commands.focus('end');
     },
     [editor, editable]
@@ -165,6 +169,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   return (
     <LayoutGroup id="editor">
       <div
+        ref={editorWrapperRef}
         className={editable ? 'editable' : 'not-editable'}
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}

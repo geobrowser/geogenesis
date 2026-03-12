@@ -30,7 +30,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { SpacePageType } from '~/app/space/[id]/page';
+import { SpacePageType } from '~/app/space/[id]/(space)/page';
 import { dismissedNoticesAtom } from '~/atoms';
 import { teamNoticeDismissedAtom } from '~/atoms';
 import type { RepeatingNotice } from '~/atoms';

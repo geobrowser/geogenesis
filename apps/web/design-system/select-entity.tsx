@@ -73,6 +73,9 @@ type SelectEntityProps = {
   advanced?: boolean;
   autoFocus?: boolean;
   showIDs?: boolean;
+  initialQuery?: string;
+  /** When set, the result with this ID gets a "Currently selected" indicator */
+  selectedEntityId?: string;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -94,6 +97,8 @@ export const SelectEntity = ({
   advanced = true,
   autoFocus = false,
   showIDs = true,
+  initialQuery,
+  selectedEntityId,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -128,6 +133,7 @@ export const SelectEntity = ({
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes,
     filterBySpace,
+    initialQuery,
   });
 
   if (query === '' && result !== null) {
@@ -475,7 +481,12 @@ export const SelectEntity = ({
                                     {isShowingIds && (
                                       <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
                                     )}
-                                    <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
+                                    <div className="flex max-w-full items-center gap-1.5">
+                                      <span className="truncate text-resultTitle text-text">{result.name}</span>
+                                      {selectedEntityId === result.id && (
+                                        <span className="shrink-0 text-[0.6875rem] text-purple">Currently selected</span>
+                                      )}
+                                    </div>
                                     <div className="mt-1.5 flex items-center gap-1.5">
                                       {withSelectSpace && (result.spaces ?? []).length > 0 && (
                                         <div className="flex shrink-0 items-center gap-1">
@@ -629,7 +640,7 @@ export const SelectEntity = ({
                       </div>
                     </>
                   )}
-                  {!result && (
+                  {!result && onCreateEntity && (
                     <div className="flex w-full items-center justify-between border-t border-grey-02 py-[5px] pr-3 pl-[5px]">
                       <div className="flex items-center gap-3">
                         {showIDs && (

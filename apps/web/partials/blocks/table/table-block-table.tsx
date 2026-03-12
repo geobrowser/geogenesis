@@ -253,7 +253,7 @@ export const TableBlockTable = ({
 
   if (isEmpty && isFetched && !isLoading) {
     return (
-      <div className="block flex min-h-[568px] flex-col justify-center rounded-lg bg-grey-01">
+      <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>

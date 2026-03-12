@@ -346,6 +346,13 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
                 sideOffset={8}
                 align="start"
                 onOpenAutoFocus={e => e.preventDefault()}
+                onInteractOutside={e => {
+                  // Prevent portals from closing
+                  const target = e.target as HTMLElement | null;
+                  if (target?.closest('[data-radix-select-content]') || target?.closest('[role="listbox"]')) {
+                    e.preventDefault();
+                  }
+                }}
               >
                 <div className="flex items-center justify-between px-2 pb-2 text-smallButton text-grey-04">
                   <p>New filter</p>
