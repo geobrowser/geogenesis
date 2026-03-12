@@ -48,14 +48,12 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
     error: subspacesError,
   } = useActiveSubspaces(spaceId, open);
   const { space } = useSpace(spaceId);
-  const { setSubspace, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
-  const [removingKey, setRemovingKey] = React.useState<string | null>(null);
-  const [pendingKeys, setPendingKeys] = React.useState<Set<string>>(new Set());
+  const { setSubspace, unsetSubspace } = useSubspace({ spaceId });
+  const [pendingKeys, setPendingKeys] = React.useState<Map<string, 'adding' | 'removing'>>(new Map());
 
   const [addRelationType, setAddRelationType] = React.useState<'related' | 'verified'>('related');
 
   const isDao = space?.type === 'DAO';
-  const isRemoving = unsetStatus === 'pending';
 
   const existingSubspaceIds = React.useMemo(
     () =>
@@ -92,7 +90,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
 
       return sortSubspaces([...currentSubspaces, optimisticEntry]);
     });
-    setPendingKeys(prev => new Set(prev).add(key));
+    setPendingKeys(prev => new Map(prev).set(key, 'adding'));
     setQuery('');
 
     setSubspace(
@@ -104,7 +102,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
         onSuccess: () => {
           // Transaction confirmed — remove pending state, entry stays in cache
           setPendingKeys(prev => {
-            const next = new Set(prev);
+            const next = new Map(prev);
             next.delete(key);
             return next;
           });
@@ -116,7 +114,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
             return current.filter(s => !(s.id === subspace.id && s.relationType === relationType));
           });
           setPendingKeys(prev => {
-            const next = new Set(prev);
+            const next = new Map(prev);
             next.delete(key);
             return next;
           });
@@ -127,7 +125,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
 
   const removeSubspace = (subspaceId: string, relationType: 'verified' | 'related') => {
     const key = `${subspaceId}:${relationType}`;
-    setRemovingKey(key);
+    setPendingKeys(prev => new Map(prev).set(key, 'removing'));
 
     unsetSubspace(
       {
@@ -145,7 +143,11 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
           });
         },
         onSettled: () => {
-          setRemovingKey(null);
+          setPendingKeys(prev => {
+            const next = new Map(prev);
+            next.delete(key);
+            return next;
+          });
         },
       }
     );
@@ -253,7 +255,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                                   </div>
                                   <button
                                     type="button"
-                                    disabled={isRemoving}
+                                    disabled={pendingKeys.has(`${result.id}:${addRelationType}`)}
                                     className="ml-2 h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
                                     onClick={() => addSubspace({ id: result.id, name: result.name, description: result.description, image: result.image })}
                                   >
@@ -295,12 +297,12 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                 !isSubspacesError &&
                 activeSubspaces?.map(subspace => {
                   const key = `${subspace.id}:${subspace.relationType}`;
-                  const isPending = pendingKeys.has(key);
+                  const pendingState = pendingKeys.get(key);
 
                   return (
                     <div key={key}>
                       <div className="h-px w-full bg-divider" />
-                      <div className={`flex flex-col gap-1 py-3 ${isPending ? 'opacity-60' : ''}`}>
+                      <div className={`flex flex-col gap-1 py-3 ${pendingState ? 'opacity-60' : ''}`}>
                         <div className="flex items-center justify-between gap-2.5">
                           <div className="flex items-center gap-2.5">
                             <div className="size-[22px] shrink-0 overflow-clip rounded-sm">
@@ -313,7 +315,7 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                               {subspace.relationType === 'verified' ? 'Verified' : 'Related'}
                             </span>
                           </div>
-                          {isPending ? (
+                          {pendingState === 'adding' ? (
                             <span className="h-6 shrink-0 px-[7px] text-metadata text-grey-04">
                               {isDao ? 'Proposing...' : 'Adding...'}
                             </span>
@@ -321,10 +323,10 @@ export function SubspacesDialog({ open, onOpenChange, spaceId }: SubspacesDialog
                             <button
                               type="button"
                               className="h-6 shrink-0 rounded-md border border-grey-02 px-[7px] text-metadata text-text disabled:cursor-not-allowed disabled:opacity-50"
-                              disabled={isRemoving}
+                              disabled={pendingState === 'removing'}
                               onClick={() => removeSubspace(subspace.id, subspace.relationType)}
                             >
-                              {isRemoving && removingKey === key ? 'Removing...' : 'Remove'}
+                              {pendingState === 'removing' ? 'Removing...' : 'Remove'}
                             </button>
                           )}
                         </div>

@@ -251,7 +251,11 @@ function buildSubspaceTopic(
   return `0x${normalizedSubspace}${targetHex}` as Hex;
 }
 
-function parseTopicEntityId(topicEntityId?: string): string {
+function parseTopicEntityId(topicEntityId: string | undefined): string {
+  if (topicEntityId == null) {
+    throw new Error('Topic entity ID is required for subtopic relationships');
+  }
+
   if (!validateEntityId(topicEntityId)) {
     throw new Error(`Invalid topic entity ID: expected UUID format, got ${topicEntityId}`);
   }

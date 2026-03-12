@@ -180,25 +180,29 @@ export function EditableSpaceHeading({
                   <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
                     <p>Create in space</p>
                   </MenuItem>
-                  <MenuItem onClick={() => setIsContextMenuOpen(false)}>
-                    <p>Set space topic</p>
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      setIsContextMenuOpen(false);
-                      setIsSubspacesOpen(true);
-                    }}
-                  >
-                    <p>Subspaces</p>
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      setIsContextMenuOpen(false);
-                      setIsSubtopicsOpen(true);
-                    }}
-                  >
-                    <p>Subtopics</p>
-                  </MenuItem>
+                  {isEditing && (
+                    <>
+                      <MenuItem onClick={() => setIsContextMenuOpen(false)}>
+                        <p>Set space topic</p>
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setIsContextMenuOpen(false);
+                          setIsSubspacesOpen(true);
+                        }}
+                      >
+                        <p>Subspaces</p>
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setIsContextMenuOpen(false);
+                          setIsSubtopicsOpen(true);
+                        }}
+                      >
+                        <p>Subtopics</p>
+                      </MenuItem>
+                    </>
+                  )}
                   <MenuItem onClick={onCopyEntityId}>
                     <p>Copy entity ID</p>
                   </MenuItem>
