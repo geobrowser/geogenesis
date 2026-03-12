@@ -20,12 +20,11 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
-import { ConditionalSpaceTabs } from '~/partials/space-page/conditional-space-tabs';
+import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
-import { SpaceLayoutChrome } from '~/partials/space-page/space-layout-chrome';
 
-import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
-import { cachedFetchSpace } from './cached-fetch-space';
+import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
+import { cachedFetchSpace } from '../cached-fetch-space';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -56,55 +55,50 @@ export default async function Layout(props0: LayoutProps) {
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
       >
-        <SpaceLayoutChrome
-          cover={<EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />}
-          headerBlock={
-            <>
-              <div className="space-y-2">
-                <EditableSpaceHeading
+        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
+        <EntityPageContentContainer>
+          <div className="space-y-2">
+            <EditableSpaceHeading
+              spaceId={spaceId}
+              entityId={props.id}
+              addSubspaceComponent={
+                <AddSubspaceDialog
                   spaceId={spaceId}
-                  entityId={props.id}
-                  addSubspaceComponent={
-                    <AddSubspaceDialog
-                      spaceId={spaceId}
-                      trigger={
-                        <MenuItem>
-                          <Create />
-                          <p>Add subspace</p>
-                        </MenuItem>
-                      }
-                      spaceType={props.space?.type ?? 'PERSONAL'}
-                    />
+                  trigger={
+                    <MenuItem>
+                      <Create />
+                      <p>Add subspace</p>
+                    </MenuItem>
                   }
+                  spaceType={props.space?.type ?? 'PERSONAL'}
                 />
-                <SpacePageMetadataHeader
-                  spaceId={spaceId}
-                  entityId={props.id}
-                  membersComponent={
-                    <React.Suspense fallback={<MembersSkeleton />}>
-                      <SpaceEditors spaceId={spaceId} />
-                      <SpaceMembers spaceId={spaceId} />
-                    </React.Suspense>
-                  }
-                />
-              </div>
+              }
+            />
+            <SpacePageMetadataHeader
+              spaceId={spaceId}
+              entityId={props.id}
+              membersComponent={
+                <React.Suspense fallback={<MembersSkeleton />}>
+                  <SpaceEditors spaceId={spaceId} />
+                  <SpaceMembers spaceId={spaceId} />
+                </React.Suspense>
+              }
+            />
+          </div>
 
-              <Spacer height={40} />
-              <React.Suspense fallback={null}>
-                <ConditionalSpaceTabs
-                  spaceId={spaceId}
-                  entityId={props.id}
-                  initialTabRelations={props.tabRelations ?? []}
-                  tabEntities={props.tabEntities}
-                  typeIds={typeIds}
-                />
-              </React.Suspense>
-              <Spacer height={20} />
-            </>
-          }
-        >
+          <Spacer height={40} />
+          <React.Suspense fallback={null}>
+            <SpaceTabs
+              spaceId={spaceId}
+              entityId={props.id}
+              initialTabRelations={props.tabRelations ?? []}
+              tabEntities={props.tabEntities}
+              typeIds={typeIds}
+            />
+          </React.Suspense>
+          <Spacer height={20} />
           {children}
-        </SpaceLayoutChrome>
+        </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
   );

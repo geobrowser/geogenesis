@@ -6,7 +6,7 @@ import { Metadata } from 'next';
 
 import { ROOT_SPACE } from '~/core/constants';
 
-import Layout from '../space/[id]/layout';
+import Layout from '../space/[id]/(space)/layout';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',

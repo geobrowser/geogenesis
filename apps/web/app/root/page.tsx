@@ -2,7 +2,7 @@ import { connection } from 'next/server';
 
 import { ROOT_SPACE } from '~/core/constants';
 
-import Page from '../space/[id]/page';
+import Page from '../space/[id]/(space)/page';
 
 export default async function RootPage() {
   await connection();
