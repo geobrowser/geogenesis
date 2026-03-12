@@ -21,8 +21,8 @@ import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 import { mapPropertyType } from '~/core/utils/property/properties';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
@@ -51,6 +51,7 @@ import {
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
   type EditApplyNewPropertyPayload,
+  type EditAddExistingPropertyPayload,
   type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
@@ -187,7 +188,6 @@ export function PowerToolsScreen() {
     excludedColumnIds,
   });
   const { createProperty } = useCreateProperty(spaceId);
-
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
@@ -380,6 +380,13 @@ export function PowerToolsScreen() {
       setExcludedColumnIds(prev => [...new Set([...prev, ...propertyIds])]);
     },
     [storage, selectedEntityIds]
+  );
+
+  const handleAddExistingProperty = React.useCallback(
+    (payload: EditAddExistingPropertyPayload) => {
+      setExtraColumnIds(prev => [...prev, payload.propertyId]);
+    },
+    []
   );
 
   const handleApplyNewProperty = React.useCallback(
@@ -709,6 +716,7 @@ export function PowerToolsScreen() {
                 onDeleteApply={handleDeleteApply}
                 onRemoveProperties={handleRemoveProperties}
                 onApplyNewProperty={handleApplyNewProperty}
+                onAddExistingProperty={handleAddExistingProperty}
                 typesProperty={
                   data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
                     id: SystemIds.TYPES_PROPERTY,

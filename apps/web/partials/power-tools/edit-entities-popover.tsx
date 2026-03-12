@@ -15,7 +15,11 @@ import { Property } from '~/core/types';
 import type { SpaceEntity } from '~/core/types';
 import type { SwitchableRenderableType } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
-import type { SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import {
+  SelectEntityCompact,
+  type SelectEntityCompactResult,
+} from '~/design-system/select-entity-compact';
+import { Checkbox } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -142,6 +146,10 @@ export type EditApplyNewPropertyPayload = {
   initialImageFile?: File;
 };
 
+export type EditAddExistingPropertyPayload = {
+  propertyId: string;
+};
+
 export type EditEntitiesPopoverProps = {
   trigger: React.ReactNode;
   selectedCount: number;
@@ -156,6 +164,7 @@ export type EditEntitiesPopoverProps = {
   onDeleteApply?: (payload: EditDeleteApplyPayload) => void;
   onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
   onApplyNewProperty?: (payload: EditApplyNewPropertyPayload) => void;
+  onAddExistingProperty?: (payload: EditAddExistingPropertyPayload) => void;
 };
 
 export function EditEntitiesPopover({
@@ -169,6 +178,7 @@ export function EditEntitiesPopover({
   onDeleteApply,
   onRemoveProperties,
   onApplyNewProperty,
+  onAddExistingProperty,
 }: EditEntitiesPopoverProps) {
   const [open, setOpen] = React.useState(false);
   const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<
@@ -188,6 +198,9 @@ export function EditEntitiesPopover({
     React.useState<SwitchableRenderableType>('TEXT');
   const [newPropertyInitialValue, setNewPropertyInitialValue] = React.useState('');
   const [newPropertyImageFile, setNewPropertyImageFile] = React.useState<File | null>(null);
+  const [selectedExistingProperty, setSelectedExistingProperty] =
+    React.useState<SelectEntityCompactResult | null>(null);
+  const [useExistingPropertyFromGeo, setUseExistingPropertyFromGeo] = React.useState(false);
   const [addImageFile, setAddImageFile] = React.useState<File | null>(null);
   const addImageFileDialogOpenRef = React.useRef(false);
   const addImageFileDialogCloseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,15 +342,26 @@ export function EditEntitiesPopover({
 
   const isNewPropertyRelation =
     newPropertyValueType === 'RELATION' || newPropertyValueType === 'IMAGE';
+  const canApplyAddExisting =
+    action === 'new' &&
+    useExistingPropertyFromGeo &&
+    onAddExistingProperty &&
+    selectedExistingProperty != null;
   const canApplyNew =
     action === 'new' &&
+    !useExistingPropertyFromGeo &&
     onApplyNewProperty &&
     newPropertyName.trim().length > 0 &&
     (newPropertyValueType === 'IMAGE'
       ? newPropertyImageFile != null
-      : isNewPropertyRelation
-        ? selectedAttributeEntities.length > 0
-        : true);
+      : true);
+
+  const handleAddExistingProperty = React.useCallback(() => {
+    if (!selectedExistingProperty || !onAddExistingProperty) return;
+    onAddExistingProperty({ propertyId: selectedExistingProperty.id });
+    setOpen(false);
+    setSelectedExistingProperty(null);
+  }, [selectedExistingProperty, onAddExistingProperty]);
 
   const handleApplyNewProperty = React.useCallback(() => {
     if (!canApplyNew || !onApplyNewProperty) return;
@@ -381,6 +405,8 @@ export function EditEntitiesPopover({
       setNewPropertyValueType('TEXT');
       setNewPropertyInitialValue('');
       setNewPropertyImageFile(null);
+      setSelectedExistingProperty(null);
+      setUseExistingPropertyFromGeo(false);
       setAddImageFile(null);
       setRemovePropertySearchQuery('');
       setPropertiesMarkedForRemoval(new Set());
@@ -452,7 +478,7 @@ export function EditEntitiesPopover({
           align="end"
           sideOffset={8}
           collisionPadding={10}
-          className="z-[100] min-w-[280px] max-w-[360px] overflow-visible rounded-lg border border-grey-02 bg-white p-0 shadow-lg"
+          className="z-[100] w-[280px] overflow-visible rounded-lg border border-grey-02 bg-white p-0 shadow-lg"
           onInteractOutside={e => {
             if (addImageFileDialogOpenRef.current) e.preventDefault();
           }}
@@ -478,7 +504,7 @@ export function EditEntitiesPopover({
                   [
                     { id: 'add', label: 'Add' },
                     { id: 'delete', label: 'Remove' },
-                    { id: 'new', label: 'New property' },
+                    { id: 'new', label: 'Add property' },
                     { id: 'removeProperty', label: 'Remove Property' },
                   ] as const
                 ).map(({ id, label }) => (
@@ -506,13 +532,19 @@ export function EditEntitiesPopover({
                     Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
                   </Text>
                 </div>
-                {(canApply || canApplyDelete || canApplyRemoveProperties || canApplyNew) && (
+                {(canApply ||
+                  canApplyDelete ||
+                  canApplyRemoveProperties ||
+                  canApplyAddExisting ||
+                  canApplyNew) && (
                   <button
                     type="button"
                     onClick={
-                      canApplyNew
-                        ? handleApplyNewProperty
-                        : canApplyRemoveProperties
+                      canApplyAddExisting
+                        ? handleAddExistingProperty
+                        : canApplyNew
+                          ? handleApplyNewProperty
+                          : canApplyRemoveProperties
                           ? handleRemovePropertiesApply
                           : canApplyDelete
                             ? handleDeleteApply
@@ -534,7 +566,7 @@ export function EditEntitiesPopover({
               >
                 <span>
                   {action === 'new'
-                    ? 'New property'
+                    ? 'Add property'
                     : action === 'add'
                       ? 'Add'
                       : action === 'removeProperty'
@@ -571,33 +603,71 @@ export function EditEntitiesPopover({
               {action === 'new' && (
                 <>
                   <Text variant="metadata" color="grey-04" className="block">
-                    Value type
+                    Property type
                   </Text>
                   <Spacer height={6} />
                   <div className="w-full">
                     <Select
                       value={newPropertyValueType}
-                      onChange={v => setNewPropertyValueType(v as SwitchableRenderableType)}
-                      options={NEW_PROPERTY_VALUE_TYPES.map(({ value, label }) => ({ value, label }))}
+                      onChange={v =>
+                        setNewPropertyValueType(v as SwitchableRenderableType)
+                      }
+                      options={NEW_PROPERTY_VALUE_TYPES.map(({ value, label }) => ({
+                        value,
+                        label,
+                      }))}
                       placeholder="Select type"
                       className="w-full min-w-0"
                       position="popper"
                     />
                   </div>
                   <Spacer height={12} />
-                  <Text variant="metadata" color="grey-04" className="block">
-                    Property name
-                  </Text>
-                  <Spacer height={6} />
-                  <input
-                    type="text"
-                    value={newPropertyName}
-                    onChange={e => setNewPropertyName(e.target.value)}
-                    placeholder="Placeholder..."
-                    className="w-full rounded border border-grey-02 px-2 py-1.5 text-button text-text shadow-inner-grey-02 placeholder:text-grey-04 focus:border-grey-04 focus:outline-none"
-                  />
-                  <Spacer height={12} />
-                  {isNewPropertyRelation ? (
+                  {newPropertyValueType === 'RELATION' && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={useExistingPropertyFromGeo}
+                          onChange={e => {
+                            e.stopPropagation();
+                            setUseExistingPropertyFromGeo(prev => !prev);
+                          }}
+                        />
+                        <Text variant="metadata" color="grey-04">
+                          Add existing property from Geo
+                        </Text>
+                      </div>
+                      <Spacer height={12} />
+                    </>
+                  )}
+                  {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo ? (
+                    <div className="w-full">
+                      <Text variant="metadata" color="grey-04" className="block">
+                        Search for an existing property to add
+                      </Text>
+                      <Spacer height={6} />
+                      <SelectEntityCompact
+                        spaceId={spaceId}
+                        relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                        selected={selectedExistingProperty ? [selectedExistingProperty] : []}
+                        onRemoveSelected={() => setSelectedExistingProperty(null)}
+                        onDone={result => setSelectedExistingProperty(result)}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Text variant="metadata" color="grey-04" className="block">
+                        Property name
+                      </Text>
+                      <Spacer height={6} />
+                      <input
+                        type="text"
+                        value={newPropertyName}
+                        onChange={e => setNewPropertyName(e.target.value)}
+                        placeholder="Placeholder..."
+                        className="w-full rounded border border-grey-02 px-2 py-1.5 text-button text-text shadow-inner-grey-02 placeholder:text-grey-04 focus:border-grey-04 focus:outline-none"
+                      />
+                      <Spacer height={12} />
+                      {isNewPropertyRelation ? (
                     <>
                       <Text variant="metadata" color="grey-04" className="block">
                         Add property values (optional)
@@ -686,7 +756,9 @@ export function EditEntitiesPopover({
                       />
                     </>
                   )}
-                  <Spacer height={12} />
+                      <Spacer height={12} />
+                    </>
+                  )}
                 </>
               )}
               {action === 'delete' && effectiveProperty && (
