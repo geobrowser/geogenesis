@@ -25,6 +25,8 @@ type SelectEntityCompactProps = {
   onDone: (result: SelectEntityCompactResult) => void;
   selected?: SelectEntityCompactResult[];
   onRemoveSelected?: (id: string) => void;
+  /** When set, search results are restricted to entities of these types (e.g. image-only). */
+  relationValueTypes?: { id: string; name: string | null }[];
 };
 
 export function SelectEntityCompact({
@@ -32,8 +34,14 @@ export function SelectEntityCompact({
   onDone,
   selected = [],
   onRemoveSelected,
+  relationValueTypes,
 }: SelectEntityCompactProps) {
-  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch();
+  const filterByTypes = relationValueTypes?.length
+    ? relationValueTypes.map(r => r.id)
+    : undefined;
+  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
+    filterByTypes,
+  });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const hasResults = query.trim() && results.length > 0;
 
@@ -157,7 +165,7 @@ export function SelectEntityCompact({
               <div className="divide-y divide-divider">
                 {results.map((result, index) => (
                   <button
-                    key={result.id}
+                    key={`${result.id}-${index}`}
                     type="button"
                     onClick={() => handleSelectResult(result)}
                     className={`flex w-full flex-col px-3 py-2 text-left transition-colors hover:bg-grey-01 focus:outline-hidden ${
