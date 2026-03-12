@@ -176,7 +176,6 @@ export function EditEntitiesPopover({
   >([]);
   const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
   const [actionPickerOpen, setActionPickerOpen] = React.useState(false);
-  const [columnPickerOpen, setColumnPickerOpen] = React.useState(false);
   const [markedForDeleteKeys, setMarkedForDeleteKeys] = React.useState<Set<string>>(new Set());
   const [showAllDeleteValues, setShowAllDeleteValues] = React.useState(false);
   const [pendingValue, setPendingValue] = React.useState<string>('');
@@ -205,7 +204,6 @@ export function EditEntitiesPopover({
   useKey('Escape', () => {
     if (!open) return;
     if (actionPickerOpen) setActionPickerOpen(false);
-    else if (columnPickerOpen) setColumnPickerOpen(false);
     else setOpen(false);
   });
 
@@ -376,7 +374,6 @@ export function EditEntitiesPopover({
   React.useEffect(() => {
     if (!open) {
       setActionPickerOpen(false);
-      setColumnPickerOpen(false);
       setMarkedForDeleteKeys(new Set());
       setShowAllDeleteValues(false);
       setPendingValue('');
@@ -480,8 +477,8 @@ export function EditEntitiesPopover({
                 {(
                   [
                     { id: 'add', label: 'Add' },
-                    { id: 'new', label: 'New property' },
                     { id: 'delete', label: 'Remove' },
+                    { id: 'new', label: 'New property' },
                     { id: 'removeProperty', label: 'Remove Property' },
                   ] as const
                 ).map(({ id, label }) => (
@@ -501,46 +498,6 @@ export function EditEntitiesPopover({
                 ))}
               </div>
             </div>
-          ) : columnPickerOpen ? (
-            <div className="p-3">
-              <div className="flex items-center gap-2 border-b border-grey-02 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setColumnPickerOpen(false)}
-                  className="rounded p-1 text-button text-grey-04 hover:bg-grey-01 hover:text-text"
-                  aria-label="Back"
-                >
-                  ←
-                </button>
-                <Text variant="body" className="font-medium">
-                  Column
-                </Text>
-              </div>
-              <Spacer height={8} />
-              <div className="max-h-[min(40vh,240px)] overflow-y-auto">
-                {pickerColumns.length > 0 ? (
-                  pickerColumns.map(prop => (
-                    <button
-                      key={prop.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProperty(prop);
-                        setColumnPickerOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-button text-text hover:bg-grey-01 ${
-                        displayColumn?.id === prop.id ? 'bg-grey-01' : ''
-                      }`}
-                    >
-                      <span>{prop.name ?? prop.id}</span>
-                    </button>
-                  ))
-                ) : (
-                  <Text variant="metadata" color="grey-04">
-                    No columns
-                  </Text>
-                )}
-              </div>
-            </div>
           ) : (
             <div className="p-2">
               <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">
@@ -548,31 +505,6 @@ export function EditEntitiesPopover({
                   <Text variant="body" color="grey-04" className="text-[14px] font-medium">
                     Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
                   </Text>
-                  {canApply && isRelationColumn && (
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Add {selectedAttributeEntities.length} to {selectedCount} row{selectedCount === 1 ? '' : 's'}
-                    </Text>
-                  )}
-                  {canApply && !isRelationColumn && (
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Set value on {selectedCount} row{selectedCount === 1 ? '' : 's'}
-                    </Text>
-                  )}
-                  {canApplyNew && (
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Add column and apply to {selectedCount} row{selectedCount === 1 ? '' : 's'}
-                    </Text>
-                  )}
-                  {canApplyDelete && (
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Remove {displayedDeleteValues.length} from all {selectedCount} row{selectedCount === 1 ? '' : 's'}
-                    </Text>
-                  )}
-                  {canApplyRemoveProperties && (
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Remove {propertiesMarkedForRemoval.size} propert{propertiesMarkedForRemoval.size === 1 ? 'y' : 'ies'} from {selectedCount} row{selectedCount === 1 ? '' : 's'}
-                    </Text>
-                  )}
                 </div>
                 {(canApply || canApplyDelete || canApplyRemoveProperties || canApplyNew) && (
                   <button
@@ -588,7 +520,7 @@ export function EditEntitiesPopover({
                               ? handleApply
                               : handleApplyValue
                     }
-                    className="shrink-0 rounded-md bg-text px-3 py-1.5 text-button text-white hover:opacity-90"
+                    className="shrink-0 text-[14px] text-button text-ctaPrimary hover:text-ctaHover hover:underline"
                   >
                     Apply
                   </button>
@@ -612,14 +544,28 @@ export function EditEntitiesPopover({
                 <ChevronRight />
               </button>
               {action !== 'new' && action !== 'removeProperty' && (
-                <button
-                  type="button"
-                  onClick={() => setColumnPickerOpen(true)}
-                  className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-button text-text hover:bg-grey-01"
-                >
-                  <span>{displayColumn ? displayColumn.name ?? displayColumn.id : 'Column'}</span>
-                  <ChevronRight />
-                </button>
+                <>
+                  <Text variant="metadata" color="grey-04" className="block">
+                    {action === 'delete' ? 'From property' : 'To property'}
+                  </Text>
+                  <Spacer height={6} />
+                  <div className="w-full">
+                    <Select
+                      value={displayColumn?.id ?? pickerColumns[0]?.id ?? ''}
+                      onChange={id => {
+                        const prop = pickerColumns.find(p => p.id === id);
+                        setSelectedProperty(prop ?? null);
+                      }}
+                      options={pickerColumns.map(prop => ({
+                        value: prop.id,
+                        label: prop.name ?? prop.id,
+                      }))}
+                      placeholder="Select column"
+                      className="w-full min-w-0"
+                      position="popper"
+                    />
+                  </div>
+                </>
               )}
               <Spacer height={12} />
               {action === 'new' && (
@@ -628,12 +574,16 @@ export function EditEntitiesPopover({
                     Value type
                   </Text>
                   <Spacer height={6} />
-                  <Select
-                    value={newPropertyValueType}
-                    onChange={v => setNewPropertyValueType(v as SwitchableRenderableType)}
-                    options={NEW_PROPERTY_VALUE_TYPES.map(({ value, label }) => ({ value, label }))}
-                    placeholder="Select type"
-                  />
+                  <div className="w-full">
+                    <Select
+                      value={newPropertyValueType}
+                      onChange={v => setNewPropertyValueType(v as SwitchableRenderableType)}
+                      options={NEW_PROPERTY_VALUE_TYPES.map(({ value, label }) => ({ value, label }))}
+                      placeholder="Select type"
+                      className="w-full min-w-0"
+                      position="popper"
+                    />
+                  </div>
                   <Spacer height={12} />
                   <Text variant="metadata" color="grey-04" className="block">
                     Property name
@@ -935,7 +885,7 @@ export function EditEntitiesPopover({
                   <Spacer height={12} />
                 </>
               )}
-              {action !== 'delete' && action !== 'removeProperty' && effectiveProperty && (
+              {action !== 'delete' && action !== 'removeProperty' && action !== 'new' && effectiveProperty && (
                 <div className="block">
                   <Text variant="metadata" color="grey-04" className="block">Value</Text>
                   <Spacer height={6} />
