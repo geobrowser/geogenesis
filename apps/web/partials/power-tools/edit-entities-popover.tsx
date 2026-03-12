@@ -479,7 +479,7 @@ export function EditEntitiesPopover({
               <div className="flex flex-col gap-0.5">
                 {(
                   [
-                    { id: 'add', label: 'Add attribute to' },
+                    { id: 'add', label: 'Add' },
                     { id: 'new', label: 'New property' },
                     { id: 'delete', label: 'Remove' },
                     { id: 'removeProperty', label: 'Remove Property' },
@@ -604,7 +604,7 @@ export function EditEntitiesPopover({
                   {action === 'new'
                     ? 'New property'
                     : action === 'add'
-                      ? 'Add attribute to'
+                      ? 'Add'
                       : action === 'removeProperty'
                         ? 'Remove Property'
                         : 'Remove'}
