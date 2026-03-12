@@ -8,7 +8,7 @@ import { produce } from 'immer';
 import * as React from 'react';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -42,7 +42,8 @@ import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dn
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
-import { TableBlockFilterPill } from './table-block-filter-pill';
+import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
+import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
@@ -254,6 +255,7 @@ function useEntries(
 
 export const TableBlock = ({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+  const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
 
@@ -261,16 +263,34 @@ export const TableBlock = ({ spaceId }: Props) => {
   const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
 
   // Use filters hook with canEdit parameter to enable temporary filters for non-editors
-  const { filterState, temporaryFilters, setFilterState, setTemporaryFilters } = useFilters(canEdit);
+  const {
+    filterState,
+    temporaryFilters,
+    setFilterState,
+    setTemporaryFilters,
+    filterMode,
+    setFilterMode,
+    temporaryFilterMode,
+    setTemporaryFilterMode,
+  } = useFilters(canEdit);
 
   // Use database filter state if user can edit, otherwise use temporary filters
   const activeFilters = canEdit ? filterState : temporaryFilters;
+  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
+  const setActiveFilterMode = React.useCallback(
+    (mode: FilterMode) => {
+      if (canEdit) setFilterMode(mode);
+      else setTemporaryFilterMode(mode);
+    },
+    [canEdit, setFilterMode, setTemporaryFilterMode]
+  );
 
   const {
     properties,
     rows,
     setPage,
     isLoading,
+    isFetched,
     hasNextPage,
     hasPreviousPage,
     pageNumber,
@@ -280,7 +300,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-  } = useDataBlock({ filterState: activeFilters });
+  } = useDataBlock({ filterState: activeFilters, filterMode: activeFilterMode });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
 
@@ -307,7 +327,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations);
-
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
@@ -341,6 +360,18 @@ export const TableBlock = ({ spaceId }: Props) => {
     });
   }, [activeFilters, spacesById]);
 
+  const filterGroups = React.useMemo(() => groupFilters(filtersWithPropertyName), [filtersWithPropertyName]);
+
+  // Build a set of keys for server-persisted filters so we can hide
+  // the delete button on those pills when not in edit mode.
+  const serverFilterKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of filterState) {
+      keys.add(`${f.columnId}:${f.value}`);
+    }
+    return keys;
+  }, [filterState]);
+
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
@@ -355,6 +386,8 @@ export const TableBlock = ({ spaceId }: Props) => {
       propertiesSchema={propertiesSchema}
       rows={entries}
       placeholder={placeholder}
+      isLoading={isLoading}
+      isFetched={isFetched}
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
@@ -425,10 +458,9 @@ export const TableBlock = ({ spaceId }: Props) => {
       />
     );
   }
-
-  if (source.type !== 'COLLECTION' && entries.length === 0) {
+  if (source.type !== 'COLLECTION' && entries.length === 0 && isFetched && !isLoading) {
     EntriesComponent = (
-      <div className="block rounded-lg bg-grey-01">
+      <div className="block flex min-h-[468px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>
@@ -478,30 +510,37 @@ export const TableBlock = ({ spaceId }: Props) => {
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
               className="flex items-center gap-2"
             >
-              <TableBlockEditableFilters filterState={activeFilters} setFilterState={setActiveFilters} />
+              <TableBlockEditableFilters
+                ref={filterPromptRef}
+                filterState={activeFilters}
+                setFilterState={setActiveFilters}
+              />
 
-              {filtersWithPropertyName.map((f, index) => {
-                return (
-                  <TableBlockFilterPill
-                    key={`${f.columnId}-${f.value}`}
-                    filter={f}
-                    onDelete={() => {
+              {filterGroups.map(group => (
+                <React.Fragment key={group.columnId}>
+                  <TableBlockFilterGroupPill
+                    group={group}
+                    mode={activeFilterMode}
+                    onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                    onDeleteValue={originalIndex => {
                       const newFilterState = produce(activeFilters, draft => {
-                        draft.splice(index, 1);
+                        draft.splice(originalIndex, 1);
                       });
-
                       setActiveFilters(newFilterState);
                     }}
+                    onAddSimilar={() => filterPromptRef.current?.openWithColumn(group.columnId)}
+                    isEditing={isEditing}
+                    serverFilterKeys={serverFilterKeys}
                   />
-                );
-              })}
+                </React.Fragment>
+              ))}
             </motion.div>
           </motion.div>
         </AnimatePresence>
       )}
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
-        {isLoading ? (
+        {isLoading || !isFetched ? (
           <>
             <TableBlockLoadingPlaceholder />
           </>

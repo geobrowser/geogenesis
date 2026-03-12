@@ -10,6 +10,7 @@ import * as React from 'react';
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { getRelationEntityRelations } from '~/core/io/queries';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { useQueryEntities, useQueryEntity, useQueryRelation, useRelation } from '~/core/sync/use-store';
 
 import { PowerToolsScreen } from '~/partials/power-tools/power-tools-screen';
@@ -89,15 +90,17 @@ export default function PowerToolsPage() {
   }
 
   return (
-    <EditorProvider
-      id={parentEntityId}
-      spaceId={spaceId}
-      initialBlocks={blocks ?? []}
-      initialBlockRelations={blockRelations}
-    >
-      <DataBlockProvider spaceId={spaceId} entityId={dataBlockEntityId} relationId={relationId}>
-        <PowerToolsScreen />
-      </DataBlockProvider>
-    </EditorProvider>
+    <EntityStoreProvider id={parentEntityId} spaceId={spaceId}>
+      <EditorProvider
+        id={parentEntityId}
+        spaceId={spaceId}
+        initialBlocks={blocks ?? []}
+        initialBlockRelations={blockRelations}
+      >
+        <DataBlockProvider spaceId={spaceId} entityId={dataBlockEntityId} relationId={relationId}>
+          <PowerToolsScreen />
+        </DataBlockProvider>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }

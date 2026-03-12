@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -42,18 +43,28 @@ function buildRowMeta(
   };
 }
 
-export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsData & {
+export function usePowerToolsData(options?: {
+  pageSize?: number;
+  filterStateOverride?: Filter[];
+  filterModeOverride?: FilterMode;
+}): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
 } {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const { spaceId } = useDataBlockInstance();
   const { source } = useSource();
-  const { filterState } = useFilters();
+  const { filterState, filterMode, isFetched: isFilterFetched } = useFilters();
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
-  const where = React.useMemo(() => filterStateToWhere(filterState), [filterState]);
+  const effectiveFilterState = options?.filterStateOverride ?? filterState;
+  const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
+  const where = React.useMemo(
+    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
+    [effectiveFilterState, effectiveFilterMode]
+  );
+
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const [page, setPage] = React.useState(0);
@@ -175,7 +186,8 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
         setLoadedCollectionRelationPages(prev => upsertRelationPage(prev, page, collectionRelations));
       }
     }
-  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage]);
+    // sourceKey: re-fire after reset clears pages
+  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, sourceKey]);
 
   React.useEffect(() => {
     if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -183,7 +195,8 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
       setLoadedEntityPages(prev => upsertEntityPage(prev, page, queriedEntities));
       setLastPageCount(queriedEntities.length);
     }
-  }, [queriedEntities, source.type, page, upsertEntityPage]);
+    // sourceKey: re-fire after reset clears pages
+  }, [queriedEntities, source.type, page, upsertEntityPage, sourceKey]);
 
   const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
@@ -330,7 +343,8 @@ export function usePowerToolsData(options?: { pageSize?: number }): PowerToolsDa
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
-  const isInitialLoading = isLoading && rows.length === 0;
+  // Wait for filters to resolve before showing data to avoid a flash of unfiltered results.
+  const isInitialLoading = !isFilterFetched || (isLoading && rows.length === 0);
 
   const fetchAllIds = React.useCallback(async () => {
     if (source.type === 'COLLECTION') {

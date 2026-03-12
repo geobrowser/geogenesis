@@ -49,8 +49,9 @@ describe('filters', () => {
       },
     };
 
-    const stringFilter = await fromGeoFilterString(JSON.stringify(filter));
+    const { filters: stringFilter, mode } = await fromGeoFilterString(JSON.stringify(filter));
 
+    expect(mode).toBe('AND');
     expect(stringFilter).toEqual([
       {
         columnId: SystemIds.SPACE_FILTER,
@@ -137,5 +138,51 @@ describe('filters', () => {
         },
       },
     });
+  });
+
+  it('round-trips OR mode through filter string', async () => {
+    const filters = [
+      {
+        columnId: SystemIds.TYPES_PROPERTY,
+        columnName: 'Types',
+        valueType: 'RELATION' as const,
+        value: SystemIds.SCHEMA_TYPE,
+      },
+    ];
+
+    const stringFilter = toGeoFilterState(filters, 'OR');
+    const parsedFilter = JSON.parse(stringFilter);
+    expect(parsedFilter.mode).toBe('OR');
+
+    const { mode } = await fromGeoFilterString(stringFilter);
+    expect(mode).toBe('OR');
+  });
+
+  it('omits mode from AND filter string for backward compatibility', () => {
+    const filters = [
+      {
+        columnId: SystemIds.TYPES_PROPERTY,
+        columnName: 'Types',
+        valueType: 'RELATION' as const,
+        value: SystemIds.SCHEMA_TYPE,
+      },
+    ];
+
+    const stringFilter = toGeoFilterState(filters, 'AND');
+    const parsedFilter = JSON.parse(stringFilter);
+    expect(parsedFilter.mode).toBeUndefined();
+  });
+
+  it('defaults to AND mode when mode is absent in stored filter string', async () => {
+    const filter: FilterString = {
+      filter: {
+        [SystemIds.TYPES_PROPERTY]: {
+          is: SystemIds.SCHEMA_TYPE,
+        },
+      },
+    };
+
+    const { mode } = await fromGeoFilterString(JSON.stringify(filter));
+    expect(mode).toBe('AND');
   });
 });

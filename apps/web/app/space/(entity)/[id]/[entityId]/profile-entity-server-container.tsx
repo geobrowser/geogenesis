@@ -15,6 +15,7 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -74,8 +75,11 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
     !preventRedirect &&
     deterministicSpaceId
   ) {
-    console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
-    return redirect(NavUtils.toSpace(deterministicSpaceId));
+    const space = await cachedFetchSpace(deterministicSpaceId);
+    if (space?.entity?.id === entityId) {
+      console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
+      return redirect(NavUtils.toSpace(deterministicSpaceId));
+    }
   }
 
   return (

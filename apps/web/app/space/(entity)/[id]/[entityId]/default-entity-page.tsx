@@ -16,7 +16,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
@@ -24,6 +23,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -123,12 +123,15 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   }
 
   /**
-   * If we're in a valid space for the entity and the entity is
-   * a space, redirect to the space front page directly.
+   * Only redirect to the space front page if this entity is the page
+   * entity for the current space, not a SPACE_TYPE from another space.
    */
   if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && !preventRedirect && deterministicSpaceId) {
-    console.log(`Redirecting from space entity ${entityId} to space page ${deterministicSpaceId}`);
-    return redirect(NavUtils.toSpace(deterministicSpaceId));
+    const space = await cachedFetchSpace(deterministicSpaceId);
+    if (space?.entity?.id === entityId) {
+      console.log(`Redirecting from space entity ${entityId} to space page ${deterministicSpaceId}`);
+      return redirect(NavUtils.toSpace(deterministicSpaceId));
+    }
   }
 
   const tabRelations = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY) ?? [];

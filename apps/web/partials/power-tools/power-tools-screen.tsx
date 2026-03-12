@@ -1,33 +1,44 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { cx } from 'class-variance-authority';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
+import { Eye } from '~/design-system/icons/eye';
+import { EyeHide } from '~/design-system/icons/eye-hide';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { writeValue } from '~/partials/blocks/table/change-entry';
+import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
+import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
+import { Editor } from '~/partials/editor/editor';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { usePowerToolsData } from './hooks/use-power-tools-data';
@@ -90,7 +101,7 @@ function PowerToolsEntityPanel({
           </button>
         </div>
       </div>
-      <div className="h-full overflow-y-auto p-4">
+      <div className="h-full overflow-y-auto">
         {isPanelLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="body" color="grey-04">
@@ -105,7 +116,14 @@ function PowerToolsEntityPanel({
               initialBlocks={blocks ?? []}
               initialBlockRelations={blockRelations}
             >
-              <ToggleEntityPage id={entityId} spaceId={spaceId} />
+              <EntityPageCover avatarUrl={null} coverUrl={null} />
+              <div className="px-4">
+                <EditableHeading spaceId={spaceId} entityId={entityId} />
+                <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+                <Spacer height={16} />
+                <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+                <ToggleEntityPage id={entityId} spaceId={spaceId} />
+              </div>
             </EditorProvider>
           </EntityStoreProvider>
         )}
@@ -120,22 +138,45 @@ export function PowerToolsScreen() {
   const searchParams = useSearchParams();
   const { spaceId, name: blockName } = useDataBlock();
   const { source } = useSource();
-  const { filterState } = useFilters();
   const isEditing = useUserIsEditing(spaceId);
+  const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
 
-  const data = usePowerToolsData();
+  const {
+    filterState,
+    temporaryFilters,
+    setFilterState,
+    setTemporaryFilters,
+    filterMode,
+    setFilterMode,
+    temporaryFilterMode,
+    setTemporaryFilterMode,
+  } = useFilters(canEdit);
 
-  const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  // Editors (by permission) use persisted filters; non-editors use local temporary filters.
+  // This matches TableBlock's behavior and is independent of the edit mode toggle.
+  const effectiveFilterState = canEdit ? filterState : temporaryFilters;
+  const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
+  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
+  const setActiveFilterMode = React.useCallback(
+    (mode: FilterMode) => {
+      if (canEdit) setFilterMode(mode);
+      else setTemporaryFilterMode(mode);
+    },
+    [canEdit, setFilterMode, setTemporaryFilterMode]
+  );
 
-  const editableSpaceIds = React.useMemo(() => {
-    return new Set(spaces.map(space => space.id));
-  }, [spaces]);
+  const data = usePowerToolsData({
+    filterStateOverride: canEdit ? undefined : temporaryFilters,
+    filterModeOverride: canEdit ? undefined : temporaryFilterMode,
+  });
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
+  const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
+  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
 
   const shouldShowPlaceholder =
     isEditing &&
@@ -148,21 +189,36 @@ export function PowerToolsScreen() {
   const panelSpaceId = searchParams?.get(PANEL_SPACE_ID_PARAM) ?? spaceId;
 
   const rowsWithPlaceholder = React.useMemo<PowerToolsRow[]>(() => {
-    if (!shouldShowPlaceholder) return data.rows;
-    const placeholderRow: PowerToolsRow = {
-      entityId: placeholderEntityId,
-      spaceId,
-      placeholder: true,
-      collectionId: source.type === 'COLLECTION' ? source.value : undefined,
-    };
-    return [placeholderRow, ...data.rows];
-  }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue]);
+    if (shouldShowPlaceholder) {
+      const placeholderRow: PowerToolsRow = {
+        entityId: placeholderEntityId,
+        spaceId,
+        placeholder: true,
+        collectionId: source.type === 'COLLECTION' ? source.value : undefined,
+      };
+      return [placeholderRow, ...data.rows];
+    }
+
+    if (pinnedNewEntityId) {
+      const pinnedRow = data.rows.find(r => r.entityId === pinnedNewEntityId);
+      if (pinnedRow) {
+        return [pinnedRow, ...data.rows.filter(r => r.entityId !== pinnedNewEntityId)];
+      }
+    }
+
+    return data.rows;
+  }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
 
   React.useEffect(() => {
     if (pendingEntityId && data.rows.find(r => r.entityId === pendingEntityId)) {
+      setPinnedNewEntityId(pendingEntityId);
       setPendingEntityId(null);
     }
   }, [pendingEntityId, data.rows]);
+
+  React.useEffect(() => {
+    setPinnedNewEntityId(null);
+  }, [sourceValue, effectiveFilterState]);
 
   const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
     switch (action.type) {
@@ -218,7 +274,7 @@ export function PowerToolsScreen() {
         setPendingEntityId(entityId);
         createEntityWithTypes({
           name: maybeName,
-          filters: filterState,
+          filters: effectiveFilterState,
         });
       }
     }
@@ -236,7 +292,40 @@ export function PowerToolsScreen() {
 
   const handleAddPlaceholder = () => {
     setHasPlaceholderRow(true);
+    setPinnedNewEntityId(null);
   };
+
+  const handleDismissPlaceholder = React.useCallback(() => {
+    setHasPlaceholderRow(false);
+    setPendingEntityId(null);
+    setPinnedNewEntityId(null);
+  }, []);
+
+  const handleDeleteRow = React.useCallback(
+    (row: PowerToolsRow) => {
+      if (source.type === 'COLLECTION') {
+        if (row.relationId) {
+          const relation = getRelations({ selector: r => r.id === row.relationId })[0];
+          if (relation) storage.relations.delete(relation);
+        }
+      } else {
+        const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
+        const relations = reactiveRelations.get().filter(r => r.fromEntity.id === row.entityId);
+        for (const v of values) storage.values.delete(v);
+        for (const r of relations) storage.relations.delete(r);
+      }
+      if (pinnedNewEntityId === row.entityId) setPinnedNewEntityId(null);
+    },
+    [source.type, storage, pinnedNewEntityId]
+  );
+
+  const handleDeleteFilter = React.useCallback(
+    (index: number) => {
+      const newFilters = effectiveFilterState.filter((_, i) => i !== index);
+      effectiveSetFilterState(newFilters);
+    },
+    [effectiveFilterState, effectiveSetFilterState]
+  );
 
   const handleOpenEntityPanel = React.useCallback(
     (entityId: string, entitySpaceId: string) => {
@@ -257,6 +346,18 @@ export function PowerToolsScreen() {
     router.replace(query ? `${safePathname}?${query}` : safePathname);
   }, [pathname, router, searchParams]);
 
+  const toggleColumnVisibility = React.useCallback((propertyId: string) => {
+    setHiddenColumnIds(prev => {
+      const next = new Set(prev);
+      if (next.has(propertyId)) {
+        next.delete(propertyId);
+      } else {
+        next.add(propertyId);
+      }
+      return next;
+    });
+  }, []);
+
   const isLoading = data.isInitialLoading;
 
   if (data.sourceType === 'RELATIONS') {
@@ -271,13 +372,27 @@ export function PowerToolsScreen() {
     );
   }
 
+  const hasActiveFilters = effectiveFilterState.length > 0;
+
+  const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
+
+  const serverFilterKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of filterState) {
+      keys.add(`${f.columnId}:${f.value}`);
+    }
+    return keys;
+  }, [filterState]);
+
   return (
     <div
       className="fixed inset-0 z-50 bg-white"
       style={{
         top: '60px',
         display: 'grid',
-        gridTemplateRows: 'auto auto 1fr',
+        gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
+          .filter(Boolean)
+          .join(' '),
       }}
     >
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
@@ -295,6 +410,34 @@ export function PowerToolsScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
+          <Menu
+            open={isColumnMenuOpen}
+            onOpenChange={setIsColumnMenuOpen}
+            className="w-[200px]!"
+            trigger={
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
+                title="Toggle columns"
+              >
+                <Eye />
+              </div>
+            }
+          >
+            <div className="max-h-[320px] overflow-y-auto py-1">
+              {data.properties.map(property => {
+                const isHidden = hiddenColumnIds.has(property.id);
+                return (
+                  <MenuItem key={property.id} onClick={() => toggleColumnVisibility(property.id)}>
+                    <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
+                      <span>{property.name || property.id}</span>
+                      {isHidden ? <EyeHide /> : <Eye />}
+                    </div>
+                  </MenuItem>
+                );
+              })}
+            </div>
+          </Menu>
           {isEditing && (
             <button
               onClick={handleAddPlaceholder}
@@ -321,6 +464,25 @@ export function PowerToolsScreen() {
         </div>
       )}
 
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {filterGroups.map(group => (
+              <React.Fragment key={group.columnId}>
+                <TableBlockFilterGroupPill
+                  group={group}
+                  mode={activeFilterMode}
+                  onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                  onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                  isEditing={isEditing}
+                  serverFilterKeys={serverFilterKeys}
+                />
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="relative h-full overflow-hidden">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
@@ -332,14 +494,19 @@ export function PowerToolsScreen() {
           <PowerToolsTable
             rows={rowsWithPlaceholder}
             properties={data.properties}
+            propertiesById={data.propertiesById}
             spaceId={spaceId}
             hasNextPage={data.hasMore}
             isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
             fetchNextPage={data.loadMore}
             onChangeEntry={onChangeEntry}
             onLinkEntry={onLinkEntry}
+            onDismissPlaceholder={handleDismissPlaceholder}
+            onDeleteRow={isEditing ? handleDeleteRow : undefined}
             onOpenEntityPanel={handleOpenEntityPanel}
             source={source}
+            hiddenColumnIds={hiddenColumnIds}
+            onHideColumn={toggleColumnVisibility}
           />
         )}
         {panelEntityId && (

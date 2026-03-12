@@ -131,6 +131,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     [editable, activeEntityId, editorContentVersion]
   );
 
+  const handleGutterClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      if (!editor || !editable) return;
+      const target = e.target as Element;
+      if (target.closest('.ProseMirror')) return;
+      editor.commands.focus('end');
+    },
+    [editor, editable]
+  );
+
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
     return (
@@ -154,7 +164,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   return (
     <LayoutGroup id="editor">
-      <div className={editable ? 'editable' : 'not-editable'}>
+      <div
+        className={editable ? 'editable' : 'not-editable'}
+        onClick={handleGutterClick}
+        style={editable ? { minHeight: '8rem' } : undefined}
+      >
         {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}

@@ -82,7 +82,8 @@ export class E {
     const name = Entities.name(values);
     const description = Entities.description(values);
     const types = readTypes(relations);
-    const spaces = Entities.spaces(values, relations);
+    const derivedSpaces = Entities.spaces(values, relations);
+    const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;
 
     return {
       id: id,
@@ -154,10 +155,10 @@ export class E {
       const entityIds = where.id.in.filter(id => id !== '');
 
       const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds],
+        queryKey: ['network', 'entities', entityIds, spaceId],
         queryFn: async ({ signal }) => {
           // @TODO: error handle
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, undefined, signal));
+          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
           return entities;
         },
       });

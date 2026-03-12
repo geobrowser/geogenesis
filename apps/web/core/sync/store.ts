@@ -8,6 +8,7 @@ import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
+import { getSpaceRank } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -46,29 +47,41 @@ export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
 
 export function resolveRelationNames(r: Relation): Relation {
-  const resolvedFromName = r.fromEntity.name ?? resolveEntityName(r.fromEntity.id);
-  const resolvedToName = r.toEntity.name ?? resolveEntityName(r.toEntity.id);
+  const resolvedFromName = resolveEntityName(r.fromEntity.id) ?? r.fromEntity.name;
+  const resolvedToName = resolveEntityName(r.toEntity.id) ?? r.toEntity.name;
+  const resolvedTypeName = resolveEntityName(r.type.id) ?? r.type.name;
 
-  if (resolvedFromName === r.fromEntity.name && resolvedToName === r.toEntity.name) {
+  if (
+    resolvedFromName === r.fromEntity.name &&
+    resolvedToName === r.toEntity.name &&
+    resolvedTypeName === r.type.name
+  ) {
     return r;
   }
 
   return {
     ...r,
+    type: { ...r.type, name: resolvedTypeName },
     fromEntity: { ...r.fromEntity, name: resolvedFromName },
     toEntity: { ...r.toEntity, name: resolvedToName },
   };
 }
 
 function resolveEntityName(entityId: string): string | null {
-  const synced = syncedEntities.get(entityId);
-  if (synced?.name != null) return synced.name;
-
   const values = reactiveValues.get();
-  const nameValue = values.find(
+  const nameValues = values.filter(
     v => v.entity.id === entityId && v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
   );
-  return nameValue?.value ?? null;
+
+  if (nameValues.length === 0) {
+    const synced = syncedEntities.get(entityId);
+    return synced?.name ?? null;
+  }
+
+  if (nameValues.length === 1) return nameValues[0].value ?? null;
+
+  // Pick the name from the highest-ranked space
+  return nameValues.reduce((a, b) => (getSpaceRank(a.spaceId) <= getSpaceRank(b.spaceId) ? a : b)).value ?? null;
 }
 
 /**
@@ -309,7 +322,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const stableDataType = this.getStableDataType(id);
     const pendingDataType = this.pendingDataTypes.get(id);
 
-    const dataType = stableDataType ?? pendingDataType ?? null;
+    const dataType = pendingDataType ?? stableDataType ?? null;
 
     if (!dataType) {
       return null;

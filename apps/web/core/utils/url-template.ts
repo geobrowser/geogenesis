@@ -36,7 +36,14 @@ export function isUrlTemplate(format: string | null | undefined): format is stri
   return true;
 }
 
+function isFullyQualifiedUrl(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value);
+}
+
 export function resolveUrlTemplate(format: string | null | undefined, value: string): string {
   if (!isUrlTemplate(format)) return value;
+  if (isFullyQualifiedUrl(value)) return value;
+  const templateBase = format.replace(URL_TEMPLATE_TOKEN, '');
+  if (value.startsWith(templateBase)) return value;
   return format.replace(URL_TEMPLATE_TOKEN, value);
 }

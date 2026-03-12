@@ -357,6 +357,7 @@
 
   body {
     @apply overflow-x-clip overflow-y-scroll bg-white;
+    scrollbar-gutter: stable;
     font-family: var(--font-calibre), sans-serif;
     text-rendering: optimizeLegibility;
   }
@@ -471,5 +472,7 @@
 
 /* https://github.com/radix-ui/primitives/issues/2908 */
 [data-radix-popper-content-wrapper] {
+  /* Ensure popovers appear above fixed overlays (e.g. power tools z-50) */
+  z-index: 60 !important;
   width: var(--radix-popper-anchor-width);
 }

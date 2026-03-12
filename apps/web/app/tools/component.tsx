@@ -301,7 +301,7 @@ const ConvertFilter = () => {
   const handleConvertFilter = async (event: any) => {
     event.preventDefault();
 
-    const newFilterState = await fromGeoFilterString(filterString.trim());
+    const { filters: newFilterState } = await fromGeoFilterString(filterString.trim());
     setFilterState(newFilterState);
 
     const newWhere = filterStateToWhere(newFilterState);

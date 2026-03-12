@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
-import { Filter, fromGeoFilterString, toGeoFilterState } from './filters';
+import { Filter, FilterMode, fromGeoFilterString, toGeoFilterState } from './filters';
 import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters(canEdit?: boolean) {
@@ -45,7 +45,7 @@ export function useFilters(canEdit?: boolean) {
    * get empty filters, then re-query once the entity loads.
    */
   const {
-    data: filterState,
+    data: filterStateResult,
     isLoading,
     isFetched,
   } = useQuery({
@@ -57,11 +57,14 @@ export function useFilters(canEdit?: boolean) {
     },
   });
 
+  const filterState = filterStateResult?.filters ?? [];
+  const filterMode: FilterMode = filterStateResult?.mode ?? 'AND';
+
   const { data: filterableProperties } = useQuery({
-    enabled: filterState !== undefined,
+    enabled: filterStateResult !== undefined,
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value) ?? [];
+      const typesInFilter = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value);
       return await getSchemaFromTypeIds(typesInFilter.map(id => ({ id })));
     },
   });
@@ -69,30 +72,47 @@ export function useFilters(canEdit?: boolean) {
   // Local state for temporary filter overrides when user cannot edit
   // null means "use database filters", an array means "user has modified filters locally"
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
+  const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
 
   // For non-editors: use their local override if they've modified filters, otherwise use database filters
   // This avoids the race condition of trying to initialize state from an async query
-  const temporaryFilters = temporaryFilterOverride ?? filterState ?? [];
+  const temporaryFilters = temporaryFilterOverride ?? filterState;
+  const temporaryFilterMode: FilterMode = temporaryModeOverride ?? filterMode;
 
   // Wrapper that sets the override
   const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
     setTemporaryFilterOverride(filters);
   }, []);
 
+  const setTemporaryFilterMode = React.useCallback((mode: FilterMode) => {
+    setTemporaryModeOverride(mode);
+  }, []);
+
   // Reset override when canEdit changes to true (user gains edit access)
   React.useEffect(() => {
     if (canEdit === true) {
       setTemporaryFilterOverride(null);
+      setTemporaryModeOverride(null);
     }
   }, [canEdit]);
 
-  const setFilterState = React.useCallback(
-    (filters: Filter[]) => {
-      const newState = filters.length === 0 ? [] : filters;
+  // Refs to track the latest persisted values so that setFilterState / setFilterMode
+  // never use a stale closure. Without these, toggling the mode and then immediately
+  // adding a filter would overwrite the mode back because the async query hadn't
+  // refetched yet.
+  const filterModeRef = React.useRef(filterMode);
+  React.useEffect(() => {
+    filterModeRef.current = filterMode;
+  }, [filterMode]);
 
-      // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState);
+  const filterStateRef = React.useRef(filterState);
+  React.useEffect(() => {
+    filterStateRef.current = filterState;
+  }, [filterState]);
 
+  const writeFilterTriple = React.useCallback(
+    (filters: Filter[], mode: FilterMode) => {
+      const newFiltersString = filters.length === 0 && mode === 'AND' ? '' : toGeoFilterState(filters, mode);
       const entityName = blockEntity?.name ?? '';
 
       storage.values.set({
@@ -117,13 +137,32 @@ export function useFilters(canEdit?: boolean) {
     [entityId, spaceId, blockEntity?.name, storage.values]
   );
 
+  const setFilterState = React.useCallback(
+    (filters: Filter[]) => {
+      writeFilterTriple(filters, filterModeRef.current);
+    },
+    [writeFilterTriple]
+  );
+
+  const setFilterMode = React.useCallback(
+    (mode: FilterMode) => {
+      filterModeRef.current = mode;
+      writeFilterTriple(filterStateRef.current, mode);
+    },
+    [writeFilterTriple]
+  );
+
   return {
-    filterState: filterState ?? [],
+    filterState,
+    filterMode,
     temporaryFilters,
+    temporaryFilterMode,
     filterableProperties: filterableProperties ?? [],
     isLoading,
     isFetched,
     setFilterState,
+    setFilterMode,
     setTemporaryFilters,
+    setTemporaryFilterMode,
   };
 }

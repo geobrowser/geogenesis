@@ -42,8 +42,9 @@ export const tiptapExtensions = [
   VideoNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
-      const isHeading = node.type.name === 'heading';
-      return isHeading ? 'Heading...' : '/ to select content block or write some content...';
+      if (node.type.name === 'heading') return 'Heading...';
+      if (node.type.name === 'bulletList') return '';
+      return '/ to select content block or write some content...';
     },
   }),
   UndoRedo,
