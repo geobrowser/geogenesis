@@ -272,10 +272,8 @@ export function PowerToolsScreen() {
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
         setPendingEntityId(entityId);
-        // Set pinnedNewEntityId eagerly so the row stays at index 0 when data.rows
-        // updates and shouldShowPlaceholder flips to false. Without this, there is a
-        // render where the entity is at its natural (non-pinned) position, which
-        // causes the virtualizer to reassign its key and unmount the focused input.
+        // Pin eagerly to avoid a render where the row is at its natural position
+        // before the effect fires, which would unmount the focused input.
         setPinnedNewEntityId(entityId);
         createEntityWithTypes({
           name: maybeName,
