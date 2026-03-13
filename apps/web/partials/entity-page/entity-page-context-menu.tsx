@@ -44,12 +44,20 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   });
 
   const performDelete = React.useCallback(() => {
-    // 1. Find block entities (toEntity of BLOCKS relations). Orphaned = only this entity references them.
+    // 1. Find block entities (toEntity of BLOCKS relations).
     const blocksRelations = outgoingRelations.filter(r => r.type.id === SystemIds.BLOCKS);
     const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
+
+    // A block is considered orphaned if, after removing this entity's BLOCKS relations,
+    // no other relations (from any entity or space) still point to the block.
     const orphanedBlockIds = blockIds.filter(blockId => {
-      const referencing = store.findReferencingEntities(blockId);
-      return referencing.length === 1 && referencing[0] === entityId;
+      const remainingRefs = getRelations({
+        selector: r =>
+          r.toEntity.id === blockId &&
+          // Ignore the BLOCKS relation from the entity we're deleting in this space.
+          !(r.fromEntity.id === entityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId),
+      });
+      return remainingRefs.length === 0;
     });
 
     // 2. Collect all values and relations to delete so we can batch (one store update each = no flash).
