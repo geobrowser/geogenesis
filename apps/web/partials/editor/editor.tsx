@@ -145,8 +145,20 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
     // Keep the editor instance alive for data blocks, but sync external store
     // changes like entity/block deletion into the active ProseMirror document.
-    editor.commands.setContent(editorJson, false);
+    editor.commands.setContent(editorJson);
   }, [editor, editorJson]);
+
+  const handleGutterClick = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!editor || !editable) return;
+
+      // Only focus when clicking on the editor wrapper itself, not inner content.
+      if (e.target === e.currentTarget) {
+        editor.commands.focus();
+      }
+    },
+    [editor, editable]
+  );
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {

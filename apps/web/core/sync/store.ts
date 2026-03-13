@@ -252,7 +252,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       const prevById = new Map(prev.map(v => [v.id, v]));
       const mergedIncoming = newValues.map(v => {
         const local = prevById.get(v.id);
-        return local && local.isLocal && !local.hasBeenPublished ? local : v;
+        return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : v;
       });
       const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
       return [...unchangedValues, ...mergedIncoming];
@@ -267,7 +267,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
         .filter(r => !deletedRelationKeys.has(relationKey(r)))
         .map(r => {
           const local = prevById.get(r.id);
-          return local && local.isLocal && !local.hasBeenPublished ? local : r;
+          return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
         });
       const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
       return [...unchangedRelations, ...mergedIncoming];
@@ -498,17 +498,54 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.timestamp = new Date().toISOString();
     });
 
-    // Remove from reactive relations
     reactiveRelations.set(prev => {
-      const unchangedRelations = prev.filter(t => {
-        return t.id !== newRelation.id;
-      });
-
+      const unchangedRelations = prev.filter(t => t.id !== newRelation.id);
       return [...unchangedRelations, newRelation];
     });
 
-    // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
+  }
+
+  /**
+   * Delete multiple values in one update to avoid multiple re-renders (e.g. entity delete).
+   */
+  public deleteValues(values: Value[]): void {
+    if (values.length === 0) return;
+    const deletedIds = new Set(values.map(v => v.id));
+    const newValues = values.map(v =>
+      produce(v, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = true;
+        draft.isLocal = true;
+        draft.timestamp = new Date().toISOString();
+      })
+    );
+    reactiveValues.set(prev => {
+      const unchanged = prev.filter(t => !deletedIds.has(t.id));
+      return [...unchanged, ...newValues];
+    });
+    newValues.forEach(v => this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: v }));
+  }
+
+  /**
+   * Delete multiple relations in one update to avoid multiple re-renders (e.g. entity delete).
+   */
+  public deleteRelations(relations: Relation[]): void {
+    if (relations.length === 0) return;
+    const deletedIds = new Set(relations.map(r => r.id));
+    const newRelations = relations.map(r =>
+      produce(r, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = true;
+        draft.isLocal = true;
+        draft.timestamp = new Date().toISOString();
+      })
+    );
+    reactiveRelations.set(prev => {
+      const unchanged = prev.filter(t => !deletedIds.has(t.id));
+      return [...unchanged, ...newRelations];
+    });
+    newRelations.forEach(r => this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: r }));
   }
 
   /**

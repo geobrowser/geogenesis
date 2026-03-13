@@ -52,23 +52,31 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
       return referencing.length === 1 && referencing[0] === entityId;
     });
 
-    // 2. Delete this entity: its values and all relations (outgoing + incoming).
-    values.forEach(v => storage.values.delete(v));
-    outgoingRelations.forEach(r => storage.relations.delete(r));
-    const incomingRelations = getRelations({ selector: r => r.toEntity.id === entityId });
-    incomingRelations.forEach(r => storage.relations.delete(r));
-
-    // 3. Delete each orphaned block entity (all values and relations from/to that block).
-    for (const blockId of orphanedBlockIds) {
-      const blockValues = getValues({ selector: v => v.entity.id === blockId });
-      blockValues.forEach(v => storage.values.delete(v));
-      const blockRelations = getRelations({
-        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
-      });
-      blockRelations.forEach(r => storage.relations.delete(r));
+    // 2. Collect all values and relations to delete so we can batch (one store update each = no flash).
+    const allValuesToDelete = [...values];
+    const relationIds = new Set<string>();
+    const allRelationsToDelete: typeof outgoingRelations = [];
+    for (const r of [...outgoingRelations, ...getRelations({ selector: r => r.toEntity.id === entityId })]) {
+      if (!relationIds.has(r.id)) {
+        relationIds.add(r.id);
+        allRelationsToDelete.push(r);
+      }
     }
 
-    setIsMenuOpen(false);
+    for (const blockId of orphanedBlockIds) {
+      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
+      for (const r of getRelations({
+        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
+      })) {
+        if (!relationIds.has(r.id)) {
+          relationIds.add(r.id);
+          allRelationsToDelete.push(r);
+        }
+      }
+    }
+
+    storage.values.deleteMany(allValuesToDelete);
+    storage.relations.deleteMany(allRelationsToDelete);
   }, [
     entityId,
     outgoingRelations,
@@ -88,8 +96,9 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   };
 
   const onDelete = () => {
+    setIsMenuOpen(false);
     if (editable) {
-      performDelete();
+      requestAnimationFrame(() => performDelete());
     } else {
       setEditable(true);
       setTimeout(() => performDelete(), 500);
