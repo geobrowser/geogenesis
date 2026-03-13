@@ -12,7 +12,6 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -21,7 +20,6 @@ import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
-import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -30,7 +28,6 @@ import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
-import { MoveSpace } from '~/design-system/icons/move-space';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -54,10 +51,8 @@ import {
   type EditApplyPayload,
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
-  type EditApplyNewPropertyPayload,
-  type EditAddExistingPropertyPayload,
-  type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
 import { PowerToolsRow } from './types';
@@ -372,115 +367,68 @@ export function PowerToolsScreen() {
   const handleDeleteApply = React.useCallback(
     (payload: EditDeleteApplyPayload) => {
       const { property, targetKeys } = payload;
-      const targetKeySet = new Set(
-        targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`)
-      );
-      const relations = getRelations({
-        selector: r => {
-          if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id)
-            return false;
-          const relationKey = `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId ?? ''}`;
-          return targetKeySet.has(relationKey);
-        },
-      });
-      relations.forEach(relation => storage.relations.delete(relation));
-    },
-    [storage, selectedEntityIds]
-  );
 
-  const handleRemoveProperties = React.useCallback(
-    (payload: EditRemovePropertiesPayload) => {
-      const { propertyIds } = payload;
-      for (const propertyId of propertyIds) {
+      const isRelationProperty =
+        property.dataType === 'RELATION' ||
+        (property.relationValueTypes && property.relationValueTypes.length > 0);
+
+      if (isRelationProperty) {
+        const targetKeySet = new Set(
+          targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`)
+        );
+        const relations = getRelations({
+          selector: r => {
+            if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id)
+              return false;
+            const relationKey = `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId ?? ''}`;
+            return targetKeySet.has(relationKey);
+          },
+        });
+        relations.forEach(relation => storage.relations.delete(relation));
+      } else {
         const valuesToDelete = getValues({
           selector: v =>
             selectedEntityIds.has(v.entity.id) &&
-            v.property.id === propertyId,
+            v.property.id === property.id,
         });
         valuesToDelete.forEach(v => storage.values.delete(v));
-        const relationsToDelete = getRelations({
-          selector: r =>
-            selectedEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
-        });
-        relationsToDelete.forEach(r => storage.relations.delete(r));
       }
-      setExcludedColumnIds(prev => [...new Set([...prev, ...propertyIds])]);
     },
     [storage, selectedEntityIds]
-  );
-
-  const handleAddExistingProperty = React.useCallback(
-    (payload: EditAddExistingPropertyPayload) => {
-      setExtraColumnIds(prev => [...prev, payload.propertyId]);
-    },
-    []
-  );
-
-  const handleApplyNewProperty = React.useCallback(
-    async (payload: EditApplyNewPropertyPayload) => {
-      const {
-        name,
-        valueType,
-        selectedRowEntityIds,
-        selectedEntities,
-        initialValue,
-        initialImageFile,
-      } = payload;
-      const propertyId = createProperty({ name, propertyType: valueType });
-      setExtraColumnIds(prev => [...prev, propertyId]);
-      const { baseDataType } = mapPropertyType(valueType);
-      const property = {
-        id: propertyId,
-        name,
-        dataType: baseDataType,
-      };
-      const entityIdToSpaceId = new Map(
-        selectableRows
-          .filter(r => selectedRowEntityIds.includes(r.entityId))
-          .map(r => [r.entityId, r.spaceId] as const)
-      );
-
-      if (valueType === 'IMAGE' && initialImageFile) {
-        for (const fromEntityId of selectedRowEntityIds) {
-          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-          await storage.images.createAndLink({
-            file: initialImageFile,
-            fromEntityId,
-            fromEntityName: null,
-            relationPropertyId: property.id,
-            relationPropertyName: property.name,
-            spaceId: rowSpaceId,
-          });
-        }
-      } else if (
-        (valueType === 'RELATION' || valueType === 'IMAGE') &&
-        selectedEntities?.length
-      ) {
-        selectedRowEntityIds.forEach(fromEntityId => {
-          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-          selectedEntities.forEach(target => {
-            createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
-              id: target.id,
-              name: target.name,
-              space: target.primarySpace,
-            });
-          });
-        });
-      } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
-        const value = initialValue ?? '';
-        for (const entityId of selectedRowEntityIds) {
-          const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
-          writeValue(storage, entityId, rowSpaceId, property, value, null);
-        }
-      }
-    },
-    [createProperty, storage, spaceId, selectableRows]
   );
 
   const onMasterToggle = React.useCallback(() => {
     if (isAllSelected) clearSelection();
     else selectAll();
   }, [isAllSelected, clearSelection, selectAll]);
+
+  const handleDeleteSelectedRows = React.useCallback(() => {
+    if (selectedEntityIds.size === 0) return;
+
+    const idsToDelete = new Set(selectedEntityIds);
+
+    const values = reactiveValues.get().filter(v => idsToDelete.has(v.entity.id));
+    values.forEach(v => storage.values.delete(v));
+
+    const relations = reactiveRelations
+      .get()
+      .filter(r => idsToDelete.has(r.fromEntity.id) || idsToDelete.has(r.toEntity.id));
+    relations.forEach(r => storage.relations.delete(r));
+
+    if (source.type === 'COLLECTION' && sourceValue) {
+      const collectionRelations = getRelations({
+        selector: r =>
+          r.fromEntity.id === source.value &&
+          idsToDelete.has(r.toEntity.id),
+      });
+      collectionRelations.forEach(r => storage.relations.delete(r));
+    }
+
+    setSelectedEntityIds(new Set());
+    if (pinnedNewEntityId && idsToDelete.has(pinnedNewEntityId)) {
+      setPinnedNewEntityId(null);
+    }
+  }, [selectedEntityIds, source.type, sourceValue, storage, pinnedNewEntityId]);
 
   const selectionProps = React.useMemo(
     () =>
@@ -608,17 +556,18 @@ export function PowerToolsScreen() {
 
   const handleDeleteRow = React.useCallback(
     (row: PowerToolsRow) => {
-      if (source.type === 'COLLECTION') {
-        if (row.relationId) {
-          const relation = getRelations({ selector: r => r.id === row.relationId })[0];
-          if (relation) storage.relations.delete(relation);
-        }
-      } else {
-        const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
-        const relations = reactiveRelations.get().filter(r => r.fromEntity.id === row.entityId);
-        for (const v of values) storage.values.delete(v);
-        for (const r of relations) storage.relations.delete(r);
+      const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
+      const relations = reactiveRelations.get().filter(
+        r => r.fromEntity.id === row.entityId || r.toEntity.id === row.entityId
+      );
+      for (const v of values) storage.values.delete(v);
+      for (const r of relations) storage.relations.delete(r);
+
+      if (source.type === 'COLLECTION' && row.relationId) {
+        const relation = getRelations({ selector: r => r.id === row.relationId })[0];
+        if (relation) storage.relations.delete(relation);
       }
+
       if (pinnedNewEntityId === row.entityId) setPinnedNewEntityId(null);
     },
     [source.type, storage, pinnedNewEntityId]
@@ -719,7 +668,7 @@ export function PowerToolsScreen() {
             <>
               <button
                 type="button"
-                onClick={selectedCount > 0 ? clearSelection : undefined}
+                onClick={selectedCount > 0 ? handleDeleteSelectedRows : undefined}
                 disabled={selectedCount === 0}
                 className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 title="Delete selected"
@@ -746,9 +695,6 @@ export function PowerToolsScreen() {
                 onApply={handleEditApply}
                 onApplyValue={handleApplyValue}
                 onDeleteApply={handleDeleteApply}
-                onRemoveProperties={handleRemoveProperties}
-                onApplyNewProperty={handleApplyNewProperty}
-                onAddExistingProperty={handleAddExistingProperty}
                 typesProperty={
                   data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
                     id: SystemIds.TYPES_PROPERTY,
@@ -757,15 +703,6 @@ export function PowerToolsScreen() {
                   }
                 }
               />
-              <button
-                type="button"
-                disabled={selectedCount === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                title="Move to..."
-                aria-label="Move to"
-              >
-                <MoveSpace />
-              </button>
               <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
               <button
                 onClick={handleAddPlaceholder}

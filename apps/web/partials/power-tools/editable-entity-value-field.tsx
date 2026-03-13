@@ -225,6 +225,7 @@ export function EditableEntityValueField({
         selected={selectedEntities}
         onRemoveSelected={onRemoveSelectedEntity}
         onDone={onSelectEntity}
+        relationValueTypes={property.relationValueTypes}
       />
     );
   }
