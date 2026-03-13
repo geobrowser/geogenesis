@@ -1,10 +1,11 @@
-import { type DecimalMantissa, Graph, Op, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { type DecimalMantissa, Graph, Op, SystemIds, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 import { GeoDate } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
+import { buildOrphanBlockDeleteOps } from './delete-orphan-blocks';
 
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.
@@ -18,17 +19,44 @@ export function prepareLocalDataForPublishing(
   relations: Relation[],
   spaceId: string
 ): Effect.Effect<Op[], PrepareOpsError> {
-  return Effect.try({
-    try: () => prepareOps(values, relations, spaceId),
-    catch: error => {
+  const program = Effect.gen(function* () {
+    const baseOps = prepareOps(values, relations, spaceId);
+
+    const deletedBlockRelations = relations.filter(
+      r =>
+        r.spaceId === spaceId &&
+        r.isLocal === true &&
+        r.isDeleted === true &&
+        r.type.id === SystemIds.BLOCKS
+    );
+
+    if (deletedBlockRelations.length === 0) {
+      return baseOps;
+    }
+
+    const orphanOps = yield* Effect.promise(() =>
+      buildOrphanBlockDeleteOps({
+        deletedBlockRelations,
+        allLocalRelations: relations,
+        spaceId,
+      })
+    );
+
+    return [...baseOps, ...orphanOps];
+  });
+
+  return program.pipe(
+    Effect.catchAll(error => {
       console.error('[PUBLISH] prepareLocalDataForPublishing failed:', error, {
         values,
         relations,
         spaceId,
       });
-      return new PrepareOpsError('Failed to prepare ops for publishing', { cause: error });
-    },
-  });
+      return Effect.fail(
+        new PrepareOpsError('Failed to prepare ops for publishing', { cause: error as unknown })
+      );
+    })
+  );
 }
 
 function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op[] {
