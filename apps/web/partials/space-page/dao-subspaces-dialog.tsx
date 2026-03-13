@@ -8,7 +8,6 @@ import { useActiveSubspaces } from '~/core/hooks/use-active-subspaces';
 import { usePendingSubspaceProposals } from '~/core/hooks/use-pending-subspace-proposals';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useSubspace } from '~/core/hooks/use-subspace';
-import type { ActiveSubspace } from '~/core/io/subgraph/fetch-active-subspaces';
 import type { PendingSubspaceProposal } from '~/core/io/subgraph/fetch-pending-subspace-proposals';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
@@ -23,7 +22,6 @@ import {
   SpaceSearchDropdown,
   type SpaceSearchResult,
   SubspacesDialogShell,
-  sortSubspaces,
 } from './subspaces-dialog-shared';
 
 // ============================================================================
@@ -39,7 +37,6 @@ interface DaoSubspacesDialogProps {
 export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspacesDialogProps) {
   const { query, setQuery, spaces: results, isLoading: isSearchLoading } = useSpacesQuery(open);
   const queryClient = useQueryClient();
-  const activeSubspacesQueryKey = React.useMemo(() => ['active-subspaces', spaceId], [spaceId]);
   const {
     data: activeSubspaces,
     isLoading: isSubspacesLoading,
@@ -67,21 +64,9 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
   const proposeAddSubspace = (space: SpaceSearchResult) => {
     const relationType = addRelationType;
     const key = `${space.id}:${relationType}`;
-    const optimisticEntry: ActiveSubspace = {
-      id: space.id,
-      name: space.name ?? 'Untitled',
-      description: space.description,
-      image: space.image,
-      relationType,
-    };
 
-    // Optimistically add to cache so it appears immediately
-    queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
-      const currentSubspaces = current ?? [];
-      const alreadyExists = currentSubspaces.some(s => s.id === space.id && s.relationType === relationType);
-      if (alreadyExists) return currentSubspaces;
-      return sortSubspaces([...currentSubspaces, optimisticEntry]);
-    });
+    // For DAO, setSubspace creates a proposal — don't optimistically add to active list.
+    // Just show "Proposing..." feedback and invalidate pending proposals on success.
     setPendingKeys(prev => new Map(prev).set(key, 'adding'));
     setQuery('');
 
@@ -89,20 +74,9 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
       { subspaceId: space.id, relationType },
       {
         onSuccess: () => {
-          setPendingKeys(prev => {
-            const next = new Map(prev);
-            next.delete(key);
-            return next;
-          });
-          // Refetch pending proposals to show the new proposal
           queryClient.invalidateQueries({ queryKey: ['pending-subspace-proposals', spaceId] });
         },
-        onError: () => {
-          // Roll back optimistic entry
-          queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
-            if (!current) return current;
-            return current.filter(s => !(s.id === space.id && s.relationType === relationType));
-          });
+        onSettled: () => {
           setPendingKeys(prev => {
             const next = new Map(prev);
             next.delete(key);
@@ -143,7 +117,7 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
           <Text variant="metadata" as="p">
             Propose subspace
           </Text>
-          <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} />
+          <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} disabled={pendingKeys.size > 0} />
         </div>
         <SpaceSearchDropdown
           query={query}
@@ -163,9 +137,7 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
         isError={isSubspacesError}
         error={subspacesError}
         pendingKeys={pendingKeys}
-        addingLabel="Proposing..."
-        actionButtonLabel="Propose removal"
-        removingLabel="Proposing..."
+        variant="dao"
         onAction={proposeRemoveSubspace}
       />
 

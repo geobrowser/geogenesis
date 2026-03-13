@@ -241,14 +241,20 @@ function buildSubspaceTopic(
   subspaceId: string,
   topicEntityId?: string
 ): Hex {
-  const normalizedSubspace = subspaceId;
-
   if (relationType !== 'subtopic') {
-    return padBytes16ToBytes32(normalizedSubspace);
+    return padBytes16ToBytes32(subspaceId);
   }
 
+  // Subtopic topic layout: bytes32(bytes16 subspaceId, bytes16 topicEntityId)
+  // Both halves must be exactly 32 hex chars (16 bytes) without 0x prefix.
+  const subspaceHex = uuidToHex(subspaceId);
   const targetHex = parseTopicEntityId(topicEntityId);
-  return `0x${normalizedSubspace}${targetHex}` as Hex;
+
+  if (subspaceHex.length !== 32 || !/^[0-9a-f]+$/.test(subspaceHex)) {
+    throw new Error(`Invalid subspace ID for subtopic: expected 32 hex chars, got "${subspaceHex}"`);
+  }
+
+  return `0x${subspaceHex}${targetHex}` as Hex;
 }
 
 function parseTopicEntityId(topicEntityId: string | undefined): string {

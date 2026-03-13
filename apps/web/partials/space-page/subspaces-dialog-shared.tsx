@@ -74,13 +74,15 @@ export function SubspacesDialogShell({ open, onOpenChange, children }: Subspaces
 interface RelationTypeToggleProps {
   value: RelationType;
   onChange: (value: RelationType) => void;
+  disabled?: boolean;
 }
 
-export function RelationTypeToggle({ value, onChange }: RelationTypeToggleProps) {
+export function RelationTypeToggle({ value, onChange, disabled = false }: RelationTypeToggleProps) {
   return (
-    <div className="relative flex overflow-hidden rounded-sm border border-grey-02">
+    <div className={`relative flex overflow-hidden rounded-sm border border-grey-02 ${disabled ? 'opacity-50' : ''}`}>
       <button
         type="button"
+        disabled={disabled}
         className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
           value === 'related' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
         }`}
@@ -97,6 +99,7 @@ export function RelationTypeToggle({ value, onChange }: RelationTypeToggleProps)
       </button>
       <button
         type="button"
+        disabled={disabled}
         className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
           value === 'verified' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
         }`}
@@ -214,26 +217,22 @@ export function SpaceSearchDropdown({
 // Active Subspace Row
 // ============================================================================
 
+export type SubspaceDialogVariant = 'personal' | 'dao';
+
+const VARIANT_LABELS = {
+  personal: { adding: 'Adding...', action: 'Remove', removing: 'Removing...' },
+  dao: { adding: 'Proposing...', action: 'Propose removal', removing: 'Proposing...' },
+} as const;
+
 interface ActiveSubspaceRowProps {
   subspace: ActiveSubspace;
   pendingState: PendingAction | undefined;
-  /** Text for adding state, e.g. "Adding..." or "Proposing..." */
-  addingLabel: string;
-  /** Text for the action button, e.g. "Remove" or "Propose removal" */
-  actionButtonLabel: string;
-  /** Text for removing state, e.g. "Removing..." or "Proposing..." */
-  removingLabel: string;
+  variant: SubspaceDialogVariant;
   onAction: (subspaceId: string, relationType: RelationType) => void;
 }
 
-export function ActiveSubspaceRow({
-  subspace,
-  pendingState,
-  addingLabel,
-  actionButtonLabel,
-  removingLabel,
-  onAction,
-}: ActiveSubspaceRowProps) {
+export function ActiveSubspaceRow({ subspace, pendingState, variant, onAction }: ActiveSubspaceRowProps) {
+  const labels = VARIANT_LABELS[variant];
   return (
     <div>
       <div className="h-px w-full bg-divider" />
@@ -257,7 +256,7 @@ export function ActiveSubspaceRow({
             </span>
           </div>
           {pendingState === 'adding' ? (
-            <span className="h-6 shrink-0 px-[7px] text-metadata text-grey-04">{addingLabel}</span>
+            <span className="h-6 shrink-0 px-[7px] text-metadata text-grey-04">{labels.adding}</span>
           ) : (
             <button
               type="button"
@@ -265,7 +264,7 @@ export function ActiveSubspaceRow({
               disabled={pendingState === 'removing'}
               onClick={() => onAction(subspace.id, subspace.relationType)}
             >
-              {pendingState === 'removing' ? removingLabel : actionButtonLabel}
+              {pendingState === 'removing' ? labels.removing : labels.action}
             </button>
           )}
         </div>
@@ -291,11 +290,8 @@ interface ActiveSubspacesListProps {
   isError: boolean;
   error: unknown;
   pendingKeys: Map<string, PendingAction>;
-  addingLabel: string;
-  actionButtonLabel: string;
-  removingLabel: string;
+  variant: SubspaceDialogVariant;
   onAction: (subspaceId: string, relationType: RelationType) => void;
-  sectionLabel?: string;
 }
 
 export function ActiveSubspacesList({
@@ -304,16 +300,13 @@ export function ActiveSubspacesList({
   isError,
   error,
   pendingKeys,
-  addingLabel,
-  actionButtonLabel,
-  removingLabel,
+  variant,
   onAction,
-  sectionLabel = 'Current active subspaces',
 }: ActiveSubspacesListProps) {
   return (
     <div className="flex flex-col gap-2 pb-4">
       <Text variant="metadata" as="p">
-        {sectionLabel}
+        Current active subspaces
       </Text>
 
       {isLoading && (
@@ -341,9 +334,7 @@ export function ActiveSubspacesList({
               key={key}
               subspace={subspace}
               pendingState={pendingKeys.get(key)}
-              addingLabel={addingLabel}
-              actionButtonLabel={actionButtonLabel}
-              removingLabel={removingLabel}
+              variant={variant}
               onAction={onAction}
             />
           );

@@ -25,6 +25,13 @@ interface SubtopicsDialogProps {
 }
 
 export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialogProps) {
+  // Avoid mounting hooks (and firing queries) when the dialog is closed
+  if (!open) return null;
+
+  return <SubtopicsDialogContent open={open} onOpenChange={onOpenChange} spaceId={spaceId} />;
+}
+
+function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialogProps) {
   const { query, onQueryChange, results, isLoading } = useSearch();
   const queryClient = useQueryClient();
   const {

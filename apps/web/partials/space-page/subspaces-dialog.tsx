@@ -60,7 +60,7 @@ interface PersonalSubspacesDialogProps {
 function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspacesDialogProps) {
   const { query, setQuery, spaces: results, isLoading: isSearchLoading } = useSpacesQuery(open);
   const queryClient = useQueryClient();
-  const activeSubspacesQueryKey = React.useMemo(() => ['active-subspaces', spaceId], [spaceId]);
+  const activeSubspacesQueryKey = ['active-subspaces', spaceId];
   const {
     data: activeSubspaces,
     isLoading: isSubspacesLoading,
@@ -84,7 +84,7 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
     [results, existingSubspaceIds, spaceId]
   );
 
-  const addSubspace = (space: SpaceSearchResult) => {
+  const addSubspace = async (space: SpaceSearchResult) => {
     const relationType = addRelationType;
     const key = `${space.id}:${relationType}`;
     const optimisticEntry: ActiveSubspace = {
@@ -94,6 +94,9 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
       image: space.image,
       relationType,
     };
+
+    // Cancel in-flight refetches so they don't overwrite our optimistic entry
+    await queryClient.cancelQueries({ queryKey: activeSubspacesQueryKey });
 
     queryClient.setQueryData<ActiveSubspace[]>(activeSubspacesQueryKey, current => {
       const currentSubspaces = current ?? [];
@@ -129,8 +132,12 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
     );
   };
 
-  const removeSubspace = (subspaceId: string, relationType: RelationType) => {
+  const removeSubspace = async (subspaceId: string, relationType: RelationType) => {
     const key = `${subspaceId}:${relationType}`;
+
+    // Cancel in-flight refetches so they don't overwrite our optimistic removal
+    await queryClient.cancelQueries({ queryKey: activeSubspacesQueryKey });
+
     setPendingKeys(prev => new Map(prev).set(key, 'removing'));
 
     unsetSubspace(
@@ -160,7 +167,7 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
           <Text variant="metadata" as="p">
             Add subspace
           </Text>
-          <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} />
+          <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} disabled={pendingKeys.size > 0} />
         </div>
         <SpaceSearchDropdown
           query={query}
@@ -180,9 +187,7 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
         isError={isSubspacesError}
         error={subspacesError}
         pendingKeys={pendingKeys}
-        addingLabel="Adding..."
-        actionButtonLabel="Remove"
-        removingLabel="Removing..."
+        variant="personal"
         onAction={removeSubspace}
       />
     </SubspacesDialogShell>

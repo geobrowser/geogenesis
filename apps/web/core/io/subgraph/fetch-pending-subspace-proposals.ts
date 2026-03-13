@@ -45,9 +45,6 @@ export interface PendingSubspaceProposal {
  */
 const SUBSPACE_ACTION_TYPES = ['SubspaceVerified', 'SubspaceUnverified', 'SubspaceRelated', 'SubspaceUnrelated'];
 
-const ADD_ACTION_TYPES = new Set(['SUBSPACE_VERIFIED', 'SUBSPACE_RELATED']);
-const REMOVE_ACTION_TYPES = new Set(['SUBSPACE_UNVERIFIED', 'SUBSPACE_UNRELATED']);
-
 function actionTypeToRelationType(actionType: string): 'verified' | 'related' | null {
   switch (actionType) {
     case 'SUBSPACE_VERIFIED':
@@ -62,9 +59,16 @@ function actionTypeToRelationType(actionType: string): 'verified' | 'related' | 
 }
 
 function actionTypeToDirection(actionType: string): 'add' | 'remove' | null {
-  if (ADD_ACTION_TYPES.has(actionType)) return 'add';
-  if (REMOVE_ACTION_TYPES.has(actionType)) return 'remove';
-  return null;
+  switch (actionType) {
+    case 'SUBSPACE_VERIFIED':
+    case 'SUBSPACE_RELATED':
+      return 'add';
+    case 'SUBSPACE_UNVERIFIED':
+    case 'SUBSPACE_UNRELATED':
+      return 'remove';
+    default:
+      return null;
+  }
 }
 
 /**
@@ -107,25 +111,33 @@ export async function fetchPendingSubspaceProposals(spaceId: string): Promise<Pe
       return [];
     }
 
-    console.error(`Failed to fetch pending subspace proposals for space ${spaceId}:`, error);
-    return [];
+    throw new Error(`Failed to fetch pending subspace proposals for space ${spaceId}: ${String(error)}`);
   }
 
   const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
 
   if (Either.isLeft(decoded)) {
-    console.error(`Failed to decode pending subspace proposals for space ${spaceId}:`, decoded.left);
-    return [];
+    throw new Error(`Failed to decode pending subspace proposals for space ${spaceId}: ${String(decoded.left)}`);
   }
 
-  const proposals = decoded.right.proposals.flatMap(proposal => mapProposalToSubspaceProposal(proposal));
+  const proposals = decoded.right.proposals
+    .map(proposal => mapProposalToSubspaceProposal(proposal))
+    .filter((p): p is PendingSubspaceProposal => p !== null);
 
   if (proposals.length === 0) return [];
 
-  // Batch-resolve child space names in a single query
+  // Batch-resolve child space names in a single query.
+  // Failure is non-fatal — fall back to the proposal name from the API.
   const childSpaceIds = [...new Set(proposals.map(p => p.childSpaceId))];
-  const spaces = await Effect.runPromise(getSpaces({ spaceIds: childSpaceIds }));
-  const nameById = new Map(spaces.map(s => [s.id, s.entity.name]));
+  const spacesResult = await Effect.runPromise(Effect.either(getSpaces({ spaceIds: childSpaceIds })));
+
+  let nameById: Map<string, string | null>;
+  if (Either.isRight(spacesResult)) {
+    nameById = new Map(spacesResult.right.map(s => [s.id, s.entity.name]));
+  } else {
+    console.warn('Failed to resolve child space names for pending proposals, using fallback names', spacesResult.left);
+    nameById = new Map();
+  }
 
   return proposals.map(p => ({
     ...p,
@@ -133,36 +145,29 @@ export async function fetchPendingSubspaceProposals(spaceId: string): Promise<Pe
   }));
 }
 
-function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSubspaceProposal[] {
-  const subspaceAction = proposal.actions.find(a => {
-    const direction = actionTypeToDirection(a.actionType);
-    return direction !== null;
-  });
-
-  if (!subspaceAction) return [];
+function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSubspaceProposal | null {
+  const subspaceAction = proposal.actions.find(a => actionTypeToDirection(a.actionType) !== null);
+  if (!subspaceAction) return null;
 
   const relationType = actionTypeToRelationType(subspaceAction.actionType);
   const direction = actionTypeToDirection(subspaceAction.actionType);
-
-  if (!relationType || !direction) return [];
+  if (!relationType || !direction) return null;
 
   // targetSpaceId is set by the gaia API for subspace edge actions
-  const childSpaceId = subspaceAction.targetSpaceId ?? '';
-  if (!childSpaceId) return [];
+  const childSpaceId = subspaceAction.targetSpaceId;
+  if (!childSpaceId) return null;
 
-  return [
-    {
-      proposalId: proposal.proposalId,
-      name: proposal.name ?? 'Subspace proposal',
-      childSpaceId,
-      childSpaceName: '', // Resolved after batch fetch
-      relationType,
-      direction,
-      yesCount: proposal.votes.yes,
-      noCount: proposal.votes.no,
-      abstainCount: proposal.votes.abstain,
-      endTime: proposal.timing.endTime,
-      status: 'PROPOSED',
-    },
-  ];
+  return {
+    proposalId: proposal.proposalId,
+    name: proposal.name ?? 'Subspace proposal',
+    childSpaceId,
+    childSpaceName: '', // Resolved after batch fetch
+    relationType,
+    direction,
+    yesCount: proposal.votes.yes,
+    noCount: proposal.votes.no,
+    abstainCount: proposal.votes.abstain,
+    endTime: proposal.timing.endTime,
+    status: 'PROPOSED',
+  };
 }

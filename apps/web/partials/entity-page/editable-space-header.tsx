@@ -182,9 +182,6 @@ export function EditableSpaceHeading({
                   </MenuItem>
                   {isEditing && (
                     <>
-                      <MenuItem onClick={() => setIsContextMenuOpen(false)}>
-                        <p>Set space topic</p>
-                      </MenuItem>
                       <MenuItem
                         onClick={() => {
                           setIsContextMenuOpen(false);
