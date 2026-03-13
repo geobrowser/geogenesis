@@ -272,6 +272,9 @@ export function PowerToolsScreen() {
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
         setPendingEntityId(entityId);
+        // Pin eagerly to avoid a render where the row is at its natural position
+        // before the effect fires, which would unmount the focused input.
+        setPinnedNewEntityId(entityId);
         createEntityWithTypes({
           name: maybeName,
           filters: effectiveFilterState,
