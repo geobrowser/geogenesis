@@ -171,6 +171,19 @@ export function PowerToolsScreen() {
     filterModeOverride: canEdit ? undefined : temporaryFilterMode,
   });
 
+  const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
+  const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
+
+  React.useEffect(() => {
+    setOrderedPropertyIds(prev => {
+      const idsSet = new Set(propertyIds);
+      const ordered = prev.filter(id => idsSet.has(id));
+      const appended = propertyIds.filter(id => !ordered.includes(id));
+      if (appended.length === 0 && ordered.length === prev.length) return prev;
+      return [...ordered, ...appended];
+    });
+  }, [propertyIds]);
+
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
@@ -428,12 +441,14 @@ export function PowerToolsScreen() {
             }
           >
             <div className="max-h-[320px] overflow-y-auto py-1">
-              {data.properties.map(property => {
-                const isHidden = hiddenColumnIds.has(property.id);
+              {orderedPropertyIds.map(id => {
+                const property = data.propertiesById[id];
+                if (!property) return null;
+                const isHidden = hiddenColumnIds.has(id);
                 return (
-                  <MenuItem key={property.id} onClick={() => toggleColumnVisibility(property.id)}>
+                  <MenuItem key={id} onClick={() => toggleColumnVisibility(id)}>
                     <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
-                      <span>{property.name || property.id}</span>
+                      <span>{property.name || id}</span>
                       {isHidden ? <EyeHide /> : <Eye />}
                     </div>
                   </MenuItem>
@@ -510,6 +525,8 @@ export function PowerToolsScreen() {
             source={source}
             hiddenColumnIds={hiddenColumnIds}
             onHideColumn={toggleColumnVisibility}
+            orderedPropertyIds={orderedPropertyIds}
+            onReorderColumns={setOrderedPropertyIds}
           />
         )}
         {panelEntityId && (
