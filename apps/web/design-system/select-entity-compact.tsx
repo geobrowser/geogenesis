@@ -25,8 +25,7 @@ type SelectEntityCompactProps = {
   onDone: (result: SelectEntityCompactResult) => void;
   selected?: SelectEntityCompactResult[];
   onRemoveSelected?: (id: string) => void;
-  /** When set, search results are restricted to entities of these types (e.g. image-only). */
-  relationValueTypes?: { id: string; name: string | null }[];
+  relationValueTypes?: { id: string }[];
 };
 
 export function SelectEntityCompact({

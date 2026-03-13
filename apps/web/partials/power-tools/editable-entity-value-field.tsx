@@ -23,6 +23,7 @@ import {
 } from '~/design-system/select-entity-compact';
 
 import type { Property, Relation } from '~/core/types';
+import { useQueryProperty } from '~/core/sync/use-store';
 
 export type EditableEntityValueFieldProps = {
   property: Property;
@@ -218,6 +219,16 @@ export function EditableEntityValueField({
   const isRelation = isRelationProperty(property);
   const isImageType = property.renderableTypeStrict === 'IMAGE';
 
+  const { property: resolvedProperty } = useQueryProperty({
+    id: isRelation && !isImageType && property.id ? property.id : undefined,
+    enabled: isRelation && !isImageType && Boolean(property.id),
+  });
+  const relationValueTypes =
+    property.relationValueTypes?.length ? property.relationValueTypes : resolvedProperty?.relationValueTypes;
+  const filterByTypeIds = relationValueTypes?.length
+    ? relationValueTypes.map(r => ({ id: r.id }))
+    : undefined;
+
   if (isRelation && !isImageType && onSelectEntity) {
     return (
       <SelectEntityCompact
@@ -225,7 +236,7 @@ export function EditableEntityValueField({
         selected={selectedEntities}
         onRemoveSelected={onRemoveSelectedEntity}
         onDone={onSelectEntity}
-        relationValueTypes={property.relationValueTypes}
+        relationValueTypes={filterByTypeIds}
       />
     );
   }
