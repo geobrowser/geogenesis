@@ -49,6 +49,7 @@ import { PowerToolsRow } from './types';
 export type PowerToolsTableSelectionProps = {
   selectedEntityIds: Set<string>;
   onToggleRowSelection: (entityId: string) => void;
+  onSetRowSelection: (entityId: string, selected: boolean) => void;
   onMasterToggle: () => void;
   selectableCount: number;
   isAllSelected: boolean;
@@ -359,6 +360,19 @@ export function PowerToolsTable({
   const [sortState, setSortState] = React.useState<ColumnSortState>(null);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
+  const [isDragSelecting, setIsDragSelecting] = React.useState(false);
+  const dragSelectValueRef = React.useRef<boolean>(false);
+  const startRowEntityIdRef = React.useRef<string | null>(null);
+  const hasDraggedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const onMouseUp = () => {
+      setIsDragSelecting(false);
+      startRowEntityIdRef.current = null;
+    };
+    window.addEventListener('mouseup', onMouseUp);
+    return () => window.removeEventListener('mouseup', onMouseUp);
+  }, []);
 
   const orderedProperties = React.useMemo(() => {
     const byId = new Map(properties.map(p => [p.id, p]));
@@ -533,14 +547,47 @@ export function PowerToolsTable({
               ref={node => rowVirtualizer.measureElement(node)}
               role={(onRowClick || onRowDoubleClick) && !row.placeholder ? 'button' : undefined}
               tabIndex={(onRowClick || onRowDoubleClick) && !row.placeholder ? 0 : undefined}
+              onMouseDown={
+                selection && !row.placeholder
+                  ? () => {
+                      hasDraggedRef.current = false;
+                      dragSelectValueRef.current = !selection.selectedEntityIds.has(row.entityId);
+                      startRowEntityIdRef.current = row.entityId;
+                      setIsDragSelecting(true);
+                    }
+                  : undefined
+              }
               onClick={
                 onRowClick && !row.placeholder
-                  ? () => onRowClick(row.entityId)
+                  ? e => {
+                      if (hasDraggedRef.current) {
+                        hasDraggedRef.current = false;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                      }
+                      onRowClick(row.entityId);
+                    }
                   : undefined
               }
               onDoubleClick={
                 onRowDoubleClick && !row.placeholder
                   ? () => onRowDoubleClick(row.entityId)
+                  : undefined
+              }
+              onMouseEnter={
+                selection && !row.placeholder && isDragSelecting
+                  ? () => {
+                      const value = dragSelectValueRef.current;
+                      selection.onSetRowSelection(row.entityId, value);
+                      if (startRowEntityIdRef.current !== row.entityId) {
+                        hasDraggedRef.current = true;
+                        if (startRowEntityIdRef.current != null) {
+                          selection.onSetRowSelection(startRowEntityIdRef.current, value);
+                          startRowEntityIdRef.current = null;
+                        }
+                      }
+                    }
                   : undefined
               }
               onKeyDown={
@@ -577,18 +624,47 @@ export function PowerToolsTable({
               >
               {showCheckboxColumn && (
                 <div
-                  className="flex items-center border-r border-grey-02 px-3 py-2"
-                  onClick={e => e.stopPropagation()}
+                  data-checkbox-cell
+                  className="flex min-h-full cursor-pointer items-center border-r border-grey-02 px-3 py-2"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (hasDraggedRef.current) {
+                      hasDraggedRef.current = false;
+                      return;
+                    }
+                    if (!row.placeholder) selection!.onToggleRowSelection(row.entityId);
+                  }}
+                  onMouseEnter={
+                    !row.placeholder && isDragSelecting
+                      ? () => {
+                          hasDraggedRef.current = true;
+                          selection!.onSetRowSelection(row.entityId, dragSelectValueRef.current);
+                        }
+                      : undefined
+                  }
+                  role="button"
+                  tabIndex={row.placeholder ? undefined : 0}
+                  aria-label={row.placeholder ? undefined : 'Select row'}
+                  onKeyDown={
+                    !row.placeholder
+                      ? e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selection!.onToggleRowSelection(row.entityId);
+                          }
+                        }
+                      : undefined
+                  }
                 >
-                    {!row.placeholder && (
-                      <Checkbox
-                        checked={selection!.selectedEntityIds.has(row.entityId)}
-                        onChange={() => selection!.onToggleRowSelection(row.entityId)}
-                        aria-label="Select row"
-                      />
-                    )}
-                  </div>
-                )}
+                  {!row.placeholder && (
+                    <Checkbox
+                      checked={selection!.selectedEntityIds.has(row.entityId)}
+                      aria-label="Select row"
+                    />
+                  )}
+                </div>
+              )}
                 {columnLayout.columns.map(({ property }) => {
                   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;

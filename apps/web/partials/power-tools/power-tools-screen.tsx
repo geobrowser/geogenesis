@@ -273,6 +273,15 @@ export function PowerToolsScreen() {
     });
   }, []);
 
+  const setRowSelection = React.useCallback((entityId: string, selected: boolean) => {
+    setSelectedEntityIds(prev => {
+      const next = new Set(prev);
+      if (selected) next.add(entityId);
+      else next.delete(entityId);
+      return next;
+    });
+  }, []);
+
   const selectAll = React.useCallback(() => {
     setSelectedEntityIds(new Set(selectableRows.map(r => r.entityId)));
   }, [selectableRows]);
@@ -479,6 +488,7 @@ export function PowerToolsScreen() {
         ? {
             selectedEntityIds,
             onToggleRowSelection: toggleRowSelection,
+            onSetRowSelection: setRowSelection,
             onMasterToggle,
             selectableCount,
             isAllSelected,
@@ -489,6 +499,7 @@ export function PowerToolsScreen() {
       selectableCount,
       selectedEntityIds,
       toggleRowSelection,
+      setRowSelection,
       onMasterToggle,
       isAllSelected,
     ]
