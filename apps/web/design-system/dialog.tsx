@@ -19,7 +19,7 @@ export function Dialog(props: Props) {
 
   return (
     <Root open={open} onOpenChange={onOpenChange}>
-      <Trigger className="w-full">{props.trigger}</Trigger>
+      <Trigger asChild>{props.trigger}</Trigger>
 
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
