@@ -46,6 +46,12 @@ export const ApiActionTypeSchema = Schema.Union(
   Schema.Literal('FLAG'),
   Schema.Literal('UNFLAG'),
   Schema.Literal('UPDATE_VOTING_SETTINGS'),
+  Schema.Literal('SUBSPACE_VERIFIED'),
+  Schema.Literal('SUBSPACE_UNVERIFIED'),
+  Schema.Literal('SUBSPACE_RELATED'),
+  Schema.Literal('SUBSPACE_UNRELATED'),
+  Schema.Literal('SUBSPACE_TOPIC_DECLARED'),
+  Schema.Literal('SUBSPACE_TOPIC_REMOVED'),
   Schema.Literal('UNKNOWN')
 );
 
@@ -63,6 +69,8 @@ export const ApiActionSchema = Schema.Struct({
   fastThreshold: Schema.optional(Schema.Number),
   slowThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
+  targetSpaceId: Schema.optional(Schema.String),
+  targetTopicId: Schema.optional(Schema.String),
 });
 
 export type ApiAction = Schema.Schema.Type<typeof ApiActionSchema>;
@@ -168,6 +176,14 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
       return 'ADD_MEMBER';
     case 'REMOVE_MEMBER':
       return 'REMOVE_MEMBER';
+    case 'SUBSPACE_VERIFIED':
+    case 'SUBSPACE_RELATED':
+    case 'SUBSPACE_TOPIC_DECLARED':
+      return 'ADD_SUBSPACE';
+    case 'SUBSPACE_UNVERIFIED':
+    case 'SUBSPACE_UNRELATED':
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return 'REMOVE_SUBSPACE';
     default:
       return 'ADD_EDIT';
   }

@@ -1,9 +1,17 @@
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { validateSpaceId } from '~/core/utils/utils';
 
-import { graphql } from './graphql';
+import { getSpaces } from '../queries';
+import {
+  ApiError,
+  type ApiProposalListItem,
+  ApiProposalListResponseSchema,
+  encodePathSegment,
+  restFetch,
+  validateSpaceId,
+} from '../rest';
+import { AbortError } from './errors';
 
 /**
  * Pending subspace proposal — a governance proposal that adds or removes
@@ -11,10 +19,12 @@ import { graphql } from './graphql';
  */
 export interface PendingSubspaceProposal {
   proposalId: string;
+  /** Human-readable proposal name from the API (e.g., "Add Verified Subspace") */
+  name: string;
   /** The child space being proposed for addition or removal */
   childSpaceId: string;
+  /** Display name of the child space, resolved from the spaces index */
   childSpaceName: string;
-  childSpaceImage: string;
   /** Which relation type is being proposed */
   relationType: 'verified' | 'related';
   /** Whether this is adding or removing the subspace */
@@ -30,16 +40,10 @@ export interface PendingSubspaceProposal {
 }
 
 /**
- * The 6 subspace action types from the GraphQL ProposalActionType enum.
- * We query for all of them to cover add + remove for verified/related.
- * (Topic actions are excluded — they're a different feature.)
+ * The 4 subspace edge action types (PascalCase for REST API query params).
+ * Topic actions are excluded — they're a different feature.
  */
-const SUBSPACE_ACTION_TYPES = [
-  'SUBSPACE_VERIFIED',
-  'SUBSPACE_UNVERIFIED',
-  'SUBSPACE_RELATED',
-  'SUBSPACE_UNRELATED',
-] as const;
+const SUBSPACE_ACTION_TYPES = ['SubspaceVerified', 'SubspaceUnverified', 'SubspaceRelated', 'SubspaceUnrelated'];
 
 const ADD_ACTION_TYPES = new Set(['SUBSPACE_VERIFIED', 'SUBSPACE_RELATED']);
 const REMOVE_ACTION_TYPES = new Set(['SUBSPACE_UNVERIFIED', 'SUBSPACE_UNRELATED']);
@@ -64,147 +68,101 @@ function actionTypeToDirection(actionType: string): 'add' | 'remove' | null {
 }
 
 /**
- * Query pending (not yet executed) subspace proposals for a space.
+ * Fetch pending subspace proposals for a space using the REST API.
  *
- * Uses proposalActionsConnection filter with the new SUBSPACE_* action types.
- * Filters to proposals that haven't been executed yet (executedAt is null).
+ * Uses GET /proposals/space/:spaceId/status with:
+ * - actionTypes filter for SUBSPACE_* types
+ * - status=PROPOSED to only get pending proposals
+ * - orderBy=end_time to show soonest-expiring first
  */
-const pendingSubspaceProposalsQuery = (spaceId: string) => `
-  {
-    proposalsConnection(
-      filter: {
-        spaceId: { is: "${spaceId}" }
-        executedAt: { isNull: true }
-        proposalActionsConnection: {
-          some: {
-            actionType: {
-              in: [${SUBSPACE_ACTION_TYPES.join(', ')}]
-            }
-          }
-        }
-      }
-      orderBy: END_TIME_DESC
-    ) {
-      nodes {
-        id
-        startTime
-        endTime
-        yesCount
-        noCount
-        abstainCount
-        proposalActions {
-          actionType
-          targetId
-        }
-        proposedSubspaces {
-          nodes {
-            subspace
-            spaceBySubspace {
-              id
-              page {
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-interface NetworkProposalAction {
-  actionType: string;
-  targetId: string | null;
-}
-
-interface NetworkProposedSubspaceNode {
-  subspace: string;
-  spaceBySubspace: {
-    id: string;
-    page: {
-      name: string | null;
-    } | null;
-  } | null;
-}
-
-interface NetworkProposal {
-  id: string;
-  startTime: string;
-  endTime: string;
-  yesCount: string;
-  noCount: string;
-  abstainCount: string;
-  proposalActions: NetworkProposalAction[];
-  proposedSubspaces: {
-    nodes: NetworkProposedSubspaceNode[];
-  };
-}
-
-interface NetworkResult {
-  proposalsConnection: {
-    nodes: NetworkProposal[];
-  };
-}
-
 export async function fetchPendingSubspaceProposals(spaceId: string): Promise<PendingSubspaceProposal[]> {
-  if (!validateSpaceId(spaceId)) {
-    throw new Error(`Invalid space ID for pending subspace proposals: ${spaceId}`);
+  const validatedSpaceId = validateSpaceId(spaceId);
+  if (!validatedSpaceId) {
+    console.error(`Invalid space ID for pending subspace proposals: ${spaceId}`);
+    return [];
   }
 
-  const resultOrError = await Effect.runPromise(
+  const config = Environment.getConfig();
+  const encodedSpaceId = encodePathSegment(validatedSpaceId);
+  const actionTypesParam = SUBSPACE_ACTION_TYPES.join(',');
+  const path = `/proposals/space/${encodedSpaceId}/status?actionTypes=${actionTypesParam}&status=PROPOSED&orderBy=end_time&orderDirection=asc`;
+
+  const result = await Effect.runPromise(
     Effect.either(
-      graphql<NetworkResult>({
-        query: pendingSubspaceProposalsQuery(spaceId),
-        endpoint: Environment.getConfig().api,
+      restFetch<unknown>({
+        endpoint: config.api,
+        path,
       })
     )
   );
 
-  if (Either.isLeft(resultOrError)) {
-    const error = resultOrError.left;
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-    switch (error._tag) {
-      case 'AbortError':
-        throw error;
-      default:
-        console.error(`${error._tag}: Unable to fetch pending subspace proposals for space ${spaceId}`);
-        return [];
+    if (error instanceof AbortError) {
+      throw error;
     }
+
+    if (error instanceof ApiError && error.status === 404) {
+      return [];
+    }
+
+    console.error(`Failed to fetch pending subspace proposals for space ${spaceId}:`, error);
+    return [];
   }
 
-  const proposals = resultOrError.right.proposalsConnection.nodes;
+  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
 
-  return proposals.flatMap(proposal => {
-    const firstAction = proposal.proposalActions[0];
-    if (!firstAction) return [];
+  if (Either.isLeft(decoded)) {
+    console.error(`Failed to decode pending subspace proposals for space ${spaceId}:`, decoded.left);
+    return [];
+  }
 
-    const relationType = actionTypeToRelationType(firstAction.actionType);
-    const direction = actionTypeToDirection(firstAction.actionType);
+  const proposals = decoded.right.proposals.flatMap(proposal => mapProposalToSubspaceProposal(proposal));
 
-    if (!relationType || !direction) return [];
+  if (proposals.length === 0) return [];
 
-    // Try to get the child space info from proposedSubspaces
-    const proposedSubspace = proposal.proposedSubspaces.nodes[0];
-    const childSpaceId = proposedSubspace?.spaceBySubspace?.id ?? proposedSubspace?.subspace ?? '';
-    const childSpaceName = proposedSubspace?.spaceBySubspace?.page?.name ?? 'Unknown space';
+  // Batch-resolve child space names in a single query
+  const childSpaceIds = [...new Set(proposals.map(p => p.childSpaceId))];
+  const spaces = await Effect.runPromise(getSpaces({ spaceIds: childSpaceIds }));
+  const nameById = new Map(spaces.map(s => [s.id, s.entity.name]));
 
-    // If we can't determine a child space ID, skip this proposal
-    if (!childSpaceId) return [];
+  return proposals.map(p => ({
+    ...p,
+    childSpaceName: nameById.get(p.childSpaceId) ?? p.name,
+  }));
+}
 
-    return [
-      {
-        proposalId: proposal.id,
-        childSpaceId,
-        childSpaceName,
-        childSpaceImage: '', // We'll use the placeholder in the UI
-        relationType,
-        direction,
-        yesCount: Number(proposal.yesCount),
-        noCount: Number(proposal.noCount),
-        abstainCount: Number(proposal.abstainCount),
-        endTime: Number(proposal.endTime),
-        status: 'PROPOSED' as const,
-      },
-    ];
+function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSubspaceProposal[] {
+  const subspaceAction = proposal.actions.find(a => {
+    const direction = actionTypeToDirection(a.actionType);
+    return direction !== null;
   });
+
+  if (!subspaceAction) return [];
+
+  const relationType = actionTypeToRelationType(subspaceAction.actionType);
+  const direction = actionTypeToDirection(subspaceAction.actionType);
+
+  if (!relationType || !direction) return [];
+
+  // targetSpaceId is set by the gaia API for subspace edge actions
+  const childSpaceId = subspaceAction.targetSpaceId ?? '';
+  if (!childSpaceId) return [];
+
+  return [
+    {
+      proposalId: proposal.proposalId,
+      name: proposal.name ?? 'Subspace proposal',
+      childSpaceId,
+      childSpaceName: '', // Resolved after batch fetch
+      relationType,
+      direction,
+      yesCount: proposal.votes.yes,
+      noCount: proposal.votes.no,
+      abstainCount: proposal.votes.abstain,
+      endTime: proposal.timing.endTime,
+      status: 'PROPOSED',
+    },
+  ];
 }
