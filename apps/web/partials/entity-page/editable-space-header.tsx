@@ -38,6 +38,34 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 
+type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'subtopics';
+
+type OverlayAction =
+  | { type: 'SET_MENU_OPEN'; open: boolean }
+  | { type: 'OPEN_CREATE_IN_SPACE' }
+  | { type: 'OPEN_SPACE_RELATIONSHIPS' }
+  | { type: 'OPEN_SUBTOPICS' }
+  | { type: 'CLOSE_OVERLAYS' };
+
+function overlayReducer(state: OverlayMode, action: OverlayAction): OverlayMode {
+  switch (action.type) {
+    case 'SET_MENU_OPEN':
+      if (action.open) {
+        return state === 'creatingVersion' ? state : 'menu';
+      }
+
+      return 'closed';
+    case 'OPEN_CREATE_IN_SPACE':
+      return 'creatingVersion';
+    case 'OPEN_SPACE_RELATIONSHIPS':
+      return 'spaceRelationships';
+    case 'OPEN_SUBTOPICS':
+      return 'subtopics';
+    case 'CLOSE_OVERLAYS':
+      return 'closed';
+  }
+}
+
 export function EditableSpaceHeading({
   spaceId,
   entityId,
@@ -54,10 +82,12 @@ export function EditableSpaceHeading({
   const isSpacePage = path === `/space/${spaceId}`;
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
-  const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
-  const [isCreatingNewVersion, setIsCreatingNewVersion] = React.useState<boolean>(false);
-  const [isSubtopicsOpen, setIsSubtopicsOpen] = React.useState(false);
-  const [isSubspacesOpen, setIsSubspacesOpen] = React.useState(false);
+  const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');
+
+  const isContextMenuOpen = overlayMode === 'menu' || overlayMode === 'creatingVersion';
+  const isCreatingNewVersion = overlayMode === 'creatingVersion';
+  const isSubtopicsOpen = overlayMode === 'subtopics';
+  const isSubspacesOpen = overlayMode === 'spaceRelationships';
 
   const {
     allVersions,
@@ -73,7 +103,7 @@ export function EditableSpaceHeading({
   const onCopySpaceId = async () => {
     try {
       await navigator.clipboard.writeText(spaceId);
-      setIsContextMenuOpen(false);
+      dispatch({ type: 'CLOSE_OVERLAYS' });
     } catch (err) {
       console.error('Failed to copy space ID in: ', spaceId);
     }
@@ -82,7 +112,7 @@ export function EditableSpaceHeading({
   const onCopyEntityId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
-      setIsContextMenuOpen(false);
+      dispatch({ type: 'CLOSE_OVERLAYS' });
     } catch (err) {
       console.error('Failed to copy entity ID in: ', entityId);
     }
@@ -164,7 +194,7 @@ export function EditableSpaceHeading({
             </HistoryPanel>
             <Menu
               open={isContextMenuOpen}
-              onOpenChange={setIsContextMenuOpen}
+              onOpenChange={open => dispatch({ type: 'SET_MENU_OPEN', open })}
               align="end"
               trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
               className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
@@ -174,9 +204,11 @@ export function EditableSpaceHeading({
                   entityId={entityId as EntityId}
                   entityName={name ?? ''}
                   sourceSpaceId={spaceId}
-                  setIsCreatingNewVersion={setIsCreatingNewVersion}
+                  setIsCreatingNewVersion={value =>
+                    dispatch({ type: value ? 'OPEN_CREATE_IN_SPACE' : 'CLOSE_OVERLAYS' })
+                  }
                   onDone={() => {
-                    setIsContextMenuOpen(false);
+                    dispatch({ type: 'CLOSE_OVERLAYS' });
                   }}
                 />
               )}
@@ -190,7 +222,7 @@ export function EditableSpaceHeading({
                     <Copy color="grey-04" />
                     <p>Copy Entity ID</p>
                   </MenuItem>
-                  <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                  <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                     <div className="shrink-0">
                       <MoveSpace />
                     </div>
@@ -204,16 +236,14 @@ export function EditableSpaceHeading({
                     <>
                       <MenuItem
                         onClick={() => {
-                          setIsContextMenuOpen(false);
-                          setIsSubspacesOpen(true);
+                          dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
                         }}
                       >
                         <p>Space relationships</p>
                       </MenuItem>
                       {/* <MenuItem
                         onClick={() => {
-                          setIsContextMenuOpen(false);
-                          setIsSubtopicsOpen(true);
+                          dispatch({ type: 'OPEN_SUBTOPICS' });
                         }}
                       >
                         <p>Subtopics</p>
@@ -229,8 +259,16 @@ export function EditableSpaceHeading({
       </div>
 
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
-      <SubspacesDialog open={isSubspacesOpen} onOpenChange={setIsSubspacesOpen} spaceId={spaceId} />
-      <SubtopicsDialog open={isSubtopicsOpen} onOpenChange={setIsSubtopicsOpen} spaceId={spaceId} />
+      <SubspacesDialog
+        open={isSubspacesOpen}
+        onOpenChange={open => dispatch({ type: open ? 'OPEN_SPACE_RELATIONSHIPS' : 'CLOSE_OVERLAYS' })}
+        spaceId={spaceId}
+      />
+      <SubtopicsDialog
+        open={isSubtopicsOpen}
+        onOpenChange={open => dispatch({ type: open ? 'OPEN_SUBTOPICS' : 'CLOSE_OVERLAYS' })}
+        spaceId={spaceId}
+      />
     </>
   );
 }
