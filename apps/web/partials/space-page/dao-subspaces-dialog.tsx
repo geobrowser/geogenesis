@@ -4,17 +4,19 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActiveSubspaces } from '~/core/hooks/use-active-subspaces';
 import { usePendingSubspaceProposals } from '~/core/hooks/use-pending-subspace-proposals';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useSubspace } from '~/core/hooks/use-subspace';
 import type { PendingSubspaceProposal } from '~/core/io/subgraph/fetch-pending-subspace-proposals';
 import { NavUtils } from '~/core/utils/utils';
-import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Dots } from '~/design-system/dots';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+import { Truncate } from '~/design-system/truncate';
 
 import {
   ActiveSubspacesList,
@@ -196,11 +198,6 @@ interface PendingProposalRowProps {
 }
 
 function PendingProposalRow({ proposal }: PendingProposalRowProps) {
-  const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
-  const totalSeconds = proposal.endTime - Math.floor(Date.now() / 1000);
-  const isVotingEnded = totalSeconds <= 0;
-  const totalVotes = proposal.yesCount + proposal.noCount + proposal.abstainCount;
-
   const directionLabel = proposal.direction === 'add' ? 'Add' : 'Remove';
   const relationLabel = proposal.relationType === 'verified' ? 'Verified' : 'Related';
 
@@ -212,7 +209,16 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
         className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
       >
         <div className="flex items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="size-[22px] shrink-0 overflow-clip rounded-sm">
+              <NativeGeoImage
+                value={proposal.childSpaceImage || PLACEHOLDER_SPACE_IMAGE}
+                alt=""
+                width={22}
+                height={22}
+                className="h-[22px] w-[22px] object-cover"
+              />
+            </div>
             <Text variant="button" as="p">
               {proposal.childSpaceName}
             </Text>
@@ -225,49 +231,16 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
               {directionLabel}
             </span>
           </div>
-          <div className="shrink-0 text-metadata text-grey-04">
-            {isVotingEnded ? (
-              'Voting ended'
-            ) : (
-              <span>
-                {hours}h {minutes}m left
-              </span>
-            )}
-          </div>
+          <span className="shrink-0 text-metadata text-grey-04">Pending</span>
         </div>
-        <div className="flex items-center gap-2">
-          <VoteBar yesCount={proposal.yesCount} noCount={proposal.noCount} totalVotes={totalVotes} />
-          <span className="shrink-0 text-tag text-grey-04">
-            {totalVotes} vote{totalVotes !== 1 ? 's' : ''}
-          </span>
-        </div>
+        {proposal.childSpaceDescription ? (
+          <Truncate maxLines={2} shouldTruncate variant="footnote">
+            <Text variant="footnote" color="grey-04">
+              {proposal.childSpaceDescription}
+            </Text>
+          </Truncate>
+        ) : null}
       </Link>
-    </div>
-  );
-}
-
-// ============================================================================
-// Vote Bar
-// ============================================================================
-
-interface VoteBarProps {
-  yesCount: number;
-  noCount: number;
-  totalVotes: number;
-}
-
-function VoteBar({ yesCount, noCount, totalVotes }: VoteBarProps) {
-  if (totalVotes === 0) {
-    return <div className="h-1.5 flex-1 rounded-full bg-grey-02" />;
-  }
-
-  const yesPercent = (yesCount / totalVotes) * 100;
-  const noPercent = (noCount / totalVotes) * 100;
-
-  return (
-    <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-grey-02">
-      {yesPercent > 0 && <div className="bg-green transition-all" style={{ width: `${yesPercent}%` }} />}
-      {noPercent > 0 && <div className="bg-red-01 transition-all" style={{ width: `${noPercent}%` }} />}
     </div>
   );
 }

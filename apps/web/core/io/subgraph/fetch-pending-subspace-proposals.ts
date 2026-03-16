@@ -1,6 +1,7 @@
 import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { uuidToHex } from '~/core/id/normalize';
 
 import { getSpaces } from '../queries';
 import {
@@ -26,6 +27,8 @@ export interface PendingSubspaceProposal {
   childSpaceId: string;
   /** Display name of the child space, resolved from the spaces index */
   childSpaceName: string;
+  childSpaceDescription: string | null;
+  childSpaceImage: string;
   /** Which relation type is being proposed */
   relationType: 'verified' | 'related';
   /** Whether this is adding or removing the subspace */
@@ -132,17 +135,31 @@ export async function fetchPendingSubspaceProposals(spaceId: string): Promise<Pe
   const childSpaceIds = [...new Set(proposals.map(p => p.childSpaceId))];
   const spacesResult = await Effect.runPromise(Effect.either(getSpaces({ spaceIds: childSpaceIds })));
 
-  let nameById: Map<string, string | null>;
+  let metadataById: Map<string, { name: string | null; description: string | null; image: string }>;
   if (Either.isRight(spacesResult)) {
-    nameById = new Map(spacesResult.right.map(s => [s.id, s.entity.name]));
+    metadataById = new Map(
+      spacesResult.right.map(s => [
+        uuidToHex(s.id),
+        {
+          name: s.entity.name,
+          description: s.entity.description,
+          image: s.entity.image,
+        },
+      ])
+    );
   } else {
-    console.warn('Failed to resolve child space names for pending proposals, using fallback names', spacesResult.left);
-    nameById = new Map();
+    console.warn(
+      'Failed to resolve child space metadata for pending proposals, using fallback names',
+      spacesResult.left
+    );
+    metadataById = new Map();
   }
 
   return proposals.map(p => ({
     ...p,
-    childSpaceName: nameById.get(p.childSpaceId) ?? p.name,
+    childSpaceName: metadataById.get(uuidToHex(p.childSpaceId))?.name ?? p.name,
+    childSpaceDescription: metadataById.get(uuidToHex(p.childSpaceId))?.description ?? null,
+    childSpaceImage: metadataById.get(uuidToHex(p.childSpaceId))?.image ?? '',
   }));
 }
 
@@ -164,6 +181,8 @@ function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSu
     name: proposal.name ?? 'Space proposal',
     childSpaceId,
     childSpaceName: '', // Resolved after batch fetch
+    childSpaceDescription: null,
+    childSpaceImage: '',
     relationType,
     direction,
     yesCount: proposal.votes.yes,
