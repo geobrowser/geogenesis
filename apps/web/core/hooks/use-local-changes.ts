@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import type { Relation, Value } from '../types';
 import { reactiveRelations, reactiveValues } from '../sync/store';
+import type { Relation, Value } from '../types';
 import { Diff, type EntityDiff } from '../utils/diff';
 
 type UseLocalChangesOptions = {
@@ -42,21 +42,21 @@ export const useLocalChanges = (
       .filter(r => r.spaceId === spaceId && r.isLocal === true && !r.hasBeenPublished);
 
     const mergeValuesForSpace = mergeWithValues.filter(
-      v => v.spaceId === spaceId && v.isLocal === true && (v.hasBeenPublished === false || v.hasBeenPublished === undefined)
+      v =>
+        v.spaceId === spaceId &&
+        v.isLocal === true &&
+        (v.hasBeenPublished === false || v.hasBeenPublished === undefined)
     );
     const mergeRelationsForSpace = mergeWithRelations.filter(
-      r => r.spaceId === spaceId && r.isLocal === true && (r.hasBeenPublished === false || r.hasBeenPublished === undefined)
+      r =>
+        r.spaceId === spaceId &&
+        r.isLocal === true &&
+        (r.hasBeenPublished === false || r.hasBeenPublished === undefined)
     );
 
     const storeIds = new Set([...storeValues.map(v => v.id), ...storeRelations.map(r => r.id)]);
-    const localValues = [
-      ...storeValues,
-      ...mergeValuesForSpace.filter(v => !storeIds.has(v.id)),
-    ];
-    const localRelations = [
-      ...storeRelations,
-      ...mergeRelationsForSpace.filter(r => !storeIds.has(r.id)),
-    ];
+    const localValues = [...storeValues, ...mergeValuesForSpace.filter(v => !storeIds.has(v.id))];
+    const localRelations = [...storeRelations, ...mergeRelationsForSpace.filter(r => !storeIds.has(r.id))];
 
     const allRelationsForSpace = reactiveRelations.get().filter(r => r.spaceId === spaceId && !r.isDeleted);
 

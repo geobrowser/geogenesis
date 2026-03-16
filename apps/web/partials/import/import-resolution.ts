@@ -103,10 +103,7 @@ export async function resolveRelationEntities(params: {
         });
         return { cacheKey, cellValue, match, typeIds };
       } catch (error) {
-        console.warn(
-          `[import] Failed to resolve relation value "${cellValue}" for property ${propertyId}`,
-          error
-        );
+        console.warn(`[import] Failed to resolve relation value "${cellValue}" for property ${propertyId}`, error);
         return null;
       }
     })
@@ -144,7 +141,7 @@ export async function resolveRelationEntities(params: {
           name: cellValue,
           status: 'created',
           typeId: firstTypeId,
-          typeName: firstTypeId ? typeNameById.get(firstTypeId) ?? null : undefined,
+          typeName: firstTypeId ? (typeNameById.get(firstTypeId) ?? null) : undefined,
         });
       } else {
         unresolvedCount += 1;

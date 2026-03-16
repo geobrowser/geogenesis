@@ -6,14 +6,13 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
+import { useSpace } from '~/core/hooks/use-space';
 import { getProperty } from '~/core/io/queries';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
-
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpace } from '~/core/hooks/use-space';
-import { useQueryEntity } from '~/core/sync/use-store';
 
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -43,17 +42,16 @@ function WarningIcon() {
 
 /** Small red status dot shown next to unresolved entity names in the Name column */
 function StatusDot() {
-  return (
-    <span
-      className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-01"
-      aria-hidden="true"
-    />
-  );
+  return <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-01" aria-hidden="true" />;
 }
 
 /** Grey colon separator shown on right side of chips */
 function ChipSeparator() {
-  return <span className="ml-1 text-grey-04" aria-hidden="true">:</span>;
+  return (
+    <span className="ml-1 text-grey-04" aria-hidden="true">
+      :
+    </span>
+  );
 }
 
 /** Renders the space image for a property's source space (like the breadcrumb avatar) */
@@ -101,7 +99,7 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   return (
     <div
       onMouseDown={handleMouseDown}
-      className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-ctaPrimary/30"
+      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-ctaPrimary/30"
     />
   );
 }
@@ -149,9 +147,7 @@ function PropertyMappingPopover({
   return (
     <SelectEntityAsPopover
       trigger={
-        <span className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50">
-          {trigger}
-        </span>
+        <span className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50">{trigger}</span>
       }
       spaceId={spaceId}
       relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
@@ -210,7 +206,13 @@ type Props = {
   onSelectProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   unresolvedLinks?: Record<string, UnresolvedImportCell>;
-  onResolveRelationToken?: (csvColumnIndex: number, token: string, entity: { id: string; name: string }, isNew?: boolean, relationType?: { id: string; name: string | null }) => void;
+  onResolveRelationToken?: (
+    csvColumnIndex: number,
+    token: string,
+    entity: { id: string; name: string },
+    isNew?: boolean,
+    relationType?: { id: string; name: string | null }
+  ) => void;
   onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }, isNew?: boolean) => void;
   onResolveEntityRow?: (rowIndex: number, entity: { id: string; name: string }) => void;
   /** When true and dataRows exist, show empty state message instead of rows */
@@ -338,7 +340,9 @@ export function ImportPreviewTable({
                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
                         !
                       </span>
-                      <Text variant="metadata" className="text-text">Needs mapping</Text>
+                      <Text variant="metadata" className="text-text">
+                        Needs mapping
+                      </Text>
                     </span>
                   }
                 />
@@ -347,7 +351,9 @@ export function ImportPreviewTable({
                   <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
                     !
                   </span>
-                  <Text variant="metadata" className="text-text">Needs mapping</Text>
+                  <Text variant="metadata" className="text-text">
+                    Needs mapping
+                  </Text>
                 </span>
               )}
               <ResizeHandle
@@ -380,7 +386,7 @@ export function ImportPreviewTable({
                 key={virtualRow.key}
                 data-index={virtualRow.index}
                 ref={node => rowVirtualizer.measureElement(node)}
-                className="absolute left-0 top-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
+                className="absolute top-0 left-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
                 style={{
                   transform: `translateY(${virtualRow.start}px)`,
                   width: '100%',
@@ -399,8 +405,7 @@ export function ImportPreviewTable({
                     const isRelation = col.dataType === 'RELATION';
                     const isImageColumn = col.renderableTypeStrict === 'IMAGE';
                     const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
-                    const unresolvedSet =
-                      cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
+                    const unresolvedSet = cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
                     const resolvedRowEntity = resolvedRows?.get(virtualRow.index);
                     const relationPropertyId = columnMappingProp?.[col.csvColumnIndex];
 
@@ -422,10 +427,7 @@ export function ImportPreviewTable({
                         {isRelation && value ? (
                           <div className="flex flex-wrap items-center gap-2 overflow-hidden">
                             {splitRelationCell(value).map((part, i) => {
-                              if (
-                                unresolvedSet?.has(part) &&
-                                onResolveRelationToken
-                              ) {
+                              if (unresolvedSet?.has(part) && onResolveRelationToken) {
                                 return (
                                   <SelectEntityAsPopover
                                     key={i}
@@ -447,10 +449,16 @@ export function ImportPreviewTable({
                                     initialQuery={part}
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
-                                      onResolveRelationToken(col.csvColumnIndex, part, {
-                                        id: result.id,
-                                        name: result.name ?? part,
-                                      }, fromCreateFn, col.relationValueTypes?.[0])
+                                      onResolveRelationToken(
+                                        col.csvColumnIndex,
+                                        part,
+                                        {
+                                          id: result.id,
+                                          name: result.name ?? part,
+                                        },
+                                        fromCreateFn,
+                                        col.relationValueTypes?.[0]
+                                      )
                                     }
                                   />
                                 );
@@ -475,13 +483,23 @@ export function ImportPreviewTable({
                                     advanced={false}
                                     showIDs={false}
                                     initialQuery={part}
-                                    selectedEntityId={relationPropertyId ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id : undefined}
+                                    selectedEntityId={
+                                      relationPropertyId
+                                        ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id
+                                        : undefined
+                                    }
                                     onCreateEntity={() => undefined}
                                     onDone={(result, fromCreateFn) =>
-                                      onResolveRelationToken(col.csvColumnIndex, part, {
-                                        id: result.id,
-                                        name: result.name ?? part,
-                                      }, fromCreateFn, col.relationValueTypes?.[0])
+                                      onResolveRelationToken(
+                                        col.csvColumnIndex,
+                                        part,
+                                        {
+                                          id: result.id,
+                                          name: result.name ?? part,
+                                        },
+                                        fromCreateFn,
+                                        col.relationValueTypes?.[0]
+                                      )
                                     }
                                   />
                                 );
@@ -500,11 +518,7 @@ export function ImportPreviewTable({
                           </div>
                         ) : isImageColumn && value && isImageUrl(value) ? (
                           <div className="overflow-hidden rounded" style={{ width: 60 }}>
-                            <NativeGeoImage
-                              value={value}
-                              alt=""
-                              className="h-auto w-[60px] object-cover"
-                            />
+                            <NativeGeoImage value={value} alt="" className="h-auto w-[60px] object-cover" />
                           </div>
                         ) : (
                           <div className="flex w-full min-w-0 items-start gap-2">
@@ -528,10 +542,14 @@ export function ImportPreviewTable({
                                   initialQuery={value || cellFlag.rawType}
                                   onCreateEntity={() => undefined}
                                   onDone={(result, fromCreateFn) =>
-                                    onResolveTypeValue(cellFlag.rawType, {
-                                      id: result.id,
-                                      name: result.name ?? cellFlag.rawType,
-                                    }, fromCreateFn)
+                                    onResolveTypeValue(
+                                      cellFlag.rawType,
+                                      {
+                                        id: result.id,
+                                        name: result.name ?? cellFlag.rawType,
+                                      },
+                                      fromCreateFn
+                                    )
                                   }
                                 />
                               </>
@@ -585,7 +603,10 @@ export function ImportPreviewTable({
                                   })
                                 }
                               />
-                            ) : typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex && value && onResolveTypeValue ? (
+                            ) : typesColumnIndex !== undefined &&
+                              col.csvColumnIndex === typesColumnIndex &&
+                              value &&
+                              onResolveTypeValue ? (
                               <SelectEntityAsPopover
                                 trigger={
                                   <button
@@ -603,10 +624,14 @@ export function ImportPreviewTable({
                                 initialQuery={value}
                                 onCreateEntity={() => undefined}
                                 onDone={(result, fromCreateFn) =>
-                                  onResolveTypeValue(value, {
-                                    id: result.id,
-                                    name: result.name ?? value,
-                                  }, fromCreateFn)
+                                  onResolveTypeValue(
+                                    value,
+                                    {
+                                      id: result.id,
+                                      name: result.name ?? value,
+                                    },
+                                    fromCreateFn
+                                  )
                                 }
                               />
                             ) : (

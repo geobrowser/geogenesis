@@ -24,7 +24,14 @@ interface Props {
   filterByTypes?: string[];
 }
 
-export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '', dropdownClassName = '', filterByTypes }: Props) {
+export function EntitySearchAutocomplete({
+  placeholder,
+  itemIds,
+  onDone,
+  className = '',
+  dropdownClassName = '',
+  filterByTypes,
+}: Props) {
   const { query, onQueryChange, isLoading, results } = useSearch({ filterByTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
@@ -55,7 +62,7 @@ export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, classNa
         <div
           ref={containerRef}
           className={cx(
-            'absolute left-0 top-full z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
+            'absolute top-full left-0 z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
             dropdownClassName
           )}
         >

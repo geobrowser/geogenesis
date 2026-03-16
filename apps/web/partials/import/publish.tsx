@@ -2,6 +2,7 @@
 
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
+
 import { useState } from 'react';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
@@ -91,7 +92,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
           </Button>
         </div>
       </div>
-      <div className="mt-3 overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big p-6">
+      <div className="mt-3 overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg p-6 shadow-big">
         <div className="mx-auto max-w-[600px] space-y-6">
           <div>
             <div className="text-body">Proposal name</div>
@@ -100,7 +101,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
               value={proposalName}
               onChange={({ currentTarget: { value } }) => setProposalName(value)}
               placeholder="Name your proposal..."
-              className="mt-1 w-full rounded border border-grey-02 bg-white px-3 py-2 text-button text-text placeholder:text-grey-03 focus:outline-hidden focus:ring-2 focus:ring-ctaPrimary"
+              className="mt-1 w-full rounded border border-grey-02 bg-white px-3 py-2 text-button text-text placeholder:text-grey-03 focus:ring-2 focus:ring-ctaPrimary focus:outline-hidden"
             />
           </div>
           <div className="flex gap-6 rounded-lg bg-grey-01 p-4">

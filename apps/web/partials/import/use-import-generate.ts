@@ -2,6 +2,7 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -24,11 +25,7 @@ import {
   unresolvedLinksAtom,
   valuesAtom,
 } from './atoms';
-import {
-  buildImportPlan,
-  collectRelationCells,
-  createGenerationTracker,
-} from './import-generation';
+import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
 import { resolveRelationEntities, resolveRowsByNameAndType, resolveTypesForRows } from './import-resolution';
 import { useImportSchema } from './use-import-schema';
@@ -71,10 +68,7 @@ export function useImportGenerate(spaceId: string) {
   const hasTypeSource = Boolean(selectedType) || typesColumnIndex !== undefined;
 
   const canGenerate =
-    hasTypeSource &&
-    records.length > 1 &&
-    nameColIdx !== undefined &&
-    Object.keys(columnMapping).length > 0;
+    hasTypeSource && records.length > 1 && nameColIdx !== undefined && Object.keys(columnMapping).length > 0;
   const generationTrackerRef = useRef(createGenerationTracker());
 
   // ── Shared side-effect writer ─────────────────────────────────────────
@@ -101,7 +95,16 @@ export function useImportGenerate(spaceId: string) {
       setResolvedTypesSnapshot(plan.resolvedTypesSnapshot);
       setResolvedEntitiesSnapshot(plan.resolvedEntitiesSnapshot);
     },
-    [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]
+    [
+      store,
+      spaceId,
+      setValues,
+      setRelations,
+      setUnresolvedLinks,
+      setResolvedRowsSnapshot,
+      setResolvedTypesSnapshot,
+      setResolvedEntitiesSnapshot,
+    ]
   );
 
   // ── Loading + pending rebuild refs ────────────────────────────────────
@@ -284,9 +287,7 @@ export function useImportGenerate(spaceId: string) {
     };
 
     // Merge relation entity overrides into the snapshot
-    const mergedEntities = new Map<string, ResolvedEntity>(
-      ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>
-    );
+    const mergedEntities = new Map<string, ResolvedEntity>(ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>);
     for (const [key, override] of Object.entries(ctx.relationOverrides)) {
       mergedEntities.set(key, override);
     }

@@ -87,6 +87,7 @@ export const Relation = Schema.Struct({
     types: Schema.Array(EntityType),
     valuesList: Schema.Array(
       Schema.Struct({
+        spaceId: HexId,
         propertyId: HexId,
         text: Schema.NullOr(Schema.String),
       })

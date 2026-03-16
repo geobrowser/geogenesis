@@ -1,10 +1,11 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
+
 import { useEffect, useRef } from 'react';
 
-import { useEditable } from '~/core/state/editable-store';
 import { Space } from '~/core/io/dto/spaces';
+import { useEditable } from '~/core/state/editable-store';
 
 import { Generate } from './generate';
 import { Publish } from './publish';

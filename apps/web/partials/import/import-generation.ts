@@ -21,7 +21,9 @@ export type RelationPropertyMeta = {
   uniqueCellValues: Set<string>;
 };
 
-export type ResolvedEntity = { id: string; name: string; status: 'found' | 'created'; typeId?: string; typeName?: string | null } | { status: 'ambiguous' };
+export type ResolvedEntity =
+  | { id: string; name: string; status: 'found' | 'created'; typeId?: string; typeName?: string | null }
+  | { status: 'ambiguous' };
 
 export type BuildRowsInput = {
   dataRows: string[][];
@@ -51,7 +53,16 @@ export function buildUnresolvedLinksByCell(params: {
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
 }): Record<string, UnresolvedImportCell> {
-  const { dataRows, columnMapping, nameColIdx, typesColumnIndex, resolvedTypes, resolvedRows, resolvedEntities, propertyLookup } = params;
+  const {
+    dataRows,
+    columnMapping,
+    nameColIdx,
+    typesColumnIndex,
+    resolvedTypes,
+    resolvedRows,
+    resolvedEntities,
+    propertyLookup,
+  } = params;
   const flags: Record<string, UnresolvedImportCell> = {};
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
@@ -148,9 +159,7 @@ export async function hydrateRelationValueTypes(property: Property): Promise<Pro
   try {
     const stub = await Effect.runPromise(getEntity(property.id));
     const primarySpace = stub?.spaces[0];
-    const entity = primarySpace
-      ? await Effect.runPromise(getEntity(property.id, primarySpace))
-      : stub;
+    const entity = primarySpace ? await Effect.runPromise(getEntity(property.id, primarySpace)) : stub;
     if (entity) {
       const rvts = entity.relations
         .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
@@ -487,7 +496,10 @@ export type ImportPlan = {
   unresolvedLinks: Record<string, UnresolvedImportCell>;
   resolvedRowsSnapshot: Map<number, { entityId: string; name: string }>;
   resolvedTypesSnapshot: Map<string, { id: string; name: string; isNew?: boolean }>;
-  resolvedEntitiesSnapshot: Map<string, { id: string; name: string; status: string; typeId?: string; typeName?: string | null }>;
+  resolvedEntitiesSnapshot: Map<
+    string,
+    { id: string; name: string; status: string; typeId?: string; typeName?: string | null }
+  >;
 };
 
 export function buildEntitySnapshot(

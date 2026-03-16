@@ -1,6 +1,7 @@
 'use client';
 
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+
 import { useCallback } from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -58,7 +59,18 @@ export function useImportSession(spaceId: string) {
     setResolvedRowsSnapshot(new Map());
     setResolvedEntitiesSnapshot(new Map());
     setResolvedTypesSnapshot(new Map());
-  }, [relations, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedEntitiesSnapshot, setResolvedTypesSnapshot, setValues, spaceId, store, values]);
+  }, [
+    relations,
+    setRelations,
+    setUnresolvedLinks,
+    setResolvedRowsSnapshot,
+    setResolvedEntitiesSnapshot,
+    setResolvedTypesSnapshot,
+    setValues,
+    spaceId,
+    store,
+    values,
+  ]);
 
   const resetMappedState = useCallback(() => {
     clearGeneratedChanges();
