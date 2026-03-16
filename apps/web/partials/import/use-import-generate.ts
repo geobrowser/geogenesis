@@ -304,6 +304,20 @@ export function useImportGenerate(spaceId: string) {
       mergedRows.set(Number(rowIdxStr), override);
     }
 
+    // Clear the previous import's local changes from the store BEFORE building
+    // the plan. `buildGeneratedRows` calls `hasExistingRelation` via
+    // `store.getResolvedRelations` — if the old import relations are still in
+    // the store they look like pre-existing relations and get skipped, producing
+    // a plan with missing relations. Clearing first ensures only truly
+    // pre-existing relations are considered.
+    if (ctx.values.length > 0 || ctx.relations.length > 0) {
+      store.clearLocalChangesByIds({
+        spaceId,
+        valueIds: ctx.values.map(v => v.id),
+        relationIds: ctx.relations.map(r => r.id),
+      });
+    }
+
     const plan = buildImportPlan({
       dataRows,
       columnMapping: ctx.columnMapping,
@@ -318,10 +332,7 @@ export function useImportGenerate(spaceId: string) {
       getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
     });
 
-    applyPlan(plan, {
-      previousValues: ctx.values,
-      previousRelations: ctx.relations,
-    });
+    applyPlan(plan);
   }, [store, spaceId, applyPlan]);
 
   // Drain pending rebuild when isLoading transitions to false.
