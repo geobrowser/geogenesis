@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSchedule, validateSchedule } from './schedule';
+import { formatSchedule, parseSchedule, serializeSchedule, validateSchedule } from './schedule';
 
 describe('validateSchedule', () => {
   it('accepts a valid schedule with DTSTART only', () => {
@@ -108,6 +108,98 @@ describe('validateSchedule', () => {
   it('accepts multiple BYDAY values', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR');
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('parseSchedule', () => {
+  it('parses a full schedule string', () => {
+    const result = parseSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH');
+    expect(result.startDate).toBe('2026-03-05');
+    expect(result.startTime).toBe('17:00');
+    expect(result.endTime).toBe('18:00');
+    expect(result.freq).toBe('WEEKLY');
+    expect(result.byDay).toEqual(['TH']);
+    expect(result.interval).toBe(1);
+  });
+
+  it('parses DTSTART only', () => {
+    const result = parseSchedule('DTSTART:20260101T090000Z');
+    expect(result.startDate).toBe('2026-01-01');
+    expect(result.startTime).toBe('09:00');
+    expect(result.endTime).toBe('');
+    expect(result.freq).toBe('');
+    expect(result.byDay).toEqual([]);
+  });
+
+  it('parses schedule with interval', () => {
+    const result = parseSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR');
+    expect(result.interval).toBe(2);
+    expect(result.byDay).toEqual(['MO', 'FR']);
+  });
+
+  it('returns defaults for empty string', () => {
+    const result = parseSchedule('');
+    expect(result.startDate).toBe('');
+    expect(result.startTime).toBe('09:00');
+    expect(result.endTime).toBe('');
+    expect(result.freq).toBe('');
+  });
+});
+
+describe('serializeSchedule', () => {
+  it('serializes a full schedule', () => {
+    const serialized = serializeSchedule({
+      startDate: '2026-03-05',
+      startTime: '17:00',
+      endTime: '18:00',
+      freq: 'WEEKLY',
+      byDay: ['TH'],
+      interval: 1,
+    });
+    expect(serialized).toBe('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH');
+  });
+
+  it('serializes DTSTART only', () => {
+    const serialized = serializeSchedule({
+      startDate: '2026-01-01',
+      startTime: '09:00',
+      endTime: '',
+      freq: '',
+      byDay: [],
+      interval: 1,
+    });
+    expect(serialized).toBe('DTSTART:20260101T090000Z');
+  });
+
+  it('serializes with interval', () => {
+    const serialized = serializeSchedule({
+      startDate: '2026-03-05',
+      startTime: '17:00',
+      endTime: '',
+      freq: 'WEEKLY',
+      byDay: ['MO', 'FR'],
+      interval: 2,
+    });
+    expect(serialized).toBe('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR');
+  });
+
+  it('returns empty string when no start date', () => {
+    const serialized = serializeSchedule({
+      startDate: '',
+      startTime: '09:00',
+      endTime: '',
+      freq: '',
+      byDay: [],
+      interval: 1,
+    });
+    expect(serialized).toBe('');
+  });
+
+  it('roundtrips through parse and serialize', () => {
+    const original = 'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH';
+    const parsed = parseSchedule(original);
+    const serialized = serializeSchedule(parsed);
+    expect(serialized).toBe(original);
   });
 });
 

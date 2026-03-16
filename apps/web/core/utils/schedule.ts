@@ -210,6 +210,94 @@ function parseRRule(rrule: string): { freq?: string; byDay?: string[]; interval?
   return result;
 }
 
+export interface ParsedSchedule {
+  startDate: string; // YYYY-MM-DD
+  startTime: string; // HH:MM (24h UTC)
+  endTime: string; // HH:MM (24h UTC) or ''
+  freq: string; // DAILY, WEEKLY, MONTHLY, YEARLY, or ''
+  byDay: string[]; // e.g. ['MO', 'WE', 'FR']
+  interval: number; // 1 = default
+}
+
+/** Parse an iCalendar schedule string into structured fields. */
+export function parseSchedule(schedule: string): ParsedSchedule {
+  const result: ParsedSchedule = {
+    startDate: '',
+    startTime: '09:00',
+    endTime: '',
+    freq: '',
+    byDay: [],
+    interval: 1,
+  };
+
+  if (!schedule) return result;
+
+  const lines = schedule.split('\n');
+  const props: Record<string, string> = {};
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    props[line.substring(0, colonIdx).trim()] = line.substring(colonIdx + 1).trim();
+  }
+
+  if (props.DTSTART) {
+    const d = parseICalDate(props.DTSTART);
+    if (d) {
+      const y = d.getUTCFullYear().toString().padStart(4, '0');
+      const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+      const day = d.getUTCDate().toString().padStart(2, '0');
+      result.startDate = `${y}-${m}-${day}`;
+      result.startTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+    }
+  }
+
+  if (props.DTEND) {
+    const d = parseICalDate(props.DTEND);
+    if (d) {
+      result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+    }
+  }
+
+  if (props.RRULE) {
+    const rrule = parseRRule(props.RRULE);
+    if (rrule.freq) result.freq = rrule.freq;
+    if (rrule.byDay) result.byDay = rrule.byDay;
+    if (rrule.interval) result.interval = rrule.interval;
+  }
+
+  return result;
+}
+
+/** Serialize structured schedule fields into an iCalendar string. */
+export function serializeSchedule(parsed: ParsedSchedule): string {
+  if (!parsed.startDate) return '';
+
+  const [year, month, day] = parsed.startDate.split('-');
+  const [startH, startM] = parsed.startTime.split(':');
+  const dtstart = `${year}${month}${day}T${startH}${startM}00Z`;
+
+  const lines = [`DTSTART:${dtstart}`];
+
+  if (parsed.endTime) {
+    const [endH, endM] = parsed.endTime.split(':');
+    const dtend = `${year}${month}${day}T${endH}${endM}00Z`;
+    lines.push(`DTEND:${dtend}`);
+  }
+
+  if (parsed.freq) {
+    const rruleParts = [`FREQ=${parsed.freq}`];
+    if (parsed.interval > 1) {
+      rruleParts.push(`INTERVAL=${parsed.interval}`);
+    }
+    if (parsed.byDay.length > 0) {
+      rruleParts.push(`BYDAY=${parsed.byDay.join(',')}`);
+    }
+    lines.push(`RRULE:${rruleParts.join(';')}`);
+  }
+
+  return lines.join('\n');
+}
+
 export function formatSchedule(schedule: string): string {
   const lines = schedule.split('\n');
   const props: Record<string, string> = {};
