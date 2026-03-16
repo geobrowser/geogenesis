@@ -43,6 +43,7 @@ import {
   PageVideoField,
   VideoPlayer,
 } from '~/design-system/editable-fields/editable-fields';
+import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -955,6 +956,10 @@ function RenderedValue({
             dataType={property.dataType}
           />
         );
+      }
+
+      case 'SCHEDULE': {
+        return <ScheduleField key={propertyId} isEditing={true} value={value} onChange={onChange} />;
       }
 
       case 'POINT': {

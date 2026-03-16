@@ -30,6 +30,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       date
       decimal
       bytes
+      schedule
     }
 
     relationsList {
@@ -62,6 +63,7 @@ export const entityFragment = graphql(/* GraphQL */ `
           date
           decimal
           bytes
+          schedule
         }
       }
       toSpaceId
@@ -122,6 +124,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -154,6 +157,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -196,6 +200,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -228,6 +233,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -270,6 +276,7 @@ export const entityQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -302,6 +309,7 @@ export const entityQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -349,6 +357,7 @@ export const relationFragment = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
     }
     toSpaceId
@@ -408,6 +417,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -440,6 +450,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -627,6 +638,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           date
           decimal
           bytes
+          schedule
         }
         relationsList {
           verified
@@ -659,6 +671,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
               date
               decimal
               bytes
+              schedule
             }
           }
           type {

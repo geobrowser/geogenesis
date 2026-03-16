@@ -16,7 +16,8 @@ export function hasValueData(remoteValue: RemoteValue): boolean {
     remoteValue.datetime !== null ||
     remoteValue.date !== null ||
     remoteValue.decimal !== null ||
-    remoteValue.bytes !== null
+    remoteValue.bytes !== null ||
+    remoteValue.schedule !== null
   );
 }
 
@@ -105,9 +106,11 @@ function getValueFromDataType(dataType: DataType, remoteValue: RemoteValue): str
       // Relations are handled separately via relationsList, not valuesList
       return null;
 
+    case 'SCHEDULE':
+      return typeof remoteValue.schedule === 'string' ? remoteValue.schedule : null;
+
     // Unsupported types
     case 'BYTES':
-    case 'SCHEDULE':
     case 'EMBEDDING':
       return null;
 
