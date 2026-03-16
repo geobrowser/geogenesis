@@ -159,7 +159,7 @@ function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSu
 
   return {
     proposalId: proposal.proposalId,
-    name: proposal.name ?? 'Subspace proposal',
+    name: proposal.name ?? 'Space proposal',
     childSpaceId,
     childSpaceName: '', // Resolved after batch fetch
     relationType,

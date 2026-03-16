@@ -53,7 +53,7 @@ export function SubspacesDialogShell({ open, onOpenChange, children }: Subspaces
               <div className="flex items-start justify-between">
                 <Title asChild>
                   <Text variant="smallTitle" as="h2">
-                    Subspaces
+                    Space relationships
                   </Text>
                 </Title>
                 <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
@@ -306,7 +306,7 @@ export function ActiveSubspacesList({
   return (
     <div className="flex flex-col gap-2 pb-4">
       <Text variant="metadata" as="p">
-        Current active subspaces
+        Current active spaces
       </Text>
 
       {isLoading && (
@@ -322,7 +322,7 @@ export function ActiveSubspacesList({
       )}
 
       {!isLoading && !isError && subspaces.length === 0 && (
-        <div className="px-3 py-2 text-button text-grey-04">No active subspaces declared yet</div>
+        <div className="px-3 py-2 text-button text-grey-04">No active spaces declared yet</div>
       )}
 
       {!isLoading &&

@@ -115,7 +115,7 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <Text variant="metadata" as="p">
-            Propose subspace
+            Propose space
           </Text>
           <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} disabled={pendingKeys.size > 0} />
         </div>

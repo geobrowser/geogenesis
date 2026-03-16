@@ -155,11 +155,13 @@ async function fetchAssociatedSpaces(topicId: string, targetSpaceId: string): Pr
 function proposalActionLabel(actionType: NonNullable<Proposal['subspaceDetails']>['actionType']) {
   switch (actionType) {
     case 'SUBSPACE_VERIFIED':
+      return 'Add verified space';
     case 'SUBSPACE_UNVERIFIED':
-      return 'Verified subspace change';
+      return 'Remove verified space';
     case 'SUBSPACE_RELATED':
+      return 'Add related space';
     case 'SUBSPACE_UNRELATED':
-      return 'Related subspace change';
+      return 'Remove related space';
     case 'SUBSPACE_TOPIC_DECLARED':
     case 'SUBSPACE_TOPIC_REMOVED':
       return 'Space topic change';

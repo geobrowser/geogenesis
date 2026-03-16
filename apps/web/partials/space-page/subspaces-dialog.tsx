@@ -165,7 +165,7 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <Text variant="metadata" as="p">
-            Add subspace
+            Add space
           </Text>
           <RelationTypeToggle value={addRelationType} onChange={setAddRelationType} disabled={pendingKeys.size > 0} />
         </div>
@@ -176,7 +176,7 @@ function PersonalSubspacesDialog({ open, onOpenChange, spaceId }: PersonalSubspa
           isSearchLoading={isSearchLoading}
           pendingKeys={pendingKeys}
           addRelationType={addRelationType}
-          addButtonLabel="Add subspace"
+          addButtonLabel="Add space"
           onAdd={addSubspace}
         />
       </div>

@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
-
-import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -25,8 +25,8 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
 import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
+import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
@@ -35,13 +35,7 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 
-export function EditableSpaceHeading({
-  spaceId,
-  entityId,
-}: {
-  spaceId: string;
-  entityId: string;
-}) {
+export function EditableSpaceHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
 
@@ -188,7 +182,7 @@ export function EditableSpaceHeading({
                           setIsSubspacesOpen(true);
                         }}
                       >
-                        <p>Subspaces</p>
+                        <p>Space relationships</p>
                       </MenuItem>
                       <MenuItem
                         onClick={() => {
