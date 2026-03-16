@@ -210,14 +210,14 @@ export function EditableSpaceHeading({
                       >
                         <p>Space relationships</p>
                       </MenuItem>
-                      <MenuItem
+                      {/* <MenuItem
                         onClick={() => {
                           setIsContextMenuOpen(false);
                           setIsSubtopicsOpen(true);
                         }}
                       >
                         <p>Subtopics</p>
-                      </MenuItem>
+                      </MenuItem> */}
                     </>
                   )}
                   {addSubspaceComponent}
