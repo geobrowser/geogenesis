@@ -3,8 +3,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { parse } from 'csv/sync';
 import { useAtom, useAtomValue } from 'jotai';
-
 import { usePathname, useRouter } from 'next/navigation';
+
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -17,8 +17,8 @@ import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
-import { Spinner } from '~/design-system/spinner';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import {
@@ -26,14 +26,15 @@ import {
   fileNameAtom,
   headersAtom,
   recordsAtom,
+  selectedTypeAtom,
   stepAtom,
   typesColumnIndexAtom,
-  selectedTypeAtom,
 } from './atoms';
 import { normalizeHeader, normalizeHeaderForMatch } from './header-normalization';
 import { useAutoMapColumns } from './use-auto-map-columns';
 import { useImportSchema } from './use-import-schema';
 import { useImportSession } from './use-import-session';
+
 type GenerateProps = {
   spaceId: string;
   space: Space;
@@ -77,9 +78,10 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   useEffect(() => {
     if (headers.length === 0) return;
     const normalizedHeaders = headers.map(h => normalizeHeader(h ?? ''));
-    const propNameToId = schema.length > 0
-      ? new Map(schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id]))
-      : new Map<string, string>();
+    const propNameToId =
+      schema.length > 0
+        ? new Map(schema.map(p => [normalizeHeader(p.name ?? p.id ?? ''), p.id]))
+        : new Map<string, string>();
 
     setColumnMapping(prev => {
       let changed = false;
@@ -112,9 +114,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     if (isAutoMapping) return;
 
     // Check if there are unmapped columns
-    const hasUnmapped = headers.some(
-      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
-    );
+    const hasUnmapped = headers.some((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined);
     if (!hasUnmapped) return;
 
     const signature = `${fileName ?? ''}::${headers.join('|')}`;
@@ -163,7 +163,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       setFileName(file.name);
       setFileSizeBytes(file.size);
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = e => {
         const result = e?.target?.result;
         if (typeof result !== 'string') return;
         try {
@@ -239,16 +239,16 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       return (
         <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
           <Spinner />
-          <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
+          <Text variant="smallButton" className="text-text">
+            Mapping columns to properties...
+          </Text>
         </div>
       );
     }
-    const step3DataRows = records.slice(1).filter(
-      (row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== '')
-    );
-    const unmappedCount = headers.filter(
-      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
-    ).length;
+    const step3DataRows = records
+      .slice(1)
+      .filter((row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== ''));
+    const unmappedCount = headers.filter((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined).length;
     const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
     const hasUnmapped = unmappedCount > 0;
     return (
@@ -323,7 +323,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         {fileName ? (
           <div
             className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate font-bold text-text">{fileName}</span>
@@ -344,14 +344,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             onDragOver={handleDrag}
             onDrop={handleDrop}
             onClick={handleFileInputClick}
-            onKeyDown={(e) => e.key === 'Enter' && handleFileInputClick()}
+            onKeyDown={e => e.key === 'Enter' && handleFileInputClick()}
             className={`flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors ${
               dragActive ? 'border-purple bg-ctaTertiary' : 'border-grey-02 bg-white'
             }`}
           >
             <p className="text-button font-semibold text-text">Drag & drop or select a file</p>
             <p className="text-metadata text-grey-04">Max {MAX_FILE_SIZE_MB}mb - CSV</p>
-            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-2" onClick={e => e.stopPropagation()}>
               <SmallButton type="button" icon={<Upload />} variant="secondary" onClick={handleFileInputClick}>
                 Select file
               </SmallButton>
@@ -372,9 +372,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           </div>
         ) : (
           <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
-            <p className="mb-2 text-metadata text-grey-04">
-              {fileName} · Type - Find or create a type to use
-            </p>
+            <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 {selectedType ? (
@@ -397,7 +395,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                       placeholder="Search for a type..."
                       dropdownClassName="!w-[384px] min-w-[320px]"
                       filterByTypes={[SystemIds.SCHEMA_TYPE]}
-                      onDone={(result) => {
+                      onDone={result => {
                         clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });
                         setTypesColumnIndex(undefined);
@@ -414,7 +412,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                   align="start"
                   trigger={
                     <span>
-                      {typesColumnIndex !== undefined ? `Column: ${headers[typesColumnIndex] ?? ''}` : 'Select column from CSV'}
+                      {typesColumnIndex !== undefined
+                        ? `Column: ${headers[typesColumnIndex] ?? ''}`
+                        : 'Select column from CSV'}
                     </span>
                   }
                   options={headers.map((header, index) => ({
@@ -438,7 +438,10 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               </div>
             </div>
             {hasTypesColumn !== undefined && (
-              <p className="mt-2 text-metadata text-grey-04">This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type above.</p>
+              <p className="mt-2 text-metadata text-grey-04">
+                This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
+                above.
+              </p>
             )}
           </div>
         )}

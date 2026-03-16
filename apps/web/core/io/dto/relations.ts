@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
@@ -9,6 +10,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
   const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   const toEntityId = relation.toEntity.id;
+  const toEntityName = resolveToEntityName(relation);
 
   return {
     id: relation.id,
@@ -28,7 +30,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
     },
     toEntity: {
       id: toEntityId,
-      name: relation.toEntity.name,
+      name: toEntityName,
 
       // The "Renderable Type" for an entity provides a hint to the consumer
       // of the entity to _what_ the entity is so they know how they should
@@ -37,6 +39,20 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
       value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : toEntityId,
     },
   };
+}
+
+/**
+ * Resolve the toEntity name from the highest-ranked space. The API's top-level
+ * name field is not space-scoped, so we derive the name from valuesList instead.
+ */
+function resolveToEntityName(relation: RemoteRelation): string | null {
+  const namePropertyHex = SystemIds.NAME_PROPERTY.replace(/-/g, '');
+  const nameValues = relation.toEntity.valuesList.filter(v => v.propertyId === namePropertyHex && v.text);
+
+  if (nameValues.length === 0) return relation.toEntity.name;
+  if (nameValues.length === 1) return nameValues[0].text;
+
+  return nameValues.reduce((a, b) => (getSpaceRank(a.spaceId) <= getSpaceRank(b.spaceId) ? a : b)).text;
 }
 
 function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {

@@ -264,10 +264,7 @@ interface ResultsArgs {
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
   const filter: EntityFilter | undefined = args.typeIds?.length
     ? {
-        and: [
-          ...BLOCK_TYPE_EXCLUSION_FILTERS,
-          { or: args.typeIds.map(id => ({ typeIds: { anyEqualTo: id } })) },
-        ],
+        and: [...BLOCK_TYPE_EXCLUSION_FILTERS, { or: args.typeIds.map(id => ({ typeIds: { anyEqualTo: id } })) }],
       }
     : { and: BLOCK_TYPE_EXCLUSION_FILTERS };
 

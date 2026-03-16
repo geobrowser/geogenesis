@@ -2,6 +2,7 @@
 
 import { useAtom, useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
+
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
@@ -21,8 +22,8 @@ import {
   entityCountAtom,
   extraPropertiesAtom,
   headersAtom,
-  relationOverridesAtom,
   recordsAtom,
+  relationOverridesAtom,
   resolvedEntitiesSnapshotAtom,
   resolvedRowsSnapshotAtom,
   resolvedTypesSnapshotAtom,
@@ -125,7 +126,13 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   );
 
   const handleResolveRelationToken = useCallback(
-    (csvColumnIndex: number, token: string, entity: { id: string; name: string }, isNew?: boolean, relationType?: { id: string; name: string | null }) => {
+    (
+      csvColumnIndex: number,
+      token: string,
+      entity: { id: string; name: string },
+      isNew?: boolean,
+      relationType?: { id: string; name: string | null }
+    ) => {
       const propertyId = columnMapping[csvColumnIndex];
       if (!propertyId || !token.trim()) return;
 
@@ -247,9 +254,11 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
           {isLoading ? (
             <div className="mb-4 flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
               <Spinner />
-              <Text variant="smallButton" className="text-text">Resolving relation data...</Text>
+              <Text variant="smallButton" className="text-text">
+                Resolving relation data...
+              </Text>
             </div>
-          ) : (unmappedCount > 0 || unresolvedDataCount > 0) ? (
+          ) : unmappedCount > 0 || unresolvedDataCount > 0 ? (
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
               {unmappedCount > 0 && (
                 <div className="flex items-center gap-1.5">
@@ -267,7 +276,8 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                     <Warning color="red-01" />
                   </span>
                   <Text variant="smallButton" className="text-text">
-                    {unresolvedDataCount.toLocaleString('en-US')} {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
+                    {unresolvedDataCount.toLocaleString('en-US')}{' '}
+                    {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
                   </Text>
                 </div>
               )}

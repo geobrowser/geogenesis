@@ -57,13 +57,16 @@ describe('import generation helpers', () => {
       selectedType: null,
       typesColumnIndex: undefined,
       resolvedTypes: new Map(),
-      resolvedEntities: new Map([
-        ['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }],
-      ]),
+      resolvedEntities: new Map([['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }]]),
       spaceId: 'space-1',
       propertyLookup: {
         schema: [
-          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+          {
+            id: 'prop-rel',
+            name: 'Related',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-1', name: 'Person' }],
+          },
         ],
         extraProperties: {},
         getProperty: () => null,
@@ -89,7 +92,12 @@ describe('import generation helpers', () => {
       spaceId: 'space-1',
       propertyLookup: {
         schema: [
-          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+          {
+            id: 'prop-rel',
+            name: 'Related',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-1', name: 'Person' }],
+          },
         ],
         extraProperties: {},
         getProperty: () => null,
@@ -110,12 +118,26 @@ describe('import generation helpers', () => {
       typesColumnIndex: undefined,
       resolvedTypes: new Map(),
       resolvedEntities: new Map([
-        ['prop-rel::New Person', { id: 'created-person-id', name: 'New Person', status: 'created' as const, typeId: 'type-1', typeName: 'Person' }],
+        [
+          'prop-rel::New Person',
+          {
+            id: 'created-person-id',
+            name: 'New Person',
+            status: 'created' as const,
+            typeId: 'type-1',
+            typeName: 'Person',
+          },
+        ],
       ]),
       spaceId: 'space-1',
       propertyLookup: {
         schema: [
-          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+          {
+            id: 'prop-rel',
+            name: 'Related',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-1', name: 'Person' }],
+          },
         ],
         extraProperties: {},
         getProperty: () => null,
@@ -162,14 +184,10 @@ describe('import generation helpers', () => {
       selectedType: null,
       typesColumnIndex: 1,
       resolvedTypes: new Map([['MyType', { id: 'type-my', name: 'MyType' }]]),
-      resolvedEntities: new Map([
-        ['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }],
-      ]),
+      resolvedEntities: new Map([['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }]]),
       spaceId: 'space-1',
       propertyLookup: {
-        schema: [
-          { id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [] },
-        ],
+        schema: [{ id: 'prop-rel', name: 'Related', dataType: 'RELATION', relationValueTypes: [] }],
         extraProperties: {},
         getProperty: () => null,
       },
@@ -215,16 +233,33 @@ describe('buildEntitySnapshot', () => {
     const snapshot = buildEntitySnapshot(entities);
 
     expect(snapshot.size).toBe(2);
-    expect(snapshot.get('prop::Alice')).toEqual({ id: 'alice-id', name: 'Alice', status: 'found', typeId: undefined, typeName: undefined });
+    expect(snapshot.get('prop::Alice')).toEqual({
+      id: 'alice-id',
+      name: 'Alice',
+      status: 'found',
+      typeId: undefined,
+      typeName: undefined,
+    });
     expect(snapshot.has('prop::Bob')).toBe(false);
-    expect(snapshot.get('prop::Charlie')).toEqual({ id: 'charlie-id', name: 'Charlie', status: 'created', typeId: 'type-1', typeName: 'Person' });
+    expect(snapshot.get('prop::Charlie')).toEqual({
+      id: 'charlie-id',
+      name: 'Charlie',
+      status: 'created',
+      typeId: 'type-1',
+      typeName: 'Person',
+    });
   });
 });
 
 describe('buildImportPlan', () => {
   const propertyLookup = {
     schema: [
-      { id: 'prop-rel', name: 'Related', dataType: 'RELATION' as const, relationValueTypes: [{ id: 'type-1', name: 'Person' }] },
+      {
+        id: 'prop-rel',
+        name: 'Related',
+        dataType: 'RELATION' as const,
+        relationValueTypes: [{ id: 'type-1', name: 'Person' }],
+      },
     ],
     extraProperties: {},
     getProperty: () => null,
@@ -237,9 +272,7 @@ describe('buildImportPlan', () => {
       nameColIdx: 0,
       selectedType: { id: 'type-project', name: 'Project' },
       typesColumnIndex: undefined,
-      resolvedEntities: new Map([
-        ['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }],
-      ]),
+      resolvedEntities: new Map([['prop-rel::Alice', { id: 'alice-id', name: 'Alice', status: 'found' as const }]]),
       resolvedTypes: new Map(),
       resolvedRows: new Map([[0, { entityId: 'project-x', name: 'Project X' }]]),
       spaceId: 'space-1',
@@ -249,7 +282,9 @@ describe('buildImportPlan', () => {
     // Values: Name for Project X
     expect(plan.values.some(v => v.entity.id === 'project-x' && v.value === 'Project X')).toBe(true);
     // Relations: Types for Project X + prop-rel to Alice
-    expect(plan.relations.some(r => r.type.id === SystemIds.TYPES_PROPERTY && r.fromEntity.id === 'project-x')).toBe(true);
+    expect(plan.relations.some(r => r.type.id === SystemIds.TYPES_PROPERTY && r.fromEntity.id === 'project-x')).toBe(
+      true
+    );
     expect(plan.relations.some(r => r.type.id === 'prop-rel' && r.toEntity.id === 'alice-id')).toBe(true);
     // Snapshots
     expect(plan.resolvedRowsSnapshot.get(0)?.entityId).toBe('project-x');

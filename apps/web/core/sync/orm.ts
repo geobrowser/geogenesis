@@ -4,6 +4,7 @@ import { dedupeWith } from 'effect/Array';
 
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
+import { ROOT_SPACE } from '../constants';
 import { readTypes } from '../database/entities';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
 import { OmitStrict } from '../types';
@@ -260,6 +261,12 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
+    const typeNameMap = await resolveTypeNames(
+      entities.flatMap(e => e.types),
+      store,
+      cache
+    );
+
     const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
 
     const spaces = await cache.fetchQuery({
@@ -277,6 +284,7 @@ export class E {
     return entities.map(e => {
       return {
         ...e,
+        types: applyTypeNames(e.types, typeNameMap),
         spaces: e.spaces.map(s => {
           const space = spacesById[s];
 
@@ -333,4 +341,58 @@ function mergeSearchResult({
     types,
     spaces: localEntity.spaces,
   };
+}
+
+// @TODO remove once the backend resolves type names using space ranking
+async function resolveTypeNames(
+  types: { id: string; name: string | null }[],
+  store: GeoStore,
+  cache: QueryClient
+): Promise<Map<string, string>> {
+  const typeNameMap = new Map<string, string>();
+  const uniqueTypeIds = [...new Set(types.map(t => t.id))];
+
+  if (uniqueTypeIds.length === 0) return typeNameMap;
+
+  const unresolvedTypeIds: string[] = [];
+
+  for (const typeId of uniqueTypeIds) {
+    const localTypeEntity = store.getEntity(typeId);
+    if (localTypeEntity?.name) {
+      typeNameMap.set(typeId, localTypeEntity.name);
+    } else {
+      unresolvedTypeIds.push(typeId);
+    }
+  }
+
+  if (unresolvedTypeIds.length > 0) {
+    try {
+      const rootSpaceEntities = await cache.fetchQuery({
+        queryKey: ['network', 'entities', 'type-names', ROOT_SPACE, unresolvedTypeIds.sort().join(',')],
+        queryFn: () => Effect.runPromise(getBatchEntities(unresolvedTypeIds, ROOT_SPACE)),
+      });
+
+      for (const entity of rootSpaceEntities) {
+        const nameFromValues = Entities.name(entity.values);
+        const resolvedName = nameFromValues ?? entity.name;
+        if (resolvedName) {
+          typeNameMap.set(entity.id, resolvedName);
+        }
+      }
+    } catch {}
+  }
+
+  return typeNameMap;
+}
+
+function applyTypeNames(
+  types: { id: string; name: string | null }[],
+  nameMap: Map<string, string>
+): { id: string; name: string | null }[] {
+  if (nameMap.size === 0) return types;
+
+  return types.map(t => {
+    const resolvedName = nameMap.get(t.id);
+    return resolvedName !== undefined ? { ...t, name: resolvedName } : t;
+  });
 }

@@ -3,6 +3,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { useAtom, useAtomValue } from 'jotai';
+
 import { useCallback, useState } from 'react';
 
 import { getProperty, getResults } from '~/core/io/queries';
@@ -61,9 +62,7 @@ export function useAutoMapColumns(spaceId: string) {
               })
             );
 
-            const exactMatches = results.filter(
-              r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase()
-            );
+            const exactMatches = results.filter(r => (r.name ?? '').trim().toLowerCase() === headerName.toLowerCase());
 
             let match = exactMatches.length === 1 ? exactMatches[0] : null;
 

@@ -49,7 +49,19 @@ describe('import resolution helpers', () => {
           name: 'Alice',
           description: null,
           types: [{ id: 'type-person', name: 'Person' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );
@@ -88,14 +100,38 @@ describe('import resolution helpers', () => {
           name: 'Alice',
           description: null,
           types: [{ id: 'type-person', name: 'Person' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
         {
           id: 'entity-2',
           name: 'Alice',
           description: null,
           types: [{ id: 'type-person', name: 'Person' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );
@@ -130,14 +166,38 @@ describe('import resolution helpers', () => {
           name: 'Alice',
           description: null,
           types: [{ id: 'type-person', name: 'Person' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
         {
           id: 'entity-2',
           name: 'Alice',
           description: null,
           types: [{ id: 'type-person', name: 'Person' }],
-          spaces: [{ id: 'space-2', name: null, description: null, image: '', relations: [], spaceId: 'space-2', spaces: ['space-2'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-2',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-2',
+              spaces: ['space-2'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );
@@ -230,16 +290,21 @@ describe('import resolution helpers', () => {
 
   it('resolves types by exact match', async () => {
     getResultsMock.mockImplementation(({ query }: { query: string }) =>
-      Effect.succeed([{
-        id: `${query}-id`,
-        name: query,
-        types: [{ id: SystemIds.SCHEMA_TYPE, name: 'Schema Type' }],
-        spaces: [{ id: 'space-1', spaceId: 'space-1' }],
-      }])
+      Effect.succeed([
+        {
+          id: `${query}-id`,
+          name: query,
+          types: [{ id: SystemIds.SCHEMA_TYPE, name: 'Schema Type' }],
+          spaces: [{ id: 'space-1', spaceId: 'space-1' }],
+        },
+      ])
     );
 
     const result = await resolveTypesForRows({
-      dataRows: [['Project A', 'Protocol'], ['Project B', 'Company']],
+      dataRows: [
+        ['Project A', 'Protocol'],
+        ['Project B', 'Company'],
+      ],
       typesColumnIndex: 1,
       guard: { isCurrent: () => true },
     });
@@ -257,14 +322,38 @@ describe('import resolution helpers', () => {
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
         {
           id: 'entity-root',
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'a19c345ab9866679b001d7d2138d88a1', name: null, description: null, image: '', relations: [], spaceId: 'a19c345ab9866679b001d7d2138d88a1', spaces: ['a19c345ab9866679b001d7d2138d88a1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'a19c345ab9866679b001d7d2138d88a1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'a19c345ab9866679b001d7d2138d88a1',
+              spaces: ['a19c345ab9866679b001d7d2138d88a1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );
@@ -291,14 +380,38 @@ describe('import resolution helpers', () => {
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'space-x', name: null, description: null, image: '', relations: [], spaceId: 'space-x', spaces: ['space-x'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-x',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-x',
+              spaces: ['space-x'],
+              values: [],
+              types: [],
+            },
+          ],
         },
         {
           id: 'entity-b',
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'space-y', name: null, description: null, image: '', relations: [], spaceId: 'space-y', spaces: ['space-y'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-y',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-y',
+              spaces: ['space-y'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );
@@ -325,7 +438,19 @@ describe('import resolution helpers', () => {
           name: 'Alpha',
           description: null,
           types: [{ id: 'type-project', name: 'Project' }],
-          spaces: [{ id: 'space-1', name: null, description: null, image: '', relations: [], spaceId: 'space-1', spaces: ['space-1'], values: [], types: [] }],
+          spaces: [
+            {
+              id: 'space-1',
+              name: null,
+              description: null,
+              image: '',
+              relations: [],
+              spaceId: 'space-1',
+              spaces: ['space-1'],
+              values: [],
+              types: [],
+            },
+          ],
         },
       ])
     );

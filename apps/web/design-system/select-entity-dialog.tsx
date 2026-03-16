@@ -13,7 +13,10 @@ import { SelectEntity } from './select-entity';
 type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
   spaceId: string;
-  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }, fromCreateFn?: boolean) => void;
+  onDone: (
+    result: { id: string; name: string | null; space?: string; verified?: boolean },
+    fromCreateFn?: boolean
+  ) => void;
   onCreateEntity?: (result: {
     id: string;
     name: string | null;

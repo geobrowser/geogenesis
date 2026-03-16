@@ -50,6 +50,7 @@ export const entityFragment = graphql(/* GraphQL */ `
           name
         }
         valuesList {
+          spaceId
           propertyId
           text
           integer
@@ -141,6 +142,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -214,6 +216,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -287,6 +290,7 @@ export const entityQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -333,6 +337,7 @@ export const relationFragment = graphql(/* GraphQL */ `
         name
       }
       valuesList {
+        spaceId
         propertyId
         text
         integer
@@ -423,6 +428,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -641,6 +647,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
               name
             }
             valuesList {
+              spaceId
               propertyId
               text
               integer
