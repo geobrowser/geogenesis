@@ -622,7 +622,7 @@ export function ImportPreviewTable({
                                 advanced={false}
                                 showIDs={false}
                                 initialQuery={value}
-                                selectedEntityId={resolvedTypesProp?.get(value)?.id}
+                                selectedEntityId={resolvedTypesProp?.get(value.trim())?.id}
                                 onCreateEntity={() => undefined}
                                 onDone={(result, fromCreateFn) =>
                                   onResolveTypeValue(
