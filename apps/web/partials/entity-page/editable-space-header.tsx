@@ -18,10 +18,7 @@ import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
-import { MoveSpace } from '~/design-system/icons/move-space';
-import { Upload } from '~/design-system/icons/upload';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
@@ -215,21 +212,15 @@ export function EditableSpaceHeading({
               {!isCreatingNewVersion && (
                 <>
                   <MenuItem onClick={onCopySpaceId}>
-                    <Copy color="grey-04" />
                     <p>Copy Space ID</p>
                   </MenuItem>
                   <MenuItem onClick={onCopyEntityId}>
-                    <Copy color="grey-04" />
                     <p>Copy Entity ID</p>
                   </MenuItem>
                   <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
-                    <div className="shrink-0">
-                      <MoveSpace />
-                    </div>
                     <p>Create in space</p>
                   </MenuItem>
                   <MenuItem href={NavUtils.toImport(spaceId)}>
-                    <Upload color="grey-04" />
                     <p>Import data</p>
                   </MenuItem>
                   {isEditing && (
