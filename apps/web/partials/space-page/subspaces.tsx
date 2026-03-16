@@ -20,7 +20,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
 
   return (
     <>
-      <Slider label="Subspaces">
+      <Slider label="Space relationships">
         {subspaces.map((subspace, index) => {
           const href = `/space/${subspace.id}`;
           const image = subspace.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;

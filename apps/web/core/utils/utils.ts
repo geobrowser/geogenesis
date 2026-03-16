@@ -1,5 +1,6 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
 import { Position } from '@geoprotocol/geo-sdk';
+
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -500,9 +501,9 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
     case 'REMOVE_MEMBER':
       return `Remove member from ${proposal.space.name}`;
     case 'ADD_SUBSPACE':
-      return `Add subspace to ${proposal.space.name}`;
+      return `Add space to ${proposal.space.name}`;
     case 'REMOVE_SUBSPACE':
-      return `Remove subspace from ${proposal.space.name}`;
+      return `Remove space from ${proposal.space.name}`;
   }
 }
 
