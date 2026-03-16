@@ -208,7 +208,7 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
         href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
         className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
       >
-        <div className="flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2.5">
             <div className="size-[22px] shrink-0 overflow-clip rounded-sm">
               <NativeGeoImage
@@ -231,7 +231,6 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
               {directionLabel}
             </span>
           </div>
-          <span className="shrink-0 text-metadata text-grey-04">Pending</span>
         </div>
         {proposal.childSpaceDescription ? (
           <Truncate maxLines={2} shouldTruncate variant="footnote">
