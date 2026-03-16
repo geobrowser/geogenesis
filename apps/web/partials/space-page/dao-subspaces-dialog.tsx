@@ -9,9 +9,11 @@ import { usePendingSubspaceProposals } from '~/core/hooks/use-pending-subspace-p
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useSubspace } from '~/core/hooks/use-subspace';
 import type { PendingSubspaceProposal } from '~/core/io/subgraph/fetch-pending-subspace-proposals';
+import { NavUtils } from '~/core/utils/utils';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Dots } from '~/design-system/dots';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import {
@@ -205,7 +207,10 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
   return (
     <div>
       <div className="h-px w-full bg-divider" />
-      <div className="flex flex-col gap-1 py-3">
+      <Link
+        href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
+      >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2">
             <Text variant="button" as="p">
@@ -236,7 +241,7 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
             {totalVotes} vote{totalVotes !== 1 ? 's' : ''}
           </span>
         </div>
-      </div>
+      </Link>
     </div>
   );
 }

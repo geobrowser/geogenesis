@@ -18,6 +18,7 @@ import { AbortError } from './errors';
  * a subspace relationship and hasn't been executed or expired yet.
  */
 export interface PendingSubspaceProposal {
+  spaceId: string;
   proposalId: string;
   /** Human-readable proposal name from the API (e.g., "Add Verified Subspace") */
   name: string;
@@ -158,6 +159,7 @@ function mapProposalToSubspaceProposal(proposal: ApiProposalListItem): PendingSu
   if (!childSpaceId) return null;
 
   return {
+    spaceId: proposal.spaceId,
     proposalId: proposal.proposalId,
     name: proposal.name ?? 'Space proposal',
     childSpaceId,
