@@ -261,8 +261,6 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
-    // Resolve type names from the highest-ranked space. The API may return
-    // type names from an arbitrary space, so we correct them here.
     const typeNameMap = await resolveTypeNames(
       entities.flatMap(e => e.types),
       store,
@@ -345,14 +343,7 @@ function mergeSearchResult({
   };
 }
 
-/**
- * Resolve type entity names from the highest-ranked space. The API may return
- * a type entity's name from a lower-ranked or personal space. This function
- * checks the local store first (which uses space-ranked name resolution), then
- * batch-fetches from Root space for any remaining unresolved types.
- *
- * Returns a Map of typeId → resolved name.
- */
+// @TODO remove once the backend resolves type names using space ranking
 async function resolveTypeNames(
   types: { id: string; name: string | null }[],
   store: GeoStore,
@@ -382,17 +373,13 @@ async function resolveTypeNames(
       });
 
       for (const entity of rootSpaceEntities) {
-        // Prefer the name derived from space-scoped values over the top-level
-        // name field, which may come from a lower-ranked space.
         const nameFromValues = Entities.name(entity.values);
         const resolvedName = nameFromValues ?? entity.name;
         if (resolvedName) {
           typeNameMap.set(entity.id, resolvedName);
         }
       }
-    } catch {
-      // If fetching fails, continue with original names
-    }
+    } catch {}
   }
 
   return typeNameMap;

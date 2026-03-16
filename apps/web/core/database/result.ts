@@ -57,7 +57,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     spaces: sortedSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
   };
 
-  // Resolve type names from the highest-ranked space
+  // @TODO remove once the backend resolves type names using space ranking
   if (merged.types && merged.types.length > 0) {
     const typeNameMap = new Map<string, string>();
     const unresolvedTypeIds: string[] = [];
@@ -80,17 +80,13 @@ export async function mergeSearchResult(args: FetchResultOptions) {
         });
 
         for (const entity of rootSpaceEntities) {
-          // Prefer the name derived from space-scoped values over the top-level
-          // name field, which may come from a lower-ranked space.
           const nameFromValues = Entities.name(entity.values);
           const resolvedName = nameFromValues ?? entity.name;
           if (resolvedName) {
             typeNameMap.set(entity.id, resolvedName);
           }
         }
-      } catch {
-        // If fetching fails, continue with original names
-      }
+      } catch {}
     }
 
     if (typeNameMap.size > 0) {
