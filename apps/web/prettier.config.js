@@ -15,7 +15,7 @@ module.exports = {
     '^@geoprotocol$',
     '^@geogenesis$',
     // External dependencies
-    '^w',
+    '^\\w',
     // This project's own aliases
     '^(~/core)(/.*|$)',
     '^(~/design-system)(/.*|$)',

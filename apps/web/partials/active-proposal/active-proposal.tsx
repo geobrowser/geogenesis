@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
-
 import * as React from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
@@ -60,6 +60,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+  const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
 
   return (
     <>
@@ -144,9 +145,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
         <div className="h-full overflow-x-clip border-t border-divider">
           <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
             {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
-            {(proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE') && (
-              <SubspaceProposal proposal={proposal} />
-            )}
+            {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
           </div>
         </div>
       </div>

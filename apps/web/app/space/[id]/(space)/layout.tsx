@@ -9,15 +9,12 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { Entities } from '~/core/utils/entity';
 import { sortRelations } from '~/core/utils/utils';
 
-import { Create } from '~/design-system/icons/create';
-import { MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
@@ -61,18 +58,6 @@ export default async function Layout(props0: LayoutProps) {
             <EditableSpaceHeading
               spaceId={spaceId}
               entityId={props.id}
-              addSubspaceComponent={
-                <AddSubspaceDialog
-                  spaceId={spaceId}
-                  trigger={
-                    <MenuItem>
-                      <Create />
-                      <p>Add subspace</p>
-                    </MenuItem>
-                  }
-                  spaceType={props.space?.type ?? 'PERSONAL'}
-                />
-              }
             />
             <SpacePageMetadataHeader
               spaceId={spaceId}

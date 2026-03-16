@@ -6,6 +6,7 @@
  */
 import { Schema } from 'effect';
 
+import type { SubspaceProposalDetails } from '../../dto/proposals';
 import { ProposalStatus, ProposalType } from '../../substream-schema';
 
 // ============================================================================
@@ -46,6 +47,12 @@ export const ApiActionTypeSchema = Schema.Union(
   Schema.Literal('FLAG'),
   Schema.Literal('UNFLAG'),
   Schema.Literal('UPDATE_VOTING_SETTINGS'),
+  Schema.Literal('SUBSPACE_VERIFIED'),
+  Schema.Literal('SUBSPACE_UNVERIFIED'),
+  Schema.Literal('SUBSPACE_RELATED'),
+  Schema.Literal('SUBSPACE_UNRELATED'),
+  Schema.Literal('SUBSPACE_TOPIC_DECLARED'),
+  Schema.Literal('SUBSPACE_TOPIC_REMOVED'),
   Schema.Literal('UNKNOWN')
 );
 
@@ -63,6 +70,8 @@ export const ApiActionSchema = Schema.Struct({
   fastThreshold: Schema.optional(Schema.Number),
   slowThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
+  targetSpaceId: Schema.optional(Schema.String),
+  targetTopicId: Schema.optional(Schema.String),
 });
 
 export type ApiAction = Schema.Schema.Type<typeof ApiActionSchema>;
@@ -152,9 +161,95 @@ export const ApiProposalListResponseSchema = Schema.Struct({
 
 export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListResponseSchema>;
 
+const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
+  'SUBSPACE_VERIFIED',
+  'SUBSPACE_UNVERIFIED',
+  'SUBSPACE_RELATED',
+  'SUBSPACE_UNRELATED',
+  'SUBSPACE_TOPIC_DECLARED',
+  'SUBSPACE_TOPIC_REMOVED',
+]);
+
 // ============================================================================
 // Mapping Functions
 // ============================================================================
+
+function isSubspaceActionType(actionType: ApiActionType): actionType is SubspaceProposalDetails['actionType'] {
+  return SUBSPACE_ACTION_TYPES.has(actionType);
+}
+
+export function isTopicSubspaceActionType(actionType: ApiActionType): boolean {
+  return actionType === 'SUBSPACE_TOPIC_DECLARED' || actionType === 'SUBSPACE_TOPIC_REMOVED';
+}
+
+export function isAddSubspaceActionType(actionType: ApiActionType): boolean {
+  return (
+    actionType === 'SUBSPACE_VERIFIED' || actionType === 'SUBSPACE_RELATED' || actionType === 'SUBSPACE_TOPIC_DECLARED'
+  );
+}
+
+function mapSubspaceActionToDetails(action: ApiAction): SubspaceProposalDetails | null {
+  if (!isSubspaceActionType(action.actionType)) {
+    return null;
+  }
+
+  switch (action.actionType) {
+    case 'SUBSPACE_VERIFIED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_UNVERIFIED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_RELATED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_UNRELATED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_TOPIC_DECLARED':
+      return action.targetSpaceId && action.targetTopicId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+            targetTopicId: action.targetTopicId,
+          }
+        : null;
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return action.targetSpaceId && action.targetTopicId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+            targetTopicId: action.targetTopicId,
+          }
+        : null;
+  }
+}
+
+export function getSubspaceProposalDetails(actions: readonly ApiAction[]): SubspaceProposalDetails | null {
+  const subspaceActions = actions.filter(action => isSubspaceActionType(action.actionType));
+
+  if (subspaceActions.length !== 1) {
+    return null;
+  }
+
+  return mapSubspaceActionToDetails(subspaceActions[0]);
+}
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
@@ -168,6 +263,14 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
       return 'ADD_MEMBER';
     case 'REMOVE_MEMBER':
       return 'REMOVE_MEMBER';
+    case 'SUBSPACE_VERIFIED':
+    case 'SUBSPACE_RELATED':
+    case 'SUBSPACE_TOPIC_DECLARED':
+      return 'ADD_SUBSPACE';
+    case 'SUBSPACE_UNVERIFIED':
+    case 'SUBSPACE_UNRELATED':
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return 'REMOVE_SUBSPACE';
     default:
       return 'ADD_EDIT';
   }
