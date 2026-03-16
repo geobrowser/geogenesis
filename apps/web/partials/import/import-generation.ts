@@ -324,13 +324,15 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
     getExistingRelations,
   } = input;
 
-  // Cache existing relations per entity so we only look them up once
+  // Cache existing relations per entity so we only look them up once.
+  // Only consider relations in the current space — relations from other
+  // spaces should not prevent creating the relation in this space.
   const existingRelationsCache = new Map<string, Relation[]>();
   function getExisting(entityId: string): Relation[] {
     if (!getExistingRelations) return [];
     let cached = existingRelationsCache.get(entityId);
     if (!cached) {
-      cached = getExistingRelations(entityId);
+      cached = getExistingRelations(entityId).filter(r => r.spaceId === spaceId);
       existingRelationsCache.set(entityId, cached);
     }
     return cached;
