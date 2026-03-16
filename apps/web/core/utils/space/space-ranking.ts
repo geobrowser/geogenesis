@@ -11,6 +11,7 @@ const SPACE_RANK: Record<string, number> = {
   '870e3b3068661e6280fad2ab456829bc': 6, // Technology
   d69608290513c2a91102c939b3265bd7: 7, // Industries
   b5a31f8182b042437ede0f84ee02f104: 8, // Podcasts
+  '89bd89bf28ff8a0963faf92a8c905e20': 9, // World Affairs
 };
 
 const UNRANKED = Number.MAX_SAFE_INTEGER;

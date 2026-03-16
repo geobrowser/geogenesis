@@ -61,6 +61,8 @@ interface Props {
   source: Source;
   hiddenColumnIds: Set<string>;
   onHideColumn?: (propertyId: string) => void;
+  orderedPropertyIds: string[];
+  onReorderColumns: (ids: string[]) => void;
 }
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -329,6 +331,8 @@ export function PowerToolsTable({
   source,
   hiddenColumnIds,
   onHideColumn,
+  orderedPropertyIds,
+  onReorderColumns,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -337,20 +341,6 @@ export function PowerToolsTable({
   const [sortState, setSortState] = React.useState<ColumnSortState>(null);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
-
-  const propertyIds = React.useMemo(() => properties.map(p => p.id), [properties]);
-
-  const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
-
-  React.useEffect(() => {
-    setOrderedPropertyIds(prev => {
-      const idsSet = new Set(propertyIds);
-      const ordered = prev.filter(id => idsSet.has(id));
-      const appended = propertyIds.filter(id => !ordered.includes(id));
-      if (appended.length === 0 && ordered.length === prev.length) return prev;
-      return [...ordered, ...appended];
-    });
-  }, [propertyIds]);
 
   const orderedProperties = React.useMemo(() => {
     const byId = new Map(properties.map(p => [p.id, p]));
@@ -376,9 +366,9 @@ export function PowerToolsTable({
       const oldIndex = orderedPropertyIds.indexOf(active.id as string);
       const newIndex = orderedPropertyIds.indexOf(over.id as string);
       if (oldIndex === -1 || newIndex === -1) return;
-      setOrderedPropertyIds(arrayMove(orderedPropertyIds, oldIndex, newIndex));
+      onReorderColumns(arrayMove(orderedPropertyIds, oldIndex, newIndex));
     },
-    [orderedPropertyIds]
+    [orderedPropertyIds, onReorderColumns]
   );
 
   React.useEffect(() => {

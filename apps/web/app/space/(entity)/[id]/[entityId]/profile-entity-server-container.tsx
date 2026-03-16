@@ -15,12 +15,13 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
+import { SpaceRedirect } from './space-redirect';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
-interface Props {
+type Props = {
   params: { id: string; entityId: string };
   searchParams?: { [key: string]: string | string[] | undefined };
-}
+};
 
 export async function ProfileEntityServerContainer({ params, searchParams }: Props) {
   const spaceId = params.id;
@@ -56,20 +57,6 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
   const deterministicSpaceId = Spaces.getDeterministicSpaceId(spaces, spaceId) ?? profile?.homeSpaceId ?? null;
   const preventRedirect = searchParams?.edit === 'true';
 
-  /**
-   * When navigating from edit mode, ?edit=true is passed which sets
-   * preventRedirect. This preserves the user's editing context by
-   * keeping them in the current space. This is safe because entity
-   * data is fetched by entityId (spaceId is contextual, not an access
-   * boundary) and write operations are gated by on-chain governance.
-   */
-  if (deterministicSpaceId && params.id !== deterministicSpaceId && !preventRedirect) {
-    console.log(
-      `Redirecting from incorrect space ${params.id} to correct space ${deterministicSpaceId} for profile ${entityId}`
-    );
-    return redirect(NavUtils.toEntity(deterministicSpaceId, entityId));
-  }
-
   if (
     person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) &&
     !preventRedirect &&
@@ -77,24 +64,31 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
   ) {
     const space = await cachedFetchSpace(deterministicSpaceId);
     if (space?.entity?.id === entityId) {
-      console.log(`Redirecting from space configuration entity ${person.id} to space page ${deterministicSpaceId}`);
       return redirect(NavUtils.toSpace(deterministicSpaceId));
     }
   }
 
   return (
-    <ProfilePageComponent
-      id={params.entityId}
-      values={person.values}
-      spaceId={params.id}
-      relations={person.relations}
-      referencedByComponent={
-        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={params.entityId} />
-          </React.Suspense>
-        </TrackedErrorBoundary>
-      }
-    />
+    <SpaceRedirect
+      entityId={entityId}
+      spaceId={spaceId}
+      serverSpaces={spaces}
+      deterministicSpaceId={deterministicSpaceId}
+      preventRedirect={preventRedirect}
+    >
+      <ProfilePageComponent
+        id={params.entityId}
+        values={person.values}
+        spaceId={params.id}
+        relations={person.relations}
+        referencedByComponent={
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </TrackedErrorBoundary>
+        }
+      />
+    </SpaceRedirect>
   );
 }
