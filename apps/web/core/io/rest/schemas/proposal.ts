@@ -6,6 +6,7 @@
  */
 import { Schema } from 'effect';
 
+import type { SubspaceProposalDetails } from '../../dto/proposals';
 import { ProposalStatus, ProposalType } from '../../substream-schema';
 
 // ============================================================================
@@ -160,9 +161,95 @@ export const ApiProposalListResponseSchema = Schema.Struct({
 
 export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListResponseSchema>;
 
+const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
+  'SUBSPACE_VERIFIED',
+  'SUBSPACE_UNVERIFIED',
+  'SUBSPACE_RELATED',
+  'SUBSPACE_UNRELATED',
+  'SUBSPACE_TOPIC_DECLARED',
+  'SUBSPACE_TOPIC_REMOVED',
+]);
+
 // ============================================================================
 // Mapping Functions
 // ============================================================================
+
+function isSubspaceActionType(actionType: ApiActionType): actionType is SubspaceProposalDetails['actionType'] {
+  return SUBSPACE_ACTION_TYPES.has(actionType);
+}
+
+export function isTopicSubspaceActionType(actionType: ApiActionType): boolean {
+  return actionType === 'SUBSPACE_TOPIC_DECLARED' || actionType === 'SUBSPACE_TOPIC_REMOVED';
+}
+
+export function isAddSubspaceActionType(actionType: ApiActionType): boolean {
+  return (
+    actionType === 'SUBSPACE_VERIFIED' || actionType === 'SUBSPACE_RELATED' || actionType === 'SUBSPACE_TOPIC_DECLARED'
+  );
+}
+
+function mapSubspaceActionToDetails(action: ApiAction): SubspaceProposalDetails | null {
+  if (!isSubspaceActionType(action.actionType)) {
+    return null;
+  }
+
+  switch (action.actionType) {
+    case 'SUBSPACE_VERIFIED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_UNVERIFIED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_RELATED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_UNRELATED':
+      return action.targetSpaceId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+          }
+        : null;
+    case 'SUBSPACE_TOPIC_DECLARED':
+      return action.targetSpaceId && action.targetTopicId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+            targetTopicId: action.targetTopicId,
+          }
+        : null;
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return action.targetSpaceId && action.targetTopicId
+        ? {
+            actionType: action.actionType,
+            targetSpaceId: action.targetSpaceId,
+            targetTopicId: action.targetTopicId,
+          }
+        : null;
+  }
+}
+
+export function getSubspaceProposalDetails(actions: readonly ApiAction[]): SubspaceProposalDetails | null {
+  const subspaceActions = actions.filter(action => isSubspaceActionType(action.actionType));
+
+  if (subspaceActions.length !== 1) {
+    return null;
+  }
+
+  return mapSubspaceActionToDetails(subspaceActions[0]);
+}
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {

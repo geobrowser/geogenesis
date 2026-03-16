@@ -6,6 +6,7 @@ import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubspaceDto } from '~/core/io/dto/subspaces';
 import { getSpace } from '~/core/io/queries';
+import { isAddSubspaceActionType, isTopicSubspaceActionType } from '~/core/io/rest';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamSubspace } from '~/core/io/substream-schema';
@@ -20,6 +21,10 @@ interface Props {
 }
 
 export async function SubspaceProposal({ proposal }: Props) {
+  if (proposal.subspaceDetails && isTopicSubspaceActionType(proposal.subspaceDetails.actionType)) {
+    return <SubspaceTopicProposal proposal={proposal} />;
+  }
+
   const [subspace, space] = await Promise.all([
     fetchProposedSubspace(proposal.id, proposal.space.id),
     Effect.runPromise(getSpace(proposal.space.id)),
@@ -30,7 +35,9 @@ export async function SubspaceProposal({ proposal }: Props) {
     return null;
   }
 
-  const isAddSubspace = proposal.type === 'ADD_SUBSPACE';
+  const isAddSubspace = proposal.subspaceDetails
+    ? isAddSubspaceActionType(proposal.subspaceDetails.actionType)
+    : proposal.type === 'ADD_SUBSPACE';
 
   return (
     <div className="flex w-full justify-center">
@@ -100,6 +107,37 @@ export async function SubspaceProposal({ proposal }: Props) {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function SubspaceTopicProposal({ proposal }: Props) {
+  const subspaceDetails = proposal.subspaceDetails;
+
+  if (!subspaceDetails || !isTopicSubspaceActionType(subspaceDetails.actionType)) {
+    return null;
+  }
+
+  const [space, subspace] = await Promise.all([
+    Effect.runPromise(getSpace(proposal.space.id)),
+    Effect.runPromise(getSpace(subspaceDetails.targetSpaceId)),
+  ]);
+
+  const isAddTopic = isAddSubspaceActionType(subspaceDetails.actionType);
+
+  return (
+    <div className="flex w-full justify-center">
+      <div className="mt-20 flex w-[585px] flex-col gap-4 rounded-lg border border-grey-02 p-5">
+        <div className="flex flex-col gap-2">
+          <p className="text-metadataMedium text-grey-04">{isAddTopic ? 'Add subtopic' : 'Remove subtopic'}</p>
+          <h2 className="text-smallTitle">{subspace?.entity?.name ?? subspaceDetails.targetSpaceId}</h2>
+        </div>
+        <div className="flex flex-col gap-2 rounded-lg bg-grey-01 p-4 text-metadataMedium text-grey-04">
+          <p>Parent space: {space?.entity?.name ?? proposal.space.id}</p>
+          <p>Subspace: {subspace?.entity?.name ?? subspaceDetails.targetSpaceId}</p>
+          <p>Topic ID: {subspaceDetails.targetTopicId}</p>
         </div>
       </div>
     </div>

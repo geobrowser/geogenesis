@@ -13,6 +13,18 @@ type SpaceWithImage = {
   image: string;
 };
 
+export type SubspaceProposalDetails = {
+  actionType:
+    | 'SUBSPACE_VERIFIED'
+    | 'SUBSPACE_UNVERIFIED'
+    | 'SUBSPACE_RELATED'
+    | 'SUBSPACE_UNRELATED'
+    | 'SUBSPACE_TOPIC_DECLARED'
+    | 'SUBSPACE_TOPIC_REMOVED';
+  targetSpaceId: string;
+  targetTopicId?: string;
+};
+
 export type Proposal = {
   id: string;
   editId: string;
@@ -30,6 +42,7 @@ export type Proposal = {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
+  subspaceDetails?: SubspaceProposalDetails;
 };
 
 export function ProposalDto(
