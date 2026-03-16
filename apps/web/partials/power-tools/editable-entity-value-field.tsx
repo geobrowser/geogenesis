@@ -236,7 +236,7 @@ export function EditableEntityValueField({
         selected={selectedEntities}
         onRemoveSelected={onRemoveSelectedEntity}
         onDone={onSelectEntity}
-        //relationValueTypes={filterByTypeIds}
+        relationValueTypes={filterByTypeIds}
       />
     );
   }
@@ -328,7 +328,7 @@ export function EditableEntityValueField({
           selected={selectedEntities}
           onRemoveSelected={onRemoveSelectedEntity}
           onDone={onSelectEntity}
-          relationValueTypes={property.relationValueTypes}
+          relationValueTypes={filterByTypeIds}
         />
       </div>
     );

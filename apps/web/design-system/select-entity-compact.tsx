@@ -10,6 +10,7 @@ import { useSearch } from '~/core/hooks/use-search';
 
 import { NativeGeoImage } from './geo-image';
 import { Search } from './icons/search';
+import { Tag } from './tag';
 import { Text } from './text';
 
 export type SelectEntityCompactResult = {
@@ -174,20 +175,49 @@ export function SelectEntityCompact({
                     <div className="max-w-full truncate text-resultTitle text-text">
                       {result.name}
                     </div>
-                    {(result.spaces ?? []).length > 0 && (
-                      <div className="mt-1.5 flex items-center gap-1">
-                        <span className="inline-flex size-[12px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
-                          <NativeGeoImage
-                            value={result.spaces[0].image}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        </span>
-                        <span className="text-[0.875rem] text-text">
-                          {result.spaces[0].name}
-                        </span>
-                      </div>
-                    )}
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      {(result.spaces ?? []).length > 0 && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="inline-flex size-[12px] items-center justify-center overflow-hidden rounded-sm border border-grey-04">
+                            <NativeGeoImage
+                              value={result.spaces[0].image}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </span>
+                          <span className="text-[0.875rem] text-text">{result.spaces[0].name}</span>
+                        </div>
+                      )}
+                      {(result.types ?? []).length > 0 && (
+                        <>
+                          {(result.spaces ?? []).length > 0 && (
+                            <div className="shrink-0">
+                              <svg
+                                width="8"
+                                height="9"
+                                viewBox="0 0 8 9"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M2.25 8L5.75 4.5L2.25 1"
+                                  stroke="#606060"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            {(result.types ?? []).slice(0, 3).map((type, i) => (
+                              <Tag key={`${type.id}-${i}`}>{type.name ?? type.id}</Tag>
+                            ))}
+                            {(result.types ?? []).length > 3 ? (
+                              <Tag>{`+${(result.types ?? []).length - 3}`}</Tag>
+                            ) : null}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>

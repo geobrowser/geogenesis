@@ -74,6 +74,7 @@ interface Props {
   orderedPropertyIds: string[];
   onReorderColumns: (ids: string[]) => void;
   selection?: PowerToolsTableSelectionProps;
+  imageUploadingFor?: Set<string>;
   onRowClick?: (entityId: string) => void;
   onRowDoubleClick?: (entityId: string) => void;
 }
@@ -192,6 +193,7 @@ function PowerToolsCell({
   onLinkEntry,
   onOpenEntityPanel,
   source,
+  imageUploadingFor,
 }: {
   row: PowerToolsRow;
   property: Property;
@@ -202,6 +204,7 @@ function PowerToolsCell({
   onLinkEntry: onLinkEntryFn;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
+  imageUploadingFor?: Set<string>;
 }) {
   if (row.placeholder && property.id !== SystemIds.NAME_PROPERTY && !isEditing) {
     return (
@@ -243,6 +246,7 @@ function PowerToolsCell({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         source={source}
+        imageUploadingFor={imageUploadingFor}
         autoFocus={false}
       />
     );
@@ -349,6 +353,7 @@ export function PowerToolsTable({
   orderedPropertyIds,
   onReorderColumns,
   selection,
+  imageUploadingFor,
   onRowClick,
   onRowDoubleClick,
 }: Props) {
@@ -682,6 +687,7 @@ export function PowerToolsTable({
                           onLinkEntry={onLinkEntry}
                           onOpenEntityPanel={onOpenEntityPanel}
                           source={source}
+                          imageUploadingFor={imageUploadingFor}
                         />
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button

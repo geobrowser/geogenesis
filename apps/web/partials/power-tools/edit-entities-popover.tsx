@@ -36,6 +36,19 @@ type DeleteValueItemProps = {
   onMarkForDelete: () => void;
 };
 
+function CurrentImageThumbnail({ imageEntityId, spaceId }: { imageEntityId: string; spaceId: string }) {
+  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+  return (
+    <span className="inline-flex size-12 shrink-0 overflow-hidden rounded-md border border-grey-02">
+      {imageSrc ? (
+        <NativeGeoImage value={imageSrc} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center bg-grey-02" />
+      )}
+    </span>
+  );
+}
+
 function DeleteValueItem({
   item,
   property,
@@ -153,6 +166,8 @@ export function EditEntitiesPopover({
   const [addImageFile, setAddImageFile] = React.useState<File | null>(null);
   const addImageFileDialogOpenRef = React.useRef(false);
   const addImageFileDialogCloseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Ref updated synchronously when value field reports a value (e.g. date blur). Use on Apply so we get latest value even when React hasn't committed state yet. */
+  const pendingValueRef = React.useRef<string>('');
 
   const INITIAL_DELETE_VALUES_VISIBLE = 5;
 
@@ -259,9 +274,11 @@ export function EditEntitiesPopover({
 
   const handleApplyValue = React.useCallback(() => {
     if (!effectiveProperty || selectedEntityIds.length === 0 || !onApplyValue) return;
-    onApplyValue({ property: effectiveProperty, value: pendingValue });
+    const valueToApply = (pendingValueRef.current || pendingValue).trim();
+    onApplyValue({ property: effectiveProperty, value: valueToApply });
     setOpen(false);
     setPendingValue('');
+    pendingValueRef.current = '';
   }, [effectiveProperty, selectedEntityIds, pendingValue, onApplyValue]);
 
   const canApplyRelation = effectiveProperty && selectedAttributeEntities.length > 0 && onApply;
@@ -286,12 +303,14 @@ export function EditEntitiesPopover({
       setMarkedForDeleteKeys(new Set());
       setShowAllDeleteValues(false);
       setPendingValue('');
+      pendingValueRef.current = '';
       setAddImageFile(null);
     }
   }, [open]);
 
   React.useEffect(() => {
     setPendingValue('');
+    pendingValueRef.current = '';
     setAddImageFile(null);
   }, [effectiveProperty?.id]);
 
@@ -311,17 +330,21 @@ export function EditEntitiesPopover({
     (isRelationColumn ? displayedDeleteValues.length > 0 : selectedEntityIds.length > 0);
 
   const handleDeleteApply = React.useCallback(() => {
-    if (!effectiveProperty || displayedDeleteValues.length === 0 || !onDeleteApply) return;
+    if (!effectiveProperty || !onDeleteApply) return;
+    if (isRelationColumn && displayedDeleteValues.length === 0) return;
+    if (!isRelationColumn && selectedEntityIds.length === 0) return;
     onDeleteApply({
       property: effectiveProperty,
-      targetKeys: displayedDeleteValues.map(v => ({
-        toEntityId: v.toEntityId,
-        toSpaceId: v.toSpaceId,
-      })),
+      targetKeys: isRelationColumn
+        ? displayedDeleteValues.map(v => ({
+            toEntityId: v.toEntityId,
+            toSpaceId: v.toSpaceId,
+          }))
+        : [],
     });
     setOpen(false);
     setMarkedForDeleteKeys(new Set());
-  }, [effectiveProperty, displayedDeleteValues, onDeleteApply]);
+  }, [effectiveProperty, isRelationColumn, displayedDeleteValues, selectedEntityIds.length, onDeleteApply]);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -500,6 +523,32 @@ export function EditEntitiesPopover({
                   )}
                 </>
               )}
+              {action !== 'delete' &&
+                effectiveProperty &&
+                effectiveProperty.renderableTypeStrict === 'IMAGE' && (
+                  <>
+                    <Text variant="metadata" color="grey-04" className="block">
+                      Current images
+                    </Text>
+                    <Spacer height={6} />
+                    {currentColumnRelations.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {currentColumnRelations.map((r, idx) => (
+                          <CurrentImageThumbnail
+                            key={`${r.id}-${idx}`}
+                            imageEntityId={r.toEntity.id}
+                            spaceId={r.spaceId ?? spaceId}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <Text variant="metadata" color="grey-04">
+                        No images in this column for selected rows.
+                      </Text>
+                    )}
+                    <Spacer height={12} />
+                  </>
+                )}
               {action !== 'delete' && effectiveProperty && (
                 <div className="block">
                   <Text variant="metadata" color="grey-04" className="block">
@@ -507,10 +556,14 @@ export function EditEntitiesPopover({
                   </Text>
                   <Spacer height={6} />
                   <EditableEntityValueField
+                    key={`value-${effectiveProperty.id}-${selectedEntityIds.join(',')}`}
                     property={effectiveProperty}
                     spaceId={spaceId}
                     value={pendingValue}
-                    onChange={setPendingValue}
+                    onChange={v => {
+                      pendingValueRef.current = v;
+                      setPendingValue(v);
+                    }}
                     selectedEntities={selectedAttributeEntities}
                     onRemoveSelectedEntity={id =>
                       setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))

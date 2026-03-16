@@ -246,6 +246,7 @@ export function PowerToolsScreen() {
   const selectableCount = selectableRows.length;
   const [selectedEntityIds, setSelectedEntityIds] = React.useState<Set<string>>(() => new Set());
   const [isSelectionModeActive, setIsSelectionModeActive] = React.useState(false);
+  const [imageUploadingFor, setImageUploadingFor] = React.useState<Set<string>>(new Set());
   const selectedCount = selectedEntityIds.size;
   const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
 
@@ -295,16 +296,36 @@ export function PowerToolsScreen() {
       );
 
       if (property.renderableTypeStrict === 'IMAGE' && imageFile) {
-        for (const fromEntityId of selectedEntityIds) {
-          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-          await storage.images.createAndLink({
-            file: imageFile,
-            fromEntityId,
-            fromEntityName: null,
-            relationPropertyId: property.id,
-            relationPropertyName: property.name ?? null,
-            spaceId: rowSpaceId,
-          });
+        const uploadKeys = new Set(
+          Array.from(selectedEntityIds).map(id => `${id}:${property.id}`)
+        );
+        setImageUploadingFor(uploadKeys);
+        try {
+          for (const fromEntityId of selectedEntityIds) {
+            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+            const existingImageRelations = getRelations({
+              selector: r =>
+                r.fromEntity.id === fromEntityId &&
+                r.type.id === property.id &&
+                (r.spaceId === rowSpaceId || r.toSpaceId === rowSpaceId),
+            });
+            existingImageRelations.forEach(relation => storage.relations.delete(relation));
+            await storage.images.createAndLink({
+              file: imageFile,
+              fromEntityId,
+              fromEntityName: null,
+              relationPropertyId: property.id,
+              relationPropertyName: property.name ?? null,
+              spaceId: rowSpaceId,
+            });
+            setImageUploadingFor(prev => {
+              const next = new Set(prev);
+              next.delete(`${fromEntityId}:${property.id}`);
+              return next;
+            });
+          }
+        } finally {
+          setImageUploadingFor(new Set());
         }
         return;
       }
@@ -834,6 +855,7 @@ export function PowerToolsScreen() {
               orderedPropertyIds={orderedPropertyIds}
               onReorderColumns={setOrderedPropertyIds}
               selection={selectionProps}
+              imageUploadingFor={imageUploadingFor}
               onRowClick={undefined}
               onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
             />
