@@ -525,7 +525,7 @@ export function PowerToolsTable({
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;
                   const isDeleteableNameCell = !row.placeholder && isEditing && isNameCell && onDeleteRow;
                   return (
-                    <div key={`${rowId}-${property.id}`} className="border-r border-grey-02 px-4 py-2">
+                    <div key={`${rowId}-${property.id}`} className="min-w-0 border-r border-grey-02 px-4 py-2">
                       <div className="flex w-full items-start gap-2 overflow-visible">
                         <PowerToolsCell
                           row={row}

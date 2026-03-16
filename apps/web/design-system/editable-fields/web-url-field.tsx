@@ -18,9 +18,21 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
       tableProperty: 'text-tableProperty! text-link! underline! decoration-1 hover:text-text!',
     },
     editable: {
-      false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
+      false: 'text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
     },
   },
+  compoundVariants: [
+    {
+      editable: false,
+      variant: 'tableCell',
+      className: 'line-clamp-1 break-all',
+    },
+    {
+      editable: false,
+      variant: ['body', 'tableProperty'],
+      className: 'truncate',
+    },
+  ],
   defaultVariants: {
     variant: 'body',
   },
