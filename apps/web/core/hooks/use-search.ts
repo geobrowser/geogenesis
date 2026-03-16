@@ -19,12 +19,13 @@ import { useDebouncedValue } from './use-debounced-value';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  initialQuery?: string;
 }
 
-export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) {
+export function useSearch({ filterByTypes, filterBySpace, initialQuery }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
-  const [query, setQuery] = React.useState<string>('');
+  const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
 
   const maybeEntityId = debouncedQuery.trim();

@@ -25,6 +25,9 @@ export const NavUtils = {
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },
+  toImport: (spaceId: string, editParam = true) => {
+    return `/space/${spaceId}/import${editParam ? '?edit=true' : ''}`;
+  },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
       return `/space/${spaceId}/activity?spaceId=${spaceIdParam}`;

@@ -19,7 +19,7 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
-import { cachedFetchSpace } from './cached-fetch-space';
+import { cachedFetchSpace } from '../cached-fetch-space';
 
 interface Props {
   params: Promise<{ id: string }>;

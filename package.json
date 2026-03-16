@@ -30,16 +30,20 @@
     "semi": false
   },
   "devDependencies": {
-    "@graphql-codegen/client-preset": "^5.2.3",
-    "eslint": "^10.0.2",
-    "eslint-config-turbo": "^2.8.11",
+    "@graphql-codegen/client-preset": "^5.2.4",
+    "eslint": "^10.0.3",
+    "eslint-config-turbo": "^2.8.16",
     "prettier": "^3.8.1",
     "rimraf": "^6.1.3",
-    "turbo": "^2.8.11",
+    "turbo": "^2.8.16",
     "web": "workspace:*"
   },
   "overrides": {
-    "viem": "^2.46.3"
+    "viem": "^2.47.2",
+    "permissionless": "^0.3.4"
+  },
+  "resolutions": {
+    "viem": "^2.47.2"
   },
   "packageManager": "bun@1.3.9"
 }

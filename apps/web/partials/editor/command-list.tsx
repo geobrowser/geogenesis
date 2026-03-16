@@ -65,7 +65,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
               data-index={index}
               onMouseOver={() => setSelectedIndex(index)}
               onClick={() => {
-                command(items[selectedIndex]);
+                command(items[index]);
               }}
               onMouseDown={e => {
                 e.preventDefault();

@@ -18,7 +18,10 @@ import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
+import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
+import { MoveSpace } from '~/design-system/icons/move-space';
+import { Upload } from '~/design-system/icons/upload';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
@@ -35,7 +38,15 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 
-export function EditableSpaceHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+export function EditableSpaceHeading({
+  spaceId,
+  entityId,
+  addSubspaceComponent,
+}: {
+  spaceId: string;
+  entityId: string;
+  addSubspaceComponent?: React.ReactElement<any>;
+}) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
 
@@ -171,8 +182,23 @@ export function EditableSpaceHeading({ spaceId, entityId }: { spaceId: string; e
               )}
               {!isCreatingNewVersion && (
                 <>
+                  <MenuItem onClick={onCopySpaceId}>
+                    <Copy color="grey-04" />
+                    <p>Copy Space ID</p>
+                  </MenuItem>
+                  <MenuItem onClick={onCopyEntityId}>
+                    <Copy color="grey-04" />
+                    <p>Copy Entity ID</p>
+                  </MenuItem>
                   <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                    <div className="shrink-0">
+                      <MoveSpace />
+                    </div>
                     <p>Create in space</p>
+                  </MenuItem>
+                  <MenuItem href={NavUtils.toImport(spaceId)}>
+                    <Upload color="grey-04" />
+                    <p>Import data</p>
                   </MenuItem>
                   {isEditing && (
                     <>
@@ -194,12 +220,7 @@ export function EditableSpaceHeading({ spaceId, entityId }: { spaceId: string; e
                       </MenuItem>
                     </>
                   )}
-                  <MenuItem onClick={onCopyEntityId}>
-                    <p>Copy entity ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={onCopySpaceId}>
-                    <p>Copy space ID</p>
-                  </MenuItem>
+                  {addSubspaceComponent}
                 </>
               )}
             </Menu>

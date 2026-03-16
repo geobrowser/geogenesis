@@ -18,10 +18,14 @@ interface Props {
   onDone: (result: { id: string; name: string | null }) => void;
   itemIds: string[];
   className?: string;
+  /** Optional class for the dropdown panel (e.g. to constrain width on import step) */
+  dropdownClassName?: string;
+  /** Optional type IDs to filter search results by */
+  filterByTypes?: string[];
 }
 
-export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '' }: Props) {
-  const { query, onQueryChange, isLoading, results } = useSearch();
+export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '', dropdownClassName = '', filterByTypes }: Props) {
+  const { query, onQueryChange, isLoading, results } = useSearch({ filterByTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 
@@ -50,7 +54,10 @@ export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, classNa
       {query && (
         <div
           ref={containerRef}
-          className="mt-4 max-h-[400px] w-[384px] flex-col rounded border border-grey-02 bg-white"
+          className={cx(
+            'absolute left-0 top-full z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
+            dropdownClassName
+          )}
         >
           <ResizableContainer duration={0.125}>
             <ResultsList>
