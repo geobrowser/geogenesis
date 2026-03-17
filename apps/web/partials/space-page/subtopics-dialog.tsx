@@ -12,6 +12,7 @@ import { useSubspace } from '~/core/hooks/use-subspace';
 import { useSubtopicSearch } from '~/core/hooks/use-subtopic-search';
 import { useSubtopics } from '~/core/hooks/use-subtopics';
 import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
+import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -33,8 +34,10 @@ type SpaceUsage = {
   image: string;
 };
 
+type PendingAction = 'adding' | 'removing';
+
 const ACTION_BUTTON_CLASSNAME =
-  'h-6 rounded-[6px] border border-grey-02 bg-white px-[7px] pb-[2px] pt-px text-metadata text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg focus:border-text focus:shadow-inner-text focus:outline-hidden disabled:cursor-pointer';
+  'h-6 rounded-[6px] border border-grey-02 bg-white px-[7px] pb-[2px] pt-px text-metadata text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg focus:border-text focus:shadow-inner-text focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50';
 
 function StackedSpaceAvatars({ spaces }: { spaces: SpaceUsage[] }) {
   if (spaces.length === 0) return null;
@@ -167,12 +170,9 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
     isError: isSubtopicsError,
     error: subtopicsError,
   } = useSubtopics(spaceId);
-  const { setSubspace, setStatus, unsetSubspace, unsetStatus } = useSubspace({ spaceId });
-  const [removingTopicId, setRemovingTopicId] = React.useState<string | null>(null);
-
-  const isAdding = setStatus === 'pending';
-  const isRemoving = unsetStatus === 'pending';
-  const isBusy = isAdding || isRemoving;
+  const { setSubspace, unsetSubspace } = useSubspace({ spaceId });
+  const [pendingTopicIds, setPendingTopicIds] = React.useState<Map<string, PendingAction>>(new Map());
+  const subtopicsQueryKey = ['subtopics', spaceId];
 
   const subtopicIds = React.useMemo(() => new Set(subtopics.map(subtopic => subtopic.id)), [subtopics]);
   const filteredResults = React.useMemo(
@@ -180,28 +180,69 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
     [results, subtopicIds]
   );
 
-  const invalidateSubtopics = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['subtopics', spaceId] });
-  };
+  const sortSubtopics = React.useCallback(
+    (topics: TopicUsage[]) => [...topics].sort((a, b) => a.name.localeCompare(b.name)),
+    []
+  );
 
-  const addSubtopic = (resultId: string) => {
+  const addSubtopic = async (result: SubtopicSearchResult) => {
+    const optimisticEntry: TopicUsage = {
+      id: result.id,
+      name: result.name ?? 'Untitled',
+      spaces: result.spaces,
+      spacesCount: result.spacesCount,
+    };
+
+    await queryClient.cancelQueries({ queryKey: subtopicsQueryKey });
+
+    queryClient.setQueryData<TopicUsage[]>(subtopicsQueryKey, current => {
+      const currentSubtopics = current ?? [];
+      const alreadyExists = currentSubtopics.some(subtopic => subtopic.id === result.id);
+
+      if (alreadyExists) {
+        return currentSubtopics;
+      }
+
+      return sortSubtopics([...currentSubtopics, optimisticEntry]);
+    });
+
+    setPendingTopicIds(prev => new Map(prev).set(result.id, 'adding'));
+    onQueryChange('');
+
     setSubspace(
       {
         subspaceId: spaceId,
         relationType: 'subtopic',
-        topicEntityId: resultId,
+        topicEntityId: result.id,
       },
       {
-        onSuccess: async () => {
-          await invalidateSubtopics();
-          onQueryChange('');
+        onSuccess: () => {
+          setPendingTopicIds(prev => {
+            const next = new Map(prev);
+            next.delete(result.id);
+            return next;
+          });
+        },
+        onError: () => {
+          queryClient.setQueryData<TopicUsage[]>(subtopicsQueryKey, current => {
+            if (!current) return current;
+            return current.filter(subtopic => subtopic.id !== result.id);
+          });
+
+          setPendingTopicIds(prev => {
+            const next = new Map(prev);
+            next.delete(result.id);
+            return next;
+          });
         },
       }
     );
   };
 
-  const removeSubtopic = (topicId: string) => {
-    setRemovingTopicId(topicId);
+  const removeSubtopic = async (topicId: string) => {
+    await queryClient.cancelQueries({ queryKey: subtopicsQueryKey });
+
+    setPendingTopicIds(prev => new Map(prev).set(topicId, 'removing'));
 
     unsetSubspace(
       {
@@ -210,11 +251,18 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
         topicEntityId: topicId,
       },
       {
-        onSuccess: async () => {
-          invalidateSubtopics();
+        onSuccess: () => {
+          queryClient.setQueryData<TopicUsage[]>(subtopicsQueryKey, current => {
+            if (!current) return current;
+            return current.filter(subtopic => subtopic.id !== topicId);
+          });
         },
         onSettled: () => {
-          setRemovingTopicId(null);
+          setPendingTopicIds(prev => {
+            const next = new Map(prev);
+            next.delete(topicId);
+            return next;
+          });
         },
       }
     );
@@ -273,8 +321,8 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                                   <SearchResultRow
                                     result={result}
                                     actionLabel="Add subtopic"
-                                    disabled={isBusy}
-                                    onAction={() => addSubtopic(result.id)}
+                                    disabled={pendingTopicIds.has(result.id)}
+                                    onAction={() => void addSubtopic(result)}
                                   />
                                 </div>
                               </motion.div>
@@ -317,9 +365,15 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                       name={subtopic.name}
                       spaces={subtopic.spaces}
                       spacesCount={subtopic.spacesCount}
-                      actionLabel={isRemoving && removingTopicId === subtopic.id ? 'Removing...' : 'Remove'}
-                      disabled={isBusy}
-                      onAction={() => removeSubtopic(subtopic.id)}
+                      actionLabel={
+                        pendingTopicIds.get(subtopic.id) === 'adding'
+                          ? 'Adding...'
+                          : pendingTopicIds.get(subtopic.id) === 'removing'
+                            ? 'Removing...'
+                            : 'Remove'
+                      }
+                      disabled={pendingTopicIds.has(subtopic.id)}
+                      onAction={() => void removeSubtopic(subtopic.id)}
                     />
                   </div>
                 ))}
