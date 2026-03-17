@@ -19,6 +19,8 @@ import type {
 import { useEntityMediaUrl, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { getVideoPath } from '~/core/utils/utils';
 
+import { formatSchedule } from '~/core/utils/schedule';
+
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Text } from '~/design-system/text';
@@ -1187,6 +1189,8 @@ const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
           <PointDisplay value={displayValue} side={side} />
         ) : value.type === 'DATE' || value.type === 'DATETIME' ? (
           <DateDisplay value={displayValue} side={side} />
+        ) : value.type === 'SCHEDULE' ? (
+          <ScheduleDisplay value={displayValue} side={side} />
         ) : (
           <SimpleValueDisplay value={displayValue} side={side} />
         )}
@@ -1390,6 +1394,23 @@ const DateDisplay = ({ value, side }: DateDisplayProps) => {
       suppressHydrationWarning
       className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}
     >
+      {displayValue}
+    </span>
+  );
+};
+
+type ScheduleDisplayProps = {
+  value: string | null;
+  side: 'before' | 'after';
+};
+
+const ScheduleDisplay = ({ value, side }: ScheduleDisplayProps) => {
+  if (value === null) return null;
+
+  const displayValue = formatSchedule(value);
+
+  return (
+    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
       {displayValue}
     </span>
   );

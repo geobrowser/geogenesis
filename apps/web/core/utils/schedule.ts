@@ -143,7 +143,7 @@ export function validateSchedule(schedule: string): ScheduleValidationResult {
       continue;
     }
 
-    if (props[key]) {
+    if (key in props) {
       errors.push(`Duplicate property "${key}"`);
       continue;
     }
@@ -190,13 +190,16 @@ function parseRRule(rrule: string): { freq?: string; byDay?: string[]; interval?
   const result: { freq?: string; byDay?: string[]; interval?: number; count?: number } = {};
 
   for (const part of parts) {
-    const [key, val] = part.split('=');
+    const eqIdx = part.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = part.substring(0, eqIdx);
+    const val = part.substring(eqIdx + 1);
     switch (key) {
       case 'FREQ':
         result.freq = val;
         break;
       case 'BYDAY':
-        result.byDay = val.split(',');
+        result.byDay = val ? val.split(',') : [];
         break;
       case 'INTERVAL':
         result.interval = Number(val);
