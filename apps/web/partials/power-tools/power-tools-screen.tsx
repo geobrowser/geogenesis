@@ -724,20 +724,6 @@ export function PowerToolsScreen() {
                   }
                 }
               />
-              <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
-              <button
-                onClick={handleAddPlaceholder}
-                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
-                title="Add new entity"
-              >
-                <Plus />
-              </button>
-              <button
-                onClick={() => router.back()}
-                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
-              >
-                <Close />
-              </button>
             </>
           )}
           <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
