@@ -11,6 +11,8 @@ import { useSubspace } from '~/core/hooks/use-subspace';
 import { useSubtopics } from '~/core/hooks/use-subtopics';
 import { useSearch } from '~/core/hooks/use-search';
 
+import { Avatar } from '~/design-system/avatar';
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
@@ -198,6 +200,20 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                         <Text variant="button" as="p">
                           {subtopic.name}
                         </Text>
+                        <div className="inline-flex items-center gap-1 text-tag text-grey-04">
+                          {subtopic.spacesCount > 0 && (
+                            <AvatarGroup>
+                              {subtopic.spaces.slice(0, 3).map(space => (
+                                <AvatarGroup.Item key={space.id}>
+                                  <Avatar avatarUrl={space.image} value={space.name} />
+                                </AvatarGroup.Item>
+                              ))}
+                            </AvatarGroup>
+                          )}
+                          <span>
+                            {subtopic.spacesCount} {pluralize('space', subtopic.spacesCount)}
+                          </span>
+                        </div>
                       </div>
                       <button
                         type="button"
