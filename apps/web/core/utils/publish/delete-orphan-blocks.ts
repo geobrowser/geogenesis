@@ -1,24 +1,23 @@
-import { Graph, SystemIds, type Op } from '@geoprotocol/geo-sdk';
+import { Graph, type Op } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { Relation } from '~/core/types';
 
-async function buildDeleteOpsForBlockEntity(blockId: string, spaceId: string): Promise<Op[]> {
-  const entities = await Effect.runPromise(getBatchEntities([blockId], spaceId));
+async function buildDeleteOpsForEntity(entityId: string, spaceId: string): Promise<Op[]> {
+  // Fetch the full entity (all spaces) so we can remove all outgoing relations.
+  const entities = await Effect.runPromise(getBatchEntities([entityId]));
   const entity = entities[0];
   if (!entity) return [];
 
-  const values = (entity.values ?? []).filter(v => v.spaceId === spaceId);
-  const relations = (entity.relations ?? []).filter(
-    r => r.spaceId === spaceId && r.fromEntity.id === blockId
-  );
+  const values = entity.values ?? [];
+  const relations = (entity.relations ?? []).filter(r => r.fromEntity.id === entityId);
 
   const ops: Op[] = [];
 
   const uniquePropertyIds = [...new Set(values.map(v => v.property.id))];
   if (uniquePropertyIds.length > 0) {
     const { ops: unsetOps } = Graph.updateEntity({
-      id: blockId,
+      id: entityId,
       unset: uniquePropertyIds.map(p => ({ property: p })),
     });
     ops.push(...unsetOps);
@@ -32,26 +31,26 @@ async function buildDeleteOpsForBlockEntity(blockId: string, spaceId: string): P
   return ops;
 }
 
-export async function buildOrphanBlockDeleteOps(args: {
-  deletedBlockRelations: Relation[];
+export async function buildOrphanChildDeleteOps(args: {
+  deletedRelations: Relation[];
   allLocalRelations: Relation[];
   spaceId: string;
 }): Promise<Op[]> {
-  const { deletedBlockRelations, allLocalRelations, spaceId } = args;
+  const { deletedRelations, allLocalRelations, spaceId } = args;
 
-  if (deletedBlockRelations.length === 0) return [];
+  if (deletedRelations.length === 0) return [];
 
   const ops: Op[] = [];
-  const seenBlockIds = new Set<string>();
+  const seenEntityIds = new Set<string>();
 
-  for (const rel of deletedBlockRelations) {
-    const blockId = rel.toEntity.id;
-    if (seenBlockIds.has(blockId)) continue;
-    seenBlockIds.add(blockId);
+  for (const rel of deletedRelations) {
+    const childId = rel.toEntity.id;
+    if (seenEntityIds.has(childId)) continue;
+    seenEntityIds.add(childId);
 
     // Skip if any other non-deleted relation (local) still targets this block.
     const hasLocalBacklink = allLocalRelations.some(r => {
-      if (r.toEntity.id !== blockId) return false;
+      if (r.toEntity.id !== childId) return false;
       if (r.isDeleted) return false;
       if (r.id === rel.id) return false;
       return true;
@@ -59,19 +58,15 @@ export async function buildOrphanBlockDeleteOps(args: {
     if (hasLocalBacklink) continue;
 
     // Remote backlinks across all spaces.
-    const backlinks = await Effect.runPromise(getEntityBacklinks(blockId));
+    const backlinks = await Effect.runPromise(getEntityBacklinks(childId));
     const externalBacklinks = backlinks.filter(bl => {
-      // Ignore the relation from the entity we're already deleting in this space.
-      return !(
-        bl.id === rel.fromEntity.id &&
-        bl.backlinkSpaceId === spaceId &&
-        rel.type.id === SystemIds.BLOCKS
-      );
+      // Ignore backlinks from the same fromEntity we're currently deleting from this space.
+      return !(bl.id === rel.fromEntity.id && bl.backlinkSpaceId === spaceId);
     });
     if (externalBacklinks.length > 0) continue;
 
-    const blockOps = await buildDeleteOpsForBlockEntity(blockId, spaceId);
-    ops.push(...blockOps);
+    const entityOps = await buildDeleteOpsForEntity(childId, spaceId);
+    ops.push(...entityOps);
   }
 
   return ops;

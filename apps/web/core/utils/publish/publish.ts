@@ -5,7 +5,7 @@ import { Relation, Value } from '~/core/types';
 import { GeoDate } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
-import { buildOrphanBlockDeleteOps } from './delete-orphan-blocks';
+import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
 
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.
@@ -22,21 +22,17 @@ export function prepareLocalDataForPublishing(
   const program = Effect.gen(function* () {
     const baseOps = prepareOps(values, relations, spaceId);
 
-    const deletedBlockRelations = relations.filter(
-      r =>
-        r.spaceId === spaceId &&
-        r.isLocal === true &&
-        r.isDeleted === true &&
-        r.type.id === SystemIds.BLOCKS
+    const deletedRelations = relations.filter(
+      r => r.spaceId === spaceId && r.isLocal === true && r.isDeleted === true
     );
 
-    if (deletedBlockRelations.length === 0) {
+    if (deletedRelations.length === 0) {
       return baseOps;
     }
 
     const orphanOps = yield* Effect.promise(() =>
-      buildOrphanBlockDeleteOps({
-        deletedBlockRelations,
+      buildOrphanChildDeleteOps({
+        deletedRelations,
         allLocalRelations: relations,
         spaceId,
       })
