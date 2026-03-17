@@ -7,14 +7,14 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSubspace } from '~/core/hooks/use-subspace';
 import { useSubtopics } from '~/core/hooks/use-subtopics';
 import { useSearch } from '~/core/hooks/use-search';
 
-import { Avatar } from '~/design-system/avatar';
-import { AvatarGroup } from '~/design-system/avatar-group';
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -24,6 +24,85 @@ interface SubtopicsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   spaceId: string;
+}
+
+type SpaceUsage = {
+  id: string;
+  image: string;
+};
+
+const ACTION_BUTTON_CLASSNAME =
+  'h-6 rounded-[6px] border border-grey-02 bg-white px-[7px] pb-[2px] pt-px text-metadata text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg focus:border-text focus:shadow-inner-text focus:outline-hidden disabled:cursor-pointer';
+
+function StackedSpaceAvatars({ spaces }: { spaces: SpaceUsage[] }) {
+  if (spaces.length === 0) return null;
+
+  return (
+    <div className="flex items-center pr-1">
+      {spaces.slice(0, 3).map(space => (
+        <div key={space.id} className="-mr-1 size-3 overflow-hidden rounded-[4px] first:mr-0">
+          <NativeGeoImage
+            value={space.image || PLACEHOLDER_SPACE_IMAGE}
+            alt=""
+            className="block size-full object-cover"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AssociatedSpacesMeta({ count, spaces }: { count: number; spaces: SpaceUsage[] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <StackedSpaceAvatars spaces={spaces} />
+      <span className="text-[16px] leading-[13px] tracking-[-0.35px] text-grey-04">
+        {count} associated {pluralize('space', count)}
+      </span>
+    </div>
+  );
+}
+
+function SubtopicActionButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" disabled={disabled} className={ACTION_BUTTON_CLASSNAME} onClick={onClick}>
+      {label}
+    </button>
+  );
+}
+
+function SubtopicRow({
+  name,
+  spaces,
+  spacesCount,
+  actionLabel,
+  disabled,
+  onAction,
+}: {
+  name: string | null;
+  spaces: SpaceUsage[];
+  spacesCount: number;
+  actionLabel: string;
+  disabled?: boolean;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex min-h-[62px] items-center justify-between rounded-[8px] bg-white p-3">
+      <div className="flex w-[250px] flex-col gap-[6px]">
+        <p className="text-[17px] leading-[19px] tracking-[-0.17px] text-text">{name ?? 'Untitled'}</p>
+        <AssociatedSpacesMeta count={spacesCount} spaces={spaces} />
+      </div>
+      <SubtopicActionButton label={actionLabel} disabled={disabled} onClick={onAction} />
+    </div>
+  );
 }
 
 export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialogProps) {
@@ -102,7 +181,7 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
 
         <Content className="fixed inset-0 z-100 flex items-start justify-center focus:outline-hidden">
           <div className="mt-32 flex w-[460px] flex-col gap-4 overflow-hidden rounded-xl bg-white px-4 pt-4 shadow-lg">
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col">
               <div className="flex items-start justify-between">
                 <Title asChild>
                   <Text variant="smallTitle" as="h2">
@@ -112,7 +191,7 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                 <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="mt-4 flex flex-col gap-2">
                 <Text variant="metadata" as="p">
                   Add a subtopic
                 </Text>
@@ -124,9 +203,9 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                     onChange={e => onQueryChange(e.target.value)}
                   />
                   {query && (
-                    <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg">
+                    <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-[12px] border border-grey-02 bg-white shadow-lg">
                       <ResizableContainer duration={0.15}>
-                        <div className="max-h-[240px] overflow-y-auto">
+                        <div className="max-h-[240px] overflow-y-auto p-1">
                           {isLoading && (
                             <div className="flex h-12 items-center justify-center">
                               <Dots />
@@ -143,22 +222,17 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.02 * i }}
                               >
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  className="group relative flex w-full items-center px-3 py-2.5 text-left"
-                                  onClick={() => addSubtopic(result.id)}
-                                >
-                                  <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
-                                  <div className="relative z-10 flex w-full flex-col gap-0.5">
-                                    <span className="text-button text-text">{result.name}</span>
-                                    {result.spaces.length > 0 && (
-                                      <span className="text-tag text-grey-04">
-                                        {result.spaces.length} {pluralize('space', result.spaces.length)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
+                                <div>
+                                  {i > 0 && <div className="h-px w-full bg-divider" />}
+                                  <SubtopicRow
+                                    name={result.name}
+                                    spaces={result.spaces.map(space => ({ id: space.id, image: space.image }))}
+                                    spacesCount={result.spaces.length}
+                                    actionLabel="Add subtopic"
+                                    disabled={isBusy}
+                                    onAction={() => addSubtopic(result.id)}
+                                  />
+                                </div>
                               </motion.div>
                             ))}
                         </div>
@@ -195,35 +269,14 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                 subtopics?.map(subtopic => (
                   <div key={subtopic.id}>
                     <div className="h-px w-full bg-divider" />
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Text variant="button" as="p">
-                          {subtopic.name}
-                        </Text>
-                        <div className="inline-flex items-center gap-1 text-tag text-grey-04">
-                          {subtopic.spacesCount > 0 && (
-                            <AvatarGroup>
-                              {subtopic.spaces.slice(0, 3).map(space => (
-                                <AvatarGroup.Item key={space.id}>
-                                  <Avatar avatarUrl={space.image} value={space.name} />
-                                </AvatarGroup.Item>
-                              ))}
-                            </AvatarGroup>
-                          )}
-                          <span>
-                            {subtopic.spacesCount} {pluralize('space', subtopic.spacesCount)}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="h-6 rounded-md border border-grey-02 px-[7px] text-metadata text-text"
-                        disabled={isBusy}
-                        onClick={() => removeSubtopic(subtopic.id)}
-                      >
-                        {isRemoving && removingTopicId === subtopic.id ? 'Removing...' : 'Remove'}
-                      </button>
-                    </div>
+                    <SubtopicRow
+                      name={subtopic.name}
+                      spaces={subtopic.spaces}
+                      spacesCount={subtopic.spacesCount}
+                      actionLabel={isRemoving && removingTopicId === subtopic.id ? 'Removing...' : 'Remove'}
+                      disabled={isBusy}
+                      onAction={() => removeSubtopic(subtopic.id)}
+                    />
                   </div>
                 ))}
             </div>
