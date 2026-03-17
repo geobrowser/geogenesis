@@ -408,8 +408,6 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
-        collectionRelations={collectionRelations ?? []}
-        collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
@@ -429,8 +427,6 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
-        collectionRelations={collectionRelations ?? []}
-        collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
@@ -450,8 +446,6 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
-        collectionRelations={collectionRelations ?? []}
-        collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
