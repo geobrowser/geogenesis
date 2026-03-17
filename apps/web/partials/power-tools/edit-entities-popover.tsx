@@ -34,6 +34,8 @@ type DeleteValueItemProps = {
   space: { image?: string | null; name?: string | null } | null;
   valueKey: string;
   onMarkForDelete: () => void;
+  /** For IMAGE columns: URL from relation so thumbnail shows immediately (same as Add mode). */
+  directImageUrl?: string | null;
 };
 
 function CurrentImageThumbnail({
@@ -68,12 +70,19 @@ function DeleteValueItem({
   space,
   valueKey: _valueKey,
   onMarkForDelete,
+  directImageUrl: directImageUrlProp,
 }: DeleteValueItemProps) {
   const isImageColumn = property.renderableTypeStrict === 'IMAGE';
-  const imageSrc = useImageUrlFromEntity(
+  const lookedUpUrl = useImageUrlFromEntity(
     item.toEntityId,
     item.toSpaceId ?? spaceId
   );
+  const imageSrc =
+    isImageColumn &&
+    directImageUrlProp &&
+    (directImageUrlProp.startsWith('ipfs://') || directImageUrlProp.startsWith('http'))
+      ? directImageUrlProp
+      : lookedUpUrl;
 
   return (
     <div className="inline-flex items-center gap-1.5 rounded-[5px] border border-grey-02 px-2 py-1.5">
@@ -492,6 +501,14 @@ export function EditEntitiesPopover({
                               {visibleValues.map((item, idx) => {
                                 const key = valueKey(item);
                                 const space = spaceById[item.toSpaceId ?? spaceId] ?? null;
+                                const directImageUrl =
+                                  effectiveProperty?.renderableTypeStrict === 'IMAGE'
+                                    ? currentColumnRelations.find(
+                                        r =>
+                                          r.toEntity.id === item.toEntityId &&
+                                          (r.toSpaceId ?? r.spaceId) === (item.toSpaceId ?? spaceId)
+                                      )?.toEntity.value
+                                    : undefined;
                                 return (
                                   <DeleteValueItem
                                     key={`${item.toEntityId}-${item.toSpaceId ?? ''}-${idx}`}
@@ -503,6 +520,7 @@ export function EditEntitiesPopover({
                                     onMarkForDelete={() =>
                                       setMarkedForDeleteKeys(prev => new Set(prev).add(key))
                                     }
+                                    directImageUrl={directImageUrl}
                                   />
                                 );
                               })}
