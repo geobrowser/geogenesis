@@ -8,19 +8,14 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
-  type SpaceImageRelationNode,
 } from './space-image';
-
-const MAX_SUBTOPIC_AVATARS = 3;
-
-interface TopicUsageSpaceNode {
-  id: string;
-  page: {
-    name: string | null;
-    relationsList: SpaceImageRelationNode[];
-  } | null;
-}
+import {
+  MAX_TOPIC_USAGE_AVATARS,
+  mergeTopicUsageSpaces,
+  PLACEHOLDER_TOPIC_NAME,
+  type TopicUsage,
+  type TopicUsageSpaceNode,
+} from './topic-space-usage';
 
 interface SubtopicNode {
   topicId: string;
@@ -39,59 +34,8 @@ interface NetworkResult {
   };
 }
 
-export interface Subtopic {
-  id: string;
-  name: string;
-  spaces: {
-    id: string;
-    name: string;
-    image: string;
-  }[];
-  spacesCount: number;
-}
-
 function isPlaceholderName(name: string) {
-  return name === 'Untitled';
-}
-
-function isPlaceholderImage(image: string) {
-  return image === '/placeholder.png';
-}
-
-function toUsageSpace(space: TopicUsageSpaceNode): Subtopic['spaces'][number] {
-  return {
-    id: space.id,
-    name: space.page?.name ?? 'Untitled',
-    image: resolveSpaceImage(space.page?.relationsList ?? []),
-  };
-}
-
-function mergeSpaces(spaces: TopicUsageSpaceNode[]) {
-  const spacesById = new Map<string, Subtopic['spaces'][number]>();
-
-  for (const space of spaces) {
-    const nextSpace = toUsageSpace(space);
-    const existingSpace = spacesById.get(space.id);
-
-    if (!existingSpace) {
-      spacesById.set(space.id, nextSpace);
-      continue;
-    }
-
-    spacesById.set(space.id, {
-      id: existingSpace.id,
-      name:
-        isPlaceholderName(existingSpace.name) && !isPlaceholderName(nextSpace.name)
-          ? nextSpace.name
-          : existingSpace.name,
-      image:
-        isPlaceholderImage(existingSpace.image) && !isPlaceholderImage(nextSpace.image)
-          ? nextSpace.image
-          : existingSpace.image,
-    });
-  }
-
-  return Array.from(spacesById.values()).slice(0, MAX_SUBTOPIC_AVATARS);
+  return name === PLACEHOLDER_TOPIC_NAME;
 }
 
 const subtopicsQuery = (spaceId: string) => `
@@ -101,7 +45,7 @@ const subtopicsQuery = (spaceId: string) => `
         topicId
         topic {
           name
-          spacesByTopicIdConnection(first: ${MAX_SUBTOPIC_AVATARS}) {
+          spacesByTopicIdConnection(first: ${MAX_TOPIC_USAGE_AVATARS}) {
             totalCount
             nodes {
               id
@@ -125,7 +69,7 @@ const subtopicsQuery = (spaceId: string) => `
   }
 `;
 
-export async function fetchSubtopics(spaceId: string): Promise<Subtopic[]> {
+export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
   if (!validateSpaceId(spaceId)) {
     throw new Error(`Invalid space ID provided for subtopics fetch: ${spaceId}`);
   }
@@ -154,7 +98,7 @@ export async function fetchSubtopics(spaceId: string): Promise<Subtopic[]> {
 
   for (const node of nodes) {
     const existingSubtopic = subtopicsById.get(node.topicId);
-    const nextName = node.topic?.name ?? 'Untitled';
+    const nextName = node.topic?.name ?? PLACEHOLDER_TOPIC_NAME;
     const nextSpaces = node.topic?.spacesByTopicIdConnection.nodes ?? [];
     const nextSpacesCount = node.topic?.spacesByTopicIdConnection.totalCount ?? 0;
 
@@ -176,7 +120,7 @@ export async function fetchSubtopics(spaceId: string): Promise<Subtopic[]> {
   }
 
   return Array.from(subtopicsById.entries()).map(([id, subtopic]) => {
-    const spaces = mergeSpaces(subtopic.spaces);
+    const spaces = mergeTopicUsageSpaces(subtopic.spaces);
 
     return {
       id,

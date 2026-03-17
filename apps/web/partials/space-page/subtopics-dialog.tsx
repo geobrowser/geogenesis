@@ -9,8 +9,9 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSubspace } from '~/core/hooks/use-subspace';
+import { useSubtopicSearch } from '~/core/hooks/use-subtopic-search';
 import { useSubtopics } from '~/core/hooks/use-subtopics';
-import { useSearch } from '~/core/hooks/use-search';
+import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -19,6 +20,7 @@ import { Close } from '~/design-system/icons/close';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Text } from '~/design-system/text';
+import { Truncate } from '~/design-system/truncate';
 
 interface SubtopicsDialogProps {
   open: boolean;
@@ -53,12 +55,12 @@ function StackedSpaceAvatars({ spaces }: { spaces: SpaceUsage[] }) {
 }
 
 function AssociatedSpacesMeta({ count, spaces }: { count: number; spaces: SpaceUsage[] }) {
+  const copy = count === 0 ? 'No associated spaces' : `${count} associated ${pluralize('space', count)}`;
+
   return (
     <div className="flex items-center gap-2">
       <StackedSpaceAvatars spaces={spaces} />
-      <span className="text-[16px] leading-[13px] tracking-[-0.35px] text-grey-04">
-        {count} associated {pluralize('space', count)}
-      </span>
+      <span className="text-[16px] leading-[13px] tracking-[-0.35px] text-grey-04">{copy}</span>
     </div>
   );
 }
@@ -105,6 +107,50 @@ function SubtopicRow({
   );
 }
 
+function SearchResultRow({
+  result,
+  actionLabel,
+  disabled,
+  onAction,
+}: {
+  result: SubtopicSearchResult;
+  actionLabel: string;
+  disabled?: boolean;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2 px-3 py-2.5">
+      <div className="flex min-w-0 flex-1 items-start gap-2.5">
+        <div className="mt-0.5 size-[22px] shrink-0 overflow-clip rounded-sm">
+          <NativeGeoImage
+            value={result.image || PLACEHOLDER_SPACE_IMAGE}
+            alt=""
+            width={22}
+            height={22}
+            className="h-[22px] w-[22px] object-cover"
+          />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-button text-text">{result.name ?? 'Untitled'}</span>
+          {result.description && (
+            <Truncate maxLines={2} shouldTruncate variant="footnote">
+              <Text variant="footnote" color="grey-04">
+                {result.description}
+              </Text>
+            </Truncate>
+          )}
+          <div className={result.description ? 'pt-1.5' : 'pt-0.5'}>
+            <AssociatedSpacesMeta count={result.spacesCount} spaces={result.spaces} />
+          </div>
+        </div>
+      </div>
+      <div className="pt-0.5">
+        <SubtopicActionButton label={actionLabel} disabled={disabled} onClick={onAction} />
+      </div>
+    </div>
+  );
+}
+
 export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialogProps) {
   // Avoid mounting hooks (and firing queries) when the dialog is closed
   if (!open) return null;
@@ -113,7 +159,7 @@ export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialog
 }
 
 function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialogProps) {
-  const { query, onQueryChange, results, isLoading } = useSearch();
+  const { query, onQueryChange, results, isLoading } = useSubtopicSearch();
   const queryClient = useQueryClient();
   const {
     data: subtopics,
@@ -180,7 +226,7 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
         <Content className="fixed inset-0 z-100 flex items-start justify-center focus:outline-hidden">
-          <div className="mt-32 flex w-[460px] flex-col gap-4 overflow-hidden rounded-xl bg-white px-4 pt-4 shadow-lg">
+          <div className="mt-32 flex w-[460px] flex-col gap-4 overflow-visible rounded-xl bg-white px-4 pt-4 shadow-lg">
             <div className="flex flex-col">
               <div className="flex items-start justify-between">
                 <Title asChild>
@@ -224,10 +270,8 @@ function SubtopicsDialogContent({ open, onOpenChange, spaceId }: SubtopicsDialog
                               >
                                 <div>
                                   {i > 0 && <div className="h-px w-full bg-divider" />}
-                                  <SubtopicRow
-                                    name={result.name}
-                                    spaces={result.spaces.map(space => ({ id: space.id, image: space.image }))}
-                                    spacesCount={result.spaces.length}
+                                  <SearchResultRow
+                                    result={result}
                                     actionLabel="Add subtopic"
                                     disabled={isBusy}
                                     onAction={() => addSubtopic(result.id)}
