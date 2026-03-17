@@ -68,6 +68,8 @@ export class GeoNumber {
   static defaultFormat = 'precision-unlimited';
 
   static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
+    const safeFormatPattern = typeof formatPattern === 'string' ? formatPattern.trim() : undefined;
+
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
@@ -75,13 +77,33 @@ export class GeoNumber {
         throw new Error('Invalid number');
       }
 
-      const formatToUse = formatPattern || GeoNumber.defaultFormat;
-      const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
+      const tryFormat = (pattern: string) => {
+        const normalized = pattern.startsWith('::') ? pattern : `::${pattern}`;
+        const message = new IntlMessageFormat(`{value, number, ${normalized}}`, locale);
+        return `${currencySymbol}${message.format({ value: numericValue })}`;
+      };
 
-      const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
-      return `${currencySymbol}${message.format({ value: numericValue })}`;
+      const primaryPattern = safeFormatPattern && safeFormatPattern.length > 0 ? safeFormatPattern : GeoNumber.defaultFormat;
+
+      try {
+        // First, try the user-specified or property-specified pattern
+        return tryFormat(primaryPattern);
+      } catch (primaryError) {
+        console.warn(
+          `Unable to format number with pattern "${safeFormatPattern}". Falling back to default pattern "${GeoNumber.defaultFormat}".`,
+          primaryError
+        );
+
+        // If the primary pattern already was the default, rethrow to be handled below
+        if (primaryPattern === GeoNumber.defaultFormat) {
+          throw primaryError;
+        }
+
+        // Fallback to a safe default ICU skeleton
+        return tryFormat(GeoNumber.defaultFormat);
+      }
     } catch (e) {
-      console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
+      console.error(`Unable to format number: "${value}" with format: "${safeFormatPattern}".`, e);
       return value;
     }
   }
