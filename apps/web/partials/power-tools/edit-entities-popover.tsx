@@ -36,8 +36,20 @@ type DeleteValueItemProps = {
   onMarkForDelete: () => void;
 };
 
-function CurrentImageThumbnail({ imageEntityId, spaceId }: { imageEntityId: string; spaceId: string }) {
-  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+function CurrentImageThumbnail({
+  imageEntityId,
+  spaceId,
+  directImageUrl,
+}: {
+  imageEntityId: string;
+  spaceId: string;
+  directImageUrl?: string | null;
+}) {
+  const lookedUpUrl = useImageUrlFromEntity(imageEntityId, spaceId);
+  const imageSrc =
+    directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'))
+      ? directImageUrl
+      : lookedUpUrl;
   return (
     <span className="inline-flex size-12 shrink-0 overflow-hidden rounded-md border border-grey-02">
       {imageSrc ? (
@@ -538,6 +550,7 @@ export function EditEntitiesPopover({
                             key={`${r.id}-${idx}`}
                             imageEntityId={r.toEntity.id}
                             spaceId={r.spaceId ?? spaceId}
+                            directImageUrl={r.toEntity.value}
                           />
                         ))}
                       </div>

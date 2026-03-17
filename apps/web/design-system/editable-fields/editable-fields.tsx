@@ -127,7 +127,13 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
+        <img
+          src={src}
+          onError={onError}
+          loading="lazy"
+          decoding="async"
+          className="h-full rounded-lg object-cover"
+        />
       </div>
     </Zoom>
   );

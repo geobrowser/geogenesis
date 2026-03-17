@@ -360,6 +360,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     case 'TIME':
       return (
         <DateField
+          key={value || 'empty'}
           isEditing={true}
           value={value}
           propertyId={property.id}

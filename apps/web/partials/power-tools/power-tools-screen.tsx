@@ -207,6 +207,7 @@ export function PowerToolsScreen() {
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
   const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
+  const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
   const shouldShowPlaceholder =
     isEditing &&
@@ -381,6 +382,7 @@ export function PowerToolsScreen() {
           writeValue(storage, entityId, rowSpaceId, property, value, safeExisting);
         }
       }
+      setValuesApplyVersion(v => v + 1);
     },
     [storage, spaceId, selectedEntityIds, selectableRows]
   );
@@ -414,6 +416,7 @@ export function PowerToolsScreen() {
         });
         valuesToDelete.forEach(v => storage.values.delete(v));
       }
+      setValuesApplyVersion(v => v + 1);
     },
     [storage, selectedEntityIds]
   );
