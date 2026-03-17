@@ -23,6 +23,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fields/editable-fields';
+import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
@@ -405,6 +406,9 @@ function RenderedValue({
           dataType={renderableType}
         />
       );
+    }
+    case 'SCHEDULE': {
+      return <ScheduleField key={`schedule-${propertyId}-${value}`} isEditing={false} value={value} />;
     }
   }
 }
