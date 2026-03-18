@@ -13,17 +13,17 @@ type SpaceWithImage = {
   image: string;
 };
 
-export type SubspaceProposalDetails = {
-  actionType:
-    | 'SUBSPACE_VERIFIED'
-    | 'SUBSPACE_UNVERIFIED'
-    | 'SUBSPACE_RELATED'
-    | 'SUBSPACE_UNRELATED'
-    | 'SUBSPACE_TOPIC_DECLARED'
-    | 'SUBSPACE_TOPIC_REMOVED';
+export type SubspaceEdgeProposalDetails = {
+  actionType: 'SUBSPACE_VERIFIED' | 'SUBSPACE_UNVERIFIED' | 'SUBSPACE_RELATED' | 'SUBSPACE_UNRELATED';
   targetSpaceId: string;
-  targetTopicId?: string;
 };
+
+export type SubspaceTopicProposalDetails = {
+  actionType: 'SUBSPACE_TOPIC_DECLARED' | 'SUBSPACE_TOPIC_REMOVED';
+  targetTopicId: string;
+};
+
+export type SubspaceProposalDetails = SubspaceEdgeProposalDetails | SubspaceTopicProposalDetails;
 
 export type Proposal = {
   id: string;
