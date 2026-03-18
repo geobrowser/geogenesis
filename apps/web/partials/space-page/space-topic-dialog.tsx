@@ -12,10 +12,10 @@ import { usePendingSpaceTopicProposals } from '~/core/hooks/use-pending-space-to
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpaceTopic } from '~/core/hooks/use-space-topic';
 import { useSpaceTopicPanel } from '~/core/hooks/use-space-topic-panel';
-import { useSpaceTopicSearch } from '~/core/hooks/use-space-topic-search';
+import { useSubtopicSearch } from '~/core/hooks/use-subtopic-search';
 import type { PendingSpaceTopicProposal } from '~/core/io/subgraph/fetch-pending-space-topic-proposals';
-import type { SpaceTopicSearchResult } from '~/core/io/subgraph/fetch-space-topic-search';
 import type { SpaceTopic } from '~/core/io/subgraph/fetch-space-topic';
+import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -159,7 +159,7 @@ function SearchResultRow({
   disabled,
   onAction,
 }: {
-  result: SpaceTopicSearchResult;
+  result: SubtopicSearchResult;
   actionLabel: string;
   disabled?: boolean;
   onAction: () => void;
@@ -210,7 +210,7 @@ export function SpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDial
 }
 
 function PersonalSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDialogProps) {
-  const { query, onQueryChange, results, isLoading } = useSpaceTopicSearch();
+  const { query, onQueryChange, results, isLoading } = useSubtopicSearch();
   const queryClient = useQueryClient();
   const { data: currentTopic, isLoading: isCurrentTopicLoading, isError, error } = useSpaceTopicPanel(spaceId, open);
   const { setTopic } = useSpaceTopic({ spaceId });
@@ -222,7 +222,7 @@ function PersonalSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDia
     [results, currentTopic?.id]
   );
 
-  const setSpaceTopic = async (result: SpaceTopicSearchResult) => {
+  const setSpaceTopic = async (result: SubtopicSearchResult) => {
     const optimisticTopic: SpaceTopic = {
       id: result.id,
       name: result.name ?? 'Untitled',
@@ -284,7 +284,7 @@ function PersonalSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDia
 }
 
 function DaoSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDialogProps) {
-  const { query, onQueryChange, results, isLoading } = useSpaceTopicSearch();
+  const { query, onQueryChange, results, isLoading } = useSubtopicSearch();
   const queryClient = useQueryClient();
   const { data: currentTopic, isLoading: isCurrentTopicLoading, isError, error } = useSpaceTopicPanel(spaceId, open);
   const { data: pendingProposals, isLoading: isPendingLoading } = usePendingSpaceTopicProposals(spaceId, open);
@@ -310,7 +310,7 @@ function DaoSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDialogPr
     [results, excludedTopicIds]
   );
 
-  const proposeTopic = (result: SpaceTopicSearchResult) => {
+  const proposeTopic = (result: SubtopicSearchResult) => {
     setPendingTopicIds(prev => new Map(prev).set(result.id, 'setting'));
     onQueryChange('');
 
@@ -369,11 +369,11 @@ function TopicSearchDropdown({
   label: string;
   query: string;
   onQueryChange: (query: string) => void;
-  results: SpaceTopicSearchResult[];
+  results: SubtopicSearchResult[];
   isSearchLoading: boolean;
   pendingTopicIds: Map<string, PendingAction>;
   actionLabel: string;
-  onAdd: (result: SpaceTopicSearchResult) => void;
+  onAdd: (result: SubtopicSearchResult) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
