@@ -232,13 +232,13 @@ export function EditableSpaceHeading({
                       >
                         <p>Space relationships</p>
                       </MenuItem>
-                      <MenuItem
+                      {/* <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SUBTOPICS' });
                         }}
                       >
                         <p>Subtopics</p>
-                      </MenuItem>
+                      </MenuItem> */}
                     </>
                   )}
                   {addSubspaceComponent}
