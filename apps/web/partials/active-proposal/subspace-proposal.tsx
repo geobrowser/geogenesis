@@ -1,10 +1,20 @@
 import { Effect } from 'effect';
 
+import { Environment } from '~/core/environment';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { uuidToHex } from '~/core/id/normalize';
 import type { Proposal } from '~/core/io/dto/proposals';
 import type { Space } from '~/core/io/dto/spaces';
-import { getEntity, getEntityBacklinks, getSpace, getSpaces } from '~/core/io/queries';
+import { getSpace } from '~/core/io/queries';
 import { isTopicSubspaceActionType } from '~/core/io/rest';
+import { graphql } from '~/core/io/subgraph/graphql';
+import {
+  AVATAR_PROPERTY_ID,
+  COVER_PROPERTY_ID,
+  IMAGE_URL_PROPERTY_ID,
+  resolveSpaceImage,
+  type SpaceImageRelationNode,
+} from '~/core/io/subgraph/space-image';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
@@ -25,6 +35,30 @@ type AssociatedSpace = {
   membersCount: number;
 };
 
+type TopicProposalMetadata = {
+  id: string;
+  name: string | null;
+  image: string;
+  associatedSpaces: AssociatedSpace[];
+};
+
+type TopicProposalMetadataResult = {
+  entity: {
+    id: string;
+    name: string | null;
+    relationsList: SpaceImageRelationNode[];
+    spacesByTopicId: Array<{
+      id: string;
+      membersList: Array<{ memberSpaceId: string }>;
+      editorsList: Array<{ memberSpaceId: string }>;
+      page: {
+        name: string | null;
+        relationsList: SpaceImageRelationNode[];
+      } | null;
+    }>;
+  } | null;
+};
+
 export async function SubspaceProposal({ proposal }: Props) {
   const subspaceDetails = proposal.subspaceDetails;
 
@@ -36,27 +70,24 @@ export async function SubspaceProposal({ proposal }: Props) {
     isTopicSubspaceActionType(subspaceDetails.actionType) && 'targetTopicId' in subspaceDetails;
   const targetSpaceId = 'targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : proposal.space.id;
 
-  const [sourceSpace, targetSpace, topic, associatedSpaces] = await Promise.all([
+  const [sourceSpace, targetSpace, topicMetadata] = await Promise.all([
     Effect.runPromise(getSpace(proposal.space.id)),
-    Effect.runPromise(getSpace(targetSpaceId)),
+    isTopicProposal ? Promise.resolve(null) : Effect.runPromise(getSpace(targetSpaceId)),
     isTopicProposal && subspaceDetails.targetTopicId
-      ? Effect.runPromise(getEntity(subspaceDetails.targetTopicId, proposal.space.id))
-      : null,
-    isTopicProposal && subspaceDetails.targetTopicId
-      ? fetchAssociatedSpaces(subspaceDetails.targetTopicId, targetSpaceId)
-      : Promise.resolve([]),
+      ? fetchTopicProposalMetadata(subspaceDetails.targetTopicId)
+      : Promise.resolve(null),
   ]);
 
   const heroTitle = isTopicProposal
-    ? (topic?.name ?? subspaceDetails.targetTopicId)
+    ? (topicMetadata?.name ?? subspaceDetails.targetTopicId)
     : (targetSpace?.entity.name ?? ('targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : targetSpaceId));
-  const heroImage = isTopicProposal ? entityImage(topic) : spaceImage(targetSpace);
+  const heroImage = isTopicProposal ? (topicMetadata?.image ?? PLACEHOLDER_SPACE_IMAGE) : spaceImage(targetSpace);
   const changeLabel = proposalActionLabel(subspaceDetails.actionType);
   const changeValue = proposalActionValue({
     actionType: subspaceDetails.actionType,
     sourceSpaceName: sourceSpace?.entity.name ?? proposal.space.id,
     targetSpaceName: targetSpace?.entity.name ?? targetSpaceId,
-    topicName: isTopicProposal ? (topic?.name ?? subspaceDetails.targetTopicId) : undefined,
+    topicName: isTopicProposal ? (topicMetadata?.name ?? subspaceDetails.targetTopicId) : undefined,
   });
 
   return (
@@ -85,8 +116,8 @@ export async function SubspaceProposal({ proposal }: Props) {
               <p className="text-metadata text-text">Associated spaces</p>
 
               <div className="mt-6 flex flex-col gap-5">
-                {associatedSpaces.length > 0 ? (
-                  associatedSpaces.map(space => <AssociatedSpaceRow key={space.id} space={space} />)
+                {topicMetadata?.associatedSpaces.length ? (
+                  topicMetadata.associatedSpaces.map(space => <AssociatedSpaceRow key={space.id} space={space} />)
                 ) : (
                   <p className="text-metadata text-grey-04">No associated spaces found yet.</p>
                 )}
@@ -128,30 +159,68 @@ function AssociatedSpaceRow({ space }: { space: AssociatedSpace }) {
   );
 }
 
-async function fetchAssociatedSpaces(topicId: string, targetSpaceId: string): Promise<AssociatedSpace[]> {
-  const backlinks = await Effect.runPromise(getEntityBacklinks(topicId));
+async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposalMetadata | null> {
+  const normalizedTopicId = uuidToHex(topicId);
+  const result = await Effect.runPromise(
+    graphql<TopicProposalMetadataResult>({
+      endpoint: Environment.getConfig().api,
+      query: `
+        {
+          entity(id: ${JSON.stringify(normalizedTopicId)}) {
+            id
+            name
+            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+              typeId
+              toEntity {
+                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                  propertyId
+                  text
+                }
+              }
+            }
+            spacesByTopicId {
+              id
+              membersList {
+                memberSpaceId
+              }
+              editorsList {
+                memberSpaceId
+              }
+              page {
+                name
+                relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+                  typeId
+                  toEntity {
+                    valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                      propertyId
+                      text
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+    })
+  );
 
-  if (backlinks.length === 0) {
-    return [];
+  if (!result.entity) {
+    return null;
   }
 
-  const uniqueSpaceIds = Array.from(new Set(backlinks.map(backlink => backlink.backlinkSpaceId).filter(Boolean)));
-
-  if (uniqueSpaceIds.length === 0) {
-    return [];
-  }
-
-  const spaces = await Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }));
-
-  return spaces
-    .filter(space => space.id !== targetSpaceId)
-    .map(space => ({
+  return {
+    id: result.entity.id,
+    name: result.entity.name,
+    image: resolveSpaceImage(result.entity.relationsList),
+    associatedSpaces: result.entity.spacesByTopicId.map(space => ({
       id: space.id,
-      name: space.entity.name ?? space.id,
-      image: space.entity.image ?? PLACEHOLDER_SPACE_IMAGE,
-      editorsCount: space.editors.length,
-      membersCount: space.members.length,
-    }));
+      name: space.page?.name ?? space.id,
+      image: resolveSpaceImage(space.page?.relationsList ?? []),
+      editorsCount: space.editorsList.length,
+      membersCount: space.membersList.length,
+    })),
+  };
 }
 
 function proposalActionLabel(actionType: NonNullable<Proposal['subspaceDetails']>['actionType']) {
@@ -165,8 +234,9 @@ function proposalActionLabel(actionType: NonNullable<Proposal['subspaceDetails']
     case 'SUBSPACE_UNRELATED':
       return 'Remove related space';
     case 'SUBSPACE_TOPIC_DECLARED':
+      return 'Add subtopic';
     case 'SUBSPACE_TOPIC_REMOVED':
-      return 'Space topic change';
+      return 'Remove subtopic';
   }
 }
 
@@ -197,9 +267,9 @@ function proposalActionValue({
     case 'SUBSPACE_TOPIC_REMOVED':
       return (
         <>
-          <span>{topicName ?? 'Topic'}</span>
+          <span>{sourceSpaceName}</span>
           <RightArrowLong color="grey-04" />
-          <span>{targetSpaceName}</span>
+          <span>{topicName ?? 'Topic'}</span>
         </>
       );
   }
