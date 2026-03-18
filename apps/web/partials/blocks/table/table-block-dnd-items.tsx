@@ -192,7 +192,7 @@ export const TableBlockDndItems = ({
   const resolvedOuterClassName =
     typeof config.outerClassName === 'function' ? config.outerClassName(isEditing) : config.outerClassName;
 
-  const canReorder = source.type === 'RELATIONS';
+  const canReorder = source.type === 'RELATIONS' || source.type === 'COLLECTION';
 
   const totalEntriesForReorder = relations?.length ?? sortableEntries.length;
 
