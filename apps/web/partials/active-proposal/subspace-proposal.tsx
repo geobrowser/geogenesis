@@ -32,29 +32,31 @@ export async function SubspaceProposal({ proposal }: Props) {
     return null;
   }
 
-  const isTopicProposal = isTopicSubspaceActionType(subspaceDetails.actionType);
+  const isTopicProposal =
+    isTopicSubspaceActionType(subspaceDetails.actionType) && 'targetTopicId' in subspaceDetails;
+  const targetSpaceId = 'targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : proposal.space.id;
 
   const [sourceSpace, targetSpace, topic, associatedSpaces] = await Promise.all([
     Effect.runPromise(getSpace(proposal.space.id)),
-    Effect.runPromise(getSpace(subspaceDetails.targetSpaceId)),
-    subspaceDetails.targetTopicId
+    Effect.runPromise(getSpace(targetSpaceId)),
+    isTopicProposal && subspaceDetails.targetTopicId
       ? Effect.runPromise(getEntity(subspaceDetails.targetTopicId, proposal.space.id))
       : null,
     isTopicProposal && subspaceDetails.targetTopicId
-      ? fetchAssociatedSpaces(subspaceDetails.targetTopicId, subspaceDetails.targetSpaceId)
+      ? fetchAssociatedSpaces(subspaceDetails.targetTopicId, targetSpaceId)
       : Promise.resolve([]),
   ]);
 
   const heroTitle = isTopicProposal
-    ? (topic?.name ?? subspaceDetails.targetTopicId ?? subspaceDetails.targetSpaceId)
-    : (targetSpace?.entity.name ?? subspaceDetails.targetSpaceId);
+    ? (topic?.name ?? subspaceDetails.targetTopicId)
+    : (targetSpace?.entity.name ?? ('targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : targetSpaceId));
   const heroImage = isTopicProposal ? entityImage(topic) : spaceImage(targetSpace);
   const changeLabel = proposalActionLabel(subspaceDetails.actionType);
   const changeValue = proposalActionValue({
     actionType: subspaceDetails.actionType,
     sourceSpaceName: sourceSpace?.entity.name ?? proposal.space.id,
-    targetSpaceName: targetSpace?.entity.name ?? subspaceDetails.targetSpaceId,
-    topicName: topic?.name ?? subspaceDetails.targetTopicId,
+    targetSpaceName: targetSpace?.entity.name ?? targetSpaceId,
+    topicName: isTopicProposal ? (topic?.name ?? subspaceDetails.targetTopicId) : undefined,
   });
 
   return (
