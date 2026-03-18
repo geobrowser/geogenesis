@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -959,12 +959,13 @@ type CollectionItem = {
   entityId: string;
   entityName: string | null | undefined;
   changeType: 'ADD' | 'REMOVE' | null;
+  position: string | null;
 };
 
 function getCollectionItems(relations: RelationChange[], side: 'before' | 'after'): CollectionItem[] {
   const relevantTypes = side === 'before' ? ['REMOVE', 'UPDATE'] : ['ADD', 'UPDATE'];
 
-  return relations.flatMap(r => {
+  const items = relations.flatMap(r => {
     const snapshot = side === 'before' ? r.before : r.after;
     if (!snapshot || !relevantTypes.includes(r.changeType)) return [];
     return [
@@ -972,9 +973,12 @@ function getCollectionItems(relations: RelationChange[], side: 'before' | 'after
         entityId: snapshot.toEntityId,
         entityName: snapshot.toEntityName,
         changeType: r.changeType === 'UPDATE' ? null : (r.changeType as 'ADD' | 'REMOVE'),
+        position: snapshot.position ?? null,
       },
     ];
   });
+
+  return items.sort((a, b) => Position.compare(a.position, b.position));
 }
 
 type DataBlockCollectionItemsProps = {
