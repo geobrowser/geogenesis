@@ -7,6 +7,18 @@ import { GeoDate } from '~/core/utils/utils';
 import { PrepareOpsError } from '../../errors';
 import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
 
+export type PrepareLocalDataOptions = {
+  /**
+   * Optional replacement for orphan-delete ops (e.g. in tests to avoid network).
+   * When not provided, uses the real buildOrphanChildDeleteOps.
+   */
+  getOrphanDeleteOps?: (args: {
+    deletedRelations: Relation[];
+    allLocalRelations: Relation[];
+    spaceId: string;
+  }) => Effect.Effect<Op[], Error>;
+};
+
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.
  *
@@ -17,7 +29,8 @@ import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
 export function prepareLocalDataForPublishing(
   values: Value[],
   relations: Relation[],
-  spaceId: string
+  spaceId: string,
+  options?: PrepareLocalDataOptions
 ): Effect.Effect<Op[], PrepareOpsError> {
   const program = Effect.gen(function* () {
     const baseOps = prepareOps(values, relations, spaceId);
@@ -30,13 +43,10 @@ export function prepareLocalDataForPublishing(
       return baseOps;
     }
 
-    const orphanOps = yield* Effect.promise(() =>
-      buildOrphanChildDeleteOps({
-        deletedRelations,
-        allLocalRelations: relations,
-        spaceId,
-      })
-    );
+    const orphanArgs = { deletedRelations, allLocalRelations: relations, spaceId };
+    const orphanOps = options?.getOrphanDeleteOps
+      ? yield* options.getOrphanDeleteOps(orphanArgs)
+      : yield* Effect.promise(() => buildOrphanChildDeleteOps(orphanArgs));
 
     return [...baseOps, ...orphanOps];
   });
