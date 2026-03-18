@@ -1,12 +1,13 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData } from '@tanstack/react-query';
 
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 
+import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
-import { useSource } from './use-source';
 
 /**
  * Deduplicates relations by toEntity.id, keeping the first occurrence.
@@ -24,14 +25,17 @@ function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(re
 }
 
 export interface CollectionProps {
+  source: Source;
   first?: number;
   skip?: number;
   where?: WhereCondition;
 }
 
-export function useCollection({ first, skip, where }: CollectionProps) {
+export function useCollection({ source, first, skip, where }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
-  const { source } = useSource();
+
+  const { initialBlockEntities } = useEditorStore();
+  const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({
     spaceId,
@@ -39,9 +43,11 @@ export function useCollection({ first, skip, where }: CollectionProps) {
     enabled: source.type === 'COLLECTION',
   });
 
+  const effectiveEntity = blockEntity ?? initialBlockEntity;
+
   const collectionRelations =
     source.type === 'COLLECTION'
-      ? (blockEntity?.relations.filter(
+      ? (effectiveEntity?.relations.filter(
           r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];

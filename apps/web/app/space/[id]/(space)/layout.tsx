@@ -1,7 +1,8 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
-import { notFound } from 'next/navigation';
 
 import * as React from 'react';
+
+import { notFound } from 'next/navigation';
 
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
@@ -55,10 +56,7 @@ export default async function Layout(props0: LayoutProps) {
         <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
-            <EditableSpaceHeading
-              spaceId={spaceId}
-              entityId={props.id}
-            />
+            <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
             <SpacePageMetadataHeader
               spaceId={spaceId}
               entityId={props.id}
@@ -127,9 +125,12 @@ const getSpaceFrontPage = async (spaceId: string) => {
 
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+      const tabBlockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+      const tabBlockEntityIds = tabBlockRelations.map(r => r.toEntity.id);
+      const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
+      const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      const blocks = allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds) : [];
       return blocks;
     })
   );
@@ -143,9 +144,12 @@ const getSpaceFrontPage = async (spaceId: string) => {
     };
   });
 
-  const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+  const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+  const blockEntityIds = blockRelations.map(r => r.toEntity.id);
+  const blockRelationEntityIds = blockRelations.map(r => r.entityId).filter(Boolean);
+  const allBlockIds = [...new Set([...blockEntityIds, ...blockRelationEntityIds])];
 
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   return {
     id: entity.id,

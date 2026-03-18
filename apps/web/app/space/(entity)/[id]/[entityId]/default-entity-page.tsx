@@ -1,7 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { redirect } from 'next/navigation';
 
 import * as React from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -138,9 +139,12 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+      const tabBlockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+      const tabBlockEntityIds = tabBlockRelations.map(r => r.toEntity.id);
+      const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
+      const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      const blocks = allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds) : [];
       return blocks;
     })
   );
@@ -158,9 +162,11 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const serverCoverUrl = Entities.cover(entity?.relations);
 
   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blockEntityIds = blockRelations?.map(r => r.toEntity.id) ?? [];
+  const blockRelationEntityIds = blockRelations?.map(r => r.entityId).filter(Boolean) ?? [];
+  const allBlockIds = [...new Set([...blockEntityIds, ...blockRelationEntityIds])];
 
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   return {
     id: entityId,

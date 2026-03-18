@@ -1,9 +1,10 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
-import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
 import { Metadata } from 'next';
+
+import { notFound } from 'next/navigation';
 
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -134,8 +135,10 @@ async function getProfilePage(
   }
 
   const blockRelations = person?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  const blockEntityIds = blockRelations?.map(r => r.toEntity.id) ?? [];
+  const blockRelationEntityIds = blockRelations?.map(r => r.entityId).filter(Boolean) ?? [];
+  const allBlockIds = [...new Set([...blockEntityIds, ...blockRelationEntityIds])];
+  const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   // Fetch tab relations and entities
   const tabRelations = person?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY) ?? [];

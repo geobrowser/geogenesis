@@ -3,10 +3,11 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
-import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
@@ -557,6 +558,7 @@ export function useEditorStore() {
     activeEntityId,
     blockIds,
     blockRelations,
+    initialBlockEntities,
     hasContent,
     setHasContent,
   };

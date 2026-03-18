@@ -68,6 +68,7 @@ export class GeoNumber {
   static defaultFormat = 'precision-unlimited';
 
   static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
+    if (value === '' || value === undefined) return '';
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 

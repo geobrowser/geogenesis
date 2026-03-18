@@ -1,14 +1,13 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { Schema } from 'effect';
-import { Effect, Either } from 'effect';
+
+import { Effect, Either, Schema } from 'effect';
 
 import { ID } from '~/core/id';
-import { getProperty, getSpace } from '~/core/io/queries';
+import { getBatchEntities, getProperties, getProperty, getSpace } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { OmitStrict } from '~/core/types';
-import { Property } from '~/core/types';
+import { OmitStrict, Property } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 export type Filter = {
@@ -17,6 +16,7 @@ export type Filter = {
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
+  isBacklink?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
 };
 
@@ -122,7 +122,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mod
   filters
     .filter(f => !ID.equals(f.columnId, SystemIds.SPACE_FILTER))
     .forEach(f => {
-      if (f.columnName === 'Backlink') {
+      if (f.isBacklink || f.columnName === 'Backlink') {
         filterMap['_relation'] = {
           fromEntity: { is: f.value },
           type: { is: f.columnId },
@@ -164,6 +164,95 @@ export type FilterStateResult = {
   filters: Filter[];
   mode: FilterMode;
 };
+
+/**
+ * Synchronously parse filter string into filters with IDs only (no display names).
+ * Enough to build WHERE conditions without network calls.
+ */
+export function parseFiltersSync(filterString: string | null): FilterStateResult {
+  if (!filterString) {
+    return { filters: [], mode: 'AND' };
+  }
+
+  let where: unknown;
+  try {
+    where = JSON.parse(filterString);
+  } catch {
+    return { filters: [], mode: 'AND' };
+  }
+
+  const decoded = Schema.decodeUnknownEither(FilterString)(where);
+
+  const result = Either.match(decoded, {
+    onLeft: error => {
+      console.warn('Skipping invalid filter format, no filter will be applied:', error);
+      return null;
+    },
+    onRight: value => {
+      const filters: Filter[] = [];
+
+      if (value.spaceId?.in) {
+        for (const spaceId of value.spaceId.in) {
+          filters.push({
+            columnId: SystemIds.SPACE_FILTER,
+            columnName: null,
+            valueType: 'RELATION',
+            value: spaceId,
+            valueName: null,
+          });
+        }
+      }
+
+      if (value.filter) {
+        for (const [key, filterValue] of Object.entries(value.filter)) {
+          if (key === '_relation' && 'fromEntity' in filterValue && 'type' in filterValue) {
+            filters.push({
+              columnId: filterValue.type.is,
+              columnName: null,
+              valueType: 'RELATION',
+              value: filterValue.fromEntity.is,
+              valueName: null,
+              isBacklink: true,
+            });
+          } else if (key === '_relation' && 'type' in filterValue && !('fromEntity' in filterValue)) {
+            filters.push({
+              columnId: filterValue.type.is,
+              columnName: null,
+              valueType: 'RELATION',
+              value: filterValue.type.is,
+              valueName: null,
+            });
+          } else if ('in' in filterValue) {
+            for (const v of filterValue.in) {
+              filters.push({
+                columnId: key,
+                columnName: null,
+                valueType: 'RELATION',
+                value: v,
+                valueName: null,
+              });
+            }
+          } else if ('is' in filterValue) {
+            filters.push({
+              columnId: key,
+              columnName: null,
+              valueType: 'RELATION',
+              value: filterValue.is,
+              valueName: null,
+            });
+          }
+        }
+      }
+
+      return {
+        filters,
+        mode: (value.mode ?? 'AND') as FilterMode,
+      };
+    },
+  });
+
+  return result ?? { filters: [], mode: 'AND' };
+}
 
 export async function fromGeoFilterString(filterString: string | null): Promise<FilterStateResult> {
   if (!filterString) {
@@ -224,7 +313,6 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
   });
 
   if (!filtersFromString) {
-    console.log('No filters from string', filtersFromString);
     return { filters: [], mode: 'AND' };
   }
 
@@ -292,6 +380,7 @@ async function getResolvedEntityFilter(entityId: string, typeId: string): Promis
     valueType: 'RELATION',
     value: entityId,
     valueName: fromEntity?.name ?? null,
+    isBacklink: true,
   };
 }
 
@@ -319,4 +408,79 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
     valueName: maybeValueEntity?.name ?? null,
     valueType,
   };
+}
+
+/** Batch-resolve display names for filters parsed by parseFiltersSync. */
+export async function resolveFilterDisplayNames(filters: Filter[]): Promise<Filter[]> {
+  if (filters.length === 0) return [];
+
+  const entityIds = new Set<string>();
+  const spaceIds = new Set<string>();
+  const propertyIds = new Set<string>();
+
+  for (const f of filters) {
+    if (ID.equals(f.columnId, SystemIds.SPACE_FILTER)) {
+      spaceIds.add(f.value);
+    } else if (f.isBacklink) {
+      entityIds.add(f.value);
+      entityIds.add(f.columnId);
+    } else if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
+      entityIds.add(f.value);
+    } else {
+      propertyIds.add(f.columnId);
+      entityIds.add(f.columnId);
+      entityIds.add(f.value);
+    }
+  }
+
+  const [entities, properties, spaces] = await Promise.all([
+    entityIds.size > 0 ? Effect.runPromise(getBatchEntities([...entityIds])) : Promise.resolve([]),
+    propertyIds.size > 0 ? Effect.runPromise(getProperties([...propertyIds])) : Promise.resolve([]),
+    spaceIds.size > 0 ? Promise.all([...spaceIds].map(id => Effect.runPromise(getSpace(id)))) : Promise.resolve([]),
+  ]);
+
+  const entityMap = new Map(entities.map(e => [e.id, e]));
+  const propertyMap = new Map(properties.map(p => [p.id, p]));
+  const spaceMap = new Map(spaces.filter((s): s is NonNullable<typeof s> => s !== null).map(s => [s.id, s]));
+
+  return filters.map(f => {
+    if (ID.equals(f.columnId, SystemIds.SPACE_FILTER)) {
+      const space = spaceMap.get(f.value);
+      return {
+        ...f,
+        columnName: 'Space',
+        valueName: space?.entity.name ?? null,
+      };
+    }
+
+    if (f.isBacklink) {
+      const fromEntity = entityMap.get(f.value);
+      return {
+        ...f,
+        columnName: 'Backlink',
+        valueName: fromEntity?.name ?? null,
+      };
+    }
+
+    if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
+      const valueEntity = entityMap.get(f.value);
+      return {
+        ...f,
+        columnName: 'Types',
+        valueName: valueEntity?.name ?? null,
+      };
+    }
+
+    const property = propertyMap.get(f.columnId);
+    const valueType: FilterableValueType = property?.dataType ?? 'RELATION';
+    const propertyEntity = entityMap.get(f.columnId);
+    const valueEntity = valueType === 'RELATION' ? entityMap.get(f.value) : undefined;
+
+    return {
+      ...f,
+      columnName: propertyEntity?.name ?? null,
+      valueName: valueEntity?.name ?? null,
+      valueType,
+    };
+  });
 }

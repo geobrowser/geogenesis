@@ -1,8 +1,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Effect } from 'effect';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
@@ -41,6 +42,7 @@ const queryKeys = {
 interface UseDataBlockOptions {
   filterState?: Filter[];
   filterMode?: FilterMode;
+  canEdit?: boolean;
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
@@ -55,16 +57,34 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { relationBlockSourceRelations } = useRelationsBlock();
   const {
     filterState: dbFilterState,
+    resolvedFilterState: dbResolvedFilterState,
     filterMode: dbFilterMode,
-    isLoading: isLoadingFilterState,
-    isFetched: isFilterStateFetched,
-  } = useFilters();
+    filterableProperties,
+    setFilterState,
+    setFilterMode,
+    temporaryFilters,
+    temporaryFilterMode,
+    setTemporaryFilters,
+    setTemporaryFilterMode,
+  } = useFilters(options?.canEdit);
 
-  // Use provided filter state or fall back to database filter state
-  const effectiveFilterState = options?.filterState ?? dbFilterState;
-  const effectiveFilterMode = options?.filterMode ?? dbFilterMode;
-  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
-  const { source } = useSource();
+  const activeFilterState = options?.canEdit ? dbFilterState : temporaryFilters;
+  const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
+  const effectiveFilterState = options?.filterState ?? activeFilterState;
+  const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
+  const {
+    shownColumnIds,
+    mapping,
+    isLoading: isViewLoading,
+    isFetched: isViewFetched,
+    view,
+    placeholder,
+    viewRelation,
+    setView,
+    shownColumnRelations,
+    toggleProperty,
+  } = useView();
+  const { source, setSource } = useSource();
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const where = React.useMemo(
@@ -80,6 +100,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
+    source,
     first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
     where: where,
@@ -246,8 +267,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   };
 
   let isLoading = true;
-  const isSharedDataLoading =
-    isBlockEntityLoading || isLoadingFilterState || !isFilterStateFetched || isViewLoading || !isViewFetched;
+  const isSharedDataLoading = isViewLoading || !isViewFetched;
 
   if (source.type === 'COLLECTION') {
     isLoading = isCollectionLoading || !isCollectionFetched || isSharedDataLoading;
@@ -305,6 +325,34 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
+
+    // From useView
+    view,
+    placeholder,
+    shownColumnIds,
+    viewRelation,
+    setView,
+    shownColumnRelations,
+    toggleProperty,
+
+    // From useSource
+    source,
+    setSource,
+
+    // From useFilters
+    filterState: effectiveFilterState,
+    resolvedFilterState: dbResolvedFilterState,
+    filterMode: effectiveFilterMode,
+    dbFilterState,
+    dbFilterMode,
+    setFilterState,
+    setFilterMode,
+    filterableProperties,
+
+    temporaryFilters,
+    temporaryFilterMode,
+    setTemporaryFilters,
+    setTemporaryFilterMode,
   };
 
   return result;
@@ -435,7 +483,7 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
     if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
       return { types: [{ id: { equals: f.value } }] };
     }
-    if (f.columnName === 'Backlink') {
+    if (f.isBacklink || f.columnName === 'Backlink') {
       return {
         backlinks: [{ typeOf: { id: { equals: f.columnId } }, fromEntity: { id: { equals: f.value } } }],
       };

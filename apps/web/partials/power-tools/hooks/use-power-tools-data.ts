@@ -63,7 +63,7 @@ export function usePowerToolsData(options?: {
   );
   const { spaceId } = useDataBlockInstance();
   const { source } = useSource();
-  const { filterState, filterMode, isFetched: isFilterFetched } = useFilters();
+  const { filterState, filterMode } = useFilters();
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
@@ -173,6 +173,7 @@ export function usePowerToolsData(options?: {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
+    source,
     first: pageSize,
     skip: page * pageSize,
     where,
@@ -364,8 +365,7 @@ export function usePowerToolsData(options?: {
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
-  // Wait for filters to resolve before showing data to avoid a flash of unfiltered results.
-  const isInitialLoading = !isFilterFetched || (isLoading && rows.length === 0);
+  const isInitialLoading = isLoading && rows.length === 0;
 
   const fetchAllIds = React.useCallback(async () => {
     if (source.type === 'COLLECTION') {
