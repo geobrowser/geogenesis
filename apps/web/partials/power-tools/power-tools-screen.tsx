@@ -18,21 +18,26 @@ import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import type { Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
+
+import { EditSmall } from '~/design-system/icons/edit-small';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
 import { Menu, MenuItem } from '~/design-system/menu';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { writeValue } from '~/partials/blocks/table/change-entry';
+import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -41,6 +46,13 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import {
+  EditEntitiesPopover,
+  type EditApplyPayload,
+  type EditApplyValuePayload,
+  type EditDeleteApplyPayload,
+} from './edit-entities-popover';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
 import { PowerToolsRow } from './types';
@@ -166,10 +178,15 @@ export function PowerToolsScreen() {
     [canEdit, setFilterMode, setTemporaryFilterMode]
   );
 
+  const [extraColumnIds, setExtraColumnIds] = React.useState<string[]>([]);
+  const [excludedColumnIds, setExcludedColumnIds] = React.useState<string[]>([]);
   const data = usePowerToolsData({
     filterStateOverride: canEdit ? undefined : temporaryFilters,
     filterModeOverride: canEdit ? undefined : temporaryFilterMode,
+    extraColumnIds,
+    excludedColumnIds,
   });
+  const { createProperty } = useCreateProperty(spaceId);
 
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
@@ -190,6 +207,7 @@ export function PowerToolsScreen() {
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
   const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
+  const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
   const shouldShowPlaceholder =
     isEditing &&
@@ -221,6 +239,261 @@ export function PowerToolsScreen() {
 
     return data.rows;
   }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
+
+  const selectableRows = React.useMemo(
+    () => rowsWithPlaceholder.filter(r => !r.placeholder),
+    [rowsWithPlaceholder]
+  );
+  const selectableCount = selectableRows.length;
+  const selectableIds = React.useMemo(
+    () => new Set(selectableRows.map(r => r.entityId)),
+    [selectableRows]
+  );
+
+  const [selectedEntityIds, setSelectedEntityIds] = React.useState<Set<string>>(() => new Set());
+  const [isSelectionModeActive, setIsSelectionModeActive] = React.useState(false);
+
+  React.useEffect(() => {
+    setSelectedEntityIds(prev => {
+      const pruned = new Set([...prev].filter(id => selectableIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [selectableIds]);
+  const [imageUploadingFor, setImageUploadingFor] = React.useState<Set<string>>(new Set());
+  const selectedCount = selectedEntityIds.size;
+  const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
+
+  const onRowClick = React.useCallback((entityId: string) => {
+    setIsSelectionModeActive(prev => {
+      if (!prev) {
+        setSelectedEntityIds(s => new Set(s).add(entityId));
+        return true;
+      }
+      return prev;
+    });
+  }, []);
+
+  const toggleRowSelection = React.useCallback((entityId: string) => {
+    setSelectedEntityIds(prev => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  }, []);
+
+  const setRowSelection = React.useCallback((entityId: string, selected: boolean) => {
+    setSelectedEntityIds(prev => {
+      const next = new Set(prev);
+      if (selected) next.add(entityId);
+      else next.delete(entityId);
+      return next;
+    });
+  }, []);
+
+  const selectAll = React.useCallback(() => {
+    setSelectedEntityIds(new Set(selectableRows.map(r => r.entityId)));
+  }, [selectableRows]);
+
+  const clearSelection = React.useCallback(() => {
+    setSelectedEntityIds(new Set());
+  }, []);
+
+  const handleEditApply = React.useCallback(
+    async (payload: EditApplyPayload) => {
+      const { property, targetEntities, imageFile } = payload;
+      const entityIdToSpaceId = new Map(
+        selectableRows
+          .filter(r => selectedEntityIds.has(r.entityId))
+          .map(r => [r.entityId, r.spaceId] as const)
+      );
+
+      if (property.renderableTypeStrict === 'IMAGE' && imageFile) {
+        const uploadKeys = new Set(
+          Array.from(selectedEntityIds).map(id => `${id}:${property.id}`)
+        );
+        setImageUploadingFor(uploadKeys);
+        try {
+          for (const fromEntityId of selectedEntityIds) {
+            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+            const existingImageRelations = getRelations({
+              selector: r =>
+                r.fromEntity.id === fromEntityId &&
+                r.type.id === property.id &&
+                (r.spaceId === rowSpaceId || r.toSpaceId === rowSpaceId),
+            });
+            existingImageRelations.forEach(relation => storage.relations.delete(relation));
+            await storage.images.createAndLink({
+              file: imageFile,
+              fromEntityId,
+              fromEntityName: null,
+              relationPropertyId: property.id,
+              relationPropertyName: property.name ?? null,
+              spaceId: rowSpaceId,
+            });
+            setImageUploadingFor(prev => {
+              const next = new Set(prev);
+              next.delete(`${fromEntityId}:${property.id}`);
+              return next;
+            });
+          }
+        } finally {
+          setImageUploadingFor(new Set());
+        }
+        return;
+      }
+
+      selectedEntityIds.forEach(fromEntityId => {
+        const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+        targetEntities.forEach(target => {
+          createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+            id: target.id,
+            name: target.name,
+            space: target.primarySpace,
+          });
+        });
+      });
+    },
+    [storage, spaceId, selectedEntityIds, selectableRows]
+  );
+
+  const handleApplyValue = React.useCallback(
+    (payload: EditApplyValuePayload) => {
+      const { property, value } = payload;
+      const selectedIds = Array.from(selectedEntityIds);
+      if (selectedIds.length === 0) return;
+
+      const selectedSet = new Set(selectedIds);
+      const entityIdToSpaceId = new Map<string, string>();
+      for (const row of selectableRows) {
+        if (selectedSet.has(row.entityId)) {
+          entityIdToSpaceId.set(row.entityId, row.spaceId);
+        }
+      }
+      const existingValuesList = getValues({
+        selector: v =>
+          selectedSet.has(v.entity.id) && v.property.id === property.id,
+      });
+      const valueByEntityAndSpace = new Map<string, Value>();
+      for (const v of existingValuesList) {
+        valueByEntityAndSpace.set(`${v.entity.id}:${v.spaceId}`, v);
+      }
+      const isClear = value.trim() === '';
+      for (const entityId of selectedIds) {
+        const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
+        const existing = valueByEntityAndSpace.get(`${entityId}:${rowSpaceId}`) ?? null;
+        const safeExisting =
+          existing &&
+          existing.entity.id === entityId &&
+          existing.spaceId === rowSpaceId
+            ? existing
+            : null;
+        if (isClear) {
+          if (safeExisting) storage.values.delete(safeExisting);
+        } else {
+          writeValue(storage, entityId, rowSpaceId, property, value, safeExisting);
+        }
+      }
+      setValuesApplyVersion(v => v + 1);
+    },
+    [storage, spaceId, selectedEntityIds, selectableRows]
+  );
+
+  const handleDeleteApply = React.useCallback(
+    (payload: EditDeleteApplyPayload) => {
+      const { property, targetKeys } = payload;
+
+      const isRelationProperty =
+        property.dataType === 'RELATION' ||
+        (property.relationValueTypes && property.relationValueTypes.length > 0);
+
+      if (isRelationProperty) {
+        const targetKeySet = new Set(
+          targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`)
+        );
+        const relations = getRelations({
+          selector: r => {
+            if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id)
+              return false;
+            const relationKey = `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId ?? ''}`;
+            return targetKeySet.has(relationKey);
+          },
+        });
+        relations.forEach(relation => storage.relations.delete(relation));
+      } else {
+        const valuesToDelete = getValues({
+          selector: v =>
+            selectedEntityIds.has(v.entity.id) &&
+            v.property.id === property.id,
+        });
+        valuesToDelete.forEach(v => storage.values.delete(v));
+      }
+      setValuesApplyVersion(v => v + 1);
+    },
+    [storage, selectedEntityIds]
+  );
+
+  const onMasterToggle = React.useCallback(() => {
+    if (isAllSelected) clearSelection();
+    else selectAll();
+  }, [isAllSelected, clearSelection, selectAll]);
+
+  const handleDeleteSelectedRows = React.useCallback(() => {
+    if (selectedEntityIds.size === 0) return;
+
+    const idsToDelete = new Set(selectedEntityIds);
+
+    if (source.type === 'COLLECTION' && sourceValue) {
+      const collectionRelations = getRelations({
+        selector: r =>
+          r.fromEntity.id === source.value &&
+          idsToDelete.has(r.toEntity.id),
+      });
+      collectionRelations.forEach(r => storage.relations.delete(r));
+    } else {
+      const values = reactiveValues.get().filter(v => idsToDelete.has(v.entity.id));
+      values.forEach(v => storage.values.delete(v));
+
+      const relations = reactiveRelations
+        .get()
+        .filter(r => idsToDelete.has(r.fromEntity.id));
+      relations.forEach(r => storage.relations.delete(r));
+    }
+
+    setSelectedEntityIds(new Set());
+    if (pinnedNewEntityId && idsToDelete.has(pinnedNewEntityId)) {
+      setPinnedNewEntityId(null);
+    }
+  }, [selectedEntityIds, source.type, sourceValue, storage, pinnedNewEntityId]);
+
+  const selectionProps = React.useMemo(
+    () =>
+      isEditing && selectableCount > 0
+        ? {
+            selectedEntityIds,
+            onToggleRowSelection: toggleRowSelection,
+            onSetRowSelection: setRowSelection,
+            onMasterToggle,
+            selectableCount,
+            isAllSelected,
+          }
+        : undefined,
+    [
+      isEditing,
+      selectableCount,
+      selectedEntityIds,
+      toggleRowSelection,
+      setRowSelection,
+      onMasterToggle,
+      isAllSelected,
+    ]
+  );
+
+  React.useEffect(() => {
+    if (selectedCount === 0) {
+      setIsSelectionModeActive(false);
+    }
+  }, [selectedCount]);
 
   React.useEffect(() => {
     if (pendingEntityId && data.rows.find(r => r.entityId === pendingEntityId)) {
@@ -426,6 +699,47 @@ export function PowerToolsScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {isEditing && selectedCount > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={selectedCount > 0 ? handleDeleteSelectedRows : undefined}
+                disabled={selectedCount === 0}
+                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                title="Delete selected"
+                aria-label="Delete selected"
+              >
+                <Trash />
+              </button>
+              <EditEntitiesPopover
+                trigger={
+                  <button
+                    type="button"
+                    disabled={selectedCount === 0}
+                    className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    title="Edit selected"
+                    aria-label="Edit selected"
+                  >
+                    <EditSmall />
+                  </button>
+                }
+                selectedCount={selectedCount}
+                spaceId={spaceId}
+                properties={data.properties}
+                selectedEntityIds={Array.from(selectedEntityIds)}
+                onApply={handleEditApply}
+                onApplyValue={handleApplyValue}
+                onDeleteApply={handleDeleteApply}
+                typesProperty={
+                  data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
+                    id: SystemIds.TYPES_PROPERTY,
+                    name: 'Types',
+                    dataType: 'RELATION',
+                  }
+                }
+              />
+            </>
+          )}
           <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
           <Menu
             open={isColumnMenuOpen}
@@ -509,25 +823,43 @@ export function PowerToolsScreen() {
             </Text>
           </div>
         ) : (
-          <PowerToolsTable
-            rows={rowsWithPlaceholder}
-            properties={data.properties}
-            propertiesById={data.propertiesById}
-            spaceId={spaceId}
-            hasNextPage={data.hasMore}
-            isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
-            fetchNextPage={data.loadMore}
-            onChangeEntry={onChangeEntry}
-            onLinkEntry={onLinkEntry}
-            onDismissPlaceholder={handleDismissPlaceholder}
-            onDeleteRow={isEditing ? handleDeleteRow : undefined}
-            onOpenEntityPanel={handleOpenEntityPanel}
-            source={source}
-            hiddenColumnIds={hiddenColumnIds}
-            onHideColumn={toggleColumnVisibility}
-            orderedPropertyIds={orderedPropertyIds}
-            onReorderColumns={setOrderedPropertyIds}
-          />
+          <>
+            {isEditing && selectableCount > 0 && (
+              <div className="flex shrink-0 items-center gap-2 border-b border-grey-02 px-4 py-2">
+                <Checkbox
+                  checked={isAllSelected}
+                  onChange={onMasterToggle}
+                  aria-label={isAllSelected ? 'Deselect all' : 'Select all'}
+                />
+                <Text variant="metadataMedium" color="grey-04">
+                  {selectedCount} / {selectableCount} selected
+                </Text>
+              </div>
+            )}
+            <PowerToolsTable
+              rows={rowsWithPlaceholder}
+              properties={data.properties}
+              propertiesById={data.propertiesById}
+              spaceId={spaceId}
+              hasNextPage={data.hasMore}
+              isFetchingNextPage={data.isLoading && rowsWithPlaceholder.length > 0}
+              fetchNextPage={data.loadMore}
+              onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
+              onDismissPlaceholder={handleDismissPlaceholder}
+              onDeleteRow={isEditing ? handleDeleteRow : undefined}
+              onOpenEntityPanel={handleOpenEntityPanel}
+              source={source}
+              hiddenColumnIds={hiddenColumnIds}
+              onHideColumn={toggleColumnVisibility}
+              orderedPropertyIds={orderedPropertyIds}
+              onReorderColumns={setOrderedPropertyIds}
+              selection={selectionProps}
+              imageUploadingFor={imageUploadingFor}
+              onRowClick={undefined}
+              onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
+            />
+          </>
         )}
         {panelEntityId && (
           <PowerToolsEntityPanel entityId={panelEntityId} spaceId={panelSpaceId} onClose={handleCloseEntityPanel} />
