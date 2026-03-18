@@ -23,7 +23,7 @@ export function useFilters(canEdit?: boolean) {
   );
 
   const localFilterValues = useValues({
-    selector: v => v.entity.id === entityId && v.property.id === SystemIds.FILTER,
+    selector: v => v.entity.id === entityId && v.property.id === SystemIds.FILTER && v.spaceId === spaceId,
   });
 
   const filterTriple =
@@ -61,10 +61,15 @@ export function useFilters(canEdit?: boolean) {
     },
   });
 
+  // Resolved state has correct valueType from property lookups; fall back to parsed state while loading.
+  // On first load (no keepPreviousData yet), resolvedFilterState is undefined until the query completes.
+  const isFilterResolving = filterState.length > 0 && resolvedFilterState === undefined;
+  const effectiveResolvedState = filterState.length === 0 ? [] : (resolvedFilterState ?? filterState);
+
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
   const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
 
-  const temporaryFilters = temporaryFilterOverride ?? filterState;
+  const temporaryFilters = temporaryFilterOverride ?? effectiveResolvedState;
   const temporaryFilterMode: FilterMode = temporaryModeOverride ?? filterMode;
 
   const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
@@ -136,7 +141,8 @@ export function useFilters(canEdit?: boolean) {
 
   return {
     filterState,
-    resolvedFilterState: resolvedFilterState ?? filterState,
+    resolvedFilterState: effectiveResolvedState,
+    isFilterResolving,
     filterMode,
     temporaryFilters,
     temporaryFilterMode,

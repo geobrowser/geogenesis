@@ -58,6 +58,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const {
     filterState: dbFilterState,
     resolvedFilterState: dbResolvedFilterState,
+    isFilterResolving,
     filterMode: dbFilterMode,
     filterableProperties,
     setFilterState,
@@ -68,7 +69,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setTemporaryFilterMode,
   } = useFilters(options?.canEdit);
 
-  const activeFilterState = options?.canEdit ? dbFilterState : temporaryFilters;
+  const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
   const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
   const effectiveFilterState = options?.filterState ?? activeFilterState;
   const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
@@ -267,7 +268,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   };
 
   let isLoading = true;
-  const isSharedDataLoading = isViewLoading || !isViewFetched;
+  const isSharedDataLoading = isBlockEntityLoading || isFilterResolving || isViewLoading || !isViewFetched;
 
   if (source.type === 'COLLECTION') {
     isLoading = isCollectionLoading || !isCollectionFetched || isSharedDataLoading;

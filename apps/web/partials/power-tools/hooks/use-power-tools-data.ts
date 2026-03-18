@@ -63,11 +63,11 @@ export function usePowerToolsData(options?: {
   );
   const { spaceId } = useDataBlockInstance();
   const { source } = useSource();
-  const { filterState, filterMode } = useFilters();
+  const { filterState, resolvedFilterState, isFilterResolving, filterMode } = useFilters();
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
-  const effectiveFilterState = options?.filterStateOverride ?? filterState;
+  const effectiveFilterState = options?.filterStateOverride ?? resolvedFilterState;
   const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
   const where = React.useMemo(
     () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
@@ -351,10 +351,7 @@ export function usePowerToolsData(options?: {
       }
     }
 
-    const filtered =
-      excludedColumnIdsSet.size > 0
-        ? next.filter(id => !excludedColumnIdsSet.has(id))
-        : next;
+    const filtered = excludedColumnIdsSet.size > 0 ? next.filter(id => !excludedColumnIdsSet.has(id)) : next;
 
     if (!arraysEqual(filtered, columnIds)) {
       setColumnIds(filtered);
@@ -365,7 +362,7 @@ export function usePowerToolsData(options?: {
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
-  const isInitialLoading = isLoading && rows.length === 0;
+  const isInitialLoading = isFilterResolving || (isLoading && rows.length === 0);
 
   const fetchAllIds = React.useCallback(async () => {
     if (source.type === 'COLLECTION') {

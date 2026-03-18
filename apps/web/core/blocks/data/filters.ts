@@ -414,33 +414,53 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
 export async function resolveFilterDisplayNames(filters: Filter[]): Promise<Filter[]> {
   if (filters.length === 0) return [];
 
-  const entityIds = new Set<string>();
   const spaceIds = new Set<string>();
   const propertyIds = new Set<string>();
+  // Entity IDs we can determine without knowing property data types
+  const knownEntityIds = new Set<string>();
 
   for (const f of filters) {
     if (ID.equals(f.columnId, SystemIds.SPACE_FILTER)) {
       spaceIds.add(f.value);
     } else if (f.isBacklink) {
-      entityIds.add(f.value);
-      entityIds.add(f.columnId);
+      knownEntityIds.add(f.value);
+      knownEntityIds.add(f.columnId);
     } else if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
-      entityIds.add(f.value);
+      knownEntityIds.add(f.value);
     } else {
       propertyIds.add(f.columnId);
-      entityIds.add(f.columnId);
-      entityIds.add(f.value);
+      knownEntityIds.add(f.columnId);
     }
   }
 
-  const [entities, properties, spaces] = await Promise.all([
-    entityIds.size > 0 ? Effect.runPromise(getBatchEntities([...entityIds])) : Promise.resolve([]),
+  // Fetch properties and spaces first so we know which filter values are entity IDs
+  const [properties, spaces] = await Promise.all([
     propertyIds.size > 0 ? Effect.runPromise(getProperties([...propertyIds])) : Promise.resolve([]),
     spaceIds.size > 0 ? Promise.all([...spaceIds].map(id => Effect.runPromise(getSpace(id)))) : Promise.resolve([]),
   ]);
 
-  const entityMap = new Map(entities.map(e => [e.id, e]));
   const propertyMap = new Map(properties.map(p => [p.id, p]));
+
+  // Now that we know property data types, collect value entity IDs only for RELATION filters
+  const entityIds = new Set(knownEntityIds);
+  for (const f of filters) {
+    if (
+      ID.equals(f.columnId, SystemIds.SPACE_FILTER) ||
+      f.isBacklink ||
+      ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)
+    ) {
+      continue;
+    }
+    const property = propertyMap.get(f.columnId);
+    const valueType: FilterableValueType = property?.dataType ?? 'RELATION';
+    if (valueType === 'RELATION') {
+      entityIds.add(f.value);
+    }
+  }
+
+  const entities = entityIds.size > 0 ? await Effect.runPromise(getBatchEntities([...entityIds])) : [];
+
+  const entityMap = new Map(entities.map(e => [e.id, e]));
   const spaceMap = new Map(spaces.filter((s): s is NonNullable<typeof s> => s !== null).map(s => [s.id, s]));
 
   return filters.map(f => {
