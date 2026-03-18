@@ -11,7 +11,7 @@ import {
 import { SortableContext, arrayMove, useSortable } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position } from '@geoprotocol/geo-sdk';
 
 import React from 'react';
 
@@ -56,8 +56,6 @@ export type TableBlockDndItemsProps = {
   isEditing: boolean;
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   relations: Relation[];
-  collectionRelations: Relation[];
-  collectionLength: number;
   pageNumber: number;
   pageSize: number;
   shouldAutoFocusPlaceholder?: boolean;
@@ -74,8 +72,6 @@ export const TableBlockDndItems = ({
   source,
   onUpdateRelation,
   relations,
-  collectionRelations,
-  collectionLength,
   pageNumber,
   pageSize,
   shouldAutoFocusPlaceholder = false,
@@ -129,7 +125,7 @@ export const TableBlockDndItems = ({
   };
 
   const handleMove = (targetPosition: number, currentPosition?: number) => {
-    const relationsToUse = source.type === 'COLLECTION' ? collectionRelations : relations;
+    const relationsToUse = relations;
 
     if (currentPosition !== undefined) {
       const currentPageIndex = currentPosition - pageNumber * pageSize - 1;
