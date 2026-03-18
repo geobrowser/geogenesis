@@ -1,30 +1,23 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect, Either } from 'effect';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { validateSpaceId } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
-
-interface ValueNode {
-  propertyId: string;
-  text: string | null;
-}
-
-interface RelationNode {
-  typeId: string;
-  toEntity: {
-    valuesList: ValueNode[];
-  } | null;
-}
+import {
+  AVATAR_PROPERTY_ID,
+  COVER_PROPERTY_ID,
+  IMAGE_URL_PROPERTY_ID,
+  resolveSpaceImage,
+  type SpaceImageRelationNode,
+} from './space-image';
 
 interface ChildSpaceNode {
   id: string;
   page: {
     name: string | null;
     description: string | null;
-    relationsList: RelationNode[];
+    relationsList: SpaceImageRelationNode[];
   } | null;
 }
 
@@ -36,24 +29,6 @@ interface SubspaceNode {
 
 interface SubspacesResult {
   subspaces: SubspaceNode[];
-}
-
-const toHex = (uuid: string) => uuid.replace(/-/g, '');
-
-const AVATAR_PROPERTY_ID = toHex(ContentIds.AVATAR_PROPERTY);
-const COVER_PROPERTY_ID = toHex(SystemIds.COVER_PROPERTY);
-const IMAGE_URL_PROPERTY_ID = toHex(SystemIds.IMAGE_URL_PROPERTY);
-
-function resolveSpaceImage(relations: RelationNode[]): string {
-  const avatar = relations.find(r => r.typeId === AVATAR_PROPERTY_ID);
-  const avatarUrl = avatar?.toEntity?.valuesList.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID)?.text;
-  if (avatarUrl) return avatarUrl;
-
-  const cover = relations.find(r => r.typeId === COVER_PROPERTY_ID);
-  const coverUrl = cover?.toEntity?.valuesList.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID)?.text;
-  if (coverUrl) return coverUrl;
-
-  return PLACEHOLDER_SPACE_IMAGE;
 }
 
 export interface ActiveSubspace {
