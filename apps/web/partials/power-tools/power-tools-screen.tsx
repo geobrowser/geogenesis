@@ -245,8 +245,20 @@ export function PowerToolsScreen() {
     [rowsWithPlaceholder]
   );
   const selectableCount = selectableRows.length;
+  const selectableIds = React.useMemo(
+    () => new Set(selectableRows.map(r => r.entityId)),
+    [selectableRows]
+  );
+
   const [selectedEntityIds, setSelectedEntityIds] = React.useState<Set<string>>(() => new Set());
   const [isSelectionModeActive, setIsSelectionModeActive] = React.useState(false);
+
+  React.useEffect(() => {
+    setSelectedEntityIds(prev => {
+      const pruned = new Set([...prev].filter(id => selectableIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [selectableIds]);
   const [imageUploadingFor, setImageUploadingFor] = React.useState<Set<string>>(new Set());
   const selectedCount = selectedEntityIds.size;
   const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
@@ -431,14 +443,6 @@ export function PowerToolsScreen() {
 
     const idsToDelete = new Set(selectedEntityIds);
 
-    const values = reactiveValues.get().filter(v => idsToDelete.has(v.entity.id));
-    values.forEach(v => storage.values.delete(v));
-
-    const relations = reactiveRelations
-      .get()
-      .filter(r => idsToDelete.has(r.fromEntity.id) || idsToDelete.has(r.toEntity.id));
-    relations.forEach(r => storage.relations.delete(r));
-
     if (source.type === 'COLLECTION' && sourceValue) {
       const collectionRelations = getRelations({
         selector: r =>
@@ -446,6 +450,14 @@ export function PowerToolsScreen() {
           idsToDelete.has(r.toEntity.id),
       });
       collectionRelations.forEach(r => storage.relations.delete(r));
+    } else {
+      const values = reactiveValues.get().filter(v => idsToDelete.has(v.entity.id));
+      values.forEach(v => storage.values.delete(v));
+
+      const relations = reactiveRelations
+        .get()
+        .filter(r => idsToDelete.has(r.fromEntity.id));
+      relations.forEach(r => storage.relations.delete(r));
     }
 
     setSelectedEntityIds(new Set());
@@ -580,18 +592,17 @@ export function PowerToolsScreen() {
 
   const handleDeleteRow = React.useCallback(
     (row: PowerToolsRow) => {
-      const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
-      const relations = reactiveRelations.get().filter(
-        r => r.fromEntity.id === row.entityId || r.toEntity.id === row.entityId
-      );
-      for (const v of values) storage.values.delete(v);
-      for (const r of relations) storage.relations.delete(r);
-
-      if (source.type === 'COLLECTION' && row.relationId) {
-        const relation = getRelations({ selector: r => r.id === row.relationId })[0];
-        if (relation) storage.relations.delete(relation);
+      if (source.type === 'COLLECTION') {
+        if (row.relationId) {
+          const relation = getRelations({ selector: r => r.id === row.relationId })[0];
+          if (relation) storage.relations.delete(relation);
+        }
+      } else {
+        const values = reactiveValues.get().filter(v => v.entity.id === row.entityId);
+        const relations = reactiveRelations.get().filter(r => r.fromEntity.id === row.entityId);
+        for (const v of values) storage.values.delete(v);
+        for (const r of relations) storage.relations.delete(r);
       }
-
       if (pinnedNewEntityId === row.entityId) setPinnedNewEntityId(null);
     },
     [source.type, storage, pinnedNewEntityId]
