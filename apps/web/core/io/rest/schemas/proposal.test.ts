@@ -37,24 +37,16 @@ describe('getSubspaceProposalDetails', () => {
 
   it('maps topic add actions', () => {
     expect(
-      getSubspaceProposalDetails([
-        { actionType: 'SUBSPACE_TOPIC_DECLARED', targetSpaceId: 'child-space-id', targetTopicId: 'topic-id' },
-      ])
+      getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
     ).toEqual({
       actionType: 'SUBSPACE_TOPIC_DECLARED',
-      targetSpaceId: 'child-space-id',
       targetTopicId: 'topic-id',
     });
   });
 
   it('maps topic removal actions', () => {
-    expect(
-      getSubspaceProposalDetails([
-        { actionType: 'SUBSPACE_TOPIC_REMOVED', targetSpaceId: 'child-space-id', targetTopicId: 'topic-id' },
-      ])
-    ).toEqual({
+    expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_REMOVED', targetTopicId: 'topic-id' }])).toEqual({
       actionType: 'SUBSPACE_TOPIC_REMOVED',
-      targetSpaceId: 'child-space-id',
       targetTopicId: 'topic-id',
     });
   });
@@ -62,11 +54,12 @@ describe('getSubspaceProposalDetails', () => {
   it('returns null when required identifiers are missing', () => {
     expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_RELATED' }])).toBeNull();
     expect(
-      getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetSpaceId: 'child-space-id' }])
-    ).toBeNull();
-    expect(
       getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
-    ).toBeNull();
+    ).toEqual({
+      actionType: 'SUBSPACE_TOPIC_DECLARED',
+      targetTopicId: 'topic-id',
+    });
+    expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED' }])).toBeNull();
   });
 
   it('returns null for non-subspace actions', () => {

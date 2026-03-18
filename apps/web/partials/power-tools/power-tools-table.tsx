@@ -30,6 +30,7 @@ import { Property } from '~/core/types';
 import { ColumnSortState, sortPowerToolsRowsByColumn } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { OrderDots } from '~/design-system/icons/order-dots';
@@ -44,6 +45,15 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 
 import { PowerToolsRow } from './types';
+
+export type PowerToolsTableSelectionProps = {
+  selectedEntityIds: Set<string>;
+  onToggleRowSelection: (entityId: string) => void;
+  onSetRowSelection: (entityId: string, selected: boolean) => void;
+  onMasterToggle: () => void;
+  selectableCount: number;
+  isAllSelected: boolean;
+};
 
 interface Props {
   rows: PowerToolsRow[];
@@ -63,7 +73,13 @@ interface Props {
   onHideColumn?: (propertyId: string) => void;
   orderedPropertyIds: string[];
   onReorderColumns: (ids: string[]) => void;
+  selection?: PowerToolsTableSelectionProps;
+  imageUploadingFor?: Set<string>;
+  onRowClick?: (entityId: string) => void;
+  onRowDoubleClick?: (entityId: string) => void;
 }
+
+const CHECKBOX_COLUMN_WIDTH = 40;
 
 const ROW_HEIGHT_ESTIMATE = 56;
 const HEADER_HEIGHT = 44;
@@ -146,7 +162,7 @@ function NameCell({
           entityId={row.entityId}
           spaceId={row.spaceId}
           href={href}
-          className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+          className="text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline border-t border-dotted border-ctaPrimary/30 pt-1"
           onClick={handleOpen}
         >
           {name || row.entityId}
@@ -159,7 +175,7 @@ function NameCell({
     <Link
       entityId={row.entityId}
       href={href}
-      className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+      className="text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline border-t border-dotted border-ctaPrimary/30 pt-1"
       onClick={handleOpen}
     >
       {name || row.entityId}
@@ -177,6 +193,7 @@ function PowerToolsCell({
   onLinkEntry,
   onOpenEntityPanel,
   source,
+  imageUploadingFor,
 }: {
   row: PowerToolsRow;
   property: Property;
@@ -187,6 +204,7 @@ function PowerToolsCell({
   onLinkEntry: onLinkEntryFn;
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
+  imageUploadingFor?: Set<string>;
 }) {
   if (row.placeholder && property.id !== SystemIds.NAME_PROPERTY && !isEditing) {
     return (
@@ -228,6 +246,7 @@ function PowerToolsCell({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         source={source}
+        imageUploadingFor={imageUploadingFor}
         autoFocus={false}
       />
     );
@@ -333,14 +352,32 @@ export function PowerToolsTable({
   onHideColumn,
   orderedPropertyIds,
   onReorderColumns,
+  selection,
+  imageUploadingFor,
+  onRowClick,
+  onRowDoubleClick,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
+  const showCheckboxColumn = isEditing && selection != null;
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [isResizing, setIsResizing] = React.useState<string | null>(null);
   const [sortState, setSortState] = React.useState<ColumnSortState>(null);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
+  const [isDragSelecting, setIsDragSelecting] = React.useState(false);
+  const dragSelectValueRef = React.useRef<boolean>(false);
+  const startRowEntityIdRef = React.useRef<string | null>(null);
+  const hasDraggedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const onMouseUp = () => {
+      setIsDragSelecting(false);
+      startRowEntityIdRef.current = null;
+    };
+    window.addEventListener('mouseup', onMouseUp);
+    return () => window.removeEventListener('mouseup', onMouseUp);
+  }, []);
 
   const orderedProperties = React.useMemo(() => {
     const byId = new Map(properties.map(p => [p.id, p]));
@@ -433,20 +470,22 @@ export function PowerToolsTable({
 
   const virtualRows = rowVirtualizer.getVirtualItems();
   const columnLayout = React.useMemo(() => {
-    let offset = 0;
+    let offset = showCheckboxColumn ? CHECKBOX_COLUMN_WIDTH : 0;
     const layout = orderedProperties.map(property => {
       const width = columnWidths[property.id] || 200;
       const left = offset;
       offset += width;
       return { property, left, width };
     });
-    const template = layout.map(col => `${col.width}px`).join(' ');
+    const template = showCheckboxColumn
+      ? `${CHECKBOX_COLUMN_WIDTH}px ${layout.map(col => `${col.width}px`).join(' ')}`
+      : layout.map(col => `${col.width}px`).join(' ');
     return {
       totalWidth: offset,
       template,
       columns: layout,
     };
-  }, [orderedProperties, columnWidths]);
+  }, [orderedProperties, columnWidths, showCheckboxColumn]);
 
   React.useEffect(() => {
     const lastItem = virtualRows[virtualRows.length - 1];
@@ -470,6 +509,15 @@ export function PowerToolsTable({
                 gridTemplateColumns: columnLayout.template,
               }}
             >
+              {showCheckboxColumn && (
+                <div className="flex items-center border-r border-grey-02 px-3">
+                  <Checkbox
+                    checked={selection!.isAllSelected}
+                    onChange={selection!.onMasterToggle}
+                    aria-label={selection!.isAllSelected ? 'Deselect all' : 'Select all'}
+                  />
+                </div>
+              )}
               {columnLayout.columns.map(({ property }) => (
                 <SortableHeaderCell
                   key={property.id}
@@ -502,11 +550,70 @@ export function PowerToolsTable({
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={node => rowVirtualizer.measureElement(node)}
-              className={cx('group absolute top-0 left-0 border-b border-grey-02', {
-                'bg-grey-01': row.placeholder,
-                'bg-grey-01/50': !row.placeholder && !isEditing,
-                'hover:bg-grey-01': !row.placeholder && isEditing,
-              })}
+              role={(onRowClick || onRowDoubleClick) && !row.placeholder ? 'button' : undefined}
+              tabIndex={(onRowClick || onRowDoubleClick) && !row.placeholder ? 0 : undefined}
+              onMouseDown={
+                selection && !row.placeholder
+                  ? () => {
+                      hasDraggedRef.current = false;
+                      dragSelectValueRef.current = !selection.selectedEntityIds.has(row.entityId);
+                      startRowEntityIdRef.current = row.entityId;
+                      setIsDragSelecting(true);
+                    }
+                  : undefined
+              }
+              onClick={
+                onRowClick && !row.placeholder
+                  ? e => {
+                      if (hasDraggedRef.current) {
+                        hasDraggedRef.current = false;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                      }
+                      onRowClick(row.entityId);
+                    }
+                  : undefined
+              }
+              onDoubleClick={
+                onRowDoubleClick && !row.placeholder
+                  ? () => onRowDoubleClick(row.entityId)
+                  : undefined
+              }
+              onMouseEnter={
+                selection && !row.placeholder && isDragSelecting
+                  ? () => {
+                      const value = dragSelectValueRef.current;
+                      selection.onSetRowSelection(row.entityId, value);
+                      if (startRowEntityIdRef.current !== row.entityId) {
+                        hasDraggedRef.current = true;
+                        if (startRowEntityIdRef.current != null) {
+                          selection.onSetRowSelection(startRowEntityIdRef.current, value);
+                          startRowEntityIdRef.current = null;
+                        }
+                      }
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                onRowClick && !row.placeholder
+                  ? e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onRowClick(row.entityId);
+                      }
+                    }
+                  : undefined
+              }
+              className={`absolute top-0 left-0 border-b border-grey-02 ${
+                row.placeholder
+                  ? 'bg-grey-01'
+                  : selection && selection.selectedEntityIds.has(row.entityId)
+                    ? 'bg-ctaTertiary'
+                    : !isEditing
+                      ? 'bg-grey-01/50'
+                      : 'hover:bg-grey-01 cursor-pointer'
+              }`}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 width: '100%',
@@ -520,6 +627,49 @@ export function PowerToolsTable({
                   gridTemplateColumns: columnLayout.template,
                 }}
               >
+              {showCheckboxColumn && (
+                <div
+                  data-checkbox-cell
+                  className="flex min-h-full cursor-pointer items-center border-r border-grey-02 px-3 py-2"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (hasDraggedRef.current) {
+                      hasDraggedRef.current = false;
+                      return;
+                    }
+                    if (!row.placeholder) selection!.onToggleRowSelection(row.entityId);
+                  }}
+                  onMouseEnter={
+                    !row.placeholder && isDragSelecting
+                      ? () => {
+                          hasDraggedRef.current = true;
+                          selection!.onSetRowSelection(row.entityId, dragSelectValueRef.current);
+                        }
+                      : undefined
+                  }
+                  role="button"
+                  tabIndex={row.placeholder ? undefined : 0}
+                  aria-label={row.placeholder ? undefined : 'Select row'}
+                  onKeyDown={
+                    !row.placeholder
+                      ? e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selection!.onToggleRowSelection(row.entityId);
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {!row.placeholder && (
+                    <Checkbox
+                      checked={selection!.selectedEntityIds.has(row.entityId)}
+                      aria-label="Select row"
+                    />
+                  )}
+                </div>
+              )}
                 {columnLayout.columns.map(({ property }) => {
                   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;
@@ -537,6 +687,7 @@ export function PowerToolsTable({
                           onLinkEntry={onLinkEntry}
                           onOpenEntityPanel={onOpenEntityPanel}
                           source={source}
+                          imageUploadingFor={imageUploadingFor}
                         />
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button

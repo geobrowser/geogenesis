@@ -6,7 +6,11 @@
  */
 import { Schema } from 'effect';
 
-import type { SubspaceProposalDetails } from '../../dto/proposals';
+import type {
+  SubspaceEdgeProposalDetails,
+  SubspaceProposalDetails,
+  SubspaceTopicProposalDetails,
+} from '../../dto/proposals';
 import { ProposalStatus, ProposalType } from '../../substream-schema';
 
 // ============================================================================
@@ -178,8 +182,21 @@ function isSubspaceActionType(actionType: ApiActionType): actionType is Subspace
   return SUBSPACE_ACTION_TYPES.has(actionType);
 }
 
-export function isTopicSubspaceActionType(actionType: ApiActionType): boolean {
+export function isTopicSubspaceActionType(
+  actionType: ApiActionType
+): actionType is SubspaceTopicProposalDetails['actionType'] {
   return actionType === 'SUBSPACE_TOPIC_DECLARED' || actionType === 'SUBSPACE_TOPIC_REMOVED';
+}
+
+export function isEdgeSubspaceActionType(
+  actionType: ApiActionType
+): actionType is SubspaceEdgeProposalDetails['actionType'] {
+  return (
+    actionType === 'SUBSPACE_VERIFIED' ||
+    actionType === 'SUBSPACE_UNVERIFIED' ||
+    actionType === 'SUBSPACE_RELATED' ||
+    actionType === 'SUBSPACE_UNRELATED'
+  );
 }
 
 export function isAddSubspaceActionType(actionType: ApiActionType): boolean {
@@ -223,18 +240,16 @@ function mapSubspaceActionToDetails(action: ApiAction): SubspaceProposalDetails 
           }
         : null;
     case 'SUBSPACE_TOPIC_DECLARED':
-      return action.targetSpaceId && action.targetTopicId
+      return action.targetTopicId
         ? {
             actionType: action.actionType,
-            targetSpaceId: action.targetSpaceId,
             targetTopicId: action.targetTopicId,
           }
         : null;
     case 'SUBSPACE_TOPIC_REMOVED':
-      return action.targetSpaceId && action.targetTopicId
+      return action.targetTopicId
         ? {
             actionType: action.actionType,
-            targetSpaceId: action.targetSpaceId,
             targetTopicId: action.targetTopicId,
           }
         : null;
