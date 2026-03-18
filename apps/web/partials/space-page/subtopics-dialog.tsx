@@ -100,12 +100,14 @@ function SubtopicRow({
   onAction: () => void;
 }) {
   return (
-    <div className="flex min-h-[62px] items-center justify-between rounded-[8px] bg-white p-3">
+    <div className="flex min-h-[62px] items-start justify-between gap-2 rounded-[8px] bg-white py-3">
       <div className="flex w-[250px] flex-col gap-[6px]">
         <p className="text-[17px] leading-[19px] tracking-[-0.17px] text-text">{name ?? 'Untitled'}</p>
         <AssociatedSpacesMeta count={spacesCount} spaces={spaces} />
       </div>
-      <SubtopicActionButton label={actionLabel} disabled={disabled} onClick={onAction} />
+      <div className="pt-0.5">
+        <SubtopicActionButton label={actionLabel} disabled={disabled} onClick={onAction} />
+      </div>
     </div>
   );
 }
