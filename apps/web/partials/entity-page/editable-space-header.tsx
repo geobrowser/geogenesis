@@ -235,7 +235,7 @@ export function EditableSpaceHeading({
                           dispatch({ type: 'OPEN_SPACE_TOPIC' });
                         }}
                       >
-                        <p>Topic</p>
+                        <p>Set topic</p>
                       </MenuItem>
                       <MenuItem
                         onClick={() => {
