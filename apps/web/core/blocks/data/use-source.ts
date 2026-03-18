@@ -77,12 +77,12 @@ export function useSource() {
 
       // Set the Name selector by default for relation blocks.
       const newRelationId = blockRelations.find(r => r.toEntity.id === entityId)?.entityId ?? '';
-      const initialBlockRelation = initialBlockEntities.find(b => b.id === newRelationId) ?? null;
+      const fromId = relationId || newRelationId;
+      const initialBlockRelation = initialBlockEntities.find(b => b.id === fromId) ?? null;
       const shownColumnRelations = getRelations({
         mergeWith: initialBlockRelation?.relations ?? [],
         selector: r =>
-          r.fromEntity.id === newRelationId &&
-          (r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES),
+          r.fromEntity.id === fromId && (r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES),
       });
 
       const maybeExistingNamePropertyRelation = shownColumnRelations.find(
@@ -144,7 +144,7 @@ export function useSource() {
             name: 'Properties',
           },
           fromEntity: {
-            id: relationId,
+            id: fromId,
             name: initialBlockRelation?.name ?? null,
           },
           toEntity: {

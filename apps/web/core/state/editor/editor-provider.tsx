@@ -5,6 +5,8 @@ import * as React from 'react';
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 
+import { DataBlockGateProvider } from '~/partials/editor/data-block-gate';
+
 const EditorContext = React.createContext<OmitStrict<EditorProviderProps, 'children'> | null>(null);
 
 export type Tabs = Record<string, { entity: Entity; blocks: Entity[] }>;
@@ -36,7 +38,11 @@ export const EditorProvider = ({
     };
   }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs]);
 
-  return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
+  return (
+    <EditorContext.Provider value={value}>
+      <DataBlockGateProvider>{children}</DataBlockGateProvider>
+    </EditorContext.Provider>
+  );
 };
 
 export function useEditorInstance() {

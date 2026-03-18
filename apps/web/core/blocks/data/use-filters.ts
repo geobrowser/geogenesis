@@ -45,7 +45,7 @@ export function useFilters(canEdit?: boolean) {
     [geoFilterString]
   );
 
-  const { data: resolvedFilterState } = useQuery({
+  const { data: resolvedFilterState, isPlaceholderData } = useQuery({
     enabled: filterState.length > 0,
     placeholderData: keepPreviousData,
     queryKey: ['blocks', 'data', 'filter-display-names', geoFilterString],
@@ -61,10 +61,11 @@ export function useFilters(canEdit?: boolean) {
     },
   });
 
-  // Resolved state has correct valueType from property lookups; fall back to parsed state while loading.
-  // On first load (no keepPreviousData yet), resolvedFilterState is undefined until the query completes.
-  const isFilterResolving = filterState.length > 0 && resolvedFilterState === undefined;
-  const effectiveResolvedState = filterState.length === 0 ? [] : (resolvedFilterState ?? filterState);
+  // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
+  // Fall back to the freshly-parsed filterState until the new resolution completes.
+  const freshResolvedState = isPlaceholderData ? undefined : resolvedFilterState;
+  const isFilterResolving = filterState.length > 0 && freshResolvedState === undefined;
+  const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? filterState);
 
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
   const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
