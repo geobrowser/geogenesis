@@ -134,6 +134,7 @@ export const Space = Schema.Struct({
   id: HexId,
   type: SpaceGovernanceType,
   address: AddressWithValidation,
+  topicId: Schema.NullOr(HexId),
 
   membersList: Schema.Array(
     Schema.Struct({

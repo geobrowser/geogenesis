@@ -26,6 +26,7 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
+import { SpaceTopicDialog } from '~/partials/space-page/space-topic-dialog';
 import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
@@ -35,12 +36,13 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 
-type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'subtopics';
+type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
 type OverlayAction =
   | { type: 'SET_MENU_OPEN'; open: boolean }
   | { type: 'OPEN_CREATE_IN_SPACE' }
   | { type: 'OPEN_SPACE_RELATIONSHIPS' }
+  | { type: 'OPEN_SPACE_TOPIC' }
   | { type: 'OPEN_SUBTOPICS' }
   | { type: 'CLOSE_OVERLAYS' };
 
@@ -56,6 +58,8 @@ function overlayReducer(state: OverlayMode, action: OverlayAction): OverlayMode 
       return 'creatingVersion';
     case 'OPEN_SPACE_RELATIONSHIPS':
       return 'spaceRelationships';
+    case 'OPEN_SPACE_TOPIC':
+      return 'spaceTopic';
     case 'OPEN_SUBTOPICS':
       return 'subtopics';
     case 'CLOSE_OVERLAYS':
@@ -85,6 +89,7 @@ export function EditableSpaceHeading({
   const isCreatingNewVersion = overlayMode === 'creatingVersion';
   const isSubtopicsOpen = overlayMode === 'subtopics';
   const isSubspacesOpen = overlayMode === 'spaceRelationships';
+  const isSpaceTopicOpen = overlayMode === 'spaceTopic';
 
   const {
     allVersions,
@@ -227,6 +232,13 @@ export function EditableSpaceHeading({
                     <>
                       <MenuItem
                         onClick={() => {
+                          dispatch({ type: 'OPEN_SPACE_TOPIC' });
+                        }}
+                      >
+                        <p>Topic</p>
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
                           dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
                         }}
                       >
@@ -253,6 +265,11 @@ export function EditableSpaceHeading({
       <SubspacesDialog
         open={isSubspacesOpen}
         onOpenChange={open => dispatch({ type: open ? 'OPEN_SPACE_RELATIONSHIPS' : 'CLOSE_OVERLAYS' })}
+        spaceId={spaceId}
+      />
+      <SpaceTopicDialog
+        open={isSpaceTopicOpen}
+        onOpenChange={open => dispatch({ type: open ? 'OPEN_SPACE_TOPIC' : 'CLOSE_OVERLAYS' })}
         spaceId={spaceId}
       />
       <SubtopicsDialog

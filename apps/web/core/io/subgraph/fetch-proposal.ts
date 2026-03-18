@@ -9,6 +9,7 @@ import {
   ApiProposalStatusResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
   mapActionTypeToProposalType,
   mapProposalStatus,
@@ -83,6 +84,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const firstAction = apiProposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
   const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
+  const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
 
   // Convert votes to internal format
   const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
@@ -121,5 +123,6 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       nodes: votesWithProfiles,
     },
     subspaceDetails: subspaceDetails ?? undefined,
+    spaceTopicDetails: spaceTopicDetails ?? undefined,
   };
 }

@@ -25,6 +25,11 @@ export type SubspaceTopicProposalDetails = {
 
 export type SubspaceProposalDetails = SubspaceEdgeProposalDetails | SubspaceTopicProposalDetails;
 
+export type SpaceTopicProposalDetails = {
+  actionType: 'TOPIC_DECLARED' | 'TOPIC_REMOVED';
+  targetTopicId: string;
+};
+
 export type Proposal = {
   id: string;
   editId: string;
@@ -43,6 +48,7 @@ export type Proposal = {
     nodes: VoteWithProfile[];
   };
   subspaceDetails?: SubspaceProposalDetails;
+  spaceTopicDetails?: SpaceTopicProposalDetails;
 };
 
 export function ProposalDto(
