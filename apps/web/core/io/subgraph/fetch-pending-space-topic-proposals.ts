@@ -62,6 +62,7 @@ const SPACE_TOPIC_ACTION_TYPES = ['TopicDeclared', 'TopicRemoved'];
 
 function actionTypeToDirection(actionType: string): PendingSpaceTopicProposal['direction'] | null {
   switch (actionType) {
+    case 'SET_TOPIC':
     case 'TOPIC_DECLARED':
       return 'set';
     case 'TOPIC_REMOVED':
