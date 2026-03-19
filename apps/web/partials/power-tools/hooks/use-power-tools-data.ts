@@ -62,8 +62,8 @@ export function usePowerToolsData(options?: {
     [options?.excludedColumnIds]
   );
   const { spaceId } = useDataBlockInstance();
-  const { source } = useSource();
-  const { resolvedFilterState, isFilterResolving, filterMode } = useFilters();
+  const { resolvedFilterState, isFilterResolving, filterMode, filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 

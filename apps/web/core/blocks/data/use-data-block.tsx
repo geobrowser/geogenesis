@@ -54,7 +54,6 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     id: entityId,
   });
 
-  const { relationBlockSourceRelations } = useRelationsBlock();
   const {
     filterState: dbFilterState,
     resolvedFilterState: dbResolvedFilterState,
@@ -68,6 +67,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setTemporaryFilters,
     setTemporaryFilterMode,
   } = useFilters(options?.canEdit);
+
+  const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
+  const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
   const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
@@ -85,7 +87,6 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     shownColumnRelations,
     toggleProperty,
   } = useView();
-  const { source, setSource } = useSource();
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const where = React.useMemo(

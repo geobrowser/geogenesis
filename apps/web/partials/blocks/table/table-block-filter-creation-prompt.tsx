@@ -2,9 +2,10 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
@@ -219,7 +220,8 @@ interface ToggleQueryModeProps {
 }
 
 function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryModeProps) {
-  const { setSource } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { setSource } = useSource({ filterState, setFilterState });
 
   const onToggleQueryMode = () => {
     const newQueryMode = queryMode === 'RELATIONS' ? 'ENTITIES' : 'RELATIONS';
@@ -255,8 +257,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
-    const { source } = useSource();
-    const { filterState } = useFilters();
+    const { filterState, setFilterState } = useFilters();
+    const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
     const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
       source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
@@ -436,8 +438,8 @@ interface StaticRelationsFiltersProps {
 }
 
 function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }: StaticRelationsFiltersProps) {
-  const { setSource } = useSource();
-  const { setFilterState, filterState } = useFilters();
+  const { filterState, setFilterState } = useFilters();
+  const { setSource } = useSource({ filterState, setFilterState });
 
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
     setRelationType({

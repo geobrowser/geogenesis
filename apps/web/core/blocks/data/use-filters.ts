@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValues } from '~/core/sync/use-store';
 
@@ -16,7 +16,7 @@ export function useFilters(canEdit?: boolean) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { storage } = useMutate();
 
-  const { initialBlockEntities } = useEditorStore();
+  const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = React.useMemo(
     () => initialBlockEntities.find(b => b.id === entityId) ?? null,
     [initialBlockEntities, entityId]

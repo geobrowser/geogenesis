@@ -2,7 +2,7 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
@@ -26,7 +26,7 @@ export function useView() {
     id: entityId,
   });
 
-  const { blockRelations, initialBlockEntities } = useEditorStore();
+  const { blockRelations, initialBlockEntities } = useEditorStoreLite();
   const newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
 
   const initialBlockRelation = initialBlockEntities.find(b => b.id === newRelationId) ?? null;

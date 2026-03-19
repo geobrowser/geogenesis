@@ -2,10 +2,16 @@
 
 import * as React from 'react';
 
+import { useSearchParams } from 'next/navigation';
+
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 
 import { DataBlockGateProvider } from '~/partials/editor/data-block-gate';
+
+import { EntityId } from '../../io/substream-schema';
+import { validateEntityId } from '../../utils/utils';
+import { RelationWithBlock, useBlocks } from './use-blocks';
 
 const EditorContext = React.createContext<OmitStrict<EditorProviderProps, 'children'> | null>(null);
 
@@ -40,7 +46,9 @@ export const EditorProvider = ({
 
   return (
     <EditorContext.Provider value={value}>
-      <DataBlockGateProvider>{children}</DataBlockGateProvider>
+      <DataBlockGateProvider>
+        <EditorBlocksProvider>{children}</EditorBlocksProvider>
+      </DataBlockGateProvider>
     </EditorContext.Provider>
   );
 };
@@ -50,6 +58,52 @@ export function useEditorInstance() {
 
   if (!value) {
     throw new Error(`Missing EditorProvider`);
+  }
+
+  return value;
+}
+
+type EditorBlocksState = {
+  blockRelations: RelationWithBlock[];
+  initialBlockEntities: Entity[];
+};
+
+const EditorBlocksContext = React.createContext<EditorBlocksState | null>(null);
+
+function useTabIdFromSearchParams() {
+  const searchParams = useSearchParams();
+  const maybeTabId = searchParams?.get('tabId');
+  if (!validateEntityId(maybeTabId)) return null;
+  return maybeTabId;
+}
+
+function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
+  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+
+  const tabId = useTabIdFromSearchParams();
+  const activeEntityId = tabId ?? entityId;
+  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
+
+  const blockRelations = useBlocks(
+    activeEntityId,
+    spaceId,
+    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
+  );
+
+  const initialBlockEntities = React.useMemo(() => {
+    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
+  }, [initialBlocks, initialTabs, isTab, tabId]);
+
+  const value = React.useMemo(() => ({ blockRelations, initialBlockEntities }), [blockRelations, initialBlockEntities]);
+
+  return <EditorBlocksContext.Provider value={value}>{children}</EditorBlocksContext.Provider>;
+}
+
+export function useEditorBlocks() {
+  const value = React.useContext(EditorBlocksContext);
+
+  if (!value) {
+    throw new Error(`Missing EditorBlocksProvider`);
   }
 
   return value;

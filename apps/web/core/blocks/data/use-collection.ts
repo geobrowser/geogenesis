@@ -1,7 +1,7 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData } from '@tanstack/react-query';
 
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
@@ -34,7 +34,7 @@ export interface CollectionProps {
 export function useCollection({ source, first, skip, where }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
 
-  const { initialBlockEntities } = useEditorStore();
+  const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({

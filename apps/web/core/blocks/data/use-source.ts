@@ -6,21 +6,24 @@ import { produce } from 'immer';
 
 import { ID } from '~/core/id';
 import { EntityId, SpaceId } from '~/core/io/substream-schema';
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntity } from '~/core/sync/use-store';
 
+import { Filter } from './filters';
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
-import { useFilters } from './use-filters';
 
-export function useSource() {
+type UseSourceOptions = {
+  filterState: Filter[];
+  setFilterState: (filters: Filter[]) => void;
+};
+
+export function useSource({ filterState, setFilterState }: UseSourceOptions) {
   const { entityId, spaceId, relationId } = useDataBlockInstance();
   const { storage } = useMutate();
 
-  const { filterState, setFilterState } = useFilters();
-
-  const { initialBlockEntities, blockRelations } = useEditorStore();
+  const { initialBlockEntities, blockRelations } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({
