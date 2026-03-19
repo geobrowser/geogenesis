@@ -147,10 +147,15 @@ export const Space = Schema.Struct({
     })
   ),
 
+  topic: Schema.optional(Schema.NullOr(Schema.Unknown)),
   page: Schema.NullOr(Entity),
 });
 
-export type RemoteSpace = Schema.Schema.Type<typeof Space>;
+type RemoteSpaceBase = Schema.Schema.Type<typeof Space>;
+
+export type RemoteSpace = Omit<RemoteSpaceBase, 'topic'> & {
+  topic?: RemoteEntity | null;
+};
 
 export const SearchResult = Schema.Struct({
   id: HexId,
