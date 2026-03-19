@@ -22,6 +22,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
+import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -49,9 +50,12 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import {
   type EditApplyPayload,
+  type EditApplyNewPropertyPayload,
+  type EditAddExistingPropertyPayload,
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
   EditEntitiesPopover,
+  type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
@@ -420,6 +424,108 @@ export function PowerToolsScreen() {
     [storage, selectedEntityIds]
   );
 
+  const handleRemoveProperties = React.useCallback(
+    (payload: EditRemovePropertiesPayload) => {
+      const { propertyIds } = payload;
+      for (const propertyId of propertyIds) {
+        const valuesToDelete = getValues({
+          selector: v =>
+            selectedEntityIds.has(v.entity.id) &&
+            v.property.id === propertyId,
+        });
+        valuesToDelete.forEach(v => storage.values.delete(v));
+        const relationsToDelete = getRelations({
+          selector: r =>
+            selectedEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
+        });
+        relationsToDelete.forEach(r => storage.relations.delete(r));
+      }
+      setExcludedColumnIds(prev => [...new Set([...prev, ...propertyIds])]);
+    },
+    [storage, selectedEntityIds]
+  );
+
+  const handleAddExistingProperty = React.useCallback(
+    (payload: EditAddExistingPropertyPayload) => {
+      setExtraColumnIds(prev => [...prev, payload.propertyId]);
+    },
+    []
+  );
+
+  const handleApplyNewProperty = React.useCallback(
+    async (payload: EditApplyNewPropertyPayload) => {
+      const {
+        name,
+        valueType,
+        selectedRowEntityIds,
+        selectedEntities,
+        initialValue,
+        initialImageFile,
+      } = payload;
+      const propertyId = createProperty({ name, propertyType: valueType });
+      setExtraColumnIds(prev => [...prev, propertyId]);
+      const { baseDataType } = mapPropertyType(valueType);
+      const property = {
+        id: propertyId,
+        name,
+        dataType: baseDataType,
+      };
+      const entityIdToSpaceId = new Map(
+        selectableRows
+          .filter(r => selectedRowEntityIds.includes(r.entityId))
+          .map(r => [r.entityId, r.spaceId] as const)
+      );
+
+      if (valueType === 'IMAGE' && initialImageFile) {
+        const uploadKeys = new Set(
+          selectedRowEntityIds.map(id => `${id}:${property.id}`)
+        );
+        setImageUploadingFor(uploadKeys);
+        try {
+          for (const fromEntityId of selectedRowEntityIds) {
+            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+            await storage.images.createAndLink({
+              file: initialImageFile,
+              fromEntityId,
+              fromEntityName: null,
+              relationPropertyId: property.id,
+              relationPropertyName: property.name,
+              spaceId: rowSpaceId,
+            });
+            setImageUploadingFor(prev => {
+              const next = new Set(prev);
+              next.delete(`${fromEntityId}:${property.id}`);
+              return next;
+            });
+          }
+        } finally {
+          setImageUploadingFor(new Set());
+        }
+      } else if (
+        (valueType === 'RELATION' || valueType === 'IMAGE') &&
+        selectedEntities?.length
+      ) {
+        selectedRowEntityIds.forEach(fromEntityId => {
+          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+          selectedEntities.forEach(target => {
+            createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+              id: target.id,
+              name: target.name,
+              space: target.primarySpace,
+            });
+          });
+        });
+      } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
+        const value = initialValue ?? '';
+        for (const entityId of selectedRowEntityIds) {
+          const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
+          writeValue(storage, entityId, rowSpaceId, property, value, null);
+        }
+      }
+    },
+    [createProperty, selectableRows, spaceId, storage]
+  );
+
   const onMasterToggle = React.useCallback(() => {
     if (isAllSelected) clearSelection();
     else selectAll();
@@ -705,6 +811,9 @@ export function PowerToolsScreen() {
                 onApply={handleEditApply}
                 onApplyValue={handleApplyValue}
                 onDeleteApply={handleDeleteApply}
+                onRemoveProperties={handleRemoveProperties}
+                onApplyNewProperty={handleApplyNewProperty}
+                onAddExistingProperty={handleAddExistingProperty}
                 typesProperty={
                   data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
                     id: SystemIds.TYPES_PROPERTY,
