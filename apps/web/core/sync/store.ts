@@ -158,25 +158,36 @@ export class GeoStore {
 
   private stream: GeoEventStream;
 
+  private pendingSyncEntities: Entity[] = [];
+  private syncScheduled = false;
+
   constructor(stream: GeoEventStream) {
     this.stream = stream;
 
-    /**
-     * The sync engine listens for events from the event stream. When it receives
-     * an event it queues it up in the background for syncing. Once syncing is
-     * complete it emits an event to the event stream to notify consumers that
-     * syncing is complete.
-     */
-    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities));
+    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
+      // Buffer entities and flush once per microtask to coalesce
+      // multiple ENTITIES_SYNCED events into a single hydrateWith call.
+      for (const entity of event.entities) {
+        syncedEntities.set(entity.id, entity);
+      }
+      this.pendingSyncEntities.push(...event.entities);
+      if (!this.syncScheduled) {
+        this.syncScheduled = true;
+        queueMicrotask(() => this.flushSync());
+      }
+    });
   }
 
-  private syncEntities(entities: Entity[]) {
+  private flushSync() {
+    this.syncScheduled = false;
+    const entities = this.pendingSyncEntities;
+    this.pendingSyncEntities = [];
+    if (entities.length === 0) return;
+
     this.hydrateWith(entities);
 
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
-      console.log(`
-Finished syncing entities to store.
-Entity ids: ${entities.map(e => e.id).join(', ')}`);
+      console.log(`Finished syncing ${entities.length} entities to store.`);
     }
   }
 
