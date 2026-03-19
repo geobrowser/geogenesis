@@ -230,13 +230,13 @@ export function EditableSpaceHeading({
                   </MenuItem>
                   {isEditing && (
                     <>
-                      <MenuItem
+                      {/* <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SPACE_TOPIC' });
                         }}
                       >
                         <p>Set topic</p>
-                      </MenuItem>
+                      </MenuItem> */}
                       <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
