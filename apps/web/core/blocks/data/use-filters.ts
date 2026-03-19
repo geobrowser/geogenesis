@@ -27,7 +27,9 @@ export function useFilters(canEdit?: boolean) {
   });
 
   const filterTriple =
-    localFilterValues[0] ?? initialBlockEntity?.values.find(v => v.property.id === SystemIds.FILTER) ?? null;
+    localFilterValues[0] ??
+    initialBlockEntity?.values.find(v => v.property.id === SystemIds.FILTER && v.spaceId === spaceId) ??
+    null;
 
   const geoFilterString = React.useMemo(() => {
     if (!filterTriple) return null;

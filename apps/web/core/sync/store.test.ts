@@ -148,7 +148,7 @@ describe('GeoStore', () => {
       expect(syncedEntities.get('entity-2')).toEqual(mockEntity2);
     });
 
-    it('should log entity IDs in development environment', async () => {
+    it('should log sync summary in development environment', async () => {
       vi.stubEnv('NODE_ENV', 'development');
       const entities = [mockEntity1, mockEntity2];
 

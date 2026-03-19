@@ -180,7 +180,7 @@ export class GeoStore {
 
   private flushSync() {
     this.syncScheduled = false;
-    const entities = this.pendingSyncEntities;
+    const entities = [...new Map(this.pendingSyncEntities.map(e => [e.id, e])).values()];
     this.pendingSyncEntities = [];
     if (entities.length === 0) return;
 
