@@ -23,7 +23,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
 
   return (
     <>
-      <Slider label="Subspaces" labelClassName="font-medium">
+      <Slider label="Subspaces" labelClassName="text-mediumTitle font-medium">
         {subtopics.map(subtopic => (
           <Link key={subtopic.id} href={NavUtils.toEntity(spaceId, subtopic.id)} className="group">
             <div className="relative aspect-2/1 w-full overflow-clip rounded-[12px] bg-grey-01">
