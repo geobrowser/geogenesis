@@ -84,9 +84,9 @@ describe('getSpaceTopicProposalDetails', () => {
     });
   });
 
-  it('maps normalized remove-topic actions', () => {
-    expect(getSpaceTopicProposalDetails([{ actionType: 'REMOVE_TOPIC', targetTopicId: 'topic-id' }])).toEqual({
-      actionType: 'REMOVE_TOPIC',
+  it('maps normalized unset-topic actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'UNSET_TOPIC', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'UNSET_TOPIC',
       targetTopicId: 'topic-id',
     });
   });

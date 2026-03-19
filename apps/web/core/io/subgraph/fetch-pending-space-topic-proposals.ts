@@ -58,14 +58,14 @@ interface TopicMetadataResult {
   entities: TopicMetadataNode[];
 }
 
-const SPACE_TOPIC_ACTION_TYPES = ['SetTopic', 'RemoveTopic'];
+const SPACE_TOPIC_ACTION_TYPES = ['SetTopic', 'UnsetTopic'];
 
 function actionTypeToDirection(actionType: string): PendingSpaceTopicProposal['direction'] | null {
   switch (actionType) {
     case 'SET_TOPIC':
     case 'TOPIC_DECLARED':
       return 'set';
-    case 'REMOVE_TOPIC':
+    case 'UNSET_TOPIC':
     case 'TOPIC_REMOVED':
       return 'remove';
     default:
