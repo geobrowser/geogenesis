@@ -50,7 +50,7 @@ function formatFileSize(bytes: number): string {
 
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
-  const { isEditor } = useAccessControl(spaceId);
+  const { isEditor, isMember } = useAccessControl(spaceId);
   const [records, setRecords] = useAtom(recordsAtom);
   const [, setStep] = useAtom(stepAtom);
   const [fileName, setFileName] = useAtom(fileNameAtom);
@@ -294,7 +294,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     );
   }, [records, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, router, spaceId]);
 
-  if (!isEditor) return null;
+  if (!isEditor && !isMember) return null;
 
   return (
     <div className="overflow-visible">

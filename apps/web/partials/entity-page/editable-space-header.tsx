@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -78,6 +79,7 @@ export function EditableSpaceHeading({
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
+  const { isEditor, isMember } = useAccessControl(spaceId);
 
   const path = usePathname();
   const isSpacePage = path === `/space/${spaceId}`;
@@ -225,9 +227,11 @@ export function EditableSpaceHeading({
                   <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                     <p>Create in space</p>
                   </MenuItem>
-                  <MenuItem href={NavUtils.toImport(spaceId)}>
-                    <p>Import data</p>
-                  </MenuItem>
+                  {(isEditor || isMember) && (
+                    <MenuItem href={NavUtils.toImport(spaceId)}>
+                      <p>Import data</p>
+                    </MenuItem>
+                  )}
                   {isEditing && (
                     <>
                       <MenuItem
