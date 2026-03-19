@@ -1,3 +1,5 @@
+import katex from 'katex';
+
 import { Content } from '~/core/state/editor/types';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -99,16 +101,35 @@ const Block = ({ block }: BlockProps) => {
       );
     }
 
+    case 'codeBlock': {
+      const code = block.content.map(c => ('text' in c ? c.text : '')).join('');
+      const lines = code.split('\n');
+      return (
+        <div className="code-block">
+          <div className="code-block-line-numbers" aria-hidden>
+            {lines.map((_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+          <code>{code}</code>
+        </div>
+      );
+    }
+
+    case 'inlineMath': {
+      const latex = block.attrs.latex || '';
+      const html = katex.renderToString(latex, { throwOnError: false });
+      return <span dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+
     case 'text': {
-      if (block?.marks?.[0]?.type === 'bold') {
-        return <strong>{block.text}</strong>;
+      let element: React.ReactNode = <>{block.text}</>;
+      for (const mark of block.marks ?? []) {
+        if (mark.type === 'bold') element = <strong>{element}</strong>;
+        if (mark.type === 'italic') element = <em>{element}</em>;
+        if (mark.type === 'code') element = <code className="inline-code">{element}</code>;
       }
-
-      if (block?.marks?.[0]?.type === 'italic') {
-        return <em>{block.text}</em>;
-      }
-
-      return <>{block.text}</>;
+      return element;
     }
 
     case 'image': {
