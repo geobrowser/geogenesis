@@ -28,25 +28,25 @@ function useImageUrl(entityId: string, spaceId: string, propertyId: string, serv
     selector: r => r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId,
   });
 
+  const relationsIncludingDeleted = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId,
+    includeDeleted: true,
+  });
+
   const relation = relations[0];
   const relatedEntityId = relation?.toEntity.id;
   const relatedValue = relation?.toEntity.value;
   const imageUrl = useImageUrlFromEntity(relatedEntityId, spaceId);
 
-  // Once the store has a relation, it's the source of truth
-  const hasSeenRelation = React.useRef(false);
-  if (relation) {
-    hasSeenRelation.current = true;
+  const hasDeletedRelation = relationsIncludingDeleted.some(r => r.isDeleted);
+
+  if (hasDeletedRelation) {
+    return null;
   }
 
   // Store has never had this relation — use server value (store may not have synced yet)
-  if (!relation && !hasSeenRelation.current) {
+  if (!relation) {
     return serverUrl;
-  }
-
-  // Store synced but relation was removed (user deleted it)
-  if (!relation && hasSeenRelation.current) {
-    return null;
   }
 
   if (imageUrl) {
