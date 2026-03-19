@@ -22,6 +22,8 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';
 import { SpaceRedirect } from './space-redirect';
@@ -64,6 +66,7 @@ export default async function DefaultEntityPage({
           initialBlocks={props.blocks}
           initialBlockRelations={props.blockRelations}
           initialTabs={props.tabs}
+          initialCollectionItems={props.initialCollectionItems}
         >
           {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
           <EntityPageContentContainer>
@@ -139,9 +142,12 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+      const tabBlockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+      const tabBlockEntityIds = tabBlockRelations.map(r => r.toEntity.id);
+      const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
+      const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      const blocks = allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds) : [];
       return blocks;
     })
   );
@@ -159,9 +165,14 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const serverCoverUrl = Entities.cover(entity?.relations);
 
   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blockEntityIds = blockRelations?.map(r => r.toEntity.id) ?? [];
+  const blockRelationEntityIds = blockRelations?.map(r => r.entityId).filter(Boolean) ?? [];
+  const allBlockIds = [...new Set([...blockEntityIds, ...blockRelationEntityIds])];
 
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
+
+  const allBlocks = [...blocks, ...tabBlocks.flat()];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
 
   return {
     id: entityId,
@@ -181,5 +192,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     // For entity page editor
     blockRelations: blockRelations ?? [],
     blocks,
+    initialCollectionItems,
   };
 };

@@ -3,10 +3,11 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
-import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
@@ -19,12 +20,12 @@ import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorInstance } from './editor-provider';
+import { useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import * as Parser from './parser';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
-import { RelationWithBlock, useBlocks } from './use-blocks';
+import { RelationWithBlock } from './use-blocks';
 import { getNodeId } from './utils';
 import { editorHasContentAtom } from '~/atoms';
 
@@ -233,27 +234,22 @@ export const useTabId = () => {
   return maybeTabId;
 };
 
+export function useEditorStoreLite() {
+  return useEditorBlocks();
+}
+
 export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+  const { id: entityId, spaceId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useTabId();
   const activeEntityId = tabId ?? entityId;
-  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
 
-  const blockRelations = useBlocks(
-    activeEntityId,
-    spaceId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
-  );
+  const { blockRelations, initialBlockEntities } = useEditorBlocks();
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
-
-  const initialBlockEntities = React.useMemo(() => {
-    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-  }, [initialBlocks, initialTabs, isTab, tabId]);
 
   const initialBlockValues = React.useMemo(() => {
     return initialBlockEntities.flatMap(b => b.values);
@@ -557,6 +553,7 @@ export function useEditorStore() {
     activeEntityId,
     blockIds,
     blockRelations,
+    initialBlockEntities,
     hasContent,
     setHasContent,
   };

@@ -149,7 +149,6 @@ export function PowerToolsScreen() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { spaceId, name: blockName } = useDataBlock();
-  const { source } = useSource();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
@@ -164,6 +163,7 @@ export function PowerToolsScreen() {
     temporaryFilterMode,
     setTemporaryFilterMode,
   } = useFilters(canEdit);
+  const { source } = useSource({ filterState, setFilterState });
 
   // Editors (by permission) use persisted filters; non-editors use local temporary filters.
   // This matches TableBlock's behavior and is independent of the edit mode toggle.

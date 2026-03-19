@@ -1,18 +1,17 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
-import * as React from 'react';
-
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { Source } from '~/core/blocks/data/source';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { useFilters } from '~/core/blocks/data/use-filters';
-import { useSource } from '~/core/blocks/data/use-source';
-import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -50,6 +49,7 @@ import { TableBlockTable } from './table-block-table';
 
 interface Props {
   spaceId: string;
+  blockId?: string;
 }
 
 function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
@@ -90,10 +90,10 @@ function useEntries(
   properties: { id: string; name: string | null }[],
   spaceId: string,
   filterState: Filter[],
-  relations: Relation[] | undefined
+  relations: Relation[] | undefined,
+  source: Source
 ) {
   const isEditing = useUserIsEditing(spaceId);
-  const { source } = useSource();
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
@@ -253,7 +253,7 @@ function useEntries(
   };
 }
 
-export const TableBlock = ({ spaceId }: Props) => {
+export const TableBlock = ({ spaceId, blockId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -261,29 +261,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
   const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
-
-  // Use filters hook with canEdit parameter to enable temporary filters for non-editors
-  const {
-    filterState,
-    temporaryFilters,
-    setFilterState,
-    setTemporaryFilters,
-    filterMode,
-    setFilterMode,
-    temporaryFilterMode,
-    setTemporaryFilterMode,
-  } = useFilters(canEdit);
-
-  // Use database filter state if user can edit, otherwise use temporary filters
-  const activeFilters = canEdit ? filterState : temporaryFilters;
-  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
-    },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
-  );
 
   const {
     properties,
@@ -300,9 +277,26 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-  } = useDataBlock({ filterState: activeFilters, filterMode: activeFilterMode });
-  const { view, placeholder, shownColumnIds } = useView();
-  const { source } = useSource();
+    view,
+    placeholder,
+    shownColumnIds,
+    source,
+    filterState: activeFilters,
+    filterMode: activeFilterMode,
+    dbFilterState,
+    setFilterState,
+    setFilterMode,
+    setTemporaryFilters,
+    setTemporaryFilterMode,
+  } = useDataBlock({ canEdit });
+
+  const setActiveFilterMode = React.useCallback(
+    (mode: FilterMode) => {
+      if (canEdit) setFilterMode(mode);
+      else setTemporaryFilterMode(mode);
+    },
+    [canEdit, setFilterMode, setTemporaryFilterMode]
+  );
 
   const filterSpaceIds = React.useMemo(
     () => [...new Set(activeFilters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
@@ -326,7 +320,7 @@ export const TableBlock = ({ spaceId }: Props) => {
   );
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
-    useEntries(rows, properties, spaceId, activeFilters, relations);
+    useEntries(rows, properties, spaceId, activeFilters, relations, source);
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
@@ -366,11 +360,11 @@ export const TableBlock = ({ spaceId }: Props) => {
   // the delete button on those pills when not in edit mode.
   const serverFilterKeys = React.useMemo(() => {
     const keys = new Set<string>();
-    for (const f of filterState) {
+    for (const f of dbFilterState) {
       keys.add(`${f.columnId}:${f.value}`);
     }
     return keys;
-  }, [filterState]);
+  }, [dbFilterState]);
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
