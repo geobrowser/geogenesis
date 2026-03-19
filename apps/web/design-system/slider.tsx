@@ -11,19 +11,24 @@ import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 
 type SliderProps = {
   label: string;
+  labelClassName?: string;
   children: ReactNode;
 };
 
-export const Slider = ({ label, children }: SliderProps) => {
+export const Slider = ({ label, labelClassName, children }: SliderProps) => {
   return (
     <>
-      <MobileSlider label={label}>{children}</MobileSlider>
-      <DesktopSlider label={label}>{children}</DesktopSlider>
+      <MobileSlider label={label} labelClassName={labelClassName}>
+        {children}
+      </MobileSlider>
+      <DesktopSlider label={label} labelClassName={labelClassName}>
+        {children}
+      </DesktopSlider>
     </>
   );
 };
 
-const MobileSlider = ({ label, children }: SliderProps) => {
+const MobileSlider = ({ label, labelClassName, children }: SliderProps) => {
   const [page, setPage] = useState<number>(0);
   const prefix = kebabCase(label);
 
@@ -49,7 +54,7 @@ const MobileSlider = ({ label, children }: SliderProps) => {
   return (
     <>
       <div className="mb-2 hidden h-8 items-center justify-between xl:flex">
-        <h4 className="text-smallTitle">{label}</h4>
+        <h4 className={cx('text-smallTitle', labelClassName)}>{label}</h4>
         {slides.length > 1 && (
           <div className="flex items-center gap-5 text-text">
             <IconButton
@@ -80,7 +85,7 @@ const MobileSlider = ({ label, children }: SliderProps) => {
   );
 };
 
-const DesktopSlider = ({ label, children }: SliderProps) => {
+const DesktopSlider = ({ label, labelClassName, children }: SliderProps) => {
   const [page, setPage] = useState<number>(0);
   const prefix = kebabCase(label);
 
@@ -106,7 +111,7 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
   return (
     <>
       <div className="mb-2 flex h-8 items-center justify-between xl:hidden">
-        <h4 className="text-mediumTitle">{label}</h4>
+        <h4 className={cx('text-mediumTitle', labelClassName)}>{label}</h4>
         {slides.length > 1 && (
           <div className="flex items-center gap-5 text-text">
             <IconButton

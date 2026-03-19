@@ -1,7 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { redirect } from 'next/navigation';
 
 import * as React from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';

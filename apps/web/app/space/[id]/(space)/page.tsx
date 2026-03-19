@@ -1,11 +1,12 @@
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
-import { notFound } from 'next/navigation';
+import { IdUtils } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { Subspace } from '~/core/io/dto/subspaces';
+import { notFound } from 'next/navigation';
+
+import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
@@ -17,7 +18,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { Subspaces } from '~/partials/space-page/subspaces';
+import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchSpace } from '../cached-fetch-space';
 
@@ -64,8 +65,8 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <>
-      <React.Suspense fallback={<SubspacesSkeleton />}>
-        <SubspacesContainer spaceId={params.id} />
+      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+        <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
@@ -86,7 +87,7 @@ export default async function SpacePage(props0: Props) {
   );
 }
 
-const SubspacesSkeleton = () => {
+const SubtopicGallerySkeleton = () => {
   return (
     <>
       <div className="h-10" />
@@ -100,19 +101,18 @@ const SubspacesSkeleton = () => {
   );
 };
 
-type SubspacesContainerProps = {
+type SubtopicGalleryContainerProps = {
   spaceId: string;
 };
 
-const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
-  // const subspaces = await fetchSubspacesBySpaceId(spaceId);
-  const subspaces: Subspace[] = [];
+const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
+  const subtopics = await fetchSubtopics(spaceId);
 
-  if (subspaces.length === 0) {
+  if (subtopics.length === 0) {
     return null;
   }
 
-  return <Subspaces subspaces={subspaces} />;
+  return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
 };
 
 const getSpaceFrontPage = async (spaceId: string) => {
@@ -139,15 +139,3 @@ const getSpaceFrontPage = async (spaceId: string) => {
 };
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
-
-const getSpaceType = (types: { id: string; name: string | null }[]): SpacePageType | null => {
-  if (types.some(type => type.id === SystemIds.PERSON_TYPE)) {
-    return 'person';
-  } else if (types.some(type => type.id === SystemIds.COMPANY_TYPE)) {
-    return 'company';
-  } else if (types.some(type => type.id === SystemIds.NONPROFIT_TYPE)) {
-    return 'nonprofit';
-  } else {
-    return null;
-  }
-};
