@@ -81,7 +81,7 @@
     "jotai": "^2.18.1",
     "lokijs": "^1.5.12",
     "mapbox-gl": "3.18.0",
-    "next": "^16.1.6",
+    "next": "16.2.0",
     "permissionless": "^0.3.4",
     "pluralize": "^8.0.0",
     "react": "^19.2.4",
