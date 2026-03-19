@@ -145,7 +145,7 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
         onAction={proposeRemoveSubspace}
       />
 
-      <PendingProposalsSection proposals={pendingProposals} isLoading={isPendingLoading} />
+      <PendingProposalsSection proposals={pendingProposals} isLoading={isPendingLoading} onOpenChange={onOpenChange} />
     </SubspacesDialogShell>
   );
 }
@@ -157,9 +157,10 @@ export function DaoSubspacesDialog({ open, onOpenChange, spaceId }: DaoSubspaces
 interface PendingProposalsSectionProps {
   proposals: PendingSubspaceProposal[];
   isLoading: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-function PendingProposalsSection({ proposals, isLoading }: PendingProposalsSectionProps) {
+function PendingProposalsSection({ proposals, isLoading, onOpenChange }: PendingProposalsSectionProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2 pb-4">
@@ -183,7 +184,7 @@ function PendingProposalsSection({ proposals, isLoading }: PendingProposalsSecti
         Pending proposals
       </Text>
       {proposals.map(proposal => (
-        <PendingProposalRow key={proposal.proposalId} proposal={proposal} />
+        <PendingProposalRow key={proposal.proposalId} proposal={proposal} onOpenChange={onOpenChange} />
       ))}
     </div>
   );
@@ -195,9 +196,10 @@ function PendingProposalsSection({ proposals, isLoading }: PendingProposalsSecti
 
 interface PendingProposalRowProps {
   proposal: PendingSubspaceProposal;
+  onOpenChange: (open: boolean) => void;
 }
 
-function PendingProposalRow({ proposal }: PendingProposalRowProps) {
+function PendingProposalRow({ proposal, onOpenChange }: PendingProposalRowProps) {
   const directionLabel = proposal.direction === 'add' ? 'Add' : 'Remove';
   const relationLabel = proposal.relationType === 'verified' ? 'Verified' : 'Related';
 
@@ -206,6 +208,7 @@ function PendingProposalRow({ proposal }: PendingProposalRowProps) {
       <div className="h-px w-full bg-divider" />
       <Link
         href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        onClick={() => onOpenChange(false)}
         className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
       >
         <div className="flex items-center gap-2.5">

@@ -443,7 +443,11 @@ function DaoSubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialogProp
         onAction={proposeRemoveSubtopic}
       />
 
-      <PendingSubtopicProposalsSection proposals={pendingProposals} isLoading={isPendingLoading} />
+      <PendingSubtopicProposalsSection
+        proposals={pendingProposals}
+        isLoading={isPendingLoading}
+        onOpenChange={onOpenChange}
+      />
     </SubtopicsDialogShell>
   );
 }
@@ -575,9 +579,11 @@ function CurrentSubtopicsSection({
 function PendingSubtopicProposalsSection({
   proposals,
   isLoading,
+  onOpenChange,
 }: {
   proposals: PendingSubtopicProposal[];
   isLoading: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   if (isLoading) {
     return (
@@ -602,13 +608,19 @@ function PendingSubtopicProposalsSection({
         Pending proposals
       </Text>
       {proposals.map(proposal => (
-        <PendingSubtopicProposalRow key={proposal.proposalId} proposal={proposal} />
+        <PendingSubtopicProposalRow key={proposal.proposalId} proposal={proposal} onOpenChange={onOpenChange} />
       ))}
     </div>
   );
 }
 
-function PendingSubtopicProposalRow({ proposal }: { proposal: PendingSubtopicProposal }) {
+function PendingSubtopicProposalRow({
+  proposal,
+  onOpenChange,
+}: {
+  proposal: PendingSubtopicProposal;
+  onOpenChange: (open: boolean) => void;
+}) {
   const directionLabel = proposal.direction === 'add' ? 'Add' : 'Remove';
 
   return (
@@ -616,6 +628,7 @@ function PendingSubtopicProposalRow({ proposal }: { proposal: PendingSubtopicPro
       <div className="h-px w-full bg-divider" />
       <Link
         href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        onClick={() => onOpenChange(false)}
         className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
       >
         <div className="flex min-w-0 flex-1 items-start gap-2.5">

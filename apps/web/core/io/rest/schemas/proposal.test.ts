@@ -77,6 +77,20 @@ describe('getSubspaceProposalDetails', () => {
 });
 
 describe('getSpaceTopicProposalDetails', () => {
+  it('maps normalized set-topic actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'SET_TOPIC', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'SET_TOPIC',
+      targetTopicId: 'topic-id',
+    });
+  });
+
+  it('maps normalized unset-topic actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'UNSET_TOPIC', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'UNSET_TOPIC',
+      targetTopicId: 'topic-id',
+    });
+  });
+
   it('maps topic declaration actions', () => {
     expect(getSpaceTopicProposalDetails([{ actionType: 'TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toEqual({
       actionType: 'TOPIC_DECLARED',

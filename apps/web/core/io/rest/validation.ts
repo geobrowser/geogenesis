@@ -71,6 +71,8 @@ export const VALID_ACTION_TYPES = [
   'SUBSPACE_UNRELATED',
   'SUBSPACE_TOPIC_DECLARED',
   'SUBSPACE_TOPIC_REMOVED',
+  'SET_TOPIC',
+  'UNSET_TOPIC',
   'TOPIC_DECLARED',
   'TOPIC_REMOVED',
   'UNKNOWN',
@@ -90,6 +92,8 @@ export const VALID_ACTION_TYPES = [
   'SubspaceUnrelated',
   'SubspaceTopicDeclared',
   'SubspaceTopicRemoved',
+  'SetTopic',
+  'UnsetTopic',
   'TopicDeclared',
   'TopicRemoved',
 ] as const;

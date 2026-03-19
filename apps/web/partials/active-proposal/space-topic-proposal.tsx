@@ -4,7 +4,6 @@ import { Environment } from '~/core/environment';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Proposal } from '~/core/io/dto/proposals';
-import { getSpace } from '~/core/io/queries';
 import { graphql } from '~/core/io/subgraph/graphql';
 import {
   AVATAR_PROPERTY_ID,
@@ -17,7 +16,6 @@ import type { TopicUsageSpaceNode } from '~/core/io/subgraph/topic-space-usage';
 import { mergeTopicUsageSpaces } from '~/core/io/subgraph/topic-space-usage';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
-import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 
 interface Props {
   proposal: Proposal;
@@ -55,15 +53,14 @@ export async function SpaceTopicProposal({ proposal }: Props) {
     return null;
   }
 
-  const [sourceSpace, topicMetadata] = await Promise.all([
-    Effect.runPromise(getSpace(proposal.space.id)),
-    fetchTopicProposalMetadata(details.targetTopicId),
-  ]);
+  const topicMetadata = await fetchTopicProposalMetadata(details.targetTopicId);
 
   const heroTitle = topicMetadata?.name ?? details.targetTopicId;
   const heroImage = topicMetadata?.image ?? PLACEHOLDER_SPACE_IMAGE;
-  const sourceSpaceName = sourceSpace?.entity.name ?? proposal.space.name ?? proposal.space.id;
-  const changeLabel = details.actionType === 'TOPIC_REMOVED' ? 'Remove topic' : 'Set topic';
+  const changeDescription =
+    details.actionType === 'TOPIC_REMOVED' || details.actionType === 'UNSET_TOPIC'
+      ? `Remove space topic ${heroTitle}`
+      : `Set space topic as ${heroTitle}`;
 
   return (
     <div className="flex w-full justify-center">
@@ -81,13 +78,8 @@ export async function SpaceTopicProposal({ proposal }: Props) {
         </div>
 
         <div className="mx-auto mt-9 w-full max-w-[400px] border-t border-grey-02">
-          <div className="flex items-center justify-between gap-6 border-b border-grey-02 py-4">
-            <p className="text-metadata text-text">{changeLabel}</p>
-            <div className="flex items-center gap-2 text-metadata text-text">
-              <span>{sourceSpaceName}</span>
-              <RightArrowLong color="grey-04" />
-              <span>{heroTitle}</span>
-            </div>
+          <div className="border-b border-grey-02 py-4">
+            <p className="text-center text-metadata text-text">{changeDescription}</p>
           </div>
 
           <div className="py-4">
