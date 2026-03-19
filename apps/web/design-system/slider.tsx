@@ -1,9 +1,9 @@
 'use client';
 
+import { Children, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import cx from 'classnames';
 import { useInView } from 'framer-motion';
-
-import { Children, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { IconButton } from '~/design-system/button';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
@@ -35,21 +35,29 @@ const MobileSlider = ({ label, labelClassName, children }: SliderProps) => {
   const cards = Children.toArray(children);
   const slides = useMemo(() => chunk(cards, 2), [cards]);
 
+  const scrollToPage = useCallback(
+    (nextPage: number) => {
+      const element = document.getElementById(`${prefix}-slider-mobile-${nextPage}`);
+
+      setPage(nextPage);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    },
+    [prefix]
+  );
+
   const hasPrev = page > 0;
   const handlePrev = useCallback(() => {
     if (page > 0) {
-      const element = document.getElementById(`${prefix}-slider-mobile-${page - 1}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      scrollToPage(page - 1);
     }
-  }, [page, prefix]);
+  }, [page, scrollToPage]);
 
   const hasNext = page < slides.length - 1;
   const handleNext = useCallback(() => {
     if (page < slides.length - 1) {
-      const element = document.getElementById(`${prefix}-slider-mobile-${page + 1}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      scrollToPage(page + 1);
     }
-  }, [page, slides.length, prefix]);
+  }, [page, scrollToPage, slides.length]);
 
   return (
     <>
@@ -92,21 +100,29 @@ const DesktopSlider = ({ label, labelClassName, children }: SliderProps) => {
   const cards = Children.toArray(children);
   const slides = useMemo(() => chunk(cards, 3), [cards]);
 
+  const scrollToPage = useCallback(
+    (nextPage: number) => {
+      const element = document.getElementById(`${prefix}-slider-desktop-${nextPage}`);
+
+      setPage(nextPage);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    },
+    [prefix]
+  );
+
   const hasPrev = page > 0;
   const handlePrev = useCallback(() => {
     if (page > 0) {
-      const element = document.getElementById(`${prefix}-slider-desktop-${page - 1}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      scrollToPage(page - 1);
     }
-  }, [page, prefix]);
+  }, [page, scrollToPage]);
 
   const hasNext = page < slides.length - 1;
   const handleNext = useCallback(() => {
     if (page < slides.length - 1) {
-      const element = document.getElementById(`${prefix}-slider-desktop-${page + 1}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      scrollToPage(page + 1);
     }
-  }, [page, slides.length, prefix]);
+  }, [page, scrollToPage, slides.length]);
 
   return (
     <>
