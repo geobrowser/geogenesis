@@ -351,7 +351,11 @@ function DaoSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDialogPr
         error={error}
       />
 
-      <PendingTopicProposalsSection proposals={pendingProposals ?? []} isLoading={isPendingLoading} />
+      <PendingTopicProposalsSection
+        proposals={pendingProposals ?? []}
+        isLoading={isPendingLoading}
+        onOpenChange={onOpenChange}
+      />
     </SpaceTopicDialogShell>
   );
 }
@@ -466,9 +470,11 @@ function CurrentTopicSection({
 function PendingTopicProposalsSection({
   proposals,
   isLoading,
+  onOpenChange,
 }: {
   proposals: PendingSpaceTopicProposal[];
   isLoading: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   if (isLoading) {
     return (
@@ -493,13 +499,19 @@ function PendingTopicProposalsSection({
         Pending proposals
       </Text>
       {proposals.map(proposal => (
-        <PendingTopicProposalRow key={proposal.proposalId} proposal={proposal} />
+        <PendingTopicProposalRow key={proposal.proposalId} proposal={proposal} onOpenChange={onOpenChange} />
       ))}
     </div>
   );
 }
 
-function PendingTopicProposalRow({ proposal }: { proposal: PendingSpaceTopicProposal }) {
+function PendingTopicProposalRow({
+  proposal,
+  onOpenChange,
+}: {
+  proposal: PendingSpaceTopicProposal;
+  onOpenChange: (open: boolean) => void;
+}) {
   const actionLabel = proposal.direction === 'remove' ? 'Remove' : 'Set';
 
   return (
@@ -507,6 +519,7 @@ function PendingTopicProposalRow({ proposal }: { proposal: PendingSpaceTopicProp
       <div className="h-px w-full bg-divider" />
       <Link
         href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        onClick={() => onOpenChange(false)}
         className="flex flex-col gap-1 py-3 transition-opacity hover:opacity-80"
       >
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
