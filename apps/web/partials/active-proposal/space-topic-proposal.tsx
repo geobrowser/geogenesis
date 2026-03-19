@@ -63,7 +63,8 @@ export async function SpaceTopicProposal({ proposal }: Props) {
   const heroTitle = topicMetadata?.name ?? details.targetTopicId;
   const heroImage = topicMetadata?.image ?? PLACEHOLDER_SPACE_IMAGE;
   const sourceSpaceName = sourceSpace?.entity.name ?? proposal.space.name ?? proposal.space.id;
-  const changeLabel = details.actionType === 'TOPIC_REMOVED' ? 'Remove topic' : 'Set topic';
+  const changeLabel =
+    details.actionType === 'TOPIC_REMOVED' || details.actionType === 'REMOVE_TOPIC' ? 'Remove topic' : 'Set topic';
 
   return (
     <div className="flex w-full justify-center">

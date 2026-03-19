@@ -26,7 +26,7 @@ export type SubspaceTopicProposalDetails = {
 export type SubspaceProposalDetails = SubspaceEdgeProposalDetails | SubspaceTopicProposalDetails;
 
 export type SpaceTopicProposalDetails = {
-  actionType: 'SET_TOPIC' | 'TOPIC_DECLARED' | 'TOPIC_REMOVED';
+  actionType: 'SET_TOPIC' | 'REMOVE_TOPIC' | 'TOPIC_DECLARED' | 'TOPIC_REMOVED';
   targetTopicId: string;
 };
 

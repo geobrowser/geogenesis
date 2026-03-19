@@ -39,7 +39,7 @@ describe('fetchPendingSpaceTopicProposals', () => {
 
   it('returns pending topic proposals with resolved topic metadata', async () => {
     restFetchMock.mockImplementation(({ path }: { path: string }) => {
-      expect(path).toContain('actionTypes=TopicDeclared,TopicRemoved');
+      expect(path).toContain('actionTypes=SetTopic,RemoveTopic');
       expect(path).toContain('status=PROPOSED');
 
       return Effect.succeed({

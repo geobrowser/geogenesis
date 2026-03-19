@@ -84,6 +84,13 @@ describe('getSpaceTopicProposalDetails', () => {
     });
   });
 
+  it('maps normalized remove-topic actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'REMOVE_TOPIC', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'REMOVE_TOPIC',
+      targetTopicId: 'topic-id',
+    });
+  });
+
   it('maps topic declaration actions', () => {
     expect(getSpaceTopicProposalDetails([{ actionType: 'TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toEqual({
       actionType: 'TOPIC_DECLARED',

@@ -59,6 +59,7 @@ export const ApiActionTypeSchema = Schema.Union(
   Schema.Literal('SUBSPACE_TOPIC_DECLARED'),
   Schema.Literal('SUBSPACE_TOPIC_REMOVED'),
   Schema.Literal('SET_TOPIC'),
+  Schema.Literal('REMOVE_TOPIC'),
   Schema.Literal('TOPIC_DECLARED'),
   Schema.Literal('TOPIC_REMOVED'),
   Schema.Literal('UNKNOWN')
@@ -178,7 +179,12 @@ const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
   'SUBSPACE_TOPIC_REMOVED',
 ]);
 
-const SPACE_TOPIC_ACTION_TYPES = new Set<ApiActionType>(['SET_TOPIC', 'TOPIC_DECLARED', 'TOPIC_REMOVED']);
+const SPACE_TOPIC_ACTION_TYPES = new Set<ApiActionType>([
+  'SET_TOPIC',
+  'REMOVE_TOPIC',
+  'TOPIC_DECLARED',
+  'TOPIC_REMOVED',
+]);
 
 // ============================================================================
 // Mapping Functions
@@ -320,6 +326,7 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
     case 'TOPIC_DECLARED':
     case 'TOPIC_REMOVED':
     case 'SET_TOPIC':
+    case 'REMOVE_TOPIC':
       return 'SET_TOPIC';
     default:
       return 'ADD_EDIT';
