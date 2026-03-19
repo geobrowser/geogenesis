@@ -20,7 +20,7 @@ export type Space = {
 
 export function SpaceDto(space: RemoteSpace): Space {
   const spaceId = space.id;
-  const spaceEntity = SpaceEntityDto(spaceId, space.page);
+  const spaceEntity = SpaceEntityDto(spaceId, space.topic ?? space.page);
 
   return {
     id: spaceId,
