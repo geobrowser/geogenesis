@@ -29,9 +29,9 @@ describe('fetchSubtopics', () => {
   it('returns subtopics with deduped space usage and resolved images', async () => {
     graphqlMock.mockImplementation(({ query }: { query: string }) => {
       expect(query).toContain('topic {');
+      expect(query).toContain('relationsList');
       expect(query).toContain('spacesByTopicIdConnection(first: 3)');
       expect(query).toContain('totalCount');
-      expect(query).toContain('relationsList');
 
       return Effect.succeed({
         subspaceTopicsConnection: {
@@ -40,6 +40,14 @@ describe('fetchSubtopics', () => {
               topicId: '00000000-0000-0000-0000-0000000000aa',
               topic: {
                 name: 'Funding',
+                relationsList: [
+                  {
+                    typeId: AVATAR_PROPERTY_ID,
+                    toEntity: {
+                      valuesList: [{ propertyId: IMAGE_URL_PROPERTY_ID, text: 'ipfs://funding-avatar' }],
+                    },
+                  },
+                ],
                 spacesByTopicIdConnection: {
                   totalCount: 5,
                   nodes: [
@@ -90,6 +98,7 @@ describe('fetchSubtopics', () => {
               topicId: '00000000-0000-0000-0000-0000000000aa',
               topic: {
                 name: null,
+                relationsList: [],
                 spacesByTopicIdConnection: {
                   totalCount: 5,
                   nodes: [
@@ -129,6 +138,7 @@ describe('fetchSubtopics', () => {
       {
         id: '00000000-0000-0000-0000-0000000000aa',
         name: 'Funding',
+        image: 'ipfs://funding-avatar',
         spaces: [
           {
             id: '00000000-0000-0000-0000-000000000001',

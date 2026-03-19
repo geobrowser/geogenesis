@@ -1,7 +1,27 @@
 import { Either, Schema } from 'effect';
 
 import { Space, SpaceDto } from '../dto/spaces';
-import { Space as SpaceSchema } from '../schema';
+import { Entity as EntitySchema, type RemoteEntity, type RemoteSpace, Space as SpaceSchema } from '../schema';
+
+function decodeTopic(data: unknown, spaceId: string, topicId: string | null): RemoteEntity | null {
+  if (data == null) {
+    return null;
+  }
+
+  const decoded = Schema.decodeUnknownEither(EntitySchema)(data);
+
+  if (Either.isLeft(decoded)) {
+    console.warn('Failed decoding Space topic, falling back to page', {
+      spaceId,
+      topicId,
+      error: decoded.left,
+    });
+
+    return null;
+  }
+
+  return decoded.right;
+}
 
 export class SpaceDecoder {
   static decode(data: unknown): Space | null {
@@ -13,6 +33,11 @@ export class SpaceDecoder {
       return null;
     }
 
-    return SpaceDto(decoded.right);
+    const remoteSpace: RemoteSpace = {
+      ...decoded.right,
+      topic: decodeTopic(decoded.right.topic, decoded.right.id, decoded.right.topicId ?? null),
+    };
+
+    return SpaceDto(remoteSpace);
   }
 }
