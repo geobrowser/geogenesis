@@ -127,7 +127,13 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
+        <img
+          src={src}
+          onError={onError}
+          loading="lazy"
+          decoding="async"
+          className="h-full rounded-lg object-cover"
+        />
       </div>
     </Zoom>
   );
@@ -276,6 +282,7 @@ interface TableImageFieldProps {
   entityName?: string | null;
   propertyId: string;
   propertyName: string;
+  isUploadingFromExternal?: boolean;
 }
 
 export function TableImageField({
@@ -285,9 +292,11 @@ export function TableImageField({
   entityName,
   propertyId,
   propertyName,
+  isUploadingFromExternal = false,
 }: TableImageFieldProps) {
   const { storage } = useMutate();
   const [isUploading, setIsUploading] = React.useState(false);
+  const showLoading = isUploading || isUploadingFromExternal;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // For published data, toEntity.value contains the IPFS URL directly
@@ -337,17 +346,17 @@ export function TableImageField({
 
   return (
     <div className="group flex w-full justify-between">
-      {imageSrc ? (
+      {imageSrc && !showLoading ? (
         <div>
           <ImageZoom variant="table-cell" imageSrc={imageSrc} />
         </div>
       ) : (
-        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
-          {isUploading ? 'Uploading...' : 'Upload'}
+        <SmallButton onClick={handleFileInputClick} icon={showLoading ? <Dots /> : <Upload />}>
+          {showLoading ? 'Uploading...' : 'Upload'}
         </SmallButton>
       )}
 
-      {imageSrc && (
+      {imageSrc && !showLoading && (
         <div className="ml-1 flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
           <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
           <SquareButton onClick={handleImageRemove} icon={<Trash />} />

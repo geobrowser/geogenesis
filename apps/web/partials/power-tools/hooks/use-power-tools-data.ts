@@ -47,11 +47,20 @@ export function usePowerToolsData(options?: {
   pageSize?: number;
   filterStateOverride?: Filter[];
   filterModeOverride?: FilterMode;
+  /** Extra column (property) IDs to always show, e.g. newly created properties. */
+  extraColumnIds?: string[];
+  /** Column (property) IDs to hide from the table, e.g. after "Remove Property". */
+  excludedColumnIds?: string[];
 }): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
 } {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const extraColumnIds = options?.extraColumnIds ?? [];
+  const excludedColumnIdsSet = React.useMemo(
+    () => new Set(options?.excludedColumnIds ?? []),
+    [options?.excludedColumnIds]
+  );
   const { spaceId } = useDataBlockInstance();
   const { source } = useSource();
   const { filterState, filterMode, isFetched: isFilterFetched } = useFilters();
@@ -320,6 +329,13 @@ export function usePowerToolsData(options?: {
     const next = [...columnIds];
     const known = new Set(columnIds);
 
+    for (const id of extraColumnIds) {
+      if (!known.has(id)) {
+        known.add(id);
+        next.push(id);
+      }
+    }
+
     for (const id of propertyIdSet) {
       if (!known.has(id)) {
         known.add(id);
@@ -334,10 +350,15 @@ export function usePowerToolsData(options?: {
       }
     }
 
-    if (!arraysEqual(next, columnIds)) {
-      setColumnIds(next);
+    const filtered =
+      excludedColumnIdsSet.size > 0
+        ? next.filter(id => !excludedColumnIdsSet.has(id))
+        : next;
+
+    if (!arraysEqual(filtered, columnIds)) {
+      setColumnIds(filtered);
     }
-  }, [propertyIdSet, schemaProperties, columnIds, arraysEqual]);
+  }, [extraColumnIds, excludedColumnIdsSet, propertyIdSet, schemaProperties, columnIds, arraysEqual]);
 
   const propertiesById = useProperties(columnIds);
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
