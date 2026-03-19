@@ -65,6 +65,24 @@ export function htmlToMarkdown(html: string): string {
         // This shouldn't be called directly, handled by ul/ol
         result = processChildren(element, indent);
         break;
+      case 'pre': {
+        const codeEl = element.querySelector('code');
+        const code = codeEl ? codeEl.textContent || '' : element.textContent || '';
+        result = `\`\`\`\n${code}\n\`\`\`\n`;
+        break;
+      }
+      case 'code':
+        result = `\`${element.textContent || ''}\``;
+        break;
+      case 'span': {
+        if (element.getAttribute('data-type') === 'inlineMath') {
+          const latex = element.getAttribute('data-latex') || element.textContent || '';
+          result = `$${latex}$`;
+          break;
+        }
+        result = processChildren(element, indent);
+        break;
+      }
       case 'br':
         result = '\n';
         break;
@@ -162,6 +180,10 @@ export function markdownToHtml(markdown: string): string {
   let codeBlockContent: string[] = [];
   let i = 0;
 
+  function escapeHtml(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function processInlineFormatting(text: string): string {
     // Process inline formatting in the correct order
     // Links first (to avoid interfering with other formatting)
@@ -173,8 +195,17 @@ export function markdownToHtml(markdown: string): string {
     // Italic
     text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
-    // Inline code
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Inline code (escape HTML inside code)
+    text = text.replace(/`([^`]+)`/g, (_, code) => `<code>${escapeHtml(code)}</code>`);
+
+    // Inline math — split by <code>...</code> segments to avoid matching $ inside code
+    text = text.split(/(<code>[^<]*<\/code>)/g).map((segment, idx) => {
+      if (idx % 2 === 1) return segment; // already inside <code>, skip
+      return segment.replace(/\$([^$]+)\$/g, (_, latex) => {
+        const attrEscaped = latex.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<span data-type="inlineMath" data-latex="${attrEscaped}">${latex}</span>`;
+      });
+    }).join('');
 
     return text;
   }
@@ -192,7 +223,7 @@ export function markdownToHtml(markdown: string): string {
     // Handle code blocks
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        output.push(`<pre><code>${codeBlockContent.join('\n')}</code></pre>`);
+        output.push(`<pre><code>${escapeHtml(codeBlockContent.join('\n'))}</code></pre>`);
         codeBlockContent = [];
         inCodeBlock = false;
       } else {
@@ -299,7 +330,7 @@ export function markdownToHtml(markdown: string): string {
 
   // Close any unclosed code block
   if (inCodeBlock && codeBlockContent.length > 0) {
-    output.push(`<pre><code>${codeBlockContent.join('\n')}</code></pre>`);
+    output.push(`<pre><code>${escapeHtml(codeBlockContent.join('\n'))}</code></pre>`);
   }
 
   return output.join('\n').trim();

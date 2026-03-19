@@ -93,6 +93,7 @@ function makeNewBlockRelation({
       case 'listItem':
       case 'bulletList':
       case 'orderedList':
+      case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
         return 'DATA';
@@ -100,6 +101,8 @@ function makeNewBlockRelation({
         return 'IMAGE';
       case 'video':
         return 'VIDEO';
+      default:
+        return 'TEXT';
     }
   })();
 
@@ -408,8 +411,7 @@ export function useEditorStore() {
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content[0].text &&
-          !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
+          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
 
         return isNonParagraph || isParagraphWithContent;
       });
@@ -457,6 +459,7 @@ export function useEditorStore() {
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
+            case 'codeBlock':
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
@@ -525,7 +528,8 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'heading':
-          case 'paragraph': {
+          case 'paragraph':
+          case 'codeBlock': {
             const markdownValue = TextEntity.getTextEntityMarkdownValue(node);
             storage.values.set(markdownValue);
 

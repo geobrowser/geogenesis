@@ -117,7 +117,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         if (editable) {
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
+            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ?? false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
