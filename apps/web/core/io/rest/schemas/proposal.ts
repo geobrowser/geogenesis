@@ -7,6 +7,7 @@
 import { Schema } from 'effect';
 
 import type {
+  SpaceTopicProposalDetails,
   SubspaceEdgeProposalDetails,
   SubspaceProposalDetails,
   SubspaceTopicProposalDetails,
@@ -57,6 +58,8 @@ export const ApiActionTypeSchema = Schema.Union(
   Schema.Literal('SUBSPACE_UNRELATED'),
   Schema.Literal('SUBSPACE_TOPIC_DECLARED'),
   Schema.Literal('SUBSPACE_TOPIC_REMOVED'),
+  Schema.Literal('TOPIC_DECLARED'),
+  Schema.Literal('TOPIC_REMOVED'),
   Schema.Literal('UNKNOWN')
 );
 
@@ -174,6 +177,8 @@ const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
   'SUBSPACE_TOPIC_REMOVED',
 ]);
 
+const SPACE_TOPIC_ACTION_TYPES = new Set<ApiActionType>(['TOPIC_DECLARED', 'TOPIC_REMOVED']);
+
 // ============================================================================
 // Mapping Functions
 // ============================================================================
@@ -203,6 +208,10 @@ export function isAddSubspaceActionType(actionType: ApiActionType): boolean {
   return (
     actionType === 'SUBSPACE_VERIFIED' || actionType === 'SUBSPACE_RELATED' || actionType === 'SUBSPACE_TOPIC_DECLARED'
   );
+}
+
+function isSpaceTopicActionType(actionType: ApiActionType): actionType is SpaceTopicProposalDetails['actionType'] {
+  return SPACE_TOPIC_ACTION_TYPES.has(actionType);
 }
 
 function mapSubspaceActionToDetails(action: ApiAction): SubspaceProposalDetails | null {
@@ -266,6 +275,27 @@ export function getSubspaceProposalDetails(actions: readonly ApiAction[]): Subsp
   return mapSubspaceActionToDetails(subspaceActions[0]);
 }
 
+function mapSpaceTopicActionToDetails(action: ApiAction): SpaceTopicProposalDetails | null {
+  if (!isSpaceTopicActionType(action.actionType) || !action.targetTopicId) {
+    return null;
+  }
+
+  return {
+    actionType: action.actionType,
+    targetTopicId: action.targetTopicId,
+  };
+}
+
+export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): SpaceTopicProposalDetails | null {
+  const topicActions = actions.filter(action => isSpaceTopicActionType(action.actionType));
+
+  if (topicActions.length !== 1) {
+    return null;
+  }
+
+  return mapSpaceTopicActionToDetails(topicActions[0]);
+}
+
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
     case 'PUBLISH':
@@ -286,6 +316,9 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
     case 'SUBSPACE_UNRELATED':
     case 'SUBSPACE_TOPIC_REMOVED':
       return 'REMOVE_SUBSPACE';
+    case 'TOPIC_DECLARED':
+    case 'TOPIC_REMOVED':
+      return 'SET_TOPIC';
     default:
       return 'ADD_EDIT';
   }
