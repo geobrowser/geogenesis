@@ -50,6 +50,44 @@ export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
 
+// Lazy indexes for O(1) entity lookups instead of O(N) array scans.
+// Rebuilt automatically when the underlying array reference changes.
+let _valueIndex: Map<string, Value[]> = new Map();
+let _valueIndexSource: Value[] | null = null;
+
+function getValueIndex(): Map<string, Value[]> {
+  const current = reactiveValues.get();
+  if (current !== _valueIndexSource) {
+    _valueIndex = new Map();
+    for (const v of current) {
+      const key = v.entity.id;
+      const arr = _valueIndex.get(key);
+      if (arr) arr.push(v);
+      else _valueIndex.set(key, [v]);
+    }
+    _valueIndexSource = current;
+  }
+  return _valueIndex;
+}
+
+let _relationIndex: Map<string, Relation[]> = new Map();
+let _relationIndexSource: Relation[] | null = null;
+
+function getRelationIndex(): Map<string, Relation[]> {
+  const current = reactiveRelations.get();
+  if (current !== _relationIndexSource) {
+    _relationIndex = new Map();
+    for (const r of current) {
+      const key = r.fromEntity.id;
+      const arr = _relationIndex.get(key);
+      if (arr) arr.push(r);
+      else _relationIndex.set(key, [r]);
+    }
+    _relationIndexSource = current;
+  }
+  return _relationIndex;
+}
+
 export function resolveRelationNames(r: Relation): Relation {
   const resolvedFromName = resolveEntityName(r.fromEntity.id) ?? r.fromEntity.name;
   const resolvedToName = resolveEntityName(r.toEntity.id) ?? r.toEntity.name;
@@ -72,9 +110,9 @@ export function resolveRelationNames(r: Relation): Relation {
 }
 
 function resolveEntityName(entityId: string): string | null {
-  const values = reactiveValues.get();
-  const nameValues = values.filter(
-    v => v.entity.id === entityId && v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
+  const entityValues = getValueIndex().get(entityId) ?? [];
+  const nameValues = entityValues.filter(
+    v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
   );
 
   if (nameValues.length === 0) {
@@ -232,12 +270,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   public hydrateWith(entities: Entity[]) {
-    /**
-     * We set the synced entities before we update values and relations
-     * so that the synced entities are immediately available as soon as
-     * any downstream reactive consumers update as a result of changes to
-     * reactiveValues or reactiveRelations.
-     */
     for (const entity of entities) {
       syncedEntities.set(entity.id, entity);
     }
@@ -245,33 +277,39 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
 
+    if (newValues.length === 0 && newRelations.length === 0) return;
+
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
     const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
-    reactiveValues.set(prev => {
-      const prevById = new Map(prev.map(v => [v.id, v]));
-      const mergedIncoming = newValues.map(v => {
-        const local = prevById.get(v.id);
-        return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : v;
-      });
-      const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
-      return [...unchangedValues, ...mergedIncoming];
-    });
-
-    reactiveRelations.set(prev => {
-      const prevById = new Map(prev.map(r => [r.id, r]));
-      const deletedRelationKeys = new Set(
-        prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r))
-      );
-      const mergedIncoming = newRelations
-        .filter(r => !deletedRelationKeys.has(relationKey(r)))
-        .map(r => {
-          const local = prevById.get(r.id);
-          return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
+    if (newValues.length > 0) {
+      reactiveValues.set(prev => {
+        const prevById = new Map(prev.map(v => [v.id, v]));
+        const mergedIncoming = newValues.map(v => {
+          const local = prevById.get(v.id);
+          return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : v;
         });
-      const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
-      return [...unchangedRelations, ...mergedIncoming];
-    });
+        const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
+        return [...unchangedValues, ...mergedIncoming];
+      });
+    }
+
+    if (newRelations.length > 0) {
+      reactiveRelations.set(prev => {
+        const prevById = new Map(prev.map(r => [r.id, r]));
+        const deletedRelationKeys = new Set(
+          prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r))
+        );
+        const mergedIncoming = newRelations
+          .filter(r => !deletedRelationKeys.has(relationKey(r)))
+          .map(r => {
+            const local = prevById.get(r.id);
+            return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
+          });
+        const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
+        return [...unchangedRelations, ...mergedIncoming];
+      });
+    }
   }
 
   /**
@@ -339,7 +377,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get all triples for an entity including optimistic updates
    */
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
-    const values = reactiveValues.get().filter(v => v.entity.id === entityId);
+    const values = getValueIndex().get(entityId) ?? [];
 
     if (!includeDeleted) {
       return values.filter(v => Boolean(v.isDeleted) === false);
@@ -408,7 +446,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get all relations for an entity including optimistic updates
    */
   public getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
-    const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
+    const relations = getRelationIndex().get(entityId) ?? [];
 
     if (!includeDeleted) {
       return relations.filter(r => Boolean(r.isDeleted) === false);
