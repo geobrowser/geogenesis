@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSubspaceProposalDetails } from './proposal';
+import { getSpaceTopicProposalDetails, getSubspaceProposalDetails } from './proposal';
 
 describe('getSubspaceProposalDetails', () => {
   it('maps verified add actions', () => {
@@ -73,5 +73,35 @@ describe('getSubspaceProposalDetails', () => {
         { actionType: 'SUBSPACE_RELATED', targetSpaceId: 'other-space-id' },
       ])
     ).toBeNull();
+  });
+});
+
+describe('getSpaceTopicProposalDetails', () => {
+  it('maps topic declaration actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'TOPIC_DECLARED',
+      targetTopicId: 'topic-id',
+    });
+  });
+
+  it('maps topic removal actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'TOPIC_REMOVED', targetTopicId: 'topic-id' }])).toEqual({
+      actionType: 'TOPIC_REMOVED',
+      targetTopicId: 'topic-id',
+    });
+  });
+
+  it('returns null for missing topic ids or ambiguous actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'TOPIC_DECLARED' }])).toBeNull();
+    expect(
+      getSpaceTopicProposalDetails([
+        { actionType: 'TOPIC_DECLARED', targetTopicId: 'topic-id' },
+        { actionType: 'TOPIC_REMOVED', targetTopicId: 'topic-id' },
+      ])
+    ).toBeNull();
+  });
+
+  it('returns null for non-topic actions', () => {
+    expect(getSpaceTopicProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toBeNull();
   });
 });

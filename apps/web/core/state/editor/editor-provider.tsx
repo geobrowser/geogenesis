@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { DataBlockGateProvider } from '~/partials/editor/data-block-gate';
 
@@ -34,6 +35,32 @@ export const EditorProvider = ({
   initialTabs,
   children,
 }: EditorProviderProps) => {
+  const { store } = useSyncEngine();
+
+  React.useEffect(() => {
+    const entities: Entity[] = [];
+
+    entities.push(...initialBlocks);
+
+    if (initialTabs) {
+      for (const tab of Object.values(initialTabs)) {
+        entities.push(tab.entity);
+        entities.push(...tab.blocks);
+      }
+    }
+
+    const byId = new Map<string, Entity>();
+    for (const e of entities) {
+      if (!e?.id) continue;
+      if (!byId.has(e.id)) byId.set(e.id, e);
+    }
+
+    const unique = [...byId.values()];
+    if (unique.length > 0) {
+      store.hydrateWith(unique);
+    }
+  }, [store, initialBlocks, initialTabs]);
+
   const value = React.useMemo(() => {
     return {
       id,

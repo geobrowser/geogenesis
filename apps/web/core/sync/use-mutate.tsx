@@ -87,12 +87,14 @@ export interface Mutator {
     set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
+    deleteMany: (values: Value[]) => void;
   };
   relations: {
     get: (id: string, entityId: string) => Relation | null;
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
+    deleteMany: (relations: Relation[]) => void;
   };
   images: {
     createAndLink: (params: {
@@ -310,6 +312,9 @@ function createMutator(store: GeoStore): Mutator {
       delete: newValue => {
         store.deleteValue(newValue);
       },
+      deleteMany: values => {
+        store.deleteValues(values);
+      },
     },
     relations: {
       get: (id, entityId) => store.getRelation(id, entityId),
@@ -322,6 +327,9 @@ function createMutator(store: GeoStore): Mutator {
       },
       delete: newRelation => {
         store.deleteRelation(newRelation);
+      },
+      deleteMany: relations => {
+        store.deleteRelations(relations);
       },
     },
     images: {

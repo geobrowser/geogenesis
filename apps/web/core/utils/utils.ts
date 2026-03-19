@@ -504,6 +504,8 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
       return `Add space to ${proposal.space.name}`;
     case 'REMOVE_SUBSPACE':
       return `Remove space from ${proposal.space.name}`;
+    case 'SET_TOPIC':
+      return `Set topic for ${proposal.space.name}`;
   }
 }
 
