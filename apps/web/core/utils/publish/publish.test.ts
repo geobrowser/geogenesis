@@ -1,4 +1,4 @@
-import { IdUtils, Op } from '@geoprotocol/geo-sdk';
+import { IdUtils, Op, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +6,7 @@ import { Relation, Value } from '~/core/types';
 
 import { Publish, prepareLocalDataForPublishing as prepareLocalDataForPublishingEffect } from './publish';
 
-/** Unwrap the Effect for test assertions */
+/** Unwrap the Effect for test assertions. Use when there are no deleted relations (effect stays sync). */
 function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string): Op[] {
   return Effect.runSync(prepareLocalDataForPublishingEffect(values, relations, spaceId));
 }
@@ -122,11 +122,16 @@ describe('prepareLocalDataForPublishing', () => {
       expect(createOp.position).toBe('1');
     });
 
-    it('should create deleteRelation operation for deleted relations', () => {
+    it('should create deleteRelation operation for deleted relations', async () => {
       const values: Value[] = [];
-      const relations = [createMockRelation({ isDeleted: true })];
+      const relations = [createMockRelation({ isDeleted: true, type: { id: SystemIds.BLOCKS, name: 'Blocks' } })];
 
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+      // Deleted relations trigger async orphan cleanup. Pass no-op so tests don't need network.
+      const result = await Effect.runPromise(
+        prepareLocalDataForPublishingEffect(values, relations, 'test-space', {
+          getOrphanDeleteOps: () => Effect.succeed([]),
+        })
+      );
 
       expect(result).toHaveLength(1);
       const deleteOp = result[0] as DeleteRelationOp;
@@ -324,11 +329,16 @@ describe('prepareLocalDataForPublishing', () => {
   });
 
   describe('mixed operations', () => {
-    it('should handle mixed values and relations', () => {
+    it('should handle mixed values and relations', async () => {
       const values = [createMockValue({ isDeleted: false }), createMockValue({ isDeleted: true })];
-      const relations = [createMockRelation({ isDeleted: false }), createMockRelation({ isDeleted: true })];
+      const relations = [createMockRelation({ isDeleted: false }), createMockRelation({ isDeleted: true, type: { id: SystemIds.BLOCKS, name: 'Blocks' } })];
 
-      const result = prepareLocalDataForPublishing(values, relations, 'test-space');
+      // Deleted relations trigger async orphan cleanup. Pass no-op so tests don't need network.
+      const result = await Effect.runPromise(
+        prepareLocalDataForPublishingEffect(values, relations, 'test-space', {
+          getOrphanDeleteOps: () => Effect.succeed([]),
+        })
+      );
 
       expect(result).toHaveLength(4);
       expect(result.some(op => op.type === 'createRelation')).toBe(true);
