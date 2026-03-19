@@ -8,8 +8,6 @@ import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
-import { DataBlockGateProvider } from '~/partials/editor/data-block-gate';
-
 import { EntityId } from '../../io/substream-schema';
 import { validateEntityId } from '../../utils/utils';
 import { RelationWithBlock, useBlocks } from './use-blocks';
@@ -24,6 +22,7 @@ type EditorProviderProps = {
   initialBlocks: Entity[];
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;
+  initialCollectionItems?: Record<string, Entity[]>;
   children: React.ReactNode;
 };
 
@@ -33,6 +32,7 @@ export const EditorProvider = ({
   initialBlocks,
   initialBlockRelations,
   initialTabs,
+  initialCollectionItems,
   children,
 }: EditorProviderProps) => {
   const { store } = useSyncEngine();
@@ -49,6 +49,12 @@ export const EditorProvider = ({
       }
     }
 
+    if (initialCollectionItems) {
+      for (const items of Object.values(initialCollectionItems)) {
+        entities.push(...items);
+      }
+    }
+
     const byId = new Map<string, Entity>();
     for (const e of entities) {
       if (!e?.id) continue;
@@ -59,7 +65,7 @@ export const EditorProvider = ({
     if (unique.length > 0) {
       store.hydrateWith(unique);
     }
-  }, [store, initialBlocks, initialTabs]);
+  }, [store, initialBlocks, initialTabs, initialCollectionItems]);
 
   const value = React.useMemo(() => {
     return {
@@ -68,14 +74,13 @@ export const EditorProvider = ({
       initialBlockRelations,
       initialBlocks,
       initialTabs,
+      initialCollectionItems,
     };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs]);
+  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems]);
 
   return (
     <EditorContext.Provider value={value}>
-      <DataBlockGateProvider>
-        <EditorBlocksProvider>{children}</EditorBlocksProvider>
-      </DataBlockGateProvider>
+      <EditorBlocksProvider>{children}</EditorBlocksProvider>
     </EditorContext.Provider>
   );
 };
@@ -93,6 +98,7 @@ export function useEditorInstance() {
 type EditorBlocksState = {
   blockRelations: RelationWithBlock[];
   initialBlockEntities: Entity[];
+  initialCollectionItems: Record<string, Entity[]>;
 };
 
 const EditorBlocksContext = React.createContext<EditorBlocksState | null>(null);
@@ -105,7 +111,14 @@ function useTabIdFromSearchParams() {
 }
 
 function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
-  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+  const {
+    id: entityId,
+    spaceId,
+    initialBlockRelations,
+    initialBlocks,
+    initialTabs,
+    initialCollectionItems: allCollectionItems,
+  } = useEditorInstance();
 
   const tabId = useTabIdFromSearchParams();
   const activeEntityId = tabId ?? entityId;
@@ -121,7 +134,10 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
     return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
   }, [initialBlocks, initialTabs, isTab, tabId]);
 
-  const value = React.useMemo(() => ({ blockRelations, initialBlockEntities }), [blockRelations, initialBlockEntities]);
+  const value = React.useMemo(
+    () => ({ blockRelations, initialBlockEntities, initialCollectionItems: allCollectionItems ?? {} }),
+    [blockRelations, initialBlockEntities, allCollectionItems]
+  );
 
   return <EditorBlocksContext.Provider value={value}>{children}</EditorBlocksContext.Provider>;
 }

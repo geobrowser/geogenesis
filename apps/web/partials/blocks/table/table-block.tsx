@@ -50,7 +50,6 @@ import { TableBlockTable } from './table-block-table';
 interface Props {
   spaceId: string;
   blockId?: string;
-  markFetched?: (blockId: string) => void;
 }
 
 function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
@@ -254,7 +253,7 @@ function useEntries(
   };
 }
 
-export const TableBlock = ({ spaceId, blockId, markFetched }: Props) => {
+export const TableBlock = ({ spaceId, blockId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const isEditing = useUserIsEditing(spaceId);
@@ -290,12 +289,6 @@ export const TableBlock = ({ spaceId, blockId, markFetched }: Props) => {
     setTemporaryFilters,
     setTemporaryFilterMode,
   } = useDataBlock({ canEdit });
-
-  React.useEffect(() => {
-    if (isFetched && blockId && markFetched) {
-      markFetched(blockId);
-    }
-  }, [isFetched, blockId, markFetched]);
 
   const setActiveFilterMode = React.useCallback(
     (mode: FilterMode) => {

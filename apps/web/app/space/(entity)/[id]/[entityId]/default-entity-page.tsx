@@ -22,6 +22,8 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';
 import { SpaceRedirect } from './space-redirect';
@@ -64,6 +66,7 @@ export default async function DefaultEntityPage({
           initialBlocks={props.blocks}
           initialBlockRelations={props.blockRelations}
           initialTabs={props.tabs}
+          initialCollectionItems={props.initialCollectionItems}
         >
           {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
           <EntityPageContentContainer>
@@ -168,6 +171,9 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
 
   const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
+  const allBlocks = [...blocks, ...tabBlocks.flat()];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+
   return {
     id: entityId,
     spaceId,
@@ -186,5 +192,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     // For entity page editor
     blockRelations: blockRelations ?? [],
     blocks,
+    initialCollectionItems,
   };
 };

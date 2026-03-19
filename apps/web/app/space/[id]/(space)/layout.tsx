@@ -21,6 +21,8 @@ import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+
 import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
 
@@ -52,6 +54,7 @@ export default async function Layout(props0: LayoutProps) {
         initialBlockRelations={props.blockRelations}
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
+        initialCollectionItems={props.initialCollectionItems}
       >
         <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
         <EntityPageContentContainer>
@@ -108,6 +111,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       tabs: {},
       blockRelations: [],
       blocks: [],
+      initialCollectionItems: {},
       space: null,
       avatarUrl: null,
       coverUrl: null,
@@ -151,6 +155,9 @@ const getSpaceFrontPage = async (spaceId: string) => {
 
   const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
+  const allBlocks = [...blocks, ...tabBlocks.flat()];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+
   return {
     id: entity.id,
     tabEntities,
@@ -158,6 +165,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
     tabs,
     blockRelations: entity.relations,
     blocks,
+    initialCollectionItems,
     space,
     avatarUrl: Entities.avatar(entity.relations) ?? null,
     coverUrl: Entities.cover(entity.relations) ?? null,

@@ -9,8 +9,7 @@ import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reportBoundaryError } from '~/core/telemetry/logger';
 
-import { TableBlock, TableBlockError, TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
-import { useDataBlockGate } from './data-block-gate';
+import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
 export const DataNode = Node.create({
   name: 'tableNode',
@@ -43,20 +42,14 @@ function DataNodeComponent({ node }: NodeViewRendererProps) {
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
 
-  const { shouldRender, markFetched } = useDataBlockGate(id);
-
   return (
     <NodeViewWrapper>
       <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
-        {shouldRender ? (
-          <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
-            <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
-              <TableBlock spaceId={spaceId} blockId={id} markFetched={markFetched} />
-            </DataBlockProvider>
-          </ErrorBoundary>
-        ) : (
-          <TableBlockLoadingPlaceholder />
-        )}
+        <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
+          <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
+            <TableBlock spaceId={spaceId} blockId={id} />
+          </DataBlockProvider>
+        </ErrorBoundary>
       </div>
     </NodeViewWrapper>
   );
