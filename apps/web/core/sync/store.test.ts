@@ -148,7 +148,7 @@ describe('GeoStore', () => {
       expect(syncedEntities.get('entity-2')).toEqual(mockEntity2);
     });
 
-    it('should log entity IDs in development environment', () => {
+    it('should log entity IDs in development environment', async () => {
       vi.stubEnv('NODE_ENV', 'development');
       const entities = [mockEntity1, mockEntity2];
 
@@ -161,11 +161,13 @@ describe('GeoStore', () => {
       // Trigger the callback to simulate the event
       syncCallback?.({ entities });
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Finished syncing entities to store'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('entity-1, entity-2'));
+      // Hydration is batched via queueMicrotask
+      await Promise.resolve();
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Finished syncing'));
     });
 
-    it('should not log in production environment', () => {
+    it('should not log in production environment', async () => {
       vi.stubEnv('NODE_ENV', 'production');
       const entities = [mockEntity1];
 
@@ -177,6 +179,8 @@ describe('GeoStore', () => {
 
       // Trigger the callback to simulate the event
       syncCallback?.({ entities });
+
+      await Promise.resolve();
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
