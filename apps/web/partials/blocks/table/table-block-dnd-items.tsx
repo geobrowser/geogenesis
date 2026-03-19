@@ -11,7 +11,7 @@ import {
 import { SortableContext, arrayMove, useSortable } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position } from '@geoprotocol/geo-sdk';
 
 import React from 'react';
 
@@ -56,8 +56,6 @@ export type TableBlockDndItemsProps = {
   isEditing: boolean;
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   relations: Relation[];
-  collectionRelations: Relation[];
-  collectionLength: number;
   pageNumber: number;
   pageSize: number;
   shouldAutoFocusPlaceholder?: boolean;
@@ -74,8 +72,6 @@ export const TableBlockDndItems = ({
   source,
   onUpdateRelation,
   relations,
-  collectionRelations,
-  collectionLength,
   pageNumber,
   pageSize,
   shouldAutoFocusPlaceholder = false,
@@ -129,17 +125,19 @@ export const TableBlockDndItems = ({
   };
 
   const handleMove = (targetPosition: number, currentPosition?: number) => {
+    const relationsToUse = relations;
+
     if (currentPosition !== undefined) {
       const currentPageIndex = currentPosition - pageNumber * pageSize - 1;
       const currentRow = sortableEntries[currentPageIndex];
 
       if (!currentRow) return;
 
-      const movingRelation = collectionRelations.find(r => r.toEntity.id === currentRow?.entityId);
+      const movingRelation = relationsToUse.find(r => r.toEntity.id === currentRow?.entityId);
 
       if (!movingRelation) return;
 
-      const allSortedRelations = [...collectionRelations].sort((a, b) =>
+      const allSortedRelations = [...relationsToUse].sort((a, b) =>
         Position.compare(a.position ?? null, b.position ?? null)
       );
 
@@ -194,7 +192,9 @@ export const TableBlockDndItems = ({
   const resolvedOuterClassName =
     typeof config.outerClassName === 'function' ? config.outerClassName(isEditing) : config.outerClassName;
 
-  const isCollection = source.type === 'COLLECTION';
+  const canReorder = source.type === 'RELATIONS' || source.type === 'COLLECTION';
+
+  const totalEntriesForReorder = relations?.length ?? sortableEntries.length;
 
   const items = (
     <div className={config.itemsClassName}>
@@ -209,13 +209,13 @@ export const TableBlockDndItems = ({
         </React.Fragment>
       ))}
       {sortableEntries.map((row, index: number) =>
-        isCollection ? (
+        canReorder ? (
           <SortableItem
             key={`${row.entityId}-${index}`}
             row={row}
             isEditing={isEditing}
             position={index}
-            totalEntries={collectionLength}
+            totalEntries={totalEntriesForReorder}
             handleMove={handleMove}
             pageSize={pageSize}
             pageNumber={pageNumber}
@@ -235,7 +235,7 @@ export const TableBlockDndItems = ({
     </div>
   );
 
-  const content = isCollection ? (
+  const content = canReorder ? (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
