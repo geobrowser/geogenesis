@@ -1,6 +1,6 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 
-import { resolveSpaceImage, type SpaceImageRelationNode } from './space-image';
+import { type SpaceImageRelationNode, resolveSpaceImage } from './space-image';
 
 export const MAX_TOPIC_USAGE_AVATARS = 3;
 export const PLACEHOLDER_TOPIC_NAME = 'Untitled';
@@ -16,6 +16,7 @@ export interface TopicUsageSpaceNode {
 export interface TopicUsage {
   id: string;
   name: string;
+  image?: string;
   spaces: {
     id: string;
     name: string;
@@ -40,7 +41,7 @@ function toUsageSpace(space: TopicUsageSpaceNode): TopicUsage['spaces'][number] 
   };
 }
 
-export function mergeTopicUsageSpaces(spaces: TopicUsageSpaceNode[]) {
+function dedupeTopicUsageSpaces(spaces: TopicUsageSpaceNode[]) {
   const spacesById = new Map<string, TopicUsage['spaces'][number]>();
 
   for (const space of spaces) {
@@ -65,5 +66,9 @@ export function mergeTopicUsageSpaces(spaces: TopicUsageSpaceNode[]) {
     });
   }
 
-  return Array.from(spacesById.values()).slice(0, MAX_TOPIC_USAGE_AVATARS);
+  return Array.from(spacesById.values());
+}
+
+export function mergeTopicUsageSpaces(spaces: TopicUsageSpaceNode[]) {
+  return dedupeTopicUsageSpaces(spaces).slice(0, MAX_TOPIC_USAGE_AVATARS);
 }

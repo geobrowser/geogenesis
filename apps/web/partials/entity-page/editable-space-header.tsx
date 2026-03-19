@@ -106,7 +106,7 @@ export function EditableSpaceHeading({
     try {
       await navigator.clipboard.writeText(spaceId);
       dispatch({ type: 'CLOSE_OVERLAYS' });
-    } catch (err) {
+    } catch {
       console.error('Failed to copy space ID in: ', spaceId);
     }
   };
@@ -115,7 +115,7 @@ export function EditableSpaceHeading({
     try {
       await navigator.clipboard.writeText(entityId);
       dispatch({ type: 'CLOSE_OVERLAYS' });
-    } catch (err) {
+    } catch {
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };
@@ -230,13 +230,13 @@ export function EditableSpaceHeading({
                   </MenuItem>
                   {isEditing && (
                     <>
-                      {/* <MenuItem
+                      <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SPACE_TOPIC' });
                         }}
                       >
                         <p>Set topic</p>
-                      </MenuItem> */}
+                      </MenuItem>
                       <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
@@ -244,13 +244,13 @@ export function EditableSpaceHeading({
                       >
                         <p>Space relationships</p>
                       </MenuItem>
-                      {/* <MenuItem
+                      <MenuItem
                         onClick={() => {
                           dispatch({ type: 'OPEN_SUBTOPICS' });
                         }}
                       >
                         <p>Subtopics</p>
-                      </MenuItem> */}
+                      </MenuItem>
                     </>
                   )}
                   {addSubspaceComponent}
