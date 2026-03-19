@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
+
+import { Effect, Either } from 'effect';
 
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { Subgraph } from '~/core/io';

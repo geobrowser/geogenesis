@@ -2,9 +2,10 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Effect } from 'effect';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';

@@ -1,6 +1,6 @@
-import cx from 'classnames';
-
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { ColumnSortState, nextSortDirection } from '~/core/utils/column-sort';
 

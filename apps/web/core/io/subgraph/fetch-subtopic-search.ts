@@ -7,15 +7,15 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
   type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from './space-image';
 import {
   MAX_TOPIC_USAGE_AVATARS,
-  mergeTopicUsageSpaces,
   PLACEHOLDER_TOPIC_NAME,
   type TopicUsage,
   type TopicUsageSpaceNode,
+  mergeTopicUsageSpaces,
 } from './topic-space-usage';
 
 const MAX_SUBTOPIC_SEARCH_RESULTS = 10;

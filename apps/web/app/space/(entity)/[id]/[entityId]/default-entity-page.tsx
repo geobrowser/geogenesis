@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { redirect } from 'next/navigation';
 
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
@@ -21,8 +22,6 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-
-import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';

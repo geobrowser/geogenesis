@@ -1,6 +1,6 @@
-import { atom, useAtom } from 'jotai';
-
 import * as React from 'react';
+
+import { atom, useAtom } from 'jotai';
 
 /**
  * Global store of page numbers keyed by data block entity ID.

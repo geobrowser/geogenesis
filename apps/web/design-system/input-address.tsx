@@ -2,13 +2,14 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Popover from '@radix-ui/react-popover';
+
+import * as React from 'react';
+import { startTransition, useState } from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
-
-import * as React from 'react';
-import { startTransition, useState } from 'react';
 
 import { Feature } from '~/core/hooks/use-place-search';
 import { usePlaceSearch } from '~/core/hooks/use-place-search';

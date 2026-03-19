@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
-import { Environment } from '~/core/environment';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Proposal } from '~/core/io/dto/proposals';
 import type { Space } from '~/core/io/dto/spaces';
@@ -12,8 +12,8 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
   type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from '~/core/io/subgraph/space-image';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -66,8 +66,7 @@ export async function SubspaceProposal({ proposal }: Props) {
     return null;
   }
 
-  const isTopicProposal =
-    isTopicSubspaceActionType(subspaceDetails.actionType) && 'targetTopicId' in subspaceDetails;
+  const isTopicProposal = isTopicSubspaceActionType(subspaceDetails.actionType) && 'targetTopicId' in subspaceDetails;
   const targetSpaceId = 'targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : proposal.space.id;
 
   const [sourceSpace, targetSpace, topicMetadata] = await Promise.all([
@@ -80,7 +79,8 @@ export async function SubspaceProposal({ proposal }: Props) {
 
   const heroTitle = isTopicProposal
     ? (topicMetadata?.name ?? subspaceDetails.targetTopicId)
-    : (targetSpace?.entity.name ?? ('targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : targetSpaceId));
+    : (targetSpace?.entity.name ??
+      ('targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : targetSpaceId));
   const heroImage = isTopicProposal ? (topicMetadata?.image ?? PLACEHOLDER_SPACE_IMAGE) : spaceImage(targetSpace);
   const changeLabel = proposalActionLabel(subspaceDetails.actionType);
   const changeValue = proposalActionValue({

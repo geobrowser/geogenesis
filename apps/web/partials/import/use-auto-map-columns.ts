@@ -1,10 +1,11 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
-import { useAtom, useAtomValue } from 'jotai';
 
 import { useCallback, useState } from 'react';
+
+import { Effect } from 'effect';
+import { useAtom, useAtomValue } from 'jotai';
 
 import { getProperty, getResults } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';

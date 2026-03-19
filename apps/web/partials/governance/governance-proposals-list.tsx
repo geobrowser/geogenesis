@@ -5,10 +5,10 @@
  * Separates proposals into categories: executable, active, and completed.
  * Supports filtering by proposal type (content proposals vs membership requests).
  */
+import React from 'react';
+
 import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
-
-import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';

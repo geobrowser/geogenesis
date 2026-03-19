@@ -1,10 +1,10 @@
 'use client';
 
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
-
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { useSearch } from '~/core/hooks/use-search';
 

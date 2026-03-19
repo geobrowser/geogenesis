@@ -1,4 +1,5 @@
-import { ContentIds, type DecimalMantissa, Graph, Op, SystemIds, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { ContentIds, type DecimalMantissa, Graph, Op, type PropertyValueParam, SystemIds } from '@geoprotocol/geo-sdk';
+
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
@@ -45,8 +46,8 @@ export function prepareLocalDataForPublishing(
     ]);
 
     const deletedRelations = relations.filter(
-      r => r.spaceId === spaceId && r.isLocal === true && r.isDeleted === true
-        && CASCADING_RELATION_TYPES.has(r.type.id)
+      r =>
+        r.spaceId === spaceId && r.isLocal === true && r.isDeleted === true && CASCADING_RELATION_TYPES.has(r.type.id)
     );
 
     if (deletedRelations.length === 0) {
@@ -68,9 +69,7 @@ export function prepareLocalDataForPublishing(
         relations,
         spaceId,
       });
-      return Effect.fail(
-        new PrepareOpsError('Failed to prepare ops for publishing', { cause: error as unknown })
-      );
+      return Effect.fail(new PrepareOpsError('Failed to prepare ops for publishing', { cause: error as unknown }));
     })
   );
 }

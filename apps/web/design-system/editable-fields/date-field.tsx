@@ -1,10 +1,10 @@
 'use client';
 
+import * as React from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-
-import * as React from 'react';
 
 import { FORMAT_PROPERTY } from '~/core/constants';
 import { useFieldWithValidation } from '~/core/hooks/use-field-with-validation';

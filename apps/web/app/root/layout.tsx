@@ -1,8 +1,8 @@
-import { connection } from 'next/server';
-
 import * as React from 'react';
 
 import { Metadata } from 'next';
+
+import { connection } from 'next/server';
 
 import { ROOT_SPACE } from '~/core/constants';
 

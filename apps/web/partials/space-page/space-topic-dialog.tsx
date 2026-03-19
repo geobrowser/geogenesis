@@ -2,10 +2,11 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import pluralize from 'pluralize';
 
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
+import pluralize from 'pluralize';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { usePendingSpaceTopicProposals } from '~/core/hooks/use-pending-space-topic-proposals';
@@ -108,15 +109,7 @@ function AssociatedSpacesMeta({ count, spaces }: { count: number; spaces: SpaceU
   );
 }
 
-function TopicActionButton({
-  label,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
+function TopicActionButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
   return (
     <button type="button" disabled={disabled} className={ACTION_BUTTON_CLASSNAME} onClick={onClick}>
       {label}
@@ -273,12 +266,7 @@ function PersonalSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDia
         onAdd={result => void setSpaceTopic(result)}
       />
 
-      <CurrentTopicSection
-        topic={currentTopic}
-        isLoading={isCurrentTopicLoading}
-        isError={isError}
-        error={error}
-      />
+      <CurrentTopicSection topic={currentTopic} isLoading={isCurrentTopicLoading} isError={isError} error={error} />
     </SpaceTopicDialogShell>
   );
 }
@@ -344,12 +332,7 @@ function DaoSpaceTopicDialog({ open, onOpenChange, spaceId }: SpaceTopicDialogPr
         onAdd={proposeTopic}
       />
 
-      <CurrentTopicSection
-        topic={currentTopic}
-        isLoading={isCurrentTopicLoading}
-        isError={isError}
-        error={error}
-      />
+      <CurrentTopicSection topic={currentTopic} isLoading={isCurrentTopicLoading} isError={isError} error={error} />
 
       <PendingTopicProposalsSection
         proposals={pendingProposals ?? []}

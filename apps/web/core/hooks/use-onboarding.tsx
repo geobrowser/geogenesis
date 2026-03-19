@@ -1,10 +1,11 @@
 'use client';
 
 import { useAccountEffect, usePrivy } from '@geogenesis/auth';
-import { atom, useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
 import { useCallback, useEffect } from 'react';
+
+import { atom, useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { Environment } from '../environment';
 import { usePersonalSpaceId } from './use-personal-space-id';

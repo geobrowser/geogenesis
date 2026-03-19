@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-
-import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 import { compareBySpaceRank } from '~/core/utils/space/space-ranking';

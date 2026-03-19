@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Duration } from 'effect';
 
 import * as React from 'react';
+
+import { Duration } from 'effect';
 
 import { fetchSubtopicSearch } from '~/core/io/subgraph/fetch-subtopic-search';
 

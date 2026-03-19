@@ -1,8 +1,8 @@
 'use client';
 
-import { useSetAtom } from 'jotai';
-
 import * as React from 'react';
+
+import { useSetAtom } from 'jotai';
 
 import { persistenceEngine } from '~/core/sync/use-sync-engine';
 

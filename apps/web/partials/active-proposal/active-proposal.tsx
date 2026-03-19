@@ -4,9 +4,9 @@ import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
-  getProposalName,
   getIsProposalEnded,
   getNoVotePercentage,
+  getProposalName,
   getProposalTimeRemaining,
   getUserVote,
   getYesVotePercentage,
@@ -64,7 +64,8 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
   const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
-  const proposalTitle = proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
+  const proposalTitle =
+    proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
   return (
     <>

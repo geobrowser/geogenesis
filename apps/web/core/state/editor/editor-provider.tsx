@@ -4,9 +4,9 @@ import * as React from 'react';
 
 import { useSearchParams } from 'next/navigation';
 
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { EntityId } from '../../io/substream-schema';
 import { validateEntityId } from '../../utils/utils';

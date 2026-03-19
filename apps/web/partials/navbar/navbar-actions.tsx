@@ -2,11 +2,12 @@
 
 import { useLogout } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
+
+import * as React from 'react';
+
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';

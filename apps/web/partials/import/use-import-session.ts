@@ -1,8 +1,8 @@
 'use client';
 
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-
 import { useCallback } from 'react';
+
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 

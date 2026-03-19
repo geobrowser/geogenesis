@@ -1,10 +1,11 @@
 'use client';
 
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
-import { cva } from 'class-variance-authority';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 

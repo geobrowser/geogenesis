@@ -2,13 +2,14 @@
 
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import * as Dialog from '@radix-ui/react-dialog';
+
+import * as React from 'react';
+import { ChangeEvent, useCallback, useRef, useState } from 'react';
+
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';

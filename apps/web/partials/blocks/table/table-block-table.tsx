@@ -8,11 +8,12 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { cx } from 'class-variance-authority';
-import { useAtomValue } from 'jotai';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import { cx } from 'class-variance-authority';
+import { useAtomValue } from 'jotai';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';

@@ -1,11 +1,11 @@
 'use client';
 
+import * as React from 'react';
+
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useSearchParams } from 'next/navigation';
-
-import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByAddresses } from '~/core/hooks/use-spaces-by-addresses';

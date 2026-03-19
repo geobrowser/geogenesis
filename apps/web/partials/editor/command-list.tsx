@@ -1,10 +1,11 @@
 'use client';
 
 import { Editor } from '@tiptap/react';
-import cx from 'classnames';
 
 import * as React from 'react';
 import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+
+import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 

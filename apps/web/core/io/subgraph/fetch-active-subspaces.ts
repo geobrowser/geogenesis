@@ -8,8 +8,8 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
   type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from './space-image';
 
 interface ChildSpaceNode {

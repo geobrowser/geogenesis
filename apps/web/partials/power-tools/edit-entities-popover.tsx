@@ -1,22 +1,24 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import * as Popover from '@radix-ui/react-popover';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
-import { getSpaces } from '~/core/io/queries';
+
 import { useKey } from '~/core/hooks/use-key';
+import { getSpaces } from '~/core/io/queries';
 import { useRelations } from '~/core/sync/use-store';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { Property } from '~/core/types';
 import type { SpaceEntity } from '~/core/types';
-import type { SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Select } from '~/design-system/select';
+import type { SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -73,10 +75,7 @@ function DeleteValueItem({
   directImageUrl: directImageUrlProp,
 }: DeleteValueItemProps) {
   const isImageColumn = property.renderableTypeStrict === 'IMAGE';
-  const lookedUpUrl = useImageUrlFromEntity(
-    item.toEntityId,
-    item.toSpaceId ?? spaceId
-  );
+  const lookedUpUrl = useImageUrlFromEntity(item.toEntityId, item.toSpaceId ?? spaceId);
   const imageSrc =
     isImageColumn &&
     directImageUrlProp &&
@@ -92,11 +91,7 @@ function DeleteValueItem({
       {isImageColumn ? (
         <span className="inline-flex size-8 shrink-0 overflow-hidden rounded-sm border border-grey-04">
           {imageSrc ? (
-            <NativeGeoImage
-              value={imageSrc}
-              alt=""
-              className="h-full w-full object-cover"
-            />
+            <NativeGeoImage value={imageSrc} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="h-full w-full bg-grey-02" />
           )}
@@ -105,11 +100,7 @@ function DeleteValueItem({
         <>
           <span className="inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
             {space?.image ? (
-              <NativeGeoImage
-                value={space.image}
-                alt=""
-                className="h-full w-full object-cover"
-              />
+              <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
             ) : (
               <span className="h-full w-full bg-grey-02" />
             )}
@@ -173,9 +164,7 @@ export function EditEntitiesPopover({
   onDeleteApply,
 }: EditEntitiesPopoverProps) {
   const [open, setOpen] = React.useState(false);
-  const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<
-    SelectEntityCompactResult[]
-  >([]);
+  const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<SelectEntityCompactResult[]>([]);
   const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
   const [markedForDeleteKeys, setMarkedForDeleteKeys] = React.useState<Set<string>>(new Set());
   const [showAllDeleteValues, setShowAllDeleteValues] = React.useState(false);
@@ -209,23 +198,20 @@ export function EditEntitiesPopover({
 
   const isRelationColumn = Boolean(
     effectiveProperty &&
-      (effectiveProperty.dataType === 'RELATION' ||
-        (effectiveProperty.relationValueTypes && effectiveProperty.relationValueTypes.length > 0))
+    (effectiveProperty.dataType === 'RELATION' ||
+      (effectiveProperty.relationValueTypes && effectiveProperty.relationValueTypes.length > 0))
   );
 
   const currentColumnRelations = useRelations({
     selector: r =>
-      selectedEntityIds.includes(r.fromEntity.id) &&
-      effectiveProperty != null &&
-      r.type.id === effectiveProperty.id,
+      selectedEntityIds.includes(r.fromEntity.id) && effectiveProperty != null && r.type.id === effectiveProperty.id,
   });
 
   /** All distinct values in the column across selected rows (union), with count of rows that have each value. */
   const currentColumnValues = React.useMemo(() => {
     if (currentColumnRelations.length === 0 || selectedEntityIds.length === 0) return [];
 
-    const key = (r: (typeof currentColumnRelations)[number]) =>
-      `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId}`;
+    const key = (r: (typeof currentColumnRelations)[number]) => `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId}`;
     const byKey = new Map<
       string,
       { toEntityId: string; toEntityName: string | null; toSpaceId: string; rowIds: Set<string> }
@@ -253,9 +239,7 @@ export function EditEntitiesPopover({
   }, [currentColumnRelations, selectedEntityIds]);
 
   const uniqueToSpaceIds = React.useMemo(() => {
-    const fromValues = currentColumnValues
-      .map(v => v.toSpaceId)
-      .filter((id): id is string => Boolean(id));
+    const fromValues = currentColumnValues.map(v => v.toSpaceId).filter((id): id is string => Boolean(id));
     const ids = new Set([...fromValues, spaceId]);
     return [...ids];
   }, [currentColumnValues, spaceId]);
@@ -304,12 +288,8 @@ export function EditEntitiesPopover({
 
   const canApplyRelation = effectiveProperty && selectedAttributeEntities.length > 0 && onApply;
   const canApplyImageColumn =
-    effectiveProperty &&
-    effectiveProperty.renderableTypeStrict === 'IMAGE' &&
-    addImageFile != null &&
-    onApply;
-  const canApplyValue =
-    effectiveProperty && selectedEntityIds.length > 0 && !isRelationColumn && onApplyValue;
+    effectiveProperty && effectiveProperty.renderableTypeStrict === 'IMAGE' && addImageFile != null && onApply;
+  const canApplyValue = effectiveProperty && selectedEntityIds.length > 0 && !isRelationColumn && onApplyValue;
   const canApply =
     action === 'add' &&
     effectiveProperty &&
@@ -335,8 +315,7 @@ export function EditEntitiesPopover({
     setAddImageFile(null);
   }, [effectiveProperty?.id]);
 
-  const valueKey = (item: { toEntityId: string; toSpaceId?: string }) =>
-    `${item.toEntityId}:${item.toSpaceId ?? ''}`;
+  const valueKey = (item: { toEntityId: string; toSpaceId?: string }) => `${item.toEntityId}:${item.toSpaceId ?? ''}`;
 
   /** For Delete: values user marked with × = will be deleted from all selected rows on Apply. */
   const displayedDeleteValues = React.useMemo(
@@ -383,31 +362,25 @@ export function EditEntitiesPopover({
           }}
         >
           <div className="p-2">
-              <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">
-                <div>
-                  <Text variant="body" color="grey-04" className="text-[14px] font-medium">
-                    Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
-                  </Text>
-                </div>
-                {(canApply || canApplyDelete) && (
-                  <button
-                    type="button"
-                    onClick={
-                      canApplyDelete
-                        ? handleDeleteApply
-                        : isRelationColumn
-                          ? handleApply
-                          : handleApplyValue
-                    }
-                    className="shrink-0 text-[14px] text-button text-ctaPrimary hover:text-ctaHover hover:underline"
-                  >
-                    Apply
-                  </button>
-                )}
+            <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">
+              <div>
+                <Text variant="body" color="grey-04" className="text-[14px] font-medium">
+                  Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
+                </Text>
               </div>
-              <Spacer height={12} />
-              <div className="flex justify-end">
-                <div className="inline-flex w-[180px] rounded border border-grey-02 bg-grey-01 p-0.5">
+              {(canApply || canApplyDelete) && (
+                <button
+                  type="button"
+                  onClick={canApplyDelete ? handleDeleteApply : isRelationColumn ? handleApply : handleApplyValue}
+                  className="shrink-0 text-button text-[14px] text-ctaPrimary hover:text-ctaHover hover:underline"
+                >
+                  Apply
+                </button>
+              )}
+            </div>
+            <Spacer height={12} />
+            <div className="flex justify-end">
+              <div className="inline-flex w-[180px] rounded border border-grey-02 bg-grey-01 p-0.5">
                 {(
                   [
                     { id: 'add' as const, label: 'Add' },
@@ -418,47 +391,44 @@ export function EditEntitiesPopover({
                     key={id}
                     type="button"
                     onClick={() => setAction(id)}
-                    className={`flex w-1/2 items-center justify-center px-3 py-1 text-[13px] font-medium rounded-sm ${
-                      action === id
-                        ? 'bg-white text-text shadow-sm'
-                        : 'bg-transparent text-grey-04 hover:text-text'
+                    className={`flex w-1/2 items-center justify-center rounded-sm px-3 py-1 text-[13px] font-medium ${
+                      action === id ? 'shadow-sm bg-white text-text' : 'bg-transparent text-grey-04 hover:text-text'
                     }`}
                   >
                     {label}
                   </button>
                 ))}
-                </div>
               </div>
+            </div>
+            <>
+              <Text variant="metadata" color="grey-04" className="block">
+                Property
+              </Text>
+              <Spacer height={6} />
+              <div className="w-full">
+                <Select
+                  value={displayColumn?.id ?? pickerColumns[0]?.id ?? ''}
+                  onChange={id => {
+                    const prop = pickerColumns.find(p => p.id === id);
+                    setSelectedProperty(prop ?? null);
+                  }}
+                  options={pickerColumns.map(prop => ({
+                    value: prop.id,
+                    label: prop.name ?? prop.id,
+                  }))}
+                  placeholder="Select column"
+                  className="w-full min-w-0"
+                  position="popper"
+                />
+              </div>
+            </>
+            <Spacer height={12} />
+            {action === 'delete' && effectiveProperty && (
               <>
-                <Text variant="metadata" color="grey-04" className="block">
-                  Property
-                </Text>
-                  <Spacer height={6} />
-                  <div className="w-full">
-                    <Select
-                      value={displayColumn?.id ?? pickerColumns[0]?.id ?? ''}
-                      onChange={id => {
-                        const prop = pickerColumns.find(p => p.id === id);
-                        setSelectedProperty(prop ?? null);
-                      }}
-                      options={pickerColumns.map(prop => ({
-                        value: prop.id,
-                        label: prop.name ?? prop.id,
-                      }))}
-                      placeholder="Select column"
-                      className="w-full min-w-0"
-                      position="popper"
-                    />
-                  </div>
-                </>
-              <Spacer height={12} />
-              {action === 'delete' && effectiveProperty && (
-                <>
-                  <Spacer height={6} />
-                  {isRelationColumn ? (() => {
-                    const unmarkedValues = currentColumnValues.filter(
-                      item => !markedForDeleteKeys.has(valueKey(item))
-                    );
+                <Spacer height={6} />
+                {isRelationColumn ? (
+                  (() => {
+                    const unmarkedValues = currentColumnValues.filter(item => !markedForDeleteKeys.has(valueKey(item)));
                     const visibleCount = showAllDeleteValues
                       ? unmarkedValues.length
                       : Math.min(INITIAL_DELETE_VALUES_VISIBLE, unmarkedValues.length);
@@ -469,7 +439,7 @@ export function EditEntitiesPopover({
                         <div className="flex items-center justify-between gap-2">
                           {unmarkedValues.length > 0 && (
                             <>
-                            <Text variant="metadata" className="text-text">
+                              <Text variant="metadata" className="text-text">
                                 All values
                               </Text>
                               <button
@@ -517,9 +487,7 @@ export function EditEntitiesPopover({
                                     spaceId={spaceId}
                                     space={space}
                                     valueKey={key}
-                                    onMarkForDelete={() =>
-                                      setMarkedForDeleteKeys(prev => new Set(prev).add(key))
-                                    }
+                                    onMarkForDelete={() => setMarkedForDeleteKeys(prev => new Set(prev).add(key))}
                                     directImageUrl={directImageUrl}
                                   />
                                 );
@@ -532,7 +500,7 @@ export function EditEntitiesPopover({
                               <button
                                 type="button"
                                 onClick={() => setShowAllDeleteValues(true)}
-                                className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
+                                className="w-full px-2 py-1.5 text-left text-button text-[0.8125rem] text-grey-04 hover:bg-grey-01 hover:text-text"
                               >
                                 Show {hiddenCount} more
                               </button>
@@ -542,113 +510,108 @@ export function EditEntitiesPopover({
                         <Spacer height={12} />
                       </>
                     );
-                  })() : (
-                    <>
-                      <Spacer height={6} />
-                      <Text variant="metadata" color="grey-04">
-                        All values in this property for the selected entities will be cleared when you click Apply.
-                      </Text>
-                      <Spacer height={12} />
-                    </>
-                  )}
-                </>
-              )}
-              {action !== 'delete' &&
-                effectiveProperty &&
-                effectiveProperty.renderableTypeStrict === 'IMAGE' && (
+                  })()
+                ) : (
                   <>
-                    <Text variant="metadata" color="grey-04" className="block">
-                      Current images
-                    </Text>
                     <Spacer height={6} />
-                    {currentColumnRelations.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {currentColumnRelations.map((r, idx) => (
-                          <CurrentImageThumbnail
-                            key={`${r.id}-${idx}`}
-                            imageEntityId={r.toEntity.id}
-                            spaceId={r.spaceId ?? spaceId}
-                            directImageUrl={r.toEntity.value}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <Text variant="metadata" color="grey-04">
-                        No images in this column for selected rows.
-                      </Text>
-                    )}
+                    <Text variant="metadata" color="grey-04">
+                      All values in this property for the selected entities will be cleared when you click Apply.
+                    </Text>
                     <Spacer height={12} />
                   </>
                 )}
-              {action !== 'delete' && effectiveProperty && (
-                <div className="block">
-                  <Text variant="metadata" color="grey-04" className="block">
-                    {isRelationColumn ? 'To Entity' : 'Value'}
+              </>
+            )}
+            {action !== 'delete' && effectiveProperty && effectiveProperty.renderableTypeStrict === 'IMAGE' && (
+              <>
+                <Text variant="metadata" color="grey-04" className="block">
+                  Current images
+                </Text>
+                <Spacer height={6} />
+                {currentColumnRelations.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {currentColumnRelations.map((r, idx) => (
+                      <CurrentImageThumbnail
+                        key={`${r.id}-${idx}`}
+                        imageEntityId={r.toEntity.id}
+                        spaceId={r.spaceId ?? spaceId}
+                        directImageUrl={r.toEntity.value}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Text variant="metadata" color="grey-04">
+                    No images in this column for selected rows.
                   </Text>
-                  <Spacer height={6} />
-                  <EditableEntityValueField
-                    key={`value-${effectiveProperty.id}-${selectedEntityIds.join(',')}`}
-                    property={effectiveProperty}
-                    spaceId={spaceId}
-                    value={pendingValue}
-                    onChange={v => {
-                      pendingValueRef.current = v;
-                      setPendingValue(v);
-                    }}
-                    selectedEntities={selectedAttributeEntities}
-                    onRemoveSelectedEntity={id =>
-                      setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
-                    }
-                    onSelectEntity={result => {
-                      setSelectedAttributeEntities(prev =>
-                        prev.some(e => e.id === result.id) ? prev : [...prev, result]
-                      );
-                    }}
-                    selectedImageFile={
-                      action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? addImageFile
-                        : null
-                    }
-                    onImageFileSelect={
-                      action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? (file: File) => setAddImageFile(file)
-                        : undefined
-                    }
-                    onImageFileClear={
-                      action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? () => setAddImageFile(null)
-                        : undefined
-                    }
-                    onBeforeImageFileDialogOpen={
-                      action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? () => {
-                            if (addImageFileDialogCloseTimeoutRef.current) {
-                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }
-                            addImageFileDialogOpenRef.current = true;
-                            addImageFileDialogCloseTimeoutRef.current = setTimeout(() => {
-                              addImageFileDialogOpenRef.current = false;
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }, 2000);
+                )}
+                <Spacer height={12} />
+              </>
+            )}
+            {action !== 'delete' && effectiveProperty && (
+              <div className="block">
+                <Text variant="metadata" color="grey-04" className="block">
+                  {isRelationColumn ? 'To Entity' : 'Value'}
+                </Text>
+                <Spacer height={6} />
+                <EditableEntityValueField
+                  key={`value-${effectiveProperty.id}-${selectedEntityIds.join(',')}`}
+                  property={effectiveProperty}
+                  spaceId={spaceId}
+                  value={pendingValue}
+                  onChange={v => {
+                    pendingValueRef.current = v;
+                    setPendingValue(v);
+                  }}
+                  selectedEntities={selectedAttributeEntities}
+                  onRemoveSelectedEntity={id => setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))}
+                  onSelectEntity={result => {
+                    setSelectedAttributeEntities(prev =>
+                      prev.some(e => e.id === result.id) ? prev : [...prev, result]
+                    );
+                  }}
+                  selectedImageFile={
+                    action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE' ? addImageFile : null
+                  }
+                  onImageFileSelect={
+                    action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
+                      ? (file: File) => setAddImageFile(file)
+                      : undefined
+                  }
+                  onImageFileClear={
+                    action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
+                      ? () => setAddImageFile(null)
+                      : undefined
+                  }
+                  onBeforeImageFileDialogOpen={
+                    action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
+                      ? () => {
+                          if (addImageFileDialogCloseTimeoutRef.current) {
+                            clearTimeout(addImageFileDialogCloseTimeoutRef.current);
+                            addImageFileDialogCloseTimeoutRef.current = null;
                           }
-                        : undefined
-                    }
-                    onAfterImageFileDialogClose={
-                      action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? () => {
-                            if (addImageFileDialogCloseTimeoutRef.current) {
-                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }
+                          addImageFileDialogOpenRef.current = true;
+                          addImageFileDialogCloseTimeoutRef.current = setTimeout(() => {
                             addImageFileDialogOpenRef.current = false;
+                            addImageFileDialogCloseTimeoutRef.current = null;
+                          }, 2000);
+                        }
+                      : undefined
+                  }
+                  onAfterImageFileDialogClose={
+                    action === 'add' && effectiveProperty.renderableTypeStrict === 'IMAGE'
+                      ? () => {
+                          if (addImageFileDialogCloseTimeoutRef.current) {
+                            clearTimeout(addImageFileDialogCloseTimeoutRef.current);
+                            addImageFileDialogCloseTimeoutRef.current = null;
                           }
-                        : undefined
-                    }
-                  />
-                </div>
-              )}
-            </div>
+                          addImageFileDialogOpenRef.current = false;
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

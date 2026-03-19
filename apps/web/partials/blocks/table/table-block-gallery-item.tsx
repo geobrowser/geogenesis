@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';

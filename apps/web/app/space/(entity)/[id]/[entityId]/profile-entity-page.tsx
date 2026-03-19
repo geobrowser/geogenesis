@@ -1,8 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
-
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
 
 import { Relation, Value } from '~/core/types';
 

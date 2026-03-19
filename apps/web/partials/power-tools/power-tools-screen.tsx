@@ -1,10 +1,11 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { cx } from 'class-variance-authority';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { cx } from 'class-variance-authority';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
@@ -12,6 +13,7 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -24,14 +26,13 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
+import { EditSmall } from '~/design-system/icons/edit-small';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
-
-import { EditSmall } from '~/design-system/icons/edit-small';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Plus } from '~/design-system/icons/plus';
-import { Menu, MenuItem } from '~/design-system/menu';
 import { Trash } from '~/design-system/icons/trash';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
@@ -47,12 +48,11 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import {
-  EditEntitiesPopover,
   type EditApplyPayload,
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
+  EditEntitiesPopover,
 } from './edit-entities-popover';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
 import { PowerToolsRow } from './types';
@@ -240,15 +240,9 @@ export function PowerToolsScreen() {
     return data.rows;
   }, [data.rows, placeholderEntityId, shouldShowPlaceholder, spaceId, source.type, sourceValue, pinnedNewEntityId]);
 
-  const selectableRows = React.useMemo(
-    () => rowsWithPlaceholder.filter(r => !r.placeholder),
-    [rowsWithPlaceholder]
-  );
+  const selectableRows = React.useMemo(() => rowsWithPlaceholder.filter(r => !r.placeholder), [rowsWithPlaceholder]);
   const selectableCount = selectableRows.length;
-  const selectableIds = React.useMemo(
-    () => new Set(selectableRows.map(r => r.entityId)),
-    [selectableRows]
-  );
+  const selectableIds = React.useMemo(() => new Set(selectableRows.map(r => r.entityId)), [selectableRows]);
 
   const [selectedEntityIds, setSelectedEntityIds] = React.useState<Set<string>>(() => new Set());
   const [isSelectionModeActive, setIsSelectionModeActive] = React.useState(false);
@@ -303,15 +297,11 @@ export function PowerToolsScreen() {
     async (payload: EditApplyPayload) => {
       const { property, targetEntities, imageFile } = payload;
       const entityIdToSpaceId = new Map(
-        selectableRows
-          .filter(r => selectedEntityIds.has(r.entityId))
-          .map(r => [r.entityId, r.spaceId] as const)
+        selectableRows.filter(r => selectedEntityIds.has(r.entityId)).map(r => [r.entityId, r.spaceId] as const)
       );
 
       if (property.renderableTypeStrict === 'IMAGE' && imageFile) {
-        const uploadKeys = new Set(
-          Array.from(selectedEntityIds).map(id => `${id}:${property.id}`)
-        );
+        const uploadKeys = new Set(Array.from(selectedEntityIds).map(id => `${id}:${property.id}`));
         setImageUploadingFor(uploadKeys);
         try {
           for (const fromEntityId of selectedEntityIds) {
@@ -371,8 +361,7 @@ export function PowerToolsScreen() {
         }
       }
       const existingValuesList = getValues({
-        selector: v =>
-          selectedSet.has(v.entity.id) && v.property.id === property.id,
+        selector: v => selectedSet.has(v.entity.id) && v.property.id === property.id,
       });
       const valueByEntityAndSpace = new Map<string, Value>();
       for (const v of existingValuesList) {
@@ -383,11 +372,7 @@ export function PowerToolsScreen() {
         const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
         const existing = valueByEntityAndSpace.get(`${entityId}:${rowSpaceId}`) ?? null;
         const safeExisting =
-          existing &&
-          existing.entity.id === entityId &&
-          existing.spaceId === rowSpaceId
-            ? existing
-            : null;
+          existing && existing.entity.id === entityId && existing.spaceId === rowSpaceId ? existing : null;
         if (isClear) {
           if (safeExisting) storage.values.delete(safeExisting);
         } else {
@@ -404,17 +389,13 @@ export function PowerToolsScreen() {
       const { property, targetKeys } = payload;
 
       const isRelationProperty =
-        property.dataType === 'RELATION' ||
-        (property.relationValueTypes && property.relationValueTypes.length > 0);
+        property.dataType === 'RELATION' || (property.relationValueTypes && property.relationValueTypes.length > 0);
 
       if (isRelationProperty) {
-        const targetKeySet = new Set(
-          targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`)
-        );
+        const targetKeySet = new Set(targetKeys.map(k => `${k.toEntityId}:${k.toSpaceId ?? ''}`));
         const relations = getRelations({
           selector: r => {
-            if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id)
-              return false;
+            if (!selectedEntityIds.has(r.fromEntity.id) || r.type.id !== property.id) return false;
             const relationKey = `${r.toEntity.id}:${r.toSpaceId ?? r.spaceId ?? ''}`;
             return targetKeySet.has(relationKey);
           },
@@ -422,9 +403,7 @@ export function PowerToolsScreen() {
         relations.forEach(relation => storage.relations.delete(relation));
       } else {
         const valuesToDelete = getValues({
-          selector: v =>
-            selectedEntityIds.has(v.entity.id) &&
-            v.property.id === property.id,
+          selector: v => selectedEntityIds.has(v.entity.id) && v.property.id === property.id,
         });
         valuesToDelete.forEach(v => storage.values.delete(v));
       }
@@ -445,18 +424,14 @@ export function PowerToolsScreen() {
 
     if (source.type === 'COLLECTION' && sourceValue) {
       const collectionRelations = getRelations({
-        selector: r =>
-          r.fromEntity.id === source.value &&
-          idsToDelete.has(r.toEntity.id),
+        selector: r => r.fromEntity.id === source.value && idsToDelete.has(r.toEntity.id),
       });
       collectionRelations.forEach(r => storage.relations.delete(r));
     } else {
       const values = reactiveValues.get().filter(v => idsToDelete.has(v.entity.id));
       values.forEach(v => storage.values.delete(v));
 
-      const relations = reactiveRelations
-        .get()
-        .filter(r => idsToDelete.has(r.fromEntity.id));
+      const relations = reactiveRelations.get().filter(r => idsToDelete.has(r.fromEntity.id));
       relations.forEach(r => storage.relations.delete(r));
     }
 
@@ -478,15 +453,7 @@ export function PowerToolsScreen() {
             isAllSelected,
           }
         : undefined,
-    [
-      isEditing,
-      selectableCount,
-      selectedEntityIds,
-      toggleRowSelection,
-      setRowSelection,
-      onMasterToggle,
-      isAllSelected,
-    ]
+    [isEditing, selectableCount, selectedEntityIds, toggleRowSelection, setRowSelection, onMasterToggle, isAllSelected]
   );
 
   React.useEffect(() => {
@@ -705,7 +672,7 @@ export function PowerToolsScreen() {
                 type="button"
                 onClick={selectedCount > 0 ? handleDeleteSelectedRows : undefined}
                 disabled={selectedCount === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 title="Delete selected"
                 aria-label="Delete selected"
               >
@@ -716,7 +683,7 @@ export function PowerToolsScreen() {
                   <button
                     type="button"
                     disabled={selectedCount === 0}
-                    className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     title="Edit selected"
                     aria-label="Edit selected"
                   >

@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';

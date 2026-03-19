@@ -4,26 +4,20 @@ import * as React from 'react';
 import { useRef, useState } from 'react';
 
 import { IMAGE_ACCEPT } from '~/core/constants';
+import { useQueryProperty } from '~/core/sync/use-store';
+import type { Property, Relation } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
-import { Checkbox, getChecked } from '~/design-system/checkbox';
+
 import { SmallButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { Dots } from '~/design-system/dots';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import {
-  TableImageField,
-  TableStringField,
-} from '~/design-system/editable-fields/editable-fields';
+import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { NativeGeoImage } from '~/design-system/geo-image';
-import { Dots } from '~/design-system/dots';
 import { Upload } from '~/design-system/icons/upload';
-import {
-  SelectEntityCompact,
-  type SelectEntityCompactResult,
-} from '~/design-system/select-entity-compact';
-
-import type { Property, Relation } from '~/core/types';
-import { useQueryProperty } from '~/core/sync/use-store';
+import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 
 export type EditableEntityValueFieldProps = {
   property: Property;
@@ -51,16 +45,11 @@ export type EditableEntityValueFieldProps = {
 
 function isRelationProperty(property: Property): boolean {
   return (
-    property.dataType === 'RELATION' ||
-    Boolean(property.relationValueTypes && property.relationValueTypes.length > 0)
+    property.dataType === 'RELATION' || Boolean(property.relationValueTypes && property.relationValueTypes.length > 0)
   );
 }
 
-function ImageUploadButton({
-  onUpload,
-}: {
-  onUpload: (file: File) => Promise<void>;
-}) {
+function ImageUploadButton({ onUpload }: { onUpload: (file: File) => Promise<void> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -78,10 +67,7 @@ function ImageUploadButton({
 
   return (
     <>
-      <SmallButton
-        onClick={() => inputRef.current?.click()}
-        icon={isUploading ? <Dots /> : <Upload />}
-      >
+      <SmallButton onClick={() => inputRef.current?.click()} icon={isUploading ? <Dots /> : <Upload />}>
         {isUploading ? 'Uploading...' : 'Load image'}
       </SmallButton>
       <input
@@ -125,24 +111,12 @@ function ImageFileSelectButton({
       <SmallButton onClick={handleButtonClick} icon={<Upload />}>
         Load image
       </SmallButton>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={IMAGE_ACCEPT}
-        className="hidden"
-        onChange={handleChange}
-      />
+      <input ref={inputRef} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={handleChange} />
     </>
   );
 }
 
-function TemporaryImagePreview({
-  file,
-  onRemove,
-}: {
-  file: File;
-  onRemove?: () => void;
-}) {
+function TemporaryImagePreview({ file, onRemove }: { file: File; onRemove?: () => void }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   React.useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -156,11 +130,7 @@ function TemporaryImagePreview({
         <img src={objectUrl} alt="" className="size-full object-cover" />
       </span>
       {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-button text-[0.8125rem] text-grey-04 hover:underline"
-        >
+        <button type="button" onClick={onRemove} className="text-button text-[0.8125rem] text-grey-04 hover:underline">
           Remove
         </button>
       )}
@@ -185,11 +155,7 @@ function InitialImagePreview({
         <NativeGeoImage value={imageSrc} alt="" className="size-full object-cover" />
       </span>
       {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-button text-[0.8125rem] text-grey-04 hover:underline"
-        >
+        <button type="button" onClick={onRemove} className="text-button text-[0.8125rem] text-grey-04 hover:underline">
           Remove
         </button>
       )}
@@ -223,11 +189,10 @@ export function EditableEntityValueField({
     id: isRelation && !isImageType && property.id ? property.id : undefined,
     enabled: isRelation && !isImageType && Boolean(property.id),
   });
-  const relationValueTypes =
-    property.relationValueTypes?.length ? property.relationValueTypes : resolvedProperty?.relationValueTypes;
-  const filterByTypeIds = relationValueTypes?.length
-    ? relationValueTypes.map(r => ({ id: r.id }))
-    : undefined;
+  const relationValueTypes = property.relationValueTypes?.length
+    ? property.relationValueTypes
+    : resolvedProperty?.relationValueTypes;
+  const filterByTypeIds = relationValueTypes?.length ? relationValueTypes.map(r => ({ id: r.id })) : undefined;
 
   if (isRelation && !isImageType && onSelectEntity) {
     return (
@@ -248,12 +213,9 @@ export function EditableEntityValueField({
   const renderableType = property.renderableTypeStrict ?? property.dataType;
 
   if (renderableType === 'IMAGE' && entityId != null) {
-    const valueFieldBorderClass =
-      'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+    const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div
-        className={`${valueFieldBorderClass} px-2 py-1.5 min-h-[2.25rem] flex items-center`}
-      >
+      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>
         <TableImageField
           imageRelation={imageRelation}
           spaceId={spaceId}
@@ -267,34 +229,23 @@ export function EditableEntityValueField({
   }
 
   if (renderableType === 'IMAGE' && onImageFileSelect) {
-    const valueFieldBorderClass =
-      'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+    const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div
-        className={`${valueFieldBorderClass} flex flex-col`}
-      >
+      <div className={`${valueFieldBorderClass} flex flex-col`}>
         <ImageFileSelectButton
           onSelect={onImageFileSelect}
           onBeforeFileDialogOpen={onBeforeImageFileDialogOpen}
           onAfterFileDialogClose={onAfterImageFileDialogClose}
         />
-        {selectedImageFile && (
-          <TemporaryImagePreview
-            file={selectedImageFile}
-            onRemove={onImageFileClear}
-          />
-        )}
+        {selectedImageFile && <TemporaryImagePreview file={selectedImageFile} onRemove={onImageFileClear} />}
       </div>
     );
   }
 
   if (renderableType === 'IMAGE' && onSelectEntity && onUploadImage) {
-    const valueFieldBorderClass =
-      'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+    const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div
-        className={`${valueFieldBorderClass} px-2 py-1.5 min-h-[2.25rem] flex flex-col gap-2`}
-      >
+      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] flex-col gap-2 px-2 py-1.5`}>
         <ImageUploadButton
           onUpload={async (file: File) => {
             const result = await onUploadImage(file);
@@ -317,12 +268,9 @@ export function EditableEntityValueField({
   }
 
   if (renderableType === 'IMAGE' && onSelectEntity) {
-    const valueFieldBorderClass =
-      'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+    const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div
-        className={`${valueFieldBorderClass} px-2 py-1.5 min-h-[2.25rem] flex items-center`}
-      >
+      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>
         <SelectEntityCompact
           spaceId={spaceId}
           selected={selectedEntities}
@@ -335,11 +283,10 @@ export function EditableEntityValueField({
   }
 
   if (renderableType === 'IMAGE') {
-    const valueFieldBorderClass =
-      'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+    const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
       <div
-        className={`${valueFieldBorderClass} px-2 py-1.5 min-h-[2.25rem] flex items-center text-[0.8125rem] text-grey-04`}
+        className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5 text-[0.8125rem] text-grey-04`}
       >
         Images can be set per row after adding the property.
       </div>
@@ -349,8 +296,7 @@ export function EditableEntityValueField({
   const unitId = unitIdProp ?? property.unit ?? undefined;
   const handleChange = onChange ?? (() => {});
 
-  const valueFieldBorderClass =
-    'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
+  const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
 
   let content: React.ReactNode;
   switch (renderableType) {
@@ -370,13 +316,7 @@ export function EditableEntityValueField({
       );
       break;
     case 'TEXT':
-      content = (
-        <TableStringField
-          placeholder="Add value..."
-          value={value}
-          onChange={handleChange}
-        />
-      );
+      content = <TableStringField placeholder="Add value..." value={value} onChange={handleChange} />;
       break;
     case 'URL':
       content = (
@@ -392,12 +332,7 @@ export function EditableEntityValueField({
       break;
     case 'BOOLEAN': {
       const checked = getChecked(value);
-      content = (
-        <Checkbox
-          checked={checked}
-          onChange={() => handleChange(!checked ? '1' : '0')}
-        />
-      );
+      content = <Checkbox checked={checked} onChange={() => handleChange(!checked ? '1' : '0')} />;
       break;
     }
     case 'DATE':
@@ -414,18 +349,8 @@ export function EditableEntityValueField({
       );
       break;
     default:
-      content = (
-        <TableStringField
-          placeholder="Add value..."
-          value={value}
-          onChange={handleChange}
-        />
-      );
+      content = <TableStringField placeholder="Add value..." value={value} onChange={handleChange} />;
   }
 
-  return (
-    <div className={`${valueFieldBorderClass} px-2 py-1.5 min-h-[2.25rem] flex items-center`}>
-      {content}
-    </div>
-  );
+  return <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>{content}</div>;
 }

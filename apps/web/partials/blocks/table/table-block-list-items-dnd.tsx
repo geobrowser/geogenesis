@@ -1,5 +1,6 @@
 import { verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import cx from 'classnames';
 
 import { OrderDots } from '~/design-system/icons/order-dots';

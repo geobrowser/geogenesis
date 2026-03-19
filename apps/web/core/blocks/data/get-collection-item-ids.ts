@@ -19,10 +19,7 @@ export function getCollectionItemIds(blocks: Entity[]): Record<string, string[]>
 
     const collectionItemRelations = block.relations
       .filter(
-        r =>
-          r.fromEntity.id === block.id &&
-          r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE &&
-          !r.isDeleted
+        r => r.fromEntity.id === block.id && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE && !r.isDeleted
       )
       .sort((a, z) => Position.compare(a.position ?? null, z.position ?? null));
 

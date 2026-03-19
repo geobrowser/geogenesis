@@ -1,4 +1,5 @@
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
 import { Duration, Effect, Either } from 'effect';
 import * as Schedule from 'effect/Schedule';
 import { GraphQLClient } from 'graphql-request';

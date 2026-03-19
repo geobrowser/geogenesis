@@ -1,12 +1,13 @@
 'use client';
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
-import { EditorContent, Editor as TiptapEditor, JSONContent, useEditor } from '@tiptap/react';
+import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+
+import * as React from 'react';
+
 import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';

@@ -1,12 +1,12 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Array as A, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
-
-import * as React from 'react';
 
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';

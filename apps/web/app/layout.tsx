@@ -1,9 +1,9 @@
-import localFont from 'next/font/local';
-import 'react-medium-image-zoom/dist/styles.css';
-
 import * as React from 'react';
 
 import { Metadata } from 'next';
+
+import localFont from 'next/font/local';
+import 'react-medium-image-zoom/dist/styles.css';
 
 import { Providers } from '~/core/providers';
 

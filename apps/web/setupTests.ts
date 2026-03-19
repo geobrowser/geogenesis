@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
+
 import indexedDB from 'fake-indexeddb';
 import { afterEach, vi } from 'vitest';
 

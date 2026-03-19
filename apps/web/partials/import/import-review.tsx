@@ -1,9 +1,9 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+
 import { useAtom, useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
-
-import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';

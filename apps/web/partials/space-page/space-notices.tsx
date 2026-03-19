@@ -1,15 +1,16 @@
 'use client';
 
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+
+import * as React from 'react';
+import { useCallback, useState } from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
 import { useAtom } from 'jotai';
 import type { LinkProps } from 'next/link';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
-import { useCallback, useState } from 'react';
 
 import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';

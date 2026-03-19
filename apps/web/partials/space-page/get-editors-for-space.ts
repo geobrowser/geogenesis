@@ -1,7 +1,7 @@
+import { cache } from 'react';
+
 import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
-
-import { cache } from 'react';
 
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { OmitStrict, Profile } from '~/core/types';

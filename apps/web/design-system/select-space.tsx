@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { Effect } from 'effect';
-
-import * as React from 'react';
 
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';

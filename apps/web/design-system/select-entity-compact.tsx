@@ -36,9 +36,7 @@ export function SelectEntityCompact({
   onRemoveSelected,
   relationValueTypes,
 }: SelectEntityCompactProps) {
-  const filterByTypes = relationValueTypes?.length
-    ? relationValueTypes.map(r => r.id)
-    : undefined;
+  const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
     filterByTypes,
   });
@@ -91,7 +89,7 @@ export function SelectEntityCompact({
       <Popover.Anchor asChild>
         <div className="w-full space-y-2">
           <div className="relative w-full">
-            <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2">
+            <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2">
               <Search />
             </div>
             <input
@@ -102,7 +100,7 @@ export function SelectEntityCompact({
                 setSelectedIndex(0);
               }}
               aria-label="Search"
-              className="w-full rounded-md border border-grey-02 bg-white py-2 pl-9 pr-3 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
+              className="w-full rounded-md border border-grey-02 bg-white py-2 pr-3 pl-9 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
             />
           </div>
           {selected.length > 0 && (
@@ -120,11 +118,7 @@ export function SelectEntityCompact({
                   >
                     {item.primarySpaceImage != null && (
                       <span className="inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-04">
-                        <NativeGeoImage
-                          value={item.primarySpaceImage}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
+                        <NativeGeoImage value={item.primarySpaceImage} alt="" className="h-full w-full object-cover" />
                       </span>
                     )}
                     <span className="max-w-[120px] truncate">{item.name ?? item.id}</span>
@@ -155,12 +149,8 @@ export function SelectEntityCompact({
           onOpenAutoFocus={e => e.preventDefault()}
         >
           <div className="max-h-[min(50vh,300px)] overflow-y-auto">
-            {isLoading && (
-              <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>
-            )}
-            {!isLoading && isEmpty && (
-              <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>
-            )}
+            {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
+            {!isLoading && isEmpty && <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>}
             {!isLoading && !isEmpty && (
               <div className="divide-y divide-divider">
                 {results.map((result, index) => (
@@ -172,9 +162,7 @@ export function SelectEntityCompact({
                       index === selectedIndex ? 'bg-grey-01' : ''
                     }`}
                   >
-                    <div className="max-w-full truncate text-resultTitle text-text">
-                      {result.name}
-                    </div>
+                    <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                     <div className="mt-1.5 flex items-center gap-1.5">
                       {(result.spaces ?? []).length > 0 && (
                         <div className="flex shrink-0 items-center gap-1">
@@ -199,11 +187,7 @@ export function SelectEntityCompact({
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
                               >
-                                <path
-                                  d="M2.25 8L5.75 4.5L2.25 1"
-                                  stroke="#606060"
-                                  strokeLinecap="round"
-                                />
+                                <path d="M2.25 8L5.75 4.5L2.25 1" stroke="#606060" strokeLinecap="round" />
                               </svg>
                             </div>
                           )}

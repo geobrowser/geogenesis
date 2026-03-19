@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-
 import { useCallback } from 'react';
+
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export function useCloseProposal(spaceId: string) {
   const router = useRouter();

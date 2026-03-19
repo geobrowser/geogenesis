@@ -1,10 +1,10 @@
 'use client';
 
-import { cva } from 'class-variance-authority';
-import Textarea from 'react-textarea-autosize';
-
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
+
+import { cva } from 'class-variance-authority';
+import Textarea from 'react-textarea-autosize';
 
 import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { GeoPoint } from '~/core/utils/utils';

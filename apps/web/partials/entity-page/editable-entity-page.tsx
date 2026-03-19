@@ -1,10 +1,11 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
-import { AnimatePresence, motion } from 'framer-motion';
-import { useAtom } from 'jotai';
 
 import * as React from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
+import { useAtom } from 'jotai';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -43,9 +44,9 @@ import {
   PageVideoField,
   VideoPlayer,
 } from '~/design-system/editable-fields/editable-fields';
-import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
+import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';

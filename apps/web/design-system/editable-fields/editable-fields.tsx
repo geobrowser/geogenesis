@@ -1,11 +1,11 @@
 'use client';
 
+import * as React from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
+
 import { cva, cx } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
-
-import * as React from 'react';
-import { ChangeEvent, useCallback, useRef } from 'react';
 
 import { VIDEO_ACCEPT } from '~/core/constants';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -127,13 +127,7 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img
-          src={src}
-          onError={onError}
-          loading="lazy"
-          decoding="async"
-          className="h-full rounded-lg object-cover"
-        />
+        <img src={src} onError={onError} loading="lazy" decoding="async" className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
   );

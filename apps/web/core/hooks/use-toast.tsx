@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom } from 'jotai';
-
-import * as React from 'react';
 
 const toastAtom = atom<React.ReactElement<any> | null>(null);
 

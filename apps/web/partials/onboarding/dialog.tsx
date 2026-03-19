@@ -2,14 +2,15 @@
 
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
+
+import * as React from 'react';
+import { ChangeEvent, useCallback, useRef, useState } from 'react';
+
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';

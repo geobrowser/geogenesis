@@ -1,9 +1,10 @@
 'use client';
 
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { useAtom } from 'jotai';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';

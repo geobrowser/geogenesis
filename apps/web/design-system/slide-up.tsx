@@ -1,10 +1,10 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
-
-import * as React from 'react';
 
 type SlideUpProps = {
   isOpen: boolean;

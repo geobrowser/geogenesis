@@ -1,8 +1,8 @@
 'use client';
 
-import cx from 'classnames';
-
 import type { ComponentPropsWithoutRef } from 'react';
+
+import cx from 'classnames';
 
 import { Blank } from '~/design-system/icons/blank';
 import { Check } from '~/design-system/icons/check';

@@ -1,14 +1,15 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 
+import { AnimatePresence, motion } from 'framer-motion';
+
 import {
+  type ParsedSchedule,
   formatSchedule,
   parseSchedule,
   serializeSchedule,
   validateSchedule,
-  type ParsedSchedule,
 } from '~/core/utils/schedule';
 
 import { SmallButton } from '~/design-system/button';
@@ -43,13 +44,7 @@ const fieldClass =
 
 const labelClass = 'text-smallButton text-grey-04';
 
-function ScheduleFormEditor({
-  parsed,
-  onUpdate,
-}: {
-  parsed: ParsedSchedule;
-  onUpdate: (p: ParsedSchedule) => void;
-}) {
+function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUpdate: (p: ParsedSchedule) => void }) {
   const toggleDay = (day: string) => {
     const byDay = parsed.byDay.includes(day) ? parsed.byDay.filter(d => d !== day) : [...parsed.byDay, day];
     onUpdate({ ...parsed, byDay });

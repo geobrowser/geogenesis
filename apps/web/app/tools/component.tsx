@@ -2,11 +2,12 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Tabs from '@radix-ui/react-tabs';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { fromGeoFilterString } from '~/core/blocks/data/filters';
 import { filterStateToWhere } from '~/core/blocks/data/use-data-block';
