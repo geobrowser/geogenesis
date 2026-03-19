@@ -22,7 +22,7 @@ export function CreateEntityDropdown() {
   const { shouldShowElement } = useOnboardGuard();
 
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
-  const { isEditor } = useAccessControl(spaceId ?? '');
+  const { isEditor, isMember } = useAccessControl(spaceId ?? '');
 
   if (!shouldShowElement) {
     return null;
@@ -64,7 +64,7 @@ export function CreateEntityDropdown() {
           >
             <p className="text-center text-button">New property</p>
           </MenuItem>
-          {isEditor && (
+          {(isEditor || isMember) && (
             <MenuItem
               onClick={() => {
                 router.push(NavUtils.toImport(spaceId));
