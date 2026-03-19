@@ -8,19 +8,22 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
+  type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from './space-image';
 import {
   MAX_TOPIC_USAGE_AVATARS,
-  mergeTopicUsageSpaces,
   PLACEHOLDER_TOPIC_NAME,
   type TopicUsage,
   type TopicUsageSpaceNode,
+  mergeTopicUsageSpaces,
 } from './topic-space-usage';
 
 interface SubtopicNode {
   topicId: string;
   topic: {
     name: string | null;
+    relationsList: SpaceImageRelationNode[];
     spacesByTopicIdConnection: {
       totalCount: number;
       nodes: TopicUsageSpaceNode[];
@@ -45,6 +48,15 @@ const subtopicsQuery = (spaceId: string) => `
         topicId
         topic {
           name
+          relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+            typeId
+            toEntity {
+              valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                propertyId
+                text
+              }
+            }
+          }
           spacesByTopicIdConnection(first: ${MAX_TOPIC_USAGE_AVATARS}) {
             totalCount
             nodes {
@@ -94,17 +106,22 @@ export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
   }
 
   const nodes = resultOrError.right.subspaceTopicsConnection.nodes;
-  const subtopicsById = new Map<string, { name: string; spaces: TopicUsageSpaceNode[]; spacesCount: number }>();
+  const subtopicsById = new Map<
+    string,
+    { name: string; image: string; spaces: TopicUsageSpaceNode[]; spacesCount: number }
+  >();
 
   for (const node of nodes) {
     const existingSubtopic = subtopicsById.get(node.topicId);
     const nextName = node.topic?.name ?? PLACEHOLDER_TOPIC_NAME;
+    const nextImage = resolveSpaceImage(node.topic?.relationsList ?? []);
     const nextSpaces = node.topic?.spacesByTopicIdConnection.nodes ?? [];
     const nextSpacesCount = node.topic?.spacesByTopicIdConnection.totalCount ?? 0;
 
     if (!existingSubtopic) {
       subtopicsById.set(node.topicId, {
         name: nextName,
+        image: nextImage,
         spaces: [...nextSpaces],
         spacesCount: nextSpacesCount,
       });
@@ -115,18 +132,25 @@ export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
       existingSubtopic.name = nextName;
     }
 
+    if (existingSubtopic.image === '' && nextImage !== '') {
+      existingSubtopic.image = nextImage;
+    }
+
     existingSubtopic.spaces.push(...nextSpaces);
     existingSubtopic.spacesCount = Math.max(existingSubtopic.spacesCount, nextSpacesCount);
   }
 
-  return Array.from(subtopicsById.entries()).map(([id, subtopic]) => {
-    const spaces = mergeTopicUsageSpaces(subtopic.spaces);
+  return Array.from(subtopicsById.entries())
+    .map(([id, subtopic]) => {
+      const spaces = mergeTopicUsageSpaces(subtopic.spaces);
 
-    return {
-      id,
-      name: subtopic.name,
-      spaces,
-      spacesCount: subtopic.spacesCount,
-    };
-  });
+      return {
+        id,
+        name: subtopic.name,
+        image: subtopic.image,
+        spaces,
+        spacesCount: subtopic.spacesCount,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
