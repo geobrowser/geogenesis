@@ -504,6 +504,10 @@ export const spaceFragment = graphql(/* GraphQL */ `
     address
     topicId
 
+    topic {
+      ...FullEntity
+    }
+
     membersList {
       memberSpaceId
     }
