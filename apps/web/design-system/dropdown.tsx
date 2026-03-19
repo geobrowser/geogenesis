@@ -1,10 +1,11 @@
 'use client';
 
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';

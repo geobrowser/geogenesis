@@ -1,8 +1,8 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-
 import * as React from 'react';
+
+import { useSearchParams } from 'next/navigation';
 
 import { ALL_SPACES_IMAGE, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';

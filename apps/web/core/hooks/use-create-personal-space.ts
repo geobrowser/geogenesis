@@ -2,6 +2,7 @@
 
 import { personalSpace } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+
 import { Effect, Either } from 'effect';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

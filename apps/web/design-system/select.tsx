@@ -1,7 +1,8 @@
 import * as SelectPrimitive from '@radix-ui/react-select';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
 

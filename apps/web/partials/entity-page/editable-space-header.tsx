@@ -26,8 +26,8 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
 import { SpaceTopicDialog } from '~/partials/space-page/space-topic-dialog';
+import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
 import { SubtopicsDialog } from '~/partials/space-page/subtopics-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 

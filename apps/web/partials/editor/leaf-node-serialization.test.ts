@@ -1,4 +1,5 @@
 import { generateHTML } from '@tiptap/react';
+
 import { describe, expect, it } from 'vitest';
 
 import { tiptapExtensions } from './extensions';

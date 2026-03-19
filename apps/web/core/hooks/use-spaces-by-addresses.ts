@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+
 import { Effect } from 'effect';
 
 import { Space } from '~/core/io/dto/spaces';

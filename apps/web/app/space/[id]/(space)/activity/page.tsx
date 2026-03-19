@@ -1,7 +1,8 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
-import { notFound } from 'next/navigation';
 
 import { Suspense } from 'react';
+
+import { notFound } from 'next/navigation';
 
 import { Skeleton } from '~/design-system/skeleton';
 

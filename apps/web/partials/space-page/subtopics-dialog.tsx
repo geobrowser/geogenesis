@@ -2,10 +2,11 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import pluralize from 'pluralize';
 
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
+import pluralize from 'pluralize';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { usePendingSubtopicProposals } from '~/core/hooks/use-pending-subtopic-proposals';
@@ -13,8 +14,8 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSubspace } from '~/core/hooks/use-subspace';
 import { useSubtopicSearch } from '~/core/hooks/use-subtopic-search';
 import { useSubtopics } from '~/core/hooks/use-subtopics';
-import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
 import type { PendingSubtopicProposal } from '~/core/io/subgraph/fetch-pending-subtopic-proposals';
+import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
 import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 import { NavUtils } from '~/core/utils/utils';
 

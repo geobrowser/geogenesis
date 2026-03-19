@@ -1,9 +1,10 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { ChangeEvent, useRef, useState } from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';

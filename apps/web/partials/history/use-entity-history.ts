@@ -1,9 +1,10 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { usePathname, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { type EntityVersion, fetchEntityVersions } from '~/core/io/subgraph/fetch-entity-versions';
 

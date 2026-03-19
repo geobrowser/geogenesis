@@ -1,8 +1,8 @@
 'use client';
 
-import { ErrorBoundary } from 'react-error-boundary';
-
 import * as React from 'react';
+
+import { ErrorBoundary } from 'react-error-boundary';
 
 import { reportBoundaryError } from './logger';
 

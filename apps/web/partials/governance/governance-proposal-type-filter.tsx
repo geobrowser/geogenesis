@@ -1,8 +1,8 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-
 import * as React from 'react';
+
+import { useSearchParams } from 'next/navigation';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';

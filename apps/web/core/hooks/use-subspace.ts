@@ -2,6 +2,7 @@
 
 import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
+
 import { Effect, Either } from 'effect';
 import { type Hex, encodeFunctionData } from 'viem';
 
@@ -236,11 +237,7 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
  * Subspace topic layout for all trust actions is `bytes32(bytes16 subspaceId, bytes16 target)`.
  * For non-subtopic actions, target is zero bytes.
  */
-function buildSubspaceTopic(
-  relationType: SubspaceRelationType,
-  subspaceId: string,
-  topicEntityId?: string
-): Hex {
+function buildSubspaceTopic(relationType: SubspaceRelationType, subspaceId: string, topicEntityId?: string): Hex {
   if (relationType !== 'subtopic') {
     return padBytes16ToBytes32(subspaceId);
   }

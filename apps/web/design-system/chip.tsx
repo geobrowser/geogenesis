@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';

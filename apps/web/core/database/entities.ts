@@ -2,10 +2,11 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Effect } from 'effect';
-import { dedupeWith } from 'effect/Array';
 
 import { useMemo } from 'react';
+
+import { Effect } from 'effect';
+import { dedupeWith } from 'effect/Array';
 
 import { DATA_TYPE_PROPERTY } from '../constants';
 import { getProperties } from '../io/queries';

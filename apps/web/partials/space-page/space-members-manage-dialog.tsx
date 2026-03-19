@@ -1,9 +1,10 @@
 'use client';
 
 import { Content, Overlay, Portal, Root, Title, Trigger } from '@radix-ui/react-dialog';
-import { motion } from 'framer-motion';
 
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
 
 import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';

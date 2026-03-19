@@ -1,9 +1,10 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useRouter } from 'next/navigation';
 
 import type { MouseEvent } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -176,7 +177,14 @@ interface RelationsGroupProps {
   imageUploadingFor?: Set<string>;
 }
 
-function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName, imageUploadingFor }: RelationsGroupProps) {
+function RelationsGroup({
+  entityId,
+  property,
+  spaceId,
+  onLinkEntry,
+  entityName,
+  imageUploadingFor,
+}: RelationsGroupProps) {
   const { storage } = useMutate();
 
   // We don't filter by space id as we want to render data from all spaces.

@@ -1,10 +1,11 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import cx from 'classnames';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import cx from 'classnames';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/substream-schema';
@@ -85,14 +86,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
     storage.values.deleteMany(allValuesToDelete);
     storage.relations.deleteMany(allRelationsToDelete);
-  }, [
-    entityId,
-    outgoingRelations,
-    store,
-    storage.relations,
-    storage.values,
-    values,
-  ]);
+  }, [entityId, outgoingRelations, store, storage.relations, storage.values, values]);
 
   const onCopyEntityId = async () => {
     try {

@@ -19,9 +19,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -162,7 +163,7 @@ function NameCell({
           entityId={row.entityId}
           spaceId={row.spaceId}
           href={href}
-          className="text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline border-t border-dotted border-ctaPrimary/30 pt-1"
+          className="border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline"
           onClick={handleOpen}
         >
           {name || row.entityId}
@@ -175,7 +176,7 @@ function NameCell({
     <Link
       entityId={row.entityId}
       href={href}
-      className="text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline border-t border-dotted border-ctaPrimary/30 pt-1"
+      className="border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline"
       onClick={handleOpen}
     >
       {name || row.entityId}
@@ -575,11 +576,7 @@ export function PowerToolsTable({
                     }
                   : undefined
               }
-              onDoubleClick={
-                onRowDoubleClick && !row.placeholder
-                  ? () => onRowDoubleClick(row.entityId)
-                  : undefined
-              }
+              onDoubleClick={onRowDoubleClick && !row.placeholder ? () => onRowDoubleClick(row.entityId) : undefined}
               onMouseEnter={
                 selection && !row.placeholder && isDragSelecting
                   ? () => {
@@ -612,7 +609,7 @@ export function PowerToolsTable({
                     ? 'bg-ctaTertiary'
                     : !isEditing
                       ? 'bg-grey-01/50'
-                      : 'hover:bg-grey-01 cursor-pointer'
+                      : 'cursor-pointer hover:bg-grey-01'
               }`}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
@@ -627,49 +624,46 @@ export function PowerToolsTable({
                   gridTemplateColumns: columnLayout.template,
                 }}
               >
-              {showCheckboxColumn && (
-                <div
-                  data-checkbox-cell
-                  className="flex min-h-full cursor-pointer items-center border-r border-grey-02 px-3 py-2"
-                  onClick={e => {
-                    e.stopPropagation();
-                    if (hasDraggedRef.current) {
-                      hasDraggedRef.current = false;
-                      return;
-                    }
-                    if (!row.placeholder) selection!.onToggleRowSelection(row.entityId);
-                  }}
-                  onMouseEnter={
-                    !row.placeholder && isDragSelecting
-                      ? () => {
-                          hasDraggedRef.current = true;
-                          selection!.onSetRowSelection(row.entityId, dragSelectValueRef.current);
-                        }
-                      : undefined
-                  }
-                  role="button"
-                  tabIndex={row.placeholder ? undefined : 0}
-                  aria-label={row.placeholder ? undefined : 'Select row'}
-                  onKeyDown={
-                    !row.placeholder
-                      ? e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            selection!.onToggleRowSelection(row.entityId);
+                {showCheckboxColumn && (
+                  <div
+                    data-checkbox-cell
+                    className="flex min-h-full cursor-pointer items-center border-r border-grey-02 px-3 py-2"
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (hasDraggedRef.current) {
+                        hasDraggedRef.current = false;
+                        return;
+                      }
+                      if (!row.placeholder) selection!.onToggleRowSelection(row.entityId);
+                    }}
+                    onMouseEnter={
+                      !row.placeholder && isDragSelecting
+                        ? () => {
+                            hasDraggedRef.current = true;
+                            selection!.onSetRowSelection(row.entityId, dragSelectValueRef.current);
                           }
-                        }
-                      : undefined
-                  }
-                >
-                  {!row.placeholder && (
-                    <Checkbox
-                      checked={selection!.selectedEntityIds.has(row.entityId)}
-                      aria-label="Select row"
-                    />
-                  )}
-                </div>
-              )}
+                        : undefined
+                    }
+                    role="button"
+                    tabIndex={row.placeholder ? undefined : 0}
+                    aria-label={row.placeholder ? undefined : 'Select row'}
+                    onKeyDown={
+                      !row.placeholder
+                        ? e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              selection!.onToggleRowSelection(row.entityId);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    {!row.placeholder && (
+                      <Checkbox checked={selection!.selectedEntityIds.has(row.entityId)} aria-label="Select row" />
+                    )}
+                  </div>
+                )}
                 {columnLayout.columns.map(({ property }) => {
                   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;

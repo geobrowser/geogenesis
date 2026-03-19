@@ -36,9 +36,7 @@ describe('getSubspaceProposalDetails', () => {
   });
 
   it('maps topic add actions', () => {
-    expect(
-      getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
-    ).toEqual({
+    expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toEqual({
       actionType: 'SUBSPACE_TOPIC_DECLARED',
       targetTopicId: 'topic-id',
     });
@@ -53,9 +51,7 @@ describe('getSubspaceProposalDetails', () => {
 
   it('returns null when required identifiers are missing', () => {
     expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_RELATED' }])).toBeNull();
-    expect(
-      getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
-    ).toEqual({
+    expect(getSubspaceProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toEqual({
       actionType: 'SUBSPACE_TOPIC_DECLARED',
       targetTopicId: 'topic-id',
     });
@@ -116,6 +112,8 @@ describe('getSpaceTopicProposalDetails', () => {
   });
 
   it('returns null for non-topic actions', () => {
-    expect(getSpaceTopicProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])).toBeNull();
+    expect(
+      getSpaceTopicProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
+    ).toBeNull();
   });
 });

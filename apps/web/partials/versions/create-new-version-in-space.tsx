@@ -1,10 +1,11 @@
 'use client';
 
 import { IdUtils } from '@geoprotocol/geo-sdk';
-import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';

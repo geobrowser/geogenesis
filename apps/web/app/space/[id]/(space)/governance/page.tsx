@@ -1,12 +1,13 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
-import { cookies } from 'next/headers';
-import { notFound } from 'next/navigation';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
+
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
+import { cookies } from 'next/headers';
+import { notFound } from 'next/navigation';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';

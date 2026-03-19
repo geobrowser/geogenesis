@@ -1,9 +1,10 @@
 'use client';
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';

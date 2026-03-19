@@ -318,7 +318,7 @@ export function formatSchedule(schedule: string): string {
   // Recurrence
   if (props.RRULE) {
     const rrule = parseRRule(props.RRULE);
-    const freqLabel = rrule.freq ? FREQ_LABELS[rrule.freq] ?? rrule.freq : '';
+    const freqLabel = rrule.freq ? (FREQ_LABELS[rrule.freq] ?? rrule.freq) : '';
 
     if (rrule.byDay && rrule.byDay.length > 0) {
       const dayNames = rrule.byDay.map(d => DAY_NAMES[d] ?? d);

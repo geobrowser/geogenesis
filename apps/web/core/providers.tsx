@@ -1,10 +1,11 @@
 'use client';
 
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Provider as JotaiProvider } from 'jotai';
-import { CookiesProvider } from 'react-cookie';
 
 import * as React from 'react';
+
+import { Provider as JotaiProvider } from 'jotai';
+import { CookiesProvider } from 'react-cookie';
 
 import { ReactQueryProvider } from './query-client';
 import { SentryUserIdentifier } from './sentry-user-identifier';

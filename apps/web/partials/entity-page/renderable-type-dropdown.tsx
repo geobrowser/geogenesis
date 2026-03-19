@@ -1,10 +1,11 @@
 'use client';
 
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
-import cx from 'classnames';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import cx from 'classnames';
 
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';

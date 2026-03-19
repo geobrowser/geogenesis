@@ -10,9 +10,7 @@ describe('validateSchedule', () => {
   });
 
   it('accepts a valid schedule with DTSTART, DTEND, and RRULE', () => {
-    const result = validateSchedule(
-      'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH'
-    );
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH');
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
   });
@@ -205,9 +203,7 @@ describe('serializeSchedule', () => {
 
 describe('formatSchedule', () => {
   it('formats a weekly recurring schedule with time range', () => {
-    const formatted = formatSchedule(
-      'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH'
-    );
+    const formatted = formatSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH');
     expect(formatted).toContain('Weekly on Thursday');
     expect(formatted).toContain('5:00 PM');
     expect(formatted).toContain('6:00 PM');

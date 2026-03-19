@@ -1,7 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { redirect } from 'next/navigation';
 
 import * as React from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/substream-schema';

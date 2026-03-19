@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
-
-import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { reportBoundaryError } from '~/core/telemetry/logger';

@@ -1,9 +1,9 @@
 'use client';
 
-import Image, { ImageProps } from 'next/image';
-
 import { useCallback, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
+
+import Image, { ImageProps } from 'next/image';
 
 import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 

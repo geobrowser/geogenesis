@@ -1,5 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { createAtom } from '@xstate/store';
+
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
@@ -111,9 +112,7 @@ export function resolveRelationNames(r: Relation): Relation {
 
 function resolveEntityName(entityId: string): string | null {
   const entityValues = getValueIndex().get(entityId) ?? [];
-  const nameValues = entityValues.filter(
-    v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
-  );
+  const nameValues = entityValues.filter(v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted);
 
   if (nameValues.length === 0) {
     const synced = syncedEntities.get(entityId);
@@ -308,9 +307,7 @@ export class GeoStore {
     if (newRelations.length > 0) {
       reactiveRelations.set(prev => {
         const prevById = new Map(prev.map(r => [r.id, r]));
-        const deletedRelationKeys = new Set(
-          prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r))
-        );
+        const deletedRelationKeys = new Set(prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r)));
         const mergedIncoming = newRelations
           .filter(r => !deletedRelationKeys.has(relationKey(r)))
           .map(r => {

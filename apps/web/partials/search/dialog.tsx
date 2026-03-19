@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
+
+import { useCallback, useEffect, useState } from 'react';
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-
-import { useCallback, useEffect, useState } from 'react';
-import * as React from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';

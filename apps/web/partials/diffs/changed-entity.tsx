@@ -1,9 +1,10 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -16,10 +17,9 @@ import type {
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
+import { formatSchedule } from '~/core/utils/schedule';
 import { useEntityMediaUrl, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { getVideoPath } from '~/core/utils/utils';
-
-import { formatSchedule } from '~/core/utils/schedule';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';

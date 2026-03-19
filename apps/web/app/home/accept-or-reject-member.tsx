@@ -1,8 +1,8 @@
 'use client';
 
-import cx from 'classnames';
-
 import { useEffect, useState } from 'react';
+
+import cx from 'classnames';
 
 import { useVote } from '~/core/hooks/use-vote';
 import { NavUtils } from '~/core/utils/utils';

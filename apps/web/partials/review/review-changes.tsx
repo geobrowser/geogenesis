@@ -3,11 +3,12 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';

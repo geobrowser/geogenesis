@@ -1,5 +1,7 @@
 import { Graph, type Op } from '@geoprotocol/geo-sdk';
+
 import { Effect } from 'effect';
+
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { Relation } from '~/core/types';
 
@@ -71,4 +73,3 @@ export async function buildOrphanChildDeleteOps(args: {
 
   return ops;
 }
-

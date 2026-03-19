@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { notFound } from 'next/navigation';
 
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -20,8 +21,6 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
-
-import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 
 import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';

@@ -18,15 +18,15 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
   type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from './space-image';
 import {
   MAX_TOPIC_USAGE_AVATARS,
-  mergeTopicUsageSpaces,
   PLACEHOLDER_TOPIC_NAME,
   type TopicUsage,
   type TopicUsageSpaceNode,
+  mergeTopicUsageSpaces,
 } from './topic-space-usage';
 
 export interface PendingSubtopicProposal extends TopicUsage {
@@ -110,7 +110,16 @@ const topicMetadataQuery = (topicIds: string[]) => `
 
 async function fetchTopicMetadata(topicIds: string[]) {
   if (topicIds.length === 0) {
-    return new Map<string, { name: string | null; description: string | null; image: string; spaces: TopicUsage['spaces']; spacesCount: number }>();
+    return new Map<
+      string,
+      {
+        name: string | null;
+        description: string | null;
+        image: string;
+        spaces: TopicUsage['spaces'];
+        spacesCount: number;
+      }
+    >();
   }
 
   const result = await Effect.runPromise(
@@ -124,7 +133,16 @@ async function fetchTopicMetadata(topicIds: string[]) {
 
   if (Either.isLeft(result)) {
     console.warn('Failed to resolve topic metadata for pending subtopic proposals', result.left);
-    return new Map<string, { name: string | null; description: string | null; image: string; spaces: TopicUsage['spaces']; spacesCount: number }>();
+    return new Map<
+      string,
+      {
+        name: string | null;
+        description: string | null;
+        image: string;
+        spaces: TopicUsage['spaces'];
+        spacesCount: number;
+      }
+    >();
   }
 
   return new Map(

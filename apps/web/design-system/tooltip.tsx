@@ -1,11 +1,12 @@
 'use client';
 
 import { Arrow, Content, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type TooltipProps = {
   trigger: ReactNode;

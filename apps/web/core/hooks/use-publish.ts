@@ -1,9 +1,10 @@
 'use client';
 
 import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
-import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
+
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 

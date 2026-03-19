@@ -1,6 +1,6 @@
-import { cookies } from 'next/headers';
-
 import * as React from 'react';
+
+import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 

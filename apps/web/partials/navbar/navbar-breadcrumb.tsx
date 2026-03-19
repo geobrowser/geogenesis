@@ -1,9 +1,10 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { useEffect, useState } from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';

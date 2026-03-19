@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import pluralize from 'pluralize';
 
 import * as React from 'react';
 import { startTransition, useState } from 'react';
+
+import pluralize from 'pluralize';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';

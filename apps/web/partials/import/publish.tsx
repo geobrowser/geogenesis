@@ -1,9 +1,9 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
-
-import { useState } from 'react';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

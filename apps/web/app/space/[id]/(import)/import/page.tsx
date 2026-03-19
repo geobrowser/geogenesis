@@ -1,8 +1,9 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
-import { notFound } from 'next/navigation';
 
 import { Suspense } from 'react';
+
+import { Effect } from 'effect';
+import { notFound } from 'next/navigation';
 
 import { getSpace } from '~/core/io/queries';
 

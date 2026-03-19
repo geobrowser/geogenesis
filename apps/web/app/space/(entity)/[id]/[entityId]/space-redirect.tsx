@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
 import { useEffect } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { NavUtils } from '~/core/utils/utils';

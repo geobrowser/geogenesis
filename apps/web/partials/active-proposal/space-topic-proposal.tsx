@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
-import { Environment } from '~/core/environment';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Proposal } from '~/core/io/dto/proposals';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -9,8 +9,8 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
-  resolveSpaceImage,
   type SpaceImageRelationNode,
+  resolveSpaceImage,
 } from '~/core/io/subgraph/space-image';
 import type { TopicUsageSpaceNode } from '~/core/io/subgraph/topic-space-usage';
 import { mergeTopicUsageSpaces } from '~/core/io/subgraph/topic-space-usage';

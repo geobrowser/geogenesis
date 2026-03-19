@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';

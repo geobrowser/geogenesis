@@ -2,9 +2,10 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useSelector } from '@xstate/store/react';
-import Link from 'next/link';
 
 import * as React from 'react';
+
+import Link from 'next/link';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';

@@ -3,10 +3,11 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
-import { Effect } from 'effect';
-import equal from 'fast-deep-equal';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
+import equal from 'fast-deep-equal';
 
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
