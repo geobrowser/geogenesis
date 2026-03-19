@@ -1,4 +1,4 @@
-import { IdUtils, Op } from '@geoprotocol/geo-sdk';
+import { IdUtils, Op, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -124,7 +124,7 @@ describe('prepareLocalDataForPublishing', () => {
 
     it('should create deleteRelation operation for deleted relations', async () => {
       const values: Value[] = [];
-      const relations = [createMockRelation({ isDeleted: true })];
+      const relations = [createMockRelation({ isDeleted: true, type: { id: SystemIds.BLOCKS, name: 'Blocks' } })];
 
       // Deleted relations trigger async orphan cleanup. Pass no-op so tests don't need network.
       const result = await Effect.runPromise(
@@ -331,7 +331,7 @@ describe('prepareLocalDataForPublishing', () => {
   describe('mixed operations', () => {
     it('should handle mixed values and relations', async () => {
       const values = [createMockValue({ isDeleted: false }), createMockValue({ isDeleted: true })];
-      const relations = [createMockRelation({ isDeleted: false }), createMockRelation({ isDeleted: true })];
+      const relations = [createMockRelation({ isDeleted: false }), createMockRelation({ isDeleted: true, type: { id: SystemIds.BLOCKS, name: 'Blocks' } })];
 
       // Deleted relations trigger async orphan cleanup. Pass no-op so tests don't need network.
       const result = await Effect.runPromise(

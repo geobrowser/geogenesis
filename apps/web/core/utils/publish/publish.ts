@@ -1,4 +1,4 @@
-import { type DecimalMantissa, Graph, Op, SystemIds, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { ContentIds, type DecimalMantissa, Graph, Op, SystemIds, type PropertyValueParam } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
@@ -35,8 +35,18 @@ export function prepareLocalDataForPublishing(
   const program = Effect.gen(function* () {
     const baseOps = prepareOps(values, relations, spaceId);
 
+    // Only cascade-delete targets for relation types whose targets are "owned content".
+    // Other relation types (e.g. TYPES_PROPERTY, RELATED_TOPICS) should not cascade.
+    const CASCADING_RELATION_TYPES: Set<string> = new Set([
+      SystemIds.BLOCKS,
+      SystemIds.COVER_PROPERTY,
+      ContentIds.AVATAR_PROPERTY,
+      SystemIds.TABS_PROPERTY,
+    ]);
+
     const deletedRelations = relations.filter(
       r => r.spaceId === spaceId && r.isLocal === true && r.isDeleted === true
+        && CASCADING_RELATION_TYPES.has(r.type.id)
     );
 
     if (deletedRelations.length === 0) {
