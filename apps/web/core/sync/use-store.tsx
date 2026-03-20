@@ -44,11 +44,16 @@ type QueryEntityOptions = {
 // Signal that fires when the store changes. Derived from both atoms so
 // useSelector subscribers re-evaluate when either values or relations update.
 // Selectors don't read this value — they call store.getEntity() directly.
-const reactive = createAtom(() => {
-  reactiveValues.get();
-  reactiveRelations.get();
-  return 0;
-});
+// compare: () => false ensures the atom always notifies subscribers when
+// dependencies change, even though the returned value is constant.
+const reactive = createAtom(
+  () => {
+    reactiveValues.get();
+    reactiveRelations.get();
+    return 0;
+  },
+  { compare: () => false }
+);
 
 /**
  * Triggers sync for a specific entity. This is useful when we want to
