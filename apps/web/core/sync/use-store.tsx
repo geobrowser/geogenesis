@@ -519,8 +519,9 @@ export function useRelations(options: UseRelationsParams = {}) {
   const { selector, includeDeleted = false, mergeWith = [] } = options;
 
   const values = useSelector(
-    reactiveRelations,
-    relations => {
+    reactive,
+    () => {
+      const relations = reactiveRelations.get();
       const filtered =
         mergeWith.length === 0
           ? relations.filter(r =>
@@ -564,8 +565,9 @@ export function useRelation(options: UseRelationParams) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
   const relation = useSelector(
-    reactiveRelations,
-    relations => {
+    reactive,
+    () => {
+      const relations = reactiveRelations.get();
       const searchableRelations = mergeWith.length === 0 ? relations : mergeRelations(relations, mergeWith);
 
       let found: Relation | null = null;
