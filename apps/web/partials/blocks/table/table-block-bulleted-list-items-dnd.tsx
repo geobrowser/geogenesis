@@ -16,6 +16,7 @@ const renderItem = ({
   source,
   isPlaceholder,
   autoFocus,
+  collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockBulletedListItem
     isEditing={isEditing}
@@ -29,6 +30,7 @@ const renderItem = ({
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    collectionTypeFilters={collectionTypeFilters}
   />
 );
 

@@ -14,6 +14,7 @@ const renderItem = ({
   source,
   isPlaceholder,
   autoFocus,
+  collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockGalleryItem
     isEditing={isEditing}
@@ -27,6 +28,7 @@ const renderItem = ({
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    collectionTypeFilters={collectionTypeFilters}
   />
 );
 
