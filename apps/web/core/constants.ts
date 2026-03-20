@@ -96,6 +96,18 @@ export const SUGGESTED_NUMBER_FORMATS = [
     label: '25K',
   },
   {
+    format: 'M',
+    label: '0.025M',
+  },
+  {
+    format: 'B',
+    label: '0.000025B',
+  },
+  {
+    format: 'T',
+    label: '0.000000000025T',
+  },
+  {
     format: DEFAULT_NUMBER_FORMAT,
     label: '25,000',
   },

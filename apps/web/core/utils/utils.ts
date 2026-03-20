@@ -77,6 +77,29 @@ export class GeoNumber {
         throw new Error('Invalid number');
       }
 
+      const bareFormat = safeFormatPattern?.replace(/^::/, '');
+      const compactUnit: Record<string, { divisor: number; suffix: string }> = {
+        K: { divisor: 1_000, suffix: 'K' },
+        M: { divisor: 1_000_000, suffix: 'M' },
+        B: { divisor: 1_000_000_000, suffix: 'B' },
+        T: { divisor: 1_000_000_000_000, suffix: 'T' },
+      };
+
+      if (bareFormat && compactUnit[bareFormat]) {
+        const { divisor, suffix } = compactUnit[bareFormat];
+        const scaled = numericValue / divisor;
+        const formattedScaled = new Intl.NumberFormat(locale, {
+          useGrouping: false,
+          maximumFractionDigits: 12,
+          minimumFractionDigits: 0,
+        }).format(scaled);
+
+        // Intl can return "0" or "0.000000000000"; normalize.
+        const normalized = formattedScaled.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+
+        return `${currencySymbol}${normalized}${suffix}`;
+      }
+
       const tryFormat = (pattern: string) => {
         const normalized = pattern.startsWith('::') ? pattern : `::${pattern}`;
         const message = new IntlMessageFormat(`{value, number, ${normalized}}`, locale);
