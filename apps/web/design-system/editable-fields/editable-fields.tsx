@@ -1,11 +1,11 @@
 'use client';
 
+import * as React from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
+
 import { cva, cx } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
-
-import * as React from 'react';
-import { ChangeEvent, useCallback, useRef } from 'react';
 
 import { VIDEO_ACCEPT } from '~/core/constants';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -23,14 +23,14 @@ import { VideoSmall } from '../icons/video-small';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height. We add a negative margin to compensate for this. This results in the correct line heights between both edit and browse modes. This only affects the editable titles of entity pages and editable titles of data blocks
-  'm-0 w-full resize-none bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
+  'm-0 w-full resize-none overflow-hidden bg-transparent p-0 placeholder:text-grey-03 focus:outline-hidden',
   {
     variants: {
       variant: {
-        mainPage: 'mb-[-1px] text-mainPage',
+        mainPage: '-mb-px text-mainPage',
         body: 'mb-[-6.5px] text-body',
         tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
-        tableProperty: '!text-tableProperty !text-grey-04',
+        tableProperty: 'text-tableProperty! text-grey-04!',
         smallTitle: 'text-smallTitle',
       },
     },
@@ -127,7 +127,7 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
+        <img src={src} onError={onError} loading="lazy" decoding="async" className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
   );
@@ -276,6 +276,7 @@ interface TableImageFieldProps {
   entityName?: string | null;
   propertyId: string;
   propertyName: string;
+  isUploadingFromExternal?: boolean;
 }
 
 export function TableImageField({
@@ -285,9 +286,11 @@ export function TableImageField({
   entityName,
   propertyId,
   propertyName,
+  isUploadingFromExternal = false,
 }: TableImageFieldProps) {
   const { storage } = useMutate();
   const [isUploading, setIsUploading] = React.useState(false);
+  const showLoading = isUploading || isUploadingFromExternal;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // For published data, toEntity.value contains the IPFS URL directly
@@ -337,17 +340,17 @@ export function TableImageField({
 
   return (
     <div className="group flex w-full justify-between">
-      {imageSrc ? (
+      {imageSrc && !showLoading ? (
         <div>
           <ImageZoom variant="table-cell" imageSrc={imageSrc} />
         </div>
       ) : (
-        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
-          {isUploading ? 'Uploading...' : 'Upload'}
+        <SmallButton onClick={handleFileInputClick} icon={showLoading ? <Dots /> : <Upload />}>
+          {showLoading ? 'Uploading...' : 'Upload'}
         </SmallButton>
       )}
 
-      {imageSrc && (
+      {imageSrc && !showLoading && (
         <div className="ml-1 flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
           <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
           <SquareButton onClick={handleImageRemove} icon={<Trash />} />
@@ -605,7 +608,7 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
         aria-label="Close video"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

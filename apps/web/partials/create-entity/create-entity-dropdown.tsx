@@ -1,9 +1,10 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-
 import { useState } from 'react';
 
+import { usePathname, useRouter } from 'next/navigation';
+
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
@@ -20,11 +21,12 @@ export function CreateEntityDropdown() {
 
   const { shouldShowElement } = useOnboardGuard();
 
+  const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
+  const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+
   if (!shouldShowElement) {
     return null;
   }
-
-  const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
 
   return (
     <Menu
@@ -62,6 +64,15 @@ export function CreateEntityDropdown() {
           >
             <p className="text-center text-button">New property</p>
           </MenuItem>
+          {(isEditor || isMember) && (
+            <MenuItem
+              onClick={() => {
+                router.push(NavUtils.toImport(spaceId));
+              }}
+            >
+              <p className="text-center text-button">Import data</p>
+            </MenuItem>
+          )}
         </>
       )}
     </Menu>

@@ -40,6 +40,10 @@ export const GOVERNANCE_ACTIONS = {
   SUBSPACE_RELATED: '0xe1dfc59a5ffb6192be6bd82457a48b1b675f4ff2886a6c1471f5c47631448de5' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_UNRELATED') - removes related status from a subspace */
   SUBSPACE_UNRELATED: '0xa5ad9ae41010e3b9b1d8db394f518a795fcee6b8e4dacf924fd493f2fa8fa79c' as Hex,
+  /** keccak256('GOVERNANCE.TOPIC_DECLARED') - declares the primary topic for a space */
+  TOPIC_DECLARED: '0xd020fbe5a0270daba9a9031c59402c03d5093ebfa8c4caa2203c2c72f95ce30c' as Hex,
+  /** keccak256('GOVERNANCE.TOPIC_REMOVED') - removes the primary topic for a space */
+  TOPIC_REMOVED: '0x6311f3c439cf906060b1d174cabab01645a7c8c628bee916f91d714030e3f195' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_DECLARED') - declares a subtopic for a subspace using an entity UUID */
   SUBSPACE_TOPIC_DECLARED: '0xf475121947612f07c138e5ac27aa31355aaea0da3096cea1b702daeb5e8477aa' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_REMOVED') - removes a subtopic from a subspace */

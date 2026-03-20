@@ -15,23 +15,14 @@ import { Execute } from '~/partials/active-proposal/execute';
 interface Props {
   spaceId: string;
   isProposalEnded: boolean;
-  // If the proposal is executable that means it's done and the
-  // acceptance threshold has passed.
-  isProposalExecutable: boolean;
+  canExecute: boolean;
   status: Proposal['status'];
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({
-  spaceId,
-  isProposalEnded,
-  isProposalExecutable,
-  status,
-  userVote,
-  proposalId,
-}: Props) {
+export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -56,14 +47,6 @@ export function AcceptOrRejectEditor({
     vote('REJECT');
   };
 
-  if (isProposalExecutable) {
-    return (
-      <Execute spaceId={spaceId} proposalId={proposalId}>
-        Execute
-      </Execute>
-    );
-  }
-
   if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || hasApproved) {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
@@ -75,6 +58,18 @@ export function AcceptOrRejectEditor({
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    }
+
+    if (status === 'REJECTED') {
+      return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    }
+
+    if (canExecute && smartAccount) {
+      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+    }
+
+    if (canExecute) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;

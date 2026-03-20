@@ -1,6 +1,6 @@
-import cx from 'classnames';
-
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -15,7 +15,7 @@ export const TabLink = ({ isActive, href, className = '', ...rest }: Props) => {
       href={href}
       className={cx(
         isActive ? 'text-text' : 'text-grey-04',
-        'cursor-pointer text-mediumTitle outline-none hover:text-text',
+        'cursor-pointer text-mediumTitle outline-hidden hover:text-text',
         className
       )}
       {...rest}

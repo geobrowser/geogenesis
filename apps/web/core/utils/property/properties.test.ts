@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
@@ -187,7 +188,7 @@ describe('Properties', () => {
         relationValueTypes: [],
         renderableType: null,
         renderableTypeStrict: undefined,
-        isDataTypeEditable: true,
+
         format: null,
         unit: null,
       });
@@ -245,7 +246,7 @@ describe('Properties', () => {
         relationValueTypes: [],
         renderableType: SystemIds.URL,
         renderableTypeStrict: 'URL',
-        isDataTypeEditable: true,
+
         format: null,
         unit: null,
       });

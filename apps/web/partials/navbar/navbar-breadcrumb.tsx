@@ -1,15 +1,16 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -24,8 +25,6 @@ type NavbarBreadcrumbProps = {
   spaceId: string;
   entityId?: string;
 };
-
-const MotionContent = motion.create(Popover.Content);
 
 export function NavbarBreadcrumb({ spaceId, entityId }: NavbarBreadcrumbProps) {
   if (!entityId) return <SpaceBreadcrumb spaceId={spaceId} />;
@@ -54,7 +53,7 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
       </div>
       <Divider type="vertical" className="inline-block h-4 w-px" />
       <div className="truncate sm:max-w-[20ch]">
-        <Text variant="button" className="hover:!text-text">
+        <Text variant="button" className="hover:text-text!">
           {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
         </Text>
       </div>
@@ -68,8 +67,19 @@ type EntityBreadcrumbProps = {
 };
 
 const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
-  const [open, setOpen] = useState<boolean>(false);
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string>('');
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.className = 'elevated-popover';
+    document.body.appendChild(el);
+    setPortalContainer(el);
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
 
   const { space, isLoading } = useSpace(spaceId);
 
@@ -83,9 +93,9 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const spaceName = space.entity.name ?? '';
   const spaceImage = space.entity.image;
 
-  const otherSpaces = spaces.filter(
-    space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim()
-  );
+  const otherSpaces = spaces
+    .filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim())
+    .sort(compareBySpaceRank(s => s.id));
 
   const formattedQuery = query.trim().toLowerCase();
 
@@ -103,7 +113,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
         </div>
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <div className="truncate sm:max-w-[20ch]">
-          <Text variant="button" className="hover:!text-text">
+          <Text variant="button" className="hover:text-text!">
             {spaceName.slice(0, 48) + (spaceName.length > 48 ? '...' : '')}
           </Text>
         </div>
@@ -111,8 +121,13 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
     );
   }
 
+  const onOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery('');
+  };
+
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <div className="inline-flex items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
         <Link href={NavUtils.toSpace(spaceId)} className="relative h-4 w-4 overflow-hidden rounded-sm">
           <GeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" priority style={{ objectFit: 'cover' }} fill />
@@ -120,86 +135,95 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <Popover.Trigger className="flex items-center gap-1.5">
           <div className="truncate sm:max-w-[20ch]">
-            <Text variant="button" className="hover:!text-text">
+            <Text variant="button" className="hover:text-text!">
               {shorten(spaceName)}
             </Text>
           </div>
-          <div className={cx('transition duration-150 ease-in-out', open && 'scale-y-[-1]')}>
-            <ChevronDownSmall color="grey-03" />
-          </div>
+          <ChevronDownSmall color="grey-03" />
         </Popover.Trigger>
       </div>
-      <AnimatePresence mode="popLayout">
-        <MotionContent
-          key="entity-view-space-toggle-content"
-          side="bottom"
-          align="start"
-          avoidCollisions
-          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-          transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.125 } }}
-          className="relative top-[0.375rem] z-100 w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1"
-          onOpenAutoFocus={event => event.preventDefault()}
-        >
-          <div>
-            <div className="p-1 text-smallButton text-grey-04">View entity in</div>
-            <div className="flex flex-col gap-1">
-              <Input value={query} onChange={event => setQuery(event.target.value)} withSearchIcon autoFocus={false} />
-              {showCurrentSpace && (
-                <div className="flex items-center gap-2 rounded-md bg-grey-01 p-2">
-                  <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <GeoImage
-                      value={spaceImage || PLACEHOLDER_SPACE_IMAGE}
-                      alt=""
-                      priority
-                      style={{ objectFit: 'cover' }}
-                      fill
-                    />
-                  </div>
-                  <div className="truncate">
-                    <Text variant="button" className="hover:!text-text">
-                      {spaceName}
-                    </Text>
-                  </div>
-                  <div className="flex flex-grow items-center justify-end">
-                    <Check color="grey-04" />
-                  </div>
-                </div>
-              )}
-              {renderedSpaces.map(space => {
-                const spaceId = space.id;
-                const spaceName = space.entity.name ?? '';
-                const spaceImage = space.entity.image;
+      <Popover.Portal container={portalContainer}>
+        <AnimatePresence mode="popLayout">
+          {open && (
+            <Popover.Content
+              forceMount
+              side="bottom"
+              align="start"
+              sideOffset={4}
+              avoidCollisions
+              onOpenAutoFocus={event => event.preventDefault()}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ type: 'spring', duration: 0.15, bounce: 0 }}
+                className="w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1 shadow-lg"
+              >
+                <div className="p-1 text-smallButton text-grey-04">View entity in</div>
+                <div className="flex flex-col gap-1">
+                  <Input
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    withSearchIcon
+                    autoFocus={false}
+                  />
+                  {showCurrentSpace && (
+                    <div className="flex items-center gap-2 rounded-md bg-grey-01 p-2">
+                      <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                        <GeoImage
+                          value={spaceImage || PLACEHOLDER_SPACE_IMAGE}
+                          alt=""
+                          priority
+                          style={{ objectFit: 'cover' }}
+                          fill
+                        />
+                      </div>
+                      <div className="truncate">
+                        <Text variant="button" className="hover:text-text!">
+                          {spaceName}
+                        </Text>
+                      </div>
+                      <div className="flex grow items-center justify-end">
+                        <Check color="grey-04" />
+                      </div>
+                    </div>
+                  )}
+                  {renderedSpaces.map(space => {
+                    const otherSpaceId = space.id;
+                    const otherSpaceName = space.entity.name ?? '';
+                    const otherSpaceImage = space.entity.image;
 
-                return (
-                  <Link
-                    key={spaceId}
-                    href={NavUtils.toEntity(spaceId, entityId)}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 rounded-md p-2 hover:bg-grey-01"
-                  >
-                    <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                      <GeoImage
-                        value={spaceImage || PLACEHOLDER_SPACE_IMAGE}
-                        alt=""
-                        priority
-                        style={{ objectFit: 'cover' }}
-                        fill
-                      />
-                    </div>
-                    <div className="truncate">
-                      <Text variant="button" className="hover:!text-text">
-                        {spaceName}
-                      </Text>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </MotionContent>
-      </AnimatePresence>
+                    return (
+                      <Popover.Close key={otherSpaceId} asChild>
+                        <Link
+                          href={NavUtils.toEntity(otherSpaceId, entityId)}
+                          className="flex items-center gap-2 rounded-md p-2 hover:bg-grey-01"
+                        >
+                          <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                            <GeoImage
+                              value={otherSpaceImage || PLACEHOLDER_SPACE_IMAGE}
+                              alt=""
+                              priority
+                              style={{ objectFit: 'cover' }}
+                              fill
+                            />
+                          </div>
+                          <div className="truncate">
+                            <Text variant="button" className="hover:text-text!">
+                              {otherSpaceName}
+                            </Text>
+                          </div>
+                        </Link>
+                      </Popover.Close>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </Popover.Content>
+          )}
+        </AnimatePresence>
+      </Popover.Portal>
     </Popover.Root>
   );
 };

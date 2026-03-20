@@ -1,11 +1,13 @@
 'use client';
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
-import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
-import { LayoutGroup } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
+
+import { LayoutGroup } from 'framer-motion';
+import { useAtomValue } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
@@ -18,6 +20,7 @@ import { NoContent } from '../space-tabs/no-content';
 import { tiptapExtensions } from './extensions';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
+import { editorContentVersionAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -40,17 +43,22 @@ interface Props {
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
-  const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
+  const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
   useInterceptEditorLinks(spaceId);
 
+  // Ref keeps the blur handler fresh without requiring editor recreation.
+  const upsertEditorStateRef = React.useRef(upsertEditorState);
+  upsertEditorStateRef.current = upsertEditorState;
+
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
       // Responsible for converting all editor blocks to Geo knowledge graph state
-      upsertEditorState(params.editor.getJSON());
+      upsertEditorStateRef.current(params.editor.getJSON());
     }
   };
 
@@ -117,7 +125,40 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         }
       },
     },
-    [editorJson, editable]
+    // NOTE: `editorJson` is intentionally excluded — including it destroys and
+    // recreates the editor on every block addition, wiping data block state.
+    // `activeEntityId` handles tab switches; `editorContentVersion` handles
+    // external resets (discard, IndexedDB restore).
+    [editable, activeEntityId, editorContentVersion]
+  );
+
+  const editorWrapperRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!editor) return;
+
+    const currentDoc = normalizeEditorContent(editor.getJSON());
+    const nextDoc = normalizeEditorContent(editorJson);
+
+    if (JSON.stringify(currentDoc) === JSON.stringify(nextDoc)) {
+      return;
+    }
+
+    // Keep the editor instance alive for data blocks, but sync external store
+    // changes like entity/block deletion into the active ProseMirror document.
+    editor.commands.setContent(editorJson);
+  }, [editor, editorJson]);
+
+  const handleGutterClick = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!editor || !editable) return;
+
+      // Only focus when clicking on the editor wrapper itself, not inner content.
+      if (e.target === e.currentTarget) {
+        editor.commands.focus();
+      }
+    },
+    [editor, editable]
   );
 
   // We are in browse mode and there is no content.
@@ -143,7 +184,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   return (
     <LayoutGroup id="editor">
-      <div className={editable ? 'editable' : 'not-editable'}>
+      <div
+        ref={editorWrapperRef}
+        className={editable ? 'editable' : 'not-editable'}
+        onClick={handleGutterClick}
+        style={editable ? { minHeight: '8rem' } : undefined}
+      >
         {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}
@@ -246,21 +292,41 @@ function useInterceptEditorLinks(spaceId: string) {
   }, [router, spaceId]);
 }
 
-// Suppress TipTap's flushSync warning in dev - this is a known issue with TipTap + React 18
+// ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
 // https://github.com/ueberdosis/tiptap/issues/3764
 const useSuppressFlushSyncWarning = () => {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-
-    const originalError = console.error;
+    const orig = console.error;
     console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
         return;
-      }
-      originalError.apply(console, args);
+      orig.apply(console, args);
     };
     return () => {
-      console.error = originalError;
+      console.error = orig;
     };
   }, []);
 };
+
+function normalizeEditorContent(content: JSONContent): JSONContent {
+  const normalizedAttrs = content.attrs
+    ? Object.fromEntries(
+        Object.entries(content.attrs).filter(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          return key !== 'spaceId' && key !== 'relationId';
+        })
+      )
+    : undefined;
+
+  return {
+    ...content,
+    ...(normalizedAttrs && Object.keys(normalizedAttrs).length > 0 ? { attrs: normalizedAttrs } : {}),
+    ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
+    ...(content.content
+      ? {
+          content: content.content.map(child => normalizeEditorContent(child)),
+        }
+      : {}),
+  };
+}

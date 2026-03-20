@@ -1,13 +1,15 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
-import * as React from 'react';
-
 import { Subgraph } from '~/core/io';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
@@ -18,12 +20,13 @@ import { useDebouncedValue } from './use-debounced-value';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  initialQuery?: string;
 }
 
-export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) {
+export function useSearch({ filterByTypes, filterBySpace, initialQuery }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
-  const [query, setQuery] = React.useState<string>('');
+  const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
 
   const maybeEntityId = debouncedQuery.trim();
@@ -115,7 +118,7 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
         }
       }
 
-      return resultOrError.right;
+      return [...resultOrError.right].sort(compareBySpaceRank(r => r.spaces[0]?.spaceId ?? ''));
     },
     /**
      * We don't want to return stale search results. Instead we just

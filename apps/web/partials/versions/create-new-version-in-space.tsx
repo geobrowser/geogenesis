@@ -1,13 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { IdUtils } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 import { useState } from 'react';
 
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { useRouter } from 'next/navigation';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -38,11 +39,20 @@ export const CreateNewVersionInSpace = ({
   const { storage } = useMutate();
 
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
+  const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
-  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+  const allSpaces = React.useMemo(() => {
+    const spaces = [...memberSpaces];
+    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
+      spaces.unshift(personalSpace);
+    }
+    return spaces;
+  }, [personalSpace, memberSpaces]);
+
+  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
 
   const renderedSpaces =
     query.length === 0
@@ -122,7 +132,7 @@ export const CreateNewVersionInSpace = ({
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-[4] p-2 text-center text-button text-text">Select space to create in</div>
+        <div className="flex-4 p-2 text-center text-button text-text">Select space to create in</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">

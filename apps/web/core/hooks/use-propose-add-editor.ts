@@ -2,16 +2,18 @@
 
 import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { useCallback } from 'react';
+
+import { Effect, Either } from 'effect';
+import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
 import {
   DAOSpaceAbi,
@@ -127,16 +129,25 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
           args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
         });
 
-        const hash = yield* tx(callData);
+        const hash = yield* tx(callData).pipe(
+          Effect.withSpan('web.write.createProposal.addEditor'),
+          Effect.annotateSpans({
+            'io.operation': 'create_proposal',
+            'space.type': 'DAO',
+            'governance.action': 'proposal_created',
+            'governance.proposal_action': 'add_editor',
+            'governance.voting_mode': 'SLOW',
+          })
+        );
         console.log('Transaction hash: ', hash);
         return hash;
       });
 
-      const result = await Effect.runPromise(Effect.either(writeTxEffect));
+      const result = await runEffectEither(writeTxEffect);
 
       Either.match(result, {
         onLeft: error => {
-          console.error(error);
+          console.error('Failed to propose add editor', { spaceId, targetEditorSpaceId, personalSpaceId }, error);
           dispatch({
             type: 'ERROR',
             payload: String(error),

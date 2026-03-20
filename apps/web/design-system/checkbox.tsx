@@ -1,8 +1,8 @@
 'use client';
 
-import cx from 'classnames';
-
 import type { ComponentPropsWithoutRef } from 'react';
+
+import cx from 'classnames';
 
 import { Blank } from '~/design-system/icons/blank';
 import { Check } from '~/design-system/icons/check';
@@ -21,7 +21,7 @@ export const Checkbox = ({ checked, onChange = () => null, className = '', ...re
     <button
       onClick={onChange}
       className={cx(
-        'relative box-border inline-flex size-4 items-center justify-center rounded-[4px] border border-text bg-white transition duration-200 ease-in-out *:size-3 hover:bg-bg focus:outline-none',
+        'relative box-border inline-flex size-4 items-center justify-center rounded-[4px] border border-text bg-white transition duration-200 ease-in-out *:size-3 hover:bg-bg focus:outline-hidden',
         className
       )}
       {...rest}

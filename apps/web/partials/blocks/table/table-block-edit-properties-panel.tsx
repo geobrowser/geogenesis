@@ -2,13 +2,14 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { cx } from 'class-variance-authority';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Image from 'next/legacy/image';
-
-import * as React from 'react';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -37,7 +38,8 @@ type Column = {
 };
 
 export function TableBlockEditPropertiesPanel() {
-  const { source } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
   const isEditingProperties = useAtomValue(editingPropertiesAtom);
 
   if (!isEditingProperties) {
@@ -48,8 +50,8 @@ export function TableBlockEditPropertiesPanel() {
 }
 
 function RelationsPropertySelector() {
-  const { source } = useSource();
-  const { filterState } = useFilters();
+  const { filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
   const findOne = useQueryEntityAsync();
 
   const [selectedEntities, setSelectedEntities] = React.useState<{
@@ -91,11 +93,11 @@ function RelationsPropertySelector() {
 
   return (
     <>
-      <MenuItem className="border-b border-grey-02">
-        <button onClick={onBack} className="flex w-full items-center gap-2 text-smallButton">
+      <MenuItem className="border-b border-grey-02" onClick={onBack}>
+        <div className="flex w-full items-center gap-2 text-smallButton">
           <LeftArrowLong />
           <span>Back</span>
-        </button>
+        </div>
       </MenuItem>
       {selectedEntities ? (
         <PropertySelector where={selectedEntities.type} entityIds={selectedEntities.entityIds} />
@@ -146,8 +148,8 @@ function RelationsPropertySelector() {
 }
 
 function DefaultPropertySelector() {
-  const { filterState } = useFilters();
-  const { source } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
 
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
@@ -176,14 +178,11 @@ function DefaultPropertySelector() {
 
   return (
     <>
-      <MenuItem className="border-b border-grey-02">
-        <button
-          onClick={() => setIsEditingProperties(false)}
-          className="flex w-full items-center gap-2 text-smallButton"
-        >
+      <MenuItem className="border-b border-grey-02" onClick={() => setIsEditingProperties(false)}>
+        <div className="flex w-full items-center gap-2 text-smallButton">
           <LeftArrowLong />
           <span>Back</span>
-        </button>
+        </div>
       </MenuItem>
       {availableColumns?.map((column: Column, index: number) => {
         // do not show name column
@@ -290,14 +289,11 @@ function ToggleColumn({ column }: ToggleColumnProps) {
   };
 
   return (
-    <MenuItem>
-      <button
-        onClick={onToggleColumn}
-        className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}
-      >
+    <MenuItem onClick={onToggleColumn}>
+      <div className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}>
         <span>{column.name}</span>
         {isShown ? <Eye /> : <EyeHide />}
-      </button>
+      </div>
     </MenuItem>
   );
 }

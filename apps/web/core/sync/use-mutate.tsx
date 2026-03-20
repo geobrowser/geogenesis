@@ -1,9 +1,18 @@
 import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
+
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
+import {
+  ADDRESS,
+  DATA_TYPE_ENTITY_IDS,
+  DATA_TYPE_PROPERTY,
+  GEO_LOCATION,
+  PLACE,
+  RENDERABLE_TYPE_PROPERTY,
+  VIDEO_RENDERABLE_TYPE,
+} from '../constants';
 import { ID } from '../id';
-import { OmitStrict } from '../types';
+import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
@@ -27,6 +36,15 @@ function toHexId(id: unknown): string {
   }
   return String(id);
 }
+
+const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
+  [SystemIds.URL]: 'Url',
+  [SystemIds.IMAGE]: 'Image',
+  [VIDEO_RENDERABLE_TYPE]: 'Video',
+  [GEO_LOCATION]: 'Geo Location',
+  [PLACE]: 'Place',
+  [ADDRESS]: 'Address',
+};
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
@@ -70,12 +88,14 @@ export interface Mutator {
     set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
+    deleteMany: (values: Value[]) => void;
   };
   relations: {
     get: (id: string, entityId: string) => Relation | null;
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
+    deleteMany: (relations: Relation[]) => void;
   };
   images: {
     createAndLink: (params: {
@@ -86,6 +106,7 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ imageId: string; relationId: string }>;
+    createOnly: (params: { file: File; spaceId: string }) => Promise<{ imageId: string }>;
   };
   videos: {
     createAndLink: (params: {
@@ -169,9 +190,7 @@ function createMutator(store: GeoStore): Mutator {
         // Create the data type relation (every property gets an explicit Data Type relation).
         const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[dataType];
         if (dataTypeEntityId) {
-          const hasDataTypeRelation = existingRelations.some(
-            r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
-          );
+          const hasDataTypeRelation = existingRelations.some(r => r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted);
 
           if (!hasDataTypeRelation) {
             store.setRelation({
@@ -191,7 +210,7 @@ function createMutator(store: GeoStore): Mutator {
               },
               toEntity: {
                 id: dataTypeEntityId,
-                name: dataType,
+                name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[dataType] ?? dataType,
                 value: dataTypeEntityId,
               },
             });
@@ -205,10 +224,7 @@ function createMutator(store: GeoStore): Mutator {
         // we don't need to create the property type relation again
         if (!skipTypeRelation) {
           const hasTypesRelation = existingRelations.some(
-            r =>
-              r.type.id === SystemIds.TYPES_PROPERTY &&
-              r.toEntity.id === SystemIds.PROPERTY &&
-              !r.isDeleted
+            r => r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted
           );
 
           if (!hasTypesRelation) {
@@ -262,7 +278,7 @@ function createMutator(store: GeoStore): Mutator {
               },
               toEntity: {
                 id: renderableTypeId,
-                name: renderableTypeId,
+                name: RENDERABLE_TYPE_ENTITY_LABELS[renderableTypeId] ?? renderableTypeId,
                 value: renderableTypeId,
               },
             };
@@ -297,6 +313,9 @@ function createMutator(store: GeoStore): Mutator {
       delete: newValue => {
         store.deleteValue(newValue);
       },
+      deleteMany: values => {
+        store.deleteValues(values);
+      },
     },
     relations: {
       get: (id, entityId) => store.getRelation(id, entityId),
@@ -309,6 +328,9 @@ function createMutator(store: GeoStore): Mutator {
       },
       delete: newRelation => {
         store.deleteRelation(newRelation);
+      },
+      deleteMany: relations => {
+        store.deleteRelations(relations);
       },
     },
     images: {
@@ -401,6 +423,62 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { imageId: imageIdStr, relationId };
+      },
+      createOnly: async ({ file, spaceId }) => {
+        const { id: imageId, ops: createImageOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        for (const op of createImageOps) {
+          if (op.type === 'createRelation') {
+            store.setRelation({
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+              fromEntity: {
+                id: toHexId(op.from),
+                name: null,
+              },
+              type: {
+                id: toHexId(op.relationType),
+                name: 'Image',
+              },
+              toEntity: {
+                id: toHexId(op.to),
+                name: 'Image',
+                value: toHexId(op.to),
+              },
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              renderableType: 'RELATION',
+            });
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
+              store.setValue({
+                id: ID.createValueId({
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
+                  spaceId,
+                }),
+                entity: {
+                  id: toHexId(op.id),
+                  name: null,
+                },
+                property: {
+                  id: toHexId(pv.property),
+                  name: 'Image Property',
+                  dataType: 'TEXT',
+                  renderableType: 'URL',
+                },
+                spaceId,
+                value: extractValueString(pv.value),
+              });
+            }
+          }
+        }
+
+        return { imageId: toHexId(imageId) };
       },
     },
     videos: {

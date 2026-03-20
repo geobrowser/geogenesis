@@ -1,9 +1,10 @@
 'use client';
 
 import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
-import { Duration, Effect, Either, Schedule } from 'effect';
 
 import * as React from 'react';
+
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 
@@ -11,6 +12,7 @@ import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
+import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
@@ -22,6 +24,8 @@ interface MakeProposalOptions {
   relations: Relation[];
   spaceId: string;
   name: string;
+  /** Optional proposal ID (Geo entity ID format). For DAO spaces this is forwarded to daoSpace.proposeEdit. */
+  proposalId?: string;
   onSuccess?: () => void;
   onError?: () => void;
 }
@@ -41,7 +45,15 @@ export function usePublish() {
    * side effects.
    */
   const make = React.useCallback(
-    async ({ values: valuesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+    async ({
+      values: valuesToPublish,
+      relations,
+      name,
+      spaceId,
+      proposalId,
+      onSuccess,
+      onError,
+    }: MakeProposalOptions) => {
       if (!smartAccount) return;
       if (!personalSpaceId) {
         onError?.();
@@ -72,6 +84,7 @@ export function usePublish() {
         yield* makeProposal({
           name,
           author: personalSpaceId,
+          proposalId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -93,7 +106,7 @@ export function usePublish() {
         );
       });
 
-      const result = await Effect.runPromise(Effect.either(publish));
+      const result = await runEffectEither(publish);
 
       if (Either.isLeft(result)) {
         onError?.();
@@ -127,6 +140,7 @@ export function useBulkPublish() {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
+  const { storage } = useMutate();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
@@ -174,7 +188,7 @@ export function useBulkPublish() {
         });
       });
 
-      const result = await Effect.runPromise(Effect.either(publish));
+      const result = await runEffectEither(publish);
 
       if (Either.isLeft(result)) {
         onError?.();
@@ -188,13 +202,17 @@ export function useBulkPublish() {
         return;
       }
 
+      storage.setAsPublished(
+        triples.map(v => v.id),
+        relations.map(r => r.id)
+      );
       dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
       onSuccess?.();
 
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [smartAccount, personalSpaceId, dispatch]
+    [smartAccount, personalSpaceId, dispatch, storage]
   );
 
   return {
@@ -223,6 +241,8 @@ interface MakeProposalArgs {
   /** The author's personal space ID. */
   author: string;
   ops: Op[];
+  /** Optional proposal ID (Geo entity ID format, 32 hex chars). Forwarded to daoSpace.proposeEdit as `0x${proposalId}`. */
+  proposalId?: string;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
@@ -248,7 +268,7 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, smartAccount, space, onChangePublishState } = args;
+  const { name, author, ops, proposalId, smartAccount, space, onChangePublishState } = args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -281,13 +301,22 @@ function makeProposal(args: MakeProposalArgs) {
               callerSpaceId: `0x${author}`,
               daoSpaceId: `0x${space.id}`,
               votingMode,
+              ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
               network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
             return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
           },
-        }),
+        }).pipe(
+          Effect.withSpan('web.write.publishEdit.dao'),
+          Effect.annotateSpans({
+            'io.operation': 'publish_edit',
+            'io.path': 'dao',
+            'space.type': 'DAO',
+            'governance.action': 'proposal_created',
+          })
+        ),
         retrySchedule('proposeEdit', Duration.minutes(1))
       );
 
@@ -309,7 +338,14 @@ function makeProposal(args: MakeProposalArgs) {
             console.error('[PUBLISH] personalSpace.publishEdit failed:', error);
             return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
           },
-        }),
+        }).pipe(
+          Effect.withSpan('web.write.publishEdit.personal'),
+          Effect.annotateSpans({
+            'io.operation': 'publish_edit',
+            'io.path': 'personal',
+            'space.type': 'PERSONAL',
+          })
+        ),
         retrySchedule('publishEdit', Duration.minutes(1))
       );
 
@@ -329,7 +365,12 @@ function makeProposal(args: MakeProposalArgs) {
           console.error('[PUBLISH] sendUserOperation failed:', error);
           return new TransactionWriteFailedError('Publish failed', { cause: error });
         },
-      }),
+      }).pipe(
+        Effect.withSpan('web.write.submitUserOperation'),
+        Effect.annotateSpans({
+          'io.operation': 'submit_user_operation',
+        })
+      ),
       retrySchedule('sendUserOperation', Duration.seconds(10))
     );
 

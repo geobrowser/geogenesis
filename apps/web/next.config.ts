@@ -1,8 +1,12 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 import type { NextConfig } from 'next';
+
+import { ServerEnvironment } from './app/api/environment';
 
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
-  reactCompiler: true,
+  reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   experimental: {
     optimizePackageImports: ['effect', 'viem', 'wagmi', 'mapbox-gl', '@tiptap/core', '@tiptap/react'],
@@ -120,4 +124,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default process.env.DISABLE_SENTRY === '1'
+  ? nextConfig
+  : withSentryConfig(nextConfig, {
+      org: ServerEnvironment.sentryBuild?.org,
+      project: ServerEnvironment.sentryBuild?.project,
+      authToken: ServerEnvironment.sentryBuild?.authToken,
+
+      // Route Sentry requests through the app to avoid ad-blockers
+      tunnelRoute: '/monitoring',
+
+      // Only log source map upload output in CI
+      silent: !process.env.CI,
+    });

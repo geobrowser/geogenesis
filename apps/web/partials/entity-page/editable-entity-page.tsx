@@ -1,10 +1,11 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
-import { AnimatePresence, motion } from 'framer-motion';
-import { useAtom } from 'jotai';
 
 import * as React from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
+import { useAtom } from 'jotai';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -28,8 +29,8 @@ import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
-import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
+import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
@@ -45,6 +46,7 @@ import {
 } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
+import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
@@ -108,7 +110,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
               return (
-                <div key={`${id}-${propertyId}`} className="w-full break-words">
+                <div key={`${id}-${propertyId}`} className="w-full wrap-break-word">
                   <RenderedProperty spaceId={spaceId} property={property} />
 
                   {isRelation || isVideo ? (
@@ -908,9 +910,7 @@ function RenderedValue({
             {property.id === FORMAT_PROPERTY && (
               <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
             )}
-            {hasUrlTemplate && value && (
-              <span className="text-sm text-grey-04">Resolved URL · {resolvedUrl}</span>
-            )}
+            {hasUrlTemplate && value && <span className="text-sm text-grey-04">Resolved URL · {resolvedUrl}</span>}
           </>
         );
       }
@@ -957,6 +957,10 @@ function RenderedValue({
             dataType={property.dataType}
           />
         );
+      }
+
+      case 'SCHEDULE': {
+        return <ScheduleField key={propertyId} isEditing={true} value={value} onChange={onChange} />;
       }
 
       case 'POINT': {

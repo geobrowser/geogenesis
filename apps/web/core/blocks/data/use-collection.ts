@@ -1,17 +1,14 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData } from '@tanstack/react-query';
 
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 
+import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
-import { useSource } from './use-source';
 
-/**
- * Deduplicates relations by toEntity.id, keeping the first occurrence.
- * This handles cases where multiple collection relations point to the same entity.
- */
 function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(relations: T[]): T[] {
   const seen = new Set<string>();
   return relations.filter(relation => {
@@ -24,14 +21,17 @@ function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(re
 }
 
 export interface CollectionProps {
+  source: Source;
   first?: number;
   skip?: number;
   where?: WhereCondition;
 }
 
-export function useCollection({ first, skip, where }: CollectionProps) {
+export function useCollection({ source, first, skip, where }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
-  const { source } = useSource();
+
+  const { initialBlockEntities, initialCollectionItems } = useEditorStoreLite();
+  const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({
     spaceId,
@@ -39,9 +39,11 @@ export function useCollection({ first, skip, where }: CollectionProps) {
     enabled: source.type === 'COLLECTION',
   });
 
+  const effectiveEntity = blockEntity ?? initialBlockEntity;
+
   const collectionRelations =
     source.type === 'COLLECTION'
-      ? (blockEntity?.relations.filter(
+      ? (effectiveEntity?.relations.filter(
           r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];
@@ -56,12 +58,10 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   // apply the filter, then paginate the filtered results
   const hasFilters = where && Object.keys(where).length > 0;
 
-  // Get all entity IDs when filtering, or just the current page when not filtering
   const entityIdsToFetch = hasFilters
     ? orderedCollectionRelations.map(r => r.toEntity.id)
     : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
 
-  // Build the where condition for collection items
   const collectionItemsWhere: WhereCondition = {
     id: {
       in: entityIdsToFetch,
@@ -72,17 +72,10 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
+    first: entityIdsToFetch.length || undefined,
     placeholderData: keepPreviousData,
   });
 
-  /**
-   * When filtering is active, we need to:
-   * 1. Get all entities that match both the collection AND the filter
-   * 2. Filter the relations to only include those that point to filtered entities
-   * 3. Deduplicate filtered relations (in case filtering reveals duplicates)
-   * 4. Apply pagination to the filtered relations
-   * 5. Return the paginated items in the correct order
-   */
   const filteredRelations = hasFilters
     ? deduplicateRelationsByEntityId(
         orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
@@ -93,11 +86,8 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   const pageEndIndex = pageStartIndex + (first || 9);
   const paginatedRelations = hasFilters ? filteredRelations.slice(pageStartIndex, pageEndIndex) : filteredRelations;
 
-  /**
-   * There's currently no guarantee of ordering when using the `id: { in: [...]}`
-   * query in the sync engine. Here we use the ordered relations list as the source
-   * of truth for ordering to return the collection item entities in the correct order.
-   */
+  // The sync engine doesn't guarantee ordering for `id: { in: [...] }` queries,
+  // so we re-order using the relations as the source of truth.
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
   const orderedCollectionItems = paginatedRelations
@@ -107,11 +97,19 @@ export function useCollection({ first, skip, where }: CollectionProps) {
     })
     .filter(item => item !== undefined);
 
+  const ssrItems = initialCollectionItems[entityId];
+  const isFirstPage = (skip || 0) === 0;
+  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters;
+  const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
+
+  const items = shouldFallbackToSSR ? ssrItems : orderedCollectionItems;
+  const hasData = items.length > 0;
+
   return {
-    collectionItems: orderedCollectionItems,
+    collectionItems: items,
     collectionRelations: paginatedRelations,
-    isLoading: isCollectionItemsLoading,
-    isFetched: !isCollectionItemsLoading,
+    isLoading: hasData ? false : isCollectionItemsLoading,
+    isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
   };
 }

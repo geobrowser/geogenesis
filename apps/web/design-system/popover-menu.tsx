@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
@@ -31,7 +32,7 @@ export const PopoverMenu = ({ isOpen, onOpenChange, menu = <></>, position = 'bo
           {isOpen && (
             <MotionPopoverContent
               className={cx(
-                'relative z-10 rounded border border-grey-02 bg-white p-1 text-white shadow-button focus:outline-none',
+                'relative z-10 rounded border border-grey-02 bg-white p-1 text-white shadow-button focus:outline-hidden',
                 positionClassName[position]
               )}
               side={position}

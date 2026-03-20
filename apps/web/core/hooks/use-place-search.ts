@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useCallback, useEffect, useState } from 'react';
+
 import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-
-import { useCallback, useEffect, useState } from 'react';
 
 import { Subgraph } from '~/core/io';
 import { EntityId } from '~/core/io/substream-schema';

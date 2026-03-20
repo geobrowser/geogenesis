@@ -24,11 +24,14 @@ import {
   propertyQuery,
   relationEntityQuery,
   relationEntityRelationsQuery,
+  relationsByToEntityIdsQuery,
   resultQuery,
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
 } from './query-fragments';
+import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
+import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
@@ -62,19 +65,49 @@ type GetAllEntitiesOptions = {
   limit?: number;
   offset?: number;
   spaceId?: string;
+  spaceIds?: UuidFilter;
+  typeId?: string;
   typeIds?: UuidFilter;
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
 
 export function getAllEntities(
-  { limit, offset, spaceId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, spaceIds, typeId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+  const extractedTypeId = extractSingleTypeIdFromFilter(filter);
+  const extractedTypeIds = extractTypeIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds = topLevelSpaceId ? undefined : (spaceIds ?? extractedSpaceIds);
+
+  const topLevelTypeId = typeId ?? extractedTypeId;
+  const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
+
+  let normalizedFilter = filter;
+  if (topLevelSpaceId || topLevelSpaceIds) {
+    normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
+  }
+  if (topLevelTypeId || topLevelTypeIds) {
+    normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
+  }
+
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: { limit, offset, spaceId, typeIds, filter, orderBy },
+    variables: {
+      limit,
+      offset,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeId: topLevelTypeId,
+      typeIds: topLevelTypeIds,
+      filter: normalizedFilter,
+      orderBy,
+    },
     signal,
   });
 }
@@ -104,6 +137,20 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
     query: relationEntityRelationsQuery,
     decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
     variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getRelationsByToEntityIds(
+  toEntityIds: string[],
+  typeId?: string,
+  spaceId?: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: relationsByToEntityIdsQuery,
+    decoder: data => data.relations ?? [],
+    variables: { toEntityIds, typeId, spaceId },
     signal,
   });
 }
@@ -170,6 +217,17 @@ export function getSpaces(
       limit,
       offset,
       filter: spaceIds ? { id: { in: spaceIds } } : undefined,
+    },
+    signal,
+  });
+}
+
+export function getSpacesByAddresses(addresses: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesQuery,
+    decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
+    variables: {
+      filter: { address: { in: addresses } },
     },
     signal,
   });

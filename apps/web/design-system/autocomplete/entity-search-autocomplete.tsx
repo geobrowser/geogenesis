@@ -1,10 +1,10 @@
 'use client';
 
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
-
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { useSearch } from '~/core/hooks/use-search';
 
@@ -18,10 +18,21 @@ interface Props {
   onDone: (result: { id: string; name: string | null }) => void;
   itemIds: string[];
   className?: string;
+  /** Optional class for the dropdown panel (e.g. to constrain width on import step) */
+  dropdownClassName?: string;
+  /** Optional type IDs to filter search results by */
+  filterByTypes?: string[];
 }
 
-export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '' }: Props) {
-  const { query, onQueryChange, isLoading, results } = useSearch();
+export function EntitySearchAutocomplete({
+  placeholder,
+  itemIds,
+  onDone,
+  className = '',
+  dropdownClassName = '',
+  filterByTypes,
+}: Props) {
+  const { query, onQueryChange, isLoading, results } = useSearch({ filterByTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 
@@ -43,14 +54,17 @@ export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, classNa
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
         className={cx(
-          'inline-flex w-48 items-center justify-between whitespace-nowrap rounded px-3 py-2 text-button shadow-inner-grey-02 placeholder:!text-text focus:outline-none',
+          'inline-flex w-48 items-center justify-between rounded px-3 py-2 text-button whitespace-nowrap shadow-inner-grey-02 placeholder:text-text! focus:outline-hidden',
           className
         )}
       />
       {query && (
         <div
           ref={containerRef}
-          className="mt-4 max-h-[400px] w-[384px] flex-col rounded border border-grey-02 bg-white"
+          className={cx(
+            'absolute top-full left-0 z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
+            dropdownClassName
+          )}
         >
           <ResizableContainer duration={0.125}>
             <ResultsList>

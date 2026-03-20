@@ -2,11 +2,12 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import * as Tabs from '@radix-ui/react-tabs';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { fromGeoFilterString } from '~/core/blocks/data/filters';
 import { filterStateToWhere } from '~/core/blocks/data/use-data-block';
@@ -20,9 +21,9 @@ import { cloneOpsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
 
 export const Tools = () => {
   return (
-    <div className="focus:!outline-none *:focus:!outline-none">
+    <div className="focus:outline-hidden! focus:*:outline-hidden!">
       <h3 className="mb-8 font-mono text-3xl">Geo editor tools</h3>
-      <Tabs.Root defaultValue="fetchEntity" className="min-h-[100svh] focus:!outline-none">
+      <Tabs.Root defaultValue="fetchEntity" className="min-h-svh focus:outline-hidden!">
         <Tabs.List className="flex border-b border-black bg-white px-2">
           <Trigger value="fetchEntity">fetch entity by ID</Trigger>
           <Trigger value="generateEntityIds">generate entity IDs</Trigger>
@@ -57,7 +58,7 @@ const Trigger = ({ value, className = '', ...rest }: any) => {
     <Tabs.Trigger
       value={value}
       className={cx(
-        `relative z-10 -mb-px border border-transparent px-2 py-1 text-text data-[state=active]:border-black data-[state=active]:!border-b-white`,
+        `relative z-10 -mb-px border border-transparent px-2 py-1 text-text data-[state=active]:border-black data-[state=active]:border-b-white!`,
         className
       )}
       {...rest}
@@ -73,7 +74,7 @@ const Input = ({ label, className = '', ...rest }: any) => {
         type="text"
         placeholder={`enter ${label}...`}
         className={cx(
-          'appearance-none border border-black bg-grey-01/50 px-2 py-1 font-mono text-xs placeholder:text-grey-04 focus:outline-none',
+          'appearance-none border border-black bg-grey-01/50 px-2 py-1 font-mono text-xs placeholder:text-grey-04 focus:outline-hidden',
           className
         )}
         {...rest}
@@ -90,7 +91,7 @@ const Textarea = ({ label, rows = 6, className = '', ...rest }: any) => {
         rows={rows}
         placeholder={`enter ${label}...`}
         className={cx(
-          'appearance-none border border-black bg-grey-01/50 px-2 py-1 font-mono text-xs placeholder:text-grey-04 focus:outline-none',
+          'appearance-none border border-black bg-grey-01/50 px-2 py-1 font-mono text-xs placeholder:text-grey-04 focus:outline-hidden',
           className
         )}
         {...rest}
@@ -103,7 +104,7 @@ const Button = ({ type = 'button', className = '', ...rest }: any) => {
   return (
     <button
       type={type}
-      className={cx('mt-2 appearance-none bg-black px-2 py-1 text-white focus:outline-none', className)}
+      className={cx('mt-2 appearance-none bg-black px-2 py-1 text-white focus:outline-hidden', className)}
       {...rest}
     />
   );
@@ -284,7 +285,7 @@ const CloneEntity = () => {
         <Button onClick={handleCloneEntity}>clone entity</Button>
       </div>
       <div className="flex gap-4">
-        <Block className="aspect-[21/9] w-full overflow-y-scroll">{ops}</Block>
+        <Block className="aspect-21/9 w-full overflow-y-scroll">{ops}</Block>
       </div>
     </div>
   );
@@ -301,7 +302,7 @@ const ConvertFilter = () => {
   const handleConvertFilter = async (event: any) => {
     event.preventDefault();
 
-    const newFilterState = await fromGeoFilterString(filterString.trim());
+    const { filters: newFilterState } = await fromGeoFilterString(filterString.trim());
     setFilterState(newFilterState);
 
     const newWhere = filterStateToWhere(newFilterState);

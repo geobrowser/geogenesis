@@ -1,10 +1,24 @@
-import { Graph, Op, type DecimalMantissa, type PropertyValueParam } from '@geoprotocol/geo-sdk';
+import { ContentIds, type DecimalMantissa, Graph, Op, type PropertyValueParam, SystemIds } from '@geoprotocol/geo-sdk';
+
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 import { GeoDate } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
+import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
+
+export type PrepareLocalDataOptions = {
+  /**
+   * Optional replacement for orphan-delete ops (e.g. in tests to avoid network).
+   * When not provided, uses the real buildOrphanChildDeleteOps.
+   */
+  getOrphanDeleteOps?: (args: {
+    deletedRelations: Relation[];
+    allLocalRelations: Relation[];
+    spaceId: string;
+  }) => Effect.Effect<Op[], Error>;
+};
 
 /**
  * Converts local values and relations to GRC-20 Ops for publishing.
@@ -16,19 +30,48 @@ import { PrepareOpsError } from '../../errors';
 export function prepareLocalDataForPublishing(
   values: Value[],
   relations: Relation[],
-  spaceId: string
+  spaceId: string,
+  options?: PrepareLocalDataOptions
 ): Effect.Effect<Op[], PrepareOpsError> {
-  return Effect.try({
-    try: () => prepareOps(values, relations, spaceId),
-    catch: error => {
+  const program = Effect.gen(function* () {
+    const baseOps = prepareOps(values, relations, spaceId);
+
+    // Only cascade-delete targets for relation types whose targets are "owned content".
+    // Other relation types (e.g. TYPES_PROPERTY, RELATED_TOPICS) should not cascade.
+    const CASCADING_RELATION_TYPES: Set<string> = new Set([
+      SystemIds.BLOCKS,
+      SystemIds.COVER_PROPERTY,
+      ContentIds.AVATAR_PROPERTY,
+      SystemIds.TABS_PROPERTY,
+    ]);
+
+    const deletedRelations = relations.filter(
+      r =>
+        r.spaceId === spaceId && r.isLocal === true && r.isDeleted === true && CASCADING_RELATION_TYPES.has(r.type.id)
+    );
+
+    if (deletedRelations.length === 0) {
+      return baseOps;
+    }
+
+    const orphanArgs = { deletedRelations, allLocalRelations: relations, spaceId };
+    const orphanOps = options?.getOrphanDeleteOps
+      ? yield* options.getOrphanDeleteOps(orphanArgs)
+      : yield* Effect.promise(() => buildOrphanChildDeleteOps(orphanArgs));
+
+    return [...baseOps, ...orphanOps];
+  });
+
+  return program.pipe(
+    Effect.catchAll(error => {
       console.error('[PUBLISH] prepareLocalDataForPublishing failed:', error, {
         values,
         relations,
         spaceId,
       });
-      return new PrepareOpsError('Failed to prepare ops for publishing', { cause: error });
-    },
-  });
+      return Effect.fail(new PrepareOpsError('Failed to prepare ops for publishing', { cause: error as unknown }));
+    })
+  );
 }
 
 function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op[] {
@@ -158,11 +201,11 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
           lat: point.lat ?? point.y ?? 0,
         };
       } catch {
-        throw new Error(`Invalid lon/lat conversion data type ${val}`)
+        throw new Error(`Invalid lon/lat conversion data type ${val}`);
       }
     }
     default:
-      throw new Error(`Unsupported conversion data type: ${dataType}`)
+      throw new Error(`Unsupported conversion data type: ${dataType}`);
   }
 }
 

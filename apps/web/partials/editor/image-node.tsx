@@ -7,11 +7,7 @@ import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttri
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import {
-  IMAGE_ACCEPT,
-  MAX_IMAGE_SIZE_BYTES,
-  VALID_IMAGE_TYPES,
-} from '~/core/constants';
+import { IMAGE_ACCEPT, MAX_IMAGE_SIZE_BYTES, VALID_IMAGE_TYPES } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -35,10 +31,8 @@ export const ImageNode = Node.create({
   name: 'image',
   group: 'block',
   atom: true,
-  spanning: false,
   allowGapCursor: false,
   defining: true,
-  exitable: true,
 
   // Note: id and spaceId are defined by id-extension as global attributes
   // We only define image-specific attributes here
@@ -59,7 +53,7 @@ export const ImageNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['image-node', mergeAttributes(HTMLAttributes), 0];
+    return ['image-node', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {
@@ -77,7 +71,7 @@ function ImageNodeComponent({ node, deleteNode }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" className="image-node my-4">
+      <div contentEditable="false" suppressContentEditableWarning className="image-node my-4">
         <ImageNodeChildren spaceId={spaceId} entityId={id} relationEntityId={relationEntityId} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
@@ -351,7 +345,7 @@ function ImageNodeChildren({
           onBlur={handleNameBlur}
           placeholder="Image title..."
           readOnly={!isEditing}
-          className="flex-1 bg-transparent text-mediumTitle text-text placeholder:text-grey-03 focus:outline-none"
+          className="flex-1 bg-transparent text-mediumTitle text-text placeholder:text-grey-03 focus:outline-hidden"
         />
         <Dropdown.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
           <Dropdown.Trigger className="ml-2 flex h-6 w-6 items-center justify-center rounded hover:bg-grey-01">
@@ -360,7 +354,7 @@ function ImageNodeChildren({
           <Dropdown.Portal>
             <Dropdown.Content
               sideOffset={8}
-              className="z-[1001] block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+              className="z-1001 block w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
               align="end"
             >
               {isEditing && relationEntityId && (

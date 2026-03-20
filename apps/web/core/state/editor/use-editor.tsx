@@ -3,10 +3,11 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
-import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
@@ -19,12 +20,12 @@ import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorInstance } from './editor-provider';
+import { useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import * as Parser from './parser';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
-import { RelationWithBlock, useBlocks } from './use-blocks';
+import { RelationWithBlock } from './use-blocks';
 import { getNodeId } from './utils';
 import { editorHasContentAtom } from '~/atoms';
 
@@ -204,12 +205,7 @@ const makeBlocksRelations = async ({
   }
 };
 
-function deleteBlockEntityData(
-  blockId: string,
-  spaceId: string,
-  initialValues: Value[],
-  initialRelations: Relation[]
-) {
+function deleteBlockEntityData(blockId: string, spaceId: string, initialValues: Value[], initialRelations: Relation[]) {
   const blockValues = getValues({
     mergeWith: initialValues,
     selector: v => v.entity.id === blockId && v.spaceId === spaceId,
@@ -238,27 +234,22 @@ export const useTabId = () => {
   return maybeTabId;
 };
 
+export function useEditorStoreLite() {
+  return useEditorBlocks();
+}
+
 export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+  const { id: entityId, spaceId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useTabId();
   const activeEntityId = tabId ?? entityId;
-  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
 
-  const blockRelations = useBlocks(
-    activeEntityId,
-    spaceId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
-  );
+  const { blockRelations, initialBlockEntities } = useEditorBlocks();
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
-
-  const initialBlockEntities = React.useMemo(() => {
-    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-  }, [initialBlocks, initialTabs, isTab, tabId]);
 
   const initialBlockValues = React.useMemo(() => {
     return initialBlockEntities.flatMap(b => b.values);
@@ -282,7 +273,7 @@ export function useEditorStore() {
   const editorJson = React.useMemo(() => {
     const json = {
       type: 'doc',
-      content: blockRelations.map(block => {
+      content: blockRelations.flatMap(block => {
         // Find the markdown value for this block. Prefer local (reactive) values over initial server values.
         // Local values from markdownValues take precedence since they reflect user edits.
         const markdownValueForBlockId =
@@ -307,16 +298,18 @@ export function useEditorStore() {
           });
           const titleValue = titleValues?.[0]?.value || '';
 
-          return {
-            type: 'image',
-            attrs: {
-              id: block.block.id,
-              src: getImagePath(imageUrlValue),
-              title: titleValue,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'image',
+              attrs: {
+                id: block.block.id,
+                src: getImagePath(imageUrlValue),
+                title: titleValue,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          };
+          ];
         }
 
         if (toEntity?.type === 'VIDEO') {
@@ -334,27 +327,31 @@ export function useEditorStore() {
           });
           const titleValue = titleValues?.[0]?.value || '';
 
-          return {
-            type: 'video',
-            attrs: {
-              id: block.block.id,
-              src: getVideoPath(videoUrlValue),
-              title: titleValue,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'video',
+              attrs: {
+                id: block.block.id,
+                src: getVideoPath(videoUrlValue),
+                title: titleValue,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          };
+          ];
         }
 
         if (toEntity?.type === 'DATA') {
-          return {
-            type: 'tableNode',
-            attrs: {
-              id: block.block.id,
-              relationId: block.relationId,
-              spaceId,
+          return [
+            {
+              type: 'tableNode',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+              },
             },
-          };
+          ];
         }
 
         const html = markdownValueForBlockId ? Parser.markdownToHtml(markdownValueForBlockId.value || '') : '';
@@ -362,17 +359,33 @@ export function useEditorStore() {
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
 
-        const nodeData = json.content[0];
+        // A single block's markdown can produce multiple Tiptap nodes (e.g. heading + paragraph + list).
+        // Return all of them so multi-element content renders fully.
+        if (!json.content || json.content.length === 0) {
+          return [
+            {
+              type: 'paragraph',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+              },
+            },
+          ];
+        }
 
-        return {
+        return json.content.map((nodeData: JSONContent, index: number) => ({
           ...nodeData,
           attrs: {
             ...nodeData.attrs,
-            id: block.block.id,
+            // First node keeps the block's real id. Continuation nodes get null so
+            // id-extension assigns fresh unique IDs on first blur, cleanly splitting
+            // multi-element markdown into separate blocks without a dedup storm.
+            id: index === 0 ? block.block.id : null,
             relationId: block.relationId,
             spaceId,
           },
-        };
+        }));
       }),
     };
 
@@ -537,8 +550,10 @@ export function useEditorStore() {
   return {
     upsertEditorState,
     editorJson,
+    activeEntityId,
     blockIds,
     blockRelations,
+    initialBlockEntities,
     hasContent,
     setHasContent,
   };

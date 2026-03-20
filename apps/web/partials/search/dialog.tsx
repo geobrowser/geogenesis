@@ -1,15 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
+
+import { useCallback, useEffect, useState } from 'react';
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { useCallback, useEffect, useState } from 'react';
-import * as React from 'react';
-
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -128,7 +130,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                 <div className={cx('relative p-1', autocomplete.results.length > 0 && 'border-b border-grey-02')}>
                   <AnimatePresence mode="wait">
                     {autocomplete.isLoading ? (
-                      <div className="absolute left-4 top-[50%] z-100">
+                      <div className="absolute top-[50%] left-4 z-100">
                         <motion.span
                           key="dots"
                           initial={{ opacity: 0, scale: 0.95 }}
@@ -140,7 +142,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </motion.span>
                       </div>
                     ) : (
-                      <div className="absolute left-4 top-[0.875rem] z-100">
+                      <div className="absolute top-3.5 left-4 z-100">
                         <motion.span
                           key="search"
                           initial={{ opacity: 0, scale: 0.95 }}
@@ -288,11 +290,20 @@ type CreateNewEntityInSpaceProps = {
 
 const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: CreateNewEntityInSpaceProps) => {
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
+  const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
 
-  const namedSpaces = spaces.filter(space => space?.entity?.name?.trim());
+  const allSpaces = React.useMemo(() => {
+    const spaces = [...memberSpaces];
+    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
+      spaces.unshift(personalSpace);
+    }
+    return spaces;
+  }, [personalSpace, memberSpaces]);
+
+  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
 
   const renderedSpaces =
     query.length === 0
@@ -307,7 +318,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-[4] p-2 text-center text-button text-text">Select space to create entity in</div>
+        <div className="flex-4 p-2 text-center text-button text-text">Select space to create entity in</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">

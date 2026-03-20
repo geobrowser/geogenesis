@@ -1,83 +1,53 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
-import cx from 'classnames';
-import { Effect } from 'effect';
-import { RemoveScroll } from 'react-remove-scroll';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+import { Effect } from 'effect';
+import { useSetAtom } from 'jotai';
+
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getSpaces } from '~/core/io/queries';
+import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import type {
-  BlockChange,
-  DiffChunk,
-  EntityDiff,
-  RelationChange,
-  TextValueChange,
-  ValueChange,
-} from '~/core/utils/diff/types';
-import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
-import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Dropdown } from '~/design-system/dropdown';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
+import { Gem } from '~/design-system/icons/gem';
 import { Pending } from '~/design-system/pending';
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
-const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
-const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
-const COVER_PROPERTY_ID = SystemIds.COVER_PROPERTY;
-const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY;
+import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
-function hasVisibleChanges(entity: EntityDiff): boolean {
-  const hasName = entity.values.some(v => v.propertyId === NAME_PROPERTY_ID && (v.before !== null || v.after !== null));
-  const hasBlocks = entity.blocks.length > 0;
-
-  const hasAvatarOrCover = entity.relations.some(
-    r => (r.typeId === AVATAR_PROPERTY_ID || r.typeId === COVER_PROPERTY_ID) && (r.before !== null || r.after !== null)
-  );
-  const hasTypes = entity.relations.some(
-    r => r.typeId === TYPES_PROPERTY_ID && (r.before !== null || r.after !== null)
-  );
-
-  const nonSpecialRelations = entity.relations.filter(
-    r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
-  );
-  const hasImageRelations = nonSpecialRelations.some(r => r.after?.imageUrl || r.before?.imageUrl);
-  const hasOtherRelations = nonSpecialRelations.some(r => !r.after?.imageUrl && !r.before?.imageUrl);
-
-  const imageRelationPropertyIds = new Set(
-    nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl).map(r => r.typeId)
-  );
-  const otherRelationPropertyIds = new Set(
-    nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl).map(r => r.typeId)
-  );
-  const hasValues = entity.values.some(
-    v =>
-      v.propertyId !== NAME_PROPERTY_ID &&
-      v.propertyId !== AVATAR_PROPERTY_ID &&
-      v.propertyId !== COVER_PROPERTY_ID &&
-      (v.type as string) !== 'RELATION' &&
-      !imageRelationPropertyIds.has(v.propertyId) &&
-      !otherRelationPropertyIds.has(v.propertyId) &&
-      (v.before !== null || v.after !== null)
-  );
-
-  return hasName || hasBlocks || hasAvatarOrCover || hasTypes || hasImageRelations || hasOtherRelations || hasValues;
-}
+import {
+  BountyLinkingPanel,
+  buildBounties,
+  buildBounty,
+  isAllocatedToUser,
+  isBountyTypeRelation,
+} from './bounty-linking';
+import type { Bounty } from './bounty-linking/types';
+import { editorContentVersionAtom } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
 
@@ -86,10 +56,18 @@ export const ReviewChanges = () => {
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
+  const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
+  const { personalSpaceId } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const address = smartAccount?.account.address;
+  const { profile } = useGeoProfile(address);
+  const personalPageEntityId = profile?.id ?? null;
 
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [spaces, setSpaces] = React.useState<Space[]>([]);
+  const [isBountyLinkingOpen, setIsBountyLinkingOpen] = React.useState(false);
+  const [selectedBountyIds, setSelectedBountyIds] = React.useState<Set<string>>(new Set());
 
   const valuesWithChanges = useValues({
     selector: t => t.hasBeenPublished === false && t.isLocal === true,
@@ -134,16 +112,12 @@ export const ReviewChanges = () => {
   }, [spacesKey]);
 
   React.useEffect(() => {
-    if (
-      dedupedSpacesWithActions.length === 0 &&
-      statusBarState.reviewState !== 'publish-complete' &&
-      statusBarState.reviewState !== 'publishing-contract'
-    ) {
+    if (dedupedSpacesWithActions.length === 0 && statusBarState.reviewState !== 'publishing-contract') {
       setIsReviewOpen(false);
-    } else if (dedupedSpacesWithActions.length === 1) {
+    } else if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
       setActiveSpace(dedupedSpacesWithActions[0] ?? '');
     }
-  }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, activeSpace, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
@@ -158,6 +132,135 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
+  const bountyTypeRelations = useRelations({
+    selector: r => r.spaceId === activeSpace && r.type.id === SystemIds.TYPES_PROPERTY && r.isDeleted !== true,
+  });
+
+  const bountyEntityIds = React.useMemo(() => {
+    const ids = bountyTypeRelations.filter(isBountyTypeRelation).map(relation => relation.fromEntity.id);
+    return [...new Set(ids)];
+  }, [bountyTypeRelations]);
+
+  const bountyEntityIdSet = React.useMemo(() => new Set(bountyEntityIds), [bountyEntityIds]);
+
+  const bountyValues = useValues({
+    selector: value =>
+      value.spaceId === activeSpace && bountyEntityIdSet.has(value.entity.id) && value.isDeleted !== true,
+  });
+
+  const bountyRelations = useRelations({
+    selector: relation =>
+      relation.spaceId === activeSpace && bountyEntityIdSet.has(relation.fromEntity.id) && relation.isDeleted !== true,
+  });
+
+  const { data: remoteBountyEntities = [] } = useQuery({
+    queryKey: ['bounties-by-type', activeSpace, BOUNTY_TYPE_ID],
+    enabled: Boolean(activeSpace && isReviewOpen),
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!activeSpace) return [];
+      return await Effect.runPromise(
+        getAllEntities({
+          spaceId: activeSpace,
+          typeIds: { is: BOUNTY_TYPE_ID },
+        })
+      );
+    },
+  });
+
+  const allBountyIds = React.useMemo(() => {
+    const remoteIds = remoteBountyEntities.map(entity => entity.id);
+    return [...new Set([...bountyEntityIds, ...remoteIds])].sort();
+  }, [bountyEntityIds, remoteBountyEntities]);
+
+  const { data: bountySubmissionRelations = [] } = useQuery({
+    queryKey: ['bounty-submission-relations', allBountyIds],
+    enabled: allBountyIds.length > 0 && isReviewOpen,
+    staleTime: 60_000,
+    queryFn: async () => {
+      return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE));
+    },
+  });
+
+  const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
+    queryKey: ['bounty-submission-relations-personal', allBountyIds, personalSpaceId],
+    enabled: allBountyIds.length > 0 && isReviewOpen && Boolean(personalSpaceId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!personalSpaceId) return [];
+      return await Effect.runPromise(getRelationsByToEntityIds(allBountyIds, BOUNTIES_RELATION_TYPE, personalSpaceId));
+    },
+  });
+
+  const bountySubmissionCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const relation of bountySubmissionRelations) {
+      const id = relation.toEntityId;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [bountySubmissionRelations]);
+
+  const bountyPersonalSubmissionCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const relation of bountyPersonalSubmissionRelations) {
+      const id = relation.toEntityId;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [bountyPersonalSubmissionRelations]);
+
+  const { bounties, bountiesById } = React.useMemo(() => {
+    if (!personalSpaceId) {
+      return { bounties: [], bountiesById: new Map<string, Bounty>() };
+    }
+
+    const allocationTargets = [personalSpaceId, personalPageEntityId].filter((id): id is string => Boolean(id));
+    const localResult = buildBounties(
+      bountyEntityIds,
+      bountyValues,
+      bountyRelations,
+      bountySubmissionCounts,
+      bountyPersonalSubmissionCounts,
+      allocationTargets,
+      activeSpace,
+      personalSpaceId
+    );
+    const remoteBounties = remoteBountyEntities
+      .filter(entity => isAllocatedToUser(entity.relations ?? [], allocationTargets))
+      .map(entity =>
+        buildBounty(
+          entity.id,
+          entity.values ?? [],
+          entity.relations ?? [],
+          bountySubmissionCounts,
+          bountyPersonalSubmissionCounts,
+          activeSpace,
+          personalSpaceId
+        )
+      );
+
+    const merged = new Map<string, Bounty>();
+    for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
+    for (const bounty of localResult.bounties) merged.set(bounty.id, bounty);
+
+    return { bounties: Array.from(merged.values()), bountiesById: merged };
+  }, [
+    bountyEntityIds,
+    bountyValues,
+    bountyRelations,
+    remoteBountyEntities,
+    bountySubmissionCounts,
+    bountyPersonalSubmissionCounts,
+    activeSpace,
+    personalSpaceId,
+    personalPageEntityId,
+  ]);
+
+  const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
+
   const isReadyToPublish = proposalName.length > 0;
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
@@ -166,7 +269,17 @@ export const ReviewChanges = () => {
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
+  const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: visibleEntities.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 300,
+    overscan: 3,
+    gap: 8,
+  });
 
   const handleProposalNameChange = (name: string) => {
     setProposals(prev => ({
@@ -179,26 +292,156 @@ export const ReviewChanges = () => {
     if (!activeSpace || !isReadyToPublish) return;
     setIsPublishing(true);
 
-    await makeProposal({
-      values: valuesFromSpace,
-      relations: relationsFromSpace,
-      spaceId: activeSpace,
-      name: proposalName,
-      onSuccess: () => {
-        setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
-      },
-      onError: () => {},
+    const proposalEntityId = ID.createEntityId();
+
+    let resolved = false;
+    const publishSucceeded = await new Promise<boolean>(resolve => {
+      const settle = (value: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
+      makeProposal({
+        values: valuesFromSpace,
+        relations: relationsFromSpace,
+        spaceId: activeSpace,
+        name: proposalName,
+        proposalId: proposalEntityId,
+        onSuccess: () => {
+          setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
+          settle(true);
+        },
+        onError: () => {
+          settle(false);
+        },
+      })
+        .then(() => {
+          // If makeProposal returned without calling onSuccess/onError
+          // (e.g. missing smart account, empty values), resolve false
+          // so the UI doesn't stay stuck in the publishing state.
+          settle(false);
+        })
+        .catch(() => {
+          settle(false);
+        });
     });
 
+    if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
+      const bountyLinkValues: StoreValue[] = [
+        {
+          id: ID.createValueId({
+            entityId: proposalEntityId,
+            propertyId: SystemIds.NAME_PROPERTY,
+            spaceId: personalSpaceId,
+          }),
+          entity: {
+            id: proposalEntityId,
+            name: proposalName,
+          },
+          property: {
+            id: SystemIds.NAME_PROPERTY,
+            name: 'Name',
+            dataType: 'TEXT',
+          },
+          spaceId: personalSpaceId,
+          value: proposalName,
+          isLocal: true,
+          isDeleted: false,
+          hasBeenPublished: false,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+
+      const bountyTargetSpaceId = activeSpace !== personalSpaceId ? activeSpace : undefined;
+
+      const proposalTypeRelation: StoreRelation = {
+        id: ID.createEntityId(),
+        entityId: ID.createEntityId(),
+        spaceId: personalSpaceId,
+        renderableType: 'RELATION',
+        verified: false,
+        position: Position.generate(),
+        type: {
+          id: SystemIds.TYPES_PROPERTY,
+          name: 'Types',
+        },
+        fromEntity: {
+          id: proposalEntityId,
+          name: proposalName,
+        },
+        toEntity: {
+          id: PROPOSAL_TYPE_ID,
+          name: 'Proposal',
+          value: PROPOSAL_TYPE_ID,
+        },
+      };
+
+      const bountyLinkRelations: StoreRelation[] = [
+        proposalTypeRelation,
+        ...Array.from(selectedBountyIds).flatMap<StoreRelation>(bountyId => {
+          const bounty = bountiesById.get(bountyId);
+          if (!bounty) return [];
+          return [
+            {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId: personalSpaceId,
+              toSpaceId: bountyTargetSpaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: BOUNTIES_RELATION_TYPE,
+                name: 'Bounties',
+              },
+              fromEntity: {
+                id: proposalEntityId,
+                name: proposalName,
+              },
+              toEntity: {
+                id: bounty.id,
+                name: bounty.name,
+                value: bounty.id,
+              },
+            },
+          ];
+        }),
+      ];
+
+      await makeProposal({
+        values: bountyLinkValues,
+        relations: bountyLinkRelations,
+        spaceId: personalSpaceId,
+        name: `Bounty links for: ${proposalName}`,
+        onSuccess: () => {
+          setSelectedBountyIds(new Set());
+        },
+        onError: () => {
+          // usePublish dispatches the error to the status bar internally.
+          // Keep selectedBountyIds so the user can retry.
+        },
+      });
+    }
+
     setIsPublishing(false);
-  }, [activeSpace, isReadyToPublish, makeProposal, valuesFromSpace, relationsFromSpace, proposalName]);
+  }, [
+    activeSpace,
+    isReadyToPublish,
+    makeProposal,
+    valuesFromSpace,
+    relationsFromSpace,
+    proposalName,
+    selectedBountyIds,
+    personalSpaceId,
+    bountiesById,
+  ]);
 
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing
-          ? [{ key: 'Enter', callback: () => handleSubmit() }]
-          : [],
+        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
       [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
     )
   );
@@ -206,7 +449,28 @@ export const ReviewChanges = () => {
   const handleDeleteAll = () => {
     if (!activeSpace) return;
     store.clearLocalChangesForSpace(activeSpace);
+    // Force the TipTap editor to recreate with fresh server content.
+    bumpEditorContentVersion(v => v + 1);
   };
+
+  React.useEffect(() => {
+    setIsBountyLinkingOpen(false);
+    setSelectedBountyIds(new Set());
+  }, [activeSpace]);
+
+  React.useEffect(() => {
+    if (selectedBountyIds.size === 0) return;
+    setSelectedBountyIds(prev => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (bountyIdSet.has(id)) {
+          next.add(id);
+        }
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [bountyIdSet, selectedBountyIds.size]);
 
   const spaceOptions = spaces.map(space => ({
     label: (
@@ -226,7 +490,7 @@ export const ReviewChanges = () => {
 
   return (
     <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
-      <RemoveScroll enabled={isReviewOpen} className="flex h-full w-full flex-col gap-2 bg-grey-01">
+      <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
         <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
           <div className="flex items-center gap-4">
             <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
@@ -260,971 +524,132 @@ export const ReviewChanges = () => {
                     />
                   </div>
                 )}
-                <span className="text-metadataMedium font-semibold leading-none">
+                <span className="text-metadataMedium leading-none font-semibold">
                   {activeSpaceMetadata?.entity.name ?? activeSpace}
                 </span>
               </div>
             )}
           </div>
-          <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-            <Pending isPending={isPublishing}>
-              {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
-            </Pending>
-          </Button>
-        </div>
-        <div className="px-2">
-          <div className="rounded-xl bg-white px-4 py-10">
-            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-              <div className="text-body">Proposal name</div>
-              <input
-                ref={proposalNameRef}
-                type="text"
-                value={rawProposalName}
-                onChange={e => handleProposalNameChange(e.target.value)}
-                placeholder="Name your proposal..."
-                className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
-              />
-              <div className="absolute right-4 top-4 xl:right-[2ch]">
-                <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
-              </div>
+          {hasRemainingSpaces && (
+            <div className="flex items-center gap-2">
+              {activeSpaceMetadata?.type !== 'PERSONAL' && (
+                <button
+                  onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+                  className={cx(
+                    'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+                    'border-grey-02 bg-white text-text hover:border-text'
+                  )}
+                >
+                  <Gem color="purple" />
+                  {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
+                </button>
+              )}
+              <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+                <Pending isPending={isPublishing}>
+                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
+                </Pending>
+              </Button>
             </div>
-          </div>
+          )}
         </div>
-        <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
-          {statusBarState.reviewState === 'publish-complete' ? null : isLoadingChanges ? (
-            <div className="rounded-xl bg-white p-4">
-              <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                <div className="mb-4 flex items-center gap-3">
-                  <Skeleton className="h-8 w-8" />
-                  <Skeleton className="h-6 w-48" />
-                </div>
-                <div className="mb-4 grid grid-cols-2 gap-20">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-28" />
-                </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-20">
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-20">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
+        <div className="flex grow overflow-hidden">
+          {hasRemainingSpaces ? (
+            <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+              <div className="px-2">
+                <div className="rounded-xl bg-white px-4 py-10">
+                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="text-body">Proposal name</div>
+                        <input
+                          ref={proposalNameRef}
+                          type="text"
+                          value={rawProposalName}
+                          onChange={e => handleProposalNameChange(e.target.value)}
+                          placeholder="Name your proposal..."
+                          className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 pt-2">
+                        <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : !hasVisibleEntities ? (
-            <div className="rounded-xl bg-white p-4">
-              <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                <Text as="p" variant="body" className="text-grey-04">
-                  No changes to review. Make some edits to see them here.
-                </Text>
+              <div ref={scrollContainerRef} className="grow overflow-y-scroll px-2 pb-2">
+                {isLoadingChanges ? (
+                  <div className="rounded-xl bg-white p-4">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                      <div className="mb-4 flex items-center gap-3">
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-6 w-48" />
+                      </div>
+                      <div className="mb-4 grid grid-cols-2 gap-20">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-20">
+                          <Skeleton className="h-24 w-full" />
+                          <Skeleton className="h-24 w-full" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-20">
+                          <Skeleton className="h-16 w-full" />
+                          <Skeleton className="h-16 w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : !hasVisibleEntities ? (
+                  <div className="rounded-xl bg-white p-4">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                      <Text as="p" variant="body" className="text-grey-04">
+                        No changes to review. Make some edits to see them here.
+                      </Text>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                      const entity = visibleEntities[virtualRow.index];
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={node => rowVirtualizer.measureElement(node)}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <div className="rounded-xl bg-white p-4">
+                            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                              <ChangedEntity entity={entity} spaceId={activeSpace} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
-            visibleEntities.map(entity => (
-              <div key={entity.entityId} className="rounded-xl bg-white p-4">
-                <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                  <ChangedEntity entity={entity} spaceId={activeSpace} />
-                </div>
-              </div>
-            ))
+            <div className="flex min-w-0 flex-1" />
           )}
+          <BountyLinkingPanel
+            isOpen={isBountyLinkingOpen}
+            setIsOpen={setIsBountyLinkingOpen}
+            selectedBountyIds={selectedBountyIds}
+            setSelectedBountyIds={setSelectedBountyIds}
+            bounties={bounties}
+          />
         </div>
-      </RemoveScroll>
+      </div>
     </SlideUp>
   );
 };
-
-type ChangedEntityProps = {
-  entity: EntityDiff;
-  spaceId: string;
-};
-
-export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
-  const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
-  const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
-  const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
-
-  const nonSpecialRelations = entity.relations.filter(
-    r => r.typeId !== TYPES_PROPERTY_ID && r.typeId !== AVATAR_PROPERTY_ID && r.typeId !== COVER_PROPERTY_ID
-  );
-  const imageRelations = nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl);
-  const otherRelations = nonSpecialRelations.filter(r => !r.after?.imageUrl && !r.before?.imageUrl);
-
-  const nameChange = entity.values.find(v => v.propertyId === NAME_PROPERTY_ID);
-
-  const otherValues = entity.values.filter(
-    v =>
-      v.propertyId !== NAME_PROPERTY_ID &&
-      v.propertyId !== AVATAR_PROPERTY_ID &&
-      v.propertyId !== COVER_PROPERTY_ID &&
-      (v.type as string) !== 'RELATION'
-  );
-
-  const imageRelationPropertyIds = new Set(imageRelations.map(r => r.typeId));
-  const otherRelationPropertyIds = new Set(otherRelations.map(r => r.typeId));
-  const filteredOtherValues = otherValues.filter(
-    v => !imageRelationPropertyIds.has(v.propertyId) && !otherRelationPropertyIds.has(v.propertyId)
-  );
-
-  const avatarChangeImageUrl =
-    avatarRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ??
-    avatarRelations.find(r => r.before?.imageUrl)?.before?.imageUrl;
-  const coverChangeImageUrl =
-    coverRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ??
-    coverRelations.find(r => r.before?.imageUrl)?.before?.imageUrl;
-  const fetchedMediaUrl = useEntityMediaUrl(entity.entityId, spaceId);
-
-  const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center gap-3">
-        {resolvedAvatarUrl && (
-          <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
-            <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
-          </div>
-        )}
-        <h2 className="text-xl font-semibold">{entity.name}</h2>
-      </div>
-
-      <div className="mb-4 grid grid-cols-2 gap-20">
-        <div className="text-sm text-grey-04">Current</div>
-        <div className="text-sm text-grey-04">Proposed edits</div>
-      </div>
-
-      <div className="space-y-4">
-        {(avatarRelations.length > 0 || coverRelations.length > 0) && (
-          <MediaChangeRow avatarRelations={avatarRelations} coverRelations={coverRelations} spaceId={spaceId} />
-        )}
-
-        {nameChange && (
-          <div className="grid grid-cols-2 gap-20">
-            <div className="flex items-center">
-              <TextDiffDisplay
-                value={nameChange.before}
-                diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
-                side="before"
-                className="text-mainPage"
-              />
-            </div>
-            <div className="flex items-center">
-              <TextDiffDisplay
-                value={nameChange.after}
-                diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
-                side="after"
-                className="text-mainPage"
-              />
-            </div>
-          </div>
-        )}
-
-        {typeRelations.length > 0 && <TypesChangeRow relations={typeRelations} />}
-
-        {entity.blocks.map(block => (
-          <BlockChangeRow key={block.id} block={block} />
-        ))}
-
-        {imageRelations.length > 0 &&
-          groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
-            <ImagePropertyChangeRow
-              key={typeId}
-              typeName={typeName}
-              typeId={typeId}
-              relations={relations}
-              spaceId={spaceId}
-            />
-          ))}
-
-        {(filteredOtherValues.length > 0 || otherRelations.length > 0) && (
-          <div className="grid grid-cols-2 gap-20">
-            {filteredOtherValues.some(v => v.before !== null) ||
-            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-                {filteredOtherValues.map(value => (
-                  <ValueChangeCell key={value.propertyId} value={value} side="before" />
-                ))}
-                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                  <RelationGroupCell
-                    key={typeId}
-                    typeId={typeId}
-                    typeName={typeName}
-                    relations={relations}
-                    side="before"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div />
-            )}
-            {filteredOtherValues.some(v => v.after !== null) ||
-            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-                {filteredOtherValues.map(value => (
-                  <ValueChangeCell key={value.propertyId} value={value} side="after" />
-                ))}
-                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                  <RelationGroupCell
-                    key={typeId}
-                    typeId={typeId}
-                    typeName={typeName}
-                    relations={relations}
-                    side="after"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div />
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-type MediaChangeRowProps = {
-  avatarRelations: RelationChange[];
-  coverRelations: RelationChange[];
-  spaceId: string;
-};
-
-const MediaChangeRow = ({ avatarRelations, coverRelations, spaceId }: MediaChangeRowProps) => {
-  const avatarBeforeUrl = avatarRelations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null;
-  const avatarAfterUrl = avatarRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
-  const coverBeforeUrl = coverRelations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null;
-  const coverAfterUrl = coverRelations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
-
-  const avatarAfterEntityId = avatarRelations.find(r => r.after)?.after?.toEntityId;
-  const coverAfterEntityId = coverRelations.find(r => r.after)?.after?.toEntityId;
-  const localAvatarUrl = useImageUrlFromEntity(avatarAfterEntityId, spaceId);
-  const localCoverUrl = useImageUrlFromEntity(coverAfterEntityId, spaceId);
-
-  const resolvedAvatarAfterUrl = avatarAfterUrl ?? localAvatarUrl ?? null;
-  const resolvedCoverAfterUrl = coverAfterUrl ?? localCoverUrl ?? null;
-
-  const hasAvatarChange = avatarRelations.length > 0;
-  const hasCoverChange = coverRelations.length > 0;
-
-  return (
-    <div className="grid grid-cols-2 gap-20">
-      <div>
-        <div className="relative">
-          {hasCoverChange && coverBeforeUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
-              <NativeGeoImage value={coverBeforeUrl} alt="Cover" className="h-full w-full object-cover" />
-            </div>
-          )}
-          {hasAvatarChange && avatarBeforeUrl && (
-            <div
-              className={cx(
-                'h-[80px] w-[80px] overflow-hidden rounded bg-grey-01',
-                hasCoverChange && coverBeforeUrl && 'absolute bottom-0 left-4 translate-y-1/2',
-                'ring-4 ring-deleted'
-              )}
-            >
-              <NativeGeoImage value={avatarBeforeUrl} alt="Avatar" className="h-full w-full object-cover" />
-            </div>
-          )}
-        </div>
-        {hasAvatarChange && hasCoverChange && avatarBeforeUrl && coverBeforeUrl && (
-          <div className="invisible h-[40px]" />
-        )}
-      </div>
-
-      <div>
-        <div className="relative">
-          {hasCoverChange && resolvedCoverAfterUrl && (
-            <div className={cx('aspect-[17/5] w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
-              <NativeGeoImage value={resolvedCoverAfterUrl} alt="Cover" className="h-full w-full object-cover" />
-            </div>
-          )}
-          {hasAvatarChange && resolvedAvatarAfterUrl && (
-            <div
-              className={cx(
-                'h-[80px] w-[80px] overflow-hidden rounded bg-grey-01',
-                hasCoverChange && resolvedCoverAfterUrl && 'absolute bottom-0 left-4 translate-y-1/2',
-                'ring-4 ring-added'
-              )}
-            >
-              <NativeGeoImage value={resolvedAvatarAfterUrl} alt="Avatar" className="h-full w-full object-cover" />
-            </div>
-          )}
-        </div>
-        {hasAvatarChange && hasCoverChange && resolvedAvatarAfterUrl && resolvedCoverAfterUrl && (
-          <div className="invisible h-[40px]" />
-        )}
-      </div>
-    </div>
-  );
-};
-
-type ImagePropertyChangeRowProps = {
-  typeName?: string | null;
-  typeId: string;
-  relations: RelationChange[];
-  spaceId: string;
-};
-
-const ImagePropertyChangeRow = ({ typeName, typeId, relations, spaceId }: ImagePropertyChangeRowProps) => {
-  const beforeUrl = relations.find(r => r.before?.imageUrl)?.before?.imageUrl ?? null;
-  const afterUrl = relations.find(r => r.after?.imageUrl)?.after?.imageUrl ?? null;
-
-  const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
-  const localImageUrl = useImageUrlFromEntity(afterEntityId, spaceId);
-  const resolvedAfterUrl = afterUrl ?? localImageUrl ?? null;
-
-  const hasBeforeImage = beforeUrl !== null;
-  const hasAfterImage = resolvedAfterUrl !== null;
-
-  return (
-    <div className="grid grid-cols-2 gap-20">
-      <div>
-        {hasBeforeImage && (
-          <div>
-            <Text as="p" variant="bodySemibold" className="mb-2">
-              {typeName ?? typeId}
-            </Text>
-            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-deleted')}>
-              <NativeGeoImage value={beforeUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
-            </div>
-          </div>
-        )}
-      </div>
-      <div>
-        {hasAfterImage && (
-          <div>
-            <Text as="p" variant="bodySemibold" className="mb-2">
-              {typeName ?? typeId}
-            </Text>
-            <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', 'ring-4 ring-added')}>
-              <NativeGeoImage value={resolvedAfterUrl} alt={typeName ?? ''} className="h-full w-full object-cover" />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-type TypesChangeRowProps = {
-  relations: RelationChange[];
-};
-
-const TypesChangeRow = ({ relations }: TypesChangeRowProps) => {
-  const addedTypes = relations
-    .filter(r => r.changeType === 'ADD')
-    .map(r => ({ id: r.after?.toEntityId, name: r.after?.toEntityName }));
-  const removedTypes = relations
-    .filter(r => r.changeType === 'REMOVE')
-    .map(r => ({ id: r.before?.toEntityId, name: r.before?.toEntityName }));
-
-  return (
-    <div className="grid grid-cols-2 gap-20">
-      <div className="flex flex-wrap gap-2">
-        {removedTypes.map((type, i) => (
-          <div
-            key={i}
-            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-deleted px-1.5 py-0.5 text-metadata tabular-nums text-text line-through decoration-1"
-          >
-            {type.name ?? type.id}
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {addedTypes.map((type, i) => (
-          <div
-            key={i}
-            className="inline-flex items-center gap-1 rounded border border-grey-02 bg-added px-1.5 py-0.5 text-metadata tabular-nums text-text"
-          >
-            {type.name ?? type.id}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-type BlockChangeRowProps = {
-  block: BlockChange;
-};
-
-const BlockChangeRow = ({ block }: BlockChangeRowProps) => {
-  switch (block.type) {
-    case 'textBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <TextBlockCell block={block} side="before" />
-          <TextBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'imageBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <ImageBlockCell block={block} side="before" />
-          <ImageBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'dataBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <DataBlockCell block={block} side="before" />
-          <DataBlockCell block={block} side="after" />
-        </div>
-      );
-  }
-};
-
-const renderHeading = (level: number, children: React.ReactNode): React.ReactNode => {
-  switch (level) {
-    case 1:
-      return <h1>{children}</h1>;
-    case 2:
-      return <h2>{children}</h2>;
-    case 3:
-      return <h3>{children}</h3>;
-    case 4:
-      return <h4>{children}</h4>;
-    case 5:
-      return <h5>{children}</h5>;
-    case 6:
-      return <h6>{children}</h6>;
-    default:
-      return <p>{children}</p>;
-  }
-};
-
-type MarkdownDiffProps = {
-  text: string;
-  highlightClass?: string;
-};
-
-const MarkdownDiffRenderer = ({ text, highlightClass }: MarkdownDiffProps) => {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const content = headingMatch[2];
-      elements.push(
-        <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, <span className={cx(highlightClass)}>{content}</span>)}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    if (line.match(/^[-*]\s+/)) {
-      const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+(.+)$/)) {
-        const itemContent = lines[i].replace(/^[-*]\s+/, '');
-        listItems.push(
-          <li key={i}>
-            <div className="react-renderer node-paragraph">
-              <div className="whitespace-normal">
-                <p>
-                  <span className={cx(highlightClass)}>{itemContent}</span>
-                </p>
-              </div>
-            </div>
-          </li>
-        );
-        i++;
-      }
-      elements.push(<ul key={`ul-${i}`}>{listItems}</ul>);
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <div key={i} className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>
-              <span className={cx(highlightClass)}>{line}</span>
-            </p>
-          </div>
-        </div>
-      );
-    }
-    i++;
-  }
-
-  return <>{elements}</>;
-};
-
-type TextBlockCellProps = {
-  block: BlockChange & { type: 'textBlock' };
-  side: 'before' | 'after';
-};
-
-const TextBlockCell = ({ block, side }: TextBlockCellProps) => {
-  const value = side === 'before' ? block.before : block.after;
-
-  if (value === null) {
-    return <div />;
-  }
-
-  const diff = 'diff' in block ? block.diff : undefined;
-  const isNew = block.before === null;
-  const isDeleted = block.after === null;
-
-  if (isNew || isDeleted) {
-    const highlightClass = side === 'before' ? 'rounded bg-deleted line-through decoration-1' : 'rounded bg-added';
-
-    return (
-      <div className="ProseMirror text-body">
-        <MarkdownDiffRenderer text={value} highlightClass={highlightClass} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="ProseMirror text-body">
-      {diff ? (
-        <MarkdownDiffWithChunks diff={diff} side={side} fullText={value} />
-      ) : (
-        <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
-          {value}
-        </span>
-      )}
-    </div>
-  );
-};
-
-type MarkdownDiffWithChunksProps = {
-  diff: DiffChunk[];
-  side: 'before' | 'after';
-  fullText: string;
-};
-
-const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunksProps) => {
-  const hasMarkdown = /^#{1,6}\s|^[-*]\s/.test(fullText);
-
-  if (!hasMarkdown) {
-    return <DiffRenderer diff={diff} side={side} />;
-  }
-
-  const visibleChunks = diff.filter(chunk => {
-    if (side === 'before' && chunk.added) return false;
-    if (side === 'after' && chunk.removed) return false;
-    return true;
-  });
-
-  const fullVisibleText = visibleChunks.map(c => c.value).join('');
-  const lines = fullVisibleText.split('\n');
-  const elements: React.ReactNode[] = [];
-  let chunkIndex = 0;
-  let charIndex = 0;
-
-  const getStyledText = (text: string): React.ReactNode[] => {
-    const result: React.ReactNode[] = [];
-    let remaining = text;
-    let localCharIndex = charIndex;
-
-    while (remaining.length > 0 && chunkIndex < visibleChunks.length) {
-      const chunk = visibleChunks[chunkIndex];
-      const chunkStart = localCharIndex - charIndex;
-      const chunkRemaining = chunk.value.slice(chunkStart);
-
-      if (chunkRemaining.length === 0) {
-        chunkIndex++;
-        localCharIndex = 0;
-        charIndex = 0;
-        continue;
-      }
-
-      const takeLength = Math.min(remaining.length, chunkRemaining.length);
-      const takenText = remaining.slice(0, takeLength);
-      remaining = remaining.slice(takeLength);
-
-      const isChanged = chunk.added || chunk.removed;
-      result.push(
-        <span
-          key={`${chunkIndex}-${localCharIndex}`}
-          className={cx(
-            isChanged && 'inline rounded',
-            chunk.removed && 'bg-deleted line-through decoration-1',
-            chunk.added && 'bg-added'
-          )}
-        >
-          {takenText}
-        </span>
-      );
-
-      localCharIndex += takeLength;
-      if (localCharIndex - charIndex >= chunk.value.length) {
-        chunkIndex++;
-        charIndex += chunk.value.length;
-        localCharIndex = charIndex;
-      }
-    }
-
-    return result;
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (i > 0) {
-      charIndex++;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      charIndex += headingMatch[1].length + 1;
-      elements.push(
-        <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, getStyledText(headingMatch[2]))}
-        </div>
-      );
-      charIndex += headingMatch[2].length;
-      continue;
-    }
-
-    const listMatch = line.match(/^([-*])\s+(.+)$/);
-    if (listMatch) {
-      charIndex += 2;
-      elements.push(
-        <ul key={`ul-${i}`}>
-          <li>
-            <div className="react-renderer node-paragraph">
-              <div className="whitespace-normal">
-                <p>{getStyledText(listMatch[2])}</p>
-              </div>
-            </div>
-          </li>
-        </ul>
-      );
-      charIndex += listMatch[2].length;
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <div key={i} className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>{getStyledText(line)}</p>
-          </div>
-        </div>
-      );
-      charIndex += line.length;
-    } else {
-      charIndex += line.length;
-    }
-  }
-
-  return <>{elements}</>;
-};
-
-type ImageBlockCellProps = {
-  block: BlockChange & { type: 'imageBlock' };
-  side: 'before' | 'after';
-};
-
-const ImageBlockCell = ({ block, side }: ImageBlockCellProps) => {
-  const value = side === 'before' ? block.before : block.after;
-
-  if (value === null) {
-    return <div />;
-  }
-
-  const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
-
-  return (
-    <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
-      <NativeGeoImage value={value} alt="" className="h-full w-full object-cover" />
-    </div>
-  );
-};
-
-type DataBlockCellProps = {
-  block: BlockChange & { type: 'dataBlock' };
-  side: 'before' | 'after';
-};
-
-const DataBlockCell = ({ block, side }: DataBlockCellProps) => {
-  const value = side === 'before' ? block.before : block.after;
-  const isNew = block.before === null;
-  const isDeleted = block.after === null;
-
-  if ((isNew && side === 'before') || (isDeleted && side === 'after')) {
-    return <div />;
-  }
-
-  return (
-    <div
-      className={cx(
-        'overflow-hidden rounded-lg border border-grey-02 shadow-button',
-        isNew && side === 'after' && 'ring-4 ring-added',
-        isDeleted && side === 'before' && 'ring-4 ring-deleted'
-      )}
-    >
-      <div className="flex items-center justify-between border-b border-grey-02 bg-white px-4 py-3">
-        <div
-          className={cx(
-            'text-smallTitle font-semibold text-text',
-            block.before !== block.after && side === 'before' && 'rounded bg-deleted line-through decoration-1',
-            block.before !== block.after && side === 'after' && 'rounded bg-added'
-          )}
-        >
-          {value}
-        </div>
-      </div>
-      <div className="bg-grey-01 p-4">
-        <div className="flex items-center justify-center py-8 text-metadata text-grey-04">Data block preview</div>
-      </div>
-    </div>
-  );
-};
-
-type ValueChangeCellProps = {
-  value: ValueChange;
-  side: 'before' | 'after';
-};
-
-const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
-  const displayValue = side === 'before' ? value.before : value.after;
-  const diff = value.type === 'TEXT' ? (value as TextValueChange).diff : undefined;
-
-  if (displayValue === null) return null;
-
-  return (
-    <div className="mb-6 last:mb-0">
-      <Text as="p" variant="bodySemibold">
-        {value.propertyName ?? value.propertyId}
-      </Text>
-      <div>
-        {value.type === 'TEXT' && diff ? (
-          <TextDiffDisplay value={displayValue} diff={diff} side={side} />
-        ) : value.type === 'BOOLEAN' ? (
-          <BooleanDisplay value={displayValue} side={side} />
-        ) : value.type === 'POINT' ? (
-          <PointDisplay value={displayValue} side={side} />
-        ) : value.type === 'DATE' || value.type === 'DATETIME' ? (
-          <DateDisplay value={displayValue} side={side} />
-        ) : (
-          <SimpleValueDisplay value={displayValue} side={side} />
-        )}
-      </div>
-    </div>
-  );
-};
-
-type RelationGroupCellProps = {
-  typeId: string;
-  typeName?: string | null;
-  relations: RelationChange[];
-  side: 'before' | 'after';
-};
-
-const RelationGroupCell = ({ typeId, typeName, relations, side }: RelationGroupCellProps) => {
-  const chips = relations
-    .map(r => {
-      if (side === 'before') {
-        if (r.changeType === 'REMOVE' || r.changeType === 'UPDATE') {
-          return {
-            entityId: r.before?.toEntityId,
-            entityName: r.before?.toEntityName,
-            changeType: r.changeType,
-          };
-        }
-        return null;
-      } else {
-        if (r.changeType === 'ADD' || r.changeType === 'UPDATE') {
-          return {
-            entityId: r.after?.toEntityId,
-            entityName: r.after?.toEntityName,
-            changeType: r.changeType,
-          };
-        }
-        return null;
-      }
-    })
-    .filter(Boolean);
-
-  if (chips.length === 0) return null;
-
-  return (
-    <div className="mb-6 last:mb-0">
-      <Text as="p" variant="bodySemibold">
-        {typeName ?? typeId}
-      </Text>
-      <div className="flex flex-wrap gap-2">
-        {chips.map((chip, i) => (
-          <div
-            key={i}
-            className={cx(
-              'inline-flex items-center gap-1 rounded border border-grey-02 px-1.5 py-0.5 text-metadata tabular-nums text-text',
-              side === 'before' && 'bg-deleted line-through decoration-1',
-              side === 'after' && 'bg-added'
-            )}
-          >
-            {chip?.entityName ?? chip?.entityId}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-type TextDiffDisplayProps = {
-  value: string | null;
-  diff?: DiffChunk[];
-  side: 'before' | 'after';
-  className?: string;
-};
-
-const TextDiffDisplay = ({ value, diff, side, className }: TextDiffDisplayProps) => {
-  if (value === null) return null;
-
-  if (diff) {
-    return (
-      <span className={className}>
-        <DiffRenderer diff={diff} side={side} />
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={cx(
-        'inline rounded',
-        side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added',
-        className
-      )}
-    >
-      {value}
-    </span>
-  );
-};
-
-type DiffRendererProps = {
-  diff: DiffChunk[];
-  side: 'before' | 'after';
-};
-
-const DiffRenderer = ({ diff, side }: DiffRendererProps) => {
-  return (
-    <>
-      {diff.map((chunk, i) => {
-        if (side === 'before' && chunk.added) return null;
-        if (side === 'after' && chunk.removed) return null;
-
-        const isChanged = chunk.added || chunk.removed;
-
-        return (
-          <span
-            key={i}
-            className={cx(
-              isChanged && 'inline rounded',
-              chunk.removed && 'bg-deleted line-through decoration-1',
-              chunk.added && 'bg-added'
-            )}
-          >
-            {chunk.value}
-          </span>
-        );
-      })}
-    </>
-  );
-};
-
-type SimpleValueDisplayProps = {
-  value: string | null;
-  side: 'before' | 'after';
-};
-
-const SimpleValueDisplay = ({ value, side }: SimpleValueDisplayProps) => {
-  if (value === null) return null;
-
-  return (
-    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
-      {value}
-    </span>
-  );
-};
-
-type BooleanDisplayProps = {
-  value: string | null;
-  side: 'before' | 'after';
-};
-
-const BooleanDisplay = ({ value, side }: BooleanDisplayProps) => {
-  if (value === null) return null;
-
-  // Handle both '1'/'0' (local store format) and 'true'/'false' (API diff format)
-  const checked = getChecked(value) ?? value === 'true';
-
-  return (
-    <span className={cx('inline-flex shrink-0 items-center rounded p-1', side === 'before' ? 'bg-deleted' : 'bg-added')}>
-      <Checkbox checked={checked} disabled />
-    </span>
-  );
-};
-
-type PointDisplayProps = {
-  value: string | null;
-  side: 'before' | 'after';
-};
-
-const PointDisplay = ({ value, side }: PointDisplayProps) => {
-  if (value === null) return null;
-
-  return (
-    <span
-      className={cx(
-        'inline rounded font-mono text-sm',
-        side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added'
-      )}
-    >
-      {value}
-    </span>
-  );
-};
-
-type DateDisplayProps = {
-  value: string | null;
-  side: 'before' | 'after';
-};
-
-const DateDisplay = ({ value, side }: DateDisplayProps) => {
-  if (value === null) return null;
-
-  let displayValue = value;
-  try {
-    const date = new Date(value);
-    displayValue = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  } catch {
-    // use raw value
-  }
-
-  return (
-    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
-      {displayValue}
-    </span>
-  );
-};
-
-function groupRelationsByType(relations: RelationChange[]): [string, string | null | undefined, RelationChange[]][] {
-  const groups = new Map<string, { typeName: string | null | undefined; relations: RelationChange[] }>();
-
-  for (const relation of relations) {
-    const existing = groups.get(relation.typeId);
-    if (existing) {
-      existing.relations.push(relation);
-    } else {
-      groups.set(relation.typeId, { typeName: relation.typeName, relations: [relation] });
-    }
-  }
-
-  return Array.from(groups.entries()).map(([typeId, { typeName, relations }]) => [typeId, typeName, relations]);
-}

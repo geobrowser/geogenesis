@@ -167,7 +167,6 @@ export type Property = {
   id: string;
   name: string | null;
   dataType: DataType;
-  isDataTypeEditable?: boolean;
   isType?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
   /**

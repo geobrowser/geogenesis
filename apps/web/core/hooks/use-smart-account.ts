@@ -2,6 +2,7 @@
 
 import { generateSmartAccount, useWalletClient } from '@geogenesis/auth';
 import { useQuery } from '@tanstack/react-query';
+
 import { useCookies } from 'react-cookie';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';

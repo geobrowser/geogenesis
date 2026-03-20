@@ -1,5 +1,6 @@
-import { Effect } from 'effect';
 import { cache } from 'react';
+
+import { Effect } from 'effect';
 
 import { fetchProfile } from '~/core/io/subgraph';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';

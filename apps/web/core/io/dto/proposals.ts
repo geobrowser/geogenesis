@@ -13,6 +13,23 @@ type SpaceWithImage = {
   image: string;
 };
 
+export type SubspaceEdgeProposalDetails = {
+  actionType: 'SUBSPACE_VERIFIED' | 'SUBSPACE_UNVERIFIED' | 'SUBSPACE_RELATED' | 'SUBSPACE_UNRELATED';
+  targetSpaceId: string;
+};
+
+export type SubspaceTopicProposalDetails = {
+  actionType: 'SUBSPACE_TOPIC_DECLARED' | 'SUBSPACE_TOPIC_REMOVED';
+  targetTopicId: string;
+};
+
+export type SubspaceProposalDetails = SubspaceEdgeProposalDetails | SubspaceTopicProposalDetails;
+
+export type SpaceTopicProposalDetails = {
+  actionType: 'SET_TOPIC' | 'UNSET_TOPIC' | 'TOPIC_DECLARED' | 'TOPIC_REMOVED';
+  targetTopicId: string;
+};
+
 export type Proposal = {
   id: string;
   editId: string;
@@ -25,10 +42,13 @@ export type Proposal = {
   startTime: number;
   endTime: number;
   status: ProposalStatus;
+  canExecute: boolean;
   proposalVotes: {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
+  subspaceDetails?: SubspaceProposalDetails;
+  spaceTopicDetails?: SpaceTopicProposalDetails;
 };
 
 export function ProposalDto(
@@ -65,6 +85,7 @@ export function ProposalDto(
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
+    canExecute: false,
     space: spaceWithMetadata,
     createdBy: profile,
     proposalVotes: {
@@ -130,6 +151,7 @@ export function ProposalWithoutVotersDto(
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
+    canExecute: false,
     space: spaceWithMetadata,
     createdBy: profile,
   };

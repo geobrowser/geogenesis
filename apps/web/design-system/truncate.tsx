@@ -1,6 +1,6 @@
-import cx from 'classnames';
-
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { textStyles } from '~/design-system/theme/typography';
 import type { TypographyName } from '~/design-system/theme/typography';
@@ -25,7 +25,8 @@ export const Truncate = ({
       className={cx(
         shouldTruncate && clampClassName[maxLines],
         textStyles[variant],
-        'w-full overflow-x-hidden leading-none',
+        'w-full leading-none',
+        shouldTruncate ? 'overflow-hidden' : 'overflow-visible',
         className
       )}
       {...rest}

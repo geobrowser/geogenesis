@@ -1,6 +1,6 @@
-import { cva } from 'class-variance-authority';
-
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { ColorName } from './theme/colors';
 import { TypographyName } from './theme/typography';
@@ -24,7 +24,7 @@ const textStyles = cva('', {
       smallTitle: 'text-smallTitle',
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: '!text-tableProperty',
+      tableProperty: 'text-tableProperty!',
       textLink: 'text-textLink',
       quote: 'text-quote',
       listItem: 'text-listItem',

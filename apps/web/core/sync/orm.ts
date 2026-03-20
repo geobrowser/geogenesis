@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
@@ -22,26 +23,30 @@ import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
-export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
-  const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
+function relationKey(r: Relation): string {
+  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
 
-  const deletedRelationIds = new Set(locallyDeletedRelations);
-  const remoteRelationsThatWerentDeleted = remoteRelations
-    // Only return initialRelations that haven't been deleted locally
-    .filter(r => !deletedRelationIds.has(r.id));
+export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
+  const locallyDeleted = localRelations.filter(r => r.isDeleted);
+  const deletedRelationIds = new Set(locallyDeleted.map(r => r.id));
+  const deletedRelationKeys = new Set(locallyDeleted.map(relationKey));
+
+  const remoteRelationsThatWerentDeleted = remoteRelations.filter(r => {
+    if (deletedRelationIds.has(r.id)) return false;
+    if (deletedRelationKeys.has(relationKey(r))) return false;
+    return true;
+  });
 
   const localRelationIds = new Set(localRelations.map(r => r.id));
   const remotes: Relation[] = [];
 
-  // Filter out any remoet relations that are already stored locally
   for (const remoteRelation of remoteRelationsThatWerentDeleted) {
     if (!localRelationIds.has(remoteRelation.id)) {
       remotes.push(remoteRelation);
     }
   }
 
-  // @TODO: Merge local triples for updated (not created) relations. This is for things like
-  // the index.
   return [...localRelations, ...remotes];
 }
 
@@ -90,7 +95,8 @@ export class E {
     const name = Entities.name(values);
     const description = Entities.description(values);
     const types = readTypes(relations);
-    const spaces = Entities.spaces(values, relations);
+    const derivedSpaces = Entities.spaces(values, relations);
+    const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;
 
     return {
       id: id,
@@ -162,10 +168,10 @@ export class E {
       const entityIds = where.id.in.filter(id => id !== '');
 
       const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds],
+        queryKey: ['network', 'entities', entityIds, spaceId],
         queryFn: async ({ signal }) => {
           // @TODO: error handle
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, undefined, signal));
+          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
           return entities;
         },
       });

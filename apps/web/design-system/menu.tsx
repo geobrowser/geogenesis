@@ -1,10 +1,11 @@
 'use client';
 
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
-import { cva } from 'class-variance-authority';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -78,7 +79,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
             active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
           )}
         />
-        <div className="relative z-10 flex items-center gap-2">{children}</div>
+        <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
       </Link>
     );
   }

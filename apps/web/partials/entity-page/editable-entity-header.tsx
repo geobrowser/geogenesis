@@ -2,9 +2,10 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { useSelector } from '@xstate/store/react';
-import Link from 'next/link';
 
 import * as React from 'react';
+
+import Link from 'next/link';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -21,8 +22,8 @@ import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { HistoryEmpty } from '../history/history-empty';
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
+import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
@@ -68,7 +69,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
         {!isRelationPage ? (
           <>
             {isEditing ? (
-              <div className="flex-grow text-text">
+              <div className="grow text-text">
                 <PageStringField
                   variant="mainPage"
                   placeholder="Entity name..."
@@ -123,7 +124,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
               </div>
             )}
             {hasNextPage && (
-              <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+              <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
                 {isFetchingNextPage ? (
                   <Dots />
                 ) : (

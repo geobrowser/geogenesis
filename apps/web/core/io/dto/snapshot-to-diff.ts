@@ -1,23 +1,22 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { computeTextDiff } from '~/core/utils/diff/diff';
-import type {
-  BlockChange,
-  EntityDiff,
-  RelationChange,
-  SimpleValueType,
-  ValueChange,
-} from '~/core/utils/diff/types';
+import type { BlockChange, EntityDiff, RelationChange, SimpleValueType, ValueChange } from '~/core/utils/diff/types';
 
-import type {
-  ApiEntitySnapshotResponse,
-  ApiVersionedValue,
-  ApiVersionedRelation,
-  ApiBlockSnapshot,
-} from '../rest';
+import type { ApiBlockSnapshot, ApiEntitySnapshotResponse, ApiVersionedRelation, ApiVersionedValue } from '../rest';
 
-const { TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK, BLOCKS, TYPES_PROPERTY, NAME_PROPERTY, MARKDOWN_CONTENT, IMAGE_URL_PROPERTY } =
-  SystemIds;
+const {
+  TEXT_BLOCK,
+  IMAGE_BLOCK,
+  IMAGE_TYPE,
+  DATA_BLOCK,
+  VIDEO_TYPE,
+  VIDEO_BLOCK,
+  BLOCKS,
+  TYPES_PROPERTY,
+  NAME_PROPERTY,
+  MARKDOWN_CONTENT,
+  IMAGE_URL_PROPERTY,
+} = SystemIds;
 
 /**
  * Determine block type from a TYPES_PROPERTY relation.
@@ -31,7 +30,9 @@ function classifyBlockType(typeEntityId: string): 'textBlock' | 'imageBlock' | '
   return null;
 }
 
-function getBlockTypeFromRelations(relations: readonly ApiVersionedRelation[]): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
+function getBlockTypeFromRelations(
+  relations: readonly ApiVersionedRelation[]
+): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
   for (const rel of relations) {
     if (rel.typeId === TYPES_PROPERTY) {
       const blockType = classifyBlockType(rel.toEntityId);
@@ -60,7 +61,9 @@ function serializeSnapshotValue(v: ApiVersionedValue): { type: string; value: st
   if (v.datetime !== undefined && v.datetime !== null) return { type: 'DATETIME', value: v.datetime };
   if (v.point !== undefined && v.point !== null) return { type: 'POINT', value: v.point };
   if (v.rect !== undefined && v.rect !== null) return { type: 'RECT', value: v.rect };
-  // Unsupported types (schedule, embedding) — can't serialize to string meaningfully
+  if (v.schedule !== undefined && v.schedule !== null && typeof v.schedule === 'string')
+    return { type: 'SCHEDULE', value: v.schedule };
+  // Unsupported types (embedding) — can't serialize to string meaningfully
   return { type: 'TEXT', value: null };
 }
 
@@ -129,7 +132,7 @@ function snapshotBlockToChange(block: ApiBlockSnapshot): BlockChange {
       const url = block.values.find(v => v.propertyId === IMAGE_URL_PROPERTY)?.text ?? null;
       return {
         id: block.id,
-        type: 'imageBlock',
+        type: 'videoBlock',
         before: null,
         after: url,
       };

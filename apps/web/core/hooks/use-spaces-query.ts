@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
+
+import { Effect, Either } from 'effect';
 
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { Subgraph } from '~/core/io';
@@ -13,14 +14,14 @@ import { useSyncEngine } from '../sync/use-sync-engine';
 
 const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space type entities
 
-export function useSpacesQuery() {
+export function useSpacesQuery(enabled = true) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
   const { store } = useSyncEngine();
   const cache = useQueryClient();
 
-  const { data: fuzzyMatchedSpaces = [] } = useQuery({
+  const { data: fuzzyMatchedSpaces = [], isLoading } = useQuery({
     queryKey: ['spaces-by-name', debouncedQuery],
     queryFn: async () => {
       const fetchResultsEffect = Effect.either(
@@ -68,15 +69,22 @@ export function useSpacesQuery() {
 
       return resultOrError.right;
     },
+    enabled: enabled && debouncedQuery.length > 0,
   });
 
-  const spaces = fuzzyMatchedSpaces.map(space => {
-    return { id: space.spaces[0].spaceId, name: space.name, image: space.spaces[0].image };
+  const spaces = fuzzyMatchedSpaces.flatMap(entity => {
+    return entity.spaces.map(space => ({
+      id: space.spaceId,
+      name: space.name ?? entity.name,
+      description: space.description ?? entity.description,
+      image: space.image,
+    }));
   });
 
   type SpaceItem = {
     id: string;
     name: string | null;
+    description: string | null;
     image: string;
   };
 
@@ -96,6 +104,7 @@ export function useSpacesQuery() {
       query,
       setQuery,
       spaces: [],
+      isLoading,
     };
   }
 
@@ -103,5 +112,6 @@ export function useSpacesQuery() {
     query,
     setQuery,
     spaces: uniqueSpacesById(spaces),
+    isLoading,
   };
 }

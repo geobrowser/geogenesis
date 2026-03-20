@@ -30,6 +30,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       date
       decimal
       bytes
+      schedule
     }
 
     relationsList {
@@ -50,6 +51,7 @@ export const entityFragment = graphql(/* GraphQL */ `
           name
         }
         valuesList {
+          spaceId
           propertyId
           text
           integer
@@ -61,6 +63,7 @@ export const entityFragment = graphql(/* GraphQL */ `
           date
           decimal
           bytes
+          schedule
         }
       }
       toSpaceId
@@ -76,6 +79,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   query AllEntities(
     $spaceId: UUID
     $spaceIds: UUIDFilter
+    $typeId: UUID
     $typeIds: UUIDFilter
     $limit: Int
     $offset: Int
@@ -89,6 +93,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       orderBy: $orderBy
       spaceId: $spaceId
       spaceIds: $spaceIds
+      typeId: $typeId
       typeIds: $typeIds
     ) {
       id
@@ -119,6 +124,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -139,6 +145,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -150,6 +157,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -192,6 +200,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -212,6 +221,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -223,6 +233,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -265,6 +276,7 @@ export const entityQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -285,6 +297,7 @@ export const entityQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -296,6 +309,7 @@ export const entityQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -331,6 +345,7 @@ export const relationFragment = graphql(/* GraphQL */ `
         name
       }
       valuesList {
+        spaceId
         propertyId
         text
         integer
@@ -342,6 +357,7 @@ export const relationFragment = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
     }
     toSpaceId
@@ -356,6 +372,17 @@ export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
   query RelationEntityRelations($id: UUID!, $spaceId: UUID) {
     relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
       ...FullRelation
+    }
+  }
+`);
+
+export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
+  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID) {
+    relations(filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
+      id
+      toEntityId
+      spaceId
+      fromEntityId
     }
   }
 `);
@@ -390,6 +417,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         date
         decimal
         bytes
+        schedule
       }
 
       relationsList(filter: { spaceId: { is: $spaceId } }) {
@@ -410,6 +438,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
             name
           }
           valuesList {
+            spaceId
             propertyId
             text
             integer
@@ -421,6 +450,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
             date
             decimal
             bytes
+            schedule
           }
         }
         toSpaceId
@@ -472,6 +502,11 @@ export const spaceFragment = graphql(/* GraphQL */ `
     id
     type
     address
+    topicId
+
+    topic {
+      ...FullEntity
+    }
 
     membersList {
       memberSpaceId
@@ -617,6 +652,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           date
           decimal
           bytes
+          schedule
         }
         relationsList {
           verified
@@ -637,6 +673,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
               name
             }
             valuesList {
+              spaceId
               propertyId
               text
               integer
@@ -648,6 +685,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
               date
               decimal
               bytes
+              schedule
             }
           }
           type {

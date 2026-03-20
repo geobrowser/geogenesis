@@ -232,8 +232,29 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
     filter.description = convertStringConditionToStringFilter(where.description);
   }
 
-  // NOTE: typeIds are now handled via extractTypeIdsFromWhere() and passed as a
-  // top-level query parameter for better performance. Do not add to filter here.
+  // Handle types - convert to typeIds filter field.
+  // When types are at the top level of the where condition, extractTypeIdsFromWhere()
+  // also extracts them for the top-level query parameter (and removeTypeIdsFromFilter
+  // strips the duplicate from the filter). When types appear inside AND/OR branches,
+  // extractTypeIdsFromWhere() won't find them, so this filter conversion is the only path.
+  if (where.types && where.types.length > 0) {
+    const typeIdValues: string[] = [];
+    where.types.forEach(typeCondition => {
+      if (typeCondition.id?.equals) {
+        typeIdValues.push(typeCondition.id.equals);
+      }
+    });
+
+    if (typeIdValues.length === 1) {
+      filter.typeIds = { anyEqualTo: typeIdValues[0] } as UuidListFilter;
+    } else if (typeIdValues.length > 1) {
+      // Multiple types in one array = match any (OR semantics within the array)
+      filter.or = filter.or || [];
+      typeIdValues.forEach(id => {
+        filter.or!.push({ typeIds: { anyEqualTo: id } as UuidListFilter });
+      });
+    }
+  }
 
   // @TODO restore once space ids are updated in filters
   // Handle spaces - convert to spaceIds

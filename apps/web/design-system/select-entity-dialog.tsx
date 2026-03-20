@@ -13,7 +13,10 @@ import { SelectEntity } from './select-entity';
 type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
   spaceId: string;
-  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onDone: (
+    result: { id: string; name: string | null; space?: string; verified?: boolean },
+    fromCreateFn?: boolean
+  ) => void;
   onCreateEntity?: (result: {
     id: string;
     name: string | null;
@@ -25,6 +28,8 @@ type SelectEntityAsPopoverProps = {
   placeholder?: string;
   advanced?: boolean;
   showIDs?: boolean;
+  initialQuery?: string;
+  selectedEntityId?: string;
 };
 
 export function SelectEntityAsPopover({
@@ -36,6 +41,8 @@ export function SelectEntityAsPopover({
   placeholder,
   advanced = true,
   showIDs = true,
+  initialQuery,
+  selectedEntityId,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -50,7 +57,7 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-[1001]" collisionPadding={10} avoidCollisions={true}>
+        <Popover.Content sideOffset={4} align="start" className="z-1001" collisionPadding={10} avoidCollisions={true}>
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}
@@ -62,6 +69,8 @@ export function SelectEntityAsPopover({
             variant="floating"
             advanced={advanced}
             showIDs={showIDs}
+            initialQuery={initialQuery}
+            selectedEntityId={selectedEntityId}
           />
         </Popover.Content>
       </Popover.Portal>

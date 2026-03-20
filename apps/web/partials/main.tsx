@@ -1,8 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
-
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
 
 import { useDiff } from '~/core/state/diff-store';
 
@@ -20,7 +20,7 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className="mx-auto max-w-[1200px] pb-16 pt-8 xl:px-[2ch]"
+      className="mx-auto max-w-[1200px] pt-8 pb-16 xl:px-[2ch]"
     >
       {children}
     </motion.main>

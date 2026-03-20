@@ -1,9 +1,10 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { DataType } from '~/core/types';
@@ -26,7 +27,7 @@ const numberFieldStyles = cva('', {
     variant: {
       body: 'text-body text-text',
       tableCell: 'text-tableCell text-text',
-      tableProperty: '!text-tableProperty !text-grey-04',
+      tableProperty: 'text-tableProperty! text-grey-04!',
     },
   },
   defaultVariants: {
@@ -73,7 +74,7 @@ export function NumberField({
     <div>
       <input
         type="text"
-        className="m-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+        className="m-0 -mb-px w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-hidden"
         onBlur={e => onChangeWithValidation(e.currentTarget.value, onChange!, dataType)}
         onChange={e => onChangeWithValidation(e.currentTarget.value, setLocalValue, dataType)}
         value={localValue}

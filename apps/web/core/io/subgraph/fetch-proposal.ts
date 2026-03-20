@@ -2,18 +2,18 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 
 import { Proposal } from '../dto/proposals';
 import {
   ApiError,
-  restFetch,
   ApiProposalStatusResponseSchema,
-  mapActionTypeToProposalType,
-  mapProposalStatus,
   convertVoteOption,
   encodePathSegment,
-  type ApiProposalStatusResponse,
+  getSpaceTopicProposalDetails,
+  getSubspaceProposalDetails,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  restFetch,
 } from '../rest';
 import { Address, SubstreamVote } from '../substream-schema';
 import { AbortError } from './errors';
@@ -83,6 +83,8 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   // Determine proposal type from the first action
   const firstAction = apiProposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+  const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
+  const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
 
   // Convert votes to internal format
   const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
@@ -101,17 +103,18 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     id: apiProposal.proposalId,
-    editId: '', // Not provided by new API, will need to be fetched separately if needed
+    editId: '',
     name: apiProposal.name,
     type: proposalType,
-    createdAt: 0, // Not directly provided, could be derived from startTime if needed
-    createdAtBlock: '0', // Not provided by new API
+    createdAt: 0,
+    createdAtBlock: '0',
     startTime: apiProposal.timing.startTime,
     endTime: apiProposal.timing.endTime,
     status: mapProposalStatus(apiProposal.status),
+    canExecute: apiProposal.canExecute,
     space: {
       id: apiProposal.spaceId,
-      name: null, // Would need to fetch space metadata separately
+      name: null,
       image: '',
     },
     createdBy: profile,
@@ -119,5 +122,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       totalCount: apiProposal.votes.total,
       nodes: votesWithProfiles,
     },
+    subspaceDetails: subspaceDetails ?? undefined,
+    spaceTopicDetails: spaceTopicDetails ?? undefined,
   };
 }

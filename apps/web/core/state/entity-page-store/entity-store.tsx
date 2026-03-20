@@ -2,6 +2,7 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
 import { useMemo } from 'react';
 
 import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIdsAndRelations } from '~/core/database/entities';
@@ -75,7 +76,7 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
-  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? t.spaceId}`).sort(), [types]);
+  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? ''}`).sort(), [types]);
   const hasTypes = types.length > 0;
 
   const allRelations = useRelations({
@@ -93,7 +94,7 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
     queryKey: ['entity-schema-for-merging', entityId, spaceId, stableTypeKey, stableRelationKey],
     queryFn: async () =>
       await getSchemaFromTypeIdsAndRelations(
-        types.map(t => ({ id: t.id, spaceId: t.toSpaceId ?? t.spaceId })),
+        types.map(t => ({ id: t.id, spaceId: t.toSpaceId })),
         allRelations
       ),
   });

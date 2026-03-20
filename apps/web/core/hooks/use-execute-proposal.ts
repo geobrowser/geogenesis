@@ -1,13 +1,15 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { useCallback } from 'react';
 
+import { Effect, Either } from 'effect';
+import { type Hex, encodeFunctionData } from 'viem';
+
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeProposalExecutedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
 import {
   EMPTY_SIGNATURE,
@@ -83,16 +85,19 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       action: 'PROPOSAL_EXECUTED',
     });
 
-    const txEffect = tx(callData);
-    const result = await Effect.runPromise(Effect.either(txEffect));
+    const txEffect = tx(callData).pipe(
+      Effect.withSpan('web.write.executeProposal'),
+      Effect.annotateSpans({
+        'io.operation': 'execute_proposal',
+        'space.type': 'DAO',
+        'governance.action': 'proposal_executed',
+      })
+    );
+    const result = await runEffectEither(txEffect);
 
     if (Either.isLeft(result)) {
       const error = result.left;
-      console.error(
-        `Execute failed: ${error.message}`,
-        { fromSpaceId, toSpaceId, proposalId },
-        error
-      );
+      console.error(`Execute failed: ${error.message}`, { fromSpaceId, toSpaceId, proposalId }, error);
       throw error;
     }
 

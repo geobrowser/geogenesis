@@ -1,11 +1,12 @@
 'use client';
 
 import { Arrow, Content, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type TooltipProps = {
   trigger: ReactNode;
@@ -32,7 +33,7 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'd
             <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
               <motion.div
                 className={cx(
-                  'relative w-full focus:outline-none',
+                  'relative w-full focus:outline-hidden',
                   positionClassName[position],
                   variantClassName[variant]
                 )}

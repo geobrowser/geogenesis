@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -55,8 +56,14 @@ export function TableBlockListItem({
   const { propertyId: cellId, verified } = nameCell;
   let { image } = nameCell;
 
-  const name = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })?.value ?? null;
-  const descriptionValue = useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.DESCRIPTION_PROPERTY, spaceId: currentSpaceId });
+  const name =
+    useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
+      ?.value ?? null;
+  const descriptionValue = useSpaceAwareValue({
+    entityId: rowEntityId,
+    propertyId: SystemIds.DESCRIPTION_PROPERTY,
+    spaceId: currentSpaceId,
+  });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
   const avatarRelation = useRelation({
@@ -94,7 +101,7 @@ export function TableBlockListItem({
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
-        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
+        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
           {image ? (
             <GeoImage
               value={image}
@@ -128,6 +135,7 @@ export function TableBlockListItem({
               <SelectEntity
                 onCreateEntity={result => {
                   onChangeEntry(rowEntityId, currentSpaceId, { type: 'CREATE_ENTITY', name: result.name });
+                  return rowEntityId;
                 }}
                 onDone={(result, fromCreateFn) => {
                   if (fromCreateFn) return;
@@ -221,7 +229,7 @@ export function TableBlockListItem({
       href={href}
       className="group flex w-full max-w-full grow items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
     >
-      <div className="relative h-16 w-16 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
+      <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
         {image ? (
           <GeoImage
             value={image}
@@ -287,4 +295,3 @@ export function TableBlockListItem({
     </Link>
   );
 }
-

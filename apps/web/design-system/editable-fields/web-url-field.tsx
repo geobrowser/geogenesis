@@ -1,26 +1,39 @@
 'use client';
 
 import { GraphUrl } from '@geoprotocol/geo-sdk';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableChip } from '~/design-system/chip';
 
-const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 focus:outline-none', {
+const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 focus:outline-hidden', {
   variants: {
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: '!text-tableProperty !text-link !underline decoration-[1px] hover:!text-text',
+      tableProperty: 'text-tableProperty! text-link! underline! decoration-1 hover:text-text!',
     },
     editable: {
-      false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
+      false: 'text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
     },
   },
+  compoundVariants: [
+    {
+      editable: false,
+      variant: 'tableCell',
+      className: 'line-clamp-1 break-all',
+    },
+    {
+      editable: false,
+      variant: ['body', 'tableProperty'],
+      className: 'truncate',
+    },
+  ],
   defaultVariants: {
     variant: 'body',
   },

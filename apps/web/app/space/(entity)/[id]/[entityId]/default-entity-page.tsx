@@ -1,11 +1,13 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { redirect } from 'next/navigation';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
+import { redirect } from 'next/navigation';
+
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -16,7 +18,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
@@ -24,6 +25,8 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 import { EntityPageHeader } from './entity-page-header';
+import { SpaceRedirect } from './space-redirect';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -44,55 +47,65 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
+  const isEditing = searchParams?.edit === 'true';
+  const props = await getData(params.id, params.entityId, isEditing);
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
-      <EditorProvider
-        id={props.id}
-        spaceId={props.spaceId}
-        initialBlocks={props.blocks}
-        initialBlockRelations={props.blockRelations}
-        initialTabs={props.tabs}
-      >
-        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-        <EntityPageContentContainer>
-          <EntityPageHeader
-            showHeading={showHeading}
-            showHeader={showHeader}
-            entityId={props.id}
-            spaceId={props.spaceId}
-            serverRelations={props.relationEntityRelations}
-          />
-          <Spacer height={40} />
-          <React.Suspense fallback={null}>
-            <EntityTabs
+    <SpaceRedirect
+      entityId={props.id}
+      spaceId={props.spaceId}
+      serverSpaces={props.serverSpaces}
+      deterministicSpaceId={props.deterministicSpaceId}
+      preventRedirect={isEditing}
+    >
+      <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
+        <EditorProvider
+          id={props.id}
+          spaceId={props.spaceId}
+          initialBlocks={props.blocks}
+          initialBlockRelations={props.blockRelations}
+          initialTabs={props.tabs}
+          initialCollectionItems={props.initialCollectionItems}
+        >
+          {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+          <EntityPageContentContainer>
+            <EntityPageHeader
+              showHeading={showHeading}
+              showHeader={showHeader}
               entityId={props.id}
               spaceId={props.spaceId}
-              initialTabRelations={props.tabRelations ?? []}
-              tabEntities={props.tabEntities}
+              serverRelations={props.relationEntityRelations}
             />
-          </React.Suspense>
-          {notice}
-          {(showSpacer || !!notice) && <Spacer height={40} />}
-
-          <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-          <ToggleEntityPage {...props} />
-          <AutomaticModeToggle />
-          <Spacer height={40} />
-          {/*
-             Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-             boundary. We don't want to show any referenced by loading states but do want to
-             stream it in
-          */}
-          <ErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={params.entityId} />
+            <Spacer height={40} />
+            <React.Suspense fallback={null}>
+              <EntityTabs
+                entityId={props.id}
+                spaceId={props.spaceId}
+                initialTabRelations={props.tabRelations ?? []}
+                tabEntities={props.tabEntities}
+              />
             </React.Suspense>
-          </ErrorBoundary>
-        </EntityPageContentContainer>
-      </EditorProvider>
-    </EntityStoreProvider>
+            {notice}
+            {(showSpacer || !!notice) && <Spacer height={40} />}
+
+            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+            <ToggleEntityPage {...props} />
+            <AutomaticModeToggle />
+            <Spacer height={40} />
+            {/*
+               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+               boundary. We don't want to show any referenced by loading states but do want to
+               stream it in
+            */}
+            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+              <React.Suspense fallback={<div />}>
+                <BacklinksServerContainer entityId={params.entityId} />
+              </React.Suspense>
+            </TrackedErrorBoundary>
+          </EntityPageContentContainer>
+        </EditorProvider>
+      </EntityStoreProvider>
+    </SpaceRedirect>
   );
 }
 
@@ -105,30 +118,14 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const deterministicSpaceId = Spaces.getDeterministicSpaceId(spaces, spaceId);
 
   /**
-   * Redirect from an invalid space to a valid one.
-   *
-   * We need to check that spaces has data. We could be navigating
-   * to an entity with no data like a relation entity page.
-   *
-   * When navigating from edit mode, ?edit=true is passed which sets
-   * preventRedirect. This preserves the user's editing context by
-   * keeping them in the current space. This is safe because entity
-   * data is fetched by entityId (spaceId is contextual, not an access
-   * boundary) and write operations are gated by on-chain governance.
-   */
-  if (entity && deterministicSpaceId && !spaces.includes(spaceId) && !preventRedirect) {
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${deterministicSpaceId}`);
-
-    return redirect(NavUtils.toEntity(deterministicSpaceId, entityId));
-  }
-
-  /**
-   * If we're in a valid space for the entity and the entity is
-   * a space, redirect to the space front page directly.
+   * Only redirect to the space front page if this entity is the page
+   * entity for the current space, not a SPACE_TYPE from another space.
    */
   if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && !preventRedirect && deterministicSpaceId) {
-    console.log(`Redirecting from space entity ${entityId} to space page ${deterministicSpaceId}`);
-    return redirect(NavUtils.toSpace(deterministicSpaceId));
+    const space = await cachedFetchSpace(deterministicSpaceId);
+    if (space?.entity?.id === entityId) {
+      return redirect(NavUtils.toSpace(deterministicSpaceId));
+    }
   }
 
   const tabRelations = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY) ?? [];
@@ -144,9 +141,12 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+      const tabBlockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+      const tabBlockEntityIds = tabBlockRelations.map(r => r.toEntity.id);
+      const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
+      const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      const blocks = allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds) : [];
       return blocks;
     })
   );
@@ -164,15 +164,22 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const serverCoverUrl = Entities.cover(entity?.relations);
 
   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blockEntityIds = blockRelations?.map(r => r.toEntity.id) ?? [];
+  const blockRelationEntityIds = blockRelations?.map(r => r.entityId).filter(Boolean) ?? [];
+  const allBlockIds = [...new Set([...blockEntityIds, ...blockRelationEntityIds])];
 
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
+
+  const allBlocks = [...blocks, ...tabBlocks.flat()];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
 
   return {
     id: entityId,
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,
+    serverSpaces: spaces,
+    deterministicSpaceId: deterministicSpaceId ?? null,
 
     tabs,
     tabEntities,
@@ -184,5 +191,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     // For entity page editor
     blockRelations: blockRelations ?? [],
     blocks,
+    initialCollectionItems,
   };
 };

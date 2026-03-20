@@ -1,7 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
 
 import { Suspense } from 'react';
+
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
@@ -96,7 +97,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>
                 </div>
-                <p className="text-breadcrumb tabular-nums text-grey-04">{formattedLastEditedDate}</p>
+                <p className="text-breadcrumb text-grey-04 tabular-nums">{formattedLastEditedDate}</p>
               </div>
 
               <p className="pl-6 text-breadcrumb">{spaceName}</p>

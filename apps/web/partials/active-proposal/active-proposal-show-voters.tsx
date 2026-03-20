@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
-
-import * as React from 'react';
 
 import { VoteWithProfile } from '~/core/io/dto/proposals';
 

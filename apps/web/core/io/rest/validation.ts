@@ -65,6 +65,16 @@ export const VALID_ACTION_TYPES = [
   'FLAG',
   'UNFLAG',
   'UPDATE_VOTING_SETTINGS',
+  'SUBSPACE_VERIFIED',
+  'SUBSPACE_UNVERIFIED',
+  'SUBSPACE_RELATED',
+  'SUBSPACE_UNRELATED',
+  'SUBSPACE_TOPIC_DECLARED',
+  'SUBSPACE_TOPIC_REMOVED',
+  'SET_TOPIC',
+  'UNSET_TOPIC',
+  'TOPIC_DECLARED',
+  'TOPIC_REMOVED',
   'UNKNOWN',
   // Also accept PascalCase variants that the API uses
   'AddMember',
@@ -76,6 +86,16 @@ export const VALID_ACTION_TYPES = [
   'Flag',
   'Unflag',
   'UpdateVotingSettings',
+  'SubspaceVerified',
+  'SubspaceUnverified',
+  'SubspaceRelated',
+  'SubspaceUnrelated',
+  'SubspaceTopicDeclared',
+  'SubspaceTopicRemoved',
+  'SetTopic',
+  'UnsetTopic',
+  'TopicDeclared',
+  'TopicRemoved',
 ] as const;
 
 export type ValidActionType = (typeof VALID_ACTION_TYPES)[number];

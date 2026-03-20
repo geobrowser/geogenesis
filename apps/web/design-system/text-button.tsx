@@ -1,9 +1,9 @@
-import { cva } from 'class-variance-authority';
-
 import * as React from 'react';
 
+import { cva } from 'class-variance-authority';
+
 const buttonStyles = cva(
-  'flex items-center bg-transparent text-smallButton outline-none hover:outline-none focus:outline-none',
+  'flex items-center bg-transparent text-smallButton outline-hidden hover:outline-hidden focus:outline-hidden',
   {
     variants: {
       disabled: {

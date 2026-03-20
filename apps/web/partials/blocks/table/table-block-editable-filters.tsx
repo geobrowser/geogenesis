@@ -2,6 +2,8 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
+import * as React from 'react';
+
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -10,7 +12,7 @@ import { FilterableValueType } from '~/core/value-types';
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
 
-import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
+import { TableBlockFilterPrompt, type TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
 
 type RenderableFilter = Filter & { columnName: string };
 
@@ -19,100 +21,103 @@ interface TableBlockEditableFiltersProps {
   setFilterState?: (filters: Filter[]) => void;
 }
 
-export function TableBlockEditableFilters({ filterState, setFilterState }: TableBlockEditableFiltersProps) {
-  const { source } = useSource();
-  const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
+export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
+  function TableBlockEditableFilters({ filterState, setFilterState }, ref) {
+    const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
+    const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
-  // Use provided props or fall back to the hook
-  const effectiveFilterState = filterState ?? dbFilterState;
-  const effectiveSetFilterState = setFilterState ?? dbSetFilterState;
+    // Use provided props or fall back to the hook
+    const effectiveFilterState = filterState ?? dbFilterState;
+    const effectiveSetFilterState = setFilterState ?? dbSetFilterState;
 
-  // We treat Name, Typs and Space as special filters even though they are not
-  // always columns on the type schema for a table. We allow users to be able
-  // to filter by name and space.
-  const filterableColumns: RenderableFilter[] =
-    source.type !== 'RELATIONS'
-      ? [
-          // @TODO(data blocks): We should add the default filters to the data model
-          // itself instead of manually here.
-          // {
-          //   columnId: SystemIds.NAME_PROPERTY,
-          //   columnName: 'Name',
-          //   valueType: valueTypes[SystemIds.TEXT],
-          //   value: '',
-          //   valueName: null,
-          // },
-          ...filterableProperties
-            .map(c => {
-              return {
-                columnId: c.id,
-                columnName: c.name ?? '',
-                valueType: c.dataType,
-                value: '',
-                valueName: null,
-                relationValueTypes: c.relationValueTypes,
-              };
-            })
-            // Filter out any columns with names and any columns that are not entity or string value types
-            .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
-        ]
-      : [
-          {
-            columnId: SystemIds.RELATION_FROM_PROPERTY,
-            columnName: 'From',
-            valueType: 'RELATION',
-            value: '',
-            valueName: null,
-          },
-          {
-            columnId: SystemIds.RELATION_TYPE_PROPERTY,
-            columnName: 'Relation type',
-            valueType: 'RELATION',
-            value: '',
-            valueName: null,
-          },
-        ];
+    // We treat Name, Typs and Space as special filters even though they are not
+    // always columns on the type schema for a table. We allow users to be able
+    // to filter by name and space.
+    const filterableColumns: RenderableFilter[] =
+      source.type !== 'RELATIONS'
+        ? [
+            // @TODO(data blocks): We should add the default filters to the data model
+            // itself instead of manually here.
+            // {
+            //   columnId: SystemIds.NAME_PROPERTY,
+            //   columnName: 'Name',
+            //   valueType: valueTypes[SystemIds.TEXT],
+            //   value: '',
+            //   valueName: null,
+            // },
+            ...filterableProperties
+              .map(c => {
+                return {
+                  columnId: c.id,
+                  columnName: c.name ?? '',
+                  valueType: c.dataType,
+                  value: '',
+                  valueName: null,
+                  relationValueTypes: c.relationValueTypes,
+                };
+              })
+              // Filter out any columns with names and any columns that are not entity or string value types
+              .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
+          ]
+        : [
+            {
+              columnId: SystemIds.RELATION_FROM_PROPERTY,
+              columnName: 'From',
+              valueType: 'RELATION',
+              value: '',
+              valueName: null,
+            },
+            {
+              columnId: SystemIds.RELATION_TYPE_PROPERTY,
+              columnName: 'Relation type',
+              valueType: 'RELATION',
+              value: '',
+              valueName: null,
+            },
+          ];
 
-  const sortedFilters = sortFilters(filterableColumns);
+    const sortedFilters = sortFilters(filterableColumns);
 
-  const onCreateFilter = ({
-    columnId,
-    value,
-    valueType,
-    valueName,
-    columnName,
-  }: {
-    columnId: string;
-    value: string;
-    valueType: FilterableValueType;
-    valueName: string | null;
-    columnName: string;
-  }) => {
-    const newFilters = [
-      ...effectiveFilterState,
-      {
-        valueType,
-        columnId,
-        columnName,
-        value,
-        valueName,
-      },
-    ];
-    effectiveSetFilterState(newFilters);
-  };
+    const onCreateFilter = ({
+      columnId,
+      value,
+      valueType,
+      valueName,
+      columnName,
+    }: {
+      columnId: string;
+      value: string;
+      valueType: FilterableValueType;
+      valueName: string | null;
+      columnName: string;
+    }) => {
+      const newFilters = [
+        ...effectiveFilterState,
+        {
+          valueType,
+          columnId,
+          columnName,
+          value,
+          valueName,
+        },
+      ];
+      effectiveSetFilterState(newFilters);
+    };
 
-  return (
-    <TableBlockFilterPrompt
-      options={sortedFilters}
-      onCreate={onCreateFilter}
-      trigger={
-        <SmallButton icon={<CreateSmall />} variant="secondary">
-          Filter
-        </SmallButton>
-      }
-    />
-  );
-}
+    return (
+      <TableBlockFilterPrompt
+        ref={ref}
+        options={sortedFilters}
+        onCreate={onCreateFilter}
+        trigger={
+          <SmallButton icon={<CreateSmall />} variant="secondary">
+            Filter
+          </SmallButton>
+        }
+      />
+    );
+  }
+);
 
 function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
   /* Visible triples includes both real triples and placeholder triples */

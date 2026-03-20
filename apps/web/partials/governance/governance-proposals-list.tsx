@@ -5,10 +5,10 @@
  * Separates proposals into categories: executable, active, and completed.
  * Supports filtering by proposal type (content proposals vs membership requests).
  */
+import React from 'react';
+
 import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
-
-import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
@@ -127,7 +127,7 @@ export async function GovernanceProposalsList({
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div className="inline-flex flex-[3] items-center gap-8">
+                <div className="inline-flex flex-3 items-center gap-8">
                   <GovernanceProposalVoteState
                     yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
                     noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
@@ -143,11 +143,7 @@ export async function GovernanceProposalsList({
                   />
                 </div>
 
-                <GovernanceStatusChip
-                  endTime={p.endTime}
-                  status={p.status}
-                  yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
-                />
+                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
             </Link>
           );
@@ -179,6 +175,7 @@ type GovernanceProposal = {
   startTime: number;
   endTime: number;
   status: ProposalStatus;
+  canExecute: boolean;
   proposalVotes: {
     totalCount: number;
     yesCount: number;
@@ -206,6 +203,7 @@ function apiProposalToGovernanceDto(
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
+    canExecute: proposal.canExecute,
     createdBy: profile,
     targetProfile: maybeTargetProfile,
     userVote: proposal.userVote ? convertVoteOption(proposal.userVote) : undefined,

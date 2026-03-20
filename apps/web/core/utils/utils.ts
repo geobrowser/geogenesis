@@ -1,5 +1,6 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
 import { Position } from '@geoprotocol/geo-sdk';
+
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -19,9 +20,13 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
-  toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
+  toProposal: (spaceId: string, proposalId: string, from?: string) =>
+    `/space/${spaceId}/governance?proposalId=${proposalId}${from ? `&from=${from}` : ''}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
+  },
+  toImport: (spaceId: string, editParam = true) => {
+    return `/space/${spaceId}/import${editParam ? '?edit=true' : ''}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
@@ -83,6 +88,19 @@ export class GeoNumber {
 }
 
 export class GeoPoint {
+  static readonly MIN_LAT = -90;
+  static readonly MAX_LAT = 90;
+  static readonly MIN_LNG = -180;
+  static readonly MAX_LNG = 180;
+
+  static clampLatForMap(lat: number): number {
+    return Math.max(GeoPoint.MIN_LAT, Math.min(GeoPoint.MAX_LAT, lat));
+  }
+
+  static clampLngForMap(lng: number): number {
+    return Math.max(GeoPoint.MIN_LNG, Math.min(GeoPoint.MAX_LNG, lng));
+  }
+
   /**
    * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
    * @param value - String containing latitude and longitude separated by a comma
@@ -100,7 +118,10 @@ export class GeoPoint {
 
       if (isNaN(latitude) || isNaN(longitude)) return null;
 
-      return { latitude, longitude };
+      return {
+        latitude: GeoPoint.clampLatForMap(latitude),
+        longitude: GeoPoint.clampLngForMap(longitude),
+      };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
@@ -335,42 +356,6 @@ export class GeoDate {
   };
 }
 
-// We rewrite the URL to use the geobrowser preview API in vercel.json.
-// This forces the image to be fetched with a file extension as a workaround
-// for some services not parsing images without a file extension. Looking at
-// you TWITTER.
-// https://geobrowser.io/preview/{hash}.png -> https://geobrowser.io/api/og?hash=
-export const getOpenGraphImageUrl = (value: string) => {
-  if (value.startsWith('https://api.thegraph.com/ipfs')) {
-    const hash = value.split('=')[1];
-    return `https://www.geobrowser.io/preview/${hash}.png`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else if (value.startsWith('ipfs://')) {
-    return `https://www.geobrowser.io/preview/${getImageHash(value)}.png`;
-  } else if (value) {
-    return `https://www.geobrowser.io/preview/${value}.png`;
-  }
-
-  return null;
-};
-
-export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
-  const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entities.avatar(entity?.relations) ?? null;
-  const serverCoverUrl = Entities.cover(entity?.relations);
-
-  const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entities.description(entity?.values ?? []);
-
-  return {
-    entityName,
-    openGraphImageUrl,
-    description,
-  };
-};
-
 // Get the image hash from an image path
 // e.g., https://gateway.lighthouse.storage/ipfs/HASH
 // e.g., https://magenta-naval-crow-536.mypinata.cloud/files/HASH
@@ -460,8 +445,10 @@ export function getRandomArrayItem(array: string[]) {
 
 export const sleepWithCallback = async (callback: () => void, ms: number) => {
   await new Promise(resolve => {
-    setTimeout(callback, ms);
-    resolve(null);
+    setTimeout(() => {
+      callback();
+      resolve(null);
+    }, ms);
   });
 };
 
@@ -514,9 +501,11 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
     case 'REMOVE_MEMBER':
       return `Remove member from ${proposal.space.name}`;
     case 'ADD_SUBSPACE':
-      return `Add subspace to ${proposal.space.name}`;
+      return `Add space to ${proposal.space.name}`;
     case 'REMOVE_SUBSPACE':
-      return `Remove subspace from ${proposal.space.name}`;
+      return `Remove space from ${proposal.space.name}`;
+    case 'SET_TOPIC':
+      return `Set topic for ${proposal.space.name}`;
   }
 }
 

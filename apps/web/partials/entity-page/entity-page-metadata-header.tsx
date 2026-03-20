@@ -7,8 +7,8 @@ import * as React from 'react';
 import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
-  DEFAULT_DATE_FORMAT,
   DEFAULT_DATETIME_FORMAT,
+  DEFAULT_DATE_FORMAT,
   DEFAULT_FLOAT_FORMAT,
   DEFAULT_NUMBER_FORMAT,
   DEFAULT_TIME_FORMAT,
@@ -45,8 +45,8 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
 
-  // Include deleted relations so handlePropertyTypeChange can reuse/update
-  // them instead of creating new ones each time the dropdown changes.
+  // Include deleted relations so handlePropertyTypeChange can find existing
+  // relations to delete before creating replacements.
   const allRelations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
     includeDeleted: true,
@@ -84,9 +84,6 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       r.isLocal === true
   );
 
-  // Check if property data type is editable (simpler than checking publish status)
-  const isDataTypeEditable = propertyData?.isDataTypeEditable ?? false;
-
   // Find renderableType relation
   const renderableTypeRelation = relations.find(
     r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
@@ -120,7 +117,11 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       const isNumericType = newType === 'INTEGER' || isFloatType;
       const isTextOrUrlType = newType === 'TEXT' || newType === 'URL';
       const temporalDefaultFormat =
-        newType === 'DATETIME' ? DEFAULT_DATETIME_FORMAT : newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_DATE_FORMAT;
+        newType === 'DATETIME'
+          ? DEFAULT_DATETIME_FORMAT
+          : newType === 'TIME'
+            ? DEFAULT_TIME_FORMAT
+            : DEFAULT_DATE_FORMAT;
       const numericDefaultFormat = isFloatType ? DEFAULT_FLOAT_FORMAT : DEFAULT_NUMBER_FORMAT;
       if (isTemporalType || isNumericType) {
         addPropertyToEntity({
@@ -149,18 +150,11 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       const baseDataType = mapping.baseDataType;
       const renderableTypeId = mapping.renderableTypeId;
 
-      // Non-editable properties can't change their base dataType
-      if (!isDataTypeEditable && propertyData && propertyData.dataType !== baseDataType) {
-        console.warn('Cannot change property dataType from', propertyData.dataType, 'to', baseDataType);
-        console.warn('Non-editable properties cannot change their base dataType');
-        return;
-      }
-
       // Register the data type so store.getProperty() returns the updated type
       storage.properties.setDataType(entityId, baseDataType);
 
-      // Update the data type relation. Every property gets an explicit Data Type relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      // Replace the data type relation. We delete + create rather than update in-place
+      // because GRC-20 createRelation with an existing ID won't update the `to` target.
       const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
       if (dataTypeEntityId) {
         const existingDataTypeRelation = allRelations.find(
@@ -168,75 +162,62 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         );
 
         if (existingDataTypeRelation) {
-          storage.relations.update(existingDataTypeRelation, draft => {
-            draft.toEntity.id = dataTypeEntityId;
-            draft.toEntity.name = baseDataType;
-            draft.toEntity.value = dataTypeEntityId;
-          });
-        } else {
-          storage.relations.set({
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: name || '',
-            },
-            type: {
-              id: DATA_TYPE_PROPERTY,
-              name: 'Data Type',
-            },
-            toEntity: {
-              id: dataTypeEntityId,
-              name: baseDataType,
-              value: dataTypeEntityId,
-            },
-            spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
-          });
+          storage.relations.delete(existingDataTypeRelation);
         }
+
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: entityId,
+            name: name || '',
+          },
+          type: {
+            id: DATA_TYPE_PROPERTY,
+            name: 'Data Type',
+          },
+          toEntity: {
+            id: dataTypeEntityId,
+            name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
+            value: dataTypeEntityId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
       }
 
-      // Handle the renderableType relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
       const existingRelation = allRelations.find(
         r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
       );
 
       if (renderableTypeId) {
-        // Need to set or update the renderableType relation
         if (existingRelation) {
-          // Update existing relation
-          storage.relations.update(existingRelation, draft => {
-            draft.toEntity.id = renderableTypeId;
-            draft.toEntity.name = SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType;
-            draft.toEntity.value = renderableTypeId;
-          });
-        } else {
-          // Create new relation
-          storage.relations.set({
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: propertyData?.name || '',
-            },
-            type: {
-              id: RENDERABLE_TYPE_PROPERTY,
-              name: 'Renderable Type',
-            },
-            toEntity: {
-              id: renderableTypeId,
-              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
-              value: renderableTypeId,
-            },
-            spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
-          });
+          storage.relations.delete(existingRelation);
         }
+
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: entityId,
+            name: propertyData?.name || '',
+          },
+          type: {
+            id: RENDERABLE_TYPE_PROPERTY,
+            name: 'Renderable Type',
+          },
+          toEntity: {
+            id: renderableTypeId,
+            name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
+            value: renderableTypeId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
       } else {
         // Remove renderableType relation if it exists
         if (existingRelation) {
@@ -244,7 +225,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, allRelations, isDataTypeEditable, name]
+    [entityId, spaceId, storage, propertyData, allRelations, name]
   );
 
   // Create property data when Property type is manually added to an existing entity
@@ -273,11 +254,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
     <div className="flex items-center gap-1 text-text">
       {isPropertyEntity && editable && (
         <>
-          <RenderableTypeDropdown
-            value={currentRenderableType}
-            onChange={handlePropertyTypeChange}
-            baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
-          />
+          <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
           <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
         </>
       )}
