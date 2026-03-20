@@ -111,6 +111,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
+    const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -159,6 +160,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
+          collectionTypeFilters={collectionTypeFilters}
         />
       );
     }
@@ -197,6 +199,7 @@ type TableBlockTableProps = {
   onAddPlaceholder?: () => void;
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export const TableBlockTable = ({
@@ -213,6 +216,7 @@ export const TableBlockTable = ({
   onAddPlaceholder,
   source,
   shouldAutoFocusPlaceholder,
+  collectionTypeFilters,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -247,6 +251,7 @@ export const TableBlockTable = ({
       propertiesSchema,
       source,
       shouldAutoFocusPlaceholder,
+      collectionTypeFilters,
     },
   });
 
