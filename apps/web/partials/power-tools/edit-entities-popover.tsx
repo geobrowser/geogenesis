@@ -464,6 +464,7 @@ export function EditEntitiesPopover({
     setPendingValue('');
     pendingValueRef.current = '';
     setAddImageFile(null);
+    setSelectedAttributeEntities([]);
   }, [effectiveProperty?.id]);
 
   const valueKey = (item: { toEntityId: string; toSpaceId?: string }) => `${item.toEntityId}:${item.toSpaceId ?? ''}`;
@@ -624,6 +625,76 @@ export function EditEntitiesPopover({
                 </>
               )}
               <Spacer height={12} />
+              {action === 'add' && effectiveProperty && (
+                <>
+                  <Text variant="metadata" color="grey-04" className="block">
+                    {effectiveProperty.renderableTypeStrict === 'IMAGE'
+                      ? 'Image'
+                      : isRelationColumn
+                        ? 'Add values'
+                        : 'Value'}
+                  </Text>
+                  <Spacer height={6} />
+                  <EditableEntityValueField
+                    property={effectiveProperty}
+                    spaceId={spaceId}
+                    value={pendingValue}
+                    onChange={v => {
+                      setPendingValue(v);
+                      pendingValueRef.current = v;
+                    }}
+                    selectedEntities={selectedAttributeEntities}
+                    onRemoveSelectedEntity={id =>
+                      setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
+                    }
+                    onSelectEntity={result => {
+                      setSelectedAttributeEntities(prev =>
+                        prev.some(e => e.id === result.id) ? prev : [...prev, result]
+                      );
+                    }}
+                    selectedImageFile={
+                      effectiveProperty.renderableTypeStrict === 'IMAGE' ? addImageFile : null
+                    }
+                    onImageFileSelect={
+                      effectiveProperty.renderableTypeStrict === 'IMAGE'
+                        ? (file: File) => setAddImageFile(file)
+                        : undefined
+                    }
+                    onImageFileClear={
+                      effectiveProperty.renderableTypeStrict === 'IMAGE'
+                        ? () => setAddImageFile(null)
+                        : undefined
+                    }
+                    onBeforeImageFileDialogOpen={
+                      effectiveProperty.renderableTypeStrict === 'IMAGE'
+                        ? () => {
+                            if (addImageFileDialogCloseTimeoutRef.current) {
+                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
+                              addImageFileDialogCloseTimeoutRef.current = null;
+                            }
+                            addImageFileDialogOpenRef.current = true;
+                            addImageFileDialogCloseTimeoutRef.current = setTimeout(() => {
+                              addImageFileDialogOpenRef.current = false;
+                              addImageFileDialogCloseTimeoutRef.current = null;
+                            }, 2000);
+                          }
+                        : undefined
+                    }
+                    onAfterImageFileDialogClose={
+                      effectiveProperty.renderableTypeStrict === 'IMAGE'
+                        ? () => {
+                            if (addImageFileDialogCloseTimeoutRef.current) {
+                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
+                              addImageFileDialogCloseTimeoutRef.current = null;
+                            }
+                            addImageFileDialogOpenRef.current = false;
+                          }
+                        : undefined
+                    }
+                  />
+                  <Spacer height={12} />
+                </>
+              )}
               {action === 'new' && (
                 <>
                   <Text variant="metadata" color="grey-04" className="block">
