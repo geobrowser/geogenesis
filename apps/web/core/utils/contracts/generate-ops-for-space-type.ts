@@ -12,7 +12,7 @@ type DeployArgs = {
   spaceAvatarUri: string | null;
   spaceCoverUri: string | null;
   initialEditorAddress: string;
-  entityId?: string;
+  topicId?: string;
 };
 
 // Space types that use templates - don't create entity first, let cloneEntity handle it
@@ -45,15 +45,15 @@ export const generateOpsForSpaceType = async ({
   spaceAvatarUri,
   spaceCoverUri,
   initialEditorAddress,
-  entityId,
+  topicId,
 }: DeployArgs) => {
   const ops: Op[] = [];
-  const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
+  const resolvedTopicId = validateEntityId(topicId) ? (topicId as EntityId) : ID.createEntityId();
   let hasSpaceType = false;
 
   if (!TEMPLATE_BASED_TYPES.includes(type)) {
     const newEntity = Graph.createEntity({
-      id: newEntityId,
+      id: resolvedTopicId,
       name: spaceName,
       types: [SystemIds.SPACE_TYPE],
     });
@@ -65,7 +65,7 @@ export const generateOpsForSpaceType = async ({
   switch (type) {
     case 'personal': {
       const { ops: createEntityOps } = Graph.createEntity({
-        id: newEntityId,
+        id: resolvedTopicId,
         name: spaceName,
         types: [SystemIds.SPACE_TYPE],
       });
@@ -73,7 +73,7 @@ export const generateOpsForSpaceType = async ({
       hasSpaceType = true;
 
       const { ops: personTypeOps } = Graph.createRelation({
-        fromEntity: newEntityId,
+        fromEntity: resolvedTopicId,
         type: SystemIds.TYPES_PROPERTY,
         toEntity: SystemIds.PERSON_TYPE,
       });
@@ -83,7 +83,7 @@ export const generateOpsForSpaceType = async ({
       ops.push(...accountOps);
 
       const { ops: accountRelationOps } = Graph.createRelation({
-        fromEntity: newEntityId,
+        fromEntity: resolvedTopicId,
         toEntity: accountId,
         type: SystemIds.ACCOUNTS_PROPERTY,
       });
@@ -94,7 +94,7 @@ export const generateOpsForSpaceType = async ({
     case 'company': {
       const [companyOps] = await cloneEntity({
         oldEntityId: SystemIds.COMPANY_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -109,7 +109,7 @@ export const generateOpsForSpaceType = async ({
     case 'academic-field': {
       const [academicFieldOps] = await cloneEntity({
         oldEntityId: SystemIds.ACADEMIC_FIELD_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -119,7 +119,7 @@ export const generateOpsForSpaceType = async ({
     case 'dao': {
       const [daoOps] = await cloneEntity({
         oldEntityId: SystemIds.DAO_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -129,7 +129,7 @@ export const generateOpsForSpaceType = async ({
     case 'government-org': {
       // @TODO government org template
       const { ops: imageRelationOps } = Graph.createRelation({
-        fromEntity: newEntityId,
+        fromEntity: resolvedTopicId,
         toEntity: SystemIds.GOVERNMENT_ORG_TYPE,
         type: SystemIds.TYPES_PROPERTY,
       });
@@ -140,7 +140,7 @@ export const generateOpsForSpaceType = async ({
     case 'industry': {
       const [industryOps] = await cloneEntity({
         oldEntityId: SystemIds.INDUSTRY_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -150,7 +150,7 @@ export const generateOpsForSpaceType = async ({
     case 'interest': {
       const [interestOps] = await cloneEntity({
         oldEntityId: SystemIds.INTEREST_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -160,7 +160,7 @@ export const generateOpsForSpaceType = async ({
     case 'protocol': {
       const [protocolOps] = await cloneEntity({
         oldEntityId: SystemIds.PROTOCOL_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -171,7 +171,7 @@ export const generateOpsForSpaceType = async ({
     case 'region': {
       const [regionOps] = await cloneEntity({
         oldEntityId: SystemIds.REGION_TEMPLATE,
-        entityId: newEntityId,
+        entityId: resolvedTopicId,
         entityName: spaceName,
       });
 
@@ -187,7 +187,7 @@ export const generateOpsForSpaceType = async ({
       if (op.type !== 'createRelation') return false;
       if (!('from' in op) || !('to' in op) || !('relationType' in op)) return false;
       return (
-        String(op.from) === newEntityId &&
+        String(op.from) === resolvedTopicId &&
         String(op.to) === SystemIds.SPACE_TYPE &&
         String(op.relationType) === SystemIds.TYPES_PROPERTY
       );
@@ -196,7 +196,7 @@ export const generateOpsForSpaceType = async ({
 
   if (DAO_SPACE_TYPES.includes(type) && !hasSpaceType) {
     const { ops: spaceTypeOps } = Graph.createRelation({
-      fromEntity: newEntityId,
+      fromEntity: resolvedTopicId,
       toEntity: SystemIds.SPACE_TYPE,
       type: SystemIds.TYPES_PROPERTY,
     });
@@ -209,7 +209,7 @@ export const generateOpsForSpaceType = async ({
     ops.push(...imageOps);
 
     const { ops: imageRelationOps } = Graph.createRelation({
-      fromEntity: newEntityId,
+      fromEntity: resolvedTopicId,
       toEntity: imageId,
       type: ContentIds.AVATAR_PROPERTY,
     });
@@ -222,12 +222,12 @@ export const generateOpsForSpaceType = async ({
     ops.push(...imageOps);
 
     const { ops: imageRelationOps } = Graph.createRelation({
-      fromEntity: newEntityId,
+      fromEntity: resolvedTopicId,
       toEntity: imageId,
       type: SystemIds.COVER_PROPERTY,
     });
     ops.push(...imageRelationOps);
   }
 
-  return { ops, spaceEntityId: newEntityId };
+  return { ops, topicId: resolvedTopicId };
 };

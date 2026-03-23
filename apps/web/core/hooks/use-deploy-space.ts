@@ -3,7 +3,7 @@
 import { Ipfs, personalSpace } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Effect, Either } from 'effect';
+import { Duration, Effect, Either, Schedule } from 'effect';
 import { type Hex, createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -19,6 +19,7 @@ import {
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
+import { buildPersonalTopicDeclaredCalldata, encodeInitialTopicId } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -27,7 +28,7 @@ type DeployArgs = {
   spaceName: string;
   spaceImage?: string;
   governanceType?: SpaceGovernanceType;
-  entityId?: string;
+  topicId?: string;
 };
 
 const PUBLIC_GOVERNANCE_TYPES: SpaceType[] = [
@@ -67,7 +68,7 @@ export function useDeploySpace() {
         return null;
       }
 
-      const { spaceName, type, governanceType, spaceImage, entityId } = args;
+      const { spaceName, type, governanceType, spaceImage, topicId } = args;
 
       const isPublicGovernance = determineIsPublicGovernance(type, governanceType);
 
@@ -78,7 +79,7 @@ export function useDeploySpace() {
           type,
           spaceName,
           spaceCoverUri: spaceImage,
-          entityId,
+          topicId,
         });
       } else {
         return await createPersonalStyleSpace({
@@ -88,7 +89,7 @@ export function useDeploySpace() {
           spaceName,
           spaceAvatarUri: type === 'personal' || type === 'company' ? spaceImage : undefined,
           spaceCoverUri: type !== 'personal' && type !== 'company' ? spaceImage : undefined,
-          entityId,
+          topicId,
         });
       }
     },
@@ -124,7 +125,7 @@ type CreateDaoSpaceParams = {
   type: SpaceType;
   spaceName: string;
   spaceCoverUri?: string;
-  entityId?: string;
+  topicId?: string;
 };
 
 async function createDaoSpace({
@@ -133,7 +134,7 @@ async function createDaoSpace({
   type,
   spaceName,
   spaceCoverUri,
-  entityId,
+  topicId,
 }: CreateDaoSpaceParams): Promise<string> {
   const personalSpaceId = await getPersonalSpaceId(walletAddress);
   if (!personalSpaceId) {
@@ -142,13 +143,13 @@ async function createDaoSpace({
     );
   }
 
-  const { ops } = await generateOpsForSpaceType({
+  const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
     type,
     spaceName,
     spaceAvatarUri: null,
     spaceCoverUri: spaceCoverUri ? getImagePath(spaceCoverUri) : null,
     initialEditorAddress: walletAddress,
-    entityId,
+    topicId,
   });
 
   const { cid } = await runWriteEffect(
@@ -213,7 +214,7 @@ async function createDaoSpace({
       [userSpaceIdHex],
       initialEditsContentUri,
       '0x' as Hex,
-      EMPTY_SPACE_ID,
+      encodeInitialTopicId(resolvedTopicId),
       '0x' as Hex,
     ],
   });
@@ -255,7 +256,15 @@ async function createDaoSpace({
   })) as Hex;
 
   const newSpaceId = newSpaceIdHex.slice(2).toLowerCase();
-  await waitForSpaceContent(newSpaceId);
+  const hasIndexedContent = await waitForSpaceContent(newSpaceId);
+  if (!hasIndexedContent) {
+    throw new Error('Timed out waiting for DAO space content to index.');
+  }
+
+  const hasIndexedTopic = await waitForSpaceTopic(newSpaceId, resolvedTopicId);
+  if (!hasIndexedTopic) {
+    throw new Error('Timed out waiting for DAO space topic to index.');
+  }
 
   return newSpaceId;
 }
@@ -267,7 +276,7 @@ type CreatePersonalStyleSpaceParams = {
   spaceName: string;
   spaceAvatarUri?: string;
   spaceCoverUri?: string;
-  entityId?: string;
+  topicId?: string;
 };
 
 async function createPersonalStyleSpace({
@@ -277,7 +286,7 @@ async function createPersonalStyleSpace({
   spaceName,
   spaceAvatarUri,
   spaceCoverUri,
-  entityId,
+  topicId,
 }: CreatePersonalStyleSpaceParams): Promise<string> {
   let spaceId = await getPersonalSpaceId(walletAddress);
 
@@ -306,13 +315,13 @@ async function createPersonalStyleSpace({
     }
   }
 
-  const { ops } = await generateOpsForSpaceType({
+  const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
     type,
     spaceName,
     spaceAvatarUri: spaceAvatarUri ? getImagePath(spaceAvatarUri) : null,
     spaceCoverUri: spaceCoverUri ? getImagePath(spaceCoverUri) : null,
     initialEditorAddress: walletAddress,
-    entityId,
+    topicId,
   });
 
   const { to: publishTo, calldata: publishCalldata } = await runWriteEffect(
@@ -354,9 +363,55 @@ async function createPersonalStyleSpace({
     )
   );
 
-  await waitForSpaceContent(spaceId);
+  await runWriteEffect(
+    Effect.retry(
+      Effect.tryPromise({
+        try: () =>
+          smartAccount.sendUserOperation({
+            calls: [
+              {
+                to: SPACE_REGISTRY_ADDRESS_HEX,
+                value: 0n,
+                data: buildPersonalTopicDeclaredCalldata({
+                  authorSpaceId: spaceId,
+                  spaceId,
+                  topicId: resolvedTopicId,
+                }),
+              },
+            ],
+          }),
+        catch: error => new Error('Failed to declare personal-style space topic', { cause: error }),
+      }).pipe(
+        Effect.withSpan('web.write.createSpace.personal.declareTopic'),
+        Effect.annotateSpans({
+          'io.operation': 'declare_space_topic',
+          'space.type': 'PERSONAL',
+          'governance.action': 'topic_declared',
+        })
+      ),
+      topicDeclarationRetrySchedule('createSpace.personal.topic')
+    )
+  );
+
+  const hasIndexedContent = await waitForSpaceContent(spaceId);
+  if (!hasIndexedContent) {
+    throw new Error('Timed out waiting for personal-style space content to index.');
+  }
+
+  const hasIndexedTopic = await waitForSpaceTopic(spaceId, resolvedTopicId);
+  if (!hasIndexedTopic) {
+    throw new Error('Timed out waiting for personal-style space topic to index.');
+  }
 
   return spaceId;
+}
+
+function topicDeclarationRetrySchedule(label: string) {
+  return Schedule.exponential(Duration.millis(500)).pipe(
+    Schedule.jittered,
+    Schedule.tapInput(() => Effect.sync(() => console.log(`[CREATE_SPACE][${label}] Retrying topic declaration`))),
+    Schedule.intersect(Schedule.recurs(2))
+  );
 }
 
 async function findNewDaoSpaceAddress(publicClient: any, receipt: any): Promise<Hex | null> {
@@ -402,6 +457,21 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 20, intervalMs
     try {
       const space = await Effect.runPromise(getSpace(spaceId));
       if (space?.entity?.name) return true;
+    } catch {
+      // Continue polling
+    }
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+  return false;
+}
+
+async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 20, intervalMs = 3_000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const space = await Effect.runPromise(getSpace(spaceId));
+      if (space?.topicId === topicId) return true;
     } catch {
       // Continue polling
     }

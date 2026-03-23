@@ -1,27 +1,22 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
+import { type Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
-import { uuidToHex } from '~/core/id/normalize';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeProposalCreatedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
 import {
-  DAOSpaceAbi,
-  EMPTY_SIGNATURE,
-  EMPTY_TOPIC_HEX,
-  GOVERNANCE_ACTIONS,
+  buildDaoTopicDeclaredCalldata,
+  buildPersonalTopicDeclaredCalldata,
+} from '~/core/utils/contracts/space-topic';
+import {
   SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-  VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -75,24 +70,19 @@ export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
         throw new Error(message);
       }
 
-      const topic = padBytes16ToBytes32(uuidToHex(topicEntityId));
-      const actionData: Hex = '0x';
-
       const writeTxEffect = Effect.gen(function* () {
         const callData =
           space.type === 'DAO'
-            ? buildDaoTopicCalldata({
-                personalSpaceId,
+            ? buildDaoTopicDeclaredCalldata({
+                authorSpaceId: personalSpaceId,
                 spaceId: spaceId!,
                 spaceAddress: space.address as Hex,
-                topic,
-                actionData,
+                topicId: topicEntityId,
               })
-            : buildPersonalTopicCalldata({
-                personalSpaceId,
+            : buildPersonalTopicDeclaredCalldata({
+                authorSpaceId: personalSpaceId,
                 spaceId: spaceId!,
-                topic,
-                actionData,
+                topicId: topicEntityId,
               });
 
         const telemetryAttributes =
@@ -138,65 +128,4 @@ export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
     setTopicAsync: mutation.mutateAsync,
     status: mutation.status,
   };
-}
-
-function buildDaoTopicCalldata({
-  personalSpaceId,
-  spaceId,
-  spaceAddress,
-  topic,
-  actionData,
-}: {
-  personalSpaceId: string;
-  spaceId: string;
-  spaceAddress: Hex;
-  topic: Hex;
-  actionData: Hex;
-}): Hex {
-  const proposalId = `0x${IdUtils.generate()}` as const;
-  const fromSpaceId = `0x${personalSpaceId}` as const;
-  const toSpaceId = `0x${spaceId}` as const;
-
-  const pingCallData = encodeFunctionData({
-    functionName: 'ping',
-    abi: DAOSpaceAbi,
-    args: [GOVERNANCE_ACTIONS.TOPIC_DECLARED, topic, actionData],
-  });
-
-  const proposalActions = [
-    {
-      to: spaceAddress,
-      value: 0n,
-      data: pingCallData,
-    },
-  ];
-
-  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, proposalActions);
-
-  return encodeFunctionData({
-    functionName: 'enter',
-    abi: SpaceRegistryAbi,
-    args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
-  });
-}
-
-function buildPersonalTopicCalldata({
-  personalSpaceId,
-  spaceId,
-  topic,
-  actionData,
-}: {
-  personalSpaceId: string;
-  spaceId: string;
-  topic: Hex;
-  actionData: Hex;
-}): Hex {
-  const fromSpaceId = `0x${personalSpaceId}` as const;
-  const toSpaceId = `0x${spaceId}` as const;
-
-  return encodeFunctionData({
-    functionName: 'enter',
-    abi: SpaceRegistryAbi,
-    args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.TOPIC_DECLARED, topic, actionData, EMPTY_SIGNATURE],
-  });
 }
