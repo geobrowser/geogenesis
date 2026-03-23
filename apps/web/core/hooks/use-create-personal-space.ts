@@ -138,10 +138,15 @@ export function useCreatePersonalSpace() {
         throw topicDeclarationResult.left;
       }
 
-      // 6. Wait for content to be indexed
+      // 6. Wait for content and topic to be indexed
       const hasIndexedContent = await waitForSpaceContent(spaceId);
       if (!hasIndexedContent) {
         throw new Error('Timed out waiting for personal space content to index.');
+      }
+
+      const hasIndexedTopic = await waitForSpaceTopic(spaceId, resolvedTopicId);
+      if (!hasIndexedTopic) {
+        throw new Error('Timed out waiting for personal space topic to index.');
       }
 
       return spaceId;
@@ -185,6 +190,21 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 15, intervalMs
     try {
       const space = await Effect.runPromise(getSpace(spaceId));
       if (space?.entity?.name) return true;
+    } catch {
+      // Continue polling
+    }
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+  return false;
+}
+
+async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 15, intervalMs = 2_000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const space = await Effect.runPromise(getSpace(spaceId));
+      if (space?.topicId === topicId) return true;
     } catch {
       // Continue polling
     }
