@@ -814,6 +814,7 @@ export function PowerToolsScreen() {
                 onRemoveProperties={handleRemoveProperties}
                 onApplyNewProperty={handleApplyNewProperty}
                 onAddExistingProperty={handleAddExistingProperty}
+                showPropertyActions={false}
                 typesProperty={
                   data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
                     id: SystemIds.TYPES_PROPERTY,
@@ -944,6 +945,11 @@ export function PowerToolsScreen() {
               onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
               sortState={sortState}
               onSort={setSortState}
+              selectedCount={selectedCount}
+              selectedEntityIdsForNewProperty={Array.from(selectedEntityIds)}
+              onApplyNewProperty={handleApplyNewProperty}
+              onAddExistingProperty={handleAddExistingProperty}
+              onRemoveProperties={handleRemoveProperties}
             />
           </>
         )}

@@ -185,6 +185,12 @@ export type EditEntitiesPopoverProps = {
   onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
   onApplyNewProperty?: (payload: EditApplyNewPropertyPayload) => void;
   onAddExistingProperty?: (payload: EditAddExistingPropertyPayload) => void;
+  newPropertyOnly?: boolean;
+  removePropertyOnly?: boolean;
+  showPropertyActions?: boolean;
+  contentAlign?: 'start' | 'center' | 'end';
+  contentSideOffset?: number;
+  initialPropertiesMarkedForRemoval?: string[];
 };
 
 export function EditEntitiesPopover({
@@ -199,6 +205,12 @@ export function EditEntitiesPopover({
   onRemoveProperties,
   onApplyNewProperty,
   onAddExistingProperty,
+  newPropertyOnly = false,
+  removePropertyOnly = false,
+  showPropertyActions = true,
+  contentAlign = 'end',
+  contentSideOffset = 8,
+  initialPropertiesMarkedForRemoval = [],
 }: EditEntitiesPopoverProps) {
   const [open, setOpen] = React.useState(false);
   const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<SelectEntityCompactResult[]>([]);
@@ -208,7 +220,9 @@ export function EditEntitiesPopover({
   const [pendingValue, setPendingValue] = React.useState<string>('');
 
   type EditAction = 'add' | 'delete' | 'new' | 'removeProperty';
-  const [action, setAction] = React.useState<EditAction>('add');
+  const [action, setAction] = React.useState<EditAction>(
+    newPropertyOnly ? 'new' : removePropertyOnly ? 'removeProperty' : 'add'
+  );
 
   const [newPropertyName, setNewPropertyName] = React.useState('');
   const [newPropertyValueType, setNewPropertyValueType] =
@@ -229,7 +243,7 @@ export function EditEntitiesPopover({
   const INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE = 5;
   const [removePropertySearchQuery, setRemovePropertySearchQuery] = React.useState('');
   const [propertiesMarkedForRemoval, setPropertiesMarkedForRemoval] = React.useState<Set<string>>(
-    new Set()
+    new Set(initialPropertiesMarkedForRemoval)
   );
   const [showAllMatchedColumns, setShowAllMatchedColumns] = React.useState(false);
 
@@ -416,11 +430,35 @@ export function EditEntitiesPopover({
       setSelectedExistingProperty(null);
       setUseExistingPropertyFromGeo(false);
       setRemovePropertySearchQuery('');
-      setPropertiesMarkedForRemoval(new Set());
+      setPropertiesMarkedForRemoval(new Set(initialPropertiesMarkedForRemoval));
       setShowAllMatchedColumns(false);
       setAddImageFile(null);
     }
-  }, [open]);
+  }, [open, initialPropertiesMarkedForRemoval]);
+
+  React.useEffect(() => {
+    if (newPropertyOnly) {
+      setAction('new');
+    }
+  }, [newPropertyOnly]);
+
+  React.useEffect(() => {
+    if (removePropertyOnly) {
+      setAction('removeProperty');
+    }
+  }, [removePropertyOnly]);
+
+  React.useEffect(() => {
+    if (!showPropertyActions && (action === 'new' || action === 'removeProperty')) {
+      setAction('add');
+    }
+  }, [showPropertyActions, action]);
+
+  React.useEffect(() => {
+    if (open && removePropertyOnly) {
+      setPropertiesMarkedForRemoval(new Set(initialPropertiesMarkedForRemoval));
+    }
+  }, [open, removePropertyOnly, initialPropertiesMarkedForRemoval]);
 
   React.useEffect(() => {
     setPendingValue('');
@@ -484,8 +522,8 @@ export function EditEntitiesPopover({
       <Popover.Portal>
         <Popover.Content
           side="bottom"
-          align="end"
-          sideOffset={8}
+          align={contentAlign}
+          sideOffset={contentSideOffset}
           collisionPadding={10}
           className="z-[100] w-[360px] overflow-visible rounded-lg border border-grey-02 bg-white p-0 shadow-lg"
           onInteractOutside={e => {
@@ -496,7 +534,11 @@ export function EditEntitiesPopover({
               <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">
                 <div>
                   <Text variant="body" color="grey-04" className="text-[14px] font-medium">
-                    Edit {selectedCount} {selectedCount === 1 ? 'entity' : 'entities'}
+                    {newPropertyOnly
+                      ? 'New property'
+                      : removePropertyOnly
+                        ? 'Remove property'
+                      : `Edit ${selectedCount} ${selectedCount === 1 ? 'entity' : 'entities'}`}
                   </Text>
                 </div>
                 {(canApply || canApplyDelete || canApplyRemoveProperties || canApplyAddExisting || canApplyNew) && (
@@ -522,32 +564,41 @@ export function EditEntitiesPopover({
                 )}
               </div>
               <Spacer height={12} />
-              <div className="flex justify-end">
-                <div className="inline-flex rounded border border-grey-02 bg-grey-01 p-0.5">
-                  {(
-                    [
-                      { id: 'add' as const, label: 'Add' },
-                      { id: 'delete' as const, label: 'Remove' },
-                      { id: 'new' as const, label: 'New property' },
-                      { id: 'removeProperty' as const, label: 'Remove property' },
-                    ] as const
-                  ).map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setAction(id)}
-                      className={`px-3 py-1 text-[13px] font-medium rounded-sm ${
-                        action === id
-                          ? 'bg-white text-text shadow-sm'
-                          : 'bg-transparent text-grey-04 hover:text-text'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Spacer height={12} />
+              {!newPropertyOnly && !removePropertyOnly && (
+                <>
+                  <div className="flex justify-end">
+                    <div className="inline-flex rounded border border-grey-02 bg-grey-01 p-0.5">
+                      {(
+                        showPropertyActions
+                          ? ([
+                              { id: 'add' as const, label: 'Add' },
+                              { id: 'delete' as const, label: 'Remove' },
+                              { id: 'new' as const, label: 'New property' },
+                              { id: 'removeProperty' as const, label: 'Remove property' },
+                            ] as const)
+                          : ([
+                              { id: 'add' as const, label: 'Add' },
+                              { id: 'delete' as const, label: 'Remove' },
+                            ] as const)
+                      ).map(({ id, label }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setAction(id)}
+                          className={`px-3 py-1 text-[13px] font-medium rounded-sm ${
+                            action === id
+                              ? 'bg-white text-text shadow-sm'
+                              : 'bg-transparent text-grey-04 hover:text-text'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Spacer height={12} />
+                </>
+              )}
               {action !== 'new' && action !== 'removeProperty' && (
                 <>
                   <Text variant="metadata" color="grey-04" className="block">
@@ -590,7 +641,7 @@ export function EditEntitiesPopover({
                     />
                   </div>
                   <Spacer height={12} />
-                  {newPropertyValueType === 'RELATION' && (
+                  {newPropertyValueType === 'RELATION' && !newPropertyOnly && (
                     <>
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -607,7 +658,7 @@ export function EditEntitiesPopover({
                       <Spacer height={12} />
                     </>
                   )}
-                  {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo ? (
+                  {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo && !newPropertyOnly ? (
                     <div className="w-full">
                       <Text variant="metadata" color="grey-04" className="block">
                         Search for an existing property to add
@@ -725,102 +776,113 @@ export function EditEntitiesPopover({
               )}
               {action === 'removeProperty' && (
                 <>
-                  <Text variant="metadata" color="grey-04" className="block">
-                    Property name
-                  </Text>
-                  <Spacer height={6} />
-                  <input
-                    type="text"
-                    value={removePropertySearchQuery}
-                    onChange={e => setRemovePropertySearchQuery(e.target.value)}
-                    placeholder="Find a property..."
-                    className="w-full rounded-md border border-grey-02 bg-white py-2 px-3 text-body text-text shadow-inner shadow-grey-02 outline-none placeholder:text-grey-04 focus:border-grey-04 focus:shadow-inner-lg focus:shadow-text"
-                  />
-                  <Spacer height={12} />
-                  {matchedColumnsForRemoval.length > 0 ? (
+                  {removePropertyOnly ? (
                     <>
-                      <div className="flex items-center justify-between gap-2">
-                        <Text variant="metadata" className="text-text">
-                          Matched columns
-                        </Text>
-                        {propertiesMarkedForRemoval.size > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setPropertiesMarkedForRemoval(new Set())}
-                            className="text-button text-[0.8125rem] text-red-01 hover:underline"
-                          >
-                            Clear selection
-                          </button>
-                        )}
-                      </div>
-                      <Spacer height={6} />
-                      <div className="max-h-[min(40vh,240px)] overflow-y-auto">
-                        <div className="flex flex-wrap gap-1.5 p-0">
-                          {(() => {
-                            const visibleCount = showAllMatchedColumns
-                              ? matchedColumnsForRemoval.length
-                              : Math.min(INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE, matchedColumnsForRemoval.length);
-                            const visibleColumns = matchedColumnsForRemoval.slice(0, visibleCount);
-                            const hiddenCount = matchedColumnsForRemoval.length - visibleCount;
-                            return (
-                              <>
-                                {visibleColumns.map(prop => {
-                                  const isMarked = propertiesMarkedForRemoval.has(prop.id);
-                                  return (
-                                    <div
-                                      key={prop.id}
-                                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
-                                        isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
-                                      }`}
-                                    >
-                                      <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
-                                        {prop.name ?? prop.id}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setPropertiesMarkedForRemoval(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(prop.id)) next.delete(prop.id);
-                                            else next.add(prop.id);
-                                            return next;
-                                          })
-                                        }
-                                        className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
-                                        aria-label={
-                                          isMarked
-                                            ? `Unmark ${prop.name ?? prop.id}`
-                                            : `Remove property ${prop.name ?? prop.id}`
-                                        }
-                                      >
-                                        <CloseSmall />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                                {!showAllMatchedColumns && hiddenCount > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowAllMatchedColumns(true)}
-                                    className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
-                                  >
-                                    Show {hiddenCount} more
-                                  </button>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
+                      <Text variant="metadata" color="grey-04" className="block">
+                        This will remove this property from selected entities when you click Apply.
+                      </Text>
+                      <Spacer height={12} />
                     </>
                   ) : (
-                    <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
-                      {removePropertySearchQuery.trim()
-                        ? 'No columns match your search.'
-                        : 'Type a property name to find columns to remove.'}
-                    </div>
+                    <>
+                      <Text variant="metadata" color="grey-04" className="block">
+                        Property name
+                      </Text>
+                      <Spacer height={6} />
+                      <input
+                        type="text"
+                        value={removePropertySearchQuery}
+                        onChange={e => setRemovePropertySearchQuery(e.target.value)}
+                        placeholder="Find a property..."
+                        className="w-full rounded-md border border-grey-02 bg-white py-2 px-3 text-body text-text shadow-inner shadow-grey-02 outline-none placeholder:text-grey-04 focus:border-grey-04 focus:shadow-inner-lg focus:shadow-text"
+                      />
+                      <Spacer height={12} />
+                      {matchedColumnsForRemoval.length > 0 ? (
+                        <>
+                          <div className="flex items-center justify-between gap-2">
+                            <Text variant="metadata" className="text-text">
+                              Matched columns
+                            </Text>
+                            {propertiesMarkedForRemoval.size > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setPropertiesMarkedForRemoval(new Set())}
+                                className="text-button text-[0.8125rem] text-red-01 hover:underline"
+                              >
+                                Clear selection
+                              </button>
+                            )}
+                          </div>
+                          <Spacer height={6} />
+                          <div className="max-h-[min(40vh,240px)] overflow-y-auto">
+                            <div className="flex flex-wrap gap-1.5 p-0">
+                              {(() => {
+                                const visibleCount = showAllMatchedColumns
+                                  ? matchedColumnsForRemoval.length
+                                  : Math.min(INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE, matchedColumnsForRemoval.length);
+                                const visibleColumns = matchedColumnsForRemoval.slice(0, visibleCount);
+                                const hiddenCount = matchedColumnsForRemoval.length - visibleCount;
+                                return (
+                                  <>
+                                    {visibleColumns.map(prop => {
+                                      const isMarked = propertiesMarkedForRemoval.has(prop.id);
+                                      return (
+                                        <div
+                                          key={prop.id}
+                                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
+                                            isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
+                                          }`}
+                                        >
+                                          <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
+                                            {prop.name ?? prop.id}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setPropertiesMarkedForRemoval(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(prop.id)) next.delete(prop.id);
+                                                else next.add(prop.id);
+                                                return next;
+                                              })
+                                            }
+                                            className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
+                                            aria-label={
+                                              isMarked
+                                                ? `Unmark ${prop.name ?? prop.id}`
+                                                : `Remove property ${prop.name ?? prop.id}`
+                                            }
+                                          >
+                                            <CloseSmall />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                    {!showAllMatchedColumns && hiddenCount > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowAllMatchedColumns(true)}
+                                        className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
+                                      >
+                                        Show {hiddenCount} more
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
+                          {removePropertySearchQuery.trim()
+                            ? 'No columns match your search.'
+                            : 'Type a property name to find columns to remove.'}
+                        </div>
+                      )}
+                      <Spacer height={12} />
+                    </>
                   )}
-                  <Spacer height={12} />
                 </>
               )}
               {action === 'delete' && effectiveProperty && (
