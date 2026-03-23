@@ -48,7 +48,8 @@ export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
 export type UnresolvedImportCell =
   | { kind: 'entity' }
   | { kind: 'type'; rawType: string }
-  | { kind: 'relation'; unresolvedValues: string[] };
+  | { kind: 'relation'; unresolvedValues: string[] }
+  | { kind: 'checkbox'; rawValue: string };
 
 /** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
 export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});
@@ -68,6 +69,9 @@ export type TypeResolutionOverride = { id: string; name: string; isNew?: boolean
 
 /** Manual type resolution keyed by raw CSV type value. */
 export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({});
+
+/** Manual checkbox resolution keyed by import cell key (`${rowIndex}:${colIdx}`). Value is `'1'` or `'0'`. */
+export const checkboxOverridesAtom = atom<Record<string, string>>({});
 
 /** Manual row-entity resolution keyed by row index. Overrides auto-resolved or unresolved rows. */
 export const rowOverridesAtom = atom<Record<number, { entityId: string; name: string }>>({});

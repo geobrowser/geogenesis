@@ -203,6 +203,87 @@ describe('import generation helpers', () => {
     expect(typesRelations[0].toEntity.id).toBe('type-my');
   });
 
+  it('parses valid checkbox values into "true"/"false" strings', () => {
+    const built = buildGeneratedRows({
+      dataRows: [
+        ['Item A', 'yes'],
+        ['Item B', '0'],
+        ['Item C', 'TRUE'],
+      ],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-bool' },
+      resolvedRows: new Map([
+        [0, { entityId: 'a', name: 'Item A' }],
+        [1, { entityId: 'b', name: 'Item B' }],
+        [2, { entityId: 'c', name: 'Item C' }],
+      ]),
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedEntities: new Map(),
+      spaceId: 'space-1',
+      propertyLookup: {
+        schema: [{ id: 'prop-bool', name: 'Active', dataType: 'BOOLEAN' }],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    const boolValues = built.values.filter(v => v.property.id === 'prop-bool');
+    expect(boolValues).toHaveLength(3);
+    expect(boolValues[0].value).toBe('1');
+    expect(boolValues[1].value).toBe('0');
+    expect(boolValues[2].value).toBe('1');
+  });
+
+  it('skips unparseable checkbox values in generated rows', () => {
+    const built = buildGeneratedRows({
+      dataRows: [['Item A', 'maybe']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-bool' },
+      resolvedRows: new Map([[0, { entityId: 'a', name: 'Item A' }]]),
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedEntities: new Map(),
+      spaceId: 'space-1',
+      propertyLookup: {
+        schema: [{ id: 'prop-bool', name: 'Active', dataType: 'BOOLEAN' }],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    const boolValues = built.values.filter(v => v.property.id === 'prop-bool');
+    expect(boolValues).toHaveLength(0);
+  });
+
+  it('flags unparseable checkbox cells as unresolved', () => {
+    const unresolved = buildUnresolvedLinksByCell({
+      dataRows: [
+        ['Item A', 'yes'],
+        ['Item B', 'maybe'],
+      ],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: 'prop-bool' },
+      nameColIdx: 0,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedRows: new Map([
+        [0, { entityId: 'a', name: 'Item A' }],
+        [1, { entityId: 'b', name: 'Item B' }],
+      ]),
+      resolvedEntities: new Map(),
+      propertyLookup: {
+        schema: [{ id: 'prop-bool', name: 'Active', dataType: 'BOOLEAN' }],
+        extraProperties: {},
+        getProperty: () => null,
+      },
+    });
+
+    // "yes" is valid — no flag
+    expect(unresolved['0:1']).toBeUndefined();
+    // "maybe" is not parseable — flagged
+    expect(unresolved['1:1']).toEqual({ kind: 'checkbox', rawValue: 'maybe' });
+  });
+
   it('marks unresolved type cells when CSV types cannot be resolved', () => {
     const unresolved = buildUnresolvedLinksByCell({
       dataRows: [['Project X', 'Unresolved Type']],

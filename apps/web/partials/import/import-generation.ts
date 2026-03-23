@@ -7,6 +7,7 @@ import { getEntity } from '~/core/io/queries';
 import { Property, Relation, RenderableEntityType, Value } from '~/core/types';
 
 import type { UnresolvedImportCell } from './atoms';
+import { parseCheckboxValue } from './checkbox-parse';
 import { splitRelationCell } from './relation-cell';
 
 type PropertyLookup = {
@@ -38,6 +39,8 @@ export type BuildRowsInput = {
   propertyLookup: PropertyLookup;
   /** Look up existing relations for an entity to avoid creating duplicates. */
   getExistingRelations?: (entityId: string) => Relation[];
+  /** Manual checkbox overrides keyed by import cell key (`${rowIndex}:${colIdx}`). Value is `'1'` or `'0'`. */
+  checkboxOverrides?: Record<string, string>;
 };
 
 export function toImportCellKey(rowIndex: number, csvColumnIndex: number): string {
@@ -53,6 +56,7 @@ export function buildUnresolvedLinksByCell(params: {
   resolvedRows: Map<number, { entityId: string; name: string }>;
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
+  checkboxOverrides?: Record<string, string>;
 }): Record<string, UnresolvedImportCell> {
   const {
     dataRows,
@@ -63,6 +67,7 @@ export function buildUnresolvedLinksByCell(params: {
     resolvedRows,
     resolvedEntities,
     propertyLookup,
+    checkboxOverrides = {},
   } = params;
   const flags: Record<string, UnresolvedImportCell> = {};
 
@@ -92,7 +97,20 @@ export function buildUnresolvedLinksByCell(params: {
       if (!raw) continue;
 
       const property = getPropertyFromSources(propertyId, propertyLookup);
-      if (!property || property.dataType !== 'RELATION') continue;
+      if (!property) continue;
+
+      if (property.dataType === 'BOOLEAN') {
+        const cellKey = toImportCellKey(rowIndex, colIdx);
+        if (!checkboxOverrides[cellKey]) {
+          const result = parseCheckboxValue(raw);
+          if (!result.parsed) {
+            flags[cellKey] = { kind: 'checkbox', rawValue: raw };
+          }
+        }
+        continue;
+      }
+
+      if (property.dataType !== 'RELATION') continue;
 
       const unresolvedValues: string[] = [];
 
@@ -323,6 +341,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
     spaceId,
     propertyLookup,
     getExistingRelations,
+    checkboxOverrides = {},
   } = input;
 
   // Cache existing relations per entity so we only look them up once.
@@ -477,6 +496,21 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
             });
           }
         }
+      } else if (property.dataType === 'BOOLEAN') {
+        const cellKey = toImportCellKey(rowIndex, colIdx);
+        const override = checkboxOverrides[cellKey];
+        const result = parseCheckboxValue(raw);
+        const resolvedValue = override ?? (result.parsed ? (result.value ? '1' : '0') : undefined);
+        if (resolvedValue !== undefined) {
+          values.push({
+            id: ID.createValueId({ entityId, propertyId, spaceId }),
+            entity: { id: entityId, name: rowName },
+            property,
+            spaceId,
+            value: resolvedValue,
+            isLocal: true,
+          });
+        }
       } else {
         values.push({
           id: ID.createValueId({ entityId, propertyId, spaceId }),
@@ -535,6 +569,7 @@ export function buildImportPlan(params: {
   spaceId: string;
   propertyLookup: PropertyLookup;
   getExistingRelations?: (entityId: string) => Relation[];
+  checkboxOverrides?: Record<string, string>;
 }): ImportPlan {
   // Clone maps so callers' originals are never mutated
   const resolvedEntities = new Map(params.resolvedEntities);
@@ -562,6 +597,7 @@ export function buildImportPlan(params: {
     resolvedRows,
     resolvedEntities,
     propertyLookup: params.propertyLookup,
+    checkboxOverrides: params.checkboxOverrides,
   });
 
   const { values, relations } = buildGeneratedRows({
@@ -575,6 +611,7 @@ export function buildImportPlan(params: {
     spaceId: params.spaceId,
     propertyLookup: params.propertyLookup,
     getExistingRelations: params.getExistingRelations,
+    checkboxOverrides: params.checkboxOverrides,
   });
 
   return {
