@@ -235,6 +235,8 @@ type Props = {
   resolvedTypes?: Map<string, { id: string; name: string }>;
   /** Manual checkbox overrides keyed by `${rowIndex}:${colIdx}` */
   checkboxOverrides?: Record<string, string>;
+  /** When true, disable all interactive cells (e.g. while resolving relations) */
+  disabled?: boolean;
 };
 
 export function ImportPreviewTable({
@@ -257,6 +259,7 @@ export function ImportPreviewTable({
   selectedType: selectedTypeProp,
   resolvedTypes: resolvedTypesProp,
   checkboxOverrides = {},
+  disabled = false,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
@@ -385,6 +388,7 @@ export function ImportPreviewTable({
             height: rowVirtualizer.getTotalSize(),
             position: 'relative',
             minWidth: columnLayout.totalWidth,
+            ...(disabled ? { pointerEvents: 'none', opacity: 0.6 } : {}),
           }}
         >
           {virtualRows.map(virtualRow => {
