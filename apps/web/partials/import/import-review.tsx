@@ -18,6 +18,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import {
+  checkboxOverridesAtom,
   columnMappingAtom,
   entityCountAtom,
   extraPropertiesAtom,
@@ -58,6 +59,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
   const headers = useAtomValue(headersAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const [extraProperties, setExtraProperties] = useAtom(extraPropertiesAtom);
+  const [checkboxOverrides, setCheckboxOverrides] = useAtom(checkboxOverridesAtom);
   const [, setRelationOverrides] = useAtom(relationOverridesAtom);
   const [, setRowOverrides] = useAtom(rowOverridesAtom);
   const [, setTypeOverrides] = useAtom(typeOverridesAtom);
@@ -169,6 +171,14 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
       }));
     },
     [setRowOverrides]
+  );
+
+  const handleResolveCheckboxValue = useCallback(
+    (rowIndex: number, csvColumnIndex: number, value: string) => {
+      const cellKey = `${rowIndex}:${csvColumnIndex}`;
+      setCheckboxOverrides(prev => ({ ...prev, [cellKey]: value }));
+    },
+    [setCheckboxOverrides]
   );
 
   const columns: ColumnConfig[] = useMemo(() => {
@@ -301,6 +311,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             onResolveRelationToken={handleResolveRelationToken}
             onResolveTypeValue={handleResolveTypeValue}
             onResolveEntityRow={handleResolveEntityRow}
+            onResolveCheckboxValue={handleResolveCheckboxValue}
             onSelectProperty={handleSelectProperty}
             onCreateProperty={handleCreateProperty}
             hasUnmappedColumns={hasUnmappedColumns}
@@ -310,6 +321,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             typesColumnIndex={typesColumnIndex}
             selectedType={selectedType}
             resolvedTypes={resolvedTypesSnapshot}
+            checkboxOverrides={checkboxOverrides}
           />
         </>
       )}

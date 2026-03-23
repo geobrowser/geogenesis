@@ -15,11 +15,13 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
+import { Checkbox } from '~/design-system/checkbox';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import type { UnresolvedImportCell } from './atoms';
+import { parseCheckboxValue } from './checkbox-parse';
 import { hydrateRelationValueTypes } from './import-generation';
 import { splitRelationCell } from './relation-cell';
 
@@ -216,6 +218,7 @@ type Props = {
   ) => void;
   onResolveTypeValue?: (rawType: string, entity: { id: string; name: string }, isNew?: boolean) => void;
   onResolveEntityRow?: (rowIndex: number, entity: { id: string; name: string }) => void;
+  onResolveCheckboxValue?: (rowIndex: number, csvColumnIndex: number, value: string) => void;
   /** When true and dataRows exist, show empty state message instead of rows */
   hasUnmappedColumns?: boolean;
   /** Snapshot of resolved rows (row index → entity), used for "Currently selected" in popovers */
@@ -230,6 +233,8 @@ type Props = {
   selectedType?: { id: string; name: string | null } | null;
   /** Resolved types snapshot (raw CSV type string → entity), used for per-row type filtering */
   resolvedTypes?: Map<string, { id: string; name: string }>;
+  /** Manual checkbox overrides keyed by `${rowIndex}:${colIdx}` */
+  checkboxOverrides?: Record<string, string>;
 };
 
 export function ImportPreviewTable({
@@ -243,6 +248,7 @@ export function ImportPreviewTable({
   onResolveRelationToken,
   onResolveTypeValue,
   onResolveEntityRow,
+  onResolveCheckboxValue,
   hasUnmappedColumns = false,
   resolvedRows,
   resolvedEntities,
@@ -250,6 +256,7 @@ export function ImportPreviewTable({
   typesColumnIndex,
   selectedType: selectedTypeProp,
   resolvedTypes: resolvedTypesProp,
+  checkboxOverrides = {},
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
@@ -425,7 +432,35 @@ export function ImportPreviewTable({
                         key={`${virtualRow.index}-${col.csvColumnIndex}`}
                         className="overflow-hidden border-r border-grey-02 px-4 py-2"
                       >
-                        {isRelation && value ? (
+                        {col.dataType === 'BOOLEAN' && value ? (() => {
+                          const isUnparseable = cellFlag?.kind === 'checkbox';
+                          const overrideKey = `${virtualRow.index}:${col.csvColumnIndex}`;
+                          const override = checkboxOverrides[overrideKey];
+                          const checkboxResult = parseCheckboxValue(value);
+                          const checked = override !== undefined
+                            ? override === '1'
+                            : checkboxResult.parsed ? checkboxResult.value : null;
+                          return (
+                            <span className="inline-flex items-center gap-2">
+                              {isUnparseable && <WarningIcon />}
+                              <Checkbox
+                                checked={checked}
+                                onChange={() => {
+                                  if (onResolveCheckboxValue) {
+                                    onResolveCheckboxValue(
+                                      virtualRow.index,
+                                      col.csvColumnIndex,
+                                      !checked ? '1' : '0'
+                                    );
+                                  }
+                                }}
+                              />
+                              {isUnparseable && cellFlag?.kind === 'checkbox' && (
+                                <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
+                              )}
+                            </span>
+                          );
+                        })() : isRelation && value ? (
                           <div className="flex flex-wrap items-center gap-2 overflow-hidden">
                             {splitRelationCell(value).map((part, i) => {
                               if (unresolvedSet?.has(part) && onResolveRelationToken) {
