@@ -9,6 +9,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import {
+  checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
   loadingAtom,
@@ -35,6 +36,7 @@ import { useImportSession } from './use-import-session';
 export function useImportGenerate(spaceId: string) {
   const { store } = useSyncEngine();
   const records = useAtomValue(recordsAtom);
+  const checkboxOverrides = useAtomValue(checkboxOverridesAtom);
   const columnMapping = useAtomValue(columnMappingAtom);
   const extraProperties = useAtomValue(extraPropertiesAtom);
   const selectedType = useAtomValue(selectedTypeAtom);
@@ -182,6 +184,7 @@ export function useImportGenerate(spaceId: string) {
         spaceId,
         propertyLookup,
         getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
+        checkboxOverrides,
       });
 
       if (!generationTrackerRef.current.isCurrent(generationId)) return;
@@ -200,6 +203,7 @@ export function useImportGenerate(spaceId: string) {
       }
     }
   }, [
+    checkboxOverrides,
     columnMapping,
     clearGeneratedChanges,
     extraProperties,
@@ -228,6 +232,7 @@ export function useImportGenerate(spaceId: string) {
   const rebuildContextRef = useRef({
     values,
     relations,
+    checkboxOverrides,
     relationOverrides,
     typeOverrides,
     rowOverrides,
@@ -245,6 +250,7 @@ export function useImportGenerate(spaceId: string) {
   rebuildContextRef.current = {
     values,
     relations,
+    checkboxOverrides,
     relationOverrides,
     typeOverrides,
     rowOverrides,
@@ -331,6 +337,7 @@ export function useImportGenerate(spaceId: string) {
       spaceId,
       propertyLookup,
       getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
+      checkboxOverrides: ctx.checkboxOverrides,
     });
 
     applyPlan(plan);
@@ -361,7 +368,7 @@ export function useImportGenerate(spaceId: string) {
   useEffect(() => {
     if (!hasGeneratedRef.current) return;
     rebuild();
-  }, [relationOverrides, typeOverrides, rowOverrides, rebuild]);
+  }, [checkboxOverrides, relationOverrides, typeOverrides, rowOverrides, rebuild]);
 
   return { generate, rebuild, isLoading, canGenerate };
 }
