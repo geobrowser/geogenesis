@@ -278,19 +278,27 @@ interface ResultsArgs {
 
 /**
  * Raw search result from the REST /search endpoint.
- * Each result represents one entity in one space (flat, denormalized).
+ * Each result represents one entity in one space, with nested space/type data.
  */
 interface RestSearchResult {
   entityId: string;
-  spaceId: string;
+  space: {
+    id: string;
+    name?: string;
+    avatar?: string;
+  };
   name?: string;
   description?: string;
   avatar?: string;
   cover?: string;
-  typeIds?: string[];
+  types?: Array<{
+    id: string;
+    name?: string;
+  }>;
   entityGlobalScore?: number;
-  spaceScore?: number;
-  entitySpaceScore?: number;
+  relevanceScore?: number;
+  textMatchScore?: number;
+  inCanonicalGraph?: boolean;
 }
 
 interface RestSearchResponse {
@@ -318,12 +326,12 @@ function toUuid(hex: string): string {
  * The REST endpoint returns one result per (entity, space) pair. We group
  * by entityId and collect all spaceIds into a single SearchResult per entity.
  */
-function groupRestResults(results: RestSearchResult[]): SearchResult[] {
+export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
   const byEntity = new Map<string, SearchResult>();
 
   for (const r of results) {
     const entityId = stripHyphens(r.entityId);
-    const spaceId = stripHyphens(r.spaceId);
+    const spaceId = stripHyphens(r.space.id);
 
     const existing = byEntity.get(entityId);
 
@@ -332,9 +340,9 @@ function groupRestResults(results: RestSearchResult[]): SearchResult[] {
       if (!existing.spaces.some(s => s.spaceId === spaceId)) {
         existing.spaces.push({
           id: spaceId,
-          name: null,
+          name: r.space.name ?? null,
           description: null,
-          image: '',
+          image: r.space.avatar ?? '',
           relations: [],
           spaceId,
           spaces: [spaceId],
@@ -342,18 +350,30 @@ function groupRestResults(results: RestSearchResult[]): SearchResult[] {
           types: [],
         });
       }
+
+      for (const type of r.types ?? []) {
+        const typeId = stripHyphens(type.id);
+        const existingType = existing.types.find(t => t.id === typeId);
+
+        if (existingType) {
+          existingType.name = existingType.name ?? type.name ?? null;
+          continue;
+        }
+
+        existing.types.push({ id: typeId, name: type.name ?? null });
+      }
     } else {
       byEntity.set(entityId, {
         id: entityId,
         name: r.name ?? null,
         description: r.description ?? null,
-        types: (r.typeIds ?? []).map(id => ({ id: stripHyphens(id), name: null })),
+        types: (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null })),
         spaces: [
           {
             id: spaceId,
-            name: null,
+            name: r.space.name ?? null,
             description: null,
-            image: '',
+            image: r.space.avatar ?? '',
             relations: [],
             spaceId,
             spaces: [spaceId],

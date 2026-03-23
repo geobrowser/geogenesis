@@ -16,7 +16,7 @@ import {
   getSpaces,
 } from '../io/queries';
 import { OmitStrict } from '../types';
-import { Entity, Relation, SearchResult } from '../types';
+import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
@@ -25,6 +25,19 @@ import { GeoStore } from './store';
 
 function relationKey(r: Relation): string {
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
+export function resolveSearchSpaces(
+  spaces: Array<string | SpaceEntity>,
+  spacesById: Record<string, SpaceEntity>
+): SpaceEntity[] {
+  return spaces
+    .map(space => {
+      const spaceId = typeof space === 'string' ? space : space.spaceId;
+
+      return spacesById[spaceId] ?? (typeof space === 'string' ? null : space);
+    })
+    .filter((space): space is SpaceEntity => space !== null);
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -273,7 +286,7 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
-    const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
+    const spaceIds = [...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId))))];
     const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
     const [spaces, typeNames] = await Promise.all([
@@ -294,7 +307,7 @@ export class E {
         : Promise.resolve([]),
     ]);
 
-    const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
+    const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
     return entities.map(e => {
@@ -304,11 +317,7 @@ export class E {
           id: t.id,
           name: t.name ?? typeNamesById.get(t.id) ?? null,
         })),
-        spaces: e.spaces.map(s => {
-          const space = spacesById[s];
-
-          return space.entity;
-        }),
+        spaces: resolveSearchSpaces(e.spaces, spacesById),
       };
     });
   }
@@ -322,7 +331,7 @@ function mergeSearchResult({
   id: string;
   store: GeoStore;
   mergeWith?: SearchResult | null;
-}): (OmitStrict<SearchResult, 'spaces'> & { spaces: string[] }) | null {
+}): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
   // We need to include the deleted to correctly merge with remote data
@@ -340,7 +349,7 @@ function mergeSearchResult({
   if (!localEntity) {
     return {
       ...remoteEntity,
-      spaces: remoteEntity.spaces.map(s => s.spaceId),
+      spaces: remoteEntity.spaces,
     };
   }
 
