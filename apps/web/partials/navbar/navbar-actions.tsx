@@ -30,7 +30,7 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '../onboarding/dialog';
+import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -42,14 +42,14 @@ function useUser() {
 
 function useResetOnboarding() {
   const setName = useSetAtom(nameAtom);
-  const setEntityId = useSetAtom(entityIdAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setName('');
-    setEntityId('');
+    setTopicId('');
     setAvatar('');
     setSpaceId('');
     setStep('start');

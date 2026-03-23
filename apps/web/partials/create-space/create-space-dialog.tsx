@@ -35,7 +35,7 @@ import { Animation } from '~/partials/onboarding/dialog';
 const spaceTypeAtom = atom<SpaceType | null>(null);
 const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 const nameAtom = atom<string>('');
-const entityIdAtom = atom<string>('');
+const topicIdAtom = atom<string>('');
 const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
@@ -53,7 +53,7 @@ export function CreateSpaceDialog() {
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
-  const [entityId, setEntityId] = useAtom(entityIdAtom);
+  const [topicId, setTopicId] = useAtom(topicIdAtom);
   const [image, setImage] = useAtom(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
@@ -73,7 +73,7 @@ export function CreateSpaceDialog() {
         spaceName: name,
         spaceImage: image,
         governanceType: governanceType ?? undefined,
-        entityId,
+        topicId,
       });
 
       if (!spaceId) {
@@ -113,7 +113,7 @@ export function CreateSpaceDialog() {
           onClick={() => {
             setName('');
             setImage('');
-            setEntityId('');
+            setTopicId('');
             setGovernanceType(null);
             setStep('select-type');
           }}
@@ -197,13 +197,13 @@ const headerText: Record<Step, string> = {
 const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
-  const setEntityId = useSetAtom(entityIdAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
 
   const showBack = step === 'enter-profile';
 
   const handleBack = () => {
     setName('');
-    setEntityId('');
+    setTopicId('');
     if (step === 'enter-profile') {
       setStep('select-type');
     }
@@ -336,7 +336,7 @@ const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
 
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const [name, setName] = useAtom(nameAtom);
-  const [entityId, setEntityId] = useAtom(entityIdAtom);
+  const [topicId, setTopicId] = useAtom(topicIdAtom);
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
@@ -408,27 +408,27 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       </StepContents>
       <div className={cx('flex w-full flex-col items-center justify-center gap-3', !isCompany && 'pt-[26px]')}>
         <div className="relative z-100 w-full">
-          <div className={cx(entityId && 'invisible')}>
+          <div className={cx(topicId && 'invisible')}>
             <FindEntity
               allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
-                setEntityId(entity.id);
+                setTopicId(entity.id);
               }}
               onCreateEntity={entity => {
                 setName(entity.name ?? '');
-                setEntityId('');
+                setTopicId('');
               }}
               placeholder="Space name..."
             />
           </div>
-          {entityId && (
+          {topicId && (
             <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
               <div className="text-bodySemibold">Space for</div>
               <SmallButton
                 onClick={() => {
                   setName('');
-                  setEntityId('');
+                  setTopicId('');
                 }}
               >
                 <span>{name}</span>
