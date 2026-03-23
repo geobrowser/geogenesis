@@ -296,6 +296,7 @@ function SortableHeaderCell({
   properties,
   selectedEntityIdsForNewProperty,
   onRemoveProperties,
+  isEditing,
 }: {
   property: Property;
   sortState: ColumnSortState;
@@ -307,6 +308,7 @@ function SortableHeaderCell({
   properties: Property[];
   selectedEntityIdsForNewProperty: string[];
   onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
+  isEditing: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: property.id,
@@ -351,27 +353,29 @@ function SortableHeaderCell({
           >
             <EyeHide />
           </button>
-          <EditEntitiesPopover
-            trigger={
-              <button
-                type="button"
-                className="flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
-                title="Remove property"
-                aria-label="Remove property"
-              >
-                <CloseSmall />
-              </button>
-            }
-            selectedCount={selectedCount}
-            spaceId={spaceId}
-            properties={properties}
-            selectedEntityIds={selectedEntityIdsForNewProperty}
-            onRemoveProperties={onRemoveProperties}
-            removePropertyOnly
-            initialPropertiesMarkedForRemoval={[property.id]}
-            contentAlign="center"
-            contentSideOffset={6}
-          />
+          {isEditing && onRemoveProperties && (
+            <EditEntitiesPopover
+              trigger={
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
+                  title="Remove property"
+                  aria-label="Remove property"
+                >
+                  <CloseSmall />
+                </button>
+              }
+              selectedCount={selectedCount}
+              spaceId={spaceId}
+              properties={properties}
+              selectedEntityIds={selectedEntityIdsForNewProperty}
+              onRemoveProperties={onRemoveProperties}
+              removePropertyOnly
+              initialPropertiesMarkedForRemoval={[property.id]}
+              contentAlign="center"
+              contentSideOffset={6}
+            />
+          )}
         </div>
       )}
       <div
@@ -582,6 +586,7 @@ export function PowerToolsTable({
                   properties={properties}
                   selectedEntityIdsForNewProperty={selectedEntityIdsForNewProperty}
                   onRemoveProperties={onRemoveProperties}
+                  isEditing={isEditing}
                 />
               ))}
               {columnLayout.showAddColumn && (
