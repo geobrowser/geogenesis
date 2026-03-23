@@ -321,6 +321,15 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
 
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations, source);
+
+  const collectionTypeFilters = React.useMemo(
+    () =>
+      activeFilters
+        .filter(f => f.columnId === SystemIds.TYPES_PROPERTY)
+        .map(f => ({ id: f.value, name: f.valueName })),
+    [activeFilters]
+  );
+
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
@@ -387,6 +396,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
       onLinkEntry={onLinkEntry}
       onAddPlaceholder={onAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      collectionTypeFilters={collectionTypeFilters}
     />
   );
 
@@ -407,6 +417,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        collectionTypeFilters={collectionTypeFilters}
       />
     );
   }
@@ -428,6 +439,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        collectionTypeFilters={collectionTypeFilters}
       />
     );
   }
@@ -449,6 +461,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        collectionTypeFilters={collectionTypeFilters}
       />
     );
   }

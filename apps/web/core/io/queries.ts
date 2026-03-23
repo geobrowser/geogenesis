@@ -1,3 +1,5 @@
+import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import * as Effect from 'effect/Effect';
 
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
@@ -417,7 +419,7 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
       path: `/search?${params.toString()}`,
       signal,
     }),
-    response => groupRestResults(response.results)
+    response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
   );
 }
 
@@ -445,4 +447,18 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     },
     signal,
   });
+}
+const EXCLUDED_BLOCK_TYPES = [
+  SystemIds.TEXT_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_TYPE,
+  SystemIds.VIDEO_TYPE,
+  SystemIds.VIDEO_BLOCK,
+];
+
+const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
+
+function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
+  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
 }

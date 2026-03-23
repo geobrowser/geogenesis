@@ -627,7 +627,7 @@ export function PowerToolsTable({
                 {showCheckboxColumn && (
                   <div
                     data-checkbox-cell
-                    className="flex min-h-full cursor-pointer items-center border-r border-grey-02 px-3 py-2"
+                    className="flex min-h-full cursor-pointer items-start border-r border-grey-02 px-3 py-2"
                     onClick={e => {
                       e.stopPropagation();
                       if (hasDraggedRef.current) {

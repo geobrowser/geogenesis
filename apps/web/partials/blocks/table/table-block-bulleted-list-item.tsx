@@ -28,6 +28,7 @@ type Props = {
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export function TableBlockBulletedListItem({
@@ -41,6 +42,7 @@ export function TableBlockBulletedListItem({
   relationId,
   source,
   autoFocus = false,
+  collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
@@ -69,6 +71,7 @@ export function TableBlockBulletedListItem({
               }}
               spaceId={currentSpaceId}
               autoFocus={autoFocus}
+              relationValueTypes={collectionTypeFilters}
             />
           ) : (
             <div>

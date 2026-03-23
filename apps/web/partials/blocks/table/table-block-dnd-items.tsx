@@ -32,6 +32,7 @@ export type RenderItemProps = {
   source: Source;
   isPlaceholder: boolean;
   autoFocus?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export type DndItemsConfig = {
@@ -61,6 +62,7 @@ export type TableBlockDndItemsProps = {
   pageNumber: number;
   pageSize: number;
   shouldAutoFocusPlaceholder?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
   config: DndItemsConfig;
 };
 
@@ -79,6 +81,7 @@ export const TableBlockDndItems = ({
   pageNumber,
   pageSize,
   shouldAutoFocusPlaceholder = false,
+  collectionTypeFilters,
   config,
 }: TableBlockDndItemsProps) => {
   const placeholderEntries = entries.filter(r => r.placeholder);
@@ -189,6 +192,7 @@ export const TableBlockDndItems = ({
     onLinkEntry,
     properties: propertiesSchema,
     source,
+    collectionTypeFilters,
   };
 
   const resolvedOuterClassName =
