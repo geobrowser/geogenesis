@@ -322,6 +322,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             selectedType={selectedType}
             resolvedTypes={resolvedTypesSnapshot}
             checkboxOverrides={checkboxOverrides}
+            disabled={isLoading}
           />
         </>
       )}
