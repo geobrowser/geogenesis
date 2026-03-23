@@ -158,7 +158,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
       if (dataTypeEntityId) {
         const existingDataTypeRelation = allRelations.find(
-          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY
+          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
         );
 
         if (existingDataTypeRelation) {
@@ -189,7 +189,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       }
 
       const existingRelation = allRelations.find(
-        r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
+        r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY && !r.isDeleted
       );
 
       if (renderableTypeId) {

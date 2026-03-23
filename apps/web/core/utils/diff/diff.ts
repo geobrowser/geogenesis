@@ -1047,6 +1047,8 @@ function computeRelationChanges(
 
     let changeType: 'ADD' | 'REMOVE' | 'UPDATE';
     if (localRelation.isDeleted) {
+      // Net-zero: added locally then deleted locally — don't show as a deletion
+      if (!remoteRelation) continue;
       changeType = 'REMOVE';
     } else if (!remoteRelation) {
       changeType = 'ADD';
