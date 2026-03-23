@@ -7,6 +7,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import {
+  checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
   fileNameAtom,
@@ -32,6 +33,7 @@ export function useImportSession(spaceId: string) {
   const relations = useAtomValue(relationsAtom);
   const setValues = useSetAtom(valuesAtom);
   const setRelations = useSetAtom(relationsAtom);
+  const setCheckboxOverrides = useSetAtom(checkboxOverridesAtom);
   const setRelationOverrides = useSetAtom(relationOverridesAtom);
   const setRowOverrides = useSetAtom(rowOverridesAtom);
   const setTypeOverrides = useSetAtom(typeOverridesAtom);
@@ -74,6 +76,7 @@ export function useImportSession(spaceId: string) {
 
   const resetMappedState = useCallback(() => {
     clearGeneratedChanges();
+    setCheckboxOverrides({});
     setRelationOverrides({});
     setRowOverrides({});
     setTypeOverrides({});
@@ -83,6 +86,7 @@ export function useImportSession(spaceId: string) {
     setExtraProperties({});
   }, [
     clearGeneratedChanges,
+    setCheckboxOverrides,
     setColumnMapping,
     setExtraProperties,
     setRelationOverrides,
