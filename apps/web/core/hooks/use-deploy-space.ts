@@ -261,11 +261,6 @@ async function createDaoSpace({
     throw new Error('Timed out waiting for DAO space content to index.');
   }
 
-  const hasIndexedTopic = await waitForSpaceTopic(newSpaceId, resolvedTopicId);
-  if (!hasIndexedTopic) {
-    throw new Error('Timed out waiting for DAO space topic to index.');
-  }
-
   return newSpaceId;
 }
 
@@ -398,11 +393,6 @@ async function createPersonalStyleSpace({
     throw new Error('Timed out waiting for personal-style space content to index.');
   }
 
-  const hasIndexedTopic = await waitForSpaceTopic(spaceId, resolvedTopicId);
-  if (!hasIndexedTopic) {
-    throw new Error('Timed out waiting for personal-style space topic to index.');
-  }
-
   return spaceId;
 }
 
@@ -457,21 +447,6 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 20, intervalMs
     try {
       const space = await Effect.runPromise(getSpace(spaceId));
       if (space?.entity?.name) return true;
-    } catch {
-      // Continue polling
-    }
-    if (attempt < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
-    }
-  }
-  return false;
-}
-
-async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 20, intervalMs = 3_000): Promise<boolean> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const space = await Effect.runPromise(getSpace(spaceId));
-      if (space?.topicId === topicId) return true;
     } catch {
       // Continue polling
     }
