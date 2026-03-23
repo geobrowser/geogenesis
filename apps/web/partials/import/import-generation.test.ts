@@ -203,7 +203,7 @@ describe('import generation helpers', () => {
     expect(typesRelations[0].toEntity.id).toBe('type-my');
   });
 
-  it('parses valid checkbox values into "true"/"false" strings', () => {
+  it('parses valid checkbox values into "1"/"0" strings', () => {
     const built = buildGeneratedRows({
       dataRows: [
         ['Item A', 'yes'],

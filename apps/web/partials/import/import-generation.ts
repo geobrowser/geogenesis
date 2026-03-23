@@ -101,7 +101,7 @@ export function buildUnresolvedLinksByCell(params: {
 
       if (property.dataType === 'BOOLEAN') {
         const cellKey = toImportCellKey(rowIndex, colIdx);
-        if (!checkboxOverrides[cellKey]) {
+        if (!(cellKey in checkboxOverrides)) {
           const result = parseCheckboxValue(raw);
           if (!result.parsed) {
             flags[cellKey] = { kind: 'checkbox', rawValue: raw };

@@ -455,8 +455,8 @@ export function ImportPreviewTable({
                                   }
                                 }}
                               />
-                              {isUnparseable && (
-                                <span className="truncate text-metadata text-red-01">{value}</span>
+                              {isUnparseable && cellFlag?.kind === 'checkbox' && (
+                                <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
                               )}
                             </span>
                           );
