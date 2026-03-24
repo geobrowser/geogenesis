@@ -238,6 +238,8 @@ export function EditEntitiesPopover({
   const addImageFileDialogCloseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Ref updated synchronously when value field reports a value (e.g. date blur). Use on Apply so we get latest value even when React hasn't committed state yet. */
   const pendingValueRef = React.useRef<string>('');
+  /** Same as pendingValueRef but for New property → optional scalar value (DATE etc. may only commit on blur). */
+  const newPropertyInitialValueRef = React.useRef<string>('');
 
   const INITIAL_DELETE_VALUES_VISIBLE = 5;
   const INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE = 5;
@@ -395,7 +397,9 @@ export function EditEntitiesPopover({
         isNewPropertyRelation && newPropertyValueType !== 'IMAGE'
           ? selectedAttributeEntities
           : undefined,
-      initialValue: isNewPropertyRelation ? undefined : newPropertyInitialValue,
+      initialValue: isNewPropertyRelation
+        ? undefined
+        : (newPropertyInitialValueRef.current || newPropertyInitialValue).trim(),
       initialImageFile:
         newPropertyValueType === 'IMAGE' ? newPropertyImageFile ?? undefined : undefined,
     });
@@ -403,6 +407,7 @@ export function EditEntitiesPopover({
     setNewPropertyName('');
     setNewPropertyValueType('TEXT');
     setNewPropertyInitialValue('');
+    newPropertyInitialValueRef.current = '';
     setSelectedAttributeEntities([]);
     setNewPropertyImageFile(null);
   }, [
@@ -426,6 +431,7 @@ export function EditEntitiesPopover({
       setNewPropertyName('');
       setNewPropertyValueType('TEXT');
       setNewPropertyInitialValue('');
+      newPropertyInitialValueRef.current = '';
       setNewPropertyImageFile(null);
       setSelectedExistingProperty(null);
       setUseExistingPropertyFromGeo(false);
@@ -460,12 +466,22 @@ export function EditEntitiesPopover({
     }
   }, [open, removePropertyOnly, initialPropertiesMarkedForRemoval]);
 
+  // Only reset Add-mode inputs when the target column changes. Do not clear while on "New property"
+  // — effectiveProperty still tracks the hidden column picker and its id can change when columns
+  // refresh, which would wipe optional relation picks / values before Apply.
   React.useEffect(() => {
+    if (action !== 'add') return;
     setPendingValue('');
     pendingValueRef.current = '';
     setAddImageFile(null);
     setSelectedAttributeEntities([]);
-  }, [effectiveProperty?.id]);
+  }, [effectiveProperty?.id, action]);
+
+  // Entering "New property" tab: clear relation chips from Add mode (separate optional field).
+  React.useEffect(() => {
+    if (action !== 'new') return;
+    setSelectedAttributeEntities([]);
+  }, [action]);
 
   const valueKey = (item: { toEntityId: string; toSpaceId?: string }) => `${item.toEntityId}:${item.toSpaceId ?? ''}`;
 
@@ -836,7 +852,10 @@ export function EditEntitiesPopover({
                             }}
                             spaceId={spaceId}
                             value={newPropertyInitialValue}
-                            onChange={setNewPropertyInitialValue}
+                            onChange={v => {
+                              setNewPropertyInitialValue(v);
+                              newPropertyInitialValueRef.current = v;
+                            }}
                           />
                         </>
                       )}
