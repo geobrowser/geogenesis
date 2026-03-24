@@ -470,19 +470,22 @@ export function PowerToolsScreen() {
         name,
         dataType: baseDataType,
       };
+
+      const targetEntityIds =
+        selectedRowEntityIds.length > 0
+          ? selectedRowEntityIds
+          : selectableRows.map(r => r.entityId);
       const entityIdToSpaceId = new Map(
         selectableRows
-          .filter(r => selectedRowEntityIds.includes(r.entityId))
+          .filter(r => targetEntityIds.includes(r.entityId))
           .map(r => [r.entityId, r.spaceId] as const)
       );
 
       if (valueType === 'IMAGE' && initialImageFile) {
-        const uploadKeys = new Set(
-          selectedRowEntityIds.map(id => `${id}:${property.id}`)
-        );
+        const uploadKeys = new Set(targetEntityIds.map(id => `${id}:${property.id}`));
         setImageUploadingFor(uploadKeys);
         try {
-          for (const fromEntityId of selectedRowEntityIds) {
+          for (const fromEntityId of targetEntityIds) {
             const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
             await storage.images.createAndLink({
               file: initialImageFile,
@@ -505,7 +508,7 @@ export function PowerToolsScreen() {
         (valueType === 'RELATION' || valueType === 'IMAGE') &&
         selectedEntities?.length
       ) {
-        selectedRowEntityIds.forEach(fromEntityId => {
+        targetEntityIds.forEach(fromEntityId => {
           const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
           selectedEntities.forEach(target => {
             createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
@@ -517,7 +520,7 @@ export function PowerToolsScreen() {
         });
       } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
         const value = initialValue ?? '';
-        for (const entityId of selectedRowEntityIds) {
+        for (const entityId of targetEntityIds) {
           const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
           writeValue(storage, entityId, rowSpaceId, property, value, null);
         }
