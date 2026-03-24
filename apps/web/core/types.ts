@@ -86,7 +86,7 @@ export type DataType =
 // Renderable Types
 // ==============================================================================
 
-export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE'; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE' | 'ADDRESS'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
 export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
