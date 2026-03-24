@@ -393,10 +393,7 @@ export function EditEntitiesPopover({
       name: newPropertyName.trim(),
       valueType: newPropertyValueType,
       selectedRowEntityIds: selectedEntityIds ?? [],
-      selectedEntities:
-        isNewPropertyRelation && newPropertyValueType !== 'IMAGE'
-          ? selectedAttributeEntities
-          : undefined,
+      selectedEntities: isNewPropertyRelation ? selectedAttributeEntities : undefined,
       initialValue: isNewPropertyRelation
         ? undefined
         : (newPropertyInitialValueRef.current || newPropertyInitialValue).trim(),
@@ -477,10 +474,12 @@ export function EditEntitiesPopover({
     setSelectedAttributeEntities([]);
   }, [effectiveProperty?.id, action]);
 
-  // Entering "New property" tab: clear relation chips from Add mode (separate optional field).
+  const prevEditActionRef = React.useRef<EditAction | null>(null);
   React.useEffect(() => {
-    if (action !== 'new') return;
-    setSelectedAttributeEntities([]);
+    if (prevEditActionRef.current === 'add' && action === 'new') {
+      setSelectedAttributeEntities([]);
+    }
+    prevEditActionRef.current = action;
   }, [action]);
 
   const valueKey = (item: { toEntityId: string; toSpaceId?: string }) => `${item.toEntityId}:${item.toSpaceId ?? ''}`;
