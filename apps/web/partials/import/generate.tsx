@@ -214,10 +214,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         // v1 limitation: file.text() allocates the full string on the main thread.
         // Future: pass File object to Worker and read there.
         const text = await file.text();
-        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] file.text(): ${(performance.now() - tParse).toFixed(1)}ms — ${(text.length / 1024).toFixed(0)}KB`);
-        const tWorker = performance.now();
         const result = await parseCSVInWorker(text);
-        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] worker parse: ${(performance.now() - tWorker).toFixed(1)}ms — ok=${result.ok}`);
 
         // A newer file was selected while we were parsing — discard this result
         if (generation !== parseGenerationRef.current) return;
@@ -225,8 +222,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         if (!result.ok) {
           throw new Error(result.message);
         }
-
-        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] result: ${result.rowCount} data rows, ${result.headers.length} columns`);
 
         const sessionId = crypto.randomUUID();
         ImportSessionStore.set(sessionId, {
@@ -241,7 +236,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         setRowCount(result.rowCount);
         setImportRevision(r => r + 1);
         setStep('step2');
-        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] DONE — total ${(performance.now() - tParse).toFixed(1)}ms`);
+        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] ${result.rowCount} rows, ${result.headers.length} cols in ${(performance.now() - tParse).toFixed(0)}ms`);
       } catch (error) {
         // Only reset UI if this is still the active parse — a stale failure
         // must not clobber a newer import that's already in progress.

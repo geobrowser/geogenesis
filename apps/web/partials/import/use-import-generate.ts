@@ -155,9 +155,7 @@ export function useImportGenerate(spaceId: string) {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      const t1 = performance.now();
       const relationProperties = collectRelationCells({ columnMapping, dataRows, propertyLookup });
-      if (DEBUG_IMPORT) console.log(`[import:generate] collectRelationCells: ${(performance.now() - t1).toFixed(1)}ms — ${relationProperties.length} relation props, ${relationProperties.reduce((n, rp) => n + rp.uniqueCellValues.size, 0)} unique tokens`);
 
       // ── Phase 1: Show review immediately with everything unresolved ──
       // Skip full buildImportPlan — just compute unresolved links directly.
@@ -176,7 +174,6 @@ export function useImportGenerate(spaceId: string) {
         resolvedTypesSnapshot: emptyTypes,
         resolvedEntitiesSnapshot: new Map(),
       };
-      if (DEBUG_IMPORT) console.log(`[import:generate] initial plan applied (empty — resolution in background)`);
 
       applyPlan(initialPlan);
       setStep('step5');
@@ -236,8 +233,6 @@ export function useImportGenerate(spaceId: string) {
       await new Promise(resolve => setTimeout(resolve, 0));
       if (!isCurrent()) return;
 
-      if (DEBUG_IMPORT) console.log(`[import:generate] building final plan...`);
-      const t5 = performance.now();
       const finalPlan = buildImportPlan({
         dataRows,
         columnMapping,
@@ -252,7 +247,6 @@ export function useImportGenerate(spaceId: string) {
         getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
         checkboxOverrides,
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] final plan: ${(performance.now() - t5).toFixed(1)}ms — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations, ${Object.keys(finalPlan.unresolvedLinks).length} unresolved cells`);
 
       if (!isCurrent()) return;
 
@@ -270,7 +264,6 @@ export function useImportGenerate(spaceId: string) {
 
       // Write values in chunks
       const VALUE_CHUNK = 2000;
-      const t6 = performance.now();
       for (let vi = 0; vi < finalPlan.values.length; vi += VALUE_CHUNK) {
         const chunk = finalPlan.values.slice(vi, vi + VALUE_CHUNK);
         store.setValues(chunk);
@@ -278,12 +271,10 @@ export function useImportGenerate(spaceId: string) {
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
-      if (DEBUG_IMPORT) console.log(`[import:generate] store.setValues: ${(performance.now() - t6).toFixed(1)}ms (${finalPlan.values.length} values)`);
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
       // Write relations in chunks
-      const t7 = performance.now();
       for (let ri = 0; ri < finalPlan.relations.length; ri += VALUE_CHUNK) {
         const chunk = finalPlan.relations.slice(ri, ri + VALUE_CHUNK);
         store.setRelations(chunk);
@@ -291,7 +282,6 @@ export function useImportGenerate(spaceId: string) {
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
-      if (DEBUG_IMPORT) console.log(`[import:generate] store.setRelations: ${(performance.now() - t7).toFixed(1)}ms (${finalPlan.relations.length} relations)`);
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -302,9 +292,7 @@ export function useImportGenerate(spaceId: string) {
       setResolvedRowsSnapshot(finalPlan.resolvedRowsSnapshot);
       setResolvedTypesSnapshot(finalPlan.resolvedTypesSnapshot);
       setResolvedEntitiesSnapshot(finalPlan.resolvedEntitiesSnapshot);
-      if (DEBUG_IMPORT) console.log(`[import:generate] atoms updated`);
-
-      if (DEBUG_IMPORT) console.log(`[import:generate] DONE — total ${(performance.now() - t0).toFixed(1)}ms`);
+      if (DEBUG_IMPORT) console.log(`[import:generate] DONE — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations in ${(performance.now() - t0).toFixed(0)}ms`);
 
       if (rowResolution.unresolvedRowCount > 0 || relationResolution.unresolvedCount > 0) {
         if (DEBUG_IMPORT) console.warn(

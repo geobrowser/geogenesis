@@ -210,7 +210,6 @@ async function resolveNames(params: {
       })
     );
 
-    if (DEBUG_IMPORT) console.log(`[import:resolve] round ${roundNum}/${totalRounds}: ${(performance.now() - tRound).toFixed(1)}ms (${namesInRound} names, ${roundBatches.length} requests)`);
 
     for (const result of batchResults) {
       if (result.status !== 'fulfilled') continue;
