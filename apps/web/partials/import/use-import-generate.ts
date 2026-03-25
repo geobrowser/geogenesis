@@ -162,7 +162,6 @@ export function useImportGenerate(spaceId: string) {
       // ── Phase 1: Show review immediately with everything unresolved ──
       // Skip full buildImportPlan — just compute unresolved links directly.
       // No values/relations to create yet (nothing is resolved).
-      const emptyEntities = new Map<string, ResolvedEntity>();
       const emptyTypes = new Map<string, { id: string; name: string; isNew?: boolean }>();
       const emptyRows = new Map<number, { entityId: string; name: string }>();
 

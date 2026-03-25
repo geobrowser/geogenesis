@@ -21,7 +21,8 @@ export function useImportData() {
 
   const rows = useMemo(
     () => (sessionId ? ImportSessionStore.getRows(sessionId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- revision drives invalidation
+    // revision drives invalidation for store reads
+    // eslint-disable-next-line -- sessionId+revision are the correct deps
     [sessionId, revision]
   );
 

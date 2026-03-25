@@ -63,7 +63,7 @@ function classifyBatchResults(
     const norm = row.text.trim().toLowerCase();
 
     // Type-check client-side (values endpoint may return broader results)
-    const entityTypeIds = row.entity.typeIds ?? [];
+    const entityTypeIds = (row.entity.typeIds ?? []).filter((t): t is string => t != null);
     if (typeIds.length > 0 && !entityTypeIds.some(t => typeIds.includes(t))) continue;
 
     let entityMap = candidatesByNorm.get(norm);

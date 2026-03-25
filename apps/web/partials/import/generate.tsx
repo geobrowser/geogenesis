@@ -69,7 +69,7 @@ function parseCSVInWorker(text: string): Promise<ParseResult> {
 
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
-  const { isEditor } = useAccessControl(spaceId);
+  const { isEditor, isMember } = useAccessControl(spaceId);
   const [, setStep] = useAtom(stepAtom);
   const [fileName, setFileName] = useAtom(fileNameAtom);
   const [selectedType, setSelectedType] = useAtom(selectedTypeAtom);
@@ -360,7 +360,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     );
   }, [hasFile, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, rowCount, handleNavigateToReview]);
 
-  if (!isEditor) return null;
+  if (!isEditor && !isMember) return null;
 
   return (
     <div className="overflow-visible">

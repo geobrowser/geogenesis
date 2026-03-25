@@ -462,7 +462,7 @@ export type NameValueMatch = {
   entity: {
     id: string;
     name: string | null;
-    typeIds: string[];
+    typeIds: Array<string | null> | null;
     backlinks: { totalCount: number };
     relations: { totalCount: number };
   };
@@ -483,7 +483,10 @@ export function getNameValuesBatch(
 
   return graphql({
     query: importNameValuesQuery,
-    decoder: data => (data.values ?? []) as NameValueMatch[],
+    decoder: data => {
+      const rows = data.values ?? [];
+      return rows.filter(v => v.entity != null) as NameValueMatch[];
+    },
     variables: {
       propertyId: SystemIds.NAME_PROPERTY,
       texts: args.names,
