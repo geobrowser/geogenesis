@@ -19,6 +19,7 @@ import {
   SelectEntityCompact,
   type SelectEntityCompactResult,
 } from '~/design-system/select-entity-compact';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Checkbox } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -145,6 +146,7 @@ export type EditDeleteApplyPayload = {
 
 export type EditRemovePropertiesPayload = {
   propertyIds: string[];
+  scope: 'selectedEntities' | 'allEntities';
 };
 
 const NEW_PROPERTY_VALUE_TYPES: { value: SwitchableRenderableType; label: string }[] = [
@@ -157,7 +159,12 @@ const NEW_PROPERTY_VALUE_TYPES: { value: SwitchableRenderableType; label: string
   { value: 'DATETIME', label: 'Date & Time' },
 ];
 
+const SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET = new Set<SwitchableRenderableType>(
+  NEW_PROPERTY_VALUE_TYPES.map(t => t.value)
+);
+
 export type EditApplyNewPropertyPayload = {
+  propertyId: string;
   name: string;
   valueType: SwitchableRenderableType;
   selectedRowEntityIds: string[];
@@ -168,6 +175,12 @@ export type EditApplyNewPropertyPayload = {
 
 export type EditAddExistingPropertyPayload = {
   propertyId: string;
+};
+
+export type EditCreatePropertyEntityPayload = {
+  propertyId: string;
+  name: string | null;
+  valueType: SwitchableRenderableType;
 };
 
 export type EditEntitiesPopoverProps = {
@@ -184,6 +197,7 @@ export type EditEntitiesPopoverProps = {
   onDeleteApply?: (payload: EditDeleteApplyPayload) => void;
   onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
   onApplyNewProperty?: (payload: EditApplyNewPropertyPayload) => void;
+  onCreatePropertyEntity?: (payload: EditCreatePropertyEntityPayload) => void;
   onAddExistingProperty?: (payload: EditAddExistingPropertyPayload) => void;
   newPropertyOnly?: boolean;
   removePropertyOnly?: boolean;
@@ -204,6 +218,7 @@ export function EditEntitiesPopover({
   onDeleteApply,
   onRemoveProperties,
   onApplyNewProperty,
+  onCreatePropertyEntity,
   onAddExistingProperty,
   newPropertyOnly = false,
   removePropertyOnly = false,
@@ -224,6 +239,7 @@ export function EditEntitiesPopover({
     newPropertyOnly ? 'new' : removePropertyOnly ? 'removeProperty' : 'add'
   );
 
+  const [newPropertyId, setNewPropertyId] = React.useState<string | null>(null);
   const [newPropertyName, setNewPropertyName] = React.useState('');
   const [newPropertyValueType, setNewPropertyValueType] =
     React.useState<SwitchableRenderableType>('TEXT');
@@ -377,8 +393,14 @@ export function EditEntitiesPopover({
     action === 'new' &&
     !useExistingPropertyFromGeo &&
     onApplyNewProperty &&
+    newPropertyId != null &&
     newPropertyName.trim().length > 0 &&
     (newPropertyValueType === 'IMAGE' ? newPropertyImageFile != null : true);
+
+  const newPropertyValueFieldPropertyId =
+    action === 'new' && newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo
+      ? selectedExistingProperty?.id ?? null
+      : newPropertyId;
 
   const handleAddExistingProperty = React.useCallback(() => {
     if (!selectedExistingProperty || !onAddExistingProperty) return;
@@ -390,6 +412,7 @@ export function EditEntitiesPopover({
   const handleApplyNewProperty = React.useCallback(() => {
     if (!canApplyNew || !onApplyNewProperty) return;
     onApplyNewProperty({
+      propertyId: newPropertyId!,
       name: newPropertyName.trim(),
       valueType: newPropertyValueType,
       selectedRowEntityIds: selectedEntityIds ?? [],
@@ -401,6 +424,7 @@ export function EditEntitiesPopover({
         newPropertyValueType === 'IMAGE' ? newPropertyImageFile ?? undefined : undefined,
     });
     setOpen(false);
+    setNewPropertyId(null);
     setNewPropertyName('');
     setNewPropertyValueType('TEXT');
     setNewPropertyInitialValue('');
@@ -413,6 +437,7 @@ export function EditEntitiesPopover({
     newPropertyImageFile,
     newPropertyInitialValue,
     newPropertyName,
+    newPropertyId,
     newPropertyValueType,
     onApplyNewProperty,
     selectedAttributeEntities,
@@ -430,6 +455,7 @@ export function EditEntitiesPopover({
       setNewPropertyInitialValue('');
       newPropertyInitialValueRef.current = '';
       setNewPropertyImageFile(null);
+      setNewPropertyId(null);
       setSelectedExistingProperty(null);
       setUseExistingPropertyFromGeo(false);
       setRemovePropertySearchQuery('');
@@ -525,11 +551,14 @@ export function EditEntitiesPopover({
   }, [effectiveProperty, isRelationColumn, displayedDeleteValues, selectedEntityIds.length, onDeleteApply]);
   const handleRemovePropertiesApply = React.useCallback(() => {
     if (propertiesMarkedForRemoval.size === 0 || !onRemoveProperties) return;
-    onRemoveProperties({ propertyIds: Array.from(propertiesMarkedForRemoval) });
+    onRemoveProperties({
+      propertyIds: Array.from(propertiesMarkedForRemoval),
+      scope: removePropertyOnly ? 'allEntities' : 'selectedEntities',
+    });
     setOpen(false);
     setPropertiesMarkedForRemoval(new Set());
     setRemovePropertySearchQuery('');
-  }, [onRemoveProperties, propertiesMarkedForRemoval]);
+  }, [onRemoveProperties, propertiesMarkedForRemoval, removePropertyOnly]);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -764,12 +793,64 @@ export function EditEntitiesPopover({
                         Property name
                       </Text>
                       <Spacer height={6} />
-                      <input
-                        type="text"
-                        value={newPropertyName}
-                        onChange={e => setNewPropertyName(e.target.value)}
-                        placeholder="Placeholder..."
-                        className="w-full rounded border border-grey-02 px-2 py-1.5 text-button text-text shadow-inner-grey-02 placeholder:text-grey-04 focus:border-grey-04 focus:outline-none"
+                      <SelectEntityAsPopover
+                        trigger={
+                          <input
+                            type="text"
+                            value={newPropertyName}
+                            readOnly
+                            placeholder="Find or create property..."
+                            className="w-full cursor-pointer rounded border border-grey-02 px-2 py-1.5 text-button text-text shadow-inner-grey-02 placeholder:text-grey-04 focus:border-grey-04 focus:outline-none"
+                            aria-label="Property name"
+                          />
+                        }
+                        spaceId={spaceId}
+                        relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                        placeholder="Find or create property..."
+                        advanced={false}
+                        showIDs={false}
+                        onCreateEntity={
+                          onCreatePropertyEntity
+                            ? result => {
+                                const pickerValueType = result.renderableType;
+                                const valueTypeToUse =
+                                  pickerValueType && SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET.has(pickerValueType)
+                                    ? pickerValueType
+                                    : newPropertyValueType;
+
+                                // Keep the outer picker in sync when the picker footer's type is supported.
+                                if (valueTypeToUse !== newPropertyValueType) setNewPropertyValueType(valueTypeToUse);
+
+                                onCreatePropertyEntity({
+                                  propertyId: result.id,
+                                  name: result.name,
+                                  valueType: valueTypeToUse,
+                                });
+                              }
+                            : undefined
+                        }
+                        onDone={(result, fromCreateFn) => {
+                          setNewPropertyId(result.id);
+                          setNewPropertyName(result.name ?? '');
+                          setNewPropertyInitialValue('');
+                          newPropertyInitialValueRef.current = '';
+                          setNewPropertyImageFile(null);
+                          setSelectedAttributeEntities([]);
+
+                          // Only sync the value type picker when selecting an existing property.
+                          if (!fromCreateFn) {
+                            const existing = properties.find(p => p.id === result.id);
+                            if (existing) {
+                              if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
+                              else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
+                              else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
+                              else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
+                              else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
+                              else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
+                              else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
+                            }
+                          }
+                        }}
                       />
                       <Spacer height={12} />
                       {isNewPropertyRelation ? (
@@ -780,7 +861,7 @@ export function EditEntitiesPopover({
                           <Spacer height={6} />
                           <EditableEntityValueField
                             property={{
-                              id: '',
+                              id: newPropertyValueFieldPropertyId ?? '',
                               name: null,
                               dataType: 'RELATION',
                               relationValueTypes:
@@ -868,7 +949,7 @@ export function EditEntitiesPopover({
                   {removePropertyOnly ? (
                     <>
                       <Text variant="metadata" color="grey-04" className="block">
-                        This will remove this property from selected entities when you click Apply.
+                        This will remove this property from all rows when you click Apply.
                       </Text>
                       <Spacer height={12} />
                     </>
@@ -1026,7 +1107,7 @@ export function EditEntitiesPopover({
                                 const directImageUrl =
                                   effectiveProperty?.renderableTypeStrict === 'IMAGE'
                                     ? currentColumnRelations.find(
-                                        r =>
+                                        (r: (typeof currentColumnRelations)[number]) =>
                                           r.toEntity.id === item.toEntityId &&
                                           (r.toSpaceId ?? r.spaceId) === (item.toSpaceId ?? spaceId)
                                       )?.toEntity.value
