@@ -28,6 +28,7 @@ import {
   relationEntityQuery,
   relationEntityRelationsQuery,
   relationsByToEntityIdsQuery,
+  importNameValuesQuery,
   resultQuery,
   spaceQuery,
   spacesQuery,
@@ -455,6 +456,47 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
   );
 }
 
+export type NameValueMatch = {
+  text: string | null;
+  spaceId: string;
+  entity: {
+    id: string;
+    name: string | null;
+    typeIds: Array<string | null> | null;
+    backlinks: { totalCount: number };
+    relations: { totalCount: number };
+  };
+};
+
+/**
+ * Batch name resolution via the `values` endpoint.
+ * Matches multiple names in one request using `text: { inInsensitive }`.
+ * Returns value rows with entity metadata for client-side ranking.
+ */
+export function getNameValuesBatch(
+  args: { names: string[]; typeIds?: string[] },
+  signal?: AbortController['signal']
+) {
+  const entityFilter: EntityFilter | undefined = args.typeIds?.length
+    ? { typeIds: { in: args.typeIds } }
+    : BLOCK_TYPE_EXCLUSION_FILTER;
+
+  return graphql({
+    query: importNameValuesQuery,
+    decoder: data => {
+      const rows = data.values ?? [];
+      return rows.filter(v => v.entity != null) as NameValueMatch[];
+    },
+    variables: {
+      propertyId: SystemIds.NAME_PROPERTY,
+      texts: args.names,
+      first: args.names.length * 5,
+      entityFilter,
+    },
+    signal,
+  });
+}
+
 export function getProperty(id: string, signal?: AbortController['signal']) {
   return graphql({
     query: propertyQuery,
@@ -488,6 +530,12 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.VIDEO_TYPE,
   SystemIds.VIDEO_BLOCK,
 ];
+
+const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
+  not: {
+    typeIds: { overlaps: EXCLUDED_BLOCK_TYPES },
+  },
+};
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
 

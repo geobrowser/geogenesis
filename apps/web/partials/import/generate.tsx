@@ -1,13 +1,11 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
+import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-import { parse } from 'csv/sync';
-import { useAtom, useAtomValue } from 'jotai';
-import { usePathname, useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Space } from '~/core/io/dto/spaces';
@@ -18,19 +16,23 @@ import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spinner } from '~/design-system/spinner';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import {
   columnMappingAtom,
   fileNameAtom,
   headersAtom,
-  recordsAtom,
-  selectedTypeAtom,
+  importRevisionAtom,
+  importSessionIdAtom,
+  rowCountAtom,
   stepAtom,
   typesColumnIndexAtom,
+  selectedTypeAtom,
 } from './atoms';
+import type { ParseResult } from './csv-parse.worker';
+import { ImportSessionStore } from './import-session-store';
 import { normalizeHeader, normalizeHeaderForMatch } from './header-normalization';
 import { useAutoMapColumns } from './use-auto-map-columns';
 import { useImportSchema } from './use-import-schema';
@@ -49,22 +51,45 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
 }
 
+/** Parse CSV in a Web Worker so the main thread stays responsive. */
+function parseCSVInWorker(text: string): Promise<ParseResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./csv-parse.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    worker.onmessage = (e: MessageEvent<ParseResult>) => {
+      resolve(e.data);
+      worker.terminate();
+    };
+    worker.onerror = (err) => {
+      reject(new Error(err.message ?? 'Worker error'));
+      worker.terminate();
+    };
+    worker.postMessage(text);
+  });
+}
+
 export const Generate = ({ spaceId }: GenerateProps) => {
   const router = useRouter();
   const { isEditor, isMember } = useAccessControl(spaceId);
-  const [records, setRecords] = useAtom(recordsAtom);
   const [, setStep] = useAtom(stepAtom);
   const [fileName, setFileName] = useAtom(fileNameAtom);
   const [selectedType, setSelectedType] = useAtom(selectedTypeAtom);
   const [typesColumnIndex, setTypesColumnIndex] = useAtom(typesColumnIndexAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const headers = useAtomValue(headersAtom);
+  const rowCount = useAtomValue(rowCountAtom);
+  const setHeaders = useSetAtom(headersAtom);
+  const setRowCount = useSetAtom(rowCountAtom);
+  const setImportSessionId = useSetAtom(importSessionIdAtom);
+  const setImportRevision = useSetAtom(importRevisionAtom);
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/space';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { autoMap, isAutoMapping } = useAutoMapColumns(spaceId);
   const autoMappedSignatureRef = useRef<string | null>(null);
+  const parseGenerationRef = useRef(0);
 
   const hasTypesColumn = useMemo(() => {
     const normalized = headers.map(h => h?.trim().toLowerCase() ?? '');
@@ -79,10 +104,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   useEffect(() => {
     if (headers.length === 0) return;
     const normalizedHeaders = headers.map(h => normalizeHeader(h ?? ''));
-    const propNameToId =
-      schema.length > 0
-        ? new Map(schema.map(p => [normalizeHeader(p.name ?? p.id ?? ''), p.id]))
-        : new Map<string, string>();
+    const propNameToId = schema.length > 0
+      ? new Map(schema.map(p => [normalizeHeader((p.name ?? p.id) ?? ''), p.id]))
+      : new Map<string, string>();
 
     setColumnMapping(prev => {
       let changed = false;
@@ -115,7 +139,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     if (isAutoMapping) return;
 
     // Check if there are unmapped columns
-    const hasUnmapped = headers.some((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined);
+    const hasUnmapped = headers.some(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    );
     if (!hasUnmapped) return;
 
     const signature = `${fileName ?? ''}::${headers.join('|')}`;
@@ -129,6 +155,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(undefined);
+  const [isParsing, setIsParsing] = useState(false);
+
+  /** Clear session store and reset metadata atoms. */
+  const clearImportData = useCallback(
+    (sessionId: string | null) => {
+      if (sessionId) ImportSessionStore.clear(sessionId);
+      setHeaders([]);
+      setRowCount(0);
+      setImportSessionId(null);
+      setImportRevision(r => r + 1);
+    },
+    [setHeaders, setRowCount, setImportSessionId, setImportRevision]
+  );
+
+  const currentSessionId = useAtomValue(importSessionIdAtom);
 
   const resetSessionState = useCallback(() => {
     resetMappedState();
@@ -136,7 +177,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   }, [resetMappedState]);
 
   const processFile = useCallback(
-    (file: File | null) => {
+    async (file: File | null) => {
       setFileError(null);
       if (!file) return;
       if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -144,7 +185,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         setFileError(`File must be under ${MAX_FILE_SIZE_MB}mb`);
         setFileName(undefined);
         setFileSizeBytes(undefined);
-        setRecords([]);
+        clearImportData(currentSessionId);
         setStep('step1');
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
@@ -155,40 +196,68 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         setFileError('Only CSV files are supported');
         setFileName(undefined);
         setFileSizeBytes(undefined);
-        setRecords([]);
+        clearImportData(currentSessionId);
         setStep('step1');
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
       resetSessionState();
+      clearImportData(currentSessionId);
       setFileName(file.name);
       setFileSizeBytes(file.size);
-      const reader = new FileReader();
-      reader.onload = e => {
-        const result = e?.target?.result;
-        if (typeof result !== 'string') return;
-        try {
-          const newRecords = parse(result, {
-            delimiter: ',',
-            skip_empty_lines: true,
-            trim: true,
-          });
-          setRecords(newRecords);
-        } catch (error) {
+      setIsParsing(true);
+
+      const generation = ++parseGenerationRef.current;
+
+      try {
+        const tParse = performance.now();
+        // v1 limitation: file.text() allocates the full string on the main thread.
+        // Future: pass File object to Worker and read there.
+        const text = await file.text();
+        const result = await parseCSVInWorker(text);
+
+        // A newer file was selected while we were parsing — discard this result
+        if (generation !== parseGenerationRef.current) return;
+
+        if (!result.ok) {
+          throw new Error(result.message);
+        }
+
+        const sessionId = crypto.randomUUID();
+        ImportSessionStore.set(sessionId, {
+          headers: result.headers,
+          rows: result.rows,
+          rowCount: result.rowCount,
+        });
+
+        // Tiny atom updates — only metadata, no row data in React state
+        setImportSessionId(sessionId);
+        setHeaders(result.headers);
+        setRowCount(result.rowCount);
+        setImportRevision(r => r + 1);
+        setStep('step2');
+        if (process.env.NODE_ENV === 'development') console.log(`[import:parse] ${result.rowCount} rows, ${result.headers.length} cols in ${(performance.now() - tParse).toFixed(0)}ms`);
+      } catch (error) {
+        // Only reset UI if this is still the active parse — a stale failure
+        // must not clobber a newer import that's already in progress.
+        if (generation === parseGenerationRef.current) {
           console.warn('[import] Failed to parse CSV file', error);
           resetSessionState();
           setFileError('Unable to parse CSV. Please check the file format and try again.');
           setFileName(undefined);
           setFileSizeBytes(undefined);
-          setRecords([]);
+          clearImportData(currentSessionId);
           setStep('step1');
         }
-      };
-      reader.readAsText(file);
-      setStep('step2');
+      } finally {
+        if (generation === parseGenerationRef.current) {
+          setIsParsing(false);
+        }
+      }
+
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    [resetSessionState, setFileName, setRecords, setStep]
+    [resetSessionState, setFileName, setStep, clearImportData, currentSessionId, setHeaders, setRowCount, setImportSessionId, setImportRevision]
   );
 
   const handleFileInputClick = () => fileInputRef.current?.click();
@@ -217,12 +286,18 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     resetSessionState();
     setFileName(undefined);
     setFileSizeBytes(undefined);
-    setRecords([]);
+    clearImportData(currentSessionId);
     setStep('step1');
-  }, [resetSessionState, setFileName, setRecords, setStep]);
+  }, [resetSessionState, setFileName, setStep, clearImportData, currentSessionId]);
+
+  const handleNavigateToReview = useCallback(() => {
+    router.push(`/space/${spaceId}/import/review`);
+  }, [router, spaceId]);
+
+  const hasFile = headers.length > 0;
 
   const step3Content = useMemo(() => {
-    if (records.length === 0) {
+    if (!hasFile) {
       return (
         <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
           <p className="text-metadata text-grey-04">Upload a file to continue</p>
@@ -240,17 +315,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       return (
         <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
           <Spinner />
-          <Text variant="smallButton" className="text-text">
-            Mapping columns to properties...
-          </Text>
+          <Text variant="smallButton" className="text-text">Mapping columns to properties...</Text>
         </div>
       );
     }
-    const step3DataRows = records
-      .slice(1)
-      .filter((row): row is string[] => Array.isArray(row) && row.some(cell => cell?.trim() !== ''));
-    const unmappedCount = headers.filter((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined).length;
-    const dataPointsNeedLinking = unmappedCount * step3DataRows.length;
+    const unmappedCount = headers.filter(
+      (_, i) => i !== typesColumnIndex && columnMapping[i] === undefined
+    ).length;
+    const dataPointsNeedLinking = unmappedCount * rowCount;
     const hasUnmapped = unmappedCount > 0;
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
@@ -273,7 +345,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             <SmallButton
               type="button"
               variant="secondary"
-              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+              onClick={handleNavigateToReview}
             >
               Fix data
             </SmallButton>
@@ -285,7 +357,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               type="button"
               variant="secondary"
               className="shrink-0 rounded-full"
-              onClick={() => router.push(`/space/${spaceId}/import/review`)}
+              onClick={handleNavigateToReview}
             >
               Review
             </SmallButton>
@@ -293,7 +365,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         )}
       </div>
     );
-  }, [records, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, router, spaceId]);
+  }, [hasFile, selectedType, typesColumnIndex, isAutoMapping, headers, columnMapping, rowCount, handleNavigateToReview]);
 
   if (!isEditor && !isMember) return null;
 
@@ -321,10 +393,15 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           className="sr-only"
           aria-label="Select CSV file"
         />
-        {fileName ? (
+        {isParsing ? (
+          <div className="flex min-h-[200px] items-center justify-center gap-3 rounded-lg border-2 border-dashed border-grey-02 bg-white px-4 py-8">
+            <Spinner />
+            <Text variant="smallButton" className="text-text">Parsing CSV...</Text>
+          </div>
+        ) : fileName ? (
           <div
             className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate font-bold text-text">{fileName}</span>
@@ -345,14 +422,14 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             onDragOver={handleDrag}
             onDrop={handleDrop}
             onClick={handleFileInputClick}
-            onKeyDown={e => e.key === 'Enter' && handleFileInputClick()}
+            onKeyDown={(e) => e.key === 'Enter' && handleFileInputClick()}
             className={`flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors ${
               dragActive ? 'border-purple bg-ctaTertiary' : 'border-grey-02 bg-white'
             }`}
           >
             <p className="text-button font-semibold text-text">Drag & drop or select a file</p>
             <p className="text-metadata text-grey-04">Max {MAX_FILE_SIZE_MB}mb - CSV</p>
-            <div className="mt-2" onClick={e => e.stopPropagation()}>
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
               <SmallButton type="button" icon={<Upload />} variant="secondary" onClick={handleFileInputClick}>
                 Select file
               </SmallButton>
@@ -367,13 +444,15 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <span className="font-semibold text-purple">Step 2</span>
           <span className="text-button font-medium text-text">Map types</span>
         </div>
-        {!fileName || records.length === 0 ? (
+        {!fileName || !hasFile ? (
           <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
             <p className="text-metadata text-grey-04">Upload a file to continue</p>
           </div>
         ) : (
           <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
-            <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
+            <p className="mb-2 text-metadata text-grey-04">
+              {fileName} · Type - Find or create a type to use
+            </p>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 {selectedType ? (
@@ -396,7 +475,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                       placeholder="Search for a type..."
                       dropdownClassName="!w-[384px] min-w-[320px]"
                       filterByTypes={[SystemIds.SCHEMA_TYPE]}
-                      onDone={result => {
+                      onDone={(result) => {
                         clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });
                         setTypesColumnIndex(undefined);
@@ -413,9 +492,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                   align="start"
                   trigger={
                     <span>
-                      {typesColumnIndex !== undefined
-                        ? `Column: ${headers[typesColumnIndex] ?? ''}`
-                        : 'Select column from CSV'}
+                      {typesColumnIndex !== undefined ? `Column: ${headers[typesColumnIndex] ?? ''}` : 'Select column from CSV'}
                     </span>
                   }
                   options={headers.map((header, index) => ({
@@ -439,10 +516,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               </div>
             </div>
             {hasTypesColumn !== undefined && (
-              <p className="mt-2 text-metadata text-grey-04">
-                This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
-                above.
-              </p>
+              <p className="mt-2 text-metadata text-grey-04">This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type above.</p>
             )}
           </div>
         )}

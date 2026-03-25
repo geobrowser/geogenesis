@@ -31,6 +31,29 @@ export function useAutoMapColumns(spaceId: string) {
   const { store } = useSyncEngine();
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
+  const runWithConcurrency = useCallback(async <T,>(tasks: Array<() => Promise<T>>, concurrency: number) => {
+    if (tasks.length === 0) return [] as T[];
+
+    const results = new Array<T>(tasks.length);
+    let nextIndex = 0;
+
+    async function worker() {
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        if (currentIndex >= tasks.length) {
+          return;
+        }
+
+        results[currentIndex] = await tasks[currentIndex]();
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+    return results;
+  }, []);
+
   const autoMap = useCallback(async () => {
     // Collect unmapped column indices
     const unmappedIndices: number[] = [];
@@ -49,8 +72,8 @@ export function useAutoMapColumns(spaceId: string) {
       const mappedByColumn: Record<number, string> = {};
       const mappedProperties: Record<string, Property> = {};
 
-      await Promise.all(
-        unmappedIndices.map(async colIndex => {
+      await runWithConcurrency(
+        unmappedIndices.map(colIndex => async () => {
           const headerName = (headers[colIndex] ?? '').trim();
           if (!headerName) return;
 
@@ -59,7 +82,6 @@ export function useAutoMapColumns(spaceId: string) {
               getResults({
                 query: headerName,
                 typeIds: [SystemIds.PROPERTY],
-                spaceId,
               })
             );
 
@@ -97,7 +119,8 @@ export function useAutoMapColumns(spaceId: string) {
           } catch (error) {
             console.warn(`[import] Auto-map failed for column "${headerName}"`, error);
           }
-        })
+        }),
+        4
       );
 
       if (Object.keys(mappedByColumn).length > 0) {
@@ -119,7 +142,7 @@ export function useAutoMapColumns(spaceId: string) {
     } finally {
       setIsAutoMapping(false);
     }
-  }, [headers, typesColumnIndex, columnMapping, spaceId, store, setColumnMapping, setExtraProperties]);
+  }, [headers, typesColumnIndex, columnMapping, store, setColumnMapping, setExtraProperties, runWithConcurrency]);
 
   return { autoMap, isAutoMapping };
 }

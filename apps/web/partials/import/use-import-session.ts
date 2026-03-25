@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback } from 'react';
-
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useCallback } from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -11,12 +10,15 @@ import {
   columnMappingAtom,
   extraPropertiesAtom,
   fileNameAtom,
-  recordsAtom,
+  headersAtom,
+  importRevisionAtom,
+  importSessionIdAtom,
   relationOverridesAtom,
   relationsAtom,
   resolvedEntitiesSnapshotAtom,
   resolvedRowsSnapshotAtom,
   resolvedTypesSnapshotAtom,
+  rowCountAtom,
   rowOverridesAtom,
   selectedTypeAtom,
   stepAtom,
@@ -26,6 +28,7 @@ import {
   valuesAtom,
 } from './atoms';
 import type { ImportStep } from './atoms';
+import { ImportSessionStore } from './import-session-store';
 
 export function useImportSession(spaceId: string) {
   const { store } = useSyncEngine();
@@ -46,7 +49,11 @@ export function useImportSession(spaceId: string) {
   const setColumnMapping = useSetAtom(columnMappingAtom);
   const setExtraProperties = useSetAtom(extraPropertiesAtom);
   const setFileName = useSetAtom(fileNameAtom);
-  const setRecords = useSetAtom(recordsAtom);
+  const setHeaders = useSetAtom(headersAtom);
+  const setRowCount = useSetAtom(rowCountAtom);
+  const setImportSessionId = useSetAtom(importSessionIdAtom);
+  const setImportRevision = useSetAtom(importRevisionAtom);
+  const currentSessionId = useAtomValue(importSessionIdAtom);
   const [, setStep] = useAtom(stepAtom);
 
   const clearGeneratedChanges = useCallback(() => {
@@ -102,14 +109,18 @@ export function useImportSession(spaceId: string) {
 
       if (options?.clearFile) {
         setFileName(undefined);
-        setRecords([]);
+        if (currentSessionId) ImportSessionStore.clear(currentSessionId);
+        setHeaders([]);
+        setRowCount(0);
+        setImportSessionId(null);
+        setImportRevision(r => r + 1);
       }
 
       if (options?.step) {
         setStep(options.step);
       }
     },
-    [resetMappedState, setFileName, setRecords, setStep]
+    [resetMappedState, setFileName, setStep, currentSessionId, setHeaders, setRowCount, setImportSessionId, setImportRevision]
   );
 
   return {

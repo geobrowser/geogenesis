@@ -487,6 +487,39 @@ export class GeoStore {
   }
 
   /**
+   * Add or update many values in one pass to avoid quadratic array rewrites.
+   */
+  public setValues(values: Value[]): void {
+    if (values.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newValues = values.map(value =>
+      produce(value, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    // Deduplicate by id, keeping the last occurrence for each id
+    const valueById = new Map<string, Value>();
+    for (const value of newValues) {
+      valueById.set(value.id, value);
+    }
+    const dedupedValues = Array.from(valueById.values());
+    const valueIds = new Set(valueById.keys());
+
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(value => !valueIds.has(value.id));
+      return [...unchangedValues, ...dedupedValues];
+    });
+
+    dedupedValues.forEach(value => {
+      this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value });
+    });
+  }
+
+  /**
    * Delete a value with optimistic updates
    */
   public deleteValue(value: Value): void {
@@ -531,6 +564,39 @@ export class GeoStore {
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
+  }
+
+  /**
+   * Add or update many relations in one pass to avoid quadratic array rewrites.
+   */
+  public setRelations(relations: Relation[]): void {
+    if (relations.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newRelations = relations.map(relation =>
+      produce(relation, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    // Deduplicate by id, keeping the last occurrence for each id
+    const relationById = new Map<string, Relation>();
+    for (const relation of newRelations) {
+      relationById.set(relation.id, relation);
+    }
+    const dedupedRelations = Array.from(relationById.values());
+    const relationIds = new Set(relationById.keys());
+
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(relation => !relationIds.has(relation.id));
+      return [...unchangedRelations, ...dedupedRelations];
+    });
+
+    dedupedRelations.forEach(relation => {
+      this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
+    });
   }
 
   /**
