@@ -12,6 +12,7 @@ import {
   checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
+  imageTasksAtom,
   importSessionIdAtom,
   loadingAtom,
   relationOverridesAtom,
@@ -28,6 +29,7 @@ import {
   unresolvedLinksAtom,
   valuesAtom,
 } from './atoms';
+import { collectImageTasks, uploadImportImages } from './image-upload';
 import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
 import { ImportSessionStore } from './import-session-store';
@@ -54,6 +56,7 @@ export function useImportGenerate(spaceId: string) {
   const setResolvedRowsSnapshot = useSetAtom(resolvedRowsSnapshotAtom);
   const setResolvedEntitiesSnapshot = useSetAtom(resolvedEntitiesSnapshotAtom);
   const setResolvedTypesSnapshot = useSetAtom(resolvedTypesSnapshotAtom);
+  const setImageTasks = useSetAtom(imageTasksAtom);
   const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
   const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
@@ -250,6 +253,27 @@ export function useImportGenerate(spaceId: string) {
 
       if (!isCurrent()) return;
 
+      // Upload images for IMAGE columns and merge into the plan
+      const imageTasks = collectImageTasks({
+        dataRows,
+        columnMapping,
+        resolvedRows: finalPlan.resolvedRowsSnapshot,
+        propertyLookup,
+      });
+      setImageTasks(imageTasks);
+
+      if (imageTasks.length > 0) {
+        const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
+        if (!isCurrent()) return;
+
+        finalPlan.values.push(...imageResult.values);
+        finalPlan.relations.push(...imageResult.relations);
+
+        if (imageResult.errors.length > 0) {
+          console.warn(`[import] ${imageResult.errors.length} image(s) failed to upload`);
+        }
+      }
+
       // ── Apply in chunks to avoid a single long frame ────────────────
       // Clear the initial plan's store entries first
       if (initialPlan.values.length > 0 || initialPlan.relations.length > 0) {
@@ -317,6 +341,7 @@ export function useImportGenerate(spaceId: string) {
     selectedType,
     typeOverrides,
     typesColumnIndex,
+    setImageTasks,
     setRelations,
     setValues,
     setStep,

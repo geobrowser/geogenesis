@@ -112,6 +112,9 @@ export function buildUnresolvedLinksByCell(params: {
 
       if (property.dataType !== 'RELATION') continue;
 
+      // IMAGE columns contain URLs, not entity names — skip relation resolution
+      if (property.renderableTypeStrict === 'IMAGE') continue;
+
       const unresolvedValues: string[] = [];
 
       for (const part of splitRelationCell(raw)) {
@@ -207,6 +210,8 @@ export function collectRelationCells(params: {
     if (propertyId === SystemIds.TYPES_PROPERTY) continue;
     const property = getPropertyFromSources(propertyId, propertyLookup);
     if (!property || property.dataType !== 'RELATION') continue;
+    // IMAGE columns contain URLs, not entity names — skip relation resolution
+    if (property.renderableTypeStrict === 'IMAGE') continue;
 
     const colIdx = parseInt(colIdxStr, 10);
     const uniqueCellValues = new Set<string>();
@@ -436,12 +441,11 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
       if (!property) continue;
 
       if (property.dataType === 'RELATION') {
+        // IMAGE columns contain URLs that are uploaded to IPFS at publish time — skip here
+        if (property.renderableTypeStrict === 'IMAGE') continue;
+
         const renderableType: RenderableEntityType =
-          property.renderableTypeStrict === 'IMAGE'
-            ? 'IMAGE'
-            : property.renderableTypeStrict === 'VIDEO'
-              ? 'VIDEO'
-              : 'RELATION';
+          property.renderableTypeStrict === 'VIDEO' ? 'VIDEO' : 'RELATION';
 
         for (const part of splitRelationCell(raw)) {
           const resolved = resolvedEntities.get(`${propertyId}::${part}`);

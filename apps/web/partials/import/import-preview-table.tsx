@@ -464,7 +464,11 @@ export function ImportPreviewTable({
                               )}
                             </span>
                           );
-                        })() : isRelation && value ? (
+                        })() : isImageColumn && value && isImageUrl(value) ? (
+                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
+                            <NativeGeoImage value={value} alt="" className="h-auto w-[60px] object-cover" />
+                          </div>
+                        ) : isRelation && value ? (
                           <div className="flex flex-wrap items-center gap-2 overflow-hidden">
                             {splitRelationCell(value).map((part, i) => {
                               if (unresolvedSet?.has(part) && onResolveRelationToken) {
@@ -555,10 +559,6 @@ export function ImportPreviewTable({
                                 </span>
                               );
                             })}
-                          </div>
-                        ) : isImageColumn && value && isImageUrl(value) ? (
-                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
-                            <NativeGeoImage value={value} alt="" className="h-auto w-[60px] object-cover" />
                           </div>
                         ) : (
                           <div className="flex w-full min-w-0 items-start gap-2">

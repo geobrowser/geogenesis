@@ -104,4 +104,24 @@ export const actionsCountAtom = atom(get => {
   return (values.length + relations.length).toLocaleString('en-US', { style: 'decimal' });
 });
 
+export type ImageImportTask = {
+  /** Data row index (0-based, relative to dataRows not records) */
+  rowIndex: number;
+  /** CSV column index */
+  colIdx: number;
+  /** The image property ID this column is mapped to */
+  propertyId: string;
+  /** The image property name */
+  propertyName: string;
+  /** The entity ID for the row this image belongs to */
+  fromEntityId: string;
+  /** The entity name for the row */
+  fromEntityName: string;
+  /** The external URL pointing to the hosted image */
+  url: string;
+};
+
+/** Image upload tasks collected during generation. Uploaded at publish time. */
+export const imageTasksAtom = atom<ImageImportTask[]>([]);
+
 export const publishAtom = atom<boolean>(false);
