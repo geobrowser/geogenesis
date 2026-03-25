@@ -243,15 +243,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         setStep('step2');
         if (process.env.NODE_ENV === 'development') console.log(`[import:parse] DONE — total ${(performance.now() - tParse).toFixed(1)}ms`);
       } catch (error) {
-        console.warn('[import] Failed to parse CSV file', error);
-        resetSessionState();
-        setFileError('Unable to parse CSV. Please check the file format and try again.');
-        setFileName(undefined);
-        setFileSizeBytes(undefined);
-        clearImportData(currentSessionId);
-        setStep('step1');
+        // Only reset UI if this is still the active parse — a stale failure
+        // must not clobber a newer import that's already in progress.
+        if (generation === parseGenerationRef.current) {
+          console.warn('[import] Failed to parse CSV file', error);
+          resetSessionState();
+          setFileError('Unable to parse CSV. Please check the file format and try again.');
+          setFileName(undefined);
+          setFileSizeBytes(undefined);
+          clearImportData(currentSessionId);
+          setStep('step1');
+        }
       } finally {
-        setIsParsing(false);
+        if (generation === parseGenerationRef.current) {
+          setIsParsing(false);
+        }
       }
 
       if (fileInputRef.current) fileInputRef.current.value = '';

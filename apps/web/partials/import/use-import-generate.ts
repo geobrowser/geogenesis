@@ -473,6 +473,9 @@ export function useImportGenerate(spaceId: string) {
       setResolvedTypesSnapshot(plan.resolvedTypesSnapshot);
       setResolvedEntitiesSnapshot(plan.resolvedEntitiesSnapshot);
     } catch (error) {
+      // Restore the values/relations we cleared so the store isn't left half-empty
+      if (ctx.values.length > 0) store.setValues(ctx.values);
+      if (ctx.relations.length > 0) store.setRelations(ctx.relations);
       console.error('[import:rebuild] failed', error);
     }
   }, [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]);
