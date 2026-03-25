@@ -89,6 +89,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
   const { autoMap, isAutoMapping } = useAutoMapColumns(spaceId);
   const autoMappedSignatureRef = useRef<string | null>(null);
+  const parseGenerationRef = useRef(0);
 
   const hasTypesColumn = useMemo(() => {
     const normalized = headers.map(h => h?.trim().toLowerCase() ?? '');
@@ -206,6 +207,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       setFileSizeBytes(file.size);
       setIsParsing(true);
 
+      const generation = ++parseGenerationRef.current;
+
       try {
         const tParse = performance.now();
         // v1 limitation: file.text() allocates the full string on the main thread.
@@ -215,6 +218,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         const tWorker = performance.now();
         const result = await parseCSVInWorker(text);
         if (process.env.NODE_ENV === 'development') console.log(`[import:parse] worker parse: ${(performance.now() - tWorker).toFixed(1)}ms — ok=${result.ok}`);
+
+        // A newer file was selected while we were parsing — discard this result
+        if (generation !== parseGenerationRef.current) return;
 
         if (!result.ok) {
           throw new Error(result.message);

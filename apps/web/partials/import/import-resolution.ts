@@ -23,8 +23,12 @@ function yieldToMain(): Promise<void> {
 
 /** Create an AbortSignal that times out after `ms` milliseconds. */
 function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+  controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
   return controller.signal;
 }
 

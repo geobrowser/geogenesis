@@ -20,7 +20,11 @@ export type SessionData = {
 
 const sessions = new Map<string, SessionData>();
 
-const EMPTY: SessionData = Object.freeze({ headers: [], rows: [], rowCount: 0 });
+const EMPTY: SessionData = Object.freeze({
+  headers: Object.freeze([]) as unknown as string[],
+  rows: Object.freeze([]) as unknown as string[][],
+  rowCount: 0,
+});
 
 export const ImportSessionStore = {
   set(sessionId: string, data: SessionData): void {

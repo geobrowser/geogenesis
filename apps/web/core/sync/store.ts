@@ -501,14 +501,20 @@ export class GeoStore {
         draft.timestamp = timestamp;
       })
     );
-    const valueIds = new Set(newValues.map(value => value.id));
+    // Deduplicate by id, keeping the last occurrence for each id
+    const valueById = new Map<string, Value>();
+    for (const value of newValues) {
+      valueById.set(value.id, value);
+    }
+    const dedupedValues = Array.from(valueById.values());
+    const valueIds = new Set(valueById.keys());
 
     reactiveValues.set(prev => {
       const unchangedValues = prev.filter(value => !valueIds.has(value.id));
-      return [...unchangedValues, ...newValues];
+      return [...unchangedValues, ...dedupedValues];
     });
 
-    newValues.forEach(value => {
+    dedupedValues.forEach(value => {
       this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value });
     });
   }
@@ -575,14 +581,20 @@ export class GeoStore {
         draft.timestamp = timestamp;
       })
     );
-    const relationIds = new Set(newRelations.map(relation => relation.id));
+    // Deduplicate by id, keeping the last occurrence for each id
+    const relationById = new Map<string, Relation>();
+    for (const relation of newRelations) {
+      relationById.set(relation.id, relation);
+    }
+    const dedupedRelations = Array.from(relationById.values());
+    const relationIds = new Set(relationById.keys());
 
     reactiveRelations.set(prev => {
       const unchangedRelations = prev.filter(relation => !relationIds.has(relation.id));
-      return [...unchangedRelations, ...newRelations];
+      return [...unchangedRelations, ...dedupedRelations];
     });
 
-    newRelations.forEach(relation => {
+    dedupedRelations.forEach(relation => {
       this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
     });
   }

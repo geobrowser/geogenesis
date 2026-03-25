@@ -82,7 +82,6 @@ export function useAutoMapColumns(spaceId: string) {
               getResults({
                 query: headerName,
                 typeIds: [SystemIds.PROPERTY],
-                spaceId,
               })
             );
 
@@ -143,7 +142,7 @@ export function useAutoMapColumns(spaceId: string) {
     } finally {
       setIsAutoMapping(false);
     }
-  }, [headers, typesColumnIndex, columnMapping, spaceId, store, setColumnMapping, setExtraProperties, runWithConcurrency]);
+  }, [headers, typesColumnIndex, columnMapping, store, setColumnMapping, setExtraProperties, runWithConcurrency]);
 
   return { autoMap, isAutoMapping };
 }

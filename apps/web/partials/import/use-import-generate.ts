@@ -404,73 +404,77 @@ export function useImportGenerate(spaceId: string) {
     const ctx = rebuildContextRef.current;
     if (dataRows.length === 0 || ctx.nameColIdx === undefined) return;
 
-    const propertyLookup = {
-      schema: ctx.schema,
-      extraProperties: ctx.extraProperties,
-      getProperty: (propertyId: string) => store.getProperty(propertyId),
-    };
+    try {
+      const propertyLookup = {
+        schema: ctx.schema,
+        extraProperties: ctx.extraProperties,
+        getProperty: (propertyId: string) => store.getProperty(propertyId),
+      };
 
-    const mergedEntities = new Map<string, ResolvedEntity>(ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>);
-    for (const [key, override] of Object.entries(ctx.relationOverrides)) {
-      mergedEntities.set(key, override);
-    }
+      const mergedEntities = new Map<string, ResolvedEntity>(ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>);
+      for (const [key, override] of Object.entries(ctx.relationOverrides)) {
+        mergedEntities.set(key, override);
+      }
 
-    const mergedTypes = new Map(ctx.resolvedTypesSnapshot);
-    for (const [rawType, override] of Object.entries(ctx.typeOverrides)) {
-      mergedTypes.set(rawType, override);
-    }
+      const mergedTypes = new Map(ctx.resolvedTypesSnapshot);
+      for (const [rawType, override] of Object.entries(ctx.typeOverrides)) {
+        mergedTypes.set(rawType, override);
+      }
 
-    const mergedRows = new Map(ctx.resolvedRowsSnapshot);
-    for (const [rowIdxStr, override] of Object.entries(ctx.rowOverrides)) {
-      mergedRows.set(Number(rowIdxStr), override);
-    }
+      const mergedRows = new Map(ctx.resolvedRowsSnapshot);
+      for (const [rowIdxStr, override] of Object.entries(ctx.rowOverrides)) {
+        mergedRows.set(Number(rowIdxStr), override);
+      }
 
-    // Clear the previous import's local changes from the store BEFORE building
-    // the plan so hasExistingRelation only sees truly pre-existing relations.
-    if (ctx.values.length > 0 || ctx.relations.length > 0) {
-      store.clearLocalChangesByIds({
+      // Clear the previous import's local changes from the store BEFORE building
+      // the plan so hasExistingRelation only sees truly pre-existing relations.
+      if (ctx.values.length > 0 || ctx.relations.length > 0) {
+        store.clearLocalChangesByIds({
+          spaceId,
+          valueIds: ctx.values.map(v => v.id),
+          relationIds: ctx.relations.map(r => r.id),
+        });
+      }
+
+      const plan = buildImportPlan({
+        dataRows,
+        columnMapping: ctx.columnMapping,
+        nameColIdx: ctx.nameColIdx,
+        selectedType: ctx.selectedType,
+        typesColumnIndex: ctx.typesColumnIndex,
+        resolvedEntities: mergedEntities,
+        resolvedTypes: mergedTypes,
+        resolvedRows: mergedRows,
         spaceId,
-        valueIds: ctx.values.map(v => v.id),
-        relationIds: ctx.relations.map(r => r.id),
+        propertyLookup,
+        getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
+        checkboxOverrides: ctx.checkboxOverrides,
       });
-    }
 
-    const plan = buildImportPlan({
-      dataRows,
-      columnMapping: ctx.columnMapping,
-      nameColIdx: ctx.nameColIdx,
-      selectedType: ctx.selectedType,
-      typesColumnIndex: ctx.typesColumnIndex,
-      resolvedEntities: mergedEntities,
-      resolvedTypes: mergedTypes,
-      resolvedRows: mergedRows,
-      spaceId,
-      propertyLookup,
-      getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
-      checkboxOverrides: ctx.checkboxOverrides,
-    });
-
-    // Chunked store writes to avoid a single long frame
-    const VALUE_CHUNK = 2000;
-    for (let vi = 0; vi < plan.values.length; vi += VALUE_CHUNK) {
-      store.setValues(plan.values.slice(vi, vi + VALUE_CHUNK));
-      if (vi + VALUE_CHUNK < plan.values.length) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      // Chunked store writes to avoid a single long frame
+      const VALUE_CHUNK = 2000;
+      for (let vi = 0; vi < plan.values.length; vi += VALUE_CHUNK) {
+        store.setValues(plan.values.slice(vi, vi + VALUE_CHUNK));
+        if (vi + VALUE_CHUNK < plan.values.length) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       }
-    }
-    for (let ri = 0; ri < plan.relations.length; ri += VALUE_CHUNK) {
-      store.setRelations(plan.relations.slice(ri, ri + VALUE_CHUNK));
-      if (ri + VALUE_CHUNK < plan.relations.length) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      for (let ri = 0; ri < plan.relations.length; ri += VALUE_CHUNK) {
+        store.setRelations(plan.relations.slice(ri, ri + VALUE_CHUNK));
+        if (ri + VALUE_CHUNK < plan.relations.length) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       }
-    }
 
-    setValues(plan.values);
-    setRelations(plan.relations);
-    setUnresolvedLinks(plan.unresolvedLinks);
-    setResolvedRowsSnapshot(plan.resolvedRowsSnapshot);
-    setResolvedTypesSnapshot(plan.resolvedTypesSnapshot);
-    setResolvedEntitiesSnapshot(plan.resolvedEntitiesSnapshot);
+      setValues(plan.values);
+      setRelations(plan.relations);
+      setUnresolvedLinks(plan.unresolvedLinks);
+      setResolvedRowsSnapshot(plan.resolvedRowsSnapshot);
+      setResolvedTypesSnapshot(plan.resolvedTypesSnapshot);
+      setResolvedEntitiesSnapshot(plan.resolvedEntitiesSnapshot);
+    } catch (error) {
+      console.error('[import:rebuild] failed', error);
+    }
   }, [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]);
 
   // Drain pending rebuild when isLoading transitions to false.
