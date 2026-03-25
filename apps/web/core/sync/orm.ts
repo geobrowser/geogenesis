@@ -5,11 +5,18 @@ import { dedupeWith } from 'effect/Array';
 
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
-import { ROOT_SPACE } from '../constants';
 import { readTypes } from '../database/entities';
-import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/queries';
+import {
+  getAllEntities,
+  getBatchEntities,
+  getEntity,
+  getEntityNames,
+  getRelation,
+  getResults,
+  getSpaces,
+} from '../io/queries';
 import { OmitStrict } from '../types';
-import { Entity, Relation, SearchResult } from '../types';
+import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
@@ -18,6 +25,19 @@ import { GeoStore } from './store';
 
 function relationKey(r: Relation): string {
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
+export function resolveSearchSpaces(
+  spaces: Array<string | SpaceEntity>,
+  spacesById: Record<string, SpaceEntity>
+): SpaceEntity[] {
+  return spaces
+    .map(space => {
+      const spaceId = typeof space === 'string' ? space : space.spaceId;
+
+      return spacesById[spaceId] ?? (typeof space === 'string' ? null : space);
+    })
+    .filter((space): space is SpaceEntity => space !== null);
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -266,35 +286,38 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
-    const typeNameMap = await resolveTypeNames(
-      entities.flatMap(e => e.types),
-      store,
-      cache
-    );
+    const spaceIds = [...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId))))];
+    const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
-    const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
-
-    const spaces = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-      queryFn: () =>
-        Effect.runPromise(
-          getSpaces({
-            spaceIds,
+    const [spaces, typeNames] = await Promise.all([
+      cache.fetchQuery({
+        queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
+        queryFn: () =>
+          Effect.runPromise(
+            getSpaces({
+              spaceIds,
+            })
+          ),
+      }),
+      typeIds.length > 0
+        ? cache.fetchQuery({
+            queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
+            queryFn: () => Effect.runPromise(getEntityNames(typeIds)),
           })
-        ),
-    });
+        : Promise.resolve([]),
+    ]);
 
-    const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
+    const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
+    const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
     return entities.map(e => {
       return {
         ...e,
-        types: applyTypeNames(e.types, typeNameMap),
-        spaces: e.spaces.map(s => {
-          const space = spacesById[s];
-
-          return space.entity;
-        }),
+        types: e.types.map(t => ({
+          id: t.id,
+          name: t.name ?? typeNamesById.get(t.id) ?? null,
+        })),
+        spaces: resolveSearchSpaces(e.spaces, spacesById),
       };
     });
   }
@@ -308,7 +331,7 @@ function mergeSearchResult({
   id: string;
   store: GeoStore;
   mergeWith?: SearchResult | null;
-}): (OmitStrict<SearchResult, 'spaces'> & { spaces: string[] }) | null {
+}): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
   // We need to include the deleted to correctly merge with remote data
@@ -326,7 +349,7 @@ function mergeSearchResult({
   if (!localEntity) {
     return {
       ...remoteEntity,
-      spaces: remoteEntity.spaces.map(s => s.spaceId),
+      spaces: remoteEntity.spaces,
     };
   }
 
@@ -346,58 +369,4 @@ function mergeSearchResult({
     types,
     spaces: localEntity.spaces,
   };
-}
-
-// @TODO remove once the backend resolves type names using space ranking
-async function resolveTypeNames(
-  types: { id: string; name: string | null }[],
-  store: GeoStore,
-  cache: QueryClient
-): Promise<Map<string, string>> {
-  const typeNameMap = new Map<string, string>();
-  const uniqueTypeIds = [...new Set(types.map(t => t.id))];
-
-  if (uniqueTypeIds.length === 0) return typeNameMap;
-
-  const unresolvedTypeIds: string[] = [];
-
-  for (const typeId of uniqueTypeIds) {
-    const localTypeEntity = store.getEntity(typeId);
-    if (localTypeEntity?.name) {
-      typeNameMap.set(typeId, localTypeEntity.name);
-    } else {
-      unresolvedTypeIds.push(typeId);
-    }
-  }
-
-  if (unresolvedTypeIds.length > 0) {
-    try {
-      const rootSpaceEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', 'type-names', ROOT_SPACE, unresolvedTypeIds.sort().join(',')],
-        queryFn: () => Effect.runPromise(getBatchEntities(unresolvedTypeIds, ROOT_SPACE)),
-      });
-
-      for (const entity of rootSpaceEntities) {
-        const nameFromValues = Entities.name(entity.values);
-        const resolvedName = nameFromValues ?? entity.name;
-        if (resolvedName) {
-          typeNameMap.set(entity.id, resolvedName);
-        }
-      }
-    } catch {}
-  }
-
-  return typeNameMap;
-}
-
-function applyTypeNames(
-  types: { id: string; name: string | null }[],
-  nameMap: Map<string, string>
-): { id: string; name: string | null }[] {
-  if (nameMap.size === 0) return types;
-
-  return types.map(t => {
-    const resolvedName = nameMap.get(t.id);
-    return resolvedName !== undefined ? { ...t, name: resolvedName } : t;
-  });
 }
