@@ -54,7 +54,9 @@ function formatFileSize(bytes: number): string {
 /** Parse CSV in a Web Worker so the main thread stays responsive. */
 function parseCSVInWorker(text: string): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('./csv-parse.worker.ts', import.meta.url));
+    const worker = new Worker(new URL('./csv-parse.worker.ts', import.meta.url), {
+      type: 'module',
+    });
     worker.onmessage = (e: MessageEvent<ParseResult>) => {
       resolve(e.data);
       worker.terminate();
@@ -199,6 +201,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         return;
       }
       resetSessionState();
+      clearImportData(currentSessionId);
       setFileName(file.name);
       setFileSizeBytes(file.size);
       setIsParsing(true);
@@ -218,9 +221,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         }
 
         if (process.env.NODE_ENV === 'development') console.log(`[import:parse] result: ${result.rowCount} data rows, ${result.headers.length} columns`);
-
-        // Clear previous session to avoid leaking old row data in memory
-        if (currentSessionId) ImportSessionStore.clear(currentSessionId);
 
         const sessionId = crypto.randomUUID();
         ImportSessionStore.set(sessionId, {

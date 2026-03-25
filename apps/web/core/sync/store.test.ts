@@ -638,6 +638,18 @@ describe('GeoStore', () => {
         relation: expect.objectContaining({ id: 'bulk-relation-2' }),
       });
     });
+
+    it('should replace existing relations when IDs already exist', () => {
+      store.setRelations([mockRelation1]);
+
+      const relationsAfterFirst = reactiveRelations.get();
+      expect(relationsAfterFirst.filter(r => r.id === 'relation-1')).toHaveLength(1);
+
+      store.setRelations([mockRelation1]);
+
+      const relationsAfterSecond = reactiveRelations.get();
+      expect(relationsAfterSecond.filter(r => r.id === 'relation-1')).toHaveLength(1);
+    });
   });
 
   describe('deleteRelation', () => {

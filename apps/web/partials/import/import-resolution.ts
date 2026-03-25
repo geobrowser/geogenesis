@@ -21,6 +21,13 @@ function yieldToMain(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+/** Create an AbortSignal that times out after `ms` milliseconds. */
+function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 type ResolutionGuard = {
   isCurrent: () => boolean;
 };
@@ -183,7 +190,7 @@ async function resolveNames(params: {
           const valueRows = await Effect.runPromise(
             getNameValuesBatch(
               { names: batch, typeIds: typeIds.length > 0 ? typeIds : undefined },
-              AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+              timeoutSignal(REQUEST_TIMEOUT_MS)
             )
           );
           const expectedFirst = batch.length * 5;

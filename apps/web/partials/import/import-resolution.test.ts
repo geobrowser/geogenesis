@@ -242,4 +242,36 @@ describe('import resolution helpers', () => {
     expect(result.unresolvedRowCount).toBe(0);
     expect(result.resolvedRows.get(0)?.entityId).toBe('entity-only');
   });
+
+  it('leaves row unresolved when multiple equally-ranked matches exist', async () => {
+    getNameValuesBatchMock.mockImplementation(() =>
+      Effect.succeed([
+        valueRow('Alpha', 'entity-a', {
+          spaceId: 'space-1',
+          typeIds: ['type-project'],
+          backlinks: 2,
+          relations: 3,
+        }),
+        valueRow('Alpha', 'entity-b', {
+          spaceId: 'space-1',
+          typeIds: ['type-project'],
+          backlinks: 2,
+          relations: 3,
+        }),
+      ])
+    );
+
+    const result = await resolveRowsByNameAndType({
+      dataRows: [['Alpha']],
+      nameColIdx: 0,
+      selectedType: { id: 'type-project', name: 'Project' },
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      guard: { isCurrent: () => true },
+    });
+
+    expect(result.aborted).toBe(false);
+    expect(result.unresolvedRowCount).toBe(1);
+    expect(result.resolvedRows.get(0)).toBeUndefined();
+  });
 });

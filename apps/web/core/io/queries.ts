@@ -522,6 +522,19 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     signal,
   });
 }
+const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
+  not: {
+    typeIds: { overlaps: [
+      SystemIds.TEXT_BLOCK,
+      SystemIds.IMAGE_BLOCK,
+      SystemIds.DATA_BLOCK,
+      SystemIds.IMAGE_TYPE,
+      SystemIds.VIDEO_TYPE,
+      SystemIds.VIDEO_BLOCK,
+    ] },
+  },
+};
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,
