@@ -522,19 +522,6 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     signal,
   });
 }
-const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
-  not: {
-    typeIds: { overlaps: [
-      SystemIds.TEXT_BLOCK,
-      SystemIds.IMAGE_BLOCK,
-      SystemIds.DATA_BLOCK,
-      SystemIds.IMAGE_TYPE,
-      SystemIds.VIDEO_TYPE,
-      SystemIds.VIDEO_BLOCK,
-    ] },
-  },
-};
-
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,
@@ -543,6 +530,12 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.VIDEO_TYPE,
   SystemIds.VIDEO_BLOCK,
 ];
+
+const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
+  not: {
+    typeIds: { overlaps: EXCLUDED_BLOCK_TYPES },
+  },
+};
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
 
