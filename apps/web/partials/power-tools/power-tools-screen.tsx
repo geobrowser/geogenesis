@@ -51,6 +51,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import {
   type EditApplyPayload,
   type EditApplyNewPropertyPayload,
+  type EditCreatePropertyEntityPayload,
   type EditAddExistingPropertyPayload,
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
@@ -426,23 +427,24 @@ export function PowerToolsScreen() {
 
   const handleRemoveProperties = React.useCallback(
     (payload: EditRemovePropertiesPayload) => {
-      const { propertyIds } = payload;
+      const { propertyIds, scope } = payload;
+      const targetEntityIds = scope === 'allEntities' ? selectableIds : selectedEntityIds;
       for (const propertyId of propertyIds) {
         const valuesToDelete = getValues({
           selector: v =>
-            selectedEntityIds.has(v.entity.id) &&
+            targetEntityIds.has(v.entity.id) &&
             v.property.id === propertyId,
         });
         valuesToDelete.forEach(v => storage.values.delete(v));
         const relationsToDelete = getRelations({
           selector: r =>
-            selectedEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
+            targetEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
         });
         relationsToDelete.forEach(r => storage.relations.delete(r));
       }
       setExcludedColumnIds(prev => [...new Set([...prev, ...propertyIds])]);
     },
-    [storage, selectedEntityIds]
+    [storage, selectedEntityIds, selectableIds]
   );
 
   const handleAddExistingProperty = React.useCallback(
@@ -452,9 +454,26 @@ export function PowerToolsScreen() {
     []
   );
 
+  const handleCreatePropertyEntity = React.useCallback(
+    ({ propertyId, name, valueType }: EditCreatePropertyEntityPayload) => {
+      const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
+      storage.properties.create({
+        entityId: propertyId,
+        spaceId,
+        name: name ?? '',
+        dataType: baseDataType,
+        renderableTypeId,
+        verified: false,
+        toSpaceId: undefined,
+      });
+    },
+    [storage, spaceId]
+  );
+
   const handleApplyNewProperty = React.useCallback(
     async (payload: EditApplyNewPropertyPayload) => {
       const {
+        propertyId,
         name,
         valueType,
         selectedRowEntityIds,
@@ -462,8 +481,7 @@ export function PowerToolsScreen() {
         initialValue,
         initialImageFile,
       } = payload;
-      const propertyId = createProperty({ name, propertyType: valueType });
-      setExtraColumnIds(prev => [...prev, propertyId]);
+      setExtraColumnIds(prev => (prev.includes(propertyId) ? prev : [...prev, propertyId]));
       const { baseDataType } = mapPropertyType(valueType);
       const property = {
         id: propertyId,
@@ -526,7 +544,7 @@ export function PowerToolsScreen() {
         }
       }
     },
-    [createProperty, selectableRows, spaceId, storage]
+    [selectableRows, spaceId, storage]
   );
 
   const onMasterToggle = React.useCallback(() => {
@@ -951,6 +969,7 @@ export function PowerToolsScreen() {
               selectedCount={selectedCount}
               selectedEntityIdsForNewProperty={Array.from(selectedEntityIds)}
               onApplyNewProperty={handleApplyNewProperty}
+              onCreatePropertyEntity={handleCreatePropertyEntity}
               onAddExistingProperty={handleAddExistingProperty}
               onRemoveProperties={handleRemoveProperties}
             />

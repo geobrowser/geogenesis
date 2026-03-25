@@ -48,6 +48,7 @@ import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-
 import {
   EditEntitiesPopover,
   type EditApplyNewPropertyPayload,
+  type EditCreatePropertyEntityPayload,
   type EditAddExistingPropertyPayload,
   type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
@@ -89,6 +90,7 @@ interface Props {
   selectedCount?: number;
   selectedEntityIdsForNewProperty?: string[];
   onApplyNewProperty?: (payload: EditApplyNewPropertyPayload) => void;
+  onCreatePropertyEntity?: (payload: EditCreatePropertyEntityPayload) => void;
   onAddExistingProperty?: (payload: EditAddExistingPropertyPayload) => void;
   onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
 }
@@ -413,6 +415,7 @@ export function PowerToolsTable({
   selectedCount = 0,
   selectedEntityIdsForNewProperty = [],
   onApplyNewProperty,
+  onCreatePropertyEntity,
   onAddExistingProperty,
   onRemoveProperties,
 }: Props) {
@@ -607,6 +610,7 @@ export function PowerToolsTable({
                     properties={properties}
                     selectedEntityIds={selectedEntityIdsForNewProperty}
                     onApplyNewProperty={onApplyNewProperty}
+                    onCreatePropertyEntity={onCreatePropertyEntity}
                     onAddExistingProperty={onAddExistingProperty}
                     newPropertyOnly
                     contentAlign="center"
