@@ -22,13 +22,11 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
-import { ColumnSortState, sortPowerToolsRowsByColumn } from '~/core/utils/column-sort';
+import { ColumnSortState } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -78,6 +76,8 @@ interface Props {
   imageUploadingFor?: Set<string>;
   onRowClick?: (entityId: string) => void;
   onRowDoubleClick?: (entityId: string) => void;
+  sortState: ColumnSortState;
+  onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
 }
 
 const CHECKBOX_COLUMN_WIDTH = 40;
@@ -357,13 +357,14 @@ export function PowerToolsTable({
   imageUploadingFor,
   onRowClick,
   onRowDoubleClick,
+  sortState,
+  onSort,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const isEditing = useUserIsEditing(spaceId);
   const showCheckboxColumn = isEditing && selection != null;
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [isResizing, setIsResizing] = React.useState<string | null>(null);
-  const [sortState, setSortState] = React.useState<ColumnSortState>(null);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(0);
   const [isDragSelecting, setIsDragSelecting] = React.useState(false);
@@ -457,13 +458,8 @@ export function PowerToolsTable({
     };
   }, [isResizing]);
 
-  const sortedRows = React.useMemo(() => {
-    if (!sortState) return rows;
-    return sortPowerToolsRowsByColumn(rows, sortState, propertiesById, spaceId);
-  }, [rows, sortState, propertiesById, spaceId]);
-
   const rowVirtualizer = useVirtualizer({
-    count: sortedRows.length,
+    count: rows.length,
     getScrollElement: () => tableRef.current,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
     overscan: 6,
@@ -492,10 +488,10 @@ export function PowerToolsTable({
     const lastItem = virtualRows[virtualRows.length - 1];
     if (!lastItem) return;
 
-    if (lastItem.index >= sortedRows.length - 1 && hasNextPage && !isFetchingNextPage) {
+    if (lastItem.index >= rows.length - 1 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
-  }, [virtualRows, sortedRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [virtualRows, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div ref={tableRef} className="h-full w-full overflow-auto">
@@ -524,7 +520,7 @@ export function PowerToolsTable({
                   key={property.id}
                   property={property}
                   sortState={sortState}
-                  onSort={setSortState}
+                  onSort={onSort}
                   onResizeMouseDown={handleMouseDown}
                   onHideColumn={onHideColumn}
                 />
@@ -543,7 +539,7 @@ export function PowerToolsTable({
         }}
       >
         {virtualRows.map(virtualRow => {
-          const row = sortedRows[virtualRow.index];
+          const row = rows[virtualRow.index];
           const rowId = row.entityId;
 
           return (

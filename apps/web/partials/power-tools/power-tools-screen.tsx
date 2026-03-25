@@ -13,7 +13,6 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -22,6 +21,7 @@ import { reactiveRelations, reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
+import { ColumnSortState } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -180,13 +180,20 @@ export function PowerToolsScreen() {
 
   const [extraColumnIds, setExtraColumnIds] = React.useState<string[]>([]);
   const [excludedColumnIds, setExcludedColumnIds] = React.useState<string[]>([]);
+  const [sortState, setSortState] = React.useState<ColumnSortState>(null);
+
+  const serverSort = React.useMemo(() => {
+    if (!sortState) return undefined;
+    return { propertyId: sortState.columnId, direction: sortState.direction };
+  }, [sortState]);
+
   const data = usePowerToolsData({
     filterStateOverride: canEdit ? undefined : temporaryFilters,
     filterModeOverride: canEdit ? undefined : temporaryFilterMode,
     extraColumnIds,
     excludedColumnIds,
+    sort: serverSort,
   });
-  const { createProperty } = useCreateProperty(spaceId);
 
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
@@ -825,6 +832,8 @@ export function PowerToolsScreen() {
               imageUploadingFor={imageUploadingFor}
               onRowClick={undefined}
               onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
+              sortState={sortState}
+              onSort={setSortState}
             />
           </>
         )}

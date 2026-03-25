@@ -21,6 +21,7 @@ import { useFilters } from './use-filters';
 import { mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useRelationsBlock } from './use-relations-block';
+import { useSort } from './use-sort';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
@@ -88,13 +89,31 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     toggleProperty,
   } = useView();
 
+  const { sortState, setSortState } = useSort(options?.canEdit);
+
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const where = React.useMemo(
     () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
     [filterStateKey, effectiveFilterMode]
   );
 
-  // Fetch collection data with server-side filtering
+  // Use the mapping to get the potential renderable properties.
+  const propertiesSchema = useProperties(shownColumnIds);
+
+  // Map sortState to server-side sort params — used by all source types.
+  // dataType is required by the backend's entitiesOrderedByProperty SQL function
+  // to resolve which value column to sort on.
+  const serverSort = React.useMemo(() => {
+    if (!sortState) return undefined;
+    const property = propertiesSchema?.[sortState.columnId];
+    return {
+      propertyId: sortState.columnId,
+      direction: sortState.direction,
+      dataType: property?.dataType?.toLowerCase(),
+    };
+  }, [sortState, propertiesSchema]);
+
+  // Fetch collection data with server-side filtering and sorting
   const {
     collectionItems,
     collectionRelations,
@@ -106,6 +125,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
     where: where,
+    sort: serverSort,
   });
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
@@ -129,10 +149,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     skip: pageNumber * PAGE_SIZE,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
+    sort: serverSort,
   });
-
-  // Use the mapping to get the potential renderable properties.
-  const propertiesSchema = useProperties(shownColumnIds);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
@@ -261,7 +279,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }, [collectionData.items, collectionData.relations, queriedEntities, relationsMapping, shownColumnIds, source.type]);
 
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
-  const sortedRows = React.useMemo(() => sortRows(rows)?.slice(0, PAGE_SIZE) ?? [], [rows]);
+  const sortedRows = React.useMemo(
+    () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
+    [rows, sortState]
+  );
   const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
 
   const setName = (newName: string) => {
@@ -355,6 +376,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     temporaryFilterMode,
     setTemporaryFilters,
     setTemporaryFilterMode,
+
+    // From useSort
+    sortState,
+    setSortState,
   };
 
   return result;

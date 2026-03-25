@@ -12,3 +12,6 @@ export const SOURCES_TYPE = '49c5d5e1679a4dbdbfd33f618f227c94';
 export const SOURCE_DATABASE_IDENTIFIER_PROPERTY = '5e92c8a417144ee79a09389ef4336aeb';
 export const PROPERTIES_SOURCED = '198150d08f4e410a93299aab3ac3c1e3';
 export const RELATIONS_SOURCED = '2596082ff4d34a619b6a831e253cb345';
+
+// Data block sort property
+export const SORT_PROPERTY = '46afd0486bb5434e81adab6c7ad1204d';

@@ -3,12 +3,14 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
+import { SortOrder } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
 import {
   getAllEntities,
   getBatchEntities,
+  getEntitiesOrderedByProperty,
   getEntity,
   getEntityNames,
   getRelation,
@@ -169,6 +171,7 @@ export class E {
     first,
     skip,
     spaceId,
+    sort,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -176,9 +179,30 @@ export class E {
     first: number;
     skip: number;
     spaceId?: string;
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
   }) {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
+
+      if (sort) {
+        const filter = convertWhereConditionToEntityFilter(where);
+        const remoteEntities = await Effect.runPromise(
+          getEntitiesOrderedByProperty({
+            propertyId: sort.propertyId,
+            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+            dataType: sort.dataType,
+            spaceId,
+            limit: first,
+            offset: skip,
+            filter,
+          })
+        );
+
+        const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+        return remoteEntities
+          .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
+          .filter(e => e !== null);
+      }
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds, spaceId],
@@ -213,14 +237,26 @@ export class E {
     const filter = convertWhereConditionToEntityFilter(where);
     const typeIds = extractTypeIdsFromWhere(where);
 
-    const remoteEntities = await Effect.runPromise(
-      getAllEntities({
-        limit,
-        offset,
-        filter,
-        typeIds,
-      })
-    );
+    const remoteEntities = sort
+      ? await Effect.runPromise(
+          getEntitiesOrderedByProperty({
+            propertyId: sort.propertyId,
+            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+            dataType: sort.dataType,
+            spaceId,
+            limit,
+            offset,
+            filter,
+          })
+        )
+      : await Effect.runPromise(
+          getAllEntities({
+            limit,
+            offset,
+            filter,
+            typeIds,
+          })
+        );
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 

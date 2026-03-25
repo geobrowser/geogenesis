@@ -51,6 +51,7 @@ export function usePowerToolsData(options?: {
   extraColumnIds?: string[];
   /** Column (property) IDs to hide from the table, e.g. after "Remove Property". */
   excludedColumnIds?: string[];
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
 }): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
@@ -101,13 +102,16 @@ export function usePowerToolsData(options?: {
 
   const sourceValue = 'value' in source ? source.value : null;
 
+  const sort = options?.sort;
+
   const sourceKey = React.useMemo(() => {
     return JSON.stringify({
       type: source.type,
       value: sourceValue,
       where,
+      sort,
     });
-  }, [source.type, sourceValue, where]);
+  }, [source.type, sourceValue, where, sort]);
 
   React.useEffect(() => {
     setPage(0);
@@ -177,6 +181,7 @@ export function usePowerToolsData(options?: {
     first: pageSize,
     skip: page * pageSize,
     where,
+    sort,
   });
 
   const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
@@ -185,6 +190,7 @@ export function usePowerToolsData(options?: {
     skip: page * pageSize,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
+    sort,
   });
 
   React.useEffect(() => {
