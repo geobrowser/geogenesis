@@ -1,5 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
+import * as Effect from 'effect/Effect';
+
 import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
@@ -9,12 +11,15 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
+import { getConfig } from '~/core/environment/environment';
 import { graphql } from './graphql-client';
+import { restFetch } from './rest';
 import {
   entitiesBatchQuery,
   entitiesOrderedByPropertyQuery,
   entitiesQuery,
   entityBacklinksQuery,
+  entityNamesQuery,
   entityPageQuery,
   entityQuery,
   entityTypesQuery,
@@ -24,7 +29,6 @@ import {
   relationEntityRelationsQuery,
   relationsByToEntityIdsQuery,
   resultQuery,
-  resultsQuery,
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
@@ -43,6 +47,19 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
+    signal,
+  });
+}
+
+/** Lightweight batch fetch that returns only {id, name} for a set of entity IDs. */
+export function getEntityNames(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: entityNamesQuery,
+    decoder: data =>
+      (data.entities ?? [])
+        .filter((e): e is { id: string; name: string | null } => e != null && typeof e.id === 'string')
+        .map(e => ({ id: e.id as string, name: (e.name as string | null) ?? null })),
+    variables: { filter: { id: { in: entityIds } } },
     signal,
   });
 }
@@ -293,27 +310,149 @@ interface ResultsArgs {
   offset?: number;
 }
 
-export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
-  const filter: EntityFilter | undefined = args.typeIds?.length
-    ? {
-        and: [BLOCK_TYPE_EXCLUSION_FILTER, { typeIds: { in: args.typeIds } }],
-      }
-    : BLOCK_TYPE_EXCLUSION_FILTER;
+/**
+ * Raw search result from the REST /search endpoint.
+ * Each result represents one entity in one space, with nested space/type data.
+ */
+interface RestSearchResult {
+  entityId: string;
+  space: {
+    id: string;
+    name?: string;
+    avatar?: string;
+  };
+  name?: string;
+  description?: string;
+  avatar?: string;
+  cover?: string;
+  types?: Array<{
+    id: string;
+    name?: string;
+  }>;
+  entityGlobalScore?: number;
+  relevanceScore?: number;
+  textMatchScore?: number;
+  inCanonicalGraph?: boolean;
+}
 
-  return graphql({
-    query: resultsQuery,
-    decoder: data => {
-      return data.search?.map(ResultDecoder.decode).filter((r): r is SearchResult => r !== null) ?? [];
-    },
-    variables: {
-      query: args.query,
-      spaceId: args.spaceId,
-      limit: args.limit,
-      offset: args.offset,
-      filter,
-    },
-    signal,
-  });
+interface RestSearchResponse {
+  results: RestSearchResult[];
+  total: number;
+  tookMs: number;
+}
+
+function stripHyphens(uuid: string): string {
+  return uuid.replace(/-/g, '');
+}
+
+/**
+ * Converts a 32-char hex ID to UUID format (8-4-4-4-12).
+ * If the string already contains hyphens it is returned as-is.
+ */
+function toUuid(hex: string): string {
+  if (hex.includes('-')) return hex;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Groups flat per-space REST results into the SearchResult shape the app expects.
+ *
+ * The REST endpoint returns one result per (entity, space) pair. We group
+ * by entityId and collect all spaceIds into a single SearchResult per entity.
+ */
+export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
+  const byEntity = new Map<string, SearchResult>();
+
+  for (const r of results) {
+    const entityId = stripHyphens(r.entityId);
+    const spaceId = stripHyphens(r.space.id);
+
+    const existing = byEntity.get(entityId);
+
+    if (existing) {
+      // Add this space to the existing result's spaces list (if not already there)
+      if (!existing.spaces.some(s => s.spaceId === spaceId)) {
+        existing.spaces.push({
+          id: spaceId,
+          name: r.space.name ?? null,
+          description: null,
+          image: r.space.avatar ?? '',
+          relations: [],
+          spaceId,
+          spaces: [spaceId],
+          values: [],
+          types: [],
+        });
+      }
+
+      for (const type of r.types ?? []) {
+        const typeId = stripHyphens(type.id);
+        const existingType = existing.types.find(t => t.id === typeId);
+
+        if (existingType) {
+          existingType.name = existingType.name ?? type.name ?? null;
+          continue;
+        }
+
+        existing.types.push({ id: typeId, name: type.name ?? null });
+      }
+    } else {
+      byEntity.set(entityId, {
+        id: entityId,
+        name: r.name ?? null,
+        description: r.description ?? null,
+        types: (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null })),
+        spaces: [
+          {
+            id: spaceId,
+            name: r.space.name ?? null,
+            description: null,
+            image: r.space.avatar ?? '',
+            relations: [],
+            spaceId,
+            spaces: [spaceId],
+            values: [],
+            types: [],
+          },
+        ],
+      });
+    }
+  }
+
+  return [...byEntity.values()];
+}
+
+/**
+ * Search for entities using the REST /search endpoint.
+ *
+ * This replaces the previous GraphQL-based search with the OpenSearch-backed
+ * REST endpoint which provides better relevance scoring and performance.
+ */
+export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  const params = new URLSearchParams();
+  params.set('query', args.query);
+  params.set('limit', String(args.limit ?? 10));
+  params.set('offset', String(args.offset ?? 0));
+
+  if (args.spaceId) {
+    params.set('scope', 'SPACE_SINGLE');
+    // REST endpoint expects UUIDs with hyphens
+    params.set('space_id', toUuid(args.spaceId));
+  }
+
+  if (args.typeIds?.length) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('type_ids', args.typeIds.map(toUuid).join(','));
+  }
+
+  return Effect.map(
+    restFetch<RestSearchResponse>({
+      endpoint: getConfig().api,
+      path: `/search?${params.toString()}`,
+      signal,
+    }),
+    response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
+  );
 }
 
 export function getProperty(id: string, signal?: AbortController['signal']) {
@@ -341,7 +480,6 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     signal,
   });
 }
-
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,
@@ -351,8 +489,8 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.VIDEO_BLOCK,
 ];
 
-const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
-  not: {
-    typeIds: { overlaps: EXCLUDED_BLOCK_TYPES },
-  },
-};
+const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
+
+function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
+  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+}
