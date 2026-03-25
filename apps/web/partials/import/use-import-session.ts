@@ -11,6 +11,7 @@ import {
   extraPropertiesAtom,
   fileNameAtom,
   headersAtom,
+  imageResultsAtom,
   imageTasksAtom,
   importRevisionAtom,
   importSessionIdAtom,
@@ -50,6 +51,7 @@ export function useImportSession(spaceId: string) {
   const setColumnMapping = useSetAtom(columnMappingAtom);
   const setExtraProperties = useSetAtom(extraPropertiesAtom);
   const setImageTasks = useSetAtom(imageTasksAtom);
+  const setImageResults = useSetAtom(imageResultsAtom);
   const setFileName = useSetAtom(fileNameAtom);
   const setHeaders = useSetAtom(headersAtom);
   const setRowCount = useSetAtom(rowCountAtom);
@@ -71,6 +73,7 @@ export function useImportSession(spaceId: string) {
     setResolvedEntitiesSnapshot(new Map());
     setResolvedTypesSnapshot(new Map());
     setImageTasks([]);
+    setImageResults({ values: [], relations: [] });
   }, [
     relations,
     setRelations,
@@ -79,6 +82,7 @@ export function useImportSession(spaceId: string) {
     setResolvedEntitiesSnapshot,
     setResolvedTypesSnapshot,
     setImageTasks,
+    setImageResults,
     setValues,
     spaceId,
     store,

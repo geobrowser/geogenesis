@@ -121,7 +121,13 @@ export type ImageImportTask = {
   url: string;
 };
 
-/** Image upload tasks collected during generation. Uploaded at publish time. */
+/** Image upload tasks collected during generation. */
 export const imageTasksAtom = atom<ImageImportTask[]>([]);
+
+/** Cached image upload results (values + relations) so rebuild can re-merge them without re-uploading. */
+export const imageResultsAtom = atom<{ values: Value[]; relations: import('~/core/types').Relation[] }>({
+  values: [],
+  relations: [],
+});
 
 export const publishAtom = atom<boolean>(false);

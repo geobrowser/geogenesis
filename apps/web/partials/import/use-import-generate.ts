@@ -12,6 +12,7 @@ import {
   checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
+  imageResultsAtom,
   imageTasksAtom,
   importSessionIdAtom,
   loadingAtom,
@@ -60,6 +61,7 @@ export function useImportGenerate(spaceId: string) {
   const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
   const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
+  const setImageResults = useSetAtom(imageResultsAtom);
   const setStep = useSetAtom(stepAtom);
   const { clearGeneratedChanges } = useImportSession(spaceId);
 
@@ -266,12 +268,17 @@ export function useImportGenerate(spaceId: string) {
         const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
         if (!isCurrent()) return;
 
+        // Cache image results so rebuild can re-merge them without re-uploading
+        setImageResults({ values: imageResult.values, relations: imageResult.relations });
+
         finalPlan.values.push(...imageResult.values);
         finalPlan.relations.push(...imageResult.relations);
 
         if (imageResult.errors.length > 0) {
           console.warn(`[import] ${imageResult.errors.length} image(s) failed to upload`);
         }
+      } else {
+        setImageResults({ values: [], relations: [] });
       }
 
       // ── Apply in chunks to avoid a single long frame ────────────────
@@ -342,6 +349,7 @@ export function useImportGenerate(spaceId: string) {
     typeOverrides,
     typesColumnIndex,
     setImageTasks,
+    setImageResults,
     setRelations,
     setValues,
     setStep,
@@ -357,11 +365,13 @@ export function useImportGenerate(spaceId: string) {
 
   const values = useAtomValue(valuesAtom);
   const relations = useAtomValue(relationsAtom);
+  const imageResults = useAtomValue(imageResultsAtom);
 
   // Refs for values that change frequently so rebuild stays stable
   const rebuildContextRef = useRef({
     values,
     relations,
+    imageResults,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -379,6 +389,7 @@ export function useImportGenerate(spaceId: string) {
   rebuildContextRef.current = {
     values,
     relations,
+    imageResults,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -463,6 +474,12 @@ export function useImportGenerate(spaceId: string) {
         getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
         checkboxOverrides: ctx.checkboxOverrides,
       });
+
+      // Re-merge cached image upload results (buildImportPlan skips IMAGE columns)
+      if (ctx.imageResults.values.length > 0 || ctx.imageResults.relations.length > 0) {
+        plan.values.push(...ctx.imageResults.values);
+        plan.relations.push(...ctx.imageResults.relations);
+      }
 
       // Chunked store writes to avoid a single long frame
       const VALUE_CHUNK = 2000;
