@@ -28,6 +28,7 @@ import {
   relationEntityQuery,
   relationEntityRelationsQuery,
   relationsByToEntityIdsQuery,
+  importNameValuesQuery,
   resultQuery,
   spaceQuery,
   spacesQuery,
@@ -453,6 +454,44 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
     }),
     response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
   );
+}
+
+export type NameValueMatch = {
+  text: string | null;
+  spaceId: string;
+  entity: {
+    id: string;
+    name: string | null;
+    typeIds: string[];
+    backlinks: { totalCount: number };
+    relations: { totalCount: number };
+  };
+};
+
+/**
+ * Batch name resolution via the `values` endpoint.
+ * Matches multiple names in one request using `text: { inInsensitive }`.
+ * Returns value rows with entity metadata for client-side ranking.
+ */
+export function getNameValuesBatch(
+  args: { names: string[]; typeIds?: string[] },
+  signal?: AbortController['signal']
+) {
+  const entityFilter: EntityFilter | undefined = args.typeIds?.length
+    ? { typeIds: { in: args.typeIds } }
+    : BLOCK_TYPE_EXCLUSION_FILTER;
+
+  return graphql({
+    query: importNameValuesQuery,
+    decoder: data => (data.values ?? []) as NameValueMatch[],
+    variables: {
+      propertyId: SystemIds.NAME_PROPERTY,
+      texts: args.names,
+      first: args.names.length * 5,
+      entityFilter,
+    },
+    signal,
+  });
 }
 
 export function getProperty(id: string, signal?: AbortController['signal']) {

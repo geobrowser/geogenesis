@@ -707,6 +707,40 @@ export const resultsQuery = graphql(/* GraphQL */ `
   }
 `);
 
+/**
+ * Batch name resolution via the `values` endpoint.
+ * Matches multiple names in one request using `text: { inInsensitive }`.
+ * Returns entity metadata + connection counts for second-order ranking.
+ */
+export const importNameValuesQuery = graphql(/* GraphQL */ `
+  query ImportNameValues(
+    $propertyId: UUID!
+    $texts: [String!]
+    $first: Int
+    $entityFilter: EntityFilter
+  ) {
+    values(
+      condition: { propertyId: $propertyId }
+      filter: {
+        text: { inInsensitive: $texts }
+        entity: $entityFilter
+      }
+      first: $first
+    ) {
+      id
+      text
+      spaceId
+      entity {
+        id
+        name
+        typeIds
+        backlinks { totalCount }
+        relations { totalCount }
+      }
+    }
+  }
+`);
+
 export const relationEntityQuery = graphql(/* GraphQL */ `
   query RelationEntityMinimal($id: UUID!, $spaceId: UUID) {
     relation(id: $id) {

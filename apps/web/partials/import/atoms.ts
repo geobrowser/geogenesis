@@ -8,7 +8,15 @@ export type ImportStep = 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'done
 
 export const stepAtom = atom<ImportStep>('step1');
 
-export const recordsAtom = atom<Array<Array<string>>>([]);
+/** Unique import session identifier. Generated on file upload, cleared on reset. */
+export const importSessionIdAtom = atom<string | null>(null);
+
+/**
+ * Incremented on every set/clear of the session store.
+ * Drives useMemo cache invalidation in useImportData so that a new file
+ * with the same row count still triggers a re-read.
+ */
+export const importRevisionAtom = atom<number>(0);
 
 /** Name of the uploaded CSV file */
 export const fileNameAtom = atom<string | undefined>(undefined);
@@ -25,19 +33,22 @@ export const columnMappingAtom = atom<Record<number, string>>({});
 /** Properties selected/created during mapping that aren't in the type's schema. */
 export const extraPropertiesAtom = atom<Record<string, Property>>({});
 
-export const headersAtom = atom(get => {
-  const records = get(recordsAtom);
-  return records?.[0] ?? [];
-});
+/**
+ * CSV headers (first row).
+ * UI snapshot — canonical source is ImportSessionStore.
+ */
+export const headersAtom = atom<string[]>([]);
 
-export const examplesAtom = atom(get => {
-  const records = get(recordsAtom);
-  return records?.[1] ?? [];
-});
+/**
+ * Number of non-empty data rows (excluding header).
+ * UI snapshot — canonical source is ImportSessionStore.
+ */
+export const rowCountAtom = atom<number>(0);
 
+/** Formatted entity count for display. */
 export const entityCountAtom = atom(get => {
-  const records = get(recordsAtom).filter(e => e.length);
-  return ((records?.length || 1) - 1).toLocaleString('en-US', { style: 'decimal' });
+  const count = get(rowCountAtom);
+  return count.toLocaleString('en-US', { style: 'decimal' });
 });
 
 export const valuesAtom = atom<Array<Value>>([]);
@@ -70,7 +81,7 @@ export type TypeResolutionOverride = { id: string; name: string; isNew?: boolean
 /** Manual type resolution keyed by raw CSV type value. */
 export const typeOverridesAtom = atom<Record<string, TypeResolutionOverride>>({});
 
-/** Manual checkbox resolution keyed by import cell key (`${rowIndex}:${colIdx}`). Value is `'1'` or `'0'`. */
+/** Manual checkbox value overrides keyed by `${rowIndex}:${csvColumnIndex}`. */
 export const checkboxOverridesAtom = atom<Record<string, string>>({});
 
 /** Manual row-entity resolution keyed by row index. Overrides auto-resolved or unresolved rows. */

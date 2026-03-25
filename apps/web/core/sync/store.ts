@@ -487,6 +487,33 @@ export class GeoStore {
   }
 
   /**
+   * Add or update many values in one pass to avoid quadratic array rewrites.
+   */
+  public setValues(values: Value[]): void {
+    if (values.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newValues = values.map(value =>
+      produce(value, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    const valueIds = new Set(newValues.map(value => value.id));
+
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(value => !valueIds.has(value.id));
+      return [...unchangedValues, ...newValues];
+    });
+
+    newValues.forEach(value => {
+      this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value });
+    });
+  }
+
+  /**
    * Delete a value with optimistic updates
    */
   public deleteValue(value: Value): void {
@@ -531,6 +558,33 @@ export class GeoStore {
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
+  }
+
+  /**
+   * Add or update many relations in one pass to avoid quadratic array rewrites.
+   */
+  public setRelations(relations: Relation[]): void {
+    if (relations.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newRelations = relations.map(relation =>
+      produce(relation, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    const relationIds = new Set(newRelations.map(relation => relation.id));
+
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(relation => !relationIds.has(relation.id));
+      return [...unchangedRelations, ...newRelations];
+    });
+
+    newRelations.forEach(relation => {
+      this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
+    });
   }
 
   /**

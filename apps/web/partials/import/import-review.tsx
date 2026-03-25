@@ -22,8 +22,6 @@ import {
   columnMappingAtom,
   entityCountAtom,
   extraPropertiesAtom,
-  headersAtom,
-  recordsAtom,
   relationOverridesAtom,
   resolvedEntitiesSnapshotAtom,
   resolvedRowsSnapshotAtom,
@@ -37,6 +35,7 @@ import {
 } from './atoms';
 import type { ColumnConfig } from './import-preview-table';
 import { ImportPreviewTable } from './import-preview-table';
+import { useImportData } from './use-import-data';
 import { useImportGenerate } from './use-import-generate';
 import { useImportSchema } from './use-import-schema';
 import { useImportSession } from './use-import-session';
@@ -55,8 +54,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
     setEditable(true);
   }, [setEditable]);
 
-  const records = useAtomValue(recordsAtom);
-  const headers = useAtomValue(headersAtom);
+  const { headers, rows: dataRows } = useImportData();
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const [extraProperties, setExtraProperties] = useAtom(extraPropertiesAtom);
   const [checkboxOverrides, setCheckboxOverrides] = useAtom(checkboxOverridesAtom);
@@ -207,17 +205,12 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
     });
   }, [headers, columnMapping, schema, extraProperties, store, typesColumnIndex]);
 
-  const dataRows = useMemo(
-    () => records.slice(1).filter(row => Array.isArray(row) && row.some(cell => cell?.trim() !== '')),
-    [records]
-  );
-
   const hasUnmappedColumns = columns.some(c => c.propertyName === null && !c.mappingLocked);
   const unmappedCount = columns.filter(c => c.propertyName === null && !c.mappingLocked).length;
   const unresolvedDataCount = Object.keys(unresolvedLinks).length;
   const hasData = dataRows.length > 0 && columns.length > 0;
-  const hasRecordsButNoDataRows = records.length >= 1 && dataRows.length === 0;
-  const hasNoRecords = records.length === 0;
+  const hasRecordsButNoDataRows = headers.length > 0 && dataRows.length === 0;
+  const hasNoRecords = headers.length === 0;
 
   return (
     <div className="overflow-visible">
@@ -259,16 +252,19 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             Select a type on the import page to see column mapping and data preview.
           </Text>
         </div>
+      ) : isLoading ? (
+        <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-lg border border-grey-02 bg-grey-01">
+          <Spinner />
+          <Text variant="smallButton" className="text-text">
+            Resolving relation data...
+          </Text>
+          <Text variant="metadata" className="text-grey-04">
+            {entityCount} entities
+          </Text>
+        </div>
       ) : (
         <>
-          {isLoading ? (
-            <div className="mb-4 flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-              <Spinner />
-              <Text variant="smallButton" className="text-text">
-                Resolving relation data...
-              </Text>
-            </div>
-          ) : unmappedCount > 0 || unresolvedDataCount > 0 ? (
+          {unmappedCount > 0 || unresolvedDataCount > 0 ? (
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
               {unmappedCount > 0 && (
                 <div className="flex items-center gap-1.5">
@@ -322,7 +318,6 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
             selectedType={selectedType}
             resolvedTypes={resolvedTypesSnapshot}
             checkboxOverrides={checkboxOverrides}
-            disabled={isLoading}
           />
         </>
       )}
