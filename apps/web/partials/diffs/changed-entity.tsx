@@ -1,13 +1,17 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
+import { Effect } from 'effect';
 
+import { getBatchEntities } from '~/core/io/queries';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { SORT_PROPERTY } from '~/core/system-ids';
 import type {
   BlockChange,
   DataBlockChange,
@@ -814,6 +818,82 @@ const VIEW_NAMES: Record<string, string> = {
   [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
 };
 
+function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[] {
+  const ids = new Set<string>();
+
+  const extractFromSortJson = (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.sort_by) ids.add(parsed.sort_by);
+    } catch {
+      // ignore
+    }
+  };
+
+  const extractFromFilterJson = (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.filter) {
+        for (const [key, filterValue] of Object.entries(parsed.filter as Record<string, unknown>)) {
+          if (key !== '_relation') ids.add(key);
+          if (filterValue && typeof filterValue === 'object') {
+            const fv = filterValue as Record<string, unknown>;
+            if (typeof fv.is === 'string') ids.add(fv.is);
+            if (Array.isArray(fv.in))
+              fv.in.forEach((v: unknown) => {
+                if (typeof v === 'string') ids.add(v);
+              });
+            if (
+              fv.fromEntity &&
+              typeof fv.fromEntity === 'object' &&
+              typeof (fv.fromEntity as Record<string, unknown>).is === 'string'
+            )
+              ids.add((fv.fromEntity as Record<string, unknown>).is as string);
+            if (fv.type && typeof fv.type === 'object' && typeof (fv.type as Record<string, unknown>).is === 'string')
+              ids.add((fv.type as Record<string, unknown>).is as string);
+          }
+        }
+      }
+      if (parsed.spaceId?.in && Array.isArray(parsed.spaceId.in)) {
+        parsed.spaceId.in.forEach((v: unknown) => {
+          if (typeof v === 'string') ids.add(v);
+        });
+      }
+    } catch {
+      // not JSON, skip
+    }
+  };
+
+  for (const v of configValues) {
+    const extract = v.propertyId === SORT_PROPERTY ? extractFromSortJson : extractFromFilterJson;
+    if (v.before) extract(v.before);
+    if (v.after) extract(v.after);
+  }
+
+  return [...ids];
+}
+
+function useConfigNameMap(configValues: ValueChange[]) {
+  const entityIds = React.useMemo(() => extractEntityIdsFromConfigValues(configValues), [configValues]);
+  const key = entityIds.sort().join(',');
+
+  const { data: nameMap = new Map<string, string>() } = useQuery({
+    queryKey: ['config-entity-names', key],
+    enabled: entityIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const entities = await Effect.runPromise(getBatchEntities(entityIds));
+      const map = new Map<string, string>();
+      for (const e of entities) {
+        if (e.name) map.set(e.id, e.name);
+      }
+      return map;
+    },
+  });
+
+  return nameMap;
+}
+
 type DataBlockCellProps = {
   block: BlockChange & { type: 'dataBlock' };
   side: 'before' | 'after';
@@ -827,12 +907,15 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
   const displayName = nameValue ?? dataBlock.blockName ?? 'Data Block';
 
   const allRelations = dataBlock.relations ?? [];
-  const configValues = dataBlock.values ?? [];
+  const allConfigValues = dataBlock.values ?? [];
+  const filterValues = allConfigValues.filter(v => v.propertyId !== SORT_PROPERTY);
+  const sortValues = allConfigValues.filter(v => v.propertyId === SORT_PROPERTY);
+  const nameMap = useConfigNameMap(allConfigValues);
 
   const viewRelations = allRelations.filter(r => r.typeId === SystemIds.VIEW_PROPERTY);
   const columnRelations = allRelations.filter(r => r.typeId === SystemIds.SHOWN_COLUMNS);
   const collectionItemRelations = allRelations.filter(r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE);
-  const hasConfigChanges = allRelations.length > 0 || configValues.length > 0;
+  const hasConfigChanges = allRelations.length > 0 || allConfigValues.length > 0;
 
   const storeViewEntityId = useBlockViewEntityId(dataBlock.id, spaceId);
   const diffViewInfo = getViewInfo(viewRelations, side);
@@ -841,14 +924,18 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
     (storeViewEntityId
       ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
       : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
-  const filterValue = getFilterValue(configValues, side);
+  const filterValue = getFilterValue(filterValues, side);
 
   const hasViewChange = viewRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
   );
-  const hasFilterChange = configValues.some(v => v.before !== v.after);
-  const isFilterAdded = configValues.some(v => v.before === null && v.after !== null);
-  const isFilterRemoved = configValues.some(v => v.before !== null && v.after === null);
+  const hasFilterChange = filterValues.some(v => (v.before || null) !== (v.after || null));
+  const isFilterAdded = filterValues.some(v => !v.before && !!v.after);
+  const isFilterRemoved = filterValues.some(v => !!v.before && !v.after);
+  const hasSortChange = sortValues.some(v => (v.before || null) !== (v.after || null));
+  const isSortAdded = sortValues.some(v => !v.before && !!v.after);
+  const isSortRemoved = sortValues.some(v => !!v.before && !v.after);
+  const sortValue = getSortValue(sortValues, side);
   const hasColumnsChange = columnRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
   );
@@ -902,8 +989,35 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
               }
               label={
                 <div className="max-w-[400px] text-left">
-                  <div className="font-mono text-xs break-all whitespace-pre-wrap">
-                    {filterValue ? formatJsonSafe(filterValue) : 'None'}
+                  <div className="text-xs break-all whitespace-pre-wrap">
+                    {filterValue ? formatFilterDisplay(filterValue, nameMap) : 'None'}
+                  </div>
+                </div>
+              }
+              position="top"
+              variant="light"
+            />
+          )}
+
+          {hasSortChange && !(isSortAdded && side === 'before') && !(isSortRemoved && side === 'after') && (
+            <Tooltip
+              trigger={
+                <div
+                  className={cx(
+                    'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                    side === 'before' && 'ring-2 ring-deleted',
+                    side === 'after' && 'ring-2 ring-added'
+                  )}
+                >
+                  <span className="text-metadata text-grey-04">
+                    {isSortAdded ? 'Sort added' : isSortRemoved ? 'Sort removed' : 'Sort changed'}
+                  </span>
+                </div>
+              }
+              label={
+                <div className="max-w-[400px] text-left">
+                  <div className="text-xs break-all whitespace-pre-wrap">
+                    {sortValue ? formatSortDisplay(sortValue, nameMap) : 'None'}
                   </div>
                 </div>
               }
@@ -1109,9 +1223,68 @@ function getFilterValue(configValues: ValueChange[], side: 'before' | 'after'): 
   return null;
 }
 
-function formatJsonSafe(value: string): string {
+function getSortValue(sortValues: ValueChange[], side: 'before' | 'after'): string | null {
+  for (const v of sortValues) {
+    const val = side === 'before' ? v.before : v.after;
+    if (val !== null && val !== '') return val;
+  }
+  return null;
+}
+
+function formatSortDisplay(value: string, nameMap: Map<string, string>): string {
   try {
-    return JSON.stringify(JSON.parse(value), null, 2);
+    const parsed = JSON.parse(value);
+    const direction = parsed.sort_direction === 'ascending' ? 'Ascending' : 'Descending';
+    const columnId = parsed.sort_by ?? 'unknown';
+    const columnName = nameMap.get(columnId) ?? columnId;
+    return `${columnName}, ${direction}`;
+  } catch {
+    return value;
+  }
+}
+
+function formatFilterDisplay(value: string, nameMap: Map<string, string>): string {
+  try {
+    const parsed = JSON.parse(value);
+    const lines: string[] = [];
+
+    if (parsed.mode === 'OR') lines.push('Mode: OR');
+
+    if (parsed.spaceId?.in && Array.isArray(parsed.spaceId.in)) {
+      const spaceNames = parsed.spaceId.in.map((id: string) => nameMap.get(id) ?? id);
+      lines.push(`Space: ${spaceNames.join(', ')}`);
+    }
+
+    if (parsed.filter) {
+      for (const [key, filterValue] of Object.entries(parsed.filter as Record<string, unknown>)) {
+        if (!filterValue || typeof filterValue !== 'object') continue;
+        const fv = filterValue as Record<string, unknown>;
+
+        if (key === '_relation') {
+          if (fv.fromEntity && typeof fv.fromEntity === 'object') {
+            const entityId = (fv.fromEntity as Record<string, unknown>).is as string;
+            const typeId =
+              fv.type && typeof fv.type === 'object' ? ((fv.type as Record<string, unknown>).is as string) : '';
+            const entityName = nameMap.get(entityId) ?? entityId;
+            const typeName = typeId ? (nameMap.get(typeId) ?? typeId) : '';
+            lines.push(`Backlink: ${entityName}${typeName ? ` (${typeName})` : ''}`);
+          } else if (fv.type && typeof fv.type === 'object') {
+            const typeId = (fv.type as Record<string, unknown>).is as string;
+            lines.push(`Relation type: ${nameMap.get(typeId) ?? typeId}`);
+          }
+        } else {
+          const propName = nameMap.get(key) ?? key;
+          if (typeof fv.is === 'string') {
+            lines.push(`${propName}: ${nameMap.get(fv.is) ?? fv.is}`);
+          } else if (Array.isArray(fv.in)) {
+            const values = fv.in.map((v: string) => nameMap.get(v) ?? v);
+            lines.push(`${propName}: ${values.join(', ')}`);
+          }
+        }
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : 'No filters';
   } catch {
     return value;
   }

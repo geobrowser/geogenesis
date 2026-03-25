@@ -21,6 +21,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
 import { Cell, Relation, Row } from '~/core/types';
+import { ColumnSortState } from '~/core/utils/column-sort';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -36,6 +37,7 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
+import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
@@ -288,6 +290,8 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     setFilterMode,
     setTemporaryFilters,
     setTemporaryFilterMode,
+    sortState,
+    setSortState,
   } = useDataBlock({ canEdit });
 
   const setActiveFilterMode = React.useCallback(
@@ -319,14 +323,20 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     [canEdit, setFilterState, setTemporaryFilters, setPage]
   );
 
+  const handleSortChange = React.useCallback(
+    (next: ColumnSortState) => {
+      setSortState(next);
+      setPage(0);
+    },
+    [setSortState, setPage]
+  );
+
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
     useEntries(rows, properties, spaceId, activeFilters, relations, source);
 
   const collectionTypeFilters = React.useMemo(
     () =>
-      activeFilters
-        .filter(f => f.columnId === SystemIds.TYPES_PROPERTY)
-        .map(f => ({ id: f.value, name: f.valueName })),
+      activeFilters.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value, name: f.valueName })),
     [activeFilters]
   );
 
@@ -397,6 +407,8 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
       onAddPlaceholder={onAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       collectionTypeFilters={collectionTypeFilters}
+      sortState={sortState}
+      onSort={handleSortChange}
     />
   );
 
@@ -488,6 +500,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
       <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
+          <DataBlockSortMenu properties={properties} sortState={sortState} onSort={handleSortChange} />
           <IconButton
             onClick={toggleFilterHandler}
             icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}

@@ -25,9 +25,10 @@ export interface CollectionProps {
   first?: number;
   skip?: number;
   where?: WhereCondition;
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
 }
 
-export function useCollection({ source, first, skip, where }: CollectionProps) {
+export function useCollection({ source, first, skip, where, sort }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
 
   const { initialBlockEntities, initialCollectionItems } = useEditorStoreLite();
@@ -55,12 +56,16 @@ export function useCollection({ source, first, skip, where }: CollectionProps) {
   });
 
   // When filters are present, we need to fetch ALL collection items first,
-  // apply the filter, then paginate the filtered results
+  // apply the filter, then paginate the filtered results.
+  // When sort is active, we fetch ALL IDs but let the server sort + paginate.
   const hasFilters = where && Object.keys(where).length > 0;
 
-  const entityIdsToFetch = hasFilters
-    ? orderedCollectionRelations.map(r => r.toEntity.id)
-    : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
+  const allEntityIds = orderedCollectionRelations.map(r => r.toEntity.id);
+
+  const entityIdsToFetch =
+    hasFilters || sort
+      ? allEntityIds
+      : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
 
   const collectionItemsWhere: WhereCondition = {
     id: {
@@ -72,8 +77,10 @@ export function useCollection({ source, first, skip, where }: CollectionProps) {
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
-    first: entityIdsToFetch.length || undefined,
+    first: sort ? first || 9 : entityIdsToFetch.length || undefined,
+    skip: sort ? skip || 0 : undefined,
     placeholderData: keepPreviousData,
+    sort,
   });
 
   const filteredRelations = hasFilters
@@ -86,20 +93,27 @@ export function useCollection({ source, first, skip, where }: CollectionProps) {
   const pageEndIndex = pageStartIndex + (first || 9);
   const paginatedRelations = hasFilters ? filteredRelations.slice(pageStartIndex, pageEndIndex) : filteredRelations;
 
-  // The sync engine doesn't guarantee ordering for `id: { in: [...] }` queries,
-  // so we re-order using the relations as the source of truth.
+  // When sort is active, the server already returned items in the right order and page.
+  // Use the server-returned order directly instead of re-ordering by position.
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = paginatedRelations
-    .map(relation => {
-      const entity = collectionItemsMap.get(relation.toEntity.id);
-      return entity;
-    })
-    .filter(item => item !== undefined);
+  const orderedCollectionItems = sort
+    ? collectionItems
+    : paginatedRelations
+        .map(relation => collectionItemsMap.get(relation.toEntity.id))
+        .filter(item => item !== undefined);
+
+  // When sort is active, build relations matching the server-returned item order
+  // so that downstream features (drag-and-drop, position tracking) still work.
+  const sortedRelations = sort
+    ? collectionItems
+        .map(item => deduplicatedRelations.find(r => r.toEntity.id === item.id))
+        .filter(r => r !== undefined)
+    : paginatedRelations;
 
   const ssrItems = initialCollectionItems[entityId];
   const isFirstPage = (skip || 0) === 0;
-  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters;
+  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters && !sort;
   const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
 
   const items = shouldFallbackToSSR ? ssrItems : orderedCollectionItems;
@@ -107,7 +121,7 @@ export function useCollection({ source, first, skip, where }: CollectionProps) {
 
   return {
     collectionItems: items,
-    collectionRelations: paginatedRelations,
+    collectionRelations: sortedRelations,
     isLoading: hasData ? false : isCollectionItemsLoading,
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,

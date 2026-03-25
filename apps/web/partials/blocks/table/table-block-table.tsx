@@ -19,7 +19,7 @@ import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
-import { ColumnSortState, sortRowsByColumn } from '~/core/utils/column-sort';
+import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -53,18 +53,26 @@ const ColumnHeader = ({
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
   const label = isNameColumn ? 'Name' : (column.name ?? column.id);
+  const isSortable = SORTABLE_DATA_TYPES.includes(column.dataType);
+
+  const editableHeader =
+    isEditMode && !isNameColumn ? (
+      <EditableEntityTableColumnHeader
+        unpublishedColumns={[]}
+        column={column}
+        entityId={column.id}
+        spaceId={spaceId}
+        isLastColumn={isLastColumn}
+      />
+    ) : undefined;
+
+  if (!isSortable) {
+    return editableHeader ?? <Text variant="smallTitle">{label}</Text>;
+  }
 
   return (
     <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
-      {isEditMode && !isNameColumn ? (
-        <EditableEntityTableColumnHeader
-          unpublishedColumns={[]}
-          column={column}
-          entityId={column.id}
-          spaceId={spaceId}
-          isLastColumn={isLastColumn}
-        />
-      ) : undefined}
+      {editableHeader}
     </SortableColumnHeader>
   );
 };
@@ -200,6 +208,8 @@ type TableBlockTableProps = {
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  sortState: ColumnSortState;
+  onSort: (next: ColumnSortState) => void;
 };
 
 export const TableBlockTable = ({
@@ -217,19 +227,15 @@ export const TableBlockTable = ({
   source,
   shouldAutoFocusPlaceholder,
   collectionTypeFilters,
+  sortState,
+  onSort,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
-  const [sortState, setSortState] = React.useState<ColumnSortState>(null);
-
-  const displayRows = React.useMemo(() => {
-    if (!sortState) return rows;
-    return sortRowsByColumn(rows, sortState, propertiesSchema ?? {}, space);
-  }, [rows, sortState, propertiesSchema, space]);
 
   const table = useReactTable({
-    data: displayRows,
+    data: rows,
     columns: formatColumns(properties, isEditing, [], space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
@@ -313,7 +319,7 @@ export const TableBlockTable = ({
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
                         sort={sortState}
-                        onSort={setSortState}
+                        onSort={onSort}
                       />
                     </div>
                   </th>

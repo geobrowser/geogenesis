@@ -11,7 +11,7 @@ import equal from 'fast-deep-equal';
 
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
-import { Property, Relation, Value } from '../types';
+import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
@@ -191,7 +191,10 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
-}: QueryEntitiesOptions) {
+  sort,
+}: QueryEntitiesOptions & {
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+}) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
@@ -211,14 +214,18 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading } = useQuery({
+  const {
+    isFetched,
+    isLoading,
+    data: orderedIds,
+  } = useQuery({
     enabled,
     placeholderData,
-    queryKey: GeoStore.queryKeys(where, first, skip),
+    queryKey: [...GeoStore.queryKeys(where, first, skip), sort ?? null],
     queryFn: async () => {
-      const entities = await E.findMany({ store, cache, where, first, skip });
+      const entities = await E.findMany({ store, cache, where, first, skip, sort });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-      return entities;
+      return entities.map(e => e.id);
     },
   });
 
@@ -233,14 +240,19 @@ export function useQueryEntities({
         return [];
       }
 
-      const result = new EntityQuery(store.getEntities())
+      // When a server-side sort is active, preserve the server-returned order
+      // but read fresh entity data from the store to pick up local edits.
+      if (sort && orderedIds) {
+        return orderedIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+      }
+
+      const query = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
         .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
+        .sortBy({ field: 'updatedAt', direction: 'desc' });
 
-      return result;
+      return query.execute();
     },
     equal
   );

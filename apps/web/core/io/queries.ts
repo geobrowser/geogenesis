@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 
-import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -12,6 +12,7 @@ import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
+  entitiesOrderedByPropertyQuery,
   entitiesQuery,
   entityBacklinksQuery,
   entityPageQuery,
@@ -92,6 +93,37 @@ export function getAllEntities(
       typeIds: topLevelTypeIds,
       filter: normalizedFilter,
       orderBy,
+    },
+    signal,
+  });
+}
+
+type GetEntitiesOrderedByPropertyOptions = {
+  propertyId: string;
+  sortDirection: SortOrder;
+  dataType?: string;
+  spaceId?: string;
+  limit?: number;
+  offset?: number;
+  filter?: EntityFilter;
+};
+
+export function getEntitiesOrderedByProperty(
+  { propertyId, sortDirection, dataType, spaceId, limit, offset, filter }: GetEntitiesOrderedByPropertyOptions,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entitiesOrderedByPropertyQuery,
+    decoder: data =>
+      data.entitiesOrderedByProperty?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    variables: {
+      propertyId,
+      sortDirection,
+      dataType,
+      spaceId,
+      limit,
+      offset,
+      filter,
     },
     signal,
   });
