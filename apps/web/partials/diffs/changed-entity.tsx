@@ -833,13 +833,26 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       continue;
     }
 
+    /** Apply inline mark rendering (code, math) to unchanged diff spans. */
+    const applyInlineMarks = (nodes: React.ReactNode[]): React.ReactNode[] => {
+      return nodes.map((node, idx) => {
+        if (React.isValidElement<{ className?: string; children?: React.ReactNode }>(node)) {
+          const { className, children } = node.props;
+          if (!className && typeof children === 'string' && /`[^`]+`|\\\([^)]+?\\\)|\$[^\s$]/.test(children)) {
+            return <React.Fragment key={`im-${idx}`}>{renderInlineMarks(children)}</React.Fragment>;
+          }
+        }
+        return node;
+      });
+    };
+
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       charIndex += headingMatch[1].length + 1;
       elements.push(
         <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, getStyledText(headingMatch[2]))}
+          {renderHeading(level, applyInlineMarks(getStyledText(headingMatch[2])))}
         </div>
       );
       charIndex += headingMatch[2].length;
@@ -854,7 +867,7 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
           <li>
             <div className="react-renderer node-paragraph">
               <div className="whitespace-normal">
-                <p>{getStyledText(unorderedListMatch[2])}</p>
+                <p>{applyInlineMarks(getStyledText(unorderedListMatch[2]))}</p>
               </div>
             </div>
           </li>
@@ -873,7 +886,7 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
           <li>
             <div className="react-renderer node-paragraph">
               <div className="whitespace-normal">
-                <p>{getStyledText(orderedListMatch[2])}</p>
+                <p>{applyInlineMarks(getStyledText(orderedListMatch[2]))}</p>
               </div>
             </div>
           </li>
@@ -884,24 +897,10 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
     }
 
     if (line.trim()) {
-      // For plain paragraphs, get diff-styled spans then apply inline mark
-      // rendering (code, math) to any unchanged spans so they display properly.
-      const styledNodes = getStyledText(line);
-      const processedNodes = styledNodes.map((node, idx) => {
-        // Only apply inline marks to unchanged text (no diff highlighting).
-        // Changed spans keep diff styling — formatting takes a back seat to showing what changed.
-        if (React.isValidElement<{ className?: string; children?: React.ReactNode }>(node)) {
-          const { className, children } = node.props;
-          if (!className && typeof children === 'string' && /`[^`]+`|\\\([^)]+?\\\)|\$[^\s$]/.test(children)) {
-            return <React.Fragment key={`im-${idx}`}>{renderInlineMarks(children)}</React.Fragment>;
-          }
-        }
-        return node;
-      });
       elements.push(
         <div key={i} className="react-renderer node-paragraph">
           <div className="whitespace-normal">
-            <p>{processedNodes}</p>
+            <p>{applyInlineMarks(getStyledText(line))}</p>
           </div>
         </div>
       );
