@@ -1,6 +1,6 @@
 import { atom } from 'jotai';
 
-import { Property, Value } from '~/core/types';
+import { Property, Relation, Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -54,13 +54,15 @@ export const entityCountAtom = atom(get => {
 export const valuesAtom = atom<Array<Value>>([]);
 
 /** Generated relations (e.g. Types) for the import. Passed to makeBulkProposal with values. */
-export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
+export const relationsAtom = atom<Relation[]>([]);
 
 export type UnresolvedImportCell =
   | { kind: 'entity' }
   | { kind: 'type'; rawType: string }
   | { kind: 'relation'; unresolvedValues: string[] }
-  | { kind: 'checkbox'; rawValue: string };
+  | { kind: 'checkbox'; rawValue: string }
+  | { kind: 'image-invalid'; rawValue: string }
+  | { kind: 'image-error'; rawValue: string; error: string };
 
 /** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
 export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});
@@ -103,5 +105,46 @@ export const actionsCountAtom = atom(get => {
   const relations = get(relationsAtom);
   return (values.length + relations.length).toLocaleString('en-US', { style: 'decimal' });
 });
+
+export type ImageImportTask = {
+  /** Data row index (0-based, relative to dataRows not records) */
+  rowIndex: number;
+  /** CSV column index */
+  colIdx: number;
+  /** The image property ID this column is mapped to */
+  propertyId: string;
+  /** The image property name */
+  propertyName: string;
+  /** The entity ID for the row this image belongs to */
+  fromEntityId: string;
+  /** The entity name for the row */
+  fromEntityName: string;
+  /** The external URL pointing to the hosted image */
+  url: string;
+};
+
+/** Image upload tasks collected during generation. */
+export const imageTasksAtom = atom<ImageImportTask[]>([]);
+
+/**
+ * Cached per-cell image entity data so rebuild can re-merge without re-uploading.
+ * Keyed by `${rowIndex}:${colIdx}`. Stores the image entity's own values and internal
+ * relations (e.g. Types → IMAGE_TYPE), plus the image entity ID and property info
+ * needed to regenerate the linking relation from the current resolved row.
+ */
+export type ImageEntityData = {
+  /** The uploaded image entity ID (hex) */
+  imageEntityId: string;
+  /** The image property ID this cell maps to */
+  propertyId: string;
+  /** The image property name */
+  propertyName: string;
+  /** Values belonging to the image entity (IMAGE_URL_PROPERTY, width, height) */
+  values: Value[];
+  /** Internal relations of the image entity (e.g. Types → IMAGE_TYPE) */
+  relations: Relation[];
+};
+
+export const imageEntityCacheAtom = atom<Record<string, ImageEntityData>>({});
 
 export const publishAtom = atom<boolean>(false);

@@ -195,7 +195,9 @@ function PropertyMappingPopover({
 }
 
 function isImageUrl(value: string): boolean {
-  return value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://');
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('ipfs://') || normalized.startsWith('http://') || normalized.startsWith('https://');
 }
 
 type Props = {
@@ -464,7 +466,25 @@ export function ImportPreviewTable({
                               )}
                             </span>
                           );
-                        })() : isRelation && value ? (
+                        })() : isImageColumn && cellFlag?.kind === 'image-invalid' ? (
+                          <span className="inline-flex items-center gap-1 text-metadata text-red-01">
+                            <WarningIcon />
+                            <span className="truncate">Invalid image URL: {cellFlag.rawValue}</span>
+                          </span>
+                        ) : isImageColumn && cellFlag?.kind === 'image-error' ? (
+                          <span className="inline-flex items-center gap-1 text-metadata text-red-01">
+                            <WarningIcon />
+                            <span className="truncate">Upload failed: {cellFlag.error}</span>
+                          </span>
+                        ) : isImageColumn && value && isImageUrl(value) ? (
+                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
+                            <NativeGeoImage
+                              value={value}
+                              alt={`Image for ${col.propertyName ?? 'column'}`}
+                              className="h-auto w-[60px] object-cover"
+                            />
+                          </div>
+                        ) : isRelation && value ? (
                           <div className="flex flex-wrap items-center gap-2 overflow-hidden">
                             {splitRelationCell(value).map((part, i) => {
                               if (unresolvedSet?.has(part) && onResolveRelationToken) {
@@ -555,10 +575,6 @@ export function ImportPreviewTable({
                                 </span>
                               );
                             })}
-                          </div>
-                        ) : isImageColumn && value && isImageUrl(value) ? (
-                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
-                            <NativeGeoImage value={value} alt="" className="h-auto w-[60px] object-cover" />
                           </div>
                         ) : (
                           <div className="flex w-full min-w-0 items-start gap-2">
