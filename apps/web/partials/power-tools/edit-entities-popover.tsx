@@ -9,6 +9,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { useKey } from '~/core/hooks/use-key';
+import { useToast } from '~/core/hooks/use-toast';
 import { getSpaces } from '~/core/io/queries';
 import { useRelations } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
@@ -46,28 +47,409 @@ type DeleteValueItemProps = {
 
 const EMPTY_PROPERTY_IDS: string[] = [];
 
-function CurrentImageThumbnail({
-  imageEntityId,
-  spaceId,
-  directImageUrl,
-}: {
-  imageEntityId: string;
-  spaceId: string;
-  directImageUrl?: string | null;
+function createImageDialogGuards(args: {
+  openRef: React.MutableRefObject<boolean>;
+  closeTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
 }) {
-  const lookedUpUrl = useImageUrlFromEntity(imageEntityId, spaceId);
-  const imageSrc =
-    directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'))
-      ? directImageUrl
-      : lookedUpUrl;
+  const { openRef, closeTimeoutRef } = args;
+  return {
+    onBefore: () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      openRef.current = true;
+      closeTimeoutRef.current = setTimeout(() => {
+        openRef.current = false;
+        closeTimeoutRef.current = null;
+      }, 2000);
+    },
+    onAfter: () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      openRef.current = false;
+    },
+  };
+}
+
+type NewPropertyPanelProps = {
+  spaceId: string;
+  properties: Property[];
+  newPropertyOnly: boolean;
+  isApplyingNewProperty: boolean;
+
+  newPropertyValueType: SwitchableRenderableType;
+  setNewPropertyValueType: (v: SwitchableRenderableType) => void;
+
+  useExistingPropertyFromGeo: boolean;
+  setUseExistingPropertyFromGeo: React.Dispatch<React.SetStateAction<boolean>>;
+
+  selectedExistingProperty: SelectEntityCompactResult | null;
+  setSelectedExistingProperty: (v: SelectEntityCompactResult | null) => void;
+
+  newPropertyId: string | null;
+  setNewPropertyId: (v: string | null) => void;
+  newPropertyName: string;
+  setNewPropertyName: (v: string) => void;
+
+  newPropertyInitialValue: string;
+  setNewPropertyInitialValue: (v: string) => void;
+  newPropertyInitialValueRef: React.MutableRefObject<string>;
+
+  newPropertyImageFile: File | null;
+  setNewPropertyImageFile: (v: File | null) => void;
+
+  selectedAttributeEntities: SelectEntityCompactResult[];
+  setSelectedAttributeEntities: React.Dispatch<React.SetStateAction<SelectEntityCompactResult[]>>;
+
+  newPropertyValueFieldPropertyId: string | null;
+
+  onCreatePropertyEntity?: (payload: EditCreatePropertyEntityPayload) => void;
+
+  addImageFileDialogCloseTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  addImageFileDialogOpenRef: React.MutableRefObject<boolean>;
+};
+
+function NewPropertyPanel(props: NewPropertyPanelProps) {
+  const {
+    spaceId,
+    properties,
+    newPropertyOnly,
+    isApplyingNewProperty,
+    newPropertyValueType,
+    setNewPropertyValueType,
+    useExistingPropertyFromGeo,
+    setUseExistingPropertyFromGeo,
+    selectedExistingProperty,
+    setSelectedExistingProperty,
+    newPropertyId,
+    setNewPropertyId,
+    newPropertyName,
+    setNewPropertyName,
+    newPropertyInitialValue,
+    setNewPropertyInitialValue,
+    newPropertyInitialValueRef,
+    newPropertyImageFile,
+    setNewPropertyImageFile,
+    selectedAttributeEntities,
+    setSelectedAttributeEntities,
+    newPropertyValueFieldPropertyId,
+    onCreatePropertyEntity,
+    addImageFileDialogCloseTimeoutRef,
+    addImageFileDialogOpenRef,
+  } = props;
+
+  const isNewPropertyRelation = newPropertyValueType === 'RELATION' || newPropertyValueType === 'IMAGE';
+  const imageDialogGuards = React.useMemo(
+    () =>
+      createImageDialogGuards({
+        openRef: addImageFileDialogOpenRef,
+        closeTimeoutRef: addImageFileDialogCloseTimeoutRef,
+      }),
+    [addImageFileDialogOpenRef, addImageFileDialogCloseTimeoutRef]
+  );
+
   return (
-    <span className="inline-flex size-12 shrink-0 overflow-hidden rounded-md border border-grey-02">
-      {imageSrc ? (
-        <NativeGeoImage value={imageSrc} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center bg-grey-02" />
+    <div className={isApplyingNewProperty ? 'pointer-events-none opacity-60' : undefined}>
+      {newPropertyValueType === 'RELATION' && !newPropertyOnly && (
+        <>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={useExistingPropertyFromGeo}
+              onChange={e => {
+                e.stopPropagation();
+                setUseExistingPropertyFromGeo(prev => !prev);
+              }}
+            />
+            <Text variant="metadata" color="grey-04">
+              Add existing property from Geo
+            </Text>
+          </div>
+          <Spacer height={12} />
+        </>
       )}
-    </span>
+
+      {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo && !newPropertyOnly ? (
+        <div className="w-full">
+          <Text variant="metadata" color="grey-04" className="block">
+            Search for an existing property to add
+          </Text>
+          <Spacer height={6} />
+          <SelectEntityCompact
+            key={`power-tools-select-entity-compact-existing-geo-${spaceId}`}
+            spaceId={spaceId}
+            relationValueTypes={[{ id: SystemIds.PROPERTY }]}
+            selected={selectedExistingProperty ? [selectedExistingProperty] : []}
+            onRemoveSelected={() => setSelectedExistingProperty(null)}
+            onDone={result => setSelectedExistingProperty(result)}
+          />
+        </div>
+      ) : (
+        <>
+          <Text variant="metadata" color="grey-04" className="block">
+            Property name
+          </Text>
+          <Spacer height={6} />
+          <SelectEntityCompact
+            key={`power-tools-select-entity-compact-property-name-${spaceId}-${newPropertyValueType}`}
+            spaceId={spaceId}
+            relationValueTypes={[{ id: SystemIds.PROPERTY }]}
+            placeholder="Find or create property..."
+            renderableTypeValue={newPropertyValueType}
+            onRenderableTypeChange={value => setNewPropertyValueType(value)}
+            selected={newPropertyId ? [{ id: newPropertyId, name: newPropertyName || null }] : []}
+            onRemoveSelected={() => {
+              setNewPropertyId(null);
+              setNewPropertyName('');
+              setNewPropertyInitialValue('');
+              newPropertyInitialValueRef.current = '';
+              setNewPropertyImageFile(null);
+              setSelectedAttributeEntities([]);
+            }}
+            onCreateEntity={
+              onCreatePropertyEntity
+                ? result => {
+                    const pickerValueType = result.renderableType;
+                    const valueTypeToUse =
+                      pickerValueType && SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET.has(pickerValueType)
+                        ? pickerValueType
+                        : newPropertyValueType;
+
+                    if (valueTypeToUse !== newPropertyValueType) setNewPropertyValueType(valueTypeToUse);
+
+                    onCreatePropertyEntity({
+                      propertyId: result.id,
+                      name: result.name,
+                      valueType: valueTypeToUse,
+                    });
+                  }
+                : undefined
+            }
+            onDone={result => {
+              setNewPropertyId(result.id);
+              setNewPropertyName(result.name ?? '');
+              setNewPropertyInitialValue('');
+              newPropertyInitialValueRef.current = '';
+              setNewPropertyImageFile(null);
+              setSelectedAttributeEntities([]);
+
+              const existing = properties.find(p => p.id === result.id);
+              if (existing) {
+                if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
+                else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
+                else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
+                else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
+                else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
+                else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
+                else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
+              }
+            }}
+          />
+          <Spacer height={12} />
+
+          <Text variant="metadata" color="grey-04" className="block">
+            Add property values (optional)
+          </Text>
+          <Spacer height={6} />
+
+          {isNewPropertyRelation ? (
+            <EditableEntityValueField
+              property={{
+                id: newPropertyValueFieldPropertyId ?? '',
+                name: null,
+                dataType: 'RELATION',
+                relationValueTypes:
+                  newPropertyValueType === 'IMAGE' ? [{ id: SystemIds.IMAGE_TYPE, name: 'Image' }] : [],
+                ...(newPropertyValueType === 'IMAGE' && { renderableTypeStrict: 'IMAGE' }),
+              }}
+              spaceId={spaceId}
+              value=""
+              selectedEntities={selectedAttributeEntities}
+              onRemoveSelectedEntity={id =>
+                setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
+              }
+              onSelectEntity={result => {
+                setSelectedAttributeEntities(prev =>
+                  prev.some(e => e.id === result.id) ? prev : [...prev, result]
+                );
+              }}
+              selectedImageFile={newPropertyValueType === 'IMAGE' ? newPropertyImageFile : null}
+              onImageFileSelect={
+                newPropertyValueType === 'IMAGE' ? (file: File) => setNewPropertyImageFile(file) : undefined
+              }
+              onImageFileClear={
+                newPropertyValueType === 'IMAGE' ? () => setNewPropertyImageFile(null) : undefined
+              }
+              onBeforeImageFileDialogOpen={
+                newPropertyValueType === 'IMAGE'
+                  ? imageDialogGuards.onBefore
+                  : undefined
+              }
+              onAfterImageFileDialogClose={
+                newPropertyValueType === 'IMAGE'
+                  ? imageDialogGuards.onAfter
+                  : undefined
+              }
+            />
+          ) : (
+            <EditableEntityValueField
+              property={{
+                id: '',
+                name: null,
+                dataType: mapPropertyType(newPropertyValueType).baseDataType,
+              }}
+              spaceId={spaceId}
+              value={newPropertyInitialValue}
+              onChange={v => {
+                setNewPropertyInitialValue(v);
+                newPropertyInitialValueRef.current = v;
+              }}
+            />
+          )}
+        </>
+      )}
+
+      <Spacer height={12} />
+    </div>
+  );
+}
+
+type RemovePropertyPanelProps = {
+  removePropertyOnly: boolean;
+  removePropertySearchQuery: string;
+  setRemovePropertySearchQuery: (v: string) => void;
+  matchedColumnsForRemoval: Property[];
+  propertiesMarkedForRemoval: Set<string>;
+  setPropertiesMarkedForRemoval: React.Dispatch<React.SetStateAction<Set<string>>>;
+  showAllMatchedColumns: boolean;
+  setShowAllMatchedColumns: (v: boolean) => void;
+  initialVisibleCount: number;
+};
+
+function RemovePropertyPanel(props: RemovePropertyPanelProps) {
+  const {
+    removePropertyOnly,
+    removePropertySearchQuery,
+    setRemovePropertySearchQuery,
+    matchedColumnsForRemoval,
+    propertiesMarkedForRemoval,
+    setPropertiesMarkedForRemoval,
+    showAllMatchedColumns,
+    setShowAllMatchedColumns,
+    initialVisibleCount,
+  } = props;
+
+  if (removePropertyOnly) {
+    return (
+      <>
+        <Text variant="metadata" color="grey-04" className="block">
+          This will remove this property from all rows when you click Apply.
+        </Text>
+        <Spacer height={12} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Text variant="metadata" color="grey-04" className="block">
+        Property name
+      </Text>
+      <Spacer height={6} />
+      <input
+        type="text"
+        value={removePropertySearchQuery}
+        onChange={e => setRemovePropertySearchQuery(e.target.value)}
+        placeholder="Find a property..."
+        className="w-full rounded-md border border-grey-02 bg-white py-2 px-3 text-body text-text shadow-inner shadow-grey-02 outline-none placeholder:text-grey-04 focus:border-grey-04 focus:shadow-inner-lg focus:shadow-text"
+      />
+      <Spacer height={12} />
+
+      {matchedColumnsForRemoval.length > 0 ? (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <Text variant="metadata" className="text-text">
+              Matched columns
+            </Text>
+            {propertiesMarkedForRemoval.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setPropertiesMarkedForRemoval(new Set())}
+                className="text-button text-[0.8125rem] text-red-01 hover:underline"
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
+          <Spacer height={6} />
+          <div className="max-h-[min(40vh,240px)] overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 p-0">
+              {(() => {
+                const visibleCount = showAllMatchedColumns
+                  ? matchedColumnsForRemoval.length
+                  : Math.min(initialVisibleCount, matchedColumnsForRemoval.length);
+                const visibleColumns = matchedColumnsForRemoval.slice(0, visibleCount);
+                const hiddenCount = matchedColumnsForRemoval.length - visibleCount;
+                return (
+                  <>
+                    {visibleColumns.map(prop => {
+                      const isMarked = propertiesMarkedForRemoval.has(prop.id);
+                      return (
+                        <div
+                          key={prop.id}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
+                            isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
+                          }`}
+                        >
+                          <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
+                            {prop.name ?? prop.id}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPropertiesMarkedForRemoval(prev => {
+                                const next = new Set(prev);
+                                if (next.has(prop.id)) next.delete(prop.id);
+                                else next.add(prop.id);
+                                return next;
+                              })
+                            }
+                            className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
+                            aria-label={
+                              isMarked ? `Unmark ${prop.name ?? prop.id}` : `Remove property ${prop.name ?? prop.id}`
+                            }
+                          >
+                            <CloseSmall />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {!showAllMatchedColumns && hiddenCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllMatchedColumns(true)}
+                        className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
+                      >
+                        Show {hiddenCount} more
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          <Spacer height={12} />
+        </>
+      ) : (
+        <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
+          {removePropertySearchQuery.trim() ? 'No columns match your search.' : 'Type a property name to find columns to remove.'}
+        </div>
+      )}
+
+      <Spacer height={12} />
+    </>
   );
 }
 
@@ -226,6 +608,10 @@ export function EditEntitiesPopover({
   const [showAllDeleteValues, setShowAllDeleteValues] = React.useState(false);
   const [pendingValue, setPendingValue] = React.useState<string>('');
 
+  const [, setToast] = useToast();
+  const [isApplyingNewProperty, setIsApplyingNewProperty] = React.useState(false);
+  const [isApplyingImageValue, setIsApplyingImageValue] = React.useState(false);
+
   type EditAction = 'add' | 'delete' | 'new' | 'removeProperty';
   const [action, setAction] = React.useState<EditAction>(
     newPropertyOnly ? 'new' : removePropertyOnly ? 'removeProperty' : 'add'
@@ -244,6 +630,14 @@ export function EditEntitiesPopover({
   const [addImageFile, setAddImageFile] = React.useState<File | null>(null);
   const addImageFileDialogOpenRef = React.useRef(false);
   const addImageFileDialogCloseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addImageDialogGuards = React.useMemo(
+    () =>
+      createImageDialogGuards({
+        openRef: addImageFileDialogOpenRef,
+        closeTimeoutRef: addImageFileDialogCloseTimeoutRef,
+      }),
+    []
+  );
   /** Ref updated synchronously when value field reports a value (e.g. date blur). Use on Apply so we get latest value even when React hasn't committed state yet. */
   const pendingValueRef = React.useRef<string>('');
   /** Same as pendingValueRef but for New property → optional scalar value (DATE etc. may only commit on blur). */
@@ -261,12 +655,6 @@ export function EditEntitiesPopover({
     if (!open) return;
     setOpen(false);
   });
-
-  const relationColumns = React.useMemo(() => {
-    return properties.filter(
-      p => p.dataType === 'RELATION' || (p.relationValueTypes && p.relationValueTypes.length > 0)
-    );
-  }, [properties]);
 
   const pickerColumns = properties;
   const displayColumn = selectedProperty ?? pickerColumns[0] ?? null;
@@ -334,15 +722,35 @@ export function EditEntitiesPopover({
     return map;
   }, [spacesData]);
 
-  const handleApply = React.useCallback(() => {
+  const handleApply = React.useCallback(async () => {
     if (!effectiveProperty || !onApply) return;
     // IMAGE column: use temporary file flow (like new property initial value)
     if (effectiveProperty.renderableTypeStrict === 'IMAGE') {
       if (addImageFile == null) return;
-      onApply({ property: effectiveProperty, targetEntities: [], imageFile: addImageFile });
-      setOpen(false);
-      setAddImageFile(null);
-      setSelectedProperty(null);
+      setIsApplyingImageValue(true);
+      let didSucceed = false;
+      try {
+        const result = onApply({
+          property: effectiveProperty,
+          targetEntities: [],
+          imageFile: addImageFile,
+        }) as unknown;
+
+        if (result && typeof (result as any).then === 'function') {
+          await result;
+        }
+
+        didSucceed = true;
+        setOpen(false);
+        setAddImageFile(null);
+        setSelectedProperty(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+      } finally {
+        if (didSucceed) setIsApplyingImageValue(false);
+      }
+
       return;
     }
 
@@ -387,7 +795,7 @@ export function EditEntitiesPopover({
     onApplyNewProperty &&
     newPropertyId != null &&
     newPropertyName.trim().length > 0 &&
-    (newPropertyValueType === 'IMAGE' ? newPropertyImageFile != null : true);
+    true;
 
   const newPropertyValueFieldPropertyId =
     action === 'new' && newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo
@@ -401,29 +809,48 @@ export function EditEntitiesPopover({
     setSelectedExistingProperty(null);
   }, [selectedExistingProperty, onAddExistingProperty]);
 
-  const handleApplyNewProperty = React.useCallback(() => {
+  const handleApplyNewProperty = React.useCallback(async () => {
     if (!canApplyNew || !onApplyNewProperty) return;
-    onApplyNewProperty({
-      propertyId: newPropertyId!,
-      name: newPropertyName.trim(),
-      valueType: newPropertyValueType,
-      applyToAllEntities: newPropertyOnly,
-      selectedRowEntityIds: selectedEntityIds ?? [],
-      selectedEntities: isNewPropertyRelation ? selectedAttributeEntities : undefined,
-      initialValue: isNewPropertyRelation
-        ? undefined
-        : (newPropertyInitialValueRef.current || newPropertyInitialValue).trim(),
-      initialImageFile:
-        newPropertyValueType === 'IMAGE' ? newPropertyImageFile ?? undefined : undefined,
-    });
-    setOpen(false);
-    setNewPropertyId(null);
-    setNewPropertyName('');
-    setNewPropertyValueType('TEXT');
-    setNewPropertyInitialValue('');
-    newPropertyInitialValueRef.current = '';
-    setSelectedAttributeEntities([]);
-    setNewPropertyImageFile(null);
+    if (isApplyingNewProperty) return;
+
+    setIsApplyingNewProperty(true);
+
+    let didSucceed = false;
+    try {
+      const payload: EditApplyNewPropertyPayload = {
+        propertyId: newPropertyId!,
+        name: newPropertyName.trim(),
+        valueType: newPropertyValueType,
+        applyToAllEntities: newPropertyOnly,
+        selectedRowEntityIds: selectedEntityIds ?? [],
+        selectedEntities: isNewPropertyRelation ? selectedAttributeEntities : undefined,
+        initialValue: isNewPropertyRelation
+          ? undefined
+          : (newPropertyInitialValueRef.current || newPropertyInitialValue).trim(),
+        initialImageFile:
+          newPropertyValueType === 'IMAGE' ? newPropertyImageFile ?? undefined : undefined,
+      };
+
+      const result = onApplyNewProperty(payload) as unknown;
+      if (result && typeof (result as any).then === 'function') {
+        await result;
+      }
+
+      didSucceed = true;
+      setOpen(false);
+      setNewPropertyId(null);
+      setNewPropertyName('');
+      setNewPropertyValueType('TEXT');
+      setNewPropertyInitialValue('');
+      newPropertyInitialValueRef.current = '';
+      setSelectedAttributeEntities([]);
+      setNewPropertyImageFile(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+    } finally {
+      if (didSucceed) setIsApplyingNewProperty(false);
+    }
   }, [
     canApplyNew,
     isNewPropertyRelation,
@@ -435,6 +862,8 @@ export function EditEntitiesPopover({
     onApplyNewProperty,
     selectedAttributeEntities,
     selectedEntityIds,
+    isApplyingNewProperty,
+    setToast,
   ]);
 
   React.useEffect(() => {
@@ -443,6 +872,8 @@ export function EditEntitiesPopover({
       setShowAllDeleteValues(false);
       setPendingValue('');
       pendingValueRef.current = '';
+      setIsApplyingNewProperty(false);
+      setIsApplyingImageValue(false);
       setNewPropertyName('');
       setNewPropertyValueType('TEXT');
       setNewPropertyInitialValue('');
@@ -480,7 +911,7 @@ export function EditEntitiesPopover({
     if (open && removePropertyOnly) {
       setPropertiesMarkedForRemoval(new Set(initialPropertiesMarkedForRemoval));
     }
-  }, [open, removePropertyOnly, initialPropertiesMarkedForRemoval]);
+  }, [open, removePropertyOnly]);
 
   // Only reset Add-mode inputs when the target column changes. Do not clear while on "New property"
   // — effectiveProperty still tracks the hidden column picker and its id can change when columns
@@ -553,6 +984,30 @@ export function EditEntitiesPopover({
     setRemovePropertySearchQuery('');
   }, [onRemoveProperties, propertiesMarkedForRemoval, removePropertyOnly]);
 
+  const handleApplyClick = React.useCallback(() => {
+    if (isApplyingNewProperty || isApplyingImageValue) return;
+    if (canApplyAddExisting) return handleAddExistingProperty();
+    if (canApplyNew) return void handleApplyNewProperty();
+    if (canApplyRemoveProperties) return handleRemovePropertiesApply();
+    if (canApplyDelete) return handleDeleteApply();
+    if (isRelationColumn) return void handleApply();
+    return handleApplyValue();
+  }, [
+    canApplyAddExisting,
+    canApplyNew,
+    canApplyRemoveProperties,
+    canApplyDelete,
+    isRelationColumn,
+    handleAddExistingProperty,
+    handleApplyNewProperty,
+    handleRemovePropertiesApply,
+    handleDeleteApply,
+    handleApply,
+    handleApplyValue,
+    isApplyingNewProperty,
+    isApplyingImageValue,
+  ]);
+
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
@@ -582,22 +1037,11 @@ export function EditEntitiesPopover({
                 {(canApply || canApplyDelete || canApplyRemoveProperties || canApplyAddExisting || canApplyNew) && (
                   <button
                     type="button"
-                    onClick={
-                      canApplyAddExisting
-                        ? handleAddExistingProperty
-                        : canApplyNew
-                          ? handleApplyNewProperty
-                          : canApplyRemoveProperties
-                            ? handleRemovePropertiesApply
-                            : canApplyDelete
-                        ? handleDeleteApply
-                        : isRelationColumn
-                          ? handleApply
-                          : handleApplyValue
-                    }
-                    className="shrink-0 text-[14px] text-button text-ctaPrimary hover:text-ctaHover hover:underline"
+                    disabled={isApplyingNewProperty || isApplyingImageValue}
+                    onClick={handleApplyClick}
+                    className="shrink-0 text-[14px] text-button text-ctaPrimary hover:text-ctaHover hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Apply
+                    {((canApplyNew && isApplyingNewProperty) || isApplyingImageValue) ? 'Applying...' : 'Apply'}
                   </button>
                 )}
               </div>
@@ -704,28 +1148,12 @@ export function EditEntitiesPopover({
                     }
                     onBeforeImageFileDialogOpen={
                       effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? () => {
-                            if (addImageFileDialogCloseTimeoutRef.current) {
-                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }
-                            addImageFileDialogOpenRef.current = true;
-                            addImageFileDialogCloseTimeoutRef.current = setTimeout(() => {
-                              addImageFileDialogOpenRef.current = false;
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }, 2000);
-                          }
+                        ? addImageDialogGuards.onBefore
                         : undefined
                     }
                     onAfterImageFileDialogClose={
                       effectiveProperty.renderableTypeStrict === 'IMAGE'
-                        ? () => {
-                            if (addImageFileDialogCloseTimeoutRef.current) {
-                              clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                              addImageFileDialogCloseTimeoutRef.current = null;
-                            }
-                            addImageFileDialogOpenRef.current = false;
-                          }
+                        ? addImageDialogGuards.onAfter
                         : undefined
                     }
                   />
@@ -733,301 +1161,46 @@ export function EditEntitiesPopover({
                 </>
               )}
               {action === 'new' && (
-                <>
-                  {newPropertyValueType === 'RELATION' && !newPropertyOnly && (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={useExistingPropertyFromGeo}
-                          onChange={e => {
-                            e.stopPropagation();
-                            setUseExistingPropertyFromGeo(prev => !prev);
-                          }}
-                        />
-                        <Text variant="metadata" color="grey-04">
-                          Add existing property from Geo
-                        </Text>
-                      </div>
-                      <Spacer height={12} />
-                    </>
-                  )}
-                  {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo && !newPropertyOnly ? (
-                    <div className="w-full">
-                      <Text variant="metadata" color="grey-04" className="block">
-                        Search for an existing property to add
-                      </Text>
-                      <Spacer height={6} />
-                      <SelectEntityCompact
-                        spaceId={spaceId}
-                        relationValueTypes={[{ id: SystemIds.PROPERTY }]}
-                        selected={selectedExistingProperty ? [selectedExistingProperty] : []}
-                        onRemoveSelected={() => setSelectedExistingProperty(null)}
-                        onDone={result => setSelectedExistingProperty(result)}
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <Text variant="metadata" color="grey-04" className="block">
-                        Property name
-                      </Text>
-                      <Spacer height={6} />
-                      <SelectEntityCompact
-                        spaceId={spaceId}
-                        relationValueTypes={[{ id: SystemIds.PROPERTY }]}
-                        placeholder="Find or create property..."
-                        renderableTypeValue={newPropertyValueType}
-                        onRenderableTypeChange={value => setNewPropertyValueType(value)}
-                        selected={newPropertyId ? [{ id: newPropertyId, name: newPropertyName || null }] : []}
-                        onRemoveSelected={() => {
-                          setNewPropertyId(null);
-                          setNewPropertyName('');
-                          setNewPropertyInitialValue('');
-                          newPropertyInitialValueRef.current = '';
-                          setNewPropertyImageFile(null);
-                          setSelectedAttributeEntities([]);
-                        }}
-                        onCreateEntity={
-                          onCreatePropertyEntity
-                            ? result => {
-                                const pickerValueType = result.renderableType;
-                                const valueTypeToUse =
-                                  pickerValueType && SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET.has(pickerValueType)
-                                    ? pickerValueType
-                                    : newPropertyValueType;
-
-                                // Keep the outer picker in sync when the picker footer's type is supported.
-                                if (valueTypeToUse !== newPropertyValueType) setNewPropertyValueType(valueTypeToUse);
-
-                                onCreatePropertyEntity({
-                                  propertyId: result.id,
-                                  name: result.name,
-                                  valueType: valueTypeToUse,
-                                });
-                              }
-                            : undefined
-                        }
-                        onDone={result => {
-                          setNewPropertyId(result.id);
-                          setNewPropertyName(result.name ?? '');
-                          setNewPropertyInitialValue('');
-                          newPropertyInitialValueRef.current = '';
-                          setNewPropertyImageFile(null);
-                          setSelectedAttributeEntities([]);
-
-                          const existing = properties.find(p => p.id === result.id);
-                          if (existing) {
-                            if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
-                            else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
-                            else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
-                            else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
-                            else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
-                            else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
-                            else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
-                          }
-                        }}
-                      />
-                      <Spacer height={12} />
-                      {isNewPropertyRelation ? (
-                        <>
-                          <Text variant="metadata" color="grey-04" className="block">
-                            Add property values (optional)
-                          </Text>
-                          <Spacer height={6} />
-                          <EditableEntityValueField
-                            property={{
-                              id: newPropertyValueFieldPropertyId ?? '',
-                              name: null,
-                              dataType: 'RELATION',
-                              relationValueTypes:
-                                newPropertyValueType === 'IMAGE'
-                                  ? [{ id: SystemIds.IMAGE_TYPE, name: 'Image' }]
-                                  : [],
-                              ...(newPropertyValueType === 'IMAGE' && { renderableTypeStrict: 'IMAGE' }),
-                            }}
-                            spaceId={spaceId}
-                            value=""
-                            selectedEntities={selectedAttributeEntities}
-                            onRemoveSelectedEntity={id =>
-                              setSelectedAttributeEntities(prev => prev.filter(e => e.id !== id))
-                            }
-                            onSelectEntity={result => {
-                              setSelectedAttributeEntities(prev =>
-                                prev.some(e => e.id === result.id) ? prev : [...prev, result]
-                              );
-                            }}
-                            selectedImageFile={newPropertyValueType === 'IMAGE' ? newPropertyImageFile : null}
-                            onImageFileSelect={
-                              newPropertyValueType === 'IMAGE'
-                                ? (file: File) => setNewPropertyImageFile(file)
-                                : undefined
-                            }
-                            onImageFileClear={
-                              newPropertyValueType === 'IMAGE' ? () => setNewPropertyImageFile(null) : undefined
-                            }
-                            onBeforeImageFileDialogOpen={
-                              newPropertyValueType === 'IMAGE'
-                                ? () => {
-                                    if (addImageFileDialogCloseTimeoutRef.current) {
-                                      clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                                      addImageFileDialogCloseTimeoutRef.current = null;
-                                    }
-                                    addImageFileDialogOpenRef.current = true;
-                                    addImageFileDialogCloseTimeoutRef.current = setTimeout(() => {
-                                      addImageFileDialogOpenRef.current = false;
-                                      addImageFileDialogCloseTimeoutRef.current = null;
-                                    }, 2000);
-                                  }
-                                : undefined
-                            }
-                            onAfterImageFileDialogClose={
-                              newPropertyValueType === 'IMAGE'
-                                ? () => {
-                                    if (addImageFileDialogCloseTimeoutRef.current) {
-                                      clearTimeout(addImageFileDialogCloseTimeoutRef.current);
-                                      addImageFileDialogCloseTimeoutRef.current = null;
-                                    }
-                                    addImageFileDialogOpenRef.current = false;
-                                  }
-                                : undefined
-                            }
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <Text variant="metadata" color="grey-04" className="block">
-                            Add property values (optional)
-                          </Text>
-                          <Spacer height={6} />
-                          <EditableEntityValueField
-                            property={{
-                              id: '',
-                              name: null,
-                              dataType: mapPropertyType(newPropertyValueType).baseDataType,
-                            }}
-                            spaceId={spaceId}
-                            value={newPropertyInitialValue}
-                            onChange={v => {
-                              setNewPropertyInitialValue(v);
-                              newPropertyInitialValueRef.current = v;
-                            }}
-                          />
-                        </>
-                      )}
-                    </>
-                  )}
-                  <Spacer height={12} />
-                </>
+                <NewPropertyPanel
+                  spaceId={spaceId}
+                  properties={properties}
+                  newPropertyOnly={newPropertyOnly}
+                  isApplyingNewProperty={isApplyingNewProperty}
+                  newPropertyValueType={newPropertyValueType}
+                  setNewPropertyValueType={setNewPropertyValueType}
+                  useExistingPropertyFromGeo={useExistingPropertyFromGeo}
+                  setUseExistingPropertyFromGeo={setUseExistingPropertyFromGeo}
+                  selectedExistingProperty={selectedExistingProperty}
+                  setSelectedExistingProperty={setSelectedExistingProperty}
+                  newPropertyId={newPropertyId}
+                  setNewPropertyId={setNewPropertyId}
+                  newPropertyName={newPropertyName}
+                  setNewPropertyName={setNewPropertyName}
+                  newPropertyInitialValue={newPropertyInitialValue}
+                  setNewPropertyInitialValue={setNewPropertyInitialValue}
+                  newPropertyInitialValueRef={newPropertyInitialValueRef}
+                  newPropertyImageFile={newPropertyImageFile}
+                  setNewPropertyImageFile={setNewPropertyImageFile}
+                  selectedAttributeEntities={selectedAttributeEntities}
+                  setSelectedAttributeEntities={setSelectedAttributeEntities}
+                  newPropertyValueFieldPropertyId={newPropertyValueFieldPropertyId}
+                  onCreatePropertyEntity={onCreatePropertyEntity}
+                  addImageFileDialogCloseTimeoutRef={addImageFileDialogCloseTimeoutRef}
+                  addImageFileDialogOpenRef={addImageFileDialogOpenRef}
+                />
               )}
               {action === 'removeProperty' && (
-                <>
-                  {removePropertyOnly ? (
-                    <>
-                      <Text variant="metadata" color="grey-04" className="block">
-                        This will remove this property from all rows when you click Apply.
-                      </Text>
-                      <Spacer height={12} />
-                    </>
-                  ) : (
-                    <>
-                      <Text variant="metadata" color="grey-04" className="block">
-                        Property name
-                      </Text>
-                      <Spacer height={6} />
-                      <input
-                        type="text"
-                        value={removePropertySearchQuery}
-                        onChange={e => setRemovePropertySearchQuery(e.target.value)}
-                        placeholder="Find a property..."
-                        className="w-full rounded-md border border-grey-02 bg-white py-2 px-3 text-body text-text shadow-inner shadow-grey-02 outline-none placeholder:text-grey-04 focus:border-grey-04 focus:shadow-inner-lg focus:shadow-text"
-                      />
-                      <Spacer height={12} />
-                      {matchedColumnsForRemoval.length > 0 ? (
-                        <>
-                          <div className="flex items-center justify-between gap-2">
-                            <Text variant="metadata" className="text-text">
-                              Matched columns
-                            </Text>
-                            {propertiesMarkedForRemoval.size > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setPropertiesMarkedForRemoval(new Set())}
-                                className="text-button text-[0.8125rem] text-red-01 hover:underline"
-                              >
-                                Clear selection
-                              </button>
-                            )}
-                          </div>
-                          <Spacer height={6} />
-                          <div className="max-h-[min(40vh,240px)] overflow-y-auto">
-                            <div className="flex flex-wrap gap-1.5 p-0">
-                              {(() => {
-                                const visibleCount = showAllMatchedColumns
-                                  ? matchedColumnsForRemoval.length
-                                  : Math.min(INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE, matchedColumnsForRemoval.length);
-                                const visibleColumns = matchedColumnsForRemoval.slice(0, visibleCount);
-                                const hiddenCount = matchedColumnsForRemoval.length - visibleCount;
-                                return (
-                                  <>
-                                    {visibleColumns.map(prop => {
-                                      const isMarked = propertiesMarkedForRemoval.has(prop.id);
-                                      return (
-                                        <div
-                                          key={prop.id}
-                                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
-                                            isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
-                                          }`}
-                                        >
-                                          <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
-                                            {prop.name ?? prop.id}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setPropertiesMarkedForRemoval(prev => {
-                                                const next = new Set(prev);
-                                                if (next.has(prop.id)) next.delete(prop.id);
-                                                else next.add(prop.id);
-                                                return next;
-                                              })
-                                            }
-                                            className="shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
-                                            aria-label={
-                                              isMarked
-                                                ? `Unmark ${prop.name ?? prop.id}`
-                                                : `Remove property ${prop.name ?? prop.id}`
-                                            }
-                                          >
-                                            <CloseSmall />
-                                          </button>
-                                        </div>
-                                      );
-                                    })}
-                                    {!showAllMatchedColumns && hiddenCount > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowAllMatchedColumns(true)}
-                                        className="w-full px-2 py-1.5 text-left text-[0.8125rem] text-button text-grey-04 hover:bg-grey-01 hover:text-text"
-                                      >
-                                        Show {hiddenCount} more
-                                      </button>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="px-2 py-3 text-center text-[0.8125rem] text-grey-04">
-                          {removePropertySearchQuery.trim()
-                            ? 'No columns match your search.'
-                            : 'Type a property name to find columns to remove.'}
-                        </div>
-                      )}
-                      <Spacer height={12} />
-                    </>
-                  )}
-                </>
+                <RemovePropertyPanel
+                  removePropertyOnly={removePropertyOnly}
+                  removePropertySearchQuery={removePropertySearchQuery}
+                  setRemovePropertySearchQuery={setRemovePropertySearchQuery}
+                  matchedColumnsForRemoval={matchedColumnsForRemoval}
+                  propertiesMarkedForRemoval={propertiesMarkedForRemoval}
+                  setPropertiesMarkedForRemoval={setPropertiesMarkedForRemoval}
+                  showAllMatchedColumns={showAllMatchedColumns}
+                  setShowAllMatchedColumns={setShowAllMatchedColumns}
+                  initialVisibleCount={INITIAL_REMOVE_PROPERTY_COLUMNS_VISIBLE}
+                />
               )}
               {action === 'delete' && effectiveProperty && (
                 <>
