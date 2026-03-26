@@ -220,8 +220,8 @@ function VotersPopoverContent({
 
   return (
     <div className="max-h-[356px] overflow-y-auto">
-      {upvoters.length > 0 && <VoterSection label={`Upvotes (${upvoters.length})`} voters={upvoters} />}
-      {downvoters.length > 0 && <VoterSection label={`Downvotes (${downvoters.length})`} voters={downvoters} />}
+      {upvoters.length > 0 && <VoterSection label="Upvotes" voters={upvoters} />}
+      {downvoters.length > 0 && <VoterSection label="Downvotes" voters={downvoters} />}
     </div>
   );
 }

@@ -103,15 +103,18 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // Map sortState to server-side sort params — used by all source types.
   // dataType is required by the backend's entitiesOrderedByProperty SQL function
   // to resolve which value column to sort on.
+  // Look up from shown columns first, then fall back to all filterable properties
+  // (allows sorting by properties not currently visible in the table).
   const serverSort = React.useMemo(() => {
     if (!sortState) return undefined;
-    const property = propertiesSchema?.[sortState.columnId];
+    const property =
+      propertiesSchema?.[sortState.columnId] ?? filterableProperties.find(p => p.id === sortState.columnId);
     return {
       propertyId: sortState.columnId,
       direction: sortState.direction,
       dataType: property?.dataType?.toLowerCase(),
     };
-  }, [sortState, propertiesSchema]);
+  }, [sortState, propertiesSchema, filterableProperties]);
 
   // Fetch collection data with server-side filtering and sorting
   const {
