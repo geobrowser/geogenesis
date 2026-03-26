@@ -19,7 +19,6 @@ import {
   SelectEntityCompact,
   type SelectEntityCompactResult,
 } from '~/design-system/select-entity-compact';
-import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Checkbox } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -149,18 +148,8 @@ export type EditRemovePropertiesPayload = {
   scope: 'selectedEntities' | 'allEntities';
 };
 
-const NEW_PROPERTY_VALUE_TYPES: { value: SwitchableRenderableType; label: string }[] = [
-  { value: 'TEXT', label: 'Text' },
-  { value: 'INTEGER', label: 'Number' },
-  { value: 'IMAGE', label: 'Image' },
-  { value: 'RELATION', label: 'Relation' },
-  { value: 'URL', label: 'URL' },
-  { value: 'BOOLEAN', label: 'Boolean' },
-  { value: 'DATETIME', label: 'Date & Time' },
-];
-
 const SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET = new Set<SwitchableRenderableType>(
-  NEW_PROPERTY_VALUE_TYPES.map(t => t.value)
+  ['TEXT', 'INTEGER', 'IMAGE', 'RELATION', 'URL', 'BOOLEAN', 'DATETIME'] as const
 );
 
 export type EditApplyNewPropertyPayload = {
@@ -741,21 +730,6 @@ export function EditEntitiesPopover({
               )}
               {action === 'new' && (
                 <>
-                  <Text variant="metadata" color="grey-04" className="block">
-                    Value type
-                  </Text>
-                  <Spacer height={6} />
-                  <div className="w-full">
-                    <Select
-                      value={newPropertyValueType}
-                      onChange={v => setNewPropertyValueType(v as SwitchableRenderableType)}
-                      options={NEW_PROPERTY_VALUE_TYPES.map(({ value, label }) => ({ value, label }))}
-                      placeholder="Select type"
-                      className="w-full min-w-0"
-                      position="popper"
-                    />
-                  </div>
-                  <Spacer height={12} />
                   {newPropertyValueType === 'RELATION' && !newPropertyOnly && (
                     <>
                       <div className="flex items-center gap-2">
@@ -793,22 +767,21 @@ export function EditEntitiesPopover({
                         Property name
                       </Text>
                       <Spacer height={6} />
-                      <SelectEntityAsPopover
-                        trigger={
-                          <input
-                            type="text"
-                            value={newPropertyName}
-                            readOnly
-                            placeholder="Find or create property..."
-                            className="w-full cursor-pointer rounded border border-grey-02 px-2 py-1.5 text-button text-text shadow-inner-grey-02 placeholder:text-grey-04 focus:border-grey-04 focus:outline-none"
-                            aria-label="Property name"
-                          />
-                        }
+                      <SelectEntityCompact
                         spaceId={spaceId}
-                        relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                        relationValueTypes={[{ id: SystemIds.PROPERTY }]}
                         placeholder="Find or create property..."
-                        advanced={false}
-                        showIDs={false}
+                        renderableTypeValue={newPropertyValueType}
+                        onRenderableTypeChange={value => setNewPropertyValueType(value)}
+                        selected={newPropertyId ? [{ id: newPropertyId, name: newPropertyName || null }] : []}
+                        onRemoveSelected={() => {
+                          setNewPropertyId(null);
+                          setNewPropertyName('');
+                          setNewPropertyInitialValue('');
+                          newPropertyInitialValueRef.current = '';
+                          setNewPropertyImageFile(null);
+                          setSelectedAttributeEntities([]);
+                        }}
                         onCreateEntity={
                           onCreatePropertyEntity
                             ? result => {
@@ -829,7 +802,7 @@ export function EditEntitiesPopover({
                               }
                             : undefined
                         }
-                        onDone={(result, fromCreateFn) => {
+                        onDone={result => {
                           setNewPropertyId(result.id);
                           setNewPropertyName(result.name ?? '');
                           setNewPropertyInitialValue('');
@@ -837,18 +810,15 @@ export function EditEntitiesPopover({
                           setNewPropertyImageFile(null);
                           setSelectedAttributeEntities([]);
 
-                          // Only sync the value type picker when selecting an existing property.
-                          if (!fromCreateFn) {
-                            const existing = properties.find(p => p.id === result.id);
-                            if (existing) {
-                              if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
-                              else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
-                              else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
-                              else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
-                              else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
-                              else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
-                              else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
-                            }
+                          const existing = properties.find(p => p.id === result.id);
+                          if (existing) {
+                            if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
+                            else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
+                            else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
+                            else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
+                            else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
+                            else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
+                            else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
                           }
                         }}
                       />

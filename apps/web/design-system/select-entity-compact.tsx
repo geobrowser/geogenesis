@@ -7,7 +7,11 @@ import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
+import { ID } from '~/core/id';
+import { useMutate } from '~/core/sync/use-mutate';
+import { SwitchableRenderableType } from '~/core/types';
 
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 import { NativeGeoImage } from './geo-image';
 import { Search } from './icons/search';
 import { Tag } from './tag';
@@ -24,24 +28,43 @@ export type SelectEntityCompactResult = {
 type SelectEntityCompactProps = {
   spaceId: string;
   onDone: (result: SelectEntityCompactResult) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    renderableType?: SwitchableRenderableType;
+  }) => void | string;
   selected?: SelectEntityCompactResult[];
   onRemoveSelected?: (id: string) => void;
   relationValueTypes?: { id: string }[];
+  placeholder?: string;
+  renderableTypeValue?: SwitchableRenderableType;
+  onRenderableTypeChange?: (value: SwitchableRenderableType) => void;
 };
 
 export function SelectEntityCompact({
   spaceId,
   onDone,
+  onCreateEntity,
   selected = [],
   onRemoveSelected,
   relationValueTypes,
+  placeholder = 'Search...',
+  renderableTypeValue = 'TEXT',
+  onRenderableTypeChange,
 }: SelectEntityCompactProps) {
+  const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
     filterByTypes,
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType>(renderableTypeValue);
   const hasResults = query.trim() && results.length > 0;
+  const canCreate = Boolean(onCreateEntity) && query.trim().length > 0;
+
+  React.useEffect(() => {
+    setRenderableType(renderableTypeValue);
+  }, [renderableTypeValue]);
 
   const handleSelectResult = React.useCallback(
     (result: (typeof results)[number]) => {
@@ -58,6 +81,29 @@ export function SelectEntityCompact({
     [onDone, onQueryChange]
   );
 
+  const handleCreate = React.useCallback(() => {
+    if (!onCreateEntity || query.trim().length === 0) return;
+    let newEntityId = ID.createEntityId();
+    newEntityId =
+      onCreateEntity({
+        id: newEntityId,
+        name: query,
+        renderableType,
+      }) ?? newEntityId;
+    storage.entities.name.set(newEntityId, spaceId, query);
+    onDone({ id: newEntityId, name: query });
+    onQueryChange('');
+  }, [onCreateEntity, onDone, onQueryChange, query, renderableType, spaceId, storage.entities.name]);
+
+  const handleRenderableTypeChange = React.useCallback(
+    (value: SwitchableRenderableType | undefined) => {
+      const next = value ?? 'TEXT';
+      setRenderableType(next);
+      onRenderableTypeChange?.(next);
+    },
+    [onRenderableTypeChange]
+  );
+
   React.useEffect(() => {
     setSelectedIndex(0);
   }, [query, results.length]);
@@ -67,6 +113,10 @@ export function SelectEntityCompact({
   });
 
   useKey('Enter', () => {
+    if (!hasResults && canCreate) {
+      handleCreate();
+      return;
+    }
     if (!hasResults) return;
     const result = results[selectedIndex];
     if (result) handleSelectResult(result);
@@ -100,6 +150,7 @@ export function SelectEntityCompact({
                 setSelectedIndex(0);
               }}
               aria-label="Search"
+              placeholder={placeholder}
               className="w-full rounded-md border border-grey-02 bg-white py-2 pr-3 pl-9 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
             />
           </div>
@@ -207,6 +258,14 @@ export function SelectEntityCompact({
               </div>
             )}
           </div>
+          {canCreate && (
+            <div className="flex items-center justify-between border-t border-grey-02 py-[5px] pr-3 pl-[5px]">
+              <RenderableTypeDropdown value={renderableType} onChange={handleRenderableTypeChange} />
+              <button type="button" onClick={handleCreate} className="text-resultLink text-ctaHover">
+                Create new
+              </button>
+            </div>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
