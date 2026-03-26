@@ -843,3 +843,12 @@ export const userEntityVoteQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const entityVotersQuery = graphql(/* GraphQL */ `
+  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
+    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {
+      userId
+      voteType
+    }
+  }
+`);

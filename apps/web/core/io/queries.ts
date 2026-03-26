@@ -23,6 +23,7 @@ import {
   entityQuery,
   entityTypesQuery,
   entityVoteCountQuery,
+  entityVotersQuery,
   importNameValuesQuery,
   propertiesBatchQuery,
   propertyQuery,
@@ -553,6 +554,24 @@ export function getUserEntityVote(
       return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
     },
     variables: { userId, objectId: entityId, objectType, spaceId },
+    signal,
+  });
+}
+
+export type EntityVoter = { userId: string; voteType: number };
+
+export function getEntityVoters(
+  entityId: string,
+  spaceId: string,
+  objectType: 0 | 1 = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entityVotersQuery,
+    decoder: data => {
+      return (data.userVotes ?? []) as EntityVoter[];
+    },
+    variables: { objectId: entityId, objectType, spaceId },
     signal,
   });
 }
