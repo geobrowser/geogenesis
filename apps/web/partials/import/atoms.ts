@@ -124,10 +124,25 @@ export type ImageImportTask = {
 /** Image upload tasks collected during generation. */
 export const imageTasksAtom = atom<ImageImportTask[]>([]);
 
-/** Cached image upload results (values + relations) so rebuild can re-merge them without re-uploading. */
-export const imageResultsAtom = atom<{ values: Value[]; relations: import('~/core/types').Relation[] }>({
-  values: [],
-  relations: [],
-});
+/**
+ * Cached per-cell image entity data so rebuild can re-merge without re-uploading.
+ * Keyed by `${rowIndex}:${colIdx}`. Stores the image entity's own values and internal
+ * relations (e.g. Types → IMAGE_TYPE), plus the image entity ID and property info
+ * needed to regenerate the linking relation from the current resolved row.
+ */
+export type ImageEntityData = {
+  /** The uploaded image entity ID (hex) */
+  imageEntityId: string;
+  /** The image property ID this cell maps to */
+  propertyId: string;
+  /** The image property name */
+  propertyName: string;
+  /** Values belonging to the image entity (IMAGE_URL_PROPERTY, width, height) */
+  values: Value[];
+  /** Internal relations of the image entity (e.g. Types → IMAGE_TYPE) */
+  relations: import('~/core/types').Relation[];
+};
+
+export const imageEntityCacheAtom = atom<Record<string, ImageEntityData>>({});
 
 export const publishAtom = atom<boolean>(false);

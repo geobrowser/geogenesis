@@ -441,7 +441,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
       if (!property) continue;
 
       if (property.dataType === 'RELATION') {
-        // IMAGE columns contain URLs that are uploaded to IPFS at publish time — skip here
+        // IMAGE columns contain URLs that are uploaded to IPFS during generation and merged into the plan separately — skip here
         if (property.renderableTypeStrict === 'IMAGE') continue;
 
         const renderableType: RenderableEntityType =

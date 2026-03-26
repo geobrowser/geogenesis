@@ -12,7 +12,7 @@ import {
   checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
-  imageResultsAtom,
+  imageEntityCacheAtom,
   imageTasksAtom,
   importSessionIdAtom,
   loadingAtom,
@@ -30,7 +30,7 @@ import {
   unresolvedLinksAtom,
   valuesAtom,
 } from './atoms';
-import { collectImageTasks, uploadImportImages } from './image-upload';
+import { buildImageValuesAndRelations, collectImageTasks, uploadImportImages } from './image-upload';
 import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
 import { ImportSessionStore } from './import-session-store';
@@ -61,7 +61,7 @@ export function useImportGenerate(spaceId: string) {
   const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
   const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
-  const setImageResults = useSetAtom(imageResultsAtom);
+  const setImageEntityCache = useSetAtom(imageEntityCacheAtom);
   const setStep = useSetAtom(stepAtom);
   const { clearGeneratedChanges } = useImportSession(spaceId);
 
@@ -268,17 +268,22 @@ export function useImportGenerate(spaceId: string) {
         const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
         if (!isCurrent()) return;
 
-        // Cache image results so rebuild can re-merge them without re-uploading
-        setImageResults({ values: imageResult.values, relations: imageResult.relations });
+        // Cache per-cell image entity data (linking relations are regenerated from current rows)
+        setImageEntityCache(imageResult.cache);
 
-        finalPlan.values.push(...imageResult.values);
-        finalPlan.relations.push(...imageResult.relations);
+        const imageData = buildImageValuesAndRelations({
+          cache: imageResult.cache,
+          resolvedRows: finalPlan.resolvedRowsSnapshot,
+          spaceId,
+        });
+        finalPlan.values.push(...imageData.values);
+        finalPlan.relations.push(...imageData.relations);
 
         if (imageResult.errors.length > 0) {
           console.warn(`[import] ${imageResult.errors.length} image(s) failed to upload`);
         }
       } else {
-        setImageResults({ values: [], relations: [] });
+        setImageEntityCache({});
       }
 
       // ── Apply in chunks to avoid a single long frame ────────────────
@@ -349,7 +354,7 @@ export function useImportGenerate(spaceId: string) {
     typeOverrides,
     typesColumnIndex,
     setImageTasks,
-    setImageResults,
+    setImageEntityCache,
     setRelations,
     setValues,
     setStep,
@@ -365,13 +370,13 @@ export function useImportGenerate(spaceId: string) {
 
   const values = useAtomValue(valuesAtom);
   const relations = useAtomValue(relationsAtom);
-  const imageResults = useAtomValue(imageResultsAtom);
+  const imageEntityCache = useAtomValue(imageEntityCacheAtom);
 
   // Refs for values that change frequently so rebuild stays stable
   const rebuildContextRef = useRef({
     values,
     relations,
-    imageResults,
+    imageEntityCache,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -389,7 +394,7 @@ export function useImportGenerate(spaceId: string) {
   rebuildContextRef.current = {
     values,
     relations,
-    imageResults,
+    imageEntityCache,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -475,10 +480,15 @@ export function useImportGenerate(spaceId: string) {
         checkboxOverrides: ctx.checkboxOverrides,
       });
 
-      // Re-merge cached image upload results (buildImportPlan skips IMAGE columns)
-      if (ctx.imageResults.values.length > 0 || ctx.imageResults.relations.length > 0) {
-        plan.values.push(...ctx.imageResults.values);
-        plan.relations.push(...ctx.imageResults.relations);
+      // Re-merge cached image entity data with fresh linking relations from current resolved rows
+      if (Object.keys(ctx.imageEntityCache).length > 0) {
+        const imageData = buildImageValuesAndRelations({
+          cache: ctx.imageEntityCache,
+          resolvedRows: plan.resolvedRowsSnapshot,
+          spaceId,
+        });
+        plan.values.push(...imageData.values);
+        plan.relations.push(...imageData.relations);
       }
 
       // Chunked store writes to avoid a single long frame
