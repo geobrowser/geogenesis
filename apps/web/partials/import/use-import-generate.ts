@@ -256,13 +256,18 @@ export function useImportGenerate(spaceId: string) {
       if (!isCurrent()) return;
 
       // Upload images for IMAGE columns and merge into the plan
-      const imageTasks = collectImageTasks({
+      const { tasks: imageTasks, flags: imageFlags } = collectImageTasks({
         dataRows,
         columnMapping,
         resolvedRows: finalPlan.resolvedRowsSnapshot,
         propertyLookup,
       });
       setImageTasks(imageTasks);
+
+      // Merge invalid-URL flags into unresolvedLinks
+      if (Object.keys(imageFlags).length > 0) {
+        Object.assign(finalPlan.unresolvedLinks, imageFlags);
+      }
 
       if (imageTasks.length > 0) {
         const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
@@ -271,6 +276,16 @@ export function useImportGenerate(spaceId: string) {
         // Cache per-cell image entity data (linking relations are regenerated from current rows)
         setImageEntityCache(imageResult.cache);
 
+        // Flag failed uploads as unresolved so the review UI shows them
+        for (const { task, error } of imageResult.errors) {
+          const key = `${task.rowIndex}:${task.colIdx}`;
+          finalPlan.unresolvedLinks[key] = {
+            kind: 'image-error',
+            rawValue: task.url,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+
         const imageData = buildImageValuesAndRelations({
           cache: imageResult.cache,
           resolvedRows: finalPlan.resolvedRowsSnapshot,
@@ -278,10 +293,6 @@ export function useImportGenerate(spaceId: string) {
         });
         finalPlan.values.push(...imageData.values);
         finalPlan.relations.push(...imageData.relations);
-
-        if (imageResult.errors.length > 0) {
-          console.warn(`[import] ${imageResult.errors.length} image(s) failed to upload`);
-        }
       } else {
         setImageEntityCache({});
       }
@@ -480,10 +491,46 @@ export function useImportGenerate(spaceId: string) {
         checkboxOverrides: ctx.checkboxOverrides,
       });
 
-      // Re-merge cached image entity data with fresh linking relations from current resolved rows
-      if (Object.keys(ctx.imageEntityCache).length > 0) {
+      // Collect image tasks for current resolved rows and check for newly-resolved rows
+      // that need uploads (e.g. rows resolved via rowOverrides after initial generation)
+      const { tasks: rebuildImageTasks, flags: rebuildImageFlags } = collectImageTasks({
+        dataRows,
+        columnMapping: ctx.columnMapping,
+        resolvedRows: plan.resolvedRowsSnapshot,
+        propertyLookup,
+      });
+
+      // Merge invalid-URL flags into unresolvedLinks
+      if (Object.keys(rebuildImageFlags).length > 0) {
+        Object.assign(plan.unresolvedLinks, rebuildImageFlags);
+      }
+
+      // Find tasks for rows that don't have cached image data yet
+      const newImageTasks = rebuildImageTasks.filter(
+        task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]
+      );
+
+      let mergedCache = { ...ctx.imageEntityCache };
+
+      // Upload images for newly-resolved rows
+      if (newImageTasks.length > 0) {
+        const newResult = await uploadImportImages({ tasks: newImageTasks, spaceId });
+        mergedCache = { ...mergedCache, ...newResult.cache };
+        setImageEntityCache(mergedCache);
+
+        for (const { task, error } of newResult.errors) {
+          plan.unresolvedLinks[`${task.rowIndex}:${task.colIdx}`] = {
+            kind: 'image-error',
+            rawValue: task.url,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      // Re-merge all cached image entity data with fresh linking relations
+      if (Object.keys(mergedCache).length > 0) {
         const imageData = buildImageValuesAndRelations({
-          cache: ctx.imageEntityCache,
+          cache: mergedCache,
           resolvedRows: plan.resolvedRowsSnapshot,
           spaceId,
         });

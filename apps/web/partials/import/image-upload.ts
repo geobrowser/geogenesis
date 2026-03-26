@@ -4,7 +4,7 @@ import { ID } from '~/core/id';
 import type { Property, Relation, Value } from '~/core/types';
 import { extractValueString } from '~/core/utils/value';
 
-import type { ImageEntityData, ImageImportTask } from './atoms';
+import type { ImageEntityData, ImageImportTask, UnresolvedImportCell } from './atoms';
 import { toImportCellKey } from './import-generation';
 import { getPropertyFromSources } from './import-generation';
 
@@ -39,9 +39,10 @@ export function collectImageTasks(params: {
   columnMapping: Record<number, string>;
   resolvedRows: Map<number, { entityId: string; name: string }>;
   propertyLookup: PropertyLookup;
-}): ImageImportTask[] {
+}): { tasks: ImageImportTask[]; flags: Record<string, UnresolvedImportCell> } {
   const { dataRows, columnMapping, resolvedRows, propertyLookup } = params;
   const tasks: ImageImportTask[] = [];
+  const flags: Record<string, UnresolvedImportCell> = {};
 
   for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
     const property = getPropertyFromSources(propertyId, propertyLookup);
@@ -56,7 +57,10 @@ export function collectImageTasks(params: {
       const resolvedRow = resolvedRows.get(rowIndex);
       if (!resolvedRow) continue;
 
-      if (!isValidImageUrl(raw)) continue;
+      if (!isValidImageUrl(raw)) {
+        flags[toImportCellKey(rowIndex, colIdx)] = { kind: 'image-invalid', rawValue: raw };
+        continue;
+      }
 
       tasks.push({
         rowIndex,
@@ -70,7 +74,7 @@ export function collectImageTasks(params: {
     }
   }
 
-  return tasks;
+  return { tasks, flags };
 }
 
 export function isValidImageUrl(value: string): boolean {

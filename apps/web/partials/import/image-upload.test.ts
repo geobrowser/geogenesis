@@ -45,7 +45,7 @@ describe('collectImageTasks', () => {
   };
 
   it('collects tasks for IMAGE columns with valid URLs', () => {
-    const tasks = collectImageTasks({
+    const { tasks } = collectImageTasks({
       dataRows: [
         ['Entity A', 'https://example.com/a.png'],
         ['Entity B', 'https://example.com/b.png'],
@@ -69,10 +69,10 @@ describe('collectImageTasks', () => {
   });
 
   it('skips rows without resolved entities', () => {
-    const tasks = collectImageTasks({
+    const { tasks } = collectImageTasks({
       dataRows: [['Entity A', 'https://example.com/a.png']],
       columnMapping: { 0: 'name-prop', 1: imageProperty.id },
-      resolvedRows: new Map(), // no resolved rows
+      resolvedRows: new Map(),
       propertyLookup,
     });
 
@@ -80,7 +80,7 @@ describe('collectImageTasks', () => {
   });
 
   it('skips empty cells', () => {
-    const tasks = collectImageTasks({
+    const { tasks } = collectImageTasks({
       dataRows: [['Entity A', '']],
       columnMapping: { 0: 'name-prop', 1: imageProperty.id },
       resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity A' }]]),
@@ -90,8 +90,8 @@ describe('collectImageTasks', () => {
     expect(tasks).toHaveLength(0);
   });
 
-  it('skips invalid URLs', () => {
-    const tasks = collectImageTasks({
+  it('flags invalid URLs instead of silently dropping them', () => {
+    const { tasks, flags } = collectImageTasks({
       dataRows: [['Entity A', 'not-a-url']],
       columnMapping: { 0: 'name-prop', 1: imageProperty.id },
       resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity A' }]]),
@@ -99,10 +99,11 @@ describe('collectImageTasks', () => {
     });
 
     expect(tasks).toHaveLength(0);
+    expect(flags['0:1']).toMatchObject({ kind: 'image-invalid', rawValue: 'not-a-url' });
   });
 
   it('collects ipfs:// URLs', () => {
-    const tasks = collectImageTasks({
+    const { tasks } = collectImageTasks({
       dataRows: [['Entity A', 'ipfs://bafkreiabc123']],
       columnMapping: { 0: 'name-prop', 1: imageProperty.id },
       resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity A' }]]),
@@ -121,7 +122,7 @@ describe('collectImageTasks', () => {
       relationValueTypes: [],
     };
 
-    const tasks = collectImageTasks({
+    const { tasks } = collectImageTasks({
       dataRows: [['Entity A', 'https://example.com/a.png']],
       columnMapping: { 0: 'name-prop', 1: nonImageProperty.id },
       resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity A' }]]),

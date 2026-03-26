@@ -60,7 +60,9 @@ export type UnresolvedImportCell =
   | { kind: 'entity' }
   | { kind: 'type'; rawType: string }
   | { kind: 'relation'; unresolvedValues: string[] }
-  | { kind: 'checkbox'; rawValue: string };
+  | { kind: 'checkbox'; rawValue: string }
+  | { kind: 'image-invalid'; rawValue: string }
+  | { kind: 'image-error'; rawValue: string; error: string };
 
 /** Per-cell unresolved link metadata keyed as `${rowIndex}:${csvColumnIndex}`. */
 export const unresolvedLinksAtom = atom<Record<string, UnresolvedImportCell>>({});
