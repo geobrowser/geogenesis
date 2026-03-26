@@ -18,24 +18,7 @@ import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
-/** Convert a Uint8Array or string ID to a hex string. */
-function toHexId(id: unknown): string {
-  if (typeof id === 'string') {
-    return id;
-  }
-  if (id instanceof Uint8Array) {
-    return Array.from(id)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  // Fallback for other array-like types
-  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
-    return Array.from(id as ArrayLike<number>)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  return String(id);
-}
+import { toHexId } from '../utils/hex-id';
 
 const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [SystemIds.URL]: 'Url',
