@@ -155,6 +155,7 @@ export function PowerToolsScreen() {
 
   const {
     filterState,
+    resolvedFilterState,
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
@@ -167,7 +168,7 @@ export function PowerToolsScreen() {
 
   // Editors (by permission) use persisted filters; non-editors use local temporary filters.
   // This matches TableBlock's behavior and is independent of the edit mode toggle.
-  const effectiveFilterState = canEdit ? filterState : temporaryFilters;
+  const effectiveFilterState = canEdit ? resolvedFilterState : temporaryFilters;
   const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
   const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
   const setActiveFilterMode = React.useCallback(
