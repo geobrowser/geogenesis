@@ -522,11 +522,10 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-/// objectType: 0 = Entity, 1 = Relation
 export function getEntityVoteCount(
   entityId: string,
   spaceId: string,
-  objectType: 0 | 1 = 0,
+  objectType: 0 | 1 = 0, // objectType: 0 = Entity, 1 = Relation
   signal?: AbortController['signal']
 ) {
   return graphql({
