@@ -151,6 +151,26 @@ function NewPropertyPanel(props: NewPropertyPanelProps) {
     [addImageFileDialogOpenRef, addImageFileDialogCloseTimeoutRef]
   );
 
+  const clearSelectedProperty = React.useCallback(() => {
+    setNewPropertyId(null);
+    setNewPropertyName('');
+    setNewPropertyInitialValue('');
+    newPropertyInitialValueRef.current = '';
+    setNewPropertyImageFile(null);
+    setSelectedAttributeEntities([]);
+  }, [
+    setNewPropertyId,
+    setNewPropertyName,
+    setNewPropertyInitialValue,
+    newPropertyInitialValueRef,
+    setNewPropertyImageFile,
+    setSelectedAttributeEntities,
+  ]);
+
+  const clearSelectedExistingProperty = React.useCallback(() => {
+    setSelectedExistingProperty(null);
+  }, [setSelectedExistingProperty]);
+
   return (
     <div className={isApplyingNewProperty ? 'pointer-events-none opacity-60' : undefined}>
       {newPropertyValueType === 'RELATION' && !newPropertyOnly && (
@@ -173,81 +193,102 @@ function NewPropertyPanel(props: NewPropertyPanelProps) {
 
       {newPropertyValueType === 'RELATION' && useExistingPropertyFromGeo && !newPropertyOnly ? (
         <div className="w-full">
-          <Text variant="metadata" color="grey-04" className="block">
-            Search for an existing property to add
-          </Text>
-          <Spacer height={6} />
-          <SelectEntityCompact
-            key={`power-tools-select-entity-compact-existing-geo-${spaceId}`}
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SystemIds.PROPERTY }]}
-            selected={selectedExistingProperty ? [selectedExistingProperty] : []}
-            onRemoveSelected={() => setSelectedExistingProperty(null)}
-            onDone={result => setSelectedExistingProperty(result)}
-          />
+          {selectedExistingProperty ? (
+            <div className="flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-grey-02 bg-white px-2 py-1 text-[0.8125rem] text-text">
+                <span className="max-w-[240px] truncate">
+                  {selectedExistingProperty.name ?? selectedExistingProperty.id}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearSelectedExistingProperty}
+                  className="shrink-0 rounded p-0.5 hover:bg-grey-02"
+                  aria-label={`Remove ${selectedExistingProperty.name ?? selectedExistingProperty.id}`}
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+          ) : (
+            <SelectEntityCompact
+              key={`power-tools-select-entity-compact-existing-geo-${spaceId}`}
+              spaceId={spaceId}
+              relationValueTypes={[{ id: SystemIds.PROPERTY }]}
+              placeholder="Find an existing property..."
+              onDone={result => setSelectedExistingProperty(result)}
+            />
+          )}
         </div>
       ) : (
         <>
-          <Text variant="metadata" color="grey-04" className="block">
-            Property name
-          </Text>
-          <Spacer height={6} />
-          <SelectEntityCompact
-            key={`power-tools-select-entity-compact-property-name-${spaceId}-${newPropertyValueType}`}
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SystemIds.PROPERTY }]}
-            placeholder="Find or create property..."
-            renderableTypeValue={newPropertyValueType}
-            onRenderableTypeChange={value => setNewPropertyValueType(value)}
-            selected={newPropertyId ? [{ id: newPropertyId, name: newPropertyName || null }] : []}
-            onRemoveSelected={() => {
-              setNewPropertyId(null);
-              setNewPropertyName('');
-              setNewPropertyInitialValue('');
-              newPropertyInitialValueRef.current = '';
-              setNewPropertyImageFile(null);
-              setSelectedAttributeEntities([]);
-            }}
-            onCreateEntity={
-              onCreatePropertyEntity
-                ? result => {
-                    const pickerValueType = result.renderableType;
-                    const valueTypeToUse =
-                      pickerValueType && SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET.has(pickerValueType)
-                        ? pickerValueType
-                        : newPropertyValueType;
+          {newPropertyId ? (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-grey-02 bg-white px-2 py-1 text-[0.8125rem] text-text">
+                  <span className="max-w-[240px] truncate">{newPropertyName || newPropertyId}</span>
+                  <button
+                    type="button"
+                    onClick={clearSelectedProperty}
+                    className="shrink-0 rounded p-0.5 hover:bg-grey-02"
+                    aria-label={`Remove ${newPropertyName || newPropertyId}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+              <Spacer height={12} />
+            </>
+          ) : (
+            <>
+              <SelectEntityCompact
+                key={`power-tools-select-entity-compact-property-name-${spaceId}-${newPropertyValueType}`}
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY }]}
+                placeholder="Find or create property..."
+                renderableTypeValue={newPropertyValueType}
+                onRenderableTypeChange={value => setNewPropertyValueType(value)}
+                onCreateEntity={
+                  onCreatePropertyEntity
+                    ? result => {
+                        const pickerValueType = result.renderableType;
+                        const valueTypeToUse =
+                          pickerValueType && SUPPORTED_NEW_PROPERTY_VALUE_TYPE_SET.has(pickerValueType)
+                            ? pickerValueType
+                            : newPropertyValueType;
 
-                    if (valueTypeToUse !== newPropertyValueType) setNewPropertyValueType(valueTypeToUse);
+                        if (valueTypeToUse !== newPropertyValueType) setNewPropertyValueType(valueTypeToUse);
 
-                    onCreatePropertyEntity({
-                      propertyId: result.id,
-                      name: result.name,
-                      valueType: valueTypeToUse,
-                    });
+                        onCreatePropertyEntity({
+                          propertyId: result.id,
+                          name: result.name,
+                          valueType: valueTypeToUse,
+                        });
+                      }
+                    : undefined
+                }
+                onDone={result => {
+                  setNewPropertyId(result.id);
+                  setNewPropertyName(result.name ?? '');
+                  setNewPropertyInitialValue('');
+                  newPropertyInitialValueRef.current = '';
+                  setNewPropertyImageFile(null);
+                  setSelectedAttributeEntities([]);
+
+                  const existing = properties.find(p => p.id === result.id);
+                  if (existing) {
+                    if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
+                    else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
+                    else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
+                    else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
+                    else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
+                    else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
+                    else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
                   }
-                : undefined
-            }
-            onDone={result => {
-              setNewPropertyId(result.id);
-              setNewPropertyName(result.name ?? '');
-              setNewPropertyInitialValue('');
-              newPropertyInitialValueRef.current = '';
-              setNewPropertyImageFile(null);
-              setSelectedAttributeEntities([]);
-
-              const existing = properties.find(p => p.id === result.id);
-              if (existing) {
-                if (existing.renderableTypeStrict === 'IMAGE') setNewPropertyValueType('IMAGE');
-                else if (existing.renderableTypeStrict === 'URL') setNewPropertyValueType('URL');
-                else if (existing.dataType === 'INTEGER') setNewPropertyValueType('INTEGER');
-                else if (existing.dataType === 'BOOLEAN') setNewPropertyValueType('BOOLEAN');
-                else if (existing.dataType === 'DATETIME') setNewPropertyValueType('DATETIME');
-                else if (existing.dataType === 'TEXT') setNewPropertyValueType('TEXT');
-                else if (existing.dataType === 'RELATION') setNewPropertyValueType('RELATION');
-              }
-            }}
-          />
-          <Spacer height={12} />
+                }}
+              />
+              <Spacer height={12} />
+            </>
+          )}
 
           <Text variant="metadata" color="grey-04" className="block">
             Add property values (optional)
