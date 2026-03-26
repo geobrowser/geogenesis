@@ -98,28 +98,25 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
     queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, objectType] });
   };
 
-  const { mutate: upvote, status: upvoteStatus } = useMutation({
+  const { mutate: upvote } = useMutation({
     mutationFn: () => castVote('UP'),
     onSuccess,
   });
 
-  const { mutate: downvote, status: downvoteStatus } = useMutation({
+  const { mutate: downvote } = useMutation({
     mutationFn: () => castVote('DOWN'),
     onSuccess,
   });
 
-  const { mutate: unvote, status: unvoteStatus } = useMutation({
+  const { mutate: unvote } = useMutation({
     mutationFn: () => castVote('NONE'),
     onSuccess,
   });
-
-  const isPending = upvoteStatus === 'pending' || downvoteStatus === 'pending' || unvoteStatus === 'pending';
 
   return {
     upvote,
     downvote,
     unvote,
-    isPending,
     isConnected: !!personalSpaceId && isRegistered,
     personalSpaceId,
   };

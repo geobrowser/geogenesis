@@ -21,7 +21,7 @@ type EntityVoteButtonsProps = {
 };
 
 export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityVoteButtonsProps) {
-  const { upvote, downvote, unvote, isPending, isConnected, personalSpaceId } = useEntityVote({
+  const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
     objectType,
@@ -70,7 +70,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const displayScore = optimisticScore !== null ? optimisticScore : netScore;
 
   function handleUpvote() {
-    if (!isConnected || isPending) return;
+    if (!isConnected) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 0) {
       setOptimisticVote('none');
@@ -96,7 +96,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   }
 
   function handleDownvote() {
-    if (!isConnected || isPending) return;
+    if (!isConnected) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 1) {
       setOptimisticVote('none');
@@ -130,7 +130,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
         onClick={handleDownvote}
-        disabled={!isConnected || isPending}
+        disabled={!isConnected}
         title={isConnected ? (downvoteActive ? 'Remove downvote' : 'Downvote') : 'Connect wallet to vote'}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
@@ -144,7 +144,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
 
       <button
         onClick={handleUpvote}
-        disabled={!isConnected || isPending}
+        disabled={!isConnected}
         title={isConnected ? (upvoteActive ? 'Remove upvote' : 'Upvote') : 'Connect wallet to vote'}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
