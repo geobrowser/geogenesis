@@ -470,12 +470,18 @@ export function PowerToolsScreen() {
     [storage, spaceId]
   );
 
+  const fetchAllIdsRef = React.useRef(data.fetchAllIds);
+  React.useEffect(() => {
+    fetchAllIdsRef.current = data.fetchAllIds;
+  }, [data.fetchAllIds]);
+
   const handleApplyNewProperty = React.useCallback(
     async (payload: EditApplyNewPropertyPayload) => {
       const {
         propertyId,
         name,
         valueType,
+        applyToAllEntities,
         selectedRowEntityIds,
         selectedEntities,
         initialValue,
@@ -489,10 +495,12 @@ export function PowerToolsScreen() {
         dataType: baseDataType,
       };
 
-      const targetEntityIds =
-        selectedRowEntityIds.length > 0
+      const targetEntityIds = applyToAllEntities
+        ? await fetchAllIdsRef.current()
+        : selectedRowEntityIds.length > 0
           ? selectedRowEntityIds
           : selectableRows.map(r => r.entityId);
+      if (targetEntityIds.length === 0) return;
       const entityIdToSpaceId = new Map(
         selectableRows
           .filter(r => targetEntityIds.includes(r.entityId))
