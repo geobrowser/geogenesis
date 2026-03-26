@@ -293,24 +293,20 @@ function SortableHeaderCell({
   onSort,
   onResizeMouseDown,
   onHideColumn,
-  selectedCount,
-  spaceId,
-  properties,
-  selectedEntityIdsForNewProperty,
-  onRemoveProperties,
-  isEditing,
+  removePropertyPopover,
 }: {
   property: Property;
   sortState: ColumnSortState;
   onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
   onResizeMouseDown: (event: React.MouseEvent, propertyId: string) => void;
   onHideColumn?: (propertyId: string) => void;
-  selectedCount: number;
-  spaceId: string;
-  properties: Property[];
-  selectedEntityIdsForNewProperty: string[];
-  onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
-  isEditing: boolean;
+  removePropertyPopover?: {
+    selectedCount: number;
+    spaceId: string;
+    properties: Property[];
+    selectedEntityIds: string[];
+    onRemoveProperties: (payload: EditRemovePropertiesPayload) => void;
+  };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: property.id,
@@ -355,7 +351,7 @@ function SortableHeaderCell({
           >
             <EyeHide />
           </button>
-          {isEditing && onRemoveProperties && (
+          {removePropertyPopover && (
             <EditEntitiesPopover
               trigger={
                 <button
@@ -367,11 +363,11 @@ function SortableHeaderCell({
                   <CloseSmall />
                 </button>
               }
-              selectedCount={selectedCount}
-              spaceId={spaceId}
-              properties={properties}
-              selectedEntityIds={selectedEntityIdsForNewProperty}
-              onRemoveProperties={onRemoveProperties}
+              selectedCount={removePropertyPopover.selectedCount}
+              spaceId={removePropertyPopover.spaceId}
+              properties={removePropertyPopover.properties}
+              selectedEntityIds={removePropertyPopover.selectedEntityIds}
+              onRemoveProperties={removePropertyPopover.onRemoveProperties}
               removePropertyOnly
               initialPropertiesMarkedForRemoval={[property.id]}
               contentAlign="center"
@@ -584,12 +580,17 @@ export function PowerToolsTable({
                   onSort={onSort}
                   onResizeMouseDown={handleMouseDown}
                   onHideColumn={onHideColumn}
-                  selectedCount={selectedCount}
-                  spaceId={spaceId}
-                  properties={properties}
-                  selectedEntityIdsForNewProperty={selectedEntityIdsForNewProperty}
-                  onRemoveProperties={onRemoveProperties}
-                  isEditing={isEditing}
+                  removePropertyPopover={
+                    isEditing && onRemoveProperties
+                      ? {
+                          selectedCount,
+                          spaceId,
+                          properties,
+                          selectedEntityIds: selectedEntityIdsForNewProperty,
+                          onRemoveProperties,
+                        }
+                      : undefined
+                  }
                 />
               ))}
               {columnLayout.showAddColumn && (
