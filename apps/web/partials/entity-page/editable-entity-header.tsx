@@ -91,7 +91,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
             )}
           </>
         ) : (
-          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isRelationPage={true} />
+          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
         )}
 
         <div className="flex items-center gap-5">

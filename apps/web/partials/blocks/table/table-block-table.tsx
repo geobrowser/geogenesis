@@ -29,6 +29,7 @@ import { Text } from '~/design-system/text';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { SortableColumnHeader } from './sortable-column-header';
@@ -325,6 +326,7 @@ export const TableBlockTable = ({
                   </th>
                 );
               })}
+              {!isEditing && <th className="w-px p-[10px]" />}
             </tr>
           </thead>
           <tbody>
@@ -343,6 +345,11 @@ export const TableBlockTable = ({
                       </TableCell>
                     );
                   })}
+                  {!isEditing && (
+                    <TableCell isShown={true} isEditMode={false}>
+                      <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
+                    </TableCell>
+                  )}
                 </tr>
               );
             })}

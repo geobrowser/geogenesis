@@ -713,18 +713,10 @@ export const resultsQuery = graphql(/* GraphQL */ `
  * Returns entity metadata + connection counts for second-order ranking.
  */
 export const importNameValuesQuery = graphql(/* GraphQL */ `
-  query ImportNameValues(
-    $propertyId: UUID!
-    $texts: [String!]
-    $first: Int
-    $entityFilter: EntityFilter
-  ) {
+  query ImportNameValues($propertyId: UUID!, $texts: [String!], $first: Int, $entityFilter: EntityFilter) {
     values(
       condition: { propertyId: $propertyId }
-      filter: {
-        text: { inInsensitive: $texts }
-        entity: $entityFilter
-      }
+      filter: { text: { inInsensitive: $texts }, entity: $entityFilter }
       first: $first
     ) {
       id
@@ -734,8 +726,12 @@ export const importNameValuesQuery = graphql(/* GraphQL */ `
         id
         name
         typeIds
-        backlinks { totalCount }
-        relations { totalCount }
+        backlinks {
+          totalCount
+        }
+        relations {
+          totalCount
+        }
       }
     }
   }
@@ -822,6 +818,28 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           }
         }
       }
+    }
+  }
+`);
+
+export const entityVoteCountQuery = graphql(/* GraphQL */ `
+  query EntityVoteCount($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
+    votesCountByObjectIdAndObjectTypeAndSpaceId(objectId: $objectId, objectType: $objectType, spaceId: $spaceId) {
+      upvotes
+      downvotes
+    }
+  }
+`);
+
+export const userEntityVoteQuery = graphql(/* GraphQL */ `
+  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
+    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(
+      userId: $userId
+      objectId: $objectId
+      objectType: $objectType
+      spaceId: $spaceId
+    ) {
+      voteType
     }
   }
 `);

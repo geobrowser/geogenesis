@@ -50,6 +50,13 @@ export const GOVERNANCE_ACTIONS = {
   SUBSPACE_TOPIC_REMOVED: '0x98ee515a05d2eb17f8e4c1e997a36ee6a8eca03af78d98943787935f9e39adda' as Hex,
 } as const;
 
+/** Permissionless action constants (keccak256 hashes) for curation votes */
+export const PERMISSIONLESS_ACTIONS = {
+  UPVOTED: '0x1fc04a8d9387c7bd1199a2a77c8e531a7a7b11991df5dcc8c9acb6abcb481725' as Hex,
+  DOWNVOTED: '0xde8b897ce7cc541dacb388d5aabb3dc0fb7856920284f41582c15b5fc31a8662' as Hex,
+  UNVOTED: '0x3bd4c337382f79aa5007a91169bb57723b5dd59e6b4bb60d20362bcc0d9d998b' as Hex,
+} as const;
+
 /**
  * DAOSpace voting modes
  */

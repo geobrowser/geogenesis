@@ -61,7 +61,6 @@ export default async function Layout(props0: LayoutProps) {
             <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
             <SpacePageMetadataHeader
               spaceId={spaceId}
-              entityId={props.id}
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={spaceId} />

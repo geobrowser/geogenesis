@@ -4,6 +4,8 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
@@ -30,16 +32,17 @@ import { Divider } from '~/design-system/divider';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
+import { EntityVoteButtons } from './entity-vote-buttons';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  isRelationPage?: boolean;
+  isVoteable?: boolean;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
@@ -251,30 +254,33 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   }, [propertyData, entityId, spaceId, storage, name, relations]);
 
   return (
-    <div className="flex items-center gap-1 text-text">
-      {isPropertyEntity && editable && (
-        <>
-          <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
-          <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-        </>
-      )}
-      {propertyDataType && !editable && (
-        <DataTypePill
-          dataType={propertyDataType.dataType}
-          renderableType={propertyDataType.renderableType}
-          spaceId={spaceId}
-        />
-      )}
-      {editable ? (
-        <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-      ) : (
-        <ReadableRelationsGroup
-          entityId={id}
-          spaceId={spaceId}
-          propertyId={SystemIds.TYPES_PROPERTY}
-          isMetadataHeader={true}
-        />
-      )}
+    <div className={cx('flex items-center text-text', isVoteable ? 'justify-between' : 'gap-1')}>
+      <div className="flex items-center gap-1">
+        {isPropertyEntity && editable && (
+          <>
+            <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
+            <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
+          </>
+        )}
+        {propertyDataType && !editable && (
+          <DataTypePill
+            dataType={propertyDataType.dataType}
+            renderableType={propertyDataType.renderableType}
+            spaceId={spaceId}
+          />
+        )}
+        {editable ? (
+          <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+        ) : (
+          <ReadableRelationsGroup
+            entityId={id}
+            spaceId={spaceId}
+            propertyId={SystemIds.TYPES_PROPERTY}
+            isMetadataHeader={true}
+          />
+        )}
+      </div>
+      {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
     </div>
   );
 }
