@@ -398,4 +398,64 @@ describe('buildImportPlan', () => {
     // Caller's map should still have status 'created'
     expect(resolvedEntities.get('prop-rel::Project X')?.status).toBe('created');
   });
+
+  // ── IMAGE column handling ──────────────────────────────────────────
+
+  const imageProperty = {
+    id: 'prop-image',
+    name: 'Avatar',
+    dataType: 'RELATION' as const,
+    renderableTypeStrict: 'IMAGE' as const,
+    relationValueTypes: [],
+  };
+
+  const imagePropertyLookup = {
+    schema: [imageProperty],
+    extraProperties: {},
+    getProperty: () => null,
+  };
+
+  it('collectRelationCells skips IMAGE columns', () => {
+    const metas = collectRelationCells({
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: imageProperty.id },
+      dataRows: [['Entity', 'https://example.com/image.png']],
+      propertyLookup: imagePropertyLookup,
+    });
+
+    expect(metas).toHaveLength(0);
+  });
+
+  it('buildUnresolvedLinksByCell does not flag IMAGE columns', () => {
+    const flags = buildUnresolvedLinksByCell({
+      dataRows: [['Entity', 'https://example.com/image.png']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: imageProperty.id },
+      nameColIdx: 0,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity' }]]),
+      resolvedEntities: new Map(),
+      propertyLookup: imagePropertyLookup,
+    });
+
+    expect(Object.keys(flags)).toHaveLength(0);
+  });
+
+  it('buildGeneratedRows skips IMAGE columns', () => {
+    const built = buildGeneratedRows({
+      dataRows: [['Entity', 'https://example.com/image.png']],
+      columnMapping: { 0: SystemIds.NAME_PROPERTY, 1: imageProperty.id },
+      resolvedRows: new Map([[0, { entityId: 'e1', name: 'Entity' }]]),
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedTypes: new Map(),
+      resolvedEntities: new Map(),
+      spaceId: 'space-1',
+      propertyLookup: imagePropertyLookup,
+    });
+
+    // Only the Name value, no image relations
+    expect(built.values).toHaveLength(1);
+    expect(built.values[0].property.id).toBe(SystemIds.NAME_PROPERTY);
+    expect(built.relations).toHaveLength(0);
+  });
 });

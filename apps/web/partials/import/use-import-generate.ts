@@ -12,6 +12,8 @@ import {
   checkboxOverridesAtom,
   columnMappingAtom,
   extraPropertiesAtom,
+  imageEntityCacheAtom,
+  imageTasksAtom,
   importSessionIdAtom,
   loadingAtom,
   relationOverridesAtom,
@@ -28,6 +30,7 @@ import {
   unresolvedLinksAtom,
   valuesAtom,
 } from './atoms';
+import { buildImageValuesAndRelations, collectImageTasks, uploadImportImages } from './image-upload';
 import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
 import { ImportSessionStore } from './import-session-store';
@@ -54,9 +57,11 @@ export function useImportGenerate(spaceId: string) {
   const setResolvedRowsSnapshot = useSetAtom(resolvedRowsSnapshotAtom);
   const setResolvedEntitiesSnapshot = useSetAtom(resolvedEntitiesSnapshotAtom);
   const setResolvedTypesSnapshot = useSetAtom(resolvedTypesSnapshotAtom);
+  const setImageTasks = useSetAtom(imageTasksAtom);
   const resolvedEntitiesSnapshot = useAtomValue(resolvedEntitiesSnapshotAtom);
   const resolvedRowsSnapshot = useAtomValue(resolvedRowsSnapshotAtom);
   const resolvedTypesSnapshot = useAtomValue(resolvedTypesSnapshotAtom);
+  const setImageEntityCache = useSetAtom(imageEntityCacheAtom);
   const setStep = useSetAtom(stepAtom);
   const { clearGeneratedChanges } = useImportSession(spaceId);
 
@@ -250,6 +255,48 @@ export function useImportGenerate(spaceId: string) {
 
       if (!isCurrent()) return;
 
+      // Upload images for IMAGE columns and merge into the plan
+      const { tasks: imageTasks, flags: imageFlags } = collectImageTasks({
+        dataRows,
+        columnMapping,
+        resolvedRows: finalPlan.resolvedRowsSnapshot,
+        propertyLookup,
+      });
+      setImageTasks(imageTasks);
+
+      // Merge invalid-URL flags into unresolvedLinks
+      if (Object.keys(imageFlags).length > 0) {
+        Object.assign(finalPlan.unresolvedLinks, imageFlags);
+      }
+
+      if (imageTasks.length > 0) {
+        const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
+        if (!isCurrent()) return;
+
+        // Cache per-cell image entity data (linking relations are regenerated from current rows)
+        setImageEntityCache(imageResult.cache);
+
+        // Flag failed uploads as unresolved so the review UI shows them
+        for (const { task, error } of imageResult.errors) {
+          const key = `${task.rowIndex}:${task.colIdx}`;
+          finalPlan.unresolvedLinks[key] = {
+            kind: 'image-error',
+            rawValue: task.url,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+
+        const imageData = buildImageValuesAndRelations({
+          cache: imageResult.cache,
+          resolvedRows: finalPlan.resolvedRowsSnapshot,
+          spaceId,
+        });
+        finalPlan.values.push(...imageData.values);
+        finalPlan.relations.push(...imageData.relations);
+      } else {
+        setImageEntityCache({});
+      }
+
       // ── Apply in chunks to avoid a single long frame ────────────────
       // Clear the initial plan's store entries first
       if (initialPlan.values.length > 0 || initialPlan.relations.length > 0) {
@@ -317,6 +364,8 @@ export function useImportGenerate(spaceId: string) {
     selectedType,
     typeOverrides,
     typesColumnIndex,
+    setImageTasks,
+    setImageEntityCache,
     setRelations,
     setValues,
     setStep,
@@ -332,11 +381,13 @@ export function useImportGenerate(spaceId: string) {
 
   const values = useAtomValue(valuesAtom);
   const relations = useAtomValue(relationsAtom);
+  const imageEntityCache = useAtomValue(imageEntityCacheAtom);
 
   // Refs for values that change frequently so rebuild stays stable
   const rebuildContextRef = useRef({
     values,
     relations,
+    imageEntityCache,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -354,6 +405,7 @@ export function useImportGenerate(spaceId: string) {
   rebuildContextRef.current = {
     values,
     relations,
+    imageEntityCache,
     checkboxOverrides,
     relationOverrides,
     typeOverrides,
@@ -438,6 +490,58 @@ export function useImportGenerate(spaceId: string) {
         getExistingRelations: (entityId: string) => store.getResolvedRelations(entityId),
         checkboxOverrides: ctx.checkboxOverrides,
       });
+
+      // Collect image tasks for current resolved rows and check for newly-resolved rows
+      // that need uploads (e.g. rows resolved via rowOverrides after initial generation)
+      const { tasks: rebuildImageTasks, flags: rebuildImageFlags } = collectImageTasks({
+        dataRows,
+        columnMapping: ctx.columnMapping,
+        resolvedRows: plan.resolvedRowsSnapshot,
+        propertyLookup,
+      });
+
+      // Merge invalid-URL flags into unresolvedLinks
+      if (Object.keys(rebuildImageFlags).length > 0) {
+        Object.assign(plan.unresolvedLinks, rebuildImageFlags);
+      }
+
+      // Find tasks for rows that don't have cached image data yet
+      const newImageTasks = rebuildImageTasks.filter(
+        task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]
+      );
+
+      let mergedCache = { ...ctx.imageEntityCache };
+
+      // Upload images for newly-resolved rows (with session guard)
+      if (newImageTasks.length > 0) {
+        const rebuildSessionId = sid;
+        const newResult = await uploadImportImages({ tasks: newImageTasks, spaceId });
+
+        // If the session changed while uploading, abort this rebuild
+        if (sessionIdRef.current !== rebuildSessionId) return;
+
+        mergedCache = { ...mergedCache, ...newResult.cache };
+        setImageEntityCache(mergedCache);
+
+        for (const { task, error } of newResult.errors) {
+          plan.unresolvedLinks[`${task.rowIndex}:${task.colIdx}`] = {
+            kind: 'image-error',
+            rawValue: task.url,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      // Re-merge all cached image entity data with fresh linking relations
+      if (Object.keys(mergedCache).length > 0) {
+        const imageData = buildImageValuesAndRelations({
+          cache: mergedCache,
+          resolvedRows: plan.resolvedRowsSnapshot,
+          spaceId,
+        });
+        plan.values.push(...imageData.values);
+        plan.relations.push(...imageData.relations);
+      }
 
       // Chunked store writes to avoid a single long frame
       const VALUE_CHUNK = 2000;
