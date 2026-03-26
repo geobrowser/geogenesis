@@ -212,7 +212,7 @@ export function PowerToolsScreen() {
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
-  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
+  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set([SystemIds.BLOCKS]));
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
   const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
