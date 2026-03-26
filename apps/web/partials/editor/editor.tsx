@@ -42,7 +42,8 @@ interface Props {
 }
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
-  const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
+  useSuppressFlushSyncWarning();
+  const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
@@ -189,7 +190,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}
       >
-        {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
+        {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}
       </div>
@@ -291,6 +292,23 @@ function useInterceptEditorLinks(spaceId: string) {
   }, [router, spaceId]);
 }
 
+
+// ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
+// https://github.com/ueberdosis/tiptap/issues/3764
+const useSuppressFlushSyncWarning = () => {
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const orig = console.error;
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
+        return;
+      orig.apply(console, args);
+    };
+    return () => {
+      console.error = orig;
+    };
+  }, []);
+};
 
 function normalizeEditorContent(content: JSONContent): JSONContent {
   const normalizedAttrs = content.attrs
