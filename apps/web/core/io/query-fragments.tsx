@@ -713,18 +713,10 @@ export const resultsQuery = graphql(/* GraphQL */ `
  * Returns entity metadata + connection counts for second-order ranking.
  */
 export const importNameValuesQuery = graphql(/* GraphQL */ `
-  query ImportNameValues(
-    $propertyId: UUID!
-    $texts: [String!]
-    $first: Int
-    $entityFilter: EntityFilter
-  ) {
+  query ImportNameValues($propertyId: UUID!, $texts: [String!], $first: Int, $entityFilter: EntityFilter) {
     values(
       condition: { propertyId: $propertyId }
-      filter: {
-        text: { inInsensitive: $texts }
-        entity: $entityFilter
-      }
+      filter: { text: { inInsensitive: $texts }, entity: $entityFilter }
       first: $first
     ) {
       id
@@ -734,8 +726,12 @@ export const importNameValuesQuery = graphql(/* GraphQL */ `
         id
         name
         typeIds
-        backlinks { totalCount }
-        relations { totalCount }
+        backlinks {
+          totalCount
+        }
+        relations {
+          totalCount
+        }
       }
     }
   }

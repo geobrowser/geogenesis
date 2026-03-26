@@ -23,12 +23,12 @@ import {
   entityQuery,
   entityTypesQuery,
   entityVoteCountQuery,
+  importNameValuesQuery,
   propertiesBatchQuery,
   propertyQuery,
   relationEntityQuery,
   relationEntityRelationsQuery,
   relationsByToEntityIdsQuery,
-  importNameValuesQuery,
   resultQuery,
   spaceQuery,
   spacesQuery,
@@ -475,10 +475,7 @@ export type NameValueMatch = {
  * Matches multiple names in one request using `text: { inInsensitive }`.
  * Returns value rows with entity metadata for client-side ranking.
  */
-export function getNameValuesBatch(
-  args: { names: string[]; typeIds?: string[] },
-  signal?: AbortController['signal']
-) {
+export function getNameValuesBatch(args: { names: string[]; typeIds?: string[] }, signal?: AbortController['signal']) {
   const entityFilter: EntityFilter | undefined = args.typeIds?.length
     ? { typeIds: { in: args.typeIds } }
     : BLOCK_TYPE_EXCLUSION_FILTER;

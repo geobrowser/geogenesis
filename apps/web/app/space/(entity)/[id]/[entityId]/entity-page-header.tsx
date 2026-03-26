@@ -6,7 +6,6 @@ import type { Relation } from '~/core/types';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 interface EntityPageHeaderProps {
   showHeading: boolean;
@@ -30,12 +29,7 @@ export function EntityPageHeader({
     <div className="space-y-2">
       <EntityPageRelations entityId={entityId} spaceId={spaceId} serverRelations={serverRelations} />
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
-      {showHeader && !isRelationPage && (
-        <div className="flex items-center justify-between">
-          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
-          <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
-        </div>
-      )}
+      {showHeader && !isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
     </div>
   );
 }
