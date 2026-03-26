@@ -21,7 +21,7 @@ type EntityVoteButtonsProps = {
 };
 
 export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityVoteButtonsProps) {
-  const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
+  const { upvote, downvote, unvote, isPending, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
     objectType,
@@ -70,7 +70,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const displayScore = optimisticScore !== null ? optimisticScore : netScore;
 
   function handleUpvote() {
-    if (!isConnected) return;
+    if (!isConnected || isPending) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 0) {
       setOptimisticVote('none');
@@ -96,7 +96,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   }
 
   function handleDownvote() {
-    if (!isConnected) return;
+    if (!isConnected || isPending) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 1) {
       setOptimisticVote('none');
@@ -130,24 +130,24 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
         onClick={handleDownvote}
-        disabled={!isConnected}
+        disabled={!isConnected || isPending}
         title={isConnected ? (downvoteActive ? 'Remove downvote' : 'Downvote') : 'Connect wallet to vote'}
         className={cx(
-          'group flex h-5 w-5 items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isConnected && 'cursor-default opacity-50'
         )}
       >
         <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
       </button>
 
-      <span className="min-w-[2ch] text-center text-[15px]! tabular-nums">{scoreLabel}</span>
+      <span className="min-w-[2ch] text-center text-[16px]! tabular-nums">{scoreLabel}</span>
 
       <button
         onClick={handleUpvote}
-        disabled={!isConnected}
+        disabled={!isConnected || isPending}
         title={isConnected ? (upvoteActive ? 'Remove upvote' : 'Upvote') : 'Connect wallet to vote'}
         className={cx(
-          'group flex h-5 w-5 items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isConnected && 'cursor-default opacity-50'
         )}
       >
