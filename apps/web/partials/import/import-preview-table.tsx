@@ -195,7 +195,9 @@ function PropertyMappingPopover({
 }
 
 function isImageUrl(value: string): boolean {
-  return value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://');
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('ipfs://') || normalized.startsWith('http://') || normalized.startsWith('https://');
 }
 
 type Props = {
@@ -466,7 +468,11 @@ export function ImportPreviewTable({
                           );
                         })() : isImageColumn && value && isImageUrl(value) ? (
                           <div className="overflow-hidden rounded" style={{ width: 60 }}>
-                            <NativeGeoImage value={value} alt="" className="h-auto w-[60px] object-cover" />
+                            <NativeGeoImage
+                              value={value}
+                              alt={`Image for ${col.propertyName ?? 'column'}`}
+                              className="h-auto w-[60px] object-cover"
+                            />
                           </div>
                         ) : isRelation && value ? (
                           <div className="flex flex-wrap items-center gap-2 overflow-hidden">

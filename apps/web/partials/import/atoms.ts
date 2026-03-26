@@ -1,6 +1,6 @@
 import { atom } from 'jotai';
 
-import { Property, Value } from '~/core/types';
+import { Property, Relation, Value } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -54,7 +54,7 @@ export const entityCountAtom = atom(get => {
 export const valuesAtom = atom<Array<Value>>([]);
 
 /** Generated relations (e.g. Types) for the import. Passed to makeBulkProposal with values. */
-export const relationsAtom = atom<import('~/core/types').Relation[]>([]);
+export const relationsAtom = atom<Relation[]>([]);
 
 export type UnresolvedImportCell =
   | { kind: 'entity' }
@@ -140,7 +140,7 @@ export type ImageEntityData = {
   /** Values belonging to the image entity (IMAGE_URL_PROPERTY, width, height) */
   values: Value[];
   /** Internal relations of the image entity (e.g. Types → IMAGE_TYPE) */
-  relations: import('~/core/types').Relation[];
+  relations: Relation[];
 };
 
 export const imageEntityCacheAtom = atom<Record<string, ImageEntityData>>({});
