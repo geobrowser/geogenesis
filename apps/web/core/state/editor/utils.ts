@@ -1,11 +1,4 @@
-import { JSONContent, generateHTML } from '@tiptap/react';
-
-import { tiptapExtensions } from '~/partials/editor/extensions';
-
-/* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
-export const getTextNodeHtml = (node: JSONContent): string => {
-  return generateHTML({ type: 'doc', content: [node] }, tiptapExtensions);
-};
+import { JSONContent } from '@tiptap/react';
 
 // Returns the id of the first paragraph even if nested inside of a list
 export const getNodeId = (node: JSONContent): string => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
