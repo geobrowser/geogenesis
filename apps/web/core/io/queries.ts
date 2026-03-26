@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as Effect from 'effect/Effect';
 
+import { getConfig } from '~/core/environment/environment';
 import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
@@ -11,9 +12,7 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
-import { getConfig } from '~/core/environment/environment';
 import { graphql } from './graphql-client';
-import { restFetch } from './rest';
 import {
   entitiesBatchQuery,
   entitiesOrderedByPropertyQuery,
@@ -23,6 +22,7 @@ import {
   entityPageQuery,
   entityQuery,
   entityTypesQuery,
+  entityVoteCountQuery,
   propertiesBatchQuery,
   propertyQuery,
   relationEntityQuery,
@@ -33,7 +33,9 @@ import {
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
+  userEntityVoteQuery,
 } from './query-fragments';
+import { restFetch } from './rest';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -519,6 +521,42 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     variables: {
       ids,
     },
+    signal,
+  });
+}
+
+/// objectType: 0 = Entity, 1 = Relation
+export function getEntityVoteCount(
+  entityId: string,
+  spaceId: string,
+  objectType: 0 | 1 = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entityVoteCountQuery,
+    decoder: data => {
+      const result = data.votesCountByObjectIdAndObjectTypeAndSpaceId;
+      if (!result) return null;
+      return { upvotes: result.upvotes, downvotes: result.downvotes };
+    },
+    variables: { objectId: entityId, objectType, spaceId },
+    signal,
+  });
+}
+
+export function getUserEntityVote(
+  userId: string,
+  entityId: string,
+  spaceId: string,
+  objectType: 0 | 1 = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: userEntityVoteQuery,
+    decoder: data => {
+      return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
+    },
+    variables: { userId, objectId: entityId, objectType, spaceId },
     signal,
   });
 }

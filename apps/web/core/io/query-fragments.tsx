@@ -825,3 +825,25 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const entityVoteCountQuery = graphql(/* GraphQL */ `
+  query EntityVoteCount($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
+    votesCountByObjectIdAndObjectTypeAndSpaceId(objectId: $objectId, objectType: $objectType, spaceId: $spaceId) {
+      upvotes
+      downvotes
+    }
+  }
+`);
+
+export const userEntityVoteQuery = graphql(/* GraphQL */ `
+  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
+    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(
+      userId: $userId
+      objectId: $objectId
+      objectType: $objectType
+      spaceId: $spaceId
+    ) {
+      voteType
+    }
+  }
+`);
