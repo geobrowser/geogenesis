@@ -512,9 +512,14 @@ export function useImportGenerate(spaceId: string) {
 
       let mergedCache = { ...ctx.imageEntityCache };
 
-      // Upload images for newly-resolved rows
+      // Upload images for newly-resolved rows (with session guard)
       if (newImageTasks.length > 0) {
+        const rebuildSessionId = sid;
         const newResult = await uploadImportImages({ tasks: newImageTasks, spaceId });
+
+        // If the session changed while uploading, abort this rebuild
+        if (sessionIdRef.current !== rebuildSessionId) return;
+
         mergedCache = { ...mergedCache, ...newResult.cache };
         setImageEntityCache(mergedCache);
 

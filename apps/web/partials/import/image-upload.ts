@@ -2,6 +2,7 @@ import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { ID } from '~/core/id';
 import type { Property, Relation, Value } from '~/core/types';
+import { toHexId } from '~/core/utils/hex-id';
 import { extractValueString } from '~/core/utils/value';
 
 import type { ImageEntityData, ImageImportTask, UnresolvedImportCell } from './atoms';
@@ -13,22 +14,6 @@ type PropertyLookup = {
   extraProperties: Record<string, Property>;
   getProperty: (propertyId: string) => Property | null;
 };
-
-/** Convert a Uint8Array or string ID to a hex string. */
-function toHexId(id: unknown): string {
-  if (typeof id === 'string') return id;
-  if (id instanceof Uint8Array) {
-    return Array.from(id)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
-    return Array.from(id as ArrayLike<number>)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  return String(id);
-}
 
 /**
  * Scan data rows for IMAGE-typed columns and collect upload tasks.
@@ -119,7 +104,6 @@ export async function uploadImportImages(params: {
         cache[key] = result.value;
       } else {
         errors.push({ task: batch[j], error: result.reason });
-        console.error('[import] Failed to upload image:', batch[j].url, result.reason);
       }
     }
 
@@ -213,7 +197,7 @@ async function uploadAndCreateImageEntity(task: ImageImportTask, spaceId: string
     if (op.type === 'createRelation') {
       relations.push({
         id: toHexId(op.id),
-        entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+        entityId: op.entity ? toHexId(op.entity) : ID.createEntityId(),
         fromEntity: { id: toHexId(op.from), name: null },
         type: { id: toHexId(op.relationType), name: null },
         toEntity: { id: toHexId(op.to), name: null, value: toHexId(op.to) },
