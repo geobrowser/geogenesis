@@ -525,18 +525,19 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
 
 export function getEntityVoteCount(
   entityId: string,
-  spaceId: string,
   objectType: 0 | 1 = 0, // objectType: 0 = Entity, 1 = Relation
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: entityVoteCountQuery,
     decoder: data => {
-      const result = data.votesCountByObjectIdAndObjectTypeAndSpaceId;
-      if (!result) return null;
-      return { upvotes: result.upvotes, downvotes: result.downvotes };
+      const nodes = data.votesCountsConnection?.nodes;
+      if (!nodes || nodes.length === 0) return null;
+      const upvotes = nodes.reduce((sum: number, n: { upvotes: string }) => sum + Number(n.upvotes), 0);
+      const downvotes = nodes.reduce((sum: number, n: { downvotes: string }) => sum + Number(n.downvotes), 0);
+      return { upvotes, downvotes };
     },
-    variables: { objectId: entityId, objectType, spaceId },
+    variables: { objectId: entityId, objectType },
     signal,
   });
 }

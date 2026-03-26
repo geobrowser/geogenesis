@@ -37,8 +37,8 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const [votersOpen, setVotersOpen] = React.useState(false);
 
   const { data: voteCounts } = useQuery<{ upvotes: number; downvotes: number } | null>({
-    queryKey: ['entity-vote-count', entityId, spaceId, objectType],
-    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, spaceId, objectType)),
+    queryKey: ['entity-vote-count', entityId, objectType],
+    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, objectType)),
     staleTime: 30_000,
   });
 
