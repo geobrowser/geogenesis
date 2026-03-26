@@ -94,7 +94,7 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
   );
 
   const onSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['entity-vote-count', entityId, spaceId, objectType] });
+    queryClient.invalidateQueries({ queryKey: ['entity-vote-count', entityId, objectType] });
     queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, objectType] });
   };
 

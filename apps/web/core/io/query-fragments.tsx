@@ -823,10 +823,13 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
 `);
 
 export const entityVoteCountQuery = graphql(/* GraphQL */ `
-  query EntityVoteCount($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
-    votesCountByObjectIdAndObjectTypeAndSpaceId(objectId: $objectId, objectType: $objectType, spaceId: $spaceId) {
-      upvotes
-      downvotes
+  query EntityVoteCount($objectId: UUID!, $objectType: Int!) {
+    votesCountsConnection(condition: { objectId: $objectId, objectType: $objectType }) {
+      nodes {
+        spaceId
+        upvotes
+        downvotes
+      }
     }
   }
 `);
