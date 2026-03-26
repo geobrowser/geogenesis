@@ -44,6 +44,8 @@ type DeleteValueItemProps = {
   directImageUrl?: string | null;
 };
 
+const EMPTY_PROPERTY_IDS: string[] = [];
+
 function CurrentImageThumbnail({
   imageEntityId,
   spaceId,
@@ -156,6 +158,7 @@ export type EditApplyNewPropertyPayload = {
   propertyId: string;
   name: string;
   valueType: SwitchableRenderableType;
+  applyToAllEntities?: boolean;
   selectedRowEntityIds: string[];
   selectedEntities?: SelectEntityCompactResult[];
   initialValue?: string;
@@ -214,7 +217,7 @@ export function EditEntitiesPopover({
   showPropertyActions = true,
   contentAlign = 'end',
   contentSideOffset = 8,
-  initialPropertiesMarkedForRemoval = [],
+  initialPropertiesMarkedForRemoval = EMPTY_PROPERTY_IDS,
 }: EditEntitiesPopoverProps) {
   const [open, setOpen] = React.useState(false);
   const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<SelectEntityCompactResult[]>([]);
@@ -404,6 +407,7 @@ export function EditEntitiesPopover({
       propertyId: newPropertyId!,
       name: newPropertyName.trim(),
       valueType: newPropertyValueType,
+      applyToAllEntities: newPropertyOnly,
       selectedRowEntityIds: selectedEntityIds ?? [],
       selectedEntities: isNewPropertyRelation ? selectedAttributeEntities : undefined,
       initialValue: isNewPropertyRelation
