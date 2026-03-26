@@ -36,13 +36,19 @@ export function VoteArrow({ color, filled = false, direction = 'up' }: Props) {
       xmlns="http://www.w3.org/2000/svg"
       style={{ transform }}
     >
-      <path fillRule="evenodd" clipRule="evenodd" d={OUTLINE_PATH} fill={themeColor} className="group-hover:hidden" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d={OUTLINE_PATH}
+        fill={themeColor}
+        className="group-hover/vote:hidden"
+      />
       <path
         fillRule="evenodd"
         clipRule="evenodd"
         d={FILLED_PATH}
         fill={themeColor}
-        className="hidden group-hover:block"
+        className="hidden group-hover/vote:block"
       />
     </svg>
   );
