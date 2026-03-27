@@ -50,6 +50,7 @@ export const tiptapExtensions = [
     placeholder: ({ node }) => {
       if (node.type.name === 'heading') return 'Heading...';
       if (node.type.name === 'bulletList') return '';
+      if (node.type.name === 'codeBlock') return '';
       return '/ to select content block or write some content...';
     },
   }),
