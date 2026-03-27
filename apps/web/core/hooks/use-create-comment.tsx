@@ -26,14 +26,14 @@ import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 import { useToast } from './use-toast';
 
-/** Generate a short name from the first ~40 chars of markdown text, stripping formatting. */
+/** Generate a short name from the first ~20 chars of markdown text, stripping formatting. */
 function getCommentName(markdown: string): string {
   const plain = markdown
     .replace(/[#*_~`>\[\]()!]/g, '')
     .replace(/\n/g, ' ')
     .trim();
-  if (plain.length <= 40) return plain || 'Comment';
-  return plain.slice(0, 40).trimEnd() + '...';
+  if (plain.length <= 20) return plain || 'Comment';
+  return plain.slice(0, 20).trimEnd() + '...';
 }
 
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
@@ -104,7 +104,7 @@ export function useCreateComment(targetEntityId: string) {
           entity: { id: commentEntityId, name: commentName },
           property: { id: COMMENT_RESOLVED_ID, name: 'Resolved', dataType: 'BOOLEAN' },
           spaceId: personalSpaceId,
-          value: 'false',
+          value: '0',
           isLocal: true,
           hasBeenPublished: false,
         });
