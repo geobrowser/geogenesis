@@ -308,8 +308,7 @@ function buildDaoSubspaceCalldata({
     },
   ];
 
-  // Subspace actions go through slow path proposals
-  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, proposalActions);
+  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.FAST, proposalActions);
 
   return encodeFunctionData({
     functionName: 'enter',

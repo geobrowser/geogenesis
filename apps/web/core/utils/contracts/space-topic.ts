@@ -60,7 +60,7 @@ export function buildDaoTopicDeclaredCalldata({
     args: [GOVERNANCE_ACTIONS.TOPIC_DECLARED, topic, '0x'],
   });
 
-  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, [
+  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.FAST, [
     {
       to: spaceAddress,
       value: 0n,
