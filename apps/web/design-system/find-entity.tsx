@@ -3,7 +3,7 @@
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
-import { startTransition, useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 
 import pluralize from 'pluralize';
 
@@ -33,8 +33,19 @@ export const FindEntity = ({
   allowedTypes,
   placeholder = 'Find entity...',
 }: FindEntityProps) => {
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const [hasDismissedPopover, setHasDismissedPopover] = useState<boolean>(false);
   const [result, setResult] = useState<SearchResult | null>(null);
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.className = 'elevated-popover';
+    document.body.appendChild(el);
+    setPortalContainer(el);
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes: allowedTypes,
@@ -76,7 +87,7 @@ export const FindEntity = ({
           />
         </Popover.Anchor>
         {showPopover && (
-          <Popover.Portal forceMount>
+          <Popover.Portal forceMount container={portalContainer}>
             <Popover.Content
               onOpenAutoFocus={event => {
                 event.preventDefault();
@@ -109,7 +120,9 @@ export const FindEntity = ({
                         {results.map((result, index) => (
                           <div key={index} className="w-full">
                             <div className="p-1">
-                              <button
+                              <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => {
                                   onDone({
                                     id: result.id,
@@ -118,7 +131,18 @@ export const FindEntity = ({
                                   onQueryChange('');
                                   setHasDismissedPopover(true);
                                 }}
-                                className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
+                                onKeyDown={event => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onDone({
+                                      id: result.id,
+                                      name: result.name,
+                                    });
+                                    onQueryChange('');
+                                    setHasDismissedPopover(true);
+                                  }
+                                }}
+                                className="relative z-10 flex w-full cursor-pointer flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                               >
                                 <div className="relative w-full">
                                   <div className="relative z-0 max-w-full truncate text-button text-text">
@@ -173,7 +197,7 @@ export const FindEntity = ({
                                   </div>
                                   {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
                                 </div>
-                              </button>
+                              </div>
                             </div>
                           </div>
                         ))}
