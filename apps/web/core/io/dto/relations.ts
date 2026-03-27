@@ -7,7 +7,9 @@ import { getSpaceRank } from '~/core/utils/space/space-ranking';
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
   const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
-  const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
+  const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
+
+  const renderableType = mediaEntityUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
 
   const toEntityId = relation.toEntity.id;
   const toEntityName = resolveToEntityName(relation);
@@ -31,11 +33,6 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
     toEntity: {
       id: toEntityId,
       name: toEntityName,
-
-      // The "Renderable Type" for an entity provides a hint to the consumer
-      // of the entity to _what_ the entity is so they know how they should
-      // render it depending on their use case.
-      // Right now we support images, videos, and entity ids as the value of the To entity.
       value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : toEntityId,
     },
   };

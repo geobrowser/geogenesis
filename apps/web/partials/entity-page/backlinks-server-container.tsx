@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { Space } from '~/core/io/dto/spaces';
 import { getEntityBacklinks, getSpaces } from '~/core/io/queries';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
 import { Backlinks } from '~/partials/entity-page/backlinks';
 
@@ -47,6 +48,8 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
       },
     ];
   });
+
+  backlinks.sort(compareBySpaceRank(b => b.primarySpace.id));
 
   return <Backlinks backlinks={backlinks} />;
 };
