@@ -13,6 +13,8 @@ export interface CommentEntity {
   /** Author info derived from the space homepage entity of the personal space */
   author: {
     spaceId: string;
+    /** Wallet address — used as the Avatar seed so jazzicons match the navbar */
+    address: string;
     name: string | null;
     avatarUrl: string | null;
   };
@@ -36,4 +38,4 @@ export interface CreateCommentParams {
 }
 
 export type CommentSortOrder = 'newest' | 'oldest';
-export type CommentFilter = 'all' | 'unresolved';
+export type CommentFilter = 'all' | 'editors';

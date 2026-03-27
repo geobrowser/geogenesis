@@ -12,7 +12,8 @@ import {
   COMMENT_TYPE_ID,
 } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getAllEntities, getSpaces } from '~/core/io/queries';
+import { getAllEntities } from '~/core/io/queries';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
 import type { CommentEntity, CommentWithReplies } from '~/partials/comments/types';
@@ -52,6 +53,7 @@ function parseCommentEntity(entity: Entity, commentIds: Set<string>, targetEntit
     replyToCommentSpaceId: replyToCommentRelation?.toSpaceId ?? null,
     author: {
       spaceId,
+      address: spaceId, // default; overwritten with wallet address after profile fetch
       name: null,
       avatarUrl: null,
     },
@@ -155,16 +157,19 @@ export function useComments({ entityId }: UseCommentsOptions) {
         }
       }
 
-      // Resolve author info: fetch space entities for all unique spaceIds
+      // Resolve author info via profile API (returns wallet address for avatar seed)
       const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
-      const spaceMap = new Map<string, { name: string | null; image: string | null }>();
+      const profileMap = new Map<string, { address: string; name: string | null; avatarUrl: string | null }>();
 
       if (uniqueSpaceIds.length > 0) {
-        const spaces = await Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }));
-        for (const space of spaces) {
-          spaceMap.set(space.id, {
-            name: space.entity.name,
-            image: space.entity.image,
+        const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
+        for (const profile of profiles) {
+          const avatarUrl =
+            profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+          profileMap.set(profile.spaceId, {
+            address: profile.address,
+            name: profile.name,
+            avatarUrl,
           });
         }
       }
@@ -173,14 +178,13 @@ export function useComments({ entityId }: UseCommentsOptions) {
       const allCommentIds = new Set(allEntities.map(e => e.id));
       const comments = allEntities.map(entity => {
         const comment = parseCommentEntity(entity, allCommentIds, entityId);
-        const spaceInfo = spaceMap.get(comment.spaceId);
-        if (spaceInfo) {
-          const avatarUrl =
-            spaceInfo.image && spaceInfo.image !== PLACEHOLDER_SPACE_IMAGE ? spaceInfo.image : null;
+        const profileInfo = profileMap.get(comment.spaceId);
+        if (profileInfo) {
           comment.author = {
             spaceId: comment.spaceId,
-            name: spaceInfo.name,
-            avatarUrl,
+            address: profileInfo.address,
+            name: profileInfo.name,
+            avatarUrl: profileInfo.avatarUrl,
           };
         }
         return comment;

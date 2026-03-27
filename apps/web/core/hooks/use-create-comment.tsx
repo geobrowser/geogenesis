@@ -174,6 +174,7 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: replyToCommentSpaceId ?? null,
           author: {
             spaceId: personalSpaceId,
+            address: smartAccount.account.address,
             name: space.entity.name,
             avatarUrl: null, // Will resolve on next fetch
           },
@@ -263,8 +264,141 @@ export function useCreateComment(targetEntityId: string) {
     [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]
   );
 
+  const editComment = React.useCallback(
+    async ({ commentId, commentSpaceId, newText }: { commentId: string; commentSpaceId: string; newText: string }) => {
+      if (!smartAccount) {
+        setToast(<span>Please connect your wallet to edit</span>);
+        return;
+      }
+
+      if (!personalSpaceId) {
+        setToast(<span>Personal space required. Please complete onboarding.</span>);
+        return;
+      }
+
+      // Can only edit your own comments (published to your personal space)
+      if (commentSpaceId !== personalSpaceId) {
+        setToast(<span>You can only edit your own comments</span>);
+        return;
+      }
+
+      setIsCreating(true);
+      setError(null);
+
+      try {
+        const newName = getCommentName(newText);
+
+        // Build updated values for the existing comment entity
+        const values: Value[] = [
+          {
+            id: createValueId({ entityId: commentId, propertyId: COMMENT_NAME_PROPERTY_ID, spaceId: personalSpaceId }),
+            entity: { id: commentId, name: newName },
+            property: { id: COMMENT_NAME_PROPERTY_ID, name: 'Name', dataType: 'TEXT' },
+            spaceId: personalSpaceId,
+            value: newName,
+            isLocal: true,
+            hasBeenPublished: false,
+          },
+          {
+            id: createValueId({ entityId: commentId, propertyId: COMMENT_MARKDOWN_CONTENT_ID, spaceId: personalSpaceId }),
+            entity: { id: commentId, name: newName },
+            property: { id: COMMENT_MARKDOWN_CONTENT_ID, name: 'Markdown content', dataType: 'TEXT' },
+            spaceId: personalSpaceId,
+            value: newText,
+            isLocal: true,
+            hasBeenPublished: false,
+          },
+        ];
+
+        // Optimistically update the comment in the query cache
+        queryClient.setQueryData<CommentEntity[]>(
+          ['comments', targetEntityId],
+          (old = []) =>
+            old.map(c =>
+              c.id === commentId ? { ...c, markdownContent: newText, name: newName } : c
+            )
+        );
+
+        const space = await Effect.runPromise(getSpace(personalSpaceId));
+        if (!space) {
+          setToast(<span>Failed to resolve personal space</span>);
+          setIsCreating(false);
+          return;
+        }
+
+        const publish = Effect.gen(function* () {
+          const ops = yield* Publish.prepareLocalDataForPublishing(values, [], personalSpaceId);
+
+          if (ops.length === 0) {
+            throw new Error('No operations to publish');
+          }
+
+          const result = yield* Effect.retry(
+            Effect.tryPromise({
+              try: () =>
+                personalSpace.publishEdit({
+                  name: `Edit comment: ${newName}`,
+                  spaceId: space.id,
+                  ops,
+                  author: personalSpaceId,
+                  network: 'TESTNET',
+                }),
+              catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
+            }),
+            retrySchedule('publishEdit', Duration.minutes(1))
+          );
+
+          const txHash = yield* Effect.retry(
+            Effect.tryPromise({
+              try: () =>
+                smartAccount.sendUserOperation({
+                  calls: [{ to: result.to, value: 0n, data: result.calldata }],
+                }),
+              catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
+            }),
+            retrySchedule('sendUserOperation', Duration.seconds(10))
+          );
+
+          return txHash;
+        });
+
+        const result = await Effect.runPromise(Effect.either(publish));
+
+        if (Either.isLeft(result)) {
+          const err = result.left;
+
+          // Roll back optimistic update
+          queryClient.invalidateQueries({ queryKey: ['comments', targetEntityId] });
+
+          if (err instanceof Error && err.message.includes('User rejected')) {
+            return;
+          }
+
+          console.error('[useCreateComment] Edit failed:', err);
+          setToast(<span>Failed to edit comment</span>);
+          setError(err as Error);
+          return;
+        }
+
+        setToast(<span>Comment updated!</span>);
+
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['comments', targetEntityId] });
+        }, 5000);
+      } catch (err) {
+        console.error('[useCreateComment] Error editing comment:', err);
+        setToast(<span>Failed to edit comment</span>);
+        setError(err as Error);
+      } finally {
+        setIsCreating(false);
+      }
+    },
+    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]
+  );
+
   return {
     createComment,
+    editComment,
     isCreating,
     error,
   };
