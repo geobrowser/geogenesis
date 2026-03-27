@@ -82,7 +82,7 @@ export function EditableSpaceHeading({
   const { isEditor, isMember } = useAccessControl(spaceId);
 
   const path = usePathname();
-  const isSpacePage = path === `/space/${spaceId}`;
+  const isSpacePage = path === NavUtils.toSpace(spaceId);
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');
