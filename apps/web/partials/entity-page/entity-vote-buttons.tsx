@@ -37,8 +37,8 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const [votersOpen, setVotersOpen] = React.useState(false);
 
   const { data: voteCounts } = useQuery<{ upvotes: number; downvotes: number } | null>({
-    queryKey: ['entity-vote-count', entityId, spaceId, objectType],
-    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, spaceId, objectType)),
+    queryKey: ['entity-vote-count', entityId, objectType],
+    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, objectType)),
     staleTime: 30_000,
   });
 
@@ -220,8 +220,8 @@ function VotersPopoverContent({
 
   return (
     <div className="max-h-[356px] overflow-y-auto">
-      {upvoters.length > 0 && <VoterSection label={`Upvotes (${upvoters.length})`} voters={upvoters} />}
-      {downvoters.length > 0 && <VoterSection label={`Downvotes (${downvoters.length})`} voters={downvoters} />}
+      {upvoters.length > 0 && <VoterSection label="Upvotes" voters={upvoters} />}
+      {downvoters.length > 0 && <VoterSection label="Downvotes" voters={downvoters} />}
     </div>
   );
 }

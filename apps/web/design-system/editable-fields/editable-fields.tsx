@@ -115,6 +115,7 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
   },
   'table-cell': {
     width: 60,
+    maxHeight: 60,
   },
   gallery: {
     height: 80,

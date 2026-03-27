@@ -292,6 +292,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     setTemporaryFilterMode,
     sortState,
     setSortState,
+    filterableProperties,
   } = useDataBlock({ canEdit });
 
   const setActiveFilterMode = React.useCallback(
@@ -500,7 +501,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
       <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
-          <DataBlockSortMenu properties={properties} sortState={sortState} onSort={handleSortChange} />
+          <DataBlockSortMenu properties={filterableProperties} sortState={sortState} onSort={handleSortChange} />
           <IconButton
             onClick={toggleFilterHandler}
             icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}

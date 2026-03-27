@@ -155,6 +155,7 @@ export function PowerToolsScreen() {
 
   const {
     filterState,
+    resolvedFilterState,
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
@@ -167,7 +168,7 @@ export function PowerToolsScreen() {
 
   // Editors (by permission) use persisted filters; non-editors use local temporary filters.
   // This matches TableBlock's behavior and is independent of the edit mode toggle.
-  const effectiveFilterState = canEdit ? filterState : temporaryFilters;
+  const effectiveFilterState = canEdit ? resolvedFilterState : temporaryFilters;
   const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
   const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
   const setActiveFilterMode = React.useCallback(
@@ -212,7 +213,7 @@ export function PowerToolsScreen() {
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
-  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set());
+  const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set([SystemIds.BLOCKS]));
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
   const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
