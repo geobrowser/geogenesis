@@ -31,7 +31,7 @@ function parseCommentEntity(entity: Entity, commentIds: Set<string>, targetEntit
     entity.values.find(v => v.property.id === COMMENT_MARKDOWN_CONTENT_ID)?.value ?? '';
 
   const resolvedValue = entity.values.find(v => v.property.id === COMMENT_RESOLVED_ID)?.value;
-  const resolved = resolvedValue === 'true' || resolvedValue === 'True';
+  const resolved = resolvedValue === '1' || resolvedValue === 'true' || resolvedValue === 'True';
 
   // Parse Reply To relations
   const replyToRelations = entity.relations.filter(r => r.type.id === COMMENT_REPLY_TO_ID);

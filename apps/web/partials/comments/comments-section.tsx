@@ -15,6 +15,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
 import { EditSmall } from '~/design-system/icons/edit-small';
+import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -487,7 +488,7 @@ function CommentItem({
           />
         </a>
         <div className="flex items-center gap-2">
-          <a href={NavUtils.toEntity(spaceId, comment.id)} className="hover:underline">
+          <a href={NavUtils.toSpace(comment.author.spaceId)} className="hover:underline">
             <Text variant="bodySemibold" as="span">
               {comment.author.name ?? 'Anonymous'}
             </Text>
@@ -501,7 +502,12 @@ function CommentItem({
             {relativeTime}
           </Text>
           {comment.resolved && (
-            <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700">Resolved</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6L5 8.5L9.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-xs font-medium">Resolved</span>
+            </span>
           )}
         </div>
       </div>
@@ -542,6 +548,12 @@ function CommentItem({
                 Edit
               </button>
             )}
+            <a
+              href={NavUtils.toEntity(spaceId, comment.id)}
+              className="inline-flex scale-75 items-center text-grey-04 hover:text-text"
+            >
+              <RightArrowDiagonal color="grey-04" />
+            </a>
           </div>
         )}
 
