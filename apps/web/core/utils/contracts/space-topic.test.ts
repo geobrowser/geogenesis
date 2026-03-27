@@ -75,7 +75,7 @@ describe('buildDaoTopicDeclaredCalldata', () => {
     );
 
     expect(proposalId).toMatch(/^0x[a-f0-9]{32}$/);
-    expect(votingMode).toBe(VOTING_MODE.SLOW);
+    expect(votingMode).toBe(VOTING_MODE.FAST);
     expect(actions).toHaveLength(1);
     expect(actions[0].to).toBe('0x1111111111111111111111111111111111111111');
     expect(actions[0].value).toBe(0n);
