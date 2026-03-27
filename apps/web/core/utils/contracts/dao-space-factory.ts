@@ -10,7 +10,7 @@ export type VotingSettings = {
 };
 
 export const DEFAULT_VOTING_SETTINGS: VotingSettings = {
-  slowPathPercentageThreshold: 510000n, // 51% for slow path (RATIO_BASE is 10^6)
+  slowPathPercentageThreshold: 5100000n, // 51% for slow path (RATIO_BASE is 10^7)
   fastPathFlatThreshold: 0n, // 0 votes for fast path (auto-executes on first YES vote)
   quorum: 1n, // 1 vote quorum
   duration: 1n * 24n * 60n * 60n, // 1 day in seconds
