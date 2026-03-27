@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { useKey } from '~/core/hooks/use-key';
 import { useToast } from '~/core/hooks/use-toast';
 import { getSpaces } from '~/core/io/queries';
-import { useRelations } from '~/core/sync/use-store';
+import { useQueryProperty, useRelations } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import type { SpaceEntity, SwitchableRenderableType } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -150,6 +150,30 @@ function NewPropertyPanel(props: NewPropertyPanelProps) {
       }),
     [addImageFileDialogOpenRef, addImageFileDialogCloseTimeoutRef]
   );
+
+  const { property: queriedProperty } = useQueryProperty({
+    id: newPropertyId ?? undefined,
+    spaceId,
+    enabled: Boolean(newPropertyId),
+  });
+
+  const inferredValueTypeFromProperty = React.useMemo<SwitchableRenderableType | null>(() => {
+    const p = queriedProperty;
+    if (!p) return null;
+    if (p.renderableTypeStrict === 'IMAGE') return 'IMAGE';
+    if (p.renderableTypeStrict === 'URL') return 'URL';
+    if (p.dataType === 'INTEGER') return 'INTEGER';
+    if (p.dataType === 'BOOLEAN') return 'BOOLEAN';
+    if (p.dataType === 'DATETIME') return 'DATETIME';
+    if (p.dataType === 'RELATION') return 'RELATION';
+    return 'TEXT';
+  }, [queriedProperty]);
+
+  React.useEffect(() => {
+    if (!inferredValueTypeFromProperty) return;
+    if (newPropertyValueType === inferredValueTypeFromProperty) return;
+    setNewPropertyValueType(inferredValueTypeFromProperty);
+  }, [inferredValueTypeFromProperty, newPropertyValueType, setNewPropertyValueType]);
 
   const clearSelectedProperty = React.useCallback(() => {
     setNewPropertyId(null);
