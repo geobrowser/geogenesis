@@ -7,9 +7,9 @@ import {
   DATA_TYPE_PROPERTY,
   GRC_20_SPECIFICATION_LINK,
   RENDERABLE_TYPE_PROPERTY,
+  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_DATETIME_FORMATS,
   SUGGESTED_DATE_FORMATS,
-  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_NUMBER_FORMATS,
   SUGGESTED_TIME_FORMATS,
   SUGGESTED_URL_FORMATS,
@@ -18,6 +18,7 @@ import {
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { useRelations } from '~/core/sync/use-store';
 import { ValueOptions } from '~/core/types';
+import { GeoNumber } from '~/core/utils/utils';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { NewTab } from './icons/new-tab';
@@ -25,13 +26,18 @@ import { NewTab } from './icons/new-tab';
 // Reverse map: entity ID → data type name (e.g. 'DATE', 'TIME', etc.)
 const ENTITY_ID_TO_DATA_TYPE = Object.fromEntries(Object.entries(DATA_TYPE_ENTITY_IDS).map(([type, id]) => [id, type]));
 
+// Shared numeric formats for INTEGER, FLOAT, and DECIMAL so users
+// always see the same suggestions (%, K, .00, .000, etc.) regardless
+// of the specific numeric type.
+const NUMERIC_FORMATS = [...SUGGESTED_NUMBER_FORMATS, ...SUGGESTED_FLOAT_FORMATS];
+
 const FORMAT_MAP = {
   URL: SUGGESTED_URL_FORMATS,
   DATE: SUGGESTED_DATE_FORMATS,
   DATETIME: SUGGESTED_DATETIME_FORMATS,
   TIME: SUGGESTED_TIME_FORMATS,
-  FLOAT: SUGGESTED_FLOAT_FORMATS,
-  NUMBER: SUGGESTED_NUMBER_FORMATS,
+  FLOAT: NUMERIC_FORMATS,
+  NUMBER: NUMERIC_FORMATS,
 } as const;
 
 type FormatKind = keyof typeof FORMAT_MAP;
@@ -85,11 +91,33 @@ const SuggestedFormats = ({
     ? 'date/time'
     : formatKind === 'URL'
       ? 'URL'
-      : formatKind === 'FLOAT'
-        ? 'float'
-        : 'number';
-  const formatLabel =
-    renderableFormats.find(f => f.format === value)?.label || (formatKind === 'URL' ? 'Custom URL' : 'Unspecified');
+      : 'number';
+
+  const formatLabel = React.useMemo(() => {
+    // URL formats still rely on the predefined labels
+    if (formatKind === 'URL') {
+      return renderableFormats.find(f => f.format === value)?.label || 'Custom URL';
+    }
+
+    // For numeric formats, always try to show a concrete example using GeoNumber,
+    // even when the user provides a custom ICU skeleton.
+    if (formatKind === 'NUMBER' || formatKind === 'FLOAT') {
+      if (!value) return 'Unspecified';
+
+      const sampleValue = formatKind === 'NUMBER' ? '25000' : '1000.1234';
+      const formatted = GeoNumber.format(sampleValue, value);
+
+      // If formatting failed and we fell back to the raw value, treat it as custom.
+      if (!formatted || formatted === sampleValue) {
+        return 'Custom';
+      }
+
+      return formatted;
+    }
+
+    // Temporal formats continue to use the predefined labels.
+    return renderableFormats.find(f => f.format === value)?.label || 'Unspecified';
+  }, [formatKind, renderableFormats, value]);
 
   return (
     visible && (
