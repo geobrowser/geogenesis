@@ -4,13 +4,12 @@ import { JSONContent } from '@tiptap/core';
 import { ID } from '~/core/id';
 import { Value } from '~/core/types';
 
-import * as Parser from './parser';
-import { getNodeId, getTextNodeHtml } from './utils';
+import { editorNodeToMarkdown } from './markdown-adapter';
+import { getNodeId } from './utils';
 
 export function getTextEntityMarkdownValue(node: JSONContent): Value {
-  const nodeHTML = getTextNodeHtml(node);
   const nodeId = getNodeId(node);
-  const markdown = Parser.htmlToMarkdown(nodeHTML);
+  const markdown = editorNodeToMarkdown(node);
 
   if (!node.attrs?.spaceId) {
     console.error('Cannot make markdown content for block. Space id not set on block.');

@@ -1,6 +1,6 @@
 export type Content =
   | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';
+      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode' | 'codeBlock';
       content: Content[];
       attrs: {
         id: string;
@@ -24,6 +24,13 @@ export type Content =
       };
     }
   | {
+      type: 'inlineMath';
+      content: Content[];
+      attrs: {
+        latex: string;
+      };
+    }
+  | {
       type: 'image';
       content: Content[];
       attrs: {
@@ -41,6 +48,6 @@ export type Content =
     };
 
 type Mark = {
-  type: 'bold' | 'italic';
+  type: 'bold' | 'italic' | 'code';
   text: string;
 };
