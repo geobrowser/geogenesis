@@ -309,7 +309,7 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     if (!remoteProperty) return property;
     if (!property) return remoteProperty;
 
-    return { ...remoteProperty, ...property };
+    return { ...remoteProperty, ...property, name: property.name || remoteProperty.name };
   }, [remoteProperty, property]);
 
   return {
