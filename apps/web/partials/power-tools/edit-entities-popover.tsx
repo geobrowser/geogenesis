@@ -818,7 +818,19 @@ export function EditEntitiesPopover({
     }
 
     if (selectedAttributeEntities.length === 0) return;
-    onApply({ property: effectiveProperty, targetEntities: selectedAttributeEntities });
+    try {
+      const result = onApply({
+        property: effectiveProperty,
+        targetEntities: selectedAttributeEntities,
+      }) as unknown;
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        await result;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+      return;
+    }
     setOpen(false);
     setSelectedAttributeEntities([]);
     setSelectedProperty(null);

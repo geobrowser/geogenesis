@@ -37,6 +37,7 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { Plus } from '~/design-system/icons/plus';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -83,6 +84,8 @@ interface Props {
   onReorderColumns: (ids: string[]) => void;
   selection?: PowerToolsTableSelectionProps;
   imageUploadingFor?: Set<string>;
+  /** Cells in these property columns show applying state during bulk apply (e.g. fetchAllIds). */
+  bulkApplyPendingPropertyIds?: ReadonlySet<string>;
   onRowClick?: (entityId: string) => void;
   onRowDoubleClick?: (entityId: string) => void;
   sortState: ColumnSortState;
@@ -211,6 +214,7 @@ function PowerToolsCell({
   onOpenEntityPanel,
   source,
   imageUploadingFor,
+  bulkApplyPendingPropertyIds,
 }: {
   row: PowerToolsRow;
   property: Property;
@@ -222,7 +226,19 @@ function PowerToolsCell({
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
   imageUploadingFor?: Set<string>;
+  bulkApplyPendingPropertyIds?: ReadonlySet<string>;
 }) {
+  if (bulkApplyPendingPropertyIds?.has(property.id)) {
+    return (
+      <div className="flex min-h-[1.25rem] items-center gap-2" aria-busy="true" aria-label="Applying changes">
+        <Spinner />
+        <Text variant="body" color="grey-04">
+          Applying…
+        </Text>
+      </div>
+    );
+  }
+
   if (row.placeholder && property.id !== SystemIds.NAME_PROPERTY && !isEditing) {
     return (
       <Text variant="body" color="grey-04">
@@ -404,6 +420,7 @@ export function PowerToolsTable({
   onReorderColumns,
   selection,
   imageUploadingFor,
+  bulkApplyPendingPropertyIds,
   onRowClick,
   onRowDoubleClick,
   sortState,
@@ -772,6 +789,7 @@ export function PowerToolsTable({
                           onOpenEntityPanel={onOpenEntityPanel}
                           source={source}
                           imageUploadingFor={imageUploadingFor}
+                          bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
                         />
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button

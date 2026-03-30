@@ -267,6 +267,8 @@ export function PowerToolsScreen() {
     });
   }, [selectableIds]);
   const [imageUploadingFor, setImageUploadingFor] = React.useState<Set<string>>(new Set());
+  /** Property columns actively receiving a bulk “apply to rows” write (e.g. while fetchAllIds runs). */
+  const [bulkApplyPendingPropertyIds, setBulkApplyPendingPropertyIds] = React.useState<Set<string>>(() => new Set());
   const selectedCount = selectedEntityIds.size;
   const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
 
@@ -346,16 +348,27 @@ export function PowerToolsScreen() {
         return;
       }
 
-      selectedEntityIds.forEach(fromEntityId => {
-        const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-        targetEntities.forEach(target => {
-          createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
-            id: target.id,
-            name: target.name,
-            space: target.primarySpace,
+      setBulkApplyPendingPropertyIds(prev => new Set(prev).add(property.id));
+      try {
+        // Let the table paint Applying… before a large synchronous relation write.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        selectedEntityIds.forEach(fromEntityId => {
+          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+          targetEntities.forEach(target => {
+            createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+              id: target.id,
+              name: target.name,
+              space: target.primarySpace,
+            });
           });
         });
-      });
+      } finally {
+        setBulkApplyPendingPropertyIds(prev => {
+          const next = new Set(prev);
+          next.delete(property.id);
+          return next;
+        });
+      }
     },
     [storage, spaceId, selectedEntityIds, selectableRows]
   );
@@ -507,89 +520,99 @@ export function PowerToolsScreen() {
         initialValue,
         initialImageFile,
       } = payload;
-      // Ensure a local property record exists for both newly created and
-      // existing-picked properties, so column rendering does not depend on
-      // remote property fetch timing.
-      const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
-      storage.properties.create({
-        entityId: propertyId,
-        spaceId,
-        name: name ?? '',
-        dataType: baseDataType,
-        renderableTypeId,
-        verified: false,
-        toSpaceId: undefined,
-      });
 
-      setExtraColumnIds(prev => (prev.includes(propertyId) ? prev : [...prev, propertyId]));
-      setExcludedColumnIds(prev => prev.filter(id => id !== propertyId));
-      setHiddenColumnIds(prev => {
-        if (!prev.has(propertyId)) return prev;
-        const next = new Set(prev);
-        next.delete(propertyId);
-        return next;
-      });
-      const property = {
-        id: propertyId,
-        name,
-        dataType: baseDataType,
-      };
+      setBulkApplyPendingPropertyIds(prev => new Set(prev).add(propertyId));
+      try {
+        // Ensure a local property record exists for both newly created and
+        // existing-picked properties, so column rendering does not depend on
+        // remote property fetch timing.
+        const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
+        storage.properties.create({
+          entityId: propertyId,
+          spaceId,
+          name: name ?? '',
+          dataType: baseDataType,
+          renderableTypeId,
+          verified: false,
+          toSpaceId: undefined,
+        });
 
-      const targetEntityIds = applyToAllEntities
-        ? await fetchAllIdsRef.current()
-        : selectedRowEntityIds.length > 0
-          ? selectedRowEntityIds
-          : selectableRows.map(r => r.entityId);
-      if (targetEntityIds.length === 0) return;
-      const entityIdToSpaceId = new Map(
-        selectableRows
-          .filter(r => targetEntityIds.includes(r.entityId))
-          .map(r => [r.entityId, r.spaceId] as const)
-      );
+        setExtraColumnIds(prev => (prev.includes(propertyId) ? prev : [...prev, propertyId]));
+        setExcludedColumnIds(prev => prev.filter(id => id !== propertyId));
+        setHiddenColumnIds(prev => {
+          if (!prev.has(propertyId)) return prev;
+          const next = new Set(prev);
+          next.delete(propertyId);
+          return next;
+        });
+        const property = {
+          id: propertyId,
+          name,
+          dataType: baseDataType,
+        };
 
-      if (valueType === 'IMAGE' && initialImageFile) {
-        const uploadKeys = new Set(targetEntityIds.map(id => `${id}:${property.id}`));
-        setImageUploadingFor(uploadKeys);
-        try {
-          for (const fromEntityId of targetEntityIds) {
-            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-            await storage.images.createAndLink({
-              file: initialImageFile,
-              fromEntityId,
-              fromEntityName: null,
-              relationPropertyId: property.id,
-              relationPropertyName: property.name,
-              spaceId: rowSpaceId,
-            });
-            setImageUploadingFor(prev => {
-              const next = new Set(prev);
-              next.delete(`${fromEntityId}:${property.id}`);
-              return next;
-            });
+        const targetEntityIds = applyToAllEntities
+          ? await fetchAllIdsRef.current()
+          : selectedRowEntityIds.length > 0
+            ? selectedRowEntityIds
+            : selectableRows.map(r => r.entityId);
+        if (targetEntityIds.length === 0) return;
+        const entityIdToSpaceId = new Map(
+          selectableRows
+            .filter(r => targetEntityIds.includes(r.entityId))
+            .map(r => [r.entityId, r.spaceId] as const)
+        );
+
+        if (valueType === 'IMAGE' && initialImageFile) {
+          const uploadKeys = new Set(targetEntityIds.map(id => `${id}:${property.id}`));
+          setImageUploadingFor(uploadKeys);
+          try {
+            for (const fromEntityId of targetEntityIds) {
+              const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+              await storage.images.createAndLink({
+                file: initialImageFile,
+                fromEntityId,
+                fromEntityName: null,
+                relationPropertyId: property.id,
+                relationPropertyName: property.name,
+                spaceId: rowSpaceId,
+              });
+              setImageUploadingFor(prev => {
+                const next = new Set(prev);
+                next.delete(`${fromEntityId}:${property.id}`);
+                return next;
+              });
+            }
+          } finally {
+            setImageUploadingFor(new Set());
           }
-        } finally {
-          setImageUploadingFor(new Set());
-        }
-      } else if (
-        (valueType === 'RELATION' || valueType === 'IMAGE') &&
-        selectedEntities?.length
-      ) {
-        targetEntityIds.forEach(fromEntityId => {
-          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-          selectedEntities.forEach(target => {
-            createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
-              id: target.id,
-              name: target.name,
-              space: target.primarySpace,
+        } else if (
+          (valueType === 'RELATION' || valueType === 'IMAGE') &&
+          selectedEntities?.length
+        ) {
+          targetEntityIds.forEach(fromEntityId => {
+            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+            selectedEntities.forEach(target => {
+              createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+                id: target.id,
+                name: target.name,
+                space: target.primarySpace,
+              });
             });
           });
-        });
-      } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
-        const value = initialValue ?? '';
-        for (const entityId of targetEntityIds) {
-          const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
-          writeValue(storage, entityId, rowSpaceId, property, value, null);
+        } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
+          const value = initialValue ?? '';
+          for (const entityId of targetEntityIds) {
+            const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
+            writeValue(storage, entityId, rowSpaceId, property, value, null);
+          }
         }
+      } finally {
+        setBulkApplyPendingPropertyIds(prev => {
+          const next = new Set(prev);
+          next.delete(propertyId);
+          return next;
+        });
       }
     },
     [selectableRows, spaceId, storage]
@@ -1010,6 +1033,7 @@ export function PowerToolsScreen() {
               onReorderColumns={setOrderedPropertyIds}
               selection={selectionProps}
               imageUploadingFor={imageUploadingFor}
+              bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
               onRowClick={undefined}
               onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
               sortState={sortState}
