@@ -644,6 +644,12 @@ export type EditEntitiesPopoverProps = {
   contentAlign?: 'start' | 'center' | 'end';
   contentSideOffset?: number;
   initialPropertiesMarkedForRemoval?: string[];
+  /**
+   * When false, Radix does not move focus back to the trigger on close.
+   * Use for triggers inside a horizontally scrollable region (e.g. table headers) so closing
+   * a popover does not scroll the container to bring the trigger into view.
+   */
+  restoreFocusOnClose?: boolean;
 };
 
 export function EditEntitiesPopover({
@@ -665,6 +671,7 @@ export function EditEntitiesPopover({
   contentAlign = 'end',
   contentSideOffset = 8,
   initialPropertiesMarkedForRemoval = EMPTY_PROPERTY_IDS,
+  restoreFocusOnClose = true,
 }: EditEntitiesPopoverProps) {
   const [open, setOpen] = React.useState(false);
   const [selectedAttributeEntities, setSelectedAttributeEntities] = React.useState<SelectEntityCompactResult[]>([]);
@@ -1095,6 +1102,7 @@ export function EditEntitiesPopover({
           onInteractOutside={e => {
             if (addImageFileDialogOpenRef.current) e.preventDefault();
           }}
+          onCloseAutoFocus={restoreFocusOnClose ? undefined : e => e.preventDefault()}
         >
           <div className="p-2">
               <div className="flex items-center justify-between gap-2 border-b border-grey-02 pb-2">

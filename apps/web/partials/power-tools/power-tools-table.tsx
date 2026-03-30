@@ -388,6 +388,7 @@ function SortableHeaderCell({
               initialPropertiesMarkedForRemoval={[property.id]}
               contentAlign="center"
               contentSideOffset={6}
+              restoreFocusOnClose={false}
             />
           )}
         </div>
@@ -433,6 +434,48 @@ export function PowerToolsTable({
   onRemoveProperties,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
+  /** Preserves scroll when cell content swaps (e.g. Applying… → relation chips) so the view does not jump horizontally. */
+  const savedTableScrollRef = React.useRef<{ left: number; top: number } | null>(null);
+  const wasBulkOrImageApplyingRef = React.useRef(false);
+
+  const bulkApplying = (bulkApplyPendingPropertyIds?.size ?? 0) > 0;
+  const imageApplying = (imageUploadingFor?.size ?? 0) > 0;
+  const isBulkOrImageApplying = bulkApplying || imageApplying;
+
+  React.useLayoutEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+
+    if (isBulkOrImageApplying && !wasBulkOrImageApplyingRef.current) {
+      savedTableScrollRef.current = { left: el.scrollLeft, top: el.scrollTop };
+    }
+
+    if (!isBulkOrImageApplying && wasBulkOrImageApplyingRef.current && savedTableScrollRef.current) {
+      const { left, top } = savedTableScrollRef.current;
+      const restore = () => {
+        el.scrollLeft = left;
+        el.scrollTop = top;
+      };
+      restore();
+      requestAnimationFrame(restore);
+      savedTableScrollRef.current = null;
+    }
+
+    wasBulkOrImageApplyingRef.current = isBulkOrImageApplying;
+  }, [isBulkOrImageApplying]);
+
+  React.useEffect(() => {
+    if (!isBulkOrImageApplying) return;
+    const el = tableRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      savedTableScrollRef.current = { left: el.scrollLeft, top: el.scrollTop };
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [isBulkOrImageApplying]);
+
   const isEditing = useUserIsEditing(spaceId);
   const showCheckboxColumn = isEditing && selection != null;
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
@@ -633,6 +676,7 @@ export function PowerToolsTable({
                     newPropertyOnly
                     contentAlign="center"
                     contentSideOffset={6}
+                    restoreFocusOnClose={false}
                   />
                 </div>
               )}
