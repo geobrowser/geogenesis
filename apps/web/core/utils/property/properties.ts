@@ -13,6 +13,7 @@ import {
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 /** Reverse mapping: data type entity ID → DataType string */
 const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
@@ -196,10 +197,18 @@ export function reconstructFromStore(
 
   const dataType: DataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
 
-  // Get the name value
-  const nameValue = getValues({
+  // Skip empty names, then pick from the highest-ranked space
+  const allNameValues = getValues({
     selector: v => v.entity.id === id && v.property.id === SystemIds.NAME_PROPERTY,
-  })[0];
+  });
+  const nameValue =
+    allNameValues.length <= 1
+      ? allNameValues[0]
+      : (() => {
+          const nonEmpty = allNameValues.filter(v => v.value);
+          const candidates = nonEmpty.length > 0 ? nonEmpty : allNameValues;
+          return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+        })();
 
   // Get the renderableType relation (if any)
   const renderableTypeRelation = getRelations({

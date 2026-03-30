@@ -40,8 +40,10 @@ export function nameValue(values: Value[]): Value | undefined {
   const nameValues = values.filter(value => value.property.id === SystemIds.NAME_PROPERTY);
   if (nameValues.length <= 1) return nameValues[0];
 
-  // Pick the name from the highest-ranked space
-  return nameValues.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+  // Skip empty names, then pick from the highest-ranked space
+  const nonEmpty = nameValues.filter(v => v.value);
+  const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
+  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
 }
 
 /**
