@@ -1,4 +1,5 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
+import { DaoSpaceAbi } from '@geoprotocol/geo-sdk/abis';
 
 import * as React from 'react';
 
@@ -8,11 +9,13 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { createPublicClient, http } from 'viem';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { cachedFetchProposal } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import {
@@ -57,21 +60,48 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   };
 }
 
-const INITIAL_PUBLIC_SPACES = [
-  '25omwWh6HYgeRQKCaSpVpa', // Geo root
-  'DqiHGrgbniQ9RXRbcQArQ2', // Industries
-  'SgjATMbm41LX6naizMqBVd', // Crypto
-  'BDuZwkjCg3nPWMDshoYtpS', // Crypto News
-  '9WjyZnACdQorhyZWXvjsYB', // software
-];
+async function fetchVotingSettings(spaceId: string) {
+  try {
+    const space = await cachedFetchSpace(spaceId);
+    if (!space?.address) return null;
 
-const getVotingPeriod = (spaceId: string) => {
-  // We don't currently track voting settings in the indexer, so we
-  // hardcode which initial spaces had the 4h voting duration.
-  if (INITIAL_PUBLIC_SPACES.includes(spaceId)) return '4h';
-  return '24h';
-};
-const passThreshold = '50%';
+    const publicClient = createPublicClient({
+      chain: GEOGENESIS,
+      transport: http(),
+    });
+
+    const settings = await publicClient.readContract({
+      address: space.address as `0x${string}`,
+      abi: DaoSpaceAbi,
+      functionName: 'votingSettings',
+    });
+
+    return settings;
+  } catch {
+    return null;
+  }
+}
+
+function formatDuration(seconds: bigint): string {
+  const totalHours = Number(seconds) / 3600;
+
+  if (totalHours >= 1 && totalHours === Math.floor(totalHours)) {
+    return `${totalHours}h`;
+  }
+
+  return `${Math.round(Number(seconds) / 60)}m`;
+}
+
+function formatThreshold(ratioValue: bigint): string {
+  // RATIO_BASE is 10^7, so divide by 100000 to get percentage
+  const percentage = Number(ratioValue) / 100000;
+
+  if (percentage === Math.floor(percentage)) {
+    return `${percentage}%`;
+  }
+
+  return `${percentage.toFixed(1)}%`;
+}
 
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
@@ -82,7 +112,13 @@ export default async function GovernancePage(props: Props) {
   }
 
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
+  const [{ acceptedProposals, rejectedProposals, activeProposals }, votingSettings] = await Promise.all([
+    getProposalsCount({ id: params.id }),
+    fetchVotingSettings(params.id),
+  ]);
+
+  const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
+  const passThreshold = votingSettings ? formatThreshold(votingSettings.slowPathPercentageThreshold) : '51%';
 
   const proposalType = searchParams.proposalType;
 
@@ -92,7 +128,7 @@ export default async function GovernancePage(props: Props) {
         <div className="flex items-center gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Voting period</h2>
-            <p className="text-mediumTitle">{getVotingPeriod(params.id)}</p>
+            <p className="text-mediumTitle">{votingPeriod}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Pass threshold</h2>
