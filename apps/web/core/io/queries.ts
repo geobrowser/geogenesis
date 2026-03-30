@@ -12,11 +12,11 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
+import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
   entitiesOrderedByPropertyQuery,
-  entitiesQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -103,8 +103,11 @@ export function getAllEntities(
   }
 
   return graphql({
-    query: entitiesQuery,
-    decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    query: allEntitiesConnectionDocument,
+    decoder: data =>
+      data.entitiesConnection?.nodes
+        ?.map((n: unknown) => EntityDecoder.decode(n))
+        .filter((e: Entity | null): e is Entity => e !== null) ?? [],
     variables: {
       limit,
       offset,
