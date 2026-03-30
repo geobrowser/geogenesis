@@ -156,39 +156,44 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
       // Register the data type so store.getProperty() returns the updated type
       storage.properties.setDataType(entityId, baseDataType);
 
-      // Replace the data type relation. We delete + create rather than update in-place
-      // because GRC-20 createRelation with an existing ID won't update the `to` target.
+      // Replace the data type relation. For locally-created relations we can update
+      // in place to avoid accumulating dead relations with each type change. For remote
+      // relations we must delete + create because GRC-20 createRelation with an existing
+      // ID won't update the `to` target.
       const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
       if (dataTypeEntityId) {
         const existingDataTypeRelation = allRelations.find(
           r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
         );
 
-        if (existingDataTypeRelation) {
+        if (existingDataTypeRelation && !existingDataTypeRelation.isLocal) {
           storage.relations.delete(existingDataTypeRelation);
         }
 
-        storage.relations.set({
-          id: IdUtils.generate(),
-          entityId: ID.createEntityId(),
-          fromEntity: {
-            id: entityId,
-            name: name || '',
-          },
-          type: {
-            id: DATA_TYPE_PROPERTY,
-            name: 'Data Type',
-          },
-          toEntity: {
-            id: dataTypeEntityId,
-            name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
-            value: dataTypeEntityId,
-          },
-          spaceId,
-          position: Position.generate(),
-          verified: false,
-          renderableType: 'RELATION',
-        });
+        const newToEntity = {
+          id: dataTypeEntityId,
+          name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
+          value: dataTypeEntityId,
+        };
+
+        if (existingDataTypeRelation?.isLocal) {
+          storage.relations.set({
+            ...existingDataTypeRelation,
+            toEntity: newToEntity,
+          });
+        } else {
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: ID.createEntityId(),
+            fromEntity: { id: entityId, name: name || '' },
+            type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+            toEntity: newToEntity,
+            spaceId,
+            position: Position.generate(),
+            verified: false,
+            renderableType: 'RELATION',
+          });
+        }
       }
 
       const existingRelation = allRelations.find(
@@ -196,31 +201,34 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
       );
 
       if (renderableTypeId) {
-        if (existingRelation) {
+        if (existingRelation && !existingRelation.isLocal) {
           storage.relations.delete(existingRelation);
         }
 
-        storage.relations.set({
-          id: IdUtils.generate(),
-          entityId: ID.createEntityId(),
-          fromEntity: {
-            id: entityId,
-            name: propertyData?.name || '',
-          },
-          type: {
-            id: RENDERABLE_TYPE_PROPERTY,
-            name: 'Renderable Type',
-          },
-          toEntity: {
-            id: renderableTypeId,
-            name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
-            value: renderableTypeId,
-          },
-          spaceId,
-          position: Position.generate(),
-          verified: false,
-          renderableType: 'RELATION',
-        });
+        const newRenderableToEntity = {
+          id: renderableTypeId,
+          name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
+          value: renderableTypeId,
+        };
+
+        if (existingRelation?.isLocal) {
+          storage.relations.set({
+            ...existingRelation,
+            toEntity: newRenderableToEntity,
+          });
+        } else {
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: ID.createEntityId(),
+            fromEntity: { id: entityId, name: propertyData?.name || '' },
+            type: { id: RENDERABLE_TYPE_PROPERTY, name: 'Renderable Type' },
+            toEntity: newRenderableToEntity,
+            spaceId,
+            position: Position.generate(),
+            verified: false,
+            renderableType: 'RELATION',
+          });
+        }
       } else {
         // Remove renderableType relation if it exists
         if (existingRelation) {
