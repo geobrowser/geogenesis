@@ -793,7 +793,6 @@ export function EditEntitiesPopover({
     if (effectiveProperty.renderableTypeStrict === 'IMAGE') {
       if (addImageFile == null) return;
       setIsApplyingImageValue(true);
-      let didSucceed = false;
       try {
         const result = onApply({
           property: effectiveProperty,
@@ -805,7 +804,6 @@ export function EditEntitiesPopover({
           await result;
         }
 
-        didSucceed = true;
         setOpen(false);
         setAddImageFile(null);
         setSelectedProperty(null);
@@ -813,7 +811,7 @@ export function EditEntitiesPopover({
         const message = err instanceof Error ? err.message : String(err);
         setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
       } finally {
-        if (didSucceed) setIsApplyingImageValue(false);
+        setIsApplyingImageValue(false);
       }
 
       return;
@@ -880,7 +878,6 @@ export function EditEntitiesPopover({
 
     setIsApplyingNewProperty(true);
 
-    let didSucceed = false;
     try {
       const payload: EditApplyNewPropertyPayload = {
         propertyId: newPropertyId!,
@@ -901,7 +898,6 @@ export function EditEntitiesPopover({
         await result;
       }
 
-      didSucceed = true;
       setOpen(false);
       setNewPropertyId(null);
       setNewPropertyName('');
@@ -914,7 +910,7 @@ export function EditEntitiesPopover({
       const message = err instanceof Error ? err.message : String(err);
       setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
     } finally {
-      if (didSucceed) setIsApplyingNewProperty(false);
+      setIsApplyingNewProperty(false);
     }
   }, [
     canApplyNew,

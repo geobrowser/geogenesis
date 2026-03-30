@@ -23,6 +23,12 @@ const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGES_IN_MEMORY = 6;
 const MAX_FETCH_PAGES = 200;
 
+/**
+ * SPACES/GEO: GraphQL rejects offset > 1000, so we must not paginate with
+ * small `first` + skip past 1000. Use one large page at offset 0 instead.
+ */
+const FETCH_ALL_IDS_FIRST = 100_000;
+
 function buildRowMeta(
   entityId: string,
   spaceId: string,
@@ -398,22 +404,14 @@ export function usePowerToolsData(options?: {
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      const ids: string[] = [];
-      let skip = 0;
-      let pageCount = 0;
-      while (true) {
-        const pageResults = await queryEntitiesAsync({
-          where,
-          first: pageSize,
-          skip,
-        });
-        ids.push(...pageResults.map(entity => entity.id));
-        if (pageResults.length < pageSize) break;
-        skip += pageSize;
-        pageCount += 1;
-        if (pageCount >= MAX_FETCH_PAGES) break;
-      }
-      return ids;
+      // The GraphQL API rejects offset > 1000. Paginating with small `first` + growing `skip`
+      // (e.g. skip 1025) fails. Fetch a large page at offset 0 instead of many offset pages.
+      const pageResults = await queryEntitiesAsync({
+        where,
+        first: FETCH_ALL_IDS_FIRST,
+        skip: 0,
+      });
+      return pageResults.map(entity => entity.id);
     }
 
     return [];
