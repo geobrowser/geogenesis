@@ -449,9 +449,29 @@ export function PowerToolsScreen() {
 
   const handleAddExistingProperty = React.useCallback(
     (payload: EditAddExistingPropertyPayload) => {
-      setExtraColumnIds(prev => [...prev, payload.propertyId]);
+      // Ensure the property exists locally so the new column can render immediately
+      // even if remote property hydration is delayed/fails.
+      const { baseDataType, renderableTypeId } = mapPropertyType('RELATION');
+      storage.properties.create({
+        entityId: payload.propertyId,
+        spaceId,
+        name: '',
+        dataType: baseDataType,
+        renderableTypeId,
+        verified: false,
+        toSpaceId: undefined,
+      });
+
+      setExtraColumnIds(prev => (prev.includes(payload.propertyId) ? prev : [...prev, payload.propertyId]));
+      setExcludedColumnIds(prev => prev.filter(id => id !== payload.propertyId));
+      setHiddenColumnIds(prev => {
+        if (!prev.has(payload.propertyId)) return prev;
+        const next = new Set(prev);
+        next.delete(payload.propertyId);
+        return next;
+      });
     },
-    []
+    [storage, spaceId]
   );
 
   const handleCreatePropertyEntity = React.useCallback(
@@ -487,8 +507,28 @@ export function PowerToolsScreen() {
         initialValue,
         initialImageFile,
       } = payload;
+      // Ensure a local property record exists for both newly created and
+      // existing-picked properties, so column rendering does not depend on
+      // remote property fetch timing.
+      const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
+      storage.properties.create({
+        entityId: propertyId,
+        spaceId,
+        name: name ?? '',
+        dataType: baseDataType,
+        renderableTypeId,
+        verified: false,
+        toSpaceId: undefined,
+      });
+
       setExtraColumnIds(prev => (prev.includes(propertyId) ? prev : [...prev, propertyId]));
-      const { baseDataType } = mapPropertyType(valueType);
+      setExcludedColumnIds(prev => prev.filter(id => id !== propertyId));
+      setHiddenColumnIds(prev => {
+        if (!prev.has(propertyId)) return prev;
+        const next = new Set(prev);
+        next.delete(propertyId);
+        return next;
+      });
       const property = {
         id: propertyId,
         name,

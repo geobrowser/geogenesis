@@ -12,6 +12,38 @@ import { GeoEvent, GeoEventStream } from './stream';
 /** TTL for synced entities cache in milliseconds (5 minutes) */
 const SYNC_TTL_MS = 5 * 60 * 1000;
 
+function serializeForLog(value: unknown): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(serializeForLog);
+  }
+
+  if (value && typeof value === 'object') {
+    const output: Record<string, unknown> = {};
+
+    for (const [key, item] of Object.entries(value)) {
+      if (item !== undefined) {
+        output[key] = serializeForLog(item);
+      }
+    }
+
+    return output;
+  }
+
+  return value;
+}
+
 export class SyncEngine {
   private stream: GeoEventStream;
   private cache: QueryClient;
@@ -223,10 +255,14 @@ export class SyncEngine {
       // Log the error but don't throw - sync failures shouldn't crash the app.
       // Entities that failed to sync will be retried on the next sync cycle
       // (after TTL expires or on next relevant event).
-      console.error('[SyncEngine] Failed to fetch entities for sync:', {
-        entityIds: uniqueEntityIds,
-        error: error instanceof Error ? error.message : error,
-      });
+      console.error(
+        `[SyncEngine] Failed to fetch entities for sync: ${JSON.stringify(
+          serializeForLog({
+            entityIds: uniqueEntityIds,
+            error,
+          })
+        )}`
+      );
       return [];
     }
 
