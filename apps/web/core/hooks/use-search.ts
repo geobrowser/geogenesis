@@ -9,7 +9,6 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { Subgraph } from '~/core/io';
-import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
@@ -118,7 +117,9 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
         }
       }
 
-      return [...resultOrError.right].sort(compareBySpaceRank(r => r.spaces[0]?.spaceId ?? ''));
+      // Preserve the API's relevance ordering. Append any local-only
+      // entities (not already in the remote results) to the end.
+      return resultOrError.right;
     },
     /**
      * We don't want to return stale search results. Instead we just
