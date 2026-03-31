@@ -5,7 +5,6 @@ import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
-import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
@@ -588,7 +587,7 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
 }
 
 export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId === getAddress(address));
+  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
 }
 
 export function getProposalTimeRemaining(endTime: number) {

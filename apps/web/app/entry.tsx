@@ -4,6 +4,8 @@ import { Analytics } from '@vercel/analytics/react';
 
 import * as React from 'react';
 
+import dynamic from 'next/dynamic';
+
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
@@ -13,10 +15,16 @@ import { ClientOnly } from '~/design-system/client-only';
 
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
-import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { FlowBar } from '~/partials/review/flow-bar';
-import { ReviewChanges } from '~/partials/review/review-changes';
 import { SearchDialog } from '~/partials/search';
+
+const OnboardingDialog = dynamic(() => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })), {
+  ssr: false,
+});
+
+const ReviewChanges = dynamic(() => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })), {
+  ssr: false,
+});
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
