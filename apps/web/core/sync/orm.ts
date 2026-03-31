@@ -260,7 +260,11 @@ export class E {
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
-    const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
+    // Preserve remote ordering; append local-only entities at the end
+    const remoteIds = remoteEntities.map(e => e.id);
+    const remoteIdSet = new Set(remoteIds);
+    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
+    const mergedIds = [...remoteIds, ...localOnlyIds];
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
@@ -313,7 +317,11 @@ export class E {
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
-    const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
+    // Preserve remote (API relevance) ordering; append local-only entities at the end
+    const remoteIds = remoteEntities.map(e => e.id);
+    const remoteIdSet = new Set(remoteIds);
+    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
+    const mergedIds = [...remoteIds, ...localOnlyIds];
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
     const maybeEntities = mergedIds.map(entityId => {
