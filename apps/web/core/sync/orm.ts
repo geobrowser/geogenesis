@@ -262,9 +262,10 @@ export class E {
 
     // Preserve remote ordering; append local-only entities at the end
     const remoteIds = remoteEntities.map(e => e.id);
-    const remoteIdSet = new Set(remoteIds);
+    const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
+    const remoteIdSet = new Set(dedupedRemoteIds);
     const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
-    const mergedIds = [...remoteIds, ...localOnlyIds];
+    const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
