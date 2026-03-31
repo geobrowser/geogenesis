@@ -22,6 +22,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
+import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -49,9 +50,13 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import {
   type EditApplyPayload,
+  type EditApplyNewPropertyPayload,
+  type EditCreatePropertyEntityPayload,
+  type EditAddExistingPropertyPayload,
   type EditApplyValuePayload,
   type EditDeleteApplyPayload,
   EditEntitiesPopover,
+  type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
 import { usePowerToolsData } from './hooks/use-power-tools-data';
 import { PowerToolsTable } from './power-tools-table';
@@ -262,6 +267,8 @@ export function PowerToolsScreen() {
     });
   }, [selectableIds]);
   const [imageUploadingFor, setImageUploadingFor] = React.useState<Set<string>>(new Set());
+  /** Property columns actively receiving a bulk “apply to rows” write (e.g. while fetchAllIds runs). */
+  const [bulkApplyPendingPropertyIds, setBulkApplyPendingPropertyIds] = React.useState<Set<string>>(() => new Set());
   const selectedCount = selectedEntityIds.size;
   const isAllSelected = selectableCount > 0 && selectedCount === selectableCount;
 
@@ -341,16 +348,27 @@ export function PowerToolsScreen() {
         return;
       }
 
-      selectedEntityIds.forEach(fromEntityId => {
-        const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
-        targetEntities.forEach(target => {
-          createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
-            id: target.id,
-            name: target.name,
-            space: target.primarySpace,
+      setBulkApplyPendingPropertyIds(prev => new Set(prev).add(property.id));
+      try {
+        // Let the table paint Applying… before a large synchronous relation write.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        selectedEntityIds.forEach(fromEntityId => {
+          const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+          targetEntities.forEach(target => {
+            createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+              id: target.id,
+              name: target.name,
+              space: target.primarySpace,
+            });
           });
         });
-      });
+      } finally {
+        setBulkApplyPendingPropertyIds(prev => {
+          const next = new Set(prev);
+          next.delete(property.id);
+          return next;
+        });
+      }
     },
     [storage, spaceId, selectedEntityIds, selectableRows]
   );
@@ -418,6 +436,186 @@ export function PowerToolsScreen() {
       setValuesApplyVersion(v => v + 1);
     },
     [storage, selectedEntityIds]
+  );
+
+  const handleRemoveProperties = React.useCallback(
+    (payload: EditRemovePropertiesPayload) => {
+      const { propertyIds, scope } = payload;
+      const targetEntityIds = scope === 'allEntities' ? selectableIds : selectedEntityIds;
+      for (const propertyId of propertyIds) {
+        const valuesToDelete = getValues({
+          selector: v =>
+            targetEntityIds.has(v.entity.id) &&
+            v.property.id === propertyId,
+        });
+        valuesToDelete.forEach(v => storage.values.delete(v));
+        const relationsToDelete = getRelations({
+          selector: r =>
+            targetEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
+        });
+        relationsToDelete.forEach(r => storage.relations.delete(r));
+      }
+      setExcludedColumnIds(prev => [...new Set([...prev, ...propertyIds])]);
+    },
+    [storage, selectedEntityIds, selectableIds]
+  );
+
+  const handleAddExistingProperty = React.useCallback(
+    (payload: EditAddExistingPropertyPayload) => {
+      // Ensure the property exists locally so the new column can render immediately
+      // even if remote property hydration is delayed/fails.
+      const { baseDataType, renderableTypeId } = mapPropertyType('RELATION');
+      storage.properties.create({
+        entityId: payload.propertyId,
+        spaceId,
+        name: '',
+        dataType: baseDataType,
+        renderableTypeId,
+        verified: false,
+        toSpaceId: undefined,
+      });
+
+      setExtraColumnIds(prev => (prev.includes(payload.propertyId) ? prev : [...prev, payload.propertyId]));
+      setExcludedColumnIds(prev => prev.filter(id => id !== payload.propertyId));
+      setHiddenColumnIds(prev => {
+        if (!prev.has(payload.propertyId)) return prev;
+        const next = new Set(prev);
+        next.delete(payload.propertyId);
+        return next;
+      });
+    },
+    [storage, spaceId]
+  );
+
+  const handleCreatePropertyEntity = React.useCallback(
+    ({ propertyId, name, valueType }: EditCreatePropertyEntityPayload) => {
+      const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
+      storage.properties.create({
+        entityId: propertyId,
+        spaceId,
+        name: name ?? '',
+        dataType: baseDataType,
+        renderableTypeId,
+        verified: false,
+        toSpaceId: undefined,
+      });
+    },
+    [storage, spaceId]
+  );
+
+  const fetchAllIdsRef = React.useRef(data.fetchAllIds);
+  React.useEffect(() => {
+    fetchAllIdsRef.current = data.fetchAllIds;
+  }, [data.fetchAllIds]);
+
+  const handleApplyNewProperty = React.useCallback(
+    async (payload: EditApplyNewPropertyPayload) => {
+      const {
+        propertyId,
+        name,
+        valueType,
+        applyToAllEntities,
+        selectedRowEntityIds,
+        selectedEntities,
+        initialValue,
+        initialImageFile,
+      } = payload;
+
+      setBulkApplyPendingPropertyIds(prev => new Set(prev).add(propertyId));
+      try {
+        // Ensure a local property record exists for both newly created and
+        // existing-picked properties, so column rendering does not depend on
+        // remote property fetch timing.
+        const { baseDataType, renderableTypeId } = mapPropertyType(valueType);
+        storage.properties.create({
+          entityId: propertyId,
+          spaceId,
+          name: name ?? '',
+          dataType: baseDataType,
+          renderableTypeId,
+          verified: false,
+          toSpaceId: undefined,
+        });
+
+        setExtraColumnIds(prev => (prev.includes(propertyId) ? prev : [...prev, propertyId]));
+        setExcludedColumnIds(prev => prev.filter(id => id !== propertyId));
+        setHiddenColumnIds(prev => {
+          if (!prev.has(propertyId)) return prev;
+          const next = new Set(prev);
+          next.delete(propertyId);
+          return next;
+        });
+        const property = {
+          id: propertyId,
+          name,
+          dataType: baseDataType,
+        };
+
+        const targetEntityIds = applyToAllEntities
+          ? await fetchAllIdsRef.current()
+          : selectedRowEntityIds.length > 0
+            ? selectedRowEntityIds
+            : selectableRows.map(r => r.entityId);
+        if (targetEntityIds.length === 0) return;
+        const entityIdToSpaceId = new Map(
+          selectableRows
+            .filter(r => targetEntityIds.includes(r.entityId))
+            .map(r => [r.entityId, r.spaceId] as const)
+        );
+
+        if (valueType === 'IMAGE' && initialImageFile) {
+          const uploadKeys = new Set(targetEntityIds.map(id => `${id}:${property.id}`));
+          setImageUploadingFor(uploadKeys);
+          try {
+            for (const fromEntityId of targetEntityIds) {
+              const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+              await storage.images.createAndLink({
+                file: initialImageFile,
+                fromEntityId,
+                fromEntityName: null,
+                relationPropertyId: property.id,
+                relationPropertyName: property.name,
+                spaceId: rowSpaceId,
+              });
+              setImageUploadingFor(prev => {
+                const next = new Set(prev);
+                next.delete(`${fromEntityId}:${property.id}`);
+                return next;
+              });
+            }
+          } finally {
+            setImageUploadingFor(new Set());
+          }
+        } else if (
+          (valueType === 'RELATION' || valueType === 'IMAGE') &&
+          selectedEntities?.length
+        ) {
+          targetEntityIds.forEach(fromEntityId => {
+            const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
+            selectedEntities.forEach(target => {
+              createPropertyRelation(storage, rowSpaceId, fromEntityId, property, {
+                id: target.id,
+                name: target.name,
+                space: target.primarySpace,
+              });
+            });
+          });
+        } else if (valueType !== 'RELATION' && valueType !== 'IMAGE') {
+          const value = initialValue ?? '';
+          for (const entityId of targetEntityIds) {
+            const rowSpaceId = entityIdToSpaceId.get(entityId) ?? spaceId;
+            writeValue(storage, entityId, rowSpaceId, property, value, null);
+          }
+        }
+      } finally {
+        setBulkApplyPendingPropertyIds(prev => {
+          const next = new Set(prev);
+          next.delete(propertyId);
+          return next;
+        });
+      }
+    },
+    [selectableRows, spaceId, storage]
   );
 
   const onMasterToggle = React.useCallback(() => {
@@ -705,6 +903,10 @@ export function PowerToolsScreen() {
                 onApply={handleEditApply}
                 onApplyValue={handleApplyValue}
                 onDeleteApply={handleDeleteApply}
+                onRemoveProperties={handleRemoveProperties}
+                onApplyNewProperty={handleApplyNewProperty}
+                onAddExistingProperty={handleAddExistingProperty}
+                showPropertyActions={false}
                 typesProperty={
                   data.properties.find(p => p.id === SystemIds.TYPES_PROPERTY) ?? {
                     id: SystemIds.TYPES_PROPERTY,
@@ -831,10 +1033,17 @@ export function PowerToolsScreen() {
               onReorderColumns={setOrderedPropertyIds}
               selection={selectionProps}
               imageUploadingFor={imageUploadingFor}
+              bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
               onRowClick={undefined}
               onRowDoubleClick={isEditing && !isSelectionModeActive ? onRowClick : undefined}
               sortState={sortState}
               onSort={setSortState}
+              selectedCount={selectedCount}
+              selectedEntityIdsForNewProperty={Array.from(selectedEntityIds)}
+              onApplyNewProperty={handleApplyNewProperty}
+              onCreatePropertyEntity={handleCreatePropertyEntity}
+              onAddExistingProperty={handleAddExistingProperty}
+              onRemoveProperties={handleRemoveProperties}
             />
           </>
         )}

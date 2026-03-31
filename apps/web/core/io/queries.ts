@@ -12,11 +12,11 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
+import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
   entitiesOrderedByPropertyQuery,
-  entitiesQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -79,43 +79,93 @@ type GetAllEntitiesOptions = {
   orderBy?: EntitiesOrderBy[];
 };
 
+/** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
+const ENTITIES_CONNECTION_MAX_FIRST = 1000;
+
+function decodeEntitiesConnectionNodes(data: {
+  entitiesConnection?: { nodes?: unknown[] } | null;
+}): Entity[] {
+  return (
+    data.entitiesConnection?.nodes
+      ?.map((n: unknown) => EntityDecoder.decode(n))
+      .filter((e: Entity | null): e is Entity => e !== null) ?? []
+  );
+}
+
 export function getAllEntities(
   { limit, offset, spaceId, spaceIds, typeId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
-  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
-  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
-  const extractedTypeId = extractSingleTypeIdFromFilter(filter);
-  const extractedTypeIds = extractTypeIdsFromFilter(filter);
+  return Effect.gen(function* () {
+    const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+    const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+    const extractedTypeId = extractSingleTypeIdFromFilter(filter);
+    const extractedTypeIds = extractTypeIdsFromFilter(filter);
 
-  const topLevelSpaceId = spaceId ?? extractedSpaceId;
-  const topLevelSpaceIds = topLevelSpaceId ? undefined : (spaceIds ?? extractedSpaceIds);
+    const topLevelSpaceId = spaceId ?? extractedSpaceId;
+    const topLevelSpaceIds = topLevelSpaceId ? undefined : (spaceIds ?? extractedSpaceIds);
 
-  const topLevelTypeId = typeId ?? extractedTypeId;
-  const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
+    const topLevelTypeId = typeId ?? extractedTypeId;
+    const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
 
-  let normalizedFilter = filter;
-  if (topLevelSpaceId || topLevelSpaceIds) {
-    normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
-  }
-  if (topLevelTypeId || topLevelTypeIds) {
-    normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
-  }
+    let normalizedFilter = filter;
+    if (topLevelSpaceId || topLevelSpaceIds) {
+      normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
+    }
+    if (topLevelTypeId || topLevelTypeIds) {
+      normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
+    }
 
-  return graphql({
-    query: entitiesQuery,
-    decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: {
-      limit,
-      offset,
+    const variablesBase = {
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeId: topLevelTypeId,
       typeIds: topLevelTypeIds,
       filter: normalizedFilter,
       orderBy,
-    },
-    signal,
+    };
+
+    const fetchPage = (pageLimit: number, pageOffset: number) =>
+      graphql({
+        query: allEntitiesConnectionDocument,
+        decoder: decodeEntitiesConnectionNodes,
+        variables: { ...variablesBase, limit: pageLimit, offset: pageOffset },
+        signal,
+      });
+
+    const startOffset = offset ?? 0;
+
+    if (limit !== undefined) {
+      if (limit === 0) {
+        return [];
+      }
+      const collected: Entity[] = [];
+      let nextOffset = startOffset;
+      let remaining = limit;
+      while (remaining > 0) {
+        const chunk = Math.min(ENTITIES_CONNECTION_MAX_FIRST, remaining);
+        const page = yield* fetchPage(chunk, nextOffset);
+        collected.push(...page);
+        if (page.length < chunk) {
+          break;
+        }
+        nextOffset += page.length;
+        remaining -= page.length;
+      }
+      return collected;
+    }
+
+    const collected: Entity[] = [];
+    let nextOffset = startOffset;
+    while (true) {
+      const page = yield* fetchPage(ENTITIES_CONNECTION_MAX_FIRST, nextOffset);
+      collected.push(...page);
+      if (page.length < ENTITIES_CONNECTION_MAX_FIRST) {
+        break;
+      }
+      nextOffset += page.length;
+    }
+    return collected;
   });
 }
 

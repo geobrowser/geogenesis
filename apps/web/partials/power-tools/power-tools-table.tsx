@@ -31,10 +31,13 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { OrderDots } from '~/design-system/icons/order-dots';
+import { Plus } from '~/design-system/icons/plus';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -43,6 +46,13 @@ import { SortableColumnHeader } from '~/partials/blocks/table/sortable-column-he
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 
+import {
+  EditEntitiesPopover,
+  type EditApplyNewPropertyPayload,
+  type EditCreatePropertyEntityPayload,
+  type EditAddExistingPropertyPayload,
+  type EditRemovePropertiesPayload,
+} from './edit-entities-popover';
 import { PowerToolsRow } from './types';
 
 export type PowerToolsTableSelectionProps = {
@@ -74,13 +84,22 @@ interface Props {
   onReorderColumns: (ids: string[]) => void;
   selection?: PowerToolsTableSelectionProps;
   imageUploadingFor?: Set<string>;
+  /** Cells in these property columns show applying state during bulk apply (e.g. fetchAllIds). */
+  bulkApplyPendingPropertyIds?: ReadonlySet<string>;
   onRowClick?: (entityId: string) => void;
   onRowDoubleClick?: (entityId: string) => void;
   sortState: ColumnSortState;
   onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
+  selectedCount?: number;
+  selectedEntityIdsForNewProperty?: string[];
+  onApplyNewProperty?: (payload: EditApplyNewPropertyPayload) => void;
+  onCreatePropertyEntity?: (payload: EditCreatePropertyEntityPayload) => void;
+  onAddExistingProperty?: (payload: EditAddExistingPropertyPayload) => void;
+  onRemoveProperties?: (payload: EditRemovePropertiesPayload) => void;
 }
 
 const CHECKBOX_COLUMN_WIDTH = 40;
+const ADD_COLUMN_WIDTH = 56;
 
 const ROW_HEIGHT_ESTIMATE = 56;
 const HEADER_HEIGHT = 44;
@@ -195,6 +214,7 @@ function PowerToolsCell({
   onOpenEntityPanel,
   source,
   imageUploadingFor,
+  bulkApplyPendingPropertyIds,
 }: {
   row: PowerToolsRow;
   property: Property;
@@ -206,7 +226,19 @@ function PowerToolsCell({
   onOpenEntityPanel?: (entityId: string, spaceId: string) => void;
   source: Source;
   imageUploadingFor?: Set<string>;
+  bulkApplyPendingPropertyIds?: ReadonlySet<string>;
 }) {
+  if (bulkApplyPendingPropertyIds?.has(property.id)) {
+    return (
+      <div className="flex min-h-[1.25rem] items-center gap-2" aria-busy="true" aria-label="Applying changes">
+        <Spinner />
+        <Text variant="body" color="grey-04">
+          Applying…
+        </Text>
+      </div>
+    );
+  }
+
   if (row.placeholder && property.id !== SystemIds.NAME_PROPERTY && !isEditing) {
     return (
       <Text variant="body" color="grey-04">
@@ -277,12 +309,20 @@ function SortableHeaderCell({
   onSort,
   onResizeMouseDown,
   onHideColumn,
+  removePropertyPopover,
 }: {
   property: Property;
   sortState: ColumnSortState;
   onSort: React.Dispatch<React.SetStateAction<ColumnSortState>>;
   onResizeMouseDown: (event: React.MouseEvent, propertyId: string) => void;
   onHideColumn?: (propertyId: string) => void;
+  removePropertyPopover?: {
+    selectedCount: number;
+    spaceId: string;
+    properties: Property[];
+    selectedEntityIds: string[];
+    onRemoveProperties: (payload: EditRemovePropertiesPayload) => void;
+  };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: property.id,
@@ -317,15 +357,41 @@ function SortableHeaderCell({
         variant="metadata"
       />
       {onHideColumn && (
-        <button
-          type="button"
-          onClick={() => onHideColumn(property.id)}
-          className="ml-2 flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
-          title="Hide column"
-          aria-label="Hide column"
-        >
-          <EyeHide />
-        </button>
+        <div className="ml-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onHideColumn(property.id)}
+            className="flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
+            title="Hide column"
+            aria-label="Hide column"
+          >
+            <EyeHide />
+          </button>
+          {removePropertyPopover && (
+            <EditEntitiesPopover
+              trigger={
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center justify-center rounded-sm p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-text"
+                  title="Remove property"
+                  aria-label="Remove property"
+                >
+                  <CloseSmall />
+                </button>
+              }
+              selectedCount={removePropertyPopover.selectedCount}
+              spaceId={removePropertyPopover.spaceId}
+              properties={removePropertyPopover.properties}
+              selectedEntityIds={removePropertyPopover.selectedEntityIds}
+              onRemoveProperties={removePropertyPopover.onRemoveProperties}
+              removePropertyOnly
+              initialPropertiesMarkedForRemoval={[property.id]}
+              contentAlign="center"
+              contentSideOffset={6}
+              restoreFocusOnClose={false}
+            />
+          )}
+        </div>
       )}
       <div
         className="hover:bg-blue-04/50 absolute top-0 right-0 h-full w-3 cursor-col-resize"
@@ -355,12 +421,61 @@ export function PowerToolsTable({
   onReorderColumns,
   selection,
   imageUploadingFor,
+  bulkApplyPendingPropertyIds,
   onRowClick,
   onRowDoubleClick,
   sortState,
   onSort,
+  selectedCount = 0,
+  selectedEntityIdsForNewProperty = [],
+  onApplyNewProperty,
+  onCreatePropertyEntity,
+  onAddExistingProperty,
+  onRemoveProperties,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
+  /** Preserves scroll when cell content swaps (e.g. Applying… → relation chips) so the view does not jump horizontally. */
+  const savedTableScrollRef = React.useRef<{ left: number; top: number } | null>(null);
+  const wasBulkOrImageApplyingRef = React.useRef(false);
+
+  const bulkApplying = (bulkApplyPendingPropertyIds?.size ?? 0) > 0;
+  const imageApplying = (imageUploadingFor?.size ?? 0) > 0;
+  const isBulkOrImageApplying = bulkApplying || imageApplying;
+
+  React.useLayoutEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+
+    if (isBulkOrImageApplying && !wasBulkOrImageApplyingRef.current) {
+      savedTableScrollRef.current = { left: el.scrollLeft, top: el.scrollTop };
+    }
+
+    if (!isBulkOrImageApplying && wasBulkOrImageApplyingRef.current && savedTableScrollRef.current) {
+      const { left, top } = savedTableScrollRef.current;
+      const restore = () => {
+        el.scrollLeft = left;
+        el.scrollTop = top;
+      };
+      restore();
+      requestAnimationFrame(restore);
+      savedTableScrollRef.current = null;
+    }
+
+    wasBulkOrImageApplyingRef.current = isBulkOrImageApplying;
+  }, [isBulkOrImageApplying]);
+
+  React.useEffect(() => {
+    if (!isBulkOrImageApplying) return;
+    const el = tableRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      savedTableScrollRef.current = { left: el.scrollLeft, top: el.scrollTop };
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [isBulkOrImageApplying]);
+
   const isEditing = useUserIsEditing(spaceId);
   const showCheckboxColumn = isEditing && selection != null;
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
@@ -467,6 +582,7 @@ export function PowerToolsTable({
 
   const virtualRows = rowVirtualizer.getVirtualItems();
   const columnLayout = React.useMemo(() => {
+    const showAddColumn = isEditing && onApplyNewProperty != null;
     let offset = showCheckboxColumn ? CHECKBOX_COLUMN_WIDTH : 0;
     const layout = orderedProperties.map(property => {
       const width = columnWidths[property.id] || 200;
@@ -475,14 +591,15 @@ export function PowerToolsTable({
       return { property, left, width };
     });
     const template = showCheckboxColumn
-      ? `${CHECKBOX_COLUMN_WIDTH}px ${layout.map(col => `${col.width}px`).join(' ')}`
-      : layout.map(col => `${col.width}px`).join(' ');
+      ? `${CHECKBOX_COLUMN_WIDTH}px ${layout.map(col => `${col.width}px`).join(' ')}${showAddColumn ? ` ${ADD_COLUMN_WIDTH}px` : ''}`
+      : `${layout.map(col => `${col.width}px`).join(' ')}${showAddColumn ? ` ${ADD_COLUMN_WIDTH}px` : ''}`;
     return {
       totalWidth: offset,
       template,
       columns: layout,
+      showAddColumn,
     };
-  }, [orderedProperties, columnWidths, showCheckboxColumn]);
+  }, [orderedProperties, columnWidths, showCheckboxColumn, isEditing, onApplyNewProperty]);
 
   React.useEffect(() => {
     const lastItem = virtualRows[virtualRows.length - 1];
@@ -523,8 +640,46 @@ export function PowerToolsTable({
                   onSort={onSort}
                   onResizeMouseDown={handleMouseDown}
                   onHideColumn={onHideColumn}
+                  removePropertyPopover={
+                    isEditing && onRemoveProperties
+                      ? {
+                          selectedCount,
+                          spaceId,
+                          properties,
+                          selectedEntityIds: selectedEntityIdsForNewProperty,
+                          onRemoveProperties,
+                        }
+                      : undefined
+                  }
                 />
               ))}
+              {columnLayout.showAddColumn && (
+                <div className="flex items-center justify-center border-r border-grey-02 bg-grey-01 px-2">
+                  <EditEntitiesPopover
+                    trigger={
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 items-center justify-center rounded-sm text-grey-04 hover:bg-grey-02 hover:text-text"
+                        title="Add property"
+                        aria-label="Add property"
+                      >
+                        <Plus />
+                      </button>
+                    }
+                    selectedCount={selectedCount}
+                    spaceId={spaceId}
+                    properties={properties}
+                    selectedEntityIds={selectedEntityIdsForNewProperty}
+                    onApplyNewProperty={onApplyNewProperty}
+                    onCreatePropertyEntity={onCreatePropertyEntity}
+                    onAddExistingProperty={onAddExistingProperty}
+                    newPropertyOnly
+                    contentAlign="center"
+                    contentSideOffset={6}
+                    restoreFocusOnClose={false}
+                  />
+                </div>
+              )}
             </div>
           </SortableContext>
         </DndContext>
@@ -678,6 +833,7 @@ export function PowerToolsTable({
                           onOpenEntityPanel={onOpenEntityPanel}
                           source={source}
                           imageUploadingFor={imageUploadingFor}
+                          bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
                         />
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button

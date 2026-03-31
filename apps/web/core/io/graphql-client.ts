@@ -77,6 +77,46 @@ function summarizeResponseForLog(response: any) {
   };
 }
 
+function toSerializableErrorLog(value: unknown): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(toSerializableErrorLog);
+  }
+
+  if (value && typeof value === 'object') {
+    const output: Record<string, unknown> = {};
+
+    for (const [key, item] of Object.entries(value)) {
+      if (item !== undefined) {
+        output[key] = toSerializableErrorLog(item);
+      }
+    }
+
+    return output;
+  }
+
+  return value;
+}
+
+function stringifyLogPayload(payload: unknown): string {
+  try {
+    return JSON.stringify(toSerializableErrorLog(payload));
+  } catch {
+    return String(payload);
+  }
+}
+
 class GraphqlRequestError extends Error {
   readonly _tag = 'GraphqlRequestError';
   readonly status?: number;
@@ -254,20 +294,22 @@ function withRetry<T>(
         if (isRetryableGraphqlError(error)) {
           const retryLogContext = toGraphqlRetryLogContext(error, context.clientRequestId);
 
-          console.warn('[GRAPHQL] Exhausted retries', {
-            operationName: context.operationName,
-            clientRequestId: retryLogContext.clientRequestId,
-            category: retryLogContext.category,
-            status: retryLogContext.status,
-            source: retryLogContext.source,
-            requestId: retryLogContext.requestId,
-            retryAfterMs: retryLogContext.retryAfterMs,
-            maxRetries: MAX_RETRIES,
-            transportCode: retryLogContext.transportCode,
-            transportErrno: retryLogContext.transportErrno,
-            transportSyscall: retryLogContext.transportSyscall,
-            correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${context.operationName ?? 'unknown'}`,
-          });
+          console.warn(
+            `[GRAPHQL] Exhausted retries ${stringifyLogPayload({
+              operationName: context.operationName,
+              clientRequestId: retryLogContext.clientRequestId,
+              category: retryLogContext.category,
+              status: retryLogContext.status,
+              source: retryLogContext.source,
+              requestId: retryLogContext.requestId,
+              retryAfterMs: retryLogContext.retryAfterMs,
+              maxRetries: MAX_RETRIES,
+              transportCode: retryLogContext.transportCode,
+              transportErrno: retryLogContext.transportErrno,
+              transportSyscall: retryLogContext.transportSyscall,
+              correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${context.operationName ?? 'unknown'}`,
+            })}`
+          );
         }
       })
     )
@@ -377,21 +419,23 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       if (!error.isAbort) {
         const retryLogContext = toGraphqlRetryLogContext(error, clientRequestId);
 
-        console.error('GraphQL request failed', {
-          message: error.message,
-          category: retryLogContext.category,
-          status: retryLogContext.status,
-          source: retryLogContext.source,
-          requestId: retryLogContext.requestId,
-          clientRequestId: retryLogContext.clientRequestId,
-          retryAfterMs: retryLogContext.retryAfterMs,
-          transportCode: retryLogContext.transportCode,
-          transportErrno: retryLogContext.transportErrno,
-          transportSyscall: retryLogContext.transportSyscall,
-          request: error.request,
-          response: summarizeResponseForLog(error.response),
-          correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${operationName ?? 'unknown'}`,
-        });
+        console.error(
+          `GraphQL request failed ${stringifyLogPayload({
+            message: error.message,
+            category: retryLogContext.category,
+            status: retryLogContext.status,
+            source: retryLogContext.source,
+            requestId: retryLogContext.requestId,
+            clientRequestId: retryLogContext.clientRequestId,
+            retryAfterMs: retryLogContext.retryAfterMs,
+            transportCode: retryLogContext.transportCode,
+            transportErrno: retryLogContext.transportErrno,
+            transportSyscall: retryLogContext.transportSyscall,
+            request: error.request,
+            response: summarizeResponseForLog(error.response),
+            correlationHint: `graphql clientRequestId=${retryLogContext.clientRequestId} requestId=${retryLogContext.requestId ?? 'unknown'} operation=${operationName ?? 'unknown'}`,
+          })}`
+        );
       }
 
       return yield* Effect.fail(error);
