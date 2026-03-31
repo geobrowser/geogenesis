@@ -74,6 +74,54 @@ describe('GeoNumber', () => {
     expect(result).toBe('not-a-number');
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
+
+  describe('compact number formatting (K, M, B, T)', () => {
+    it('should format thousands with K suffix', () => {
+      expect(GeoNumber.format(1500, 'K')).toBe('1.5K');
+      expect(GeoNumber.format(1000, 'K')).toBe('1K');
+      expect(GeoNumber.format(999999, 'K')).toBe('999.999K');
+    });
+
+    it('should format millions with M suffix', () => {
+      expect(GeoNumber.format(1000000, 'M')).toBe('1M');
+      expect(GeoNumber.format(2500000, 'M')).toBe('2.5M');
+    });
+
+    it('should format billions with B suffix', () => {
+      expect(GeoNumber.format(1000000000, 'B')).toBe('1B');
+      expect(GeoNumber.format(3750000000, 'B')).toBe('3.75B');
+    });
+
+    it('should format trillions with T suffix', () => {
+      expect(GeoNumber.format(1000000000000, 'T')).toBe('1T');
+      expect(GeoNumber.format(1500000000000, 'T')).toBe('1.5T');
+    });
+
+    it('should handle compact format with :: prefix', () => {
+      expect(GeoNumber.format(1500, '::K')).toBe('1.5K');
+      expect(GeoNumber.format(2500000, '::M')).toBe('2.5M');
+    });
+
+    it('should handle compact format with currency symbol', () => {
+      expect(GeoNumber.format(1500, 'K', '$')).toBe('$1.5K');
+      expect(GeoNumber.format(1000000, 'M', '€')).toBe('€1M');
+    });
+
+    it('should handle small values with compact format', () => {
+      expect(GeoNumber.format(500, 'K')).toBe('0.5K');
+      expect(GeoNumber.format(1, 'M')).toBe('0.000001M');
+    });
+
+    it('should strip trailing zeros from compact format', () => {
+      expect(GeoNumber.format(2000, 'K')).toBe('2K');
+      expect(GeoNumber.format(5000000, 'M')).toBe('5M');
+    });
+
+    it('should handle string values with compact format', () => {
+      expect(GeoNumber.format('1500', 'K')).toBe('1.5K');
+      expect(GeoNumber.format('2500000', 'M')).toBe('2.5M');
+    });
+  });
 });
 
 describe('GeoDate', () => {
