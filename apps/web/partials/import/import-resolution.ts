@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
-import { type NameValueMatch, getNameValuesBatch } from '~/core/io/queries';
+import { type EntityTiebreakerData, type NameValueMatch, getEntityTiebreakerBatch, getNameValuesBatch } from '~/core/io/queries';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { RelationPropertyMeta, ResolvedEntity } from './import-generation';
@@ -38,7 +38,7 @@ type ResolutionGuard = {
 
 type ResolvedEntityMatch =
   | { status: 'resolved'; entity: { id: string; name: string } }
-  | { status: 'unresolved'; reason: 'none' | 'tie' | 'ambiguous' };
+  | { status: 'unresolved'; reason: 'none' | 'ambiguous' };
 
 function getCandidateTopSpaceRank(spaceIds: string[]): number {
   if (spaceIds.length === 0) return Number.MAX_SAFE_INTEGER;
@@ -51,19 +51,73 @@ type Candidate = {
   id: string;
   name: string;
   spaceIds: string[];
-  connectedness: number; // backlinks + relations — tiebreaker
+  connectedness: number; // backlinks + relations — first tiebreaker
 };
+
+/**
+ * Break a tie among multiple candidates at the same space rank using entity metadata.
+ * Tiebreaker hierarchy:
+ * 1. Most backlinks (incoming references)
+ * 2. Most outgoing relations
+ * 3. Most value properties set
+ * 4. Earliest creation date
+ * 5. First in list (deterministic fallback)
+ */
+async function breakTieWithEntityMetadata(candidates: Candidate[]): Promise<Candidate> {
+  if (candidates.length === 1) return candidates[0];
+
+  let tiebreakerData: Map<string, EntityTiebreakerData>;
+  try {
+    const entityIds = candidates.map(c => c.id);
+    const data = await Effect.runPromise(getEntityTiebreakerBatch(entityIds));
+    tiebreakerData = new Map(data.map(d => [d.id, d]));
+  } catch {
+    // If the tiebreaker query fails, fall back to picking the first candidate
+    return candidates[0];
+  }
+
+  const withData = candidates.map(c => ({
+    candidate: c,
+    data: tiebreakerData.get(c.id),
+  }));
+
+  // 1. Most backlinks
+  const maxBacklinks = Math.max(...withData.map(w => w.data?.backlinksCount ?? 0));
+  const byBacklinks = withData.filter(w => (w.data?.backlinksCount ?? 0) === maxBacklinks);
+  if (byBacklinks.length === 1) return byBacklinks[0].candidate;
+
+  // 2. Most outgoing relations
+  const maxRelations = Math.max(...byBacklinks.map(w => w.data?.relationsCount ?? 0));
+  const byRelations = byBacklinks.filter(w => (w.data?.relationsCount ?? 0) === maxRelations);
+  if (byRelations.length === 1) return byRelations[0].candidate;
+
+  // 3. Most value properties set
+  const maxValues = Math.max(...byRelations.map(w => w.data?.valuesCount ?? 0));
+  const byValues = byRelations.filter(w => (w.data?.valuesCount ?? 0) === maxValues);
+  if (byValues.length === 1) return byValues[0].candidate;
+
+  // 4. Earliest creation date (missing data sorts last)
+  const FAR_FUTURE = '9999-12-31T23:59:59Z';
+  const earliest = byValues.reduce((a, b) => {
+    const aDate = a.data?.createdAt || FAR_FUTURE;
+    const bDate = b.data?.createdAt || FAR_FUTURE;
+    return aDate <= bDate ? a : b;
+  });
+
+  // 5. If all identical, this returns the first one encountered (deterministic)
+  return earliest.candidate;
+}
 
 /**
  * Process raw value rows into resolved matches.
  * Groups by normalized text, collapses by entity.id, ranks, classifies.
  */
-function classifyBatchResults(
+async function classifyBatchResults(
   valueRows: NameValueMatch[],
   inputNames: string[],
   typeIds: string[],
   hitLimit: boolean
-): Map<string, ResolvedEntityMatch> {
+): Promise<Map<string, ResolvedEntityMatch>> {
   const results = new Map<string, ResolvedEntityMatch>();
 
   // Step 1: Group value rows by normalized text, collapse by entity.id
@@ -135,7 +189,7 @@ function classifyBatchResults(
       continue;
     }
 
-    // Still tied — use connectedness as tiebreaker
+    // Still tied — use connectedness as quick tiebreaker
     const bestConnectedness = Math.max(...atBestSpace.map(r => r.candidate.connectedness));
     const atBestConnectedness = atBestSpace.filter(r => r.candidate.connectedness === bestConnectedness);
 
@@ -143,7 +197,10 @@ function classifyBatchResults(
       const winner = atBestConnectedness[0].candidate;
       results.set(norm, { status: 'resolved', entity: { id: winner.id, name: winner.name } });
     } else {
-      results.set(norm, { status: 'unresolved', reason: 'tie' });
+      // Connectedness also tied — use deep tiebreaker (backlinks → relations → values → createdAt)
+      const tiedCandidates = atBestConnectedness.map(r => r.candidate);
+      const winner = await breakTieWithEntityMetadata(tiedCandidates);
+      results.set(norm, { status: 'resolved', entity: { id: winner.id, name: winner.name } });
     }
   }
 
@@ -222,7 +279,7 @@ async function resolveNames(params: {
         continue;
       }
 
-      const classified = classifyBatchResults(valueRows, batch, typeIds, hitLimit);
+      const classified = await classifyBatchResults(valueRows, batch, typeIds, hitLimit);
       for (const [norm, match] of classified) {
         results.set(norm, match);
       }
