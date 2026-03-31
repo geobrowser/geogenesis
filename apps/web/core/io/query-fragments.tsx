@@ -737,6 +737,24 @@ export const importNameValuesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entityTiebreakerBatchQuery = graphql(/* GraphQL */ `
+  query EntityTiebreakerBatch($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      createdAt
+      backlinks {
+        totalCount
+      }
+      relations {
+        totalCount
+      }
+      values {
+        totalCount
+      }
+    }
+  }
+`);
+
 export const relationEntityQuery = graphql(/* GraphQL */ `
   query RelationEntityMinimal($id: UUID!, $spaceId: UUID) {
     relation(id: $id) {
