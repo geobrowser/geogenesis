@@ -1,2 +1,2 @@
 [install]
-minimumReleaseAge = "14d"
+minimumReleaseAge = 1209600
