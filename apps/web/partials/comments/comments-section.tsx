@@ -19,7 +19,7 @@ import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import * as Parser from '~/core/state/editor/parser';
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 
 import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
@@ -442,8 +442,8 @@ function CommentItem({
     setIsEditing(false);
   };
 
-  const renderedHtml = React.useMemo(() => {
-    return Parser.markdownToHtml(comment.markdownContent);
+  const renderedContent = React.useMemo(() => {
+    return renderMarkdownDocument(comment.markdownContent);
   }, [comment.markdownContent]);
 
   const relativeTime = React.useMemo(() => {
@@ -524,10 +524,9 @@ function CommentItem({
             initialValue={comment.markdownContent}
           />
         ) : (
-          <div
-            className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1"
-            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-          />
+          <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
+            {renderedContent}
+          </div>
         )}
 
         {/* Comment actions: vote + reply + edit */}

@@ -2,13 +2,14 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { useQuery } from '@tanstack/react-query';
+import cx from 'classnames';
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { getBatchEntities } from '~/core/io/queries';
+import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { SORT_PROPERTY } from '~/core/system-ids';
@@ -31,6 +32,7 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
+import { getFenceLength, readFencedCodeBlock } from './markdown-fences';
 
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
 const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
@@ -529,62 +531,15 @@ type MarkdownDiffProps = {
 };
 
 const MarkdownDiffRenderer = ({ text, highlightClass }: MarkdownDiffProps) => {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const content = headingMatch[2];
-      elements.push(
-        <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, <span className={cx(highlightClass)}>{content}</span>)}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    if (line.match(/^[-*]\s+/)) {
-      const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+(.+)$/)) {
-        const itemContent = lines[i].replace(/^[-*]\s+/, '');
-        listItems.push(
-          <li key={i}>
-            <div className="react-renderer node-paragraph">
-              <div className="whitespace-normal">
-                <p>
-                  <span className={cx(highlightClass)}>{itemContent}</span>
-                </p>
-              </div>
-            </div>
-          </li>
-        );
-        i++;
-      }
-      elements.push(<ul key={`ul-${i}`}>{listItems}</ul>);
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <div key={i} className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>
-              <span className={cx(highlightClass)}>{line}</span>
-            </p>
-          </div>
-        </div>
-      );
-    }
-    i++;
-  }
-
-  return <>{elements}</>;
+  return (
+    <>
+      {renderMarkdownDocument(text, {
+        textClassName: highlightClass,
+        markClassName: highlightClass,
+        codeBlockClassName: highlightClass ? 'rounded ring-2 ring-current' : undefined,
+      })}
+    </>
+  );
 };
 
 type TextBlockCellProps = {
@@ -633,9 +588,7 @@ type MarkdownDiffWithChunksProps = {
 };
 
 const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunksProps) => {
-  const hasMarkdown = /^#{1,6}\s|^[-*]\s/.test(fullText);
-
-  if (!hasMarkdown) {
+  if (!hasMarkdownSyntax(fullText)) {
     return <DiffRenderer diff={diff} side={side} />;
   }
 
@@ -697,6 +650,11 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
     return result;
   };
 
+  /** Advance the chunk cursor through `count` characters without emitting any nodes. */
+  const skipChars = (count: number) => {
+    charIndex += count;
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
@@ -704,34 +662,102 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       charIndex++;
     }
 
+    // Code block (``` ... ```)
+    if (getFenceLength(line)) {
+      const block = readFencedCodeBlock(lines, i);
+      if (!block) {
+        i++;
+        continue;
+      }
+
+      skipChars(block.openingLine.length);
+
+      if (block.codeText.length > 0) {
+        charIndex++;
+      }
+
+      const codeNodes = getStyledText(block.codeText);
+      const codeLinesArray = block.codeText.split('\n');
+      elements.push(
+        <div key={`code-${i}`} className="code-block">
+          <div className="code-block-line-numbers" aria-hidden>
+            {codeLinesArray.map((_, idx) => (
+              <div key={idx}>{idx + 1}</div>
+            ))}
+          </div>
+          <code>{codeNodes}</code>
+        </div>
+      );
+
+      if (block.closingLine) {
+        charIndex++;
+        skipChars(block.closingLine.length);
+      }
+
+      i = block.nextIndex - 1;
+      continue;
+    }
+
+    /** Apply inline mark rendering (code, math) to unchanged diff spans. */
+    const applyInlineMarks = (nodes: React.ReactNode[]): React.ReactNode[] => {
+      return nodes.map((node, idx) => {
+        if (React.isValidElement<{ className?: string; children?: React.ReactNode }>(node)) {
+          const { className, children } = node.props;
+          if (!className && typeof children === 'string' && hasMarkdownSyntax(children)) {
+            return <React.Fragment key={`im-${idx}`}>{renderMarkdownInline(children)}</React.Fragment>;
+          }
+        }
+        return node;
+      });
+    };
+
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       charIndex += headingMatch[1].length + 1;
       elements.push(
         <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, getStyledText(headingMatch[2]))}
+          {renderHeading(level, applyInlineMarks(getStyledText(headingMatch[2])))}
         </div>
       );
       charIndex += headingMatch[2].length;
       continue;
     }
 
-    const listMatch = line.match(/^([-*])\s+(.+)$/);
-    if (listMatch) {
+    const unorderedListMatch = line.match(/^([-*])\s+(.+)$/);
+    if (unorderedListMatch) {
       charIndex += 2;
       elements.push(
         <ul key={`ul-${i}`}>
           <li>
             <div className="react-renderer node-paragraph">
               <div className="whitespace-normal">
-                <p>{getStyledText(listMatch[2])}</p>
+                <p>{applyInlineMarks(getStyledText(unorderedListMatch[2]))}</p>
               </div>
             </div>
           </li>
         </ul>
       );
-      charIndex += listMatch[2].length;
+      charIndex += unorderedListMatch[2].length;
+      continue;
+    }
+
+    const orderedListMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    if (orderedListMatch) {
+      const prefixLen = orderedListMatch[1].length + 2; // "1. " = digit + dot + space
+      charIndex += prefixLen;
+      elements.push(
+        <ol key={`ol-${i}`} start={Number(orderedListMatch[1])}>
+          <li>
+            <div className="react-renderer node-paragraph">
+              <div className="whitespace-normal">
+                <p>{applyInlineMarks(getStyledText(orderedListMatch[2]))}</p>
+              </div>
+            </div>
+          </li>
+        </ol>
+      );
+      charIndex += orderedListMatch[2].length;
       continue;
     }
 
@@ -739,7 +765,7 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       elements.push(
         <div key={i} className="react-renderer node-paragraph">
           <div className="whitespace-normal">
-            <p>{getStyledText(line)}</p>
+            <p>{applyInlineMarks(getStyledText(line))}</p>
           </div>
         </div>
       );
