@@ -3,13 +3,13 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { useQuery } from '@tanstack/react-query';
 import cx from 'classnames';
-import katex from 'katex';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
 
 import { getBatchEntities } from '~/core/io/queries';
+import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { SORT_PROPERTY } from '~/core/system-ids';
@@ -530,146 +530,16 @@ type MarkdownDiffProps = {
   highlightClass?: string;
 };
 
-/**
- * Processes inline markdown marks (backtick code and \(...\) or legacy $...$) within a text string,
- * returning React nodes with appropriate formatting applied.
- */
-const renderInlineMarks = (text: string, highlightClass?: string): React.ReactNode => {
-  // Match inline code (`...`), bracket math \(...\), and legacy dollar math $...$.
-  // Dollar math requires non-whitespace at boundaries and no trailing digit to avoid matching dollar amounts.
-  const inlinePattern = /(`[^`]+`|\\\([^)]+?\\\)|\$[^\s$](?:[^$]*?[^\s$])?\$(?!\d))/g;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = inlinePattern.exec(text)) !== null) {
-    // Add plain text before this match
-    if (match.index > lastIndex) {
-      parts.push(
-        <span key={`t-${lastIndex}`} className={cx(highlightClass)}>
-          {text.slice(lastIndex, match.index)}
-        </span>
-      );
-    }
-
-    const matched = match[0];
-    if (matched.startsWith('`')) {
-      // Inline code
-      const code = matched.slice(1, -1);
-      parts.push(
-        <code key={`c-${match.index}`} className={cx('inline-code', highlightClass)}>
-          {code}
-        </code>
-      );
-    } else {
-      // Inline math — bracket \(...\) or legacy dollar $...$
-      const latex = matched.startsWith('\\(') ? matched.slice(2, -2) : matched.slice(1, -1);
-      try {
-        const html = katex.renderToString(latex, { throwOnError: false });
-        parts.push(
-          <span key={`m-${match.index}`} className={cx(highlightClass)}>
-            <span dangerouslySetInnerHTML={{ __html: html }} />
-          </span>
-        );
-      } catch {
-        parts.push(
-          <span key={`m-${match.index}`} className={cx(highlightClass)}>
-            {matched}
-          </span>
-        );
-      }
-    }
-
-    lastIndex = match.index + matched.length;
-  }
-
-  // Add remaining plain text
-  if (lastIndex < text.length) {
-    parts.push(
-      <span key={`t-${lastIndex}`} className={cx(highlightClass)}>
-        {text.slice(lastIndex)}
-      </span>
-    );
-  }
-
-  return parts.length === 1 ? parts[0] : <>{parts}</>;
-};
-
 const MarkdownDiffRenderer = ({ text, highlightClass }: MarkdownDiffProps) => {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Code block (``` ... ```)
-    if (getFenceLength(line)) {
-      const block = readFencedCodeBlock(lines, i);
-      if (!block) {
-        i++;
-        continue;
-      }
-      const codeLinesArray = block.codeText.split('\n');
-      elements.push(
-        <div key={`code-${i}`} className={cx('code-block', highlightClass && 'rounded ring-2 ring-current')}>
-          <div className="code-block-line-numbers" aria-hidden>
-            {codeLinesArray.map((_, idx) => (
-              <div key={idx}>{idx + 1}</div>
-            ))}
-          </div>
-          <code className={cx(highlightClass)}>{block.codeText}</code>
-        </div>
-      );
-      i = block.nextIndex;
-      continue;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const content = headingMatch[2];
-      elements.push(
-        <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, renderInlineMarks(content, highlightClass))}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    if (line.match(/^[-*]\s+/)) {
-      const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+(.+)$/)) {
-        const itemContent = lines[i].replace(/^[-*]\s+/, '');
-        listItems.push(
-          <li key={i}>
-            <div className="react-renderer node-paragraph">
-              <div className="whitespace-normal">
-                <p>{renderInlineMarks(itemContent, highlightClass)}</p>
-              </div>
-            </div>
-          </li>
-        );
-        i++;
-      }
-      elements.push(<ul key={`ul-${i}`}>{listItems}</ul>);
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <div key={i} className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>{renderInlineMarks(line, highlightClass)}</p>
-          </div>
-        </div>
-      );
-    }
-    i++;
-  }
-
-  return <>{elements}</>;
+  return (
+    <>
+      {renderMarkdownDocument(text, {
+        textClassName: highlightClass,
+        markClassName: highlightClass,
+        codeBlockClassName: highlightClass ? 'rounded ring-2 ring-current' : undefined,
+      })}
+    </>
+  );
 };
 
 type TextBlockCellProps = {
@@ -718,12 +588,7 @@ type MarkdownDiffWithChunksProps = {
 };
 
 const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunksProps) => {
-  // Always use markdown-aware rendering so inline marks (code, math) and
-  // ordered lists are handled, not just headings/unordered lists/code fences.
-  const hasBlockMarkdown = /^#{1,6}\s|^[-*]\s|^```|^\d+\.\s/m.test(fullText);
-  const hasInlineMarkdown = /`[^`]+`|\\\([^)]+?\\\)|\$[^\s$](?:[^$]*?[^\s$])?\$(?!\d)/m.test(fullText);
-
-  if (!hasBlockMarkdown && !hasInlineMarkdown) {
+  if (!hasMarkdownSyntax(fullText)) {
     return <DiffRenderer diff={diff} side={side} />;
   }
 
@@ -838,8 +703,8 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       return nodes.map((node, idx) => {
         if (React.isValidElement<{ className?: string; children?: React.ReactNode }>(node)) {
           const { className, children } = node.props;
-          if (!className && typeof children === 'string' && /`[^`]+`|\\\([^)]+?\\\)|\$[^\s$]/.test(children)) {
-            return <React.Fragment key={`im-${idx}`}>{renderInlineMarks(children)}</React.Fragment>;
+          if (!className && typeof children === 'string' && hasMarkdownSyntax(children)) {
+            return <React.Fragment key={`im-${idx}`}>{renderMarkdownInline(children)}</React.Fragment>;
           }
         }
         return node;

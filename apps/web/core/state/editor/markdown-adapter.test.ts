@@ -229,5 +229,13 @@ describe('markdown-adapter', () => {
       const result = editorNodeToMarkdown(node);
       expect(result).toBe('````\nsome ```code``` here\n````');
     });
+
+    it('serializes inline code with dynamic backtick length', () => {
+      const node = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'const value = `x`', marks: [{ type: 'code' }] }],
+      };
+      expect(editorNodeToMarkdown(node)).toBe('``const value = `x```');
+    });
   });
 });

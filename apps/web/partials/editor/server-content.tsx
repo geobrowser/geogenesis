@@ -1,4 +1,4 @@
-import { markdownToRenderedHtml } from '~/core/state/editor/markdown-adapter';
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -45,8 +45,7 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
           </div>
         );
       }
-      const html = markdownToRenderedHtml(block.markdown);
-      return <div dangerouslySetInnerHTML={{ __html: html }} />;
+      return <>{renderMarkdownDocument(block.markdown)}</>;
     }
 
     case 'image':
