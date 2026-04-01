@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { mergeSearchResult } from '~/core/database/result';
@@ -23,6 +23,7 @@ import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { E } from '~/core/sync/orm';
 import { reactiveRelations } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -243,11 +244,14 @@ function useScopedFilterSuggestions(
   );
 
   return React.useMemo((): ScopedFilterSuggestions => {
-    if (!dataRows?.length && !filterSuggestionEntityIds?.length) {
-      return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-    }
-
     if (valueType === 'RELATION') {
+      const noMembersInBlock =
+        !filterSuggestionEntityIds?.length &&
+        (!(dataRows?.length) || (dataRows?.every(r => r.placeholder) ?? true));
+      if (noMembersInBlock) {
+        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
+      }
+
       const globalCounts = new Map<string, number>();
       const globalMeta = new Map<string, { id: string; name: string | null }>();
       for (const r of relationsByType) {
@@ -322,9 +326,16 @@ function useScopedFilterSuggestions(
     if (valueType === 'TEXT') {
       if (selectedColumnId === SystemIds.NAME_PROPERTY) {
         const nameCounts = new Map<string, number>();
+        const rowNameByEntityId = new Map<string, string>();
         for (const row of dataRows ?? []) {
           if (row.placeholder) continue;
           const n = row.columns[SystemIds.NAME_PROPERTY]?.name?.trim();
+          if (n) rowNameByEntityId.set(row.entityId, n);
+        }
+
+        for (const id of effectiveEntityIdSet) {
+          const entity = store.getEntity(id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+          const n = entity?.name?.trim() || rowNameByEntityId.get(id)?.trim();
           if (n) nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
         }
         const stringSuggestions = [...nameCounts.entries()]
@@ -1243,6 +1254,7 @@ function DynamicFilters({
             <TableBlockEntityFilterInput
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
+              suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
               selectedEntityIds={selectedEntityIds}
@@ -1340,6 +1352,8 @@ interface TableBlockEntityFilterInputProps {
   filterByTypes?: string[];
   /** Block unscoped search until relation target type ids are loaded (table relation filters). */
   waitForFilterTypes?: boolean;
+  /** Space used when listing entities by type for an empty table (relation target browse). */
+  suggestionSpaceId?: string;
   scopedSuggestions?: { id: string; name: string | null }[];
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
@@ -1351,12 +1365,14 @@ function TableBlockEntityFilterInput({
   selectedValue,
   filterByTypes,
   waitForFilterTypes = false,
+  suggestionSpaceId,
   scopedSuggestions,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
+  const cache = useQueryClient();
   const autocomplete = useSearch(
     filterByTypes?.length || waitForFilterTypes
       ? {
@@ -1396,10 +1412,48 @@ function TableBlockEntityFilterInput({
     return list.slice(0, MAX_SCOPED_SUGGESTIONS);
   }, [scopedSuggestions, autocomplete.query]);
 
+  const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
+  const browseEnabled =
+    focused &&
+    filteredScoped.length === 0 &&
+    !autocomplete.query.trim() &&
+    canBrowseByType;
+
+  const { data: browseResults = [], isFetching: isBrowseFetching } = useQuery({
+    queryKey: [
+      'table-block-filter-entity-browse',
+      filterByTypes?.slice().sort().join(',') ?? '',
+      suggestionSpaceId ?? '',
+    ],
+    enabled: browseEnabled,
+    queryFn: async () => {
+      const where = {
+        types: filterByTypes!.map(id => ({ id: { equals: id } })),
+      };
+      const entities = await E.findMany({
+        store,
+        cache,
+        where,
+        first: 25,
+        skip: 0,
+        spaceId: suggestionSpaceId,
+      });
+      const merged = await Promise.all(entities.map(e => mergeSearchResult({ id: e.id, store })));
+      return merged.filter((r): r is SearchResult => r != null);
+    },
+    staleTime: Duration.toMillis(Duration.seconds(60)),
+  });
+
   const rowsToRender = React.useMemo(() => {
     const q = autocomplete.query.trim();
     if (!q) {
-      return filteredScoped.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      if (filteredScoped.length > 0) {
+        return filteredScoped.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      }
+      if (browseResults.length > 0) {
+        return browseResults.map(r => ({ kind: 'search' as const, result: r }));
+      }
+      return [];
     }
     const seen = new Set(filteredScoped.map(s => s.id));
     return [
@@ -1408,7 +1462,7 @@ function TableBlockEntityFilterInput({
         .filter(r => !seen.has(r.id))
         .map(r => ({ kind: 'search' as const, result: r })),
     ];
-  }, [filteredScoped, autocomplete.query, autocomplete.results]);
+  }, [filteredScoped, autocomplete.query, autocomplete.results, browseResults]);
 
   const scopedResultQueries = useQueries({
     queries: filteredScoped.map(s => ({
@@ -1428,7 +1482,16 @@ function TableBlockEntityFilterInput({
     return m;
   }, [filteredScoped, scopedResultQueries]);
 
-  const showDropdown = rowsToRender.length > 0 && focused;
+  const showEmptyBrowseHint =
+    canBrowseByType &&
+    filteredScoped.length === 0 &&
+    !autocomplete.query.trim() &&
+    !isBrowseFetching &&
+    browseResults.length === 0;
+
+  const showDropdown =
+    focused &&
+    (rowsToRender.length > 0 || (browseEnabled && isBrowseFetching) || showEmptyBrowseHint);
   const multi = Boolean(onToggleEntity);
   const inputValue = multi
     ? autocomplete.query
@@ -1463,6 +1526,20 @@ function TableBlockEntityFilterInput({
         >
           <ResizableContainer duration={0.125}>
             <ResultsList>
+              {rowsToRender.length === 0 && isBrowseFetching ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Loading…
+                  </Text>
+                </ResultItem>
+              ) : null}
+              {rowsToRender.length === 0 && showEmptyBrowseHint ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Type to search, or pick from the list when the table has rows.
+                  </Text>
+                </ResultItem>
+              ) : null}
               {rowsToRender.map((row, i) =>
                 row.kind === 'scoped' ? (
                   <motion.div
@@ -1758,7 +1835,8 @@ function TableBlockTextFilterInput({
     return list.slice(0, MAX_SCOPED_SUGGESTIONS);
   }, [stringSuggestions, value]);
 
-  const showDropdown = focused && stringSuggestions.length > 0 && filtered.length > 0;
+  const showEmptyTextHint = focused && stringSuggestions.length === 0;
+  const showDropdown = focused && (showEmptyTextHint || filtered.length > 0);
   const multi = Boolean(onToggleString);
 
   return (
@@ -1781,6 +1859,13 @@ function TableBlockTextFilterInput({
         >
           <ResizableContainer duration={0.125}>
             <ResultsList>
+              {showEmptyTextHint ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Type a value to filter. Suggestions appear when the table has matching rows.
+                  </Text>
+                </ResultItem>
+              ) : null}
               {filtered.map((s, i) => {
                 const isSel = Boolean(selectedStrings?.has(s));
                 return (
