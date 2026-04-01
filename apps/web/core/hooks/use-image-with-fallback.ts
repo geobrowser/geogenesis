@@ -1,12 +1,24 @@
 'use client';
 
-import { getImagePath } from '~/core/utils/utils';
+import { useCallback, useState } from 'react';
+
+import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 
 /**
- * Resolves a raw image value (ipfs:// URI, http URL, or static path) to a Pinata gateway URL.
- * Returns `onError` for API compatibility with callers that pass it to img/Image elements.
+ * Resolves a raw image value to a Pinata gateway URL.
+ * Falls back to Lighthouse for legacy CIDs not yet migrated to Pinata.
  */
 export function useImageWithFallback(value: string | undefined | null) {
-  if (!value) return { src: undefined, onError: undefined };
-  return { src: getImagePath(value), onError: undefined };
+  const [useFallback, setUseFallback] = useState(false);
+
+  const onError = useCallback(() => {
+    if (!useFallback && value?.startsWith('ipfs://')) {
+      setUseFallback(true);
+    }
+  }, [useFallback, value]);
+
+  if (!value) return { src: undefined, onError };
+
+  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  return { src, onError };
 }
