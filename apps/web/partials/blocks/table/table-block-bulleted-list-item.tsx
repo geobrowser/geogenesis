@@ -116,7 +116,7 @@ export function TableBlockBulletedListItem({
   }
 
   return (
-    <div className="group relative flex w-full items-center gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
+    <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="grow">
         {source.type !== 'COLLECTION' ? (
