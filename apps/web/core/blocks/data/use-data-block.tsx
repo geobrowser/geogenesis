@@ -123,6 +123,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
     collectionLength,
+    filterSuggestionEntityIds,
   } = useCollection({
     source,
     first: PAGE_SIZE,
@@ -351,6 +352,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
+    filterSuggestionEntityIds,
 
     // From useView
     view,

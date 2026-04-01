@@ -58,6 +58,7 @@ interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
   filterSuggestionRows?: Row[];
+  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
 }
@@ -106,7 +107,8 @@ function useScopedFilterSuggestions(
   valueType: FilterableValueType | undefined,
   blockSpaceId: string | undefined,
   relationTargetTypeIds?: string[],
-  activeFilters?: Filter[]
+  activeFilters?: Filter[],
+  filterSuggestionEntityIds?: string[]
 ): ScopedFilterSuggestions {
   const { store } = useSyncEngine();
 
@@ -130,14 +132,21 @@ function useScopedFilterSuggestions(
     return s;
   }, [entityIdsKey]);
 
+  const effectiveEntityIdSet = React.useMemo(() => {
+    if (filterSuggestionEntityIds?.length) {
+      return new Set(filterSuggestionEntityIds);
+    }
+    return entityIdSet;
+  }, [filterSuggestionEntityIds, entityIdSet]);
+
   const relationsSubset = useRelations({
     selector: React.useCallback(
       (r: Relation) =>
         valueType === 'RELATION' &&
-        entityIdSet.size > 0 &&
-        entityIdSet.has(r.fromEntity.id) &&
+        effectiveEntityIdSet.size > 0 &&
+        effectiveEntityIdSet.has(r.fromEntity.id) &&
         r.type.id === selectedColumnId,
-      [entityIdSet, selectedColumnId, valueType]
+      [effectiveEntityIdSet, selectedColumnId, valueType]
     ),
   });
   const relationsByType = useRelations({
@@ -146,36 +155,34 @@ function useScopedFilterSuggestions(
       [selectedColumnId, valueType]
     ),
   });
-  console.log('relationsSubset', relationsSubset);
-  console.log('relationsByType', relationsByType);
   const valuesSubset = useValues({
     selector: React.useCallback(
       (v: Value) =>
         valueType === 'TEXT' &&
-        entityIdSet.size > 0 &&
-        entityIdSet.has(v.entity.id) &&
+        effectiveEntityIdSet.size > 0 &&
+        effectiveEntityIdSet.has(v.entity.id) &&
         v.property.id === selectedColumnId,
-      [entityIdSet, selectedColumnId, valueType]
+      [effectiveEntityIdSet, selectedColumnId, valueType]
     ),
   });
 
   const spaceStats = React.useMemo(() => {
     if (
       selectedColumnId !== SystemIds.SPACE_FILTER ||
-      entityIdSet.size === 0 ||
+      effectiveEntityIdSet.size === 0 ||
       !blockSpaceId
     ) {
       return { ids: [] as string[], counts: new Map<string, number>() };
     }
     const counts = new Map<string, number>();
-    for (const id of entityIdSet) {
+    for (const id of effectiveEntityIdSet) {
       const e = store.getEntity(id, { spaceId: blockSpaceId });
       for (const sp of e?.spaces ?? []) {
         counts.set(sp, (counts.get(sp) ?? 0) + 1);
       }
     }
     return { ids: [...counts.keys()], counts };
-  }, [selectedColumnId, entityIdSet, store, blockSpaceId]);
+  }, [selectedColumnId, effectiveEntityIdSet, store, blockSpaceId]);
 
   const { spacesById } = useSpacesByIds(spaceStats.ids);
   const activeTypeFilterIds = React.useMemo(
@@ -187,7 +194,7 @@ function useScopedFilterSuggestions(
   );
 
   return React.useMemo((): ScopedFilterSuggestions => {
-    if (!dataRows?.length) {
+    if (!dataRows?.length && !filterSuggestionEntityIds?.length) {
       return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
     }
 
@@ -195,6 +202,9 @@ function useScopedFilterSuggestions(
       const globalCounts = new Map<string, number>();
       const globalMeta = new Map<string, { id: string; name: string | null }>();
       for (const r of relationsByType) {
+        if (filterSuggestionEntityIds?.length && !effectiveEntityIdSet.has(r.fromEntity.id)) {
+          continue;
+        }
         const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
         const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
 
@@ -263,7 +273,7 @@ function useScopedFilterSuggestions(
     if (valueType === 'TEXT') {
       if (selectedColumnId === SystemIds.NAME_PROPERTY) {
         const nameCounts = new Map<string, number>();
-        for (const row of dataRows) {
+        for (const row of dataRows ?? []) {
           if (row.placeholder) continue;
           const n = row.columns[SystemIds.NAME_PROPERTY]?.name?.trim();
           if (n) nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
@@ -308,6 +318,8 @@ function useScopedFilterSuggestions(
     spacesById,
     store,
     blockSpaceId,
+    filterSuggestionEntityIds,
+    effectiveEntityIdSet,
   ]);
 }
 
@@ -909,7 +921,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt(
-    { trigger, onCreate, options, filterSuggestionRows, filterSuggestionSpaceId },
+    { trigger, onCreate, options, filterSuggestionRows, filterSuggestionEntityIds, filterSuggestionSpaceId },
     ref
   ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
@@ -970,6 +982,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           state={state}
           dispatch={dispatch}
           filterSuggestionRows={filterSuggestionRows}
+          filterSuggestionEntityIds={filterSuggestionEntityIds}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
         />
       );
@@ -1040,6 +1053,7 @@ interface DynamicFiltersProps {
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
   filterSuggestionRows?: Row[];
+  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
 }
 
@@ -1073,6 +1087,7 @@ function DynamicFilters({
   dispatch,
   state,
   filterSuggestionRows,
+  filterSuggestionEntityIds,
   filterSuggestionSpaceId,
 }: DynamicFiltersProps) {
   const { filterState } = useFilters();
@@ -1099,7 +1114,8 @@ function DynamicFilters({
     selectedOption?.valueType,
     filterSuggestionSpaceId,
     selectedOption?.relationValueTypes?.map(t => t.id),
-    filterState
+    filterState,
+    filterSuggestionEntityIds
   );
 
   const pendingFilterChips = React.useMemo(
