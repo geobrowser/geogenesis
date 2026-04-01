@@ -120,8 +120,10 @@ export function useCollection({ source, first, skip, where, sort }: CollectionPr
   const hasData = items.length > 0;
 
   const filterSuggestionEntityIds =
-    source.type === 'COLLECTION' && hasFilters
-      ? filteredRelations.map(r => r.toEntity.id)
+    source.type === 'COLLECTION'
+      ? hasFilters
+        ? filteredRelations.map(r => r.toEntity.id)
+        : orderedCollectionRelations.map(r => r.toEntity.id)
       : undefined;
 
   return {
