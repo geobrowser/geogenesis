@@ -293,6 +293,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     sortState,
     setSortState,
     filterableProperties,
+    filterSuggestionEntityIds,
   } = useDataBlock({ canEdit });
 
   const setActiveFilterMode = React.useCallback(
@@ -537,6 +538,9 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
                 ref={filterPromptRef}
                 filterState={activeFilters}
                 setFilterState={setActiveFilters}
+                filterSuggestionRows={rows}
+                filterSuggestionEntityIds={filterSuggestionEntityIds}
+                filterSuggestionSpaceId={spaceId}
               />
 
               {filterGroups.map(group => (
