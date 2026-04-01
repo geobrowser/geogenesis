@@ -6,7 +6,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
-import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import { PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -400,50 +400,27 @@ export class GeoDate {
   };
 }
 
-// Get the image hash from an image path
-// e.g., https://gateway.lighthouse.storage/ipfs/HASH
-// e.g., https://magenta-naval-crow-536.mypinata.cloud/files/HASH
-// e.g., ipfs://HASH -> HASH
+// Extract the IPFS CID from a gateway URL, ipfs:// URI, or raw hash
 export const getImageHash = (value: string) => {
-  // Handle Lighthouse gateway URLs
-  if (value.startsWith(IPFS_GATEWAY_READ_PATH)) {
-    const [, hash] = value.split(IPFS_GATEWAY_READ_PATH);
-    return hash;
-  }
-  // Handle Pinata gateway URLs
   if (value.startsWith(PINATA_GATEWAY_READ_PATH)) {
     const [, hash] = value.split(PINATA_GATEWAY_READ_PATH);
     return hash;
   }
-  // Handle ipfs:// protocol
+  const ipfsPathIndex = value.indexOf('/ipfs/');
+  if (ipfsPathIndex !== -1) {
+    return value.slice(ipfsPathIndex + '/ipfs/'.length);
+  }
   if (value.startsWith('ipfs://')) {
     const [, hash] = value.split('ipfs://');
     return hash;
   }
-  // If the value does not contain a known gateway or protocol prefix, it already is a hash
   return value;
 };
 
-// Get the image URL from an image triple value
-// this allows us to render images on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
+// Resolve an image triple value to a Pinata gateway URL
 export const getImagePath = (value: string) => {
-  // Use Pinata gateway as the primary source for IPFS images
   if (value.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
-    // The image likely resolves to an image resource at some URL
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    // The image is likely a static, bundled path
-    return value;
-  }
-};
-
-// Get the fallback image URL (Lighthouse gateway) for when Pinata fails
-export const getImagePathFallback = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
   } else if (value.startsWith('http')) {
     return value;
   } else {
@@ -451,30 +428,11 @@ export const getImagePathFallback = (value: string) => {
   }
 };
 
-// Get the video hash from a video path
-// Uses the same logic as image hash extraction
 export const getVideoHash = getImageHash;
 
-// Get the video URL from a video triple value
-// this allows us to render videos on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getVideoPath = (value: string) => {
-  // Use Pinata gateway as the primary source for IPFS videos
   if (value.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getVideoHash(value)}`;
-    // The video likely resolves to a video resource at some URL
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    // The video is likely a static, bundled path
-    return value;
-  }
-};
-
-// Get the fallback video URL (Lighthouse gateway) for when Pinata fails
-export const getVideoPathFallback = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getVideoHash(value)}`;
   } else if (value.startsWith('http')) {
     return value;
   } else {

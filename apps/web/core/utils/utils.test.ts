@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
+import { PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
 import { Value } from '../types';
 import { useImageUrlFromEntity } from './use-entity-media';
@@ -328,8 +328,12 @@ describe('getImageHash', () => {
     expect(getImageHash('ipfs://QmBananaSandwich')).toBe('QmBananaSandwich');
   });
 
-  it('an HTTP path returns the IPFS hash', () => {
-    expect(getImageHash(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
+  it('an IPFS gateway URL returns the IPFS hash', () => {
+    expect(getImageHash('https://gateway.example.com/ipfs/QmBananaSandwich')).toBe('QmBananaSandwich');
+  });
+
+  it('a Pinata gateway URL returns the IPFS hash', () => {
+    expect(getImageHash(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {
