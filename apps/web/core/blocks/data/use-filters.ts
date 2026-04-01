@@ -1,13 +1,18 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useSelector } from '@xstate/store/react';
+import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { reactiveRelations } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValues } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
+import { mergeRelationValueTypesFromStore } from '~/core/utils/property/properties';
 
 import { Filter, FilterMode, parseFiltersSync, resolveFilterDisplayNames, toGeoFilterState } from './filters';
 import { useDataBlockInstance } from './use-data-block';
@@ -54,7 +59,7 @@ export function useFilters(canEdit?: boolean) {
     queryFn: () => resolveFilterDisplayNames(filterState),
   });
 
-  const { data: filterableProperties } = useQuery({
+  const { data: schemaProperties } = useQuery({
     enabled: true,
     queryKey: ['blocks', 'data', 'filterable-properties', geoFilterString],
     queryFn: async () => {
@@ -62,6 +67,13 @@ export function useFilters(canEdit?: boolean) {
       return await getSchemaFromTypeIds(typesInFilter.map(id => ({ id })));
     },
   });
+
+  const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
+
+  const filterableProperties = React.useMemo(() => {
+    const base = schemaProperties ?? [];
+    return base.map(p => mergeRelationValueTypesFromStore(p, store));
+  }, [schemaProperties, relationsSnapshot]);
 
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
   // Fall back to the freshly-parsed filterState until the new resolution completes.
