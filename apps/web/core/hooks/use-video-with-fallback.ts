@@ -1,12 +1,24 @@
 'use client';
 
-import { getVideoPath } from '~/core/utils/utils';
+import { useCallback, useState } from 'react';
+
+import { getVideoPath, getVideoPathFallback } from '~/core/utils/utils';
 
 /**
- * Resolves a raw video value (ipfs:// URI, http URL, or static path) to a Pinata gateway URL.
- * Returns `onError` for API compatibility with callers that pass it to video elements.
+ * Resolves a raw video value to a Pinata gateway URL.
+ * Falls back to Lighthouse for legacy CIDs not yet migrated to Pinata.
  */
 export function useVideoWithFallback(value: string | undefined | null) {
-  if (!value) return { src: undefined, onError: undefined };
-  return { src: getVideoPath(value), onError: undefined };
+  const [useFallback, setUseFallback] = useState(false);
+
+  const onError = useCallback(() => {
+    if (!useFallback && value?.startsWith('ipfs://')) {
+      setUseFallback(true);
+    }
+  }, [useFallback, value]);
+
+  if (!value) return { src: undefined, onError };
+
+  const src = useFallback ? getVideoPathFallback(value) : getVideoPath(value);
+  return { src, onError };
 }

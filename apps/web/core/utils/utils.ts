@@ -6,7 +6,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
-import { PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -428,6 +428,14 @@ export const getImagePath = (value: string) => {
   }
 };
 
+// Lighthouse fallback for legacy CIDs not yet migrated to Pinata
+export const getImagePathFallback = (value: string) => {
+  if (value.startsWith('ipfs://')) {
+    return `${LIGHTHOUSE_GATEWAY_READ_PATH}${getImageHash(value)}`;
+  }
+  return value;
+};
+
 export const getVideoHash = getImageHash;
 
 export const getVideoPath = (value: string) => {
@@ -439,6 +447,8 @@ export const getVideoPath = (value: string) => {
     return value;
   }
 };
+
+export const getVideoPathFallback = getImagePathFallback;
 
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);

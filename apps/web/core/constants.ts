@@ -2,6 +2,7 @@ export const ZERO_WIDTH_SPACE = '\u200b';
 export const ALL_SPACES_IMAGE = 'ipfs://QmQXJYrbJJZcukgkzk8C71nQL1V8ND9TQjrtP4sKWjYPFH';
 export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
 export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
+export const LIGHTHOUSE_GATEWAY_READ_PATH = 'https://gateway.lighthouse.storage/ipfs/';
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 

@@ -1,10 +1,11 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
 
 import Image, { ImageProps } from 'next/image';
 
-import { getImagePath } from '~/core/utils/utils';
+import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
@@ -12,23 +13,39 @@ import { getImagePath } from '~/core/utils/utils';
  */
 export const DEFAULT_IMAGE_SIZES = '(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 25vw';
 
-type GeoImageProps = Omit<ImageProps, 'src'> & {
+type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
   value: string;
 };
 
-/** Image component that resolves IPFS values to Pinata gateway URLs. Wraps Next.js Image. */
+/** Image component that resolves IPFS values via Pinata, with Lighthouse fallback for legacy CIDs. */
 export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
-  const src = getImagePath(value);
+  const [useFallback, setUseFallback] = useState(false);
+
+  const handleError = useCallback(() => {
+    if (!useFallback && value.startsWith('ipfs://')) {
+      setUseFallback(true);
+    }
+  }, [useFallback, value]);
+
+  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
   const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
-  return <Image {...imageProps} src={src} alt={alt} unoptimized={unoptimized} />;
+  return <Image {...imageProps} src={src} alt={alt} onError={handleError} unoptimized={unoptimized} />;
 }
 
-type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
+type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   value: string;
 };
 
-/** Native img element that resolves IPFS values to Pinata gateway URLs. */
+/** Native img element with Pinata primary, Lighthouse fallback for legacy CIDs. */
 export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProps) {
-  const src = getImagePath(value);
-  return <img {...props} src={src} alt={alt} />;
+  const [useFallback, setUseFallback] = useState(false);
+
+  const handleError = useCallback(() => {
+    if (!useFallback && value.startsWith('ipfs://')) {
+      setUseFallback(true);
+    }
+  }, [useFallback, value]);
+
+  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  return <img {...props} src={src} alt={alt} onError={handleError} />;
 }
