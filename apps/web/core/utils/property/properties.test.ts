@@ -186,6 +186,7 @@ describe('Properties', () => {
         name: 'Test Property',
         dataType: 'TEXT',
         relationValueTypes: [],
+        relationEntityTypes: [],
         renderableType: null,
         renderableTypeStrict: undefined,
 
@@ -244,6 +245,7 @@ describe('Properties', () => {
         name: 'Test Property',
         dataType: 'TEXT',
         relationValueTypes: [],
+        relationEntityTypes: [],
         renderableType: SystemIds.URL,
         renderableTypeStrict: 'URL',
 

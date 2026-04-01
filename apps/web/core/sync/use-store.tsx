@@ -377,8 +377,16 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       if (remoteProp) {
         const localRelationValueTypes = localProp?.relationValueTypes;
+        const localRelationEntityTypes = localProp?.relationEntityTypes;
+        const overrides: Partial<Property> = {};
         if (localRelationValueTypes && localRelationValueTypes.length > 0) {
-          merged.push({ ...remoteProp, relationValueTypes: localRelationValueTypes });
+          overrides.relationValueTypes = localRelationValueTypes;
+        }
+        if (localRelationEntityTypes && localRelationEntityTypes.length > 0) {
+          overrides.relationEntityTypes = localRelationEntityTypes;
+        }
+        if (Object.keys(overrides).length > 0) {
+          merged.push({ ...remoteProp, ...overrides });
         } else {
           merged.push(remoteProp);
         }

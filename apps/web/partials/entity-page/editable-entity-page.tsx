@@ -57,6 +57,7 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
+import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
@@ -478,7 +479,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                       spaceId,
                       renderableType: 'RELATION',
                       verified: result.verified,
-                      toSpaceId: result.space,
+                      toSpaceId: valueType.spaceId,
                       type: {
                         id: SystemIds.TYPES_PROPERTY,
                         name: 'Types',
@@ -533,6 +534,10 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 }
 
                 storage.relations.set(newRelation);
+
+                for (const relationType of property.relationEntityTypes ?? []) {
+                  createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
+                }
 
                 await applyTemplate({ ...templateOptions, typeId: result.id });
               }}
@@ -671,7 +676,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                     entityId: IdUtils.generate(),
                     spaceId,
                     renderableType: 'RELATION',
-                    toSpaceId: result.space,
+                    toSpaceId: valueType.spaceId,
                     type: {
                       id: SystemIds.TYPES_PROPERTY,
                       name: 'Types',
@@ -725,6 +730,10 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               }
 
               storage.relations.set(newRelation);
+
+              for (const relationType of property.relationEntityTypes ?? []) {
+                createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
+              }
 
               await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
             }}

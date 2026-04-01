@@ -4,7 +4,12 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '../constants';
+import {
+  FORMAT_PROPERTY,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
+  RENDERABLE_TYPE_PROPERTY,
+  UNIT_PROPERTY,
+} from '../constants';
 import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
@@ -427,6 +432,15 @@ export class GeoStore {
       .map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
+        spaceId: r.toSpaceId,
+      }));
+
+    const relationEntityTypes = entity?.relations
+      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+        spaceId: r.toSpaceId,
       }));
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
@@ -441,6 +455,7 @@ export class GeoStore {
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
+      relationEntityTypes,
       renderableType: renderableTypeId,
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
       format: formatValue?.value ?? null,
