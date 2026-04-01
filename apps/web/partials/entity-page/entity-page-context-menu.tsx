@@ -32,7 +32,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
   const { store } = useSyncEngine();
-  const { isMember } = useAccessControl(spaceId);
+  const { isMember, isEditor } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
 
@@ -150,7 +150,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               Create in space
             </button>
           </EntityPageContextMenuItem>
-          {isMember && (
+          {(isMember || isEditor) && (
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
                 <Trash />
