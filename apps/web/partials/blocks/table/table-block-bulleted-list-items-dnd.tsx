@@ -48,7 +48,7 @@ const bulletedListConfig: DndItemsConfig = {
   outerClassName: 'flex w-full flex-col',
   itemsClassName: 'flex flex-col',
   sortableItemClassName: 'relative',
-  sortableItemInnerClassName: 'flex items-center',
+  sortableItemInnerClassName: 'flex items-start',
   positionBoxClassName: '-left-[152px] h-full items-center',
   renderItem,
   renderDragOverlay,
