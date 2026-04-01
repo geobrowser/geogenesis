@@ -20,9 +20,24 @@ interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
   initialQuery?: string;
+  waitForFilterTypes?: boolean;
 }
 
-export function useSearch({ filterByTypes, filterBySpace, initialQuery }: SearchOptions = {}) {
+function resultMatchesFilterTypes(
+  result: { types: { id: string }[] },
+  filterByTypes: string[] | undefined
+): boolean {
+  if (!filterByTypes?.length) return true;
+  const allowed = new Set(filterByTypes);
+  return result.types.some(t => allowed.has(t.id));
+}
+
+export function useSearch({
+  filterByTypes,
+  filterBySpace,
+  initialQuery,
+  waitForFilterTypes,
+}: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
@@ -30,9 +45,11 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
 
   const maybeEntityId = debouncedQuery.trim();
 
+  const searchBlocked = Boolean(waitForFilterTypes) && !filterByTypes?.length;
+
   const { data: results, isLoading } = useQuery({
-    enabled: debouncedQuery !== '',
-    queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace],
+    enabled: debouncedQuery !== '' && !searchBlocked,
+    queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace, Boolean(waitForFilterTypes)],
     queryFn: async () => {
       if (query.length === 0) return [];
 
@@ -70,7 +87,12 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
           }
         }
 
-        return resultOrError.right ? [resultOrError.right] : [];
+        const merged = resultOrError.right;
+        if (!merged) return [];
+        if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+          return [];
+        }
+        return [merged];
       }
 
       const fetchResultsEffect = Effect.either(
@@ -83,13 +105,15 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
                 name: {
                   fuzzy: debouncedQuery,
                 },
-                types: filterByTypes?.map(t => {
-                  return {
-                    id: {
-                      equals: t,
-                    },
-                  };
-                }),
+                ...(filterByTypes?.length
+                  ? {
+                      types: filterByTypes.map(t => ({
+                        id: {
+                          equals: t,
+                        },
+                      })),
+                    }
+                  : {}),
                 ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
               },
               first: 10,
@@ -117,9 +141,9 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
         }
       }
 
-      // Preserve the API's relevance ordering. Append any local-only
-      // entities (not already in the remote results) to the end.
-      return resultOrError.right;
+      const rows = resultOrError.right;
+      if (!filterByTypes?.length) return rows;
+      return rows.filter(r => resultMatchesFilterTypes(r, filterByTypes));
     },
     /**
      * We don't want to return stale search results. Instead we just

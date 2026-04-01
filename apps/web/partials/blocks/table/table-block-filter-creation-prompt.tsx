@@ -6,7 +6,9 @@ import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
+import equal from 'fast-deep-equal';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -21,8 +23,13 @@ import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { reactiveRelations } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import {
+  fetchRelationTargetTypeIdsForProperty,
+  mergeRelationValueTypesFromStore,
+} from '~/core/utils/property/properties';
 import type { Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
@@ -65,6 +72,48 @@ interface TableBlockFilterPromptProps {
 }
 
 const MAX_SCOPED_SUGGESTIONS = 100;
+
+function useRelationColumnTargetTypeIds(
+  propertyId: string | undefined,
+  blockSpaceId: string | undefined,
+  relationValueTypesFromOptions: { id: string; name: string | null }[] | undefined
+): { typeIds: string[] | undefined; waitForFilterTypes: boolean } {
+  const { store } = useSyncEngine();
+  const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
+
+  const fromStore = React.useMemo(() => {
+    void relationsSnapshot;
+    if (!propertyId) return undefined;
+    const merged = mergeRelationValueTypesFromStore(
+      { id: propertyId, name: null, dataType: 'RELATION' },
+      store
+    );
+    return merged.relationValueTypes?.length
+      ? merged.relationValueTypes.map(t => t.id)
+      : undefined;
+  }, [propertyId, relationsSnapshot, store]);
+
+  const { data: fromNetwork, isFetching: isFetchingNetworkTypes } = useQuery({
+    enabled: Boolean(propertyId) && !fromStore?.length,
+    queryKey: ['table-block-filter-relation-target-type-ids', propertyId, blockSpaceId],
+    queryFn: () => fetchRelationTargetTypeIdsForProperty(propertyId!, blockSpaceId),
+    staleTime: 60_000,
+  });
+
+  const typeIds = React.useMemo(() => {
+    const fromOptions = relationValueTypesFromOptions?.length
+      ? relationValueTypesFromOptions.map(t => t.id)
+      : undefined;
+    if (fromStore?.length) return fromStore;
+    if (fromNetwork?.length) return fromNetwork;
+    return fromOptions;
+  }, [fromStore, fromNetwork, relationValueTypesFromOptions]);
+
+  const waitForFilterTypes =
+    Boolean(propertyId) && !typeIds?.length && isFetchingNetworkTypes;
+
+  return { typeIds, waitForFilterTypes };
+}
 
 function stubSearchResultForFilter(id: string, displayName: string | null): SearchResult {
   const placeholderSpace: SpaceEntity = {
@@ -1109,12 +1158,24 @@ function DynamicFilters({
 
   const selectedOption = options.find(o => o.columnId === state.selectedColumn);
 
+  const isRelationPropertyColumn =
+    Boolean(state.selectedColumn) &&
+    state.selectedColumn !== SystemIds.SPACE_FILTER &&
+    selectedOption?.valueType === 'RELATION';
+
+  const { typeIds: relationTargetTypeIds, waitForFilterTypes: waitForRelationTargetTypes } =
+    useRelationColumnTargetTypeIds(
+      isRelationPropertyColumn ? state.selectedColumn : undefined,
+      filterSuggestionSpaceId,
+      selectedOption?.relationValueTypes
+    );
+
   const scoped = useScopedFilterSuggestions(
     filterSuggestionRows,
     state.selectedColumn,
     selectedOption?.valueType,
     filterSuggestionSpaceId,
-    selectedOption?.relationValueTypes?.map(t => t.id),
+    relationTargetTypeIds,
     filterState,
     filterSuggestionEntityIds
   );
@@ -1181,9 +1242,8 @@ function DynamicFilters({
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              filterByTypes={
-                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.id) : undefined
-              }
+              filterByTypes={relationTargetTypeIds}
+              waitForFilterTypes={waitForRelationTargetTypes}
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
               selectedEntityIds={selectedEntityIds}
@@ -1279,6 +1339,8 @@ interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
+  /** Block unscoped search until relation target type ids are loaded (table relation filters). */
+  waitForFilterTypes?: boolean;
   scopedSuggestions?: { id: string; name: string | null }[];
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
@@ -1289,13 +1351,21 @@ function TableBlockEntityFilterInput({
   onSelect,
   selectedValue,
   filterByTypes,
+  waitForFilterTypes = false,
   scopedSuggestions,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
-  const autocomplete = useSearch(filterByTypes ? { filterByTypes } : undefined);
+  const autocomplete = useSearch(
+    filterByTypes?.length || waitForFilterTypes
+      ? {
+          filterByTypes: filterByTypes?.length ? filterByTypes : undefined,
+          waitForFilterTypes: waitForFilterTypes || undefined,
+        }
+      : undefined
+  );
   const [focused, setFocused] = React.useState(false);
   const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
