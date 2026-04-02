@@ -358,16 +358,17 @@ export function useEditorStore() {
             mergeWith: initialBlockValues,
             selector: value => value.entity.id === block.block.id && value.property.id === PDF_URL,
           });
-          const pdfUrlValue = pdfUrlValues?.[0]?.value || toEntity.value;
+          const pdfUrlValue = pdfUrlValues?.[0]?.value || toEntity.value || '';
+          const pdfSrc = pdfUrlValue ? getImagePath(pdfUrlValue) : '';
 
-          sBlocks.push({ type: 'pdf', src: getImagePath(pdfUrlValue) });
+          sBlocks.push({ type: 'pdf', src: pdfSrc });
 
           return [
             {
               type: 'pdf',
               attrs: {
                 id: block.block.id,
-                src: getImagePath(pdfUrlValue),
+                src: pdfSrc,
                 relationId: block.relationId,
                 spaceId,
               },
