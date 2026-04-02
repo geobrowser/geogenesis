@@ -239,8 +239,8 @@ function RelationPropertyWithDelete({
           <SquareButton
             icon={<Trash />}
             onClick={() => {
-              // Delete all relations for this property
-              propertyRelations.forEach(relation => storage.relations.delete(relation));
+              // Batch-delete all relations for this property in a single store update
+              storage.relations.deleteMany(propertyRelations);
               // Also delete the value entry to fully remove the property from the entity
               if (propertyValue) {
                 storage.values.delete(propertyValue);
