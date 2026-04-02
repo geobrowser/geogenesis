@@ -78,6 +78,9 @@ export const DOCUMENTATION_SPACE_ENTITY_ID = '46162f0614d448b2b00d8c3bbd7e5194';
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
 export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
 
+export const PDF_TYPE = '14a39e59d9874596956ac2dd4165c210';
+export const PDF_URL = '9d69ac47702343e2b72a91a335eb54d9';
+
 export const PLACE = '783bc688e65f4e54b67fa5643d78345e';
 export const ADDRESS = '5c6e72fb834047c082818be159ecd495';
 export const VENUE_PROPERTY = 'f28bbb6bf4e8465d9de7a09085e224b9';

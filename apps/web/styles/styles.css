@@ -531,3 +531,10 @@
   font-weight: 700;
   src: url('/fonts/calibre-bold.woff2') format('woff2');
 }
+
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

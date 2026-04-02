@@ -15,6 +15,7 @@ import { InlineCode } from './inline-code';
 import { MathNode } from './math-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
+import { PdfNode } from './pdf-node';
 import { VideoNode } from './video-node';
 import { Web2URLExtension } from './web2-url-extension';
 import { GraphLinkExtension, MarkdownLinkExtension } from './graph-link-extension';
@@ -53,6 +54,7 @@ export const tiptapExtensions = [
   DataNode,
   ImageNode,
   VideoNode,
+  PdfNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       if (node.type.name === 'heading') return 'Heading...';

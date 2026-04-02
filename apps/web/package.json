@@ -101,6 +101,7 @@
     "react-error-boundary": "^6.1.1",
     "react-input-autosize": "^3.0.0",
     "react-medium-image-zoom": "^5.4.3",
+    "react-pdf": "^10.3.0",
     "react-remove-scroll": "^2.7.2",
     "react-textarea-autosize": "^8.5.9",
     "react-use-measure": "^2.1.7",
