@@ -16,4 +16,9 @@ export const addBreadcrumb = noop;
 export const BrowserClient = class {};
 export const Scope = class {};
 export const Hub = class {};
-export const SentrySpanProcessor = class {};
+export const SentrySpanProcessor = class {
+  onStart() {}
+  onEnd() {}
+  shutdown() { return Promise.resolve(); }
+  forceFlush() { return Promise.resolve(); }
+};
