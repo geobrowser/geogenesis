@@ -52,7 +52,13 @@ import { editorContentVersionAtom } from '~/atoms';
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
+  const {
+    isReviewOpen,
+    setIsReviewOpen,
+    reviewVersion,
+    activeSpace: diffPreferredSpaceId,
+    setActiveSpace: setDiffPreferredSpaceId,
+  } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
@@ -88,12 +94,31 @@ export const ReviewChanges = () => {
 
   const spacesKey = dedupedSpacesWithActions.sort().join(',');
   const [activeSpace, setActiveSpace] = React.useState<string>('');
+  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
 
   React.useEffect(() => {
+    if (!isReviewOpen) {
+      setDiffPreferredSpaceId('');
+      appliedPreferredSpaceForVersion.current = null;
+    }
+  }, [isReviewOpen, setDiffPreferredSpaceId]);
+
+  React.useEffect(() => {
+    const shouldApplyPreferred =
+      reviewVersion !== appliedPreferredSpaceForVersion.current &&
+      Boolean(diffPreferredSpaceId) &&
+      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
+
+    if (shouldApplyPreferred) {
+      appliedPreferredSpaceForVersion.current = reviewVersion;
+      setActiveSpace(diffPreferredSpaceId);
+      return;
+    }
+
     if (activeSpace === '' && dedupedSpacesWithActions[0]) {
       setActiveSpace(dedupedSpacesWithActions[0]);
     }
-  }, [spacesKey, activeSpace]);
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -115,9 +140,13 @@ export const ReviewChanges = () => {
     if (dedupedSpacesWithActions.length === 0 && statusBarState.reviewState !== 'publishing-contract') {
       setIsReviewOpen(false);
     } else if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-      setActiveSpace(dedupedSpacesWithActions[0] ?? '');
+      const next =
+        diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
+          ? diffPreferredSpaceId
+          : (dedupedSpacesWithActions[0] ?? '');
+      setActiveSpace(next);
     }
-  }, [spacesKey, activeSpace, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
