@@ -21,6 +21,18 @@ export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId
   return imageUrlValue?.value;
 }
 
+export function usePdfUrlFromEntity(pdfEntityId: string | undefined, spaceId: string): string | undefined {
+  const pdfValues = useValues({
+    selector: v => v.entity.id === pdfEntityId && v.spaceId === spaceId,
+  });
+
+  if (!pdfEntityId || pdfValues.length === 0) return undefined;
+
+  const pdfUrlValue = pdfValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+
+  return pdfUrlValue?.value;
+}
+
 export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId: string): string | undefined {
   const videoValues = useValues({
     selector: v => v.entity.id === videoEntityId && v.spaceId === spaceId,

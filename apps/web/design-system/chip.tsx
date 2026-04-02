@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 
+import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/substream-schema';
@@ -17,6 +18,7 @@ import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Create as CreateIcon } from '~/design-system/icons/create';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { Image as ImageIcon } from '~/design-system/icons/image';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
@@ -337,7 +339,7 @@ function RelationDots({ color }: RelationDotsProps) {
 
 type LinkableMediaChipProps = {
   isEditing: boolean;
-  mediaType: 'IMAGE' | 'VIDEO';
+  mediaType: 'IMAGE' | 'VIDEO' | 'PDF';
   mediaSrc?: string;
   isUploading?: boolean;
 
@@ -403,6 +405,10 @@ export function LinkableMediaChip({
 
   // For videos, use the video fallback hook to get the correct URL
   const { src: videoSrc, onError: onVideoError } = useVideoWithFallback(mediaType === 'VIDEO' ? mediaSrc : undefined);
+  // For PDFs, use the image fallback hook to resolve the IPFS URL
+  const { src: pdfSrc } = useImageWithFallback(mediaType === 'PDF' ? mediaSrc ?? '' : '');
+
+  const containerSize = mediaType === 'PDF' ? 'h-[200px] w-[173px]' : 'h-20 w-20';
 
   return (
     <div
@@ -421,8 +427,18 @@ export function LinkableMediaChip({
         href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
         className="block"
       >
-        <div className="relative h-20 w-20">
-          {mediaType === 'VIDEO' ? (
+        <div className={`relative ${containerSize}`}>
+          {mediaType === 'PDF' ? (
+            pdfSrc ? (
+              <div className="h-full w-full overflow-hidden rounded-lg">
+                <embed src={pdfSrc} type="application/pdf" width="173" height="200" />
+              </div>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-grey-01">
+                <PdfFile color="grey-04" />
+              </div>
+            )
+          ) : mediaType === 'VIDEO' ? (
             videoSrc ? (
               <video
                 src={videoSrc}
@@ -447,8 +463,8 @@ export function LinkableMediaChip({
         </div>
       </Link>
 
-      {/* Upload button overlay - only in edit mode */}
-      {isEditing && onUpload && !isUploading && (
+      {/* Upload button overlay - only in edit mode (not for PDF) */}
+      {isEditing && onUpload && !isUploading && mediaType !== 'PDF' && (
         <button
           onClick={e => {
             e.stopPropagation();

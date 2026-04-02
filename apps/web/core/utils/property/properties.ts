@@ -6,6 +6,7 @@ import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
+  PDF_TYPE,
   PLACE,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
   RENDERABLE_TYPE_PROPERTY,
@@ -76,6 +77,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
       return {
         baseDataType: 'RELATION',
         renderableTypeId: VIDEO_RENDERABLE_TYPE,
+      };
+    case 'PDF':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: PDF_TYPE,
       };
     // GRC-20 v2 numeric types
     case 'INTEGER':
@@ -151,6 +157,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   RELATION: 'RELATION',
   IMAGE: 'RELATION',
   VIDEO: 'RELATION',
+  PDF: 'RELATION',
   // GRC-20 v2 numeric types
   INTEGER: 'INTEGER',
   FLOAT: 'FLOAT',

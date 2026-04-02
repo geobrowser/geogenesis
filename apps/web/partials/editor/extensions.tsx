@@ -16,6 +16,7 @@ import { InlineCode } from './inline-code';
 import { MathNode } from './math-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
+import { PdfNode } from './pdf-node';
 import { VideoNode } from './video-node';
 
 export const tiptapExtensions = [
@@ -46,6 +47,7 @@ export const tiptapExtensions = [
   DataNode,
   ImageNode,
   VideoNode,
+  PdfNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       if (node.type.name === 'heading') return 'Heading...';

@@ -28,7 +28,7 @@ import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync
 import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
-import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useImageUrlFromEntity, usePdfUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
@@ -38,6 +38,7 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import {
   ImageZoom,
   PageImageField,
+  PagePdfField,
   PageStringField,
   PageVideoField,
   VideoPlayer,
@@ -105,12 +106,13 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
 
               const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
+              const isPdf = property.renderableTypeStrict === 'PDF';
 
               return (
                 <div key={`${id}-${propertyId}`} className="w-full wrap-break-word">
                   <RenderedProperty spaceId={spaceId} property={property} />
 
-                  {isRelation || isVideo ? (
+                  {isRelation || isVideo || isPdf ? (
                     <RelationPropertyWithDelete
                       key={propertyId}
                       propertyId={propertyId}
@@ -283,6 +285,11 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   // Use the efficient hook to get only the video URL for this specific entity
   const videoSrc = useVideoUrlFromEntity(videoEntityId, spaceId);
 
+  // For PDF properties, get the PDF URL from related PDF entities
+  const pdfRelation = relations.find(r => r.renderableType === 'PDF');
+  const pdfEntityId = pdfRelation?.toEntity.id;
+  const pdfSrc = usePdfUrlFromEntity(pdfEntityId, spaceId);
+
   if (!property) {
     return null;
   }
@@ -308,6 +315,15 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
     try {
       if (property.renderableTypeStrict === 'VIDEO') {
         await storage.videos.createAndLink({
+          file,
+          fromEntityId: id,
+          fromEntityName: name,
+          relationPropertyId: propertyId,
+          relationPropertyName: typeOfName,
+          spaceId,
+        });
+      } else if (property.renderableTypeStrict === 'PDF') {
+        await storage.pdfs.createAndLink({
           file,
           fromEntityId: id,
           fromEntityName: name,
@@ -369,6 +385,22 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               onFileChange={async file => {
                 // Use the consolidated helper to create and link the video
                 await storage.videos.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
+              }}
+            />
+          </div>
+        ) : property.renderableTypeStrict === 'PDF' ? (
+          <div key="relation-upload-pdf">
+            <PagePdfField
+              pdfSrc={pdfSrc}
+              onFileChange={async file => {
+                await storage.pdfs.createAndLink({
                   file,
                   fromEntityId: id,
                   fromEntityName: name,
@@ -553,7 +585,9 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const fileAccept =
     property.renderableTypeStrict === 'VIDEO'
       ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
-      : 'image/png,image/jpeg';
+      : property.renderableTypeStrict === 'PDF'
+        ? 'application/pdf'
+        : 'image/png,image/jpeg';
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
@@ -604,6 +638,28 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             />
           );
         })
+      ) : property.renderableTypeStrict === 'PDF' ? (
+        relations.map(r => {
+          const relationId = r.id;
+          const relationValue = r.toEntity.id;
+
+          return (
+            <PdfRelationChipWrapper
+              key={`relation-${relationId}-${relationValue}`}
+              relation={r}
+              spaceId={spaceId}
+              isUploading={isUploading}
+              onDelete={() => storage.relations.delete(r)}
+              onDone={result => {
+                storage.relations.update(r, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
+              onUpload={triggerFileUpload}
+            />
+          );
+        })
       ) : (
         <ReorderableRelationChipsDnd
           relations={relations}
@@ -616,7 +672,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         />
       )}
 
-      {property.renderableType !== SystemIds.IMAGE && property.renderableTypeStrict !== 'VIDEO' && (
+      {property.renderableType !== SystemIds.IMAGE && property.renderableTypeStrict !== 'VIDEO' && property.renderableTypeStrict !== 'PDF' && (
         <div>
           <SelectEntityAsPopover
             trigger={
@@ -820,6 +876,44 @@ function VideoRelationChipWrapper({
       isEditing
       mediaType="VIDEO"
       mediaSrc={videoSrc}
+      isUploading={isUploading}
+      currentSpaceId={spaceId}
+      entityId={entityId}
+      spaceId={relation.toSpaceId}
+      relationId={relation.id}
+      relationEntityId={relation.entityId}
+      verified={relation.verified}
+      onDelete={onDelete}
+      onDone={onDone}
+      onUpload={onUpload}
+    />
+  );
+}
+
+// Wrapper component for PDF relations in edit mode
+function PdfRelationChipWrapper({
+  relation,
+  spaceId,
+  isUploading,
+  onDelete,
+  onDone,
+  onUpload,
+}: {
+  relation: Relation;
+  spaceId: string;
+  isUploading?: boolean;
+  onDelete: () => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onUpload: () => void;
+}) {
+  const entityId = relation.toEntity.id;
+  const pdfSrc = usePdfUrlFromEntity(entityId, spaceId);
+
+  return (
+    <LinkableMediaChip
+      isEditing
+      mediaType="PDF"
+      mediaSrc={pdfSrc}
       isUploading={isUploading}
       currentSpaceId={spaceId}
       entityId={entityId}
