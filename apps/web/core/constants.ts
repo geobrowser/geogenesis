@@ -38,6 +38,11 @@ export const VALID_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'imag
 export const IMAGE_ACCEPT = VALID_IMAGE_TYPES.join(',');
 export const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
+// PDF file types and upload constraints
+export const VALID_PDF_TYPES = ['application/pdf'];
+export const PDF_ACCEPT = VALID_PDF_TYPES.join(',');
+export const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+
 export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 
 /** DataType → entity ID for Data Type relations. */
