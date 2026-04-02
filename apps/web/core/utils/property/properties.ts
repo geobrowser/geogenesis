@@ -7,6 +7,7 @@ import {
   FORMAT_PROPERTY,
   GEO_LOCATION,
   PLACE,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
   RENDERABLE_TYPE_PROPERTY,
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
@@ -231,6 +232,16 @@ export function reconstructFromStore(
   }).map(r => ({
     id: r.toEntity.id,
     name: r.toEntity.name || null,
+    spaceId: r.toSpaceId,
+  }));
+
+  // Get relation entity types
+  const relationEntityTypes = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE,
+  }).map(r => ({
+    id: r.toEntity.id,
+    name: r.toEntity.name || null,
+    spaceId: r.toSpaceId,
   }));
 
   const renderableTypeId = renderableTypeRelation?.toEntity.id || null;
@@ -238,9 +249,10 @@ export function reconstructFromStore(
   // Construct a Property object
   const property: Property = {
     id,
-    name: nameValue?.value || null, // Fixed: use null instead of empty string
+    name: nameValue?.value || null,
     dataType,
-    relationValueTypes, // Added: missing field
+    relationValueTypes,
+    relationEntityTypes,
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
     format: formatValue?.value || null,

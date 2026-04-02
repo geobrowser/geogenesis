@@ -168,7 +168,10 @@ export type Property = {
   name: string | null;
   dataType: DataType;
   isType?: boolean;
-  relationValueTypes?: { id: string; name: string | null }[];
+  /** Types that the to-entity should have when creating a new relation via this property. */
+  relationValueTypes?: { id: string; name: string | null; spaceId?: string }[];
+  /** Types to auto-assign to the relation entity (relation.entityId) when creating a relation via this property. */
+  relationEntityTypes?: { id: string; name: string | null; spaceId?: string }[];
   /**
    * We might render _any_ arbitrary renderable type in the UI or we might
    * render a _specific_ renderable type. We want to make sure the strict
