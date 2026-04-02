@@ -21,6 +21,7 @@ import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
+import { MoveEntityToSpace } from '~/partials/versions/move-entity-to-space';
 
 type Props = {
   entityId: string;
@@ -108,14 +109,18 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   };
 
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
+  const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
+
+  const isSubMenu = isCreatingNewVersion || isMovingEntity;
 
   return (
     <Menu
-      className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+      className={cx(!isSubMenu ? 'max-w-[160px]' : 'max-w-[320px]')}
       open={isMenuOpen}
       onOpenChange={() => {
         setIsMenuOpen(!isMenuOpen);
         setIsCreatingNewVersion(false);
+        setIsMovingEntity(false);
       }}
       trigger={<Context color="grey-04" />}
       side="bottom"
@@ -131,7 +136,18 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
           }}
         />
       )}
-      {!isCreatingNewVersion && (
+      {isMovingEntity && (
+        <MoveEntityToSpace
+          entityId={entityId as EntityId}
+          entityName={entityName}
+          sourceSpaceId={spaceId}
+          setIsMovingEntity={setIsMovingEntity}
+          onDone={() => {
+            setIsMenuOpen(false);
+          }}
+        />
+      )}
+      {!isSubMenu && (
         <>
           <EntityPageContextMenuItem>
             <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
@@ -150,6 +166,19 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               Create in space
             </button>
           </EntityPageContextMenuItem>
+          {(isMember || isEditor) && (
+            <EntityPageContextMenuItem>
+              <button
+                onClick={() => setIsMovingEntity(true)}
+                className="flex h-full w-full items-center gap-2 px-2 py-2"
+              >
+                <div className="shrink-0">
+                  <MoveSpace />
+                </div>
+                Move to space
+              </button>
+            </EntityPageContextMenuItem>
+          )}
           {(isMember || isEditor) && (
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
