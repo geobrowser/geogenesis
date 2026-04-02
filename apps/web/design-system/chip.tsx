@@ -480,8 +480,8 @@ export function LinkableMediaChip({
         </div>
       </Link>
 
-      {/* Upload button overlay - only in edit mode (not for PDF) */}
-      {isEditing && onUpload && !isUploading && mediaType !== 'PDF' && (
+      {/* Upload button overlay - only in edit mode */}
+      {isEditing && onUpload && !isUploading && (
         <button
           onClick={e => {
             e.stopPropagation();
