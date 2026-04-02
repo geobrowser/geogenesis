@@ -17,7 +17,7 @@ import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { useSearch } from '~/core/hooks/use-search';
+import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
@@ -265,9 +265,8 @@ function useScopedFilterSuggestions(
           const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
           if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
         }
-        if (relationTargetTypeIds && relationTargetTypeIds.length > 0) {
-          const toTypeSet = new Set((to?.types ?? []).map(t => t.id));
-          if (!relationTargetTypeIds.some(id => toTypeSet.has(id))) continue;
+        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
+          continue;
         }
 
         const id = r.toEntity.id;
@@ -288,6 +287,17 @@ function useScopedFilterSuggestions(
       const counts = new Map<string, number>();
       const meta = new Map<string, { id: string; name: string | null }>();
       for (const r of relationsSubset) {
+        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+
+        if (activeTypeFilterIds.length > 0) {
+          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
+          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
+        }
+        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
+          continue;
+        }
+
         const id = r.toEntity.id;
         counts.set(id, (counts.get(id) ?? 0) + 1);
         if (!meta.has(id)) meta.set(id, { id, name: r.toEntity.name });
@@ -1254,6 +1264,7 @@ function DynamicFilters({
             <TableBlockEntityFilterInput
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
+              restrictSearchToTypes
               suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
@@ -1350,8 +1361,8 @@ interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
-  /** Block unscoped search until relation target type ids are loaded (table relation filters). */
   waitForFilterTypes?: boolean;
+  restrictSearchToTypes?: boolean;
   /** Space used when listing entities by type for an empty table (relation target browse). */
   suggestionSpaceId?: string;
   scopedSuggestions?: { id: string; name: string | null }[];
@@ -1365,6 +1376,7 @@ function TableBlockEntityFilterInput({
   selectedValue,
   filterByTypes,
   waitForFilterTypes = false,
+  restrictSearchToTypes = false,
   suggestionSpaceId,
   scopedSuggestions,
   selectedEntityIds,
@@ -1374,10 +1386,11 @@ function TableBlockEntityFilterInput({
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const autocomplete = useSearch(
-    filterByTypes?.length || waitForFilterTypes
+    filterByTypes?.length || waitForFilterTypes || restrictSearchToTypes
       ? {
           filterByTypes: filterByTypes?.length ? filterByTypes : undefined,
           waitForFilterTypes: waitForFilterTypes || undefined,
+          restrictToFilterTypes: restrictSearchToTypes || undefined,
         }
       : undefined
   );
@@ -1412,10 +1425,18 @@ function TableBlockEntityFilterInput({
     return list.slice(0, MAX_SCOPED_SUGGESTIONS);
   }, [scopedSuggestions, autocomplete.query]);
 
+  const filteredScopedByTargetType = React.useMemo(() => {
+    if (!filterByTypes?.length) return filteredScoped;
+    return filteredScoped.filter(s => {
+      const e = store.getEntity(s.id, suggestionSpaceId ? { spaceId: suggestionSpaceId } : undefined);
+      return entityTypesMatchFilter(e?.types, filterByTypes);
+    });
+  }, [filteredScoped, filterByTypes, store, suggestionSpaceId]);
+
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled =
     focused &&
-    filteredScoped.length === 0 &&
+    filteredScopedByTargetType.length === 0 &&
     !autocomplete.query.trim() &&
     canBrowseByType;
 
@@ -1447,44 +1468,53 @@ function TableBlockEntityFilterInput({
   const rowsToRender = React.useMemo(() => {
     const q = autocomplete.query.trim();
     if (!q) {
-      if (filteredScoped.length > 0) {
-        return filteredScoped.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      if (filteredScopedByTargetType.length > 0) {
+        return filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
       }
       if (browseResults.length > 0) {
-        return browseResults.map(r => ({ kind: 'search' as const, result: r }));
+        return browseResults
+          .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
+          .map(r => ({ kind: 'search' as const, result: r }));
       }
       return [];
     }
-    const seen = new Set(filteredScoped.map(s => s.id));
+    const seen = new Set(filteredScopedByTargetType.map(s => s.id));
+    const fuzzyRows = autocomplete.results
+      .filter(r => !seen.has(r.id))
+      .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
     return [
-      ...filteredScoped.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...autocomplete.results
-        .filter(r => !seen.has(r.id))
-        .map(r => ({ kind: 'search' as const, result: r })),
+      ...filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s })),
+      ...fuzzyRows.map(r => ({ kind: 'search' as const, result: r })),
     ];
-  }, [filteredScoped, autocomplete.query, autocomplete.results, browseResults]);
+  }, [
+    filteredScopedByTargetType,
+    autocomplete.query,
+    autocomplete.results,
+    browseResults,
+    filterByTypes,
+  ]);
 
   const scopedResultQueries = useQueries({
-    queries: filteredScoped.map(s => ({
+    queries: filteredScopedByTargetType.map(s => ({
       queryKey: ['table-block-filter-scoped-entity', s.id] as const,
       queryFn: () => mergeSearchResult({ id: s.id, store }),
-      enabled: focused && filteredScoped.length > 0,
+      enabled: focused && filteredScopedByTargetType.length > 0,
       staleTime: Duration.toMillis(Duration.seconds(60)),
     })),
   });
 
   const scopedResultById = React.useMemo(() => {
     const m = new Map<string, SearchResult>();
-    filteredScoped.forEach((s, idx) => {
+    filteredScopedByTargetType.forEach((s, idx) => {
       const data = scopedResultQueries[idx]?.data;
       if (data != null) m.set(s.id, data);
     });
     return m;
-  }, [filteredScoped, scopedResultQueries]);
+  }, [filteredScopedByTargetType, scopedResultQueries]);
 
   const showEmptyBrowseHint =
     canBrowseByType &&
-    filteredScoped.length === 0 &&
+    filteredScopedByTargetType.length === 0 &&
     !autocomplete.query.trim() &&
     !isBrowseFetching &&
     browseResults.length === 0;
