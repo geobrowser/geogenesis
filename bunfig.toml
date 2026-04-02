@@ -1,2 +1,3 @@
 [install]
 minimumReleaseAge = 1209600
+minimumReleaseAgeExcludes = ["@geoprotocol/geo-sdk", "react", "react-dom", "next", "@types/react", "@types/react-dom", "typescript", "@types/bun", "@types/node"]

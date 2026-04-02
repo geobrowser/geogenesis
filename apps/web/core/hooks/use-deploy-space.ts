@@ -1,6 +1,7 @@
 'use client';
 
-import { Ipfs, personalSpace } from '@geoprotocol/geo-sdk';
+import { personalSpace } from '@geoprotocol/geo-sdk';
+import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -467,7 +468,12 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 20, intervalMs
   return false;
 }
 
-async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 20, intervalMs = 3_000): Promise<boolean> {
+async function waitForSpaceTopic(
+  spaceId: string,
+  topicId: string,
+  maxAttempts = 20,
+  intervalMs = 3_000
+): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const space = await Effect.runPromise(getSpace(spaceId));

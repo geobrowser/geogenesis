@@ -1,5 +1,4 @@
 import cx from 'classnames';
-import dynamic from 'next/dynamic';
 
 import { NavUtils } from '~/core/utils/utils';
 
@@ -7,12 +6,8 @@ import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
-
-const NavbarClientActions = dynamic(
-  () => import('./navbar-client-actions').then(m => ({ default: m.NavbarClientActions })),
-  { ssr: false }
-);
 
 interface Props {
   onSearchClick: () => void;

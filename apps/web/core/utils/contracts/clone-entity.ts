@@ -1,4 +1,4 @@
-import { ContentIds, Graph, Id, Op, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, Graph, Id, Op, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 

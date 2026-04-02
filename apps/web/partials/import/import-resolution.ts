@@ -1,8 +1,14 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
-import { type EntityTiebreakerData, type NameValueMatch, getEntityTiebreakerBatch, getNameValuesBatch } from '~/core/io/queries';
+import {
+  type EntityTiebreakerData,
+  type NameValueMatch,
+  getEntityTiebreakerBatch,
+  getNameValuesBatch,
+} from '~/core/io/queries';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { RelationPropertyMeta, ResolvedEntity } from './import-generation';
@@ -163,9 +169,9 @@ async function classifyBatchResults(
     const candidates = entityMap ? Array.from(entityMap.values()) : [];
 
     if (candidates.length === 0) {
-      results.set(norm, hitLimit
-        ? { status: 'unresolved', reason: 'ambiguous' }
-        : { status: 'unresolved', reason: 'none' }
+      results.set(
+        norm,
+        hitLimit ? { status: 'unresolved', reason: 'ambiguous' } : { status: 'unresolved', reason: 'none' }
       );
       continue;
     }
@@ -228,7 +234,10 @@ async function resolveNames(params: {
   const uniqueNames = Array.from(normToOriginal.values());
   const totalBatches = Math.ceil(uniqueNames.length / BATCH_SIZE);
   const totalRounds = Math.ceil(totalBatches / BATCH_CONCURRENCY);
-  if (DEBUG_IMPORT) console.log(`[import:resolve] ${uniqueNames.length} unique names → ${totalBatches} batches of ${BATCH_SIZE}, ${totalRounds} rounds (typeIds=[${typeIds.slice(0, 2).join(',')}${typeIds.length > 2 ? '...' : ''}])`);
+  if (DEBUG_IMPORT)
+    console.log(
+      `[import:resolve] ${uniqueNames.length} unique names → ${totalBatches} batches of ${BATCH_SIZE}, ${totalRounds} rounds (typeIds=[${typeIds.slice(0, 2).join(',')}${typeIds.length > 2 ? '...' : ''}])`
+    );
 
   for (let i = 0; i < uniqueNames.length; i += BATCH_SIZE * BATCH_CONCURRENCY) {
     if (!guard.isCurrent()) return results;
@@ -257,7 +266,8 @@ async function resolveNames(params: {
           const expectedFirst = batch.length * 5;
           const hitLimit = valueRows.length >= expectedFirst;
           if (hitLimit) {
-            if (DEBUG_IMPORT) console.warn(`[import:resolve] batch hit first=${expectedFirst} limit — some results may be truncated`);
+            if (DEBUG_IMPORT)
+              console.warn(`[import:resolve] batch hit first=${expectedFirst} limit — some results may be truncated`);
           }
           return { batch, valueRows, hitLimit, failed: false };
         } catch (error) {
@@ -266,7 +276,6 @@ async function resolveNames(params: {
         }
       })
     );
-
 
     for (const result of batchResults) {
       if (result.status !== 'fulfilled') continue;
@@ -355,7 +364,7 @@ export async function resolveRelationEntities(params: {
             name: entry.cellValue,
             status: 'created',
             typeId: firstTypeId,
-            typeName: firstTypeId ? typeNameById.get(firstTypeId) ?? null : undefined,
+            typeName: firstTypeId ? (typeNameById.get(firstTypeId) ?? null) : undefined,
           });
         } else {
           unresolvedCount += 1;
@@ -433,14 +442,20 @@ export async function resolveRowsByNameAndType(params: {
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
     const row = dataRows[rowIndex];
     const rowName = (row[nameColIdx] ?? '').trim();
-    if (!rowName) { rowMetas.push(null); continue; }
+    if (!rowName) {
+      rowMetas.push(null);
+      continue;
+    }
 
     let rowTypeId: string | null = selectedType?.id ?? null;
     if (typesColumnIndex !== undefined) {
       const rawType = (row[typesColumnIndex] ?? '').trim();
       rowTypeId = rawType ? (resolvedTypes.get(rawType)?.id ?? null) : null;
     }
-    if (!rowTypeId) { rowMetas.push(null); continue; }
+    if (!rowTypeId) {
+      rowMetas.push(null);
+      continue;
+    }
 
     const cacheKey = `${rowTypeId}::${rowName.toLowerCase()}`;
     rowMetas.push({ rowName, rowTypeId, cacheKey });
@@ -487,7 +502,10 @@ export async function resolveRowsByNameAndType(params: {
 
   for (let rowIndex = 0; rowIndex < rowMetas.length; rowIndex++) {
     const meta = rowMetas[rowIndex];
-    if (!meta) { unresolvedRowCount += 1; continue; }
+    if (!meta) {
+      unresolvedRowCount += 1;
+      continue;
+    }
     const cached = cache.get(meta.cacheKey);
     if (cached?.status === 'resolved') {
       resolvedRows.set(rowIndex, { entityId: cached.entityId, name: cached.name });

@@ -18,13 +18,15 @@ import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { SearchDialog } from '~/partials/search';
 
-const OnboardingDialog = dynamic(() => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })), {
-  ssr: false,
-});
+const OnboardingDialog = dynamic(
+  () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
+  { ssr: false }
+);
 
-const ReviewChanges = dynamic(() => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })), {
-  ssr: false,
-});
+const ReviewChanges = dynamic(
+  () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
+  { ssr: false }
+);
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);

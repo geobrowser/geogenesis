@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ADDRESS, GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
 import { DataType as AppDataType, Property, RenderableType } from '~/core/types';

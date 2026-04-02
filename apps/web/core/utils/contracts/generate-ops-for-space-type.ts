@@ -1,4 +1,4 @@
-import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk';
+import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';

@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk';
+import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -118,7 +118,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         if (editable) {
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ?? false);
+            (editor
+              .getJSON()
+              .content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ??
+              false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
@@ -291,7 +294,6 @@ function useInterceptEditorLinks(spaceId: string) {
     };
   }, [router, spaceId]);
 }
-
 
 // ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
 // https://github.com/ueberdosis/tiptap/issues/3764

@@ -1,6 +1,6 @@
 'use client';
 
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 

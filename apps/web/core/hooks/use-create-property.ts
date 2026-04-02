@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 

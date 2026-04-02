@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';

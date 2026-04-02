@@ -1,4 +1,4 @@
-import { WebSdk } from '@effect/opentelemetry';
+import * as WebSdk from '@effect/opentelemetry/WebSdk';
 import { SentrySpanProcessor } from '@sentry/opentelemetry';
 
 import * as Effect from 'effect/Effect';

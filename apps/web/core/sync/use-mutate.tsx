@@ -1,4 +1,4 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Draft, produce } from 'immer';
 
@@ -14,11 +14,10 @@ import {
 import { ID } from '../id';
 import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
+import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
-
-import { toHexId } from '../utils/hex-id';
 
 const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [SystemIds.URL]: 'Url',

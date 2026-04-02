@@ -1,4 +1,4 @@
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Entity } from '~/core/types';
 

@@ -10,6 +10,8 @@
   "exports": {
     "./package.json": "./package.json",
     ".": "./dist/index.js",
+    "./account": "./dist/account.js",
+    "./wallet": "./dist/wallet.js",
     "./server": "./dist/src/server.js"
   },
   "scripts": {

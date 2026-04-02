@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';

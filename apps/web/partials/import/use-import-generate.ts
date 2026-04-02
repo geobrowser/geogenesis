@@ -1,10 +1,10 @@
 'use client';
 
-const DEBUG_IMPORT = process.env.NODE_ENV === 'development';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -33,10 +33,12 @@ import {
 import { buildImageValuesAndRelations, collectImageTasks, uploadImportImages } from './image-upload';
 import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
-import { ImportSessionStore } from './import-session-store';
 import { resolveRelationEntities, resolveRowsByNameAndType, resolveTypesForRows } from './import-resolution';
+import { ImportSessionStore } from './import-session-store';
 import { useImportSchema } from './use-import-schema';
 import { useImportSession } from './use-import-session';
+
+const DEBUG_IMPORT = process.env.NODE_ENV === 'development';
 
 export function useImportGenerate(spaceId: string) {
   const { store } = useSyncEngine();
@@ -79,10 +81,7 @@ export function useImportGenerate(spaceId: string) {
   const hasTypeSource = Boolean(selectedType) || typesColumnIndex !== undefined;
 
   const canGenerate =
-    hasTypeSource &&
-    rowCount > 0 &&
-    nameColIdx !== undefined &&
-    Object.keys(columnMapping).length > 0;
+    hasTypeSource && rowCount > 0 && nameColIdx !== undefined && Object.keys(columnMapping).length > 0;
   const generationTrackerRef = useRef(createGenerationTracker());
 
   // ── Shared side-effect writer ─────────────────────────────────────────
@@ -147,7 +146,8 @@ export function useImportGenerate(spaceId: string) {
 
     try {
       const t0 = performance.now();
-      if (DEBUG_IMPORT) console.log(`[import:generate] START — ${dataRows.length} rows, ${Object.keys(columnMapping).length} columns`);
+      if (DEBUG_IMPORT)
+        console.log(`[import:generate] START — ${dataRows.length} rows, ${Object.keys(columnMapping).length} columns`);
 
       clearGeneratedChanges();
 
@@ -192,7 +192,10 @@ export function useImportGenerate(spaceId: string) {
         relationProperties,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveRelationEntities: ${(performance.now() - t2).toFixed(1)}ms — found=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'found').length}, created=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'created').length}, unresolved=${relationResolution.unresolvedCount}`);
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveRelationEntities: ${(performance.now() - t2).toFixed(1)}ms — found=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'found').length}, created=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'created').length}, unresolved=${relationResolution.unresolvedCount}`
+        );
       if (relationResolution.aborted) return;
 
       const mergedResolvedEntities = new Map(relationResolution.resolvedEntities);
@@ -207,7 +210,10 @@ export function useImportGenerate(spaceId: string) {
         typesColumnIndex,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveTypesForRows: ${(performance.now() - t3).toFixed(1)}ms — ${typeResolution.resolvedTypes.size} types resolved`);
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveTypesForRows: ${(performance.now() - t3).toFixed(1)}ms — ${typeResolution.resolvedTypes.size} types resolved`
+        );
       if (typeResolution.aborted) return;
 
       const mergedResolvedTypes = new Map(typeResolution.resolvedTypes);
@@ -225,7 +231,10 @@ export function useImportGenerate(spaceId: string) {
         resolvedTypes: mergedResolvedTypes,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveRowsByNameAndType: ${(performance.now() - t4).toFixed(1)}ms — resolved=${rowResolution.resolvedRows.size}, unresolved=${rowResolution.unresolvedRowCount}`);
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveRowsByNameAndType: ${(performance.now() - t4).toFixed(1)}ms — resolved=${rowResolution.resolvedRows.size}, unresolved=${rowResolution.unresolvedRowCount}`
+        );
       if (rowResolution.aborted) return;
 
       const mergedResolvedRows = new Map(rowResolution.resolvedRows);
@@ -339,12 +348,16 @@ export function useImportGenerate(spaceId: string) {
       setResolvedRowsSnapshot(finalPlan.resolvedRowsSnapshot);
       setResolvedTypesSnapshot(finalPlan.resolvedTypesSnapshot);
       setResolvedEntitiesSnapshot(finalPlan.resolvedEntitiesSnapshot);
-      if (DEBUG_IMPORT) console.log(`[import:generate] DONE — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations in ${(performance.now() - t0).toFixed(0)}ms`);
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] DONE — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations in ${(performance.now() - t0).toFixed(0)}ms`
+        );
 
       if (rowResolution.unresolvedRowCount > 0 || relationResolution.unresolvedCount > 0) {
-        if (DEBUG_IMPORT) console.warn(
-          `[import] unresolved links: rows=${rowResolution.unresolvedRowCount}, relationCells=${relationResolution.unresolvedCount}`
-        );
+        if (DEBUG_IMPORT)
+          console.warn(
+            `[import] unresolved links: rows=${rowResolution.unresolvedRowCount}, relationCells=${relationResolution.unresolvedCount}`
+          );
       }
     } finally {
       if (generationTrackerRef.current.isCurrent(generationId)) {
@@ -451,7 +464,9 @@ export function useImportGenerate(spaceId: string) {
         getProperty: (propertyId: string) => store.getProperty(propertyId),
       };
 
-      const mergedEntities = new Map<string, ResolvedEntity>(ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>);
+      const mergedEntities = new Map<string, ResolvedEntity>(
+        ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>
+      );
       for (const [key, override] of Object.entries(ctx.relationOverrides)) {
         mergedEntities.set(key, override);
       }
@@ -506,9 +521,7 @@ export function useImportGenerate(spaceId: string) {
       }
 
       // Find tasks for rows that don't have cached image data yet
-      const newImageTasks = rebuildImageTasks.filter(
-        task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]
-      );
+      const newImageTasks = rebuildImageTasks.filter(task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]);
 
       let mergedCache = { ...ctx.imageEntityCache };
 
@@ -570,7 +583,16 @@ export function useImportGenerate(spaceId: string) {
       if (ctx.relations.length > 0) store.setRelations(ctx.relations);
       console.error('[import:rebuild] failed', error);
     }
-  }, [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]);
+  }, [
+    store,
+    spaceId,
+    setValues,
+    setRelations,
+    setUnresolvedLinks,
+    setResolvedRowsSnapshot,
+    setResolvedTypesSnapshot,
+    setResolvedEntitiesSnapshot,
+  ]);
 
   // Drain pending rebuild when isLoading transitions to false.
   // Using an effect guarantees React has committed the state change,

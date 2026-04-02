@@ -1,6 +1,7 @@
 'use client';
 
-import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 

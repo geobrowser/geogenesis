@@ -1,4 +1,4 @@
-import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk';
+import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';

@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -49,11 +49,11 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import {
-  type EditApplyPayload,
-  type EditApplyNewPropertyPayload,
-  type EditCreatePropertyEntityPayload,
   type EditAddExistingPropertyPayload,
+  type EditApplyNewPropertyPayload,
+  type EditApplyPayload,
   type EditApplyValuePayload,
+  type EditCreatePropertyEntityPayload,
   type EditDeleteApplyPayload,
   EditEntitiesPopover,
   type EditRemovePropertiesPayload,
@@ -444,14 +444,11 @@ export function PowerToolsScreen() {
       const targetEntityIds = scope === 'allEntities' ? selectableIds : selectedEntityIds;
       for (const propertyId of propertyIds) {
         const valuesToDelete = getValues({
-          selector: v =>
-            targetEntityIds.has(v.entity.id) &&
-            v.property.id === propertyId,
+          selector: v => targetEntityIds.has(v.entity.id) && v.property.id === propertyId,
         });
         valuesToDelete.forEach(v => storage.values.delete(v));
         const relationsToDelete = getRelations({
-          selector: r =>
-            targetEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
+          selector: r => targetEntityIds.has(r.fromEntity.id) && r.type.id === propertyId,
         });
         relationsToDelete.forEach(r => storage.relations.delete(r));
       }
@@ -558,9 +555,7 @@ export function PowerToolsScreen() {
             : selectableRows.map(r => r.entityId);
         if (targetEntityIds.length === 0) return;
         const entityIdToSpaceId = new Map(
-          selectableRows
-            .filter(r => targetEntityIds.includes(r.entityId))
-            .map(r => [r.entityId, r.spaceId] as const)
+          selectableRows.filter(r => targetEntityIds.includes(r.entityId)).map(r => [r.entityId, r.spaceId] as const)
         );
 
         if (valueType === 'IMAGE' && initialImageFile) {
@@ -586,10 +581,7 @@ export function PowerToolsScreen() {
           } finally {
             setImageUploadingFor(new Set());
           }
-        } else if (
-          (valueType === 'RELATION' || valueType === 'IMAGE') &&
-          selectedEntities?.length
-        ) {
+        } else if ((valueType === 'RELATION' || valueType === 'IMAGE') && selectedEntities?.length) {
           targetEntityIds.forEach(fromEntityId => {
             const rowSpaceId = entityIdToSpaceId.get(fromEntityId) ?? spaceId;
             selectedEntities.forEach(target => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';

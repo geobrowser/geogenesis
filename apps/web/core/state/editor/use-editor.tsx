@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { JSONContent } from '@tiptap/react';
 
 import * as React from 'react';
@@ -12,6 +12,8 @@ import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
+
+import type { ServerBlock } from '~/partials/editor/server-content';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
@@ -25,7 +27,6 @@ import { Content } from './types';
 import { RelationWithBlock } from './use-blocks';
 import { getNodeId } from './utils';
 import { editorHasContentAtom } from '~/atoms';
-import type { ServerBlock } from '~/partials/editor/server-content';
 
 interface MakeNewBlockArgs {
   addedBlock: { id: string; value: string };
@@ -366,9 +367,7 @@ export function useEditorStore() {
         const markdownStr = markdownValueForBlockId?.value || '';
         sBlocks.push({ type: 'text', markdown: markdownStr });
 
-        const parsed = markdownStr
-          ? markdownToEditorJson(markdownStr)
-          : { type: 'doc', content: [] };
+        const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
 
         // A single block's markdown can produce multiple Tiptap nodes (e.g. heading + paragraph + list).
         // Return all of them so multi-element content renders fully.

@@ -1,4 +1,4 @@
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { storage } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/types';

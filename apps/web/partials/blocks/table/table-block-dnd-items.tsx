@@ -11,7 +11,7 @@ import {
 import { SortableContext, arrayMove, useSortable } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import React from 'react';
 
