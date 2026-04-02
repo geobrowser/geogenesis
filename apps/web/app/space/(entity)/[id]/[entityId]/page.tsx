@@ -1,4 +1,4 @@
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 

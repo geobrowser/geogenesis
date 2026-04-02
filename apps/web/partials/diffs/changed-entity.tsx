@@ -1,11 +1,11 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
-import cx from 'classnames';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { getBatchEntities } from '~/core/io/queries';
@@ -32,6 +32,7 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
+
 import { getFenceLength, readFencedCodeBlock } from './markdown-fences';
 
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;

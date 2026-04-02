@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { CookiesProvider } from 'react-cookie';
 
 import { ReactQueryProvider } from './query-client';
+import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
@@ -22,11 +23,6 @@ const LazyWalletProvider = dynamic(() => import('./wallet').then(m => ({ default
   ssr: false,
 });
 
-const LazySentryUserIdentifier = dynamic(
-  () => import('./sentry-user-identifier').then(m => ({ default: m.SentryUserIdentifier })),
-  { ssr: false }
-);
-
 interface Props {
   children: React.ReactNode;
 }
@@ -37,7 +33,7 @@ export function Providers({ children }: Props) {
       <LazyPrivyProvider>
         <ReactQueryProvider>
           <LazyWalletProvider>
-            <LazySentryUserIdentifier />
+            <SentryUserIdentifier />
             <JotaiProvider store={store}>
               <SyncEngineProvider>
                 <StatusBarContextProvider>

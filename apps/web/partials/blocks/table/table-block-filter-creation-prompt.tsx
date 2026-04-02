@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';

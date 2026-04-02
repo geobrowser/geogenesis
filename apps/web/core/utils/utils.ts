@@ -1,5 +1,4 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
-import { Position } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -105,7 +104,8 @@ export class GeoNumber {
         return `${currencySymbol}${message.format({ value: numericValue })}`;
       };
 
-      const primaryPattern = safeFormatPattern && safeFormatPattern.length > 0 ? safeFormatPattern : GeoNumber.defaultFormat;
+      const primaryPattern =
+        safeFormatPattern && safeFormatPattern.length > 0 ? safeFormatPattern : GeoNumber.defaultFormat;
 
       try {
         // First, try the user-specified or property-specified pattern

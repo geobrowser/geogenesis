@@ -1,4 +1,4 @@
-import { Graph, type Op } from '@geoprotocol/geo-sdk';
+import { Graph, type Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 

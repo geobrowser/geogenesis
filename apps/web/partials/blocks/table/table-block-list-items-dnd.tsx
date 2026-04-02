@@ -1,5 +1,5 @@
 import { verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import cx from 'classnames';
 

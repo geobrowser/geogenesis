@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import type { BlockChange, EntityDiff, RelationChange, SimpleValueType, ValueChange } from '~/core/utils/diff/types';
 

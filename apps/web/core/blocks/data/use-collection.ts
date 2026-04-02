@@ -1,4 +1,4 @@
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData } from '@tanstack/react-query';
 
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';

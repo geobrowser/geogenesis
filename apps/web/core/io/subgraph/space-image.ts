@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 

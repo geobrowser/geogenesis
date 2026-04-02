@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useMemo } from 'react';

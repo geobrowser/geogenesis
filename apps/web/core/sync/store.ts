@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { createAtom } from '@xstate/store';
 
 import { Array as A } from 'effect';

@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';

@@ -1,4 +1,4 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { Suspense } from 'react';
 

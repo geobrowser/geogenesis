@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';

@@ -1,5 +1,5 @@
 import { rectSortingStrategy } from '@dnd-kit/sortable';
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
 import { TableBlockGalleryItem } from './table-block-gallery-item';

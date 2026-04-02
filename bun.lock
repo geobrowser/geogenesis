@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "geogenesis",
+      "dependencies": {
+        "@geoprotocol/geo-sdk": "^0.15.2",
+      },
       "devDependencies": {
         "@graphql-codegen/client-preset": "^5.2.4",
         "eslint": "^10.0.3",
@@ -25,7 +28,7 @@
         "@effect/opentelemetry": "^0.62.0",
         "@floating-ui/dom": "^1.7.5",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.14.0",
+        "@geoprotocol/geo-sdk": "^0.15.2",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.213.0",
         "@opentelemetry/sdk-trace-base": "^2.6.0",
@@ -75,7 +78,7 @@
         "date-fns": "^4.1.0",
         "date-fns-tz": "^3.2.0",
         "dayjs": "^1.11.20",
-        "dexie": "^4.3.0",
+        "dexie": "^4.4.0",
         "diff": "^8.0.3",
         "effect": "^3.20.0",
         "fast-deep-equal": "^3.1.3",
@@ -89,7 +92,7 @@
         "lokijs": "^1.5.12",
         "mapbox-gl": "3.20.0",
         "markdown-it": "^14.1.1",
-        "next": "16.2.0",
+        "next": "^16.2.0",
         "permissionless": "^0.3.4",
         "pluralize": "^8.0.0",
         "react": "^19.2.4",
@@ -327,7 +330,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.14.0", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-/ymutQ2U0CFSgiNRdLhrJlpPfnlpyLz0lbCz2msuUue3EPivAcW/eo8DMdllZZYJaX8KvtjoAUdWFbWAVF+DKg=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.15.2", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-vBWbVb345FjMcVW1Y6IPojOJyVE6JqaLEeolF8HoR5qC/u3wZ073aMR83/ZWwfH4IQAR5EgGfsmQ77ukw6RjVA=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.1", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww=="],
 
@@ -1779,7 +1782,7 @@
 
     "detect-node-es": ["detect-node-es@1.1.0", "", {}, "sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ=="],
 
-    "dexie": ["dexie@4.3.0", "", {}, "sha512-5EeoQpJvMKHe6zWt/FSIIuRa3CWlZeIl6zKXt+Lz7BU6RoRRLgX9dZEynRfXrkLcldKYCBiz7xekTEylnie1Ug=="],
+    "dexie": ["dexie@4.4.0", "", {}, "sha512-7ZZ7NCcPfHnSiIwE24GLiV3TmUzFclFv6K7PdjXpf7mDhmXp9eQegW0S3fo2RonNJBTgRfIUSbNmN8uXhjC1zA=="],
 
     "diff": ["diff@8.0.3", "", {}, "sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ=="],
 
@@ -2231,7 +2234,7 @@
 
     "js-yaml": ["js-yaml@4.1.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA=="],
 
-    "jsdom": ["jsdom@29.0.1", "", { "dependencies": { "@asamuzakjp/css-color": "^5.0.1", "@asamuzakjp/dom-selector": "^7.0.3", "@bramus/specificity": "^2.4.2", "@csstools/css-syntax-patches-for-csstree": "^1.1.1", "@exodus/bytes": "^1.15.0", "css-tree": "^3.2.1", "data-urls": "^7.0.0", "decimal.js": "^10.6.0", "html-encoding-sniffer": "^6.0.0", "is-potential-custom-element-name": "^1.0.1", "lru-cache": "^11.2.7", "parse5": "^8.0.0", "saxes": "^6.0.0", "symbol-tree": "^3.2.4", "tough-cookie": "^6.0.1", "undici": "^7.24.5", "w3c-xmlserializer": "^5.0.0", "webidl-conversions": "^8.0.1", "whatwg-mimetype": "^5.0.0", "whatwg-url": "^16.0.1", "xml-name-validator": "^5.0.0" }, "peerDependencies": { "canvas": "^3.0.0" }, "optionalPeers": ["canvas"] }, "sha512-z6JOK5gRO7aMybVq/y/MlIpKh8JIi68FBKMUtKkK2KH/wMSRlCxQ682d08LB9fYXplyY/UXG8P4XXTScmdjApg=="],
+    "jsdom": ["jsdom@29.0.0", "", { "dependencies": { "@asamuzakjp/css-color": "^5.0.1", "@asamuzakjp/dom-selector": "^7.0.2", "@bramus/specificity": "^2.4.2", "@csstools/css-syntax-patches-for-csstree": "^1.1.1", "@exodus/bytes": "^1.15.0", "css-tree": "^3.2.1", "data-urls": "^7.0.0", "decimal.js": "^10.6.0", "html-encoding-sniffer": "^6.0.0", "is-potential-custom-element-name": "^1.0.1", "lru-cache": "^11.2.7", "parse5": "^8.0.0", "saxes": "^6.0.0", "symbol-tree": "^3.2.4", "tough-cookie": "^6.0.1", "undici": "^7.24.3", "w3c-xmlserializer": "^5.0.0", "webidl-conversions": "^8.0.1", "whatwg-mimetype": "^5.0.0", "whatwg-url": "^16.0.1", "xml-name-validator": "^5.0.0" }, "peerDependencies": { "canvas": "^3.0.0" }, "optionalPeers": ["canvas"] }, "sha512-9FshNB6OepopZ08unmmGpsF7/qCjxGPbo3NbgfJAnPeHXnsODE9WWffXZtRFRFe0ntzaAOcSKNJFz8wiyvF1jQ=="],
 
     "jsesc": ["jsesc@3.1.0", "", { "bin": { "jsesc": "bin/jsesc" } }, "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA=="],
 

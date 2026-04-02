@@ -1,4 +1,4 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
 import type { Property, Relation, Value } from '~/core/types';
@@ -92,9 +92,7 @@ export async function uploadImportImages(params: {
   const CONCURRENCY = 3;
   for (let i = 0; i < tasks.length; i += CONCURRENCY) {
     const batch = tasks.slice(i, i + CONCURRENCY);
-    const results = await Promise.allSettled(
-      batch.map(task => processImageTask(task, spaceId))
-    );
+    const results = await Promise.allSettled(batch.map(task => processImageTask(task, spaceId)));
 
     for (let j = 0; j < results.length; j++) {
       completed++;

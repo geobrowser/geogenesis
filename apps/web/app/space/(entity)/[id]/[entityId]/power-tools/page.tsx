@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';

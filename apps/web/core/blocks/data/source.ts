@@ -1,4 +1,4 @@
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Match } from 'effect';
 

@@ -1,5 +1,5 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
 import { DaoSpaceAbi } from '@geoprotocol/geo-sdk/abis';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 

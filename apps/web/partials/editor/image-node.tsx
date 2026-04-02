@@ -1,6 +1,6 @@
 'use client';
 
-import { Graph, SystemIds } from '@geoprotocol/geo-sdk';
+import { Graph, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
