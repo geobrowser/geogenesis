@@ -30,8 +30,11 @@ import { getProposalName } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import cx from 'classnames';
+
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
+import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from './governance-status-chip';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -111,12 +114,17 @@ export async function GovernanceProposalsList({
                 },
               });
 
+          const nowSec = Math.floor(Date.now() / 1000);
+          const showReopenMenu =
+            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && nowSec >= p.endTime;
+
           return (
-            <Link
-              key={p.id}
-              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-              className="flex w-full flex-col gap-4 py-6"
-            >
+            <div key={p.id} className="relative w-full">
+              {showReopenMenu ? <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} /> : null}
+              <Link
+                href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+                className={cx('flex w-full flex-col gap-4 py-6', showReopenMenu && 'pr-10')}
+              >
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{proposalTitle}</h3>
                 <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
@@ -145,7 +153,8 @@ export async function GovernanceProposalsList({
 
                 <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
-            </Link>
+              </Link>
+            </div>
           );
         })}
       </div>
