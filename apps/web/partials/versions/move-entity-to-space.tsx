@@ -1,5 +1,7 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -10,6 +12,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -18,21 +21,21 @@ import { Input } from '~/design-system/input';
 
 import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
-type CreateNewVersionInSpaceProps = {
+type MoveEntityToSpaceProps = {
   entityId: EntityId;
   entityName?: string;
   sourceSpaceId: string;
-  setIsCreatingNewVersion: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsMovingEntity: React.Dispatch<React.SetStateAction<boolean>>;
   onDone?: () => void;
 };
 
-export const CreateNewVersionInSpace = ({
+export const MoveEntityToSpace = ({
   entityId,
   entityName,
   sourceSpaceId,
-  setIsCreatingNewVersion,
+  setIsMovingEntity,
   onDone,
-}: CreateNewVersionInSpaceProps) => {
+}: MoveEntityToSpaceProps) => {
   const router = useRouter();
   const { storage } = useMutate();
 
@@ -47,8 +50,9 @@ export const CreateNewVersionInSpace = ({
     if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
       spaces.unshift(personalSpace);
     }
-    return spaces;
-  }, [personalSpace, memberSpaces]);
+    // Filter out the source space since we're moving away from it
+    return spaces.filter(s => s.id !== sourceSpaceId);
+  }, [personalSpace, memberSpaces, sourceSpaceId]);
 
   const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
 
@@ -57,20 +61,72 @@ export const CreateNewVersionInSpace = ({
       ? namedSpaces
       : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
 
-  const onClone = (targetSpaceId: string) => {
+  const moveEntityToSpace = (targetSpaceId: string) => {
     if (!targetSpaceId || targetSpaceId === sourceSpaceId) return;
+
+    // 1. Clone entity into target space
     cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage);
+
+    // 2. Delete entity from source space
+    const sourceValues = getValues({
+      selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
+    });
+
+    const sourceRelations = getRelations({
+      selector: relation => relation.fromEntity.id === entityId && relation.spaceId === sourceSpaceId,
+    });
+
+    const blocksRelations = sourceRelations.filter(r => r.type.id === SystemIds.BLOCKS);
+    const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
+
+    const orphanedBlockIds = blockIds.filter(blockId => {
+      const remainingRefs = getRelations({
+        selector: r =>
+          r.toEntity.id === blockId &&
+          !(r.fromEntity.id === entityId && r.type.id === SystemIds.BLOCKS && r.spaceId === sourceSpaceId),
+      });
+      return remainingRefs.length === 0;
+    });
+
+    const allValuesToDelete = [...sourceValues];
+    const relationIds = new Set<string>();
+    const allRelationsToDelete: typeof sourceRelations = [];
+
+    for (const r of [
+      ...sourceRelations,
+      ...getRelations({ selector: r => r.toEntity.id === entityId && r.spaceId === sourceSpaceId }),
+    ]) {
+      if (!relationIds.has(r.id)) {
+        relationIds.add(r.id);
+        allRelationsToDelete.push(r);
+      }
+    }
+
+    for (const blockId of orphanedBlockIds) {
+      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
+      for (const r of getRelations({
+        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
+      })) {
+        if (!relationIds.has(r.id)) {
+          relationIds.add(r.id);
+          allRelationsToDelete.push(r);
+        }
+      }
+    }
+
+    storage.values.deleteMany(allValuesToDelete);
+    storage.relations.deleteMany(allRelationsToDelete);
   };
 
   return (
     <div className="bg-white">
       <div className="border-grey flex items-center justify-between border-b border-grey-02">
         <div className="flex-1 p-2">
-          <button onClick={() => setIsCreatingNewVersion(false)}>
+          <button onClick={() => setIsMovingEntity(false)}>
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-4 p-2 text-center text-button text-text">Select space to create in</div>
+        <div className="flex-4 p-2 text-center text-button text-text">Select space to move to</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">
@@ -78,11 +134,11 @@ export const CreateNewVersionInSpace = ({
       </div>
       <div className="flex max-h-[190px] flex-col gap-1 overflow-auto p-1">
         {renderedSpaces.map(space => (
-          <CreateVersionSpaceItem
+          <MoveSpaceItem
             key={space.id}
             space={space}
             onSelect={() => {
-              onClone(space.id);
+              moveEntityToSpace(space.id);
               router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
               onDone?.();
             }}
@@ -93,12 +149,12 @@ export const CreateNewVersionInSpace = ({
   );
 };
 
-type CreateVersionSpaceItemProps = {
+type MoveSpaceItemProps = {
   space: ReturnType<typeof useSpacesWhereMember>[number];
   onSelect: () => void;
 };
 
-const CreateVersionSpaceItem = ({ space, onSelect }: CreateVersionSpaceItemProps) => {
+const MoveSpaceItem = ({ space, onSelect }: MoveSpaceItemProps) => {
   return (
     <button
       onClick={() => {
