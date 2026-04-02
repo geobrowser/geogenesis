@@ -21,15 +21,34 @@ interface SearchOptions {
   filterBySpace?: string;
   initialQuery?: string;
   waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
+}
+
+function normalizeTypeId(id: string): string {
+  return id.replace(/-/g, '');
+}
+
+export function searchResultMatchesAllowedTypes(
+  result: { types: { id: string }[] },
+  filterByTypes: string[] | undefined
+): boolean {
+  if (!filterByTypes?.length) return true;
+  const allowed = new Set(filterByTypes.flatMap(id => [id, normalizeTypeId(id)]));
+  return result.types.some(t => allowed.has(t.id) || allowed.has(normalizeTypeId(t.id)));
+}
+
+export function entityTypesMatchFilter(
+  types: { id: string }[] | undefined,
+  relationTargetTypeIds: string[] | undefined
+): boolean {
+  return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
 }
 
 function resultMatchesFilterTypes(
   result: { types: { id: string }[] },
   filterByTypes: string[] | undefined
 ): boolean {
-  if (!filterByTypes?.length) return true;
-  const allowed = new Set(filterByTypes);
-  return result.types.some(t => allowed.has(t.id));
+  return searchResultMatchesAllowedTypes(result, filterByTypes);
 }
 
 export function useSearch({
@@ -37,6 +56,7 @@ export function useSearch({
   filterBySpace,
   initialQuery,
   waitForFilterTypes,
+  restrictToFilterTypes,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -45,11 +65,20 @@ export function useSearch({
 
   const maybeEntityId = debouncedQuery.trim();
 
-  const searchBlocked = Boolean(waitForFilterTypes) && !filterByTypes?.length;
+  const searchBlocked =
+    (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
+    (Boolean(restrictToFilterTypes) && !filterByTypes?.length);
 
   const { data: results, isLoading } = useQuery({
     enabled: debouncedQuery !== '' && !searchBlocked,
-    queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace, Boolean(waitForFilterTypes)],
+    queryKey: [
+      'search',
+      debouncedQuery,
+      filterByTypes?.join('-'),
+      filterBySpace,
+      Boolean(waitForFilterTypes),
+      Boolean(restrictToFilterTypes),
+    ],
     queryFn: async () => {
       if (query.length === 0) return [];
 
