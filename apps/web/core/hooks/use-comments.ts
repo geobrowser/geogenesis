@@ -46,7 +46,7 @@ function parseCommentEntity(
   // Find all reply-to-comment relations (point to other comments)
   const replyToCommentRelations = replyToRelations.filter(r => commentIds.has(r.toEntity.id));
 
-  // The immediate parent is the deepest ancestor (highest depth = most Reply To comment relations)
+  // The immediate parent is the ancestor whose target comment has the highest computed depth in depthMap.
   let replyToCommentRelation = replyToCommentRelations[0] ?? null;
   if (replyToCommentRelations.length > 1) {
     replyToCommentRelation = replyToCommentRelations.reduce((best, r) => {
