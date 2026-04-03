@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
@@ -16,6 +17,7 @@ import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -34,6 +36,8 @@ export function TableBlockPropertyField(props: {
   const { spaceId, entityId, property, source, disableLink = false, entityName } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
+  const isNameOrDescriptionProperty =
+    property.id === SystemIds.NAME_PROPERTY || property.id === SystemIds.DESCRIPTION_PROPERTY;
 
   if (isEditing && source.type !== 'RELATIONS') {
     if (isRelation) {
@@ -65,8 +69,19 @@ export function TableBlockPropertyField(props: {
   }
 
   return (
-    <div className="flex flex-wrap gap-x-2">
-      <RenderedProperty entityId={entityId} property={property} spaceId={spaceId} disableLink={disableLink} />
+    <div className={cx('space-y-1', !isRelation && 'w-full min-w-0')}>
+      {!isNameOrDescriptionProperty && property.name ? (
+        <div className="text-metadata text-grey-04">{property.name}</div>
+      ) : null}
+      <div className={cx('flex flex-wrap gap-x-2', !isRelation && 'w-full min-w-0')}>
+        <RenderedProperty
+          entityId={entityId}
+          property={property}
+          spaceId={spaceId}
+          disableLink={disableLink}
+          hideHoverTooltip={!isNameOrDescriptionProperty}
+        />
+      </div>
     </div>
   );
 }
@@ -77,9 +92,11 @@ type PropertyProps = {
   spaceId: string;
   className?: string;
   disableLink?: boolean;
+  /** When browse mode shows a static label above the field, hide the hover name tooltip. */
+  hideHoverTooltip?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: PropertyProps) => {
+const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, hideHoverTooltip = false }: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';
@@ -91,20 +108,26 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: 
 
   return (
     <div
-      className={cx('relative inline-block', isRelation ? 'mt-2' : 'mt-1')}
+      className={cx(
+        'relative',
+        // inline-block shrink-wraps long TEXT inside flex layouts; use full width for values.
+        isRelation ? 'mt-2 inline-block' : 'mt-1 block w-full min-w-0'
+      )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="absolute top-0 right-0 -translate-y-full pb-1">
-        <div
-          className={cx(
-            'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
-            isHovered ? 'opacity-100 delay-700' : 'opacity-0'
-          )}
-        >
-          {property.name}
+      {!hideHoverTooltip && (
+        <div className="absolute top-0 right-0 -translate-y-full pb-1">
+          <div
+            className={cx(
+              'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
+              isHovered ? 'opacity-100 delay-700' : 'opacity-0'
+            )}
+          >
+            {property.name}
+          </div>
         </div>
-      </div>
+      )}
       {isRelation ? (
         <EditableRelationsGroup
           entityId={entityId}
@@ -253,7 +276,9 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
   const { storage } = useMutate();
   const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
 
-  const renderableType = property.renderableType ?? property.dataType;
+  // Match entity-table-cell / editable-entity-table-cell: `renderableType` is often a UUID;
+  // fall back to dataType so DATE/DATETIME/TEXT/etc. resolve correctly.
+  const renderableType = property.renderableTypeStrict ?? property.dataType;
   const value = rawValue?.value ?? '';
 
   const onWriteValue = (newValue: string) => {
@@ -261,7 +286,9 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
   };
 
   switch (renderableType) {
-    case 'NUMBER':
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL':
       return (
         <NumberField
           variant="tableCell"
@@ -275,18 +302,33 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
       );
     case 'TEXT':
       return <TableStringField variant="tableCell" placeholder="Add value..." value={value} onChange={onWriteValue} />;
-    case 'CHECKBOX': {
+    case 'URL':
+      return (
+        <WebUrlField
+          variant="tableCell"
+          isEditing={isEditing}
+          spaceId={spaceId}
+          value={value}
+          format={property.format}
+          onBlur={isEditing ? e => onWriteValue(e.currentTarget.value) : undefined}
+        />
+      );
+    case 'BOOLEAN': {
       const checked = getChecked(value);
       return <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />;
     }
+    case 'DATE':
+    case 'DATETIME':
     case 'TIME':
       return (
         <DateField
-          isEditing={true}
+          variant="tableCell"
+          key={value || 'empty'}
+          isEditing={isEditing}
           value={value}
           propertyId={property.id}
           dataType={property.dataType}
-          onBlur={v => onWriteValue(v.value)}
+          onBlur={isEditing ? v => onWriteValue(v.value) : undefined}
         />
       );
     default:

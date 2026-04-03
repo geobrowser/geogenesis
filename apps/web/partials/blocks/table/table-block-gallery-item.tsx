@@ -243,7 +243,7 @@ export function TableBlockGalleryItem({
       </Link>
       <div className="flex w-full flex-col gap-2 px-1">
         <div className="flex items-start justify-between gap-2">
-          <div className="grow">
+          <div className="min-w-0 grow">
             {source.type !== 'COLLECTION' ? (
               <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                 <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
