@@ -236,6 +236,8 @@ const publishingStates: Array<ReviewState> = [
 /**
  * Filter values to only include net changes compared to the remote/synced state.
  * Excludes values created-then-deleted locally and values unchanged from remote.
+ * Only compares against non-local values in syncedEntities because the SyncEngine
+ * can bake local edits into syncedEntities during re-sync.
  */
 function getNetValues(localValues: Value[]): Value[] {
   return localValues.filter(v => {
@@ -244,13 +246,13 @@ function getNetValues(localValues: Value[]): Value[] {
     if (v.isDeleted) {
       // If no remote entity exists, this value was created and deleted locally — net-zero
       if (!remoteEntity) return false;
-      return remoteEntity.values.some(remote => remote.id === v.id);
+      return remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal);
     }
 
     // If the value is unchanged from the remote version, skip it
     if (remoteEntity) {
       const remoteValue = remoteEntity.values.find(
-        remote => remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId)
+        remote => !remote.isLocal && (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
       );
       if (remoteValue && remoteValue.value === v.value) return false;
     }
@@ -263,6 +265,8 @@ function getNetValues(localValues: Value[]): Value[] {
  * Filter relations to only include net changes compared to the remote/synced state.
  * Excludes relations created-then-deleted locally, relations identical to remote,
  * and delete+create pairs that restore the original state (cycling back).
+ * Only compares against non-local relations in syncedEntities because the SyncEngine
+ * can bake local edits into syncedEntities during re-sync.
  */
 function getNetRelations(localRelations: Relation[]): Relation[] {
   // Build a set of semantic keys for active local relations
@@ -279,7 +283,7 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
       // If no remote entity, or the relation ID doesn't exist in remote,
       // this was created and deleted locally — net-zero
       if (!remoteEntity) return false;
-      const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id);
+      const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
       if (!remoteRelation) return false;
 
       // If an active local relation restores the same (fromEntity, type, toEntity, space)
@@ -294,7 +298,7 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
     if (remoteEntity) {
       const key = `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`;
       const matchesRemote = remoteEntity.relations.some(
-        remote => `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
+        remote => !remote.isLocal && `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
       );
       if (matchesRemote) return false;
     }
