@@ -2,21 +2,26 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import { useToast } from '~/core/hooks/use-toast';
 import type { EntityDiff } from '~/core/utils/diff/types';
 import { useDiff } from '~/core/state/diff-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { applyEntityDiffsToLocalStore } from '~/core/utils/reopen-rejected-proposal/apply-entity-diffs-to-local-store';
 
+import { governanceReopenEditLoadingAtom } from './governance-reopen-edit-loading-bar';
+
 export function useReopenRejectedProposalEdits(proposalId: string, spaceId: string) {
   const { store } = useSyncEngine();
-  const { bumpReviewVersion, setIsReviewOpen, setIsReviewEditsLoading, setActiveSpace } = useDiff();
+  const setGovernanceReopenLoading = useSetAtom(governanceReopenEditLoadingAtom);
+  const { bumpReviewVersion, setIsReviewOpen, setActiveSpace } = useDiff();
   const [, setToast] = useToast();
   const [busy, setBusy] = React.useState(false);
 
   const reopenEdit = React.useCallback(async () => {
     setBusy(true);
-    setIsReviewEditsLoading(true);
+    setGovernanceReopenLoading(true);
     try {
       const res = await fetch(
         `/api/proposals/${encodeURIComponent(proposalId)}/diff?spaceId=${encodeURIComponent(spaceId)}`
@@ -41,7 +46,7 @@ export function useReopenRejectedProposalEdits(proposalId: string, spaceId: stri
       console.error('[governance] reopen rejected proposal failed', e);
       setToast(<span>Could not load proposal edits. Try again.</span>);
     } finally {
-      setIsReviewEditsLoading(false);
+      setGovernanceReopenLoading(false);
       setBusy(false);
     }
   }, [
@@ -50,7 +55,7 @@ export function useReopenRejectedProposalEdits(proposalId: string, spaceId: stri
     store,
     bumpReviewVersion,
     setIsReviewOpen,
-    setIsReviewEditsLoading,
+    setGovernanceReopenLoading,
     setActiveSpace,
     setToast,
   ]);
