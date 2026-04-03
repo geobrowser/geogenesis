@@ -328,6 +328,7 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
   const { data: remoteProperties, isFetched } = useQuery({
     enabled: enabled,
+    placeholderData: keepPreviousData,
     queryKey: ['store', 'properties', JSON.stringify({ ids, enabled })],
     queryFn: async (): Promise<Property[]> => {
       return await Effect.runPromise(getProperties(ids));
