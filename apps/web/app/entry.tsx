@@ -13,6 +13,7 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
+import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
@@ -58,6 +59,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <ClientOnly>
         <OnboardingDialog />
         <Toast />
+        <GovernanceReopenEditLoadingBar />
         <FlowBar />
         <ReviewChanges />
         <Persistence />
