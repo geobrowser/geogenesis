@@ -6,6 +6,9 @@ import { createContext, useContext, useState } from 'react';
 type DiffState = {
   isReviewOpen: boolean;
   setIsReviewOpen: (value: boolean) => void;
+  /** True while governance “Reopen edit” is fetching/applying proposal diffs. */
+  isReviewEditsLoading: boolean;
+  setIsReviewEditsLoading: (value: boolean) => void;
   reviewVersion: number;
   bumpReviewVersion: () => void;
   activeSpace: string;
@@ -25,6 +28,8 @@ type DiffState = {
 const initialDiffState = {
   isReviewOpen: false,
   setIsReviewOpen: (value: boolean) => null,
+  isReviewEditsLoading: false,
+  setIsReviewEditsLoading: (value: boolean) => null,
   reviewVersion: 0,
   bumpReviewVersion: () => null,
   activeSpace: '',
@@ -49,6 +54,7 @@ type DiffProviderProps = {
 
 export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
+  const [isReviewEditsLoading, setIsReviewEditsLoading] = useState<boolean>(false);
   const [reviewVersion, setReviewVersion] = useState<number>(0);
   const bumpReviewVersion = React.useCallback(() => setReviewVersion(v => v + 1), []);
   const [activeSpace, setActiveSpace] = useState<string>('');
@@ -63,6 +69,8 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
       value={{
         isReviewOpen,
         setIsReviewOpen,
+        isReviewEditsLoading,
+        setIsReviewEditsLoading,
         reviewVersion,
         bumpReviewVersion,
         activeSpace,

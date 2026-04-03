@@ -81,6 +81,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           isProposalEnded={isProposalEnded}
           status={proposal.status}
           canExecute={proposal.canExecute}
+          proposalType={proposal.type}
           userVote={userVote}
         />
       </div>

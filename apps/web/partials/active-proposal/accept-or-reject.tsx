@@ -11,6 +11,7 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
+import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
 
 import { Execute } from './execute';
 
@@ -19,12 +20,21 @@ interface Props {
   isProposalEnded: boolean;
   status: Proposal['status'];
   canExecute: boolean;
+  proposalType: Proposal['type'];
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
 }
 
-export function AcceptOrReject({ spaceId, isProposalEnded, status, canExecute, userVote, proposalId }: Props) {
+export function AcceptOrReject({
+  spaceId,
+  isProposalEnded,
+  status,
+  canExecute,
+  proposalType,
+  userVote,
+  proposalId,
+}: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     spaceId,
@@ -63,7 +73,18 @@ export function AcceptOrReject({ spaceId, isProposalEnded, status, canExecute, u
     }
 
     if (status === 'REJECTED') {
-      return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+      const rejectedBadge = (
+        <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>
+      );
+      if (proposalType === 'ADD_EDIT') {
+        return (
+          <div className="inline-flex items-center gap-2">
+            <GovernanceReopenEditButton proposalId={proposalId} spaceId={spaceId} />
+            {rejectedBadge}
+          </div>
+        );
+      }
+      return rejectedBadge;
     }
 
     if (canExecute && smartAccount) {
