@@ -30,8 +30,6 @@ import { getProposalName } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import cx from 'classnames';
-
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
@@ -119,14 +117,18 @@ export async function GovernanceProposalsList({
             p.status === 'REJECTED' && p.type === 'ADD_EDIT' && nowSec >= p.endTime;
 
           return (
-            <div key={p.id} className="relative w-full">
-              {showReopenMenu ? <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} /> : null}
-              <Link
-                href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-                className={cx('flex w-full flex-col gap-4 py-6', showReopenMenu && 'pr-10')}
-              >
+            <Link
+              key={p.id}
+              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+              className="flex w-full flex-col gap-4 py-6"
+            >
               <div className="flex flex-col gap-2">
-                <h3 className="text-smallTitle">{proposalTitle}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
+                  {showReopenMenu ? (
+                    <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
                   <div className="relative h-3 w-3 overflow-hidden rounded-full">
                     <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
@@ -153,8 +155,7 @@ export async function GovernanceProposalsList({
 
                 <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
-              </Link>
-            </div>
+            </Link>
           );
         })}
       </div>

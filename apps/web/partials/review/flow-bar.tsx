@@ -28,7 +28,7 @@ export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
-  const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
+  const { isReviewOpen, setIsReviewOpen, bumpReviewVersion, isReviewEditsLoading } = useDiff();
 
   const allValues = useValues({
     selector: t => t.hasBeenPublished === false && t.isLocal === true,
@@ -55,15 +55,19 @@ export const FlowBar = () => {
 
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
-  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const showFlowBar =
+    !toast &&
+    statusBarState.reviewState === 'idle' &&
+    (isReviewEditsLoading || (opsCount > 0 && editable));
 
   return (
     <AnimatePresence>
       <>
-        {!hideFlowbar && (
+        {showFlowBar && (
           <div
             className={cx(
-              'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
+              'pointer-events-none fixed inset-x-0 bottom-5 flex justify-center text-button',
+              isReviewEditsLoading ? 'z-[10001]' : 'z-1000',
               RemoveScroll.classNames.fullWidth
             )}
           >
@@ -73,31 +77,40 @@ export const FlowBar = () => {
               animate="visible"
               exit="hidden"
               transition={transition}
-              custom={!isReviewOpen}
+              custom={!isReviewOpen || isReviewEditsLoading}
               className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
             >
-              <div className="inline-flex h-full items-center justify-center">
-                <p className="inline-flex items-center px-3">
-                  <span>{pluralize('edit', opsCount, true)}</span>
-                </p>
-                <Divider type="vertical" className="inline-block h-4 w-px" />
-                <p className="inline-flex items-center px-3">
-                  <span>{pluralize('entity', entitiesCount, true)}</span>
-                </p>
-                <Divider type="vertical" className="inline-block h-4 w-px" />
-                <p className="inline-flex items-center px-3">
-                  <span>{pluralize('space', spacesCount, true)}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  bumpReviewVersion();
-                  setIsReviewOpen(true);
-                }}
-                className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
-              >
-                Review edits
-              </button>
+              {isReviewEditsLoading ? (
+                <div className="inline-flex h-full items-center gap-2 px-4">
+                  <Spinner />
+                  <span>Loading reopened edits…</span>
+                </div>
+              ) : (
+                <>
+                  <div className="inline-flex h-full items-center justify-center">
+                    <p className="inline-flex items-center px-3">
+                      <span>{pluralize('edit', opsCount, true)}</span>
+                    </p>
+                    <Divider type="vertical" className="inline-block h-4 w-px" />
+                    <p className="inline-flex items-center px-3">
+                      <span>{pluralize('entity', entitiesCount, true)}</span>
+                    </p>
+                    <Divider type="vertical" className="inline-block h-4 w-px" />
+                    <p className="inline-flex items-center px-3">
+                      <span>{pluralize('space', spacesCount, true)}</span>
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      bumpReviewVersion();
+                      setIsReviewOpen(true);
+                    }}
+                    className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
+                  >
+                    Review edits
+                  </button>
+                </>
+              )}
             </motion.div>
           </div>
         )}
