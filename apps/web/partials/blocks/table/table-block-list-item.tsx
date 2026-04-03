@@ -131,7 +131,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-3">
+        <div className="min-w-0 w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -248,7 +248,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full">
+        <div className="min-w-0 w-full">
           {source.type !== 'COLLECTION' ? (
             <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           ) : (
