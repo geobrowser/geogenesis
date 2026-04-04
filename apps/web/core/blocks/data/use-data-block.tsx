@@ -27,6 +27,9 @@ import { useView } from './use-view';
 
 export const PAGE_SIZE = 9;
 
+/** Max entities to hydrate for filter value suggestions (names, text values, relations) beyond the current table page. */
+const FILTER_SUGGESTION_ENTITY_CAP = 5000;
+
 interface RenderablesQueryKey {
   sourceType: Source['type'];
   sourceKey: string;
@@ -123,6 +126,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
     collectionLength,
+    filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
   } = useCollection({
     source,
     first: PAGE_SIZE,
@@ -130,6 +134,48 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     where: where,
     sort: serverSort,
   });
+
+  const collectionSuggestionIdSlice = React.useMemo(() => {
+    if (source.type !== 'COLLECTION' || !collectionFilterSuggestionEntityIds?.length) return undefined;
+    return collectionFilterSuggestionEntityIds.slice(0, FILTER_SUGGESTION_ENTITY_CAP);
+  }, [source.type, collectionFilterSuggestionEntityIds]);
+
+  useQueryEntities({
+    where: { id: { in: collectionSuggestionIdSlice ?? [] } },
+    enabled: Boolean(collectionSuggestionIdSlice?.length),
+    first: collectionSuggestionIdSlice?.length ?? 0,
+    skip: 0,
+    placeholderData: keepPreviousData,
+    deferUntilFetched: true,
+  });
+
+  const {
+    entities: queryBlockSuggestionEntities,
+    isFetched: isQueryBlockSuggestionEntitiesFetched,
+  } = useQueryEntities({
+    where,
+    enabled: source.type === 'SPACES' || source.type === 'GEO',
+    first: FILTER_SUGGESTION_ENTITY_CAP,
+    skip: 0,
+    placeholderData: keepPreviousData,
+    deferUntilFetched: true,
+  });
+
+  const filterSuggestionEntityIds = React.useMemo(() => {
+    if (source.type === 'COLLECTION') {
+      return collectionFilterSuggestionEntityIds;
+    }
+    if (source.type === 'SPACES' || source.type === 'GEO') {
+      if (!isQueryBlockSuggestionEntitiesFetched) return undefined;
+      return queryBlockSuggestionEntities.map(e => e.id);
+    }
+    return undefined;
+  }, [
+    source.type,
+    collectionFilterSuggestionEntityIds,
+    isQueryBlockSuggestionEntitiesFetched,
+    queryBlockSuggestionEntities,
+  ]);
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
   // We just need to organize the data here
@@ -351,6 +397,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
+    filterSuggestionEntityIds,
 
     // From useView
     view,
