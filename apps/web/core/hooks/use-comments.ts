@@ -24,9 +24,16 @@ import type { CommentEntity, CommentWithReplies } from '~/partials/comments/type
  * - A reply-to pointing to a non-comment entity = the target entity
  * - A reply-to pointing to another comment entity = the parent comment
  *
- * We resolve which is which by checking against the set of all fetched comment IDs.
+ * A reply may have "Reply To" relations to ALL ancestor comments (cascading).
+ * We identify the immediate parent as the ancestor with the highest true nesting
+ * depth (computed by traversing the parent chain), using the provided depth map.
  */
-function parseCommentEntity(entity: Entity, commentIds: Set<string>, targetEntityId: string): CommentEntity {
+function parseCommentEntity(
+  entity: Entity,
+  commentIds: Set<string>,
+  targetEntityId: string,
+  depthMap: Map<string, number>
+): CommentEntity {
   const markdownContent =
     entity.values.find(v => v.property.id === COMMENT_MARKDOWN_CONTENT_ID)?.value ?? '';
 
@@ -36,8 +43,19 @@ function parseCommentEntity(entity: Entity, commentIds: Set<string>, targetEntit
   // Parse Reply To relations
   const replyToRelations = entity.relations.filter(r => r.type.id === COMMENT_REPLY_TO_ID);
 
-  // Find the reply-to-comment relation (points to another comment)
-  const replyToCommentRelation = replyToRelations.find(r => commentIds.has(r.toEntity.id));
+  // Find all reply-to-comment relations (point to other comments)
+  const replyToCommentRelations = replyToRelations.filter(r => commentIds.has(r.toEntity.id));
+
+  // The immediate parent is the ancestor whose target comment has the highest computed depth in depthMap.
+  let replyToCommentRelation = replyToCommentRelations[0] ?? null;
+  if (replyToCommentRelations.length > 1) {
+    replyToCommentRelation = replyToCommentRelations.reduce((best, r) => {
+      const depth = depthMap.get(r.toEntity.id) ?? 0;
+      const bestDepth = depthMap.get(best.toEntity.id) ?? 0;
+      return depth > bestDepth ? r : best;
+    });
+  }
+
   // Find the reply-to-entity relation (points to the target entity)
   const replyToEntityRelation = replyToRelations.find(r => r.toEntity.id === targetEntityId);
 
@@ -176,8 +194,39 @@ export function useComments({ entityId }: UseCommentsOptions) {
 
       // Parse into CommentEntity
       const allCommentIds = new Set(allEntities.map(e => e.id));
+
+      // Build adjacency map: for each comment, its Reply To comment targets
+      const adjacency = new Map<string, string[]>();
+      for (const entity of allEntities) {
+        const targets = entity.relations
+          .filter(r => r.type.id === COMMENT_REPLY_TO_ID && allCommentIds.has(r.toEntity.id))
+          .map(r => r.toEntity.id);
+        adjacency.set(entity.id, targets);
+      }
+
+      // Compute true nesting depth by traversing the parent chain.
+      // Old comments only have Reply To to their immediate parent, so counting
+      // local relations gives all non-root comments depth 1 regardless of actual
+      // nesting. Traversing the chain gives the correct depth.
+      const depthMap = new Map<string, number>();
+      function computeDepth(commentId: string): number {
+        if (depthMap.has(commentId)) return depthMap.get(commentId)!;
+        const targets = adjacency.get(commentId) ?? [];
+        if (targets.length === 0) {
+          depthMap.set(commentId, 0);
+          return 0;
+        }
+        const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
+        const depth = maxParentDepth + 1;
+        depthMap.set(commentId, depth);
+        return depth;
+      }
+      for (const id of allCommentIds) {
+        computeDepth(id);
+      }
+
       const comments = allEntities.map(entity => {
-        const comment = parseCommentEntity(entity, allCommentIds, entityId);
+        const comment = parseCommentEntity(entity, allCommentIds, entityId, depthMap);
         const profileInfo = profileMap.get(comment.spaceId);
         if (profileInfo) {
           comment.author = {
