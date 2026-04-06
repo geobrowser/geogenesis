@@ -61,7 +61,7 @@ export default function PdfZoom({
             <div className="flex items-center gap-[5px]">
               <PdfFile className="h-3 w-3" />
               <span className="text-[11px] font-medium leading-[13px] text-grey-04">
-                {numPages} page{numPages && numPages > 1 && 's'}
+                {numPages !== null ? `${numPages} page${numPages > 1 ? 's' : ''}` : ''}
               </span>
             </div>
             <button

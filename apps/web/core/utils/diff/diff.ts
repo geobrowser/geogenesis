@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
+import { PDF_TYPE, PDF_URL } from '~/core/constants';
 import type { Entity, Relation, Value } from '~/core/types';
 
 import type {
@@ -124,7 +125,7 @@ export function mapApiEntityDiff(apiEntity: ApiEntityDiffShape): EntityDiff {
   };
 }
 
-export const BLOCK_TYPE_IDS: string[] = [TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK];
+export const BLOCK_TYPE_IDS: string[] = [TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK, PDF_TYPE];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
@@ -265,7 +266,7 @@ export async function postProcessDiffs(
   // Collect media URLs per entity and inject into parent relations for ImagePropertyCell/VideoPropertyCell rendering.
   const mediaPropertyEntityUrls = new Map<
     string,
-    { before: string | null; after: string | null; mediaType: 'image' | 'video' }
+    { before: string | null; after: string | null; mediaType: 'image' | 'video' | 'pdf' }
   >();
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
@@ -277,12 +278,14 @@ export async function postProcessDiffs(
         v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
       );
     if (mediaValue) {
-      let mediaType: 'image' | 'video' = 'image';
+      let mediaType: 'image' | 'video' | 'pdf' = 'image';
       for (const rel of entity.relations) {
         if (rel.typeId === TYPES_PROPERTY) {
           const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
           if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) {
             mediaType = 'video';
+          } else if (typeId === PDF_TYPE) {
+            mediaType = 'pdf';
           }
         }
       }
@@ -484,7 +487,7 @@ export async function postProcessDiffs(
   //   b) fetchedEntityMap        — entity was fetched in step 4 for name resolution
   //      (history/single-entity path where the media property entity is a foreign entity
   //       not included in the input, but already fetched to resolve its name)
-  type MediaUrlResult = { url: string; mediaType: 'image' | 'video' } | null;
+  type MediaUrlResult = { url: string; mediaType: 'image' | 'video' | 'pdf' } | null;
 
   const resolveMediaUrl = (targetId: string, side: 'after' | 'before'): MediaUrlResult => {
     // (a) entity was in the input diff — use the before/after from its diff values
@@ -506,13 +509,20 @@ export async function postProcessDiffs(
     if (fetched && !blocksWithParent.has(targetId)) {
       const isImage = fetched.types.some(t => t.id === IMAGE_TYPE || t.id === IMAGE_BLOCK);
       const isVideo = fetched.types.some(t => t.id === VIDEO_TYPE || t.id === VIDEO_BLOCK);
-      if (isImage || isVideo) {
+      const isPdf = fetched.types.some(t => t.id === PDF_TYPE);
+      if (isImage || isVideo || isPdf) {
         const url = resolveImageUrlFromEntity(fetched);
-        if (url) return { url, mediaType: isVideo ? 'video' : 'image' };
+        if (url) return { url, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' };
       }
     }
 
     return null;
+  };
+
+  const mediaUrlFields = (media: { url: string; mediaType: string }) => {
+    if (media.mediaType === 'video') return { videoUrl: media.url };
+    if (media.mediaType === 'pdf') return { pdfUrl: media.url };
+    return { imageUrl: media.url };
   };
 
   let processed: EntityDiff[] = entities
@@ -528,7 +538,7 @@ export async function postProcessDiffs(
             ? {
                 after: {
                   ...r.after,
-                  ...(afterMedia.mediaType === 'image' ? { imageUrl: afterMedia.url } : { videoUrl: afterMedia.url }),
+                  ...mediaUrlFields(afterMedia),
                 },
               }
             : {}),
@@ -536,9 +546,7 @@ export async function postProcessDiffs(
             ? {
                 before: {
                   ...r.before,
-                  ...(beforeMedia.mediaType === 'image'
-                    ? { imageUrl: beforeMedia.url }
-                    : { videoUrl: beforeMedia.url }),
+                  ...mediaUrlFields(beforeMedia),
                 },
               }
             : {}),
@@ -721,6 +729,17 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
     };
   }
 
+  if (blockType === 'pdfBlock') {
+    const contentValue = entity.values.find(v => v.propertyId === PDF_URL) ?? entity.values[0];
+
+    return {
+      id: entity.entityId,
+      type: 'pdfBlock',
+      before: contentValue?.before ?? null,
+      after: contentValue?.after ?? null,
+    };
+  }
+
   const contentValue =
     entity.values.find(v => v.propertyId === MARKDOWN_CONTENT) ?? entity.values.find(v => v.type === 'TEXT');
   const before = contentValue?.before ?? null;
@@ -736,13 +755,14 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   } as TextBlockChange;
 }
 
-export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
+export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' | 'videoBlock' | 'pdfBlock' | 'dataBlock' {
   for (const rel of entity.relations) {
     if (rel.typeId === TYPES_PROPERTY) {
       const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
       if (typeId === TEXT_BLOCK) return 'textBlock';
       if (typeId === IMAGE_BLOCK || typeId === IMAGE_TYPE) return 'imageBlock';
       if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) return 'videoBlock';
+      if (typeId === PDF_TYPE) return 'pdfBlock';
       if (typeId === DATA_BLOCK) return 'dataBlock';
     }
   }
@@ -796,6 +816,7 @@ export async function fromLocal(
   // or VIDEO_TYPE but are NOT blocks.
   const imageEntityIds = new Set<string>();
   const videoEntityIds = new Set<string>();
+  const pdfEntityIds = new Set<string>();
   for (const relation of localRelations) {
     if (relation.renderableType === 'IMAGE' && !actualBlockEntityIds.has(relation.toEntity.id)) {
       imageEntityIds.add(relation.toEntity.id);
@@ -803,10 +824,13 @@ export async function fromLocal(
     if (relation.renderableType === 'VIDEO' && !actualBlockEntityIds.has(relation.toEntity.id)) {
       videoEntityIds.add(relation.toEntity.id);
     }
+    if (relation.renderableType === 'PDF' && !actualBlockEntityIds.has(relation.toEntity.id)) {
+      pdfEntityIds.add(relation.toEntity.id);
+    }
   }
 
   const remoteEntities = new Map<string, Entity>();
-  const idsToFetch = new Set([...allChangedEntityIds, ...mediaTargetEntityIds, ...imageEntityIds, ...videoEntityIds]);
+  const idsToFetch = new Set([...allChangedEntityIds, ...mediaTargetEntityIds, ...imageEntityIds, ...videoEntityIds, ...pdfEntityIds]);
 
   if (idsToFetch.size > 0) {
     try {
@@ -853,6 +877,7 @@ export async function fromLocal(
   type MediaSides = { before: string | null; after: string | null };
   const imageEntityUrls = new Map<string, MediaSides>();
   const videoEntityUrls = new Map<string, MediaSides>();
+  const pdfEntityUrls = new Map<string, MediaSides>();
   for (const diff of diffs) {
     const resolveMediaValue = () =>
       diff.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
@@ -866,6 +891,11 @@ export async function fromLocal(
       const ipfsValue = resolveMediaValue();
       if (ipfsValue)
         videoEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
+    }
+    if (pdfEntityIds.has(diff.entityId)) {
+      const ipfsValue = resolveMediaValue();
+      if (ipfsValue)
+        pdfEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
     }
   }
   // Fall back to remote entity for media entities with no local changes.
@@ -881,8 +911,14 @@ export async function fromLocal(
       if (url) videoEntityUrls.set(entityId, { before: url, after: url });
     }
   }
+  for (const entityId of pdfEntityIds) {
+    if (!pdfEntityUrls.has(entityId)) {
+      const url = resolveImageUrlFromEntity(remoteEntities.get(entityId));
+      if (url) pdfEntityUrls.set(entityId, { before: url, after: url });
+    }
+  }
 
-  const mediaPropertyEntityIds = new Set([...imageEntityIds, ...videoEntityIds]);
+  const mediaPropertyEntityIds = new Set([...imageEntityIds, ...videoEntityIds, ...pdfEntityIds]);
 
   const filteredDiffs = diffs
     .filter(d => !mediaPropertyEntityIds.has(d.entityId))
@@ -893,8 +929,11 @@ export async function fromLocal(
         const beforeImageUrl = r.before ? (imageEntityUrls.get(r.before.toEntityId)?.before ?? null) : null;
         const afterVideoUrl = r.after ? (videoEntityUrls.get(r.after.toEntityId)?.after ?? null) : null;
         const beforeVideoUrl = r.before ? (videoEntityUrls.get(r.before.toEntityId)?.before ?? null) : null;
+        const afterPdfUrl = r.after ? (pdfEntityUrls.get(r.after.toEntityId)?.after ?? null) : null;
+        const beforePdfUrl = r.before ? (pdfEntityUrls.get(r.before.toEntityId)?.before ?? null) : null;
 
-        if (!afterImageUrl && !beforeImageUrl && !afterVideoUrl && !beforeVideoUrl) return r;
+        if (!afterImageUrl && !beforeImageUrl && !afterVideoUrl && !beforeVideoUrl && !afterPdfUrl && !beforePdfUrl)
+          return r;
 
         return {
           ...r,
@@ -902,6 +941,8 @@ export async function fromLocal(
           ...(r.before && beforeImageUrl ? { before: { ...r.before, imageUrl: beforeImageUrl } } : {}),
           ...(r.after && afterVideoUrl ? { after: { ...r.after, videoUrl: afterVideoUrl } } : {}),
           ...(r.before && beforeVideoUrl ? { before: { ...r.before, videoUrl: beforeVideoUrl } } : {}),
+          ...(r.after && afterPdfUrl ? { after: { ...r.after, pdfUrl: afterPdfUrl } } : {}),
+          ...(r.before && beforePdfUrl ? { before: { ...r.before, pdfUrl: beforePdfUrl } } : {}),
         };
       }),
     }));
