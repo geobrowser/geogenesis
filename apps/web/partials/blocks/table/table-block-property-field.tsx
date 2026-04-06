@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
@@ -32,12 +31,12 @@ export function TableBlockPropertyField(props: {
   source: Source;
   disableLink?: boolean;
   entityName?: string | null;
+  /** List/gallery browse: render relation values as plain text (Figma), not bordered chips. */
+  browsePlainRelations?: boolean;
 }) {
-  const { spaceId, entityId, property, source, disableLink = false, entityName } = props;
+  const { spaceId, entityId, property, source, disableLink = false, entityName, browsePlainRelations = false } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
-  const isNameOrDescriptionProperty =
-    property.id === SystemIds.NAME_PROPERTY || property.id === SystemIds.DESCRIPTION_PROPERTY;
 
   if (isEditing && source.type !== 'RELATIONS') {
     if (isRelation) {
@@ -69,19 +68,14 @@ export function TableBlockPropertyField(props: {
   }
 
   return (
-    <div className={cx('space-y-1', !isRelation && 'w-full min-w-0')}>
-      {!isNameOrDescriptionProperty && property.name ? (
-        <div className="text-metadata text-grey-04">{property.name}</div>
-      ) : null}
-      <div className={cx('flex flex-wrap gap-x-2', !isRelation && 'w-full min-w-0')}>
-        <RenderedProperty
-          entityId={entityId}
-          property={property}
-          spaceId={spaceId}
-          disableLink={disableLink}
-          hideHoverTooltip={!isNameOrDescriptionProperty}
-        />
-      </div>
+    <div className={cx('flex flex-wrap gap-x-2', !isRelation && 'w-full min-w-0')}>
+      <RenderedProperty
+        entityId={entityId}
+        property={property}
+        spaceId={spaceId}
+        disableLink={disableLink}
+        plainBrowseRelations={browsePlainRelations}
+      />
     </div>
   );
 }
@@ -92,11 +86,10 @@ type PropertyProps = {
   spaceId: string;
   className?: string;
   disableLink?: boolean;
-  /** When browse mode shows a static label above the field, hide the hover name tooltip. */
-  hideHoverTooltip?: boolean;
+  plainBrowseRelations?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, hideHoverTooltip = false }: PropertyProps) => {
+const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, plainBrowseRelations = false }: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';
@@ -116,18 +109,16 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, hi
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {!hideHoverTooltip && (
-        <div className="absolute top-0 right-0 -translate-y-full pb-1">
-          <div
-            className={cx(
-              'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
-              isHovered ? 'opacity-100 delay-700' : 'opacity-0'
-            )}
-          >
-            {property.name}
-          </div>
+      <div className="absolute top-0 right-0 -translate-y-full pb-1">
+        <div
+          className={cx(
+            'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
+            isHovered ? 'opacity-100 delay-700' : 'opacity-0'
+          )}
+        >
+          {property.name}
         </div>
-      )}
+      </div>
       {isRelation ? (
         <EditableRelationsGroup
           entityId={entityId}
@@ -135,6 +126,7 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, hi
           property={property}
           disableLink={disableLink}
           isEditing={false}
+          plainBrowse={plainBrowseRelations}
         />
       ) : (
         <EditableValueGroup entityId={entityId} property={property} spaceId={spaceId} isEditing={false} />
@@ -150,6 +142,8 @@ type EditableRelationsGroupProps = {
   disableLink?: boolean;
   entityName?: string | null;
   isEditing: boolean;
+  /** Browse list/gallery: comma-separated names, no chip chrome (Figma). */
+  plainBrowse?: boolean;
 };
 
 function EditableRelationsGroup({
@@ -159,6 +153,7 @@ function EditableRelationsGroup({
   disableLink = false,
   entityName,
   isEditing,
+  plainBrowse = false,
 }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
@@ -208,6 +203,15 @@ function EditableRelationsGroup({
         />
       </div>
     );
+  }
+
+  if (!isEditing && plainBrowse) {
+    const text = relations
+      .map(r => r.toEntity.name ?? r.toEntity.value)
+      .filter((s): s is string => Boolean(s && String(s).length))
+      .join(', ');
+    if (!text) return null;
+    return <p className="text-metadata text-grey-04 wrap-break-word">{text}</p>;
   }
 
   return (

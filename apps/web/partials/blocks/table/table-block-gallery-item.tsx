@@ -22,6 +22,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { orderCellsForBrowseFigma } from './table-block-browse-layout';
 import { TableBlockPropertyField } from './table-block-property-field';
 
 type Props = {
@@ -270,30 +271,32 @@ export function TableBlockGalleryItem({
           <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
         </div>
         {description && propertyDataHasDescription && (
-          <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>
+          <div className="line-clamp-4 text-metadata leading-relaxed text-grey-04 md:line-clamp-3">{description}</div>
         )}
 
-        {otherPropertyData
-          .filter(p => p.slotId !== SystemIds.DESCRIPTION_PROPERTY)
-          .map(p => {
-            const property = properties?.[p.slotId];
+        {orderCellsForBrowseFigma(
+          otherPropertyData.filter(p => p.slotId !== SystemIds.DESCRIPTION_PROPERTY),
+          properties
+        ).map(p => {
+          const property = properties?.[p.slotId];
 
-            if (!property) {
-              return null;
-            }
+          if (!property) {
+            return null;
+          }
 
-            return (
-              <TableBlockPropertyField
-                key={p.slotId}
-                property={property}
-                spaceId={currentSpaceId}
-                entityId={cellId}
-                onChangeEntry={onChangeEntry}
-                source={source}
-                entityName={name}
-              />
-            );
-          })}
+          return (
+            <TableBlockPropertyField
+              key={p.slotId}
+              property={property}
+              spaceId={currentSpaceId}
+              entityId={cellId}
+              onChangeEntry={onChangeEntry}
+              source={source}
+              entityName={name}
+              browsePlainRelations
+            />
+          );
+        })}
       </div>
     </div>
   );
