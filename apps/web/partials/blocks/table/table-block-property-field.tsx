@@ -129,7 +129,13 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, pl
           plainBrowse={plainBrowseRelations}
         />
       ) : (
-        <EditableValueGroup entityId={entityId} property={property} spaceId={spaceId} isEditing={false} />
+        <EditableValueGroup
+          entityId={entityId}
+          property={property}
+          spaceId={spaceId}
+          isEditing={false}
+          browseListTypography={plainBrowseRelations}
+        />
       )}
     </div>
   );
@@ -274,9 +280,17 @@ type EditableValueGroupProps = {
   property: Property;
   spaceId: string;
   isEditing: boolean;
+  /** List/gallery browse: match description (`text-metadata` / tableProperty) instead of table cell scale. */
+  browseListTypography?: boolean;
 };
 
-function EditableValueGroup({ entityId, property, spaceId, isEditing }: EditableValueGroupProps) {
+function EditableValueGroup({
+  entityId,
+  property,
+  spaceId,
+  isEditing,
+  browseListTypography = false,
+}: EditableValueGroupProps) {
   const { storage } = useMutate();
   const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
 
@@ -289,13 +303,16 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
     writeValue(storage, entityId, spaceId, property, newValue, rawValue);
   };
 
+  const compactBrowse = browseListTypography && !isEditing;
+  const valueVariant = compactBrowse ? 'tableProperty' : 'tableCell';
+
   switch (renderableType) {
     case 'INTEGER':
     case 'FLOAT':
     case 'DECIMAL':
       return (
         <NumberField
-          variant="tableCell"
+          variant={valueVariant}
           value={value}
           format={property.format || undefined}
           unitId={rawValue?.options?.unit || property.unit || undefined}
@@ -305,11 +322,15 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
         />
       );
     case 'TEXT':
+      if (compactBrowse) {
+        if (!value) return null;
+        return <p className="text-metadata text-grey-04 wrap-break-word whitespace-pre-wrap">{value}</p>;
+      }
       return <TableStringField variant="tableCell" placeholder="Add value..." value={value} onChange={onWriteValue} />;
     case 'URL':
       return (
         <WebUrlField
-          variant="tableCell"
+          variant={valueVariant}
           isEditing={isEditing}
           spaceId={spaceId}
           value={value}
@@ -326,7 +347,7 @@ function EditableValueGroup({ entityId, property, spaceId, isEditing }: Editable
     case 'TIME':
       return (
         <DateField
-          variant="tableCell"
+          variant={valueVariant}
           key={value || 'empty'}
           isEditing={isEditing}
           value={value}
