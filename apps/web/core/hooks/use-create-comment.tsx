@@ -56,12 +56,7 @@ export function useCreateComment(targetEntityId: string) {
   const [error, setError] = React.useState<Error | null>(null);
 
   const createComment = React.useCallback(
-    async ({
-      text,
-      targetSpaceId,
-      replyToCommentId,
-      replyToCommentSpaceId,
-    }: Omit<CreateCommentParams, 'targetEntityId'>) => {
+    async ({ text, targetSpaceId, ancestorComments }: Omit<CreateCommentParams, 'targetEntityId'>) => {
       if (!smartAccount) {
         setToast(<span>Please connect your wallet to comment</span>);
         return;
@@ -139,12 +134,18 @@ export function useCreateComment(targetEntityId: string) {
         });
 
         // 5. Reply To relation → target entity (the entity being commented on)
+        // Positions are ordered: target entity (lowest) → root ancestor → ... → immediate parent (highest)
+        let lastReplyToPos: string | null = null;
+
+        const targetEntityPosition = Position.generateBetween(lastReplyToPos, null);
+        lastReplyToPos = targetEntityPosition;
+
         relations.push({
           id: IdUtils.generate(),
           entityId: IdUtils.generate(),
           spaceId: personalSpaceId,
           renderableType: 'RELATION',
-          position: Position.generate(),
+          position: targetEntityPosition,
           type: { id: COMMENT_REPLY_TO_ID, name: 'Reply to' },
           fromEntity: { id: commentEntityId, name: commentName },
           toEntity: { id: targetEntityId, name: null, value: targetEntityId },
@@ -153,21 +154,28 @@ export function useCreateComment(targetEntityId: string) {
           hasBeenPublished: false,
         });
 
-        // 6. If replying to another comment, add additional Reply To relation
-        if (replyToCommentId) {
-          relations.push({
-            id: IdUtils.generate(),
-            entityId: IdUtils.generate(),
-            spaceId: personalSpaceId,
-            renderableType: 'RELATION',
-            position: Position.generate(),
-            type: { id: COMMENT_REPLY_TO_ID, name: 'Reply to' },
-            fromEntity: { id: commentEntityId, name: commentName },
-            toEntity: { id: replyToCommentId, name: null, value: replyToCommentId },
-            toSpaceId: replyToCommentSpaceId,
-            isLocal: true,
-            hasBeenPublished: false,
-          });
+        // 6. Reply To relations for each ancestor comment in the thread
+        // ancestorComments is [immediate parent, ..., root] — reverse so positions ascend from root to immediate parent
+        if (ancestorComments) {
+          const rootToLeaf = [...ancestorComments].reverse();
+          for (const ancestor of rootToLeaf) {
+            const pos = Position.generateBetween(lastReplyToPos, null);
+            lastReplyToPos = pos;
+
+            relations.push({
+              id: IdUtils.generate(),
+              entityId: IdUtils.generate(),
+              spaceId: personalSpaceId,
+              renderableType: 'RELATION',
+              position: pos,
+              type: { id: COMMENT_REPLY_TO_ID, name: 'Reply to' },
+              fromEntity: { id: commentEntityId, name: commentName },
+              toEntity: { id: ancestor.id, name: null, value: ancestor.id },
+              toSpaceId: ancestor.spaceId,
+              isLocal: true,
+              hasBeenPublished: false,
+            });
+          }
         }
 
         // Fetch author info for optimistic update
@@ -185,8 +193,8 @@ export function useCreateComment(targetEntityId: string) {
           markdownContent: text,
           targetEntityId,
           targetSpaceId,
-          replyToCommentId: replyToCommentId ?? null,
-          replyToCommentSpaceId: replyToCommentSpaceId ?? null,
+          replyToCommentId: ancestorComments?.[0]?.id ?? null,
+          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
             address: smartAccount.account.address,
