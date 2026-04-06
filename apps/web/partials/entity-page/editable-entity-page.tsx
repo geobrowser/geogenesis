@@ -910,7 +910,7 @@ function RenderedValue({
           <>
             <PageStringField
               key={propertyId}
-              variant="body"
+              variant="tableCell"
               placeholder="Add value..."
               aria-label="text-field"
               value={value}
@@ -987,7 +987,7 @@ function RenderedValue({
             ) : (
               <PageStringField
                 key={propertyId}
-                variant="body"
+                variant="tableCell"
                 placeholder="Add value..."
                 aria-label="text-field"
                 value={value}

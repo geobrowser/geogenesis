@@ -21,7 +21,17 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
+import { isUrlTemplate } from '~/core/utils/url-template';
+
 import { createPropertyRelation, createTypeRelationForNewEntity, onChangeEntryFn, writeValue } from './change-entry';
+import { LIST_GALLERY_BROWSE_BODY_CLASS } from './table-block-browse-layout';
+
+/** Match description tokens in list/gallery browse (overrides tableCell / tableProperty on inner elements). */
+const BROWSE_LIST_VALUE_CLASS =
+  '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] !font-normal !text-grey-04 !text-left';
+
+const BROWSE_LIST_URL_CLASS =
+  '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] !font-normal !text-ctaPrimary hover:!text-ctaHover !text-left break-all';
 
 export function TableBlockPropertyField(props: {
   spaceId: string;
@@ -31,10 +41,10 @@ export function TableBlockPropertyField(props: {
   source: Source;
   disableLink?: boolean;
   entityName?: string | null;
-  /** List/gallery browse: render relation values as plain text (Figma), not bordered chips. */
-  browsePlainRelations?: boolean;
+  /** List/gallery browse: unify value typography with description; relations use chips. */
+  browseListBody?: boolean;
 }) {
-  const { spaceId, entityId, property, source, disableLink = false, entityName, browsePlainRelations = false } = props;
+  const { spaceId, entityId, property, source, disableLink = false, entityName, browseListBody = false } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
 
@@ -74,7 +84,7 @@ export function TableBlockPropertyField(props: {
         property={property}
         spaceId={spaceId}
         disableLink={disableLink}
-        plainBrowseRelations={browsePlainRelations}
+        browseListBody={browseListBody}
       />
     </div>
   );
@@ -86,10 +96,10 @@ type PropertyProps = {
   spaceId: string;
   className?: string;
   disableLink?: boolean;
-  plainBrowseRelations?: boolean;
+  browseListBody?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, plainBrowseRelations = false }: PropertyProps) => {
+const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, browseListBody = false }: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';
@@ -103,8 +113,15 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, pl
     <div
       className={cx(
         'relative',
-        // inline-block shrink-wraps long TEXT inside flex layouts; use full width for values.
-        isRelation ? 'mt-2 inline-block' : 'mt-1 block w-full min-w-0'
+        browseListBody
+          ? // List/gallery browse: parent `space-y-*` / `gap-*` owns vertical rhythm; no extra top margin.
+            isRelation
+            ? 'block w-full'
+            : 'block w-full min-w-0'
+          : // Table / other: small top offset so values sit comfortably in the cell.
+            isRelation
+            ? 'mt-2 inline-block'
+            : 'mt-1 block w-full min-w-0'
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -126,7 +143,6 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, pl
           property={property}
           disableLink={disableLink}
           isEditing={false}
-          plainBrowse={plainBrowseRelations}
         />
       ) : (
         <EditableValueGroup
@@ -134,7 +150,7 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, pl
           property={property}
           spaceId={spaceId}
           isEditing={false}
-          browseListTypography={plainBrowseRelations}
+          browseListTypography={browseListBody}
         />
       )}
     </div>
@@ -148,8 +164,6 @@ type EditableRelationsGroupProps = {
   disableLink?: boolean;
   entityName?: string | null;
   isEditing: boolean;
-  /** Browse list/gallery: comma-separated names, no chip chrome (Figma). */
-  plainBrowse?: boolean;
 };
 
 function EditableRelationsGroup({
@@ -159,7 +173,6 @@ function EditableRelationsGroup({
   disableLink = false,
   entityName,
   isEditing,
-  plainBrowse = false,
 }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
@@ -211,24 +224,15 @@ function EditableRelationsGroup({
     );
   }
 
-  if (!isEditing && plainBrowse) {
-    const text = relations
-      .map(r => r.toEntity.name ?? r.toEntity.value)
-      .filter((s): s is string => Boolean(s && String(s).length))
-      .join(', ');
-    if (!text) return null;
-    return <p className="text-metadata text-grey-04 wrap-break-word">{text}</p>;
-  }
-
   return (
-    <div className="flex flex-wrap items-center gap-x-2">
+    <div className="flex flex-wrap items-center gap-2">
       {relations.map(r => {
         const relationId = r.id;
         const relationName = r.toEntity.name;
         const relationValue = r.toEntity.value;
 
         return (
-          <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
+          <div key={`relation-${relationId}-${relationValue}`}>
             <LinkableRelationChip
               isEditing={isEditing}
               onDelete={() => {
@@ -304,7 +308,25 @@ function EditableValueGroup({
   };
 
   const compactBrowse = browseListTypography && !isEditing;
-  const valueVariant = compactBrowse ? 'tableProperty' : 'tableCell';
+
+  // List/gallery browse: always key off `dataType` for TEXT so Summary/long text never hits `case 'URL'`
+  // or other renderable branches with larger tableCell styles.
+  if (compactBrowse && property.dataType === 'TEXT') {
+    if (!value) return null;
+    if (isUrlTemplate(property.format) || property.renderableTypeStrict === 'URL') {
+      return (
+        <WebUrlField
+          variant="tableCell"
+          isEditing={false}
+          spaceId={spaceId}
+          value={value}
+          format={property.format}
+          className={BROWSE_LIST_URL_CLASS}
+        />
+      );
+    }
+    return <p className={`${LIST_GALLERY_BROWSE_BODY_CLASS} wrap-break-word whitespace-pre-wrap`}>{value}</p>;
+  }
 
   switch (renderableType) {
     case 'INTEGER':
@@ -312,30 +334,28 @@ function EditableValueGroup({
     case 'DECIMAL':
       return (
         <NumberField
-          variant={valueVariant}
+          variant="tableCell"
           value={value}
           format={property.format || undefined}
           unitId={rawValue?.options?.unit || property.unit || undefined}
           isEditing={isEditing}
           dataType={property.dataType}
           onChange={onWriteValue}
+          className={compactBrowse ? BROWSE_LIST_VALUE_CLASS : undefined}
         />
       );
     case 'TEXT':
-      if (compactBrowse) {
-        if (!value) return null;
-        return <p className="text-metadata text-grey-04 wrap-break-word whitespace-pre-wrap">{value}</p>;
-      }
       return <TableStringField variant="tableCell" placeholder="Add value..." value={value} onChange={onWriteValue} />;
     case 'URL':
       return (
         <WebUrlField
-          variant={valueVariant}
+          variant="tableCell"
           isEditing={isEditing}
           spaceId={spaceId}
           value={value}
           format={property.format}
           onBlur={isEditing ? e => onWriteValue(e.currentTarget.value) : undefined}
+          className={compactBrowse ? BROWSE_LIST_URL_CLASS : undefined}
         />
       );
     case 'BOOLEAN': {
@@ -347,13 +367,14 @@ function EditableValueGroup({
     case 'TIME':
       return (
         <DateField
-          variant={valueVariant}
+          variant="tableCell"
           key={value || 'empty'}
           isEditing={isEditing}
           value={value}
           propertyId={property.id}
           dataType={property.dataType}
           onBlur={isEditing ? v => onWriteValue(v.value) : undefined}
+          className={compactBrowse ? BROWSE_LIST_VALUE_CLASS : undefined}
         />
       );
     default:
