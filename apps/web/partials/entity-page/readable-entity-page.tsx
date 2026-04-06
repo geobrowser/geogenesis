@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 
@@ -326,7 +327,9 @@ function PdfRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; rela
   return <DynamicPdfZoom pdfSrc={pdfSrc} isEditing={false} />;
 }
 
-const DynamicPdfZoom = React.lazy(() => import('~/design-system/editable-fields/pdf-preview'));
+const DynamicPdfZoom = dynamic(() => import('~/design-system/editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 function RenderedValue({
   entityId,
