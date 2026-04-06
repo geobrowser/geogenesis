@@ -26,11 +26,11 @@
     "@privy-io/react-auth": "^3.14.1",
     "@privy-io/wagmi": "^4.0.2",
     "permissionless": "^0.3.4",
-    "viem": "^2.46.3",
+    "viem": "^2.47.10",
     "wagmi": "^3.5.0"
   },
   "devDependencies": {
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
