@@ -1,3 +1,3 @@
 [install]
 minimumReleaseAge = 1209600
-minimumReleaseAgeExcludes = ["@geoprotocol/geo-sdk", "react", "react-dom", "next", "@types/react", "@types/react-dom", "typescript", "@types/bun", "@types/node"]
+minimumReleaseAgeExcludes = ["@geoprotocol/geo-sdk", "@next/env", "@next/swc-linux-x64-gnu", "@next/swc-linux-x64-musl", "@types/bun", "@types/node", "@types/react", "@types/react-dom", "@wagmi/connectors", "@wagmi/core", "effect", "jotai", "next", "react", "react-dom", "typescript", "viem", "wagmi"]

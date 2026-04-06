@@ -251,6 +251,7 @@ export function LinkableRelationChip({
             side="top"
             sideOffset={-4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+            onCloseAutoFocus={e => e.preventDefault()}
             onMouseLeave={e => {
               const next = e.relatedTarget as Node | null;
               if (next && triggerRef.current?.contains(next)) {
@@ -488,6 +489,7 @@ export function LinkableMediaChip({
             side="top"
             sideOffset={4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+            onCloseAutoFocus={e => e.preventDefault()}
           >
             {isEditing && (
               <div
