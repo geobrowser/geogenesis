@@ -1,5 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { PDF_TYPE, PDF_URL } from '~/core/constants';
 import type { BlockChange, EntityDiff, RelationChange, SimpleValueType, ValueChange } from '~/core/utils/diff/types';
 
 import type { ApiBlockSnapshot, ApiEntitySnapshotResponse, ApiVersionedRelation, ApiVersionedValue } from '../rest';
@@ -22,17 +23,18 @@ const {
  * Determine block type from a TYPES_PROPERTY relation.
  * Shared logic with `detectBlockType` in diff.ts, but operates on raw API relation shapes.
  */
-function classifyBlockType(typeEntityId: string): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' | null {
+function classifyBlockType(typeEntityId: string): 'textBlock' | 'imageBlock' | 'videoBlock' | 'pdfBlock' | 'dataBlock' | null {
   if (typeEntityId === TEXT_BLOCK) return 'textBlock';
   if (typeEntityId === IMAGE_BLOCK || typeEntityId === IMAGE_TYPE) return 'imageBlock';
   if (typeEntityId === VIDEO_TYPE || typeEntityId === VIDEO_BLOCK) return 'videoBlock';
+  if (typeEntityId === PDF_TYPE) return 'pdfBlock';
   if (typeEntityId === DATA_BLOCK) return 'dataBlock';
   return null;
 }
 
 function getBlockTypeFromRelations(
   relations: readonly ApiVersionedRelation[]
-): 'textBlock' | 'imageBlock' | 'videoBlock' | 'dataBlock' {
+): 'textBlock' | 'imageBlock' | 'videoBlock' | 'pdfBlock' | 'dataBlock' {
   for (const rel of relations) {
     if (rel.typeId === TYPES_PROPERTY) {
       const blockType = classifyBlockType(rel.toEntityId);
@@ -133,6 +135,15 @@ function snapshotBlockToChange(block: ApiBlockSnapshot): BlockChange {
       return {
         id: block.id,
         type: 'videoBlock',
+        before: null,
+        after: url,
+      };
+    }
+    case 'pdfBlock': {
+      const url = block.values.find(v => v.propertyId === PDF_URL)?.text ?? null;
+      return {
+        id: block.id,
+        type: 'pdfBlock',
         before: null,
         after: url,
       };
