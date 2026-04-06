@@ -11,8 +11,10 @@ import type { DataType, Entity, Property, Relation, RenderableEntityType, Value 
 import type {
   BlockChange,
   DataBlockChange,
+  DiffChunk,
   EntityDiff,
   RelationChange,
+  TextBlockChange,
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
@@ -46,11 +48,26 @@ function valueChangeToDataType(vc: ValueChange): DataType {
     t === 'POINT' ||
     t === 'BYTES' ||
     t === 'SCHEDULE' ||
-    t === 'EMBEDDING'
+    t === 'EMBEDDING' ||
+    t === 'RECT' ||
+    t === 'JSON'
   ) {
     return t as DataType;
   }
   return 'TEXT';
+}
+
+function textAfterFromDiffChunks(chunks: DiffChunk[]): string {
+  return chunks.filter(c => !c.removed).map(c => c.value).join('');
+}
+
+function resolvedScalarAfter(vc: ValueChange): string | null {
+  if (vc.after != null) return vc.after;
+  if (vc.type === 'TEXT') {
+    const d = (vc as TextValueChange).diff;
+    if (d?.length) return textAfterFromDiffChunks(d);
+  }
+  return null;
 }
 
 function getEntityFromMap(map: Map<string, Entity>, id: string): Entity | undefined {
@@ -179,7 +196,8 @@ function looksLikeStandaloneMediaUrl(s: string): boolean {
   const t = s.trim();
   if (t.startsWith('ipfs://')) return true;
   if (t.startsWith('http://') || t.startsWith('https://')) {
-    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(t) || /\/ipfs\//i.test(t);
+    if (/\/ipfs\//i.test(t)) return true;
+    return /\.(png|jpe?g|gif|webp|svg|mp4|webm|mov|m4v|ogv)(\?|$)/i.test(t);
   }
   return false;
 }
@@ -208,7 +226,9 @@ function effectiveBlockRenderableAndUrl(block: BlockChange): {
       textMarkdown: null,
     };
   }
-  const content = block.after ?? block.before;
+  const tb = block as TextBlockChange;
+  const content =
+    tb.after ?? tb.before ?? (tb.type === 'textBlock' && tb.diff?.length ? textAfterFromDiffChunks(tb.diff) : null);
   if (content !== null && looksLikeStandaloneMediaUrl(content)) {
     return {
       renderableType: 'IMAGE',
@@ -279,7 +299,8 @@ function materializeValueChanges(
       continue;
     }
 
-    if (vc.after !== null) {
+    const afterScalar = resolvedScalarAfter(vc);
+    if (afterScalar !== null) {
       const id = ID.createValueId({
         entityId,
         propertyId: vc.propertyId,
@@ -290,7 +311,7 @@ function materializeValueChanges(
         entity: { id: entityId, name: entityName ?? remoteEntity?.name ?? null },
         property: prop,
         spaceId: vc.spaceId,
-        value: vc.after,
+        value: afterScalar,
         isLocal: true,
         hasBeenPublished: false,
         isDeleted: false,
@@ -435,25 +456,31 @@ function materializeBlockChanges(
         propertyById,
         outValues
       );
-    } else if ((eff.renderableType === 'IMAGE' || eff.renderableType === 'VIDEO') && eff.imageOrVideoUrl) {
-      materializeValueChanges(
-        blockEntityId,
-        blockDisplayName,
-        [
-          {
-            propertyId: IMAGE_URL_PROPERTY,
-            propertyName: null,
-            spaceId,
-            type: 'TEXT',
-            before: null,
-            after: eff.imageOrVideoUrl,
-            diff: [],
-          } as TextValueChange,
-        ],
-        remoteBlock,
-        propertyById,
-        outValues
-      );
+    } else if (eff.renderableType === 'IMAGE' || eff.renderableType === 'VIDEO') {
+      const remoteMedia = remoteBlock?.values.find(v => ID.equals(v.property.id, IMAGE_URL_PROPERTY))?.value;
+      const mediaUrl =
+        (eff.imageOrVideoUrl && eff.imageOrVideoUrl !== '' ? eff.imageOrVideoUrl : null) ??
+        (typeof remoteMedia === 'string' && remoteMedia !== '' ? remoteMedia : null);
+      if (mediaUrl) {
+        materializeValueChanges(
+          blockEntityId,
+          blockDisplayName,
+          [
+            {
+              propertyId: IMAGE_URL_PROPERTY,
+              propertyName: null,
+              spaceId,
+              type: 'TEXT',
+              before: null,
+              after: mediaUrl,
+              diff: [],
+            } as TextValueChange,
+          ],
+          remoteBlock,
+          propertyById,
+          outValues
+        );
+      }
     }
 
     const remoteBlocksRel = remoteParent?.relations.find(
