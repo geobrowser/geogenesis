@@ -124,7 +124,7 @@
     "@types/react-input-autosize": "^2.2.4",
     "@vercel/config": "^0.0.41",
     "@vitest/ui": "^4.1.1",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "eslint-config-next": "^16.2.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.0.1",
