@@ -581,15 +581,17 @@ export function formatGovernanceOutcomeDate(geoTimeSeconds: number, nowMs: numbe
   return formatInTimeZone(date, 'UTC', 'MMM d, yyyy');
 }
 
+/** Time of day (UTC) for governance resolution, e.g. "2:30pm". */
+export function formatGovernanceOutcomeTime(geoTimeSeconds: number): string {
+  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), 'UTC', 'h:mmaaa');
+}
+
 /**
- * Date and time (UTC) for resolution display next to the author.
- * Same calendar year as `now`: "Apr 7 · 2:30pm". Other years: "Dec 31, 2025 · 11:59pm".
+ * Single string date + time (UTC). Prefer separate `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime`
+ * in flex layouts so middot spacing matches between name, date, and time.
  */
 export function formatGovernanceOutcomeDateTime(geoTimeSeconds: number, nowMs: number = Date.now()): string {
-  const date = GeoDate.fromGeoTime(geoTimeSeconds);
-  const datePart = formatGovernanceOutcomeDate(geoTimeSeconds, nowMs);
-  const timePart = formatInTimeZone(date, 'UTC', 'h:mmaaa');
-  return `${datePart} · ${timePart}`;
+  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs)} · ${formatGovernanceOutcomeTime(geoTimeSeconds)}`;
 }
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;

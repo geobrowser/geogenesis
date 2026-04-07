@@ -25,7 +25,11 @@ import {
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
-import { formatGovernanceOutcomeDateTime, getProposalName } from '~/core/utils/utils';
+import {
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeTime,
+  getProposalName,
+} from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -129,16 +133,25 @@ export async function GovernanceProposalsList({
                     <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
-                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
+                  <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
                     <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
                   </div>
-                  <p>{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                  <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
                   {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
                     <>
-                      <span aria-hidden="true">·</span>
-                      <time dateTime={new Date(p.endTime * 1000).toISOString()}>
-                        {formatGovernanceOutcomeDateTime(p.endTime)}
+                      <span aria-hidden className="shrink-0 select-none">
+                        ·
+                      </span>
+                      <span className="shrink-0">{formatGovernanceOutcomeDate(p.endTime)}</span>
+                      <span aria-hidden className="shrink-0 select-none">
+                        ·
+                      </span>
+                      <time
+                        className="shrink-0 tabular-nums"
+                        dateTime={new Date(p.endTime * 1000).toISOString()}
+                      >
+                        {formatGovernanceOutcomeTime(p.endTime)}
                       </time>
                     </>
                   )}

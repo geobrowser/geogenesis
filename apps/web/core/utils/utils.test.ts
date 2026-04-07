@@ -13,6 +13,7 @@ import {
   PagesPaginationPlaceholder,
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeDateTime,
+  formatGovernanceOutcomeTime,
   formatShortAddress,
   getImageHash,
   getImagePath,
@@ -322,6 +323,13 @@ describe('formatGovernanceOutcomeDate', () => {
   it('includes the year when the date is in a different calendar year than now (UTC)', () => {
     const geoSeconds = Math.floor(Date.UTC(2025, 11, 31) / 1000);
     expect(formatGovernanceOutcomeDate(geoSeconds, now2026)).toBe('Dec 31, 2025');
+  });
+});
+
+describe('formatGovernanceOutcomeTime', () => {
+  it('formats UTC time of day', () => {
+    const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
+    expect(formatGovernanceOutcomeTime(geoSeconds)).toBe('2:21pm');
   });
 });
 
