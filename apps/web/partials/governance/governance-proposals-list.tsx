@@ -291,7 +291,7 @@ async function fetchGovernanceProposals({
   connectedAddress: string | undefined;
   proposalType?: GovernanceProposalType;
 }): Promise<FetchGovernanceProposalsResult> {
-  const effectiveType = proposalType ?? 'proposals';
+  const effectiveType = proposalType ?? 'all';
 
   const [executableProposals, activeProposals, completedProposals] = await Promise.all([
     fetchProposalsByStatus({
