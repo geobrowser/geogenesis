@@ -182,7 +182,7 @@ function NameCell({
           entityId={row.entityId}
           spaceId={row.spaceId}
           href={href}
-          className="border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline"
+          className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell text-ctaPrimary hover:text-ctaHover hover:underline"
           onClick={handleOpen}
         >
           {name || row.entityId}
@@ -195,7 +195,7 @@ function NameCell({
     <Link
       entityId={row.entityId}
       href={href}
-      className="border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell wrap-break-word text-ctaPrimary hover:text-ctaHover hover:underline"
+      className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell text-ctaPrimary hover:text-ctaHover hover:underline"
       onClick={handleOpen}
     >
       {name || row.entityId}
@@ -820,8 +820,9 @@ export function PowerToolsTable({
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;
                   const isDeleteableNameCell = !row.placeholder && isEditing && isNameCell && onDeleteRow;
                   return (
-                    <div key={`${rowId}-${property.id}`} className="min-w-0 border-r border-grey-02 px-4 py-2">
-                      <div className="flex w-full items-start gap-2 overflow-visible">
+                    <div key={`${rowId}-${property.id}`} className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2">
+                      <div className="flex min-w-0 w-full items-start gap-2">
+                        <div className="min-w-0 flex-1 overflow-hidden">
                         <PowerToolsCell
                           row={row}
                           property={property}
@@ -835,6 +836,7 @@ export function PowerToolsTable({
                           imageUploadingFor={imageUploadingFor}
                           bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
                         />
+                        </div>
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button
                             type="button"

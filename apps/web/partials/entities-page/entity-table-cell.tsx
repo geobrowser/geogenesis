@@ -61,7 +61,7 @@ export const EntityTableCell = ({
           <Link
             entityId={entityId}
             href={href}
-            className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+            className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
           >
             {name || entityId}
           </Link>
@@ -82,7 +82,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+              className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -93,7 +93,7 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       {isRelation ? (
         <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
       ) : (

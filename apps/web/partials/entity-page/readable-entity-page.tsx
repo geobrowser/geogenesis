@@ -123,13 +123,13 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
           return null;
         }
         return (
-          <div key={`${entityId}-${propertyId}-${index}`} className="wrap-break-word">
+          <div key={`${entityId}-${propertyId}-${index}`} className="min-w-0 max-w-full break-words">
             <Link href={NavUtils.toEntity(spaceId, propertyId)}>
               <Text as="p" variant="bodySemibold">
                 {property.name || propertyId}
               </Text>
             </Link>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
               <RenderedValue
                 propertyId={propertyId}
                 entityId={entityId}
@@ -195,7 +195,7 @@ export function RelationsGroup({
 
   return (
     <>
-      <div key={`${propertyId}-${property.name}`} className="wrap-break-word">
+      <div key={`${propertyId}-${property.name}`} className="min-w-0 max-w-full break-words">
         {propertyId !== SystemIds.TYPES_PROPERTY && (
           <Link href={NavUtils.toEntity(spaceId, propertyId)}>
             <Text as="p" variant="bodySemibold">
@@ -204,7 +204,7 @@ export function RelationsGroup({
           </Link>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
           {relations.map(r => {
             const linkedEntityId = r.toEntity.id;
             const linkedSpaceId = r.toSpaceId ?? r.spaceId;
@@ -355,7 +355,7 @@ function RenderedValue({
           format={format}
         />
       ) : (
-        <Text key={`string-${propertyId}-${value}`} as="p">
+        <Text key={`string-${propertyId}-${value}`} as="p" className="min-w-0 max-w-full break-words">
           {value}
         </Text>
       );
