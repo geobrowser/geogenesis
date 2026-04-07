@@ -107,7 +107,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
               return (
-                <div key={`${id}-${propertyId}`} className="w-full wrap-break-word">
+                <div key={`${id}-${propertyId}`} className="w-full min-w-0 max-w-full break-words">
                   <RenderedProperty spaceId={spaceId} property={property} />
 
                   {isRelation || isVideo ? (

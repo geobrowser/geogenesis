@@ -166,7 +166,7 @@ export function EditableEntityTableCell({
   }
 
   return (
-    <div className="flex w-full flex-wrap gap-2">
+    <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
       <ValueGroup entityId={entityId} property={property} spaceId={spaceId} />
     </div>
   );
@@ -257,7 +257,7 @@ function RelationsGroup({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       {dedupedRelations.map(r => {
         return (
           <div key={`relation-${r.id}-${r.toEntity.value}`}>
