@@ -13,21 +13,8 @@ import {
   validateSpaceId,
 } from '../rest';
 import { AbortError } from './errors';
-import { graphql } from './graphql';
-import {
-  AVATAR_PROPERTY_ID,
-  COVER_PROPERTY_ID,
-  IMAGE_URL_PROPERTY_ID,
-  type SpaceImageRelationNode,
-  resolveSpaceImage,
-} from './space-image';
-import {
-  MAX_TOPIC_USAGE_AVATARS,
-  PLACEHOLDER_TOPIC_NAME,
-  type TopicUsage,
-  type TopicUsageSpaceNode,
-  mergeTopicUsageSpaces,
-} from './topic-space-usage';
+import { fetchTopicMetadata } from './fetch-topic-metadata';
+import { PLACEHOLDER_TOPIC_NAME, type TopicUsage } from './topic-space-usage';
 
 export interface PendingSubtopicProposal extends TopicUsage {
   spaceId: string;
@@ -40,22 +27,7 @@ export interface PendingSubtopicProposal extends TopicUsage {
   noCount: number;
   abstainCount: number;
   endTime: number;
-  status: 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED';
-}
-
-interface TopicMetadataNode {
-  id: string;
-  name: string | null;
-  description: string | null;
-  relationsList: SpaceImageRelationNode[];
-  spacesByTopicIdConnection: {
-    totalCount: number;
-    nodes: TopicUsageSpaceNode[];
-  };
-}
-
-interface TopicMetadataResult {
-  entities: TopicMetadataNode[];
+  status: 'PROPOSED' | 'EXECUTABLE' | 'ACCEPTED' | 'REJECTED';
 }
 
 const SUBTOPIC_ACTION_TYPES = ['SubspaceTopicDeclared', 'SubspaceTopicRemoved'];
@@ -69,94 +41,6 @@ function actionTypeToDirection(actionType: string): 'add' | 'remove' | null {
     default:
       return null;
   }
-}
-
-const topicMetadataQuery = (topicIds: string[]) => `
-  {
-    entities(filter: { id: { in: [${topicIds.map(id => JSON.stringify(id)).join(', ')}] } }) {
-      id
-      name
-      description
-      relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-        typeId
-        toEntity {
-          valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-            propertyId
-            text
-          }
-        }
-      }
-      spacesByTopicIdConnection(first: ${MAX_TOPIC_USAGE_AVATARS}) {
-        totalCount
-        nodes {
-          id
-          page {
-            name
-            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-              typeId
-              toEntity {
-                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-                  propertyId
-                  text
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-async function fetchTopicMetadata(topicIds: string[]) {
-  if (topicIds.length === 0) {
-    return new Map<
-      string,
-      {
-        name: string | null;
-        description: string | null;
-        image: string;
-        spaces: TopicUsage['spaces'];
-        spacesCount: number;
-      }
-    >();
-  }
-
-  const result = await Effect.runPromise(
-    Effect.either(
-      graphql<TopicMetadataResult>({
-        query: topicMetadataQuery(topicIds),
-        endpoint: Environment.getConfig().api,
-      })
-    )
-  );
-
-  if (Either.isLeft(result)) {
-    console.warn('Failed to resolve topic metadata for pending subtopic proposals', result.left);
-    return new Map<
-      string,
-      {
-        name: string | null;
-        description: string | null;
-        image: string;
-        spaces: TopicUsage['spaces'];
-        spacesCount: number;
-      }
-    >();
-  }
-
-  return new Map(
-    result.right.entities.map(entity => [
-      entity.id,
-      {
-        name: entity.name,
-        description: entity.description,
-        image: resolveSpaceImage(entity.relationsList),
-        spaces: mergeTopicUsageSpaces(entity.spacesByTopicIdConnection.nodes),
-        spacesCount: entity.spacesByTopicIdConnection.totalCount,
-      },
-    ])
-  );
 }
 
 export async function fetchPendingSubtopicProposals(spaceId: string): Promise<PendingSubtopicProposal[]> {
@@ -249,6 +133,6 @@ function mapProposalToSubtopicProposal(proposal: ApiProposalListItem): PendingSu
     noCount: proposal.votes.no,
     abstainCount: proposal.votes.abstain,
     endTime: proposal.timing.endTime,
-    status: 'PROPOSED',
+    status: proposal.status,
   };
 }

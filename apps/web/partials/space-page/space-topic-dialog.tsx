@@ -420,6 +420,9 @@ function CurrentTopicSection({
   isError: boolean;
   error: unknown;
 }) {
+  // TODO: Remove topic is not yet supported by the backend.
+  // Add onRemove/isRemoving/removeLabel/removePendingLabel props back
+  // once the backend supports TOPIC_REMOVED.
   return (
     <div className="flex flex-col gap-2 pb-4">
       <Text variant="metadata" as="p">

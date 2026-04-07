@@ -7,11 +7,13 @@ import { usePathname } from 'next/navigation';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -80,6 +82,7 @@ export function EditableSpaceHeading({
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { isEditor, isMember } = useAccessControl(spaceId);
+  const { space } = useSpace(spaceId);
 
   const path = usePathname();
   const isSpacePage = path === NavUtils.toSpace(spaceId);
@@ -230,6 +233,11 @@ export function EditableSpaceHeading({
                   {(isEditor || isMember) && (
                     <MenuItem href={NavUtils.toImport(spaceId)}>
                       <p>Import data</p>
+                    </MenuItem>
+                  )}
+                  {isEditing && Spaces.hasExternalTopic(space) && (
+                    <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
+                      <p>Edit space config</p>
                     </MenuItem>
                   )}
                   {isEditing && (
