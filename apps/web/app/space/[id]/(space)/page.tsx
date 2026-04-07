@@ -116,7 +116,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
           <SubtopicGalleryContainer spaceId={spaceId} />
         </React.Suspense>
         <React.Suspense fallback={null}>
-          <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+          <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
         </React.Suspense>
         <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
         <Spacer height={40} />
