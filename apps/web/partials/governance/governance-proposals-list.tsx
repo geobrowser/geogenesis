@@ -25,7 +25,7 @@ import {
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
-import { getProposalName } from '~/core/utils/utils';
+import { formatGovernanceOutcomeDateTime, getProposalName } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -134,6 +134,14 @@ export async function GovernanceProposalsList({
                     <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
                   </div>
                   <p>{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                  {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <time dateTime={new Date(p.endTime * 1000).toISOString()}>
+                        {formatGovernanceOutcomeDateTime(p.endTime)}
+                      </time>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between">

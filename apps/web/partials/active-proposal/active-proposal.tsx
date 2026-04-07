@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
+  formatGovernanceOutcomeDateTime,
   getIsProposalEnded,
   getNoVotePercentage,
   getProposalName,
@@ -102,6 +103,18 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                       </div>
                       <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                     </Link>
+                    {isProposalEnded &&
+                      (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
+                        <>
+                          <span className="text-grey-04">·</span>
+                          <time
+                            className="text-grey-04"
+                            dateTime={new Date(proposal.endTime * 1000).toISOString()}
+                          >
+                            {formatGovernanceOutcomeDateTime(proposal.endTime)}
+                          </time>
+                        </>
+                      )}
                     <span className="text-grey-04">·</span>
                     <span className="text-text">
                       {isProposalEnded
