@@ -25,6 +25,7 @@
   "dependencies": {
     "@privy-io/react-auth": "^3.14.1",
     "@privy-io/wagmi": "^4.0.2",
+    "@rhinestone/module-sdk": "^0.4.0",
     "permissionless": "^0.3.4",
     "viem": "^2.47.10",
     "wagmi": "^3.5.0"
