@@ -548,11 +548,50 @@ type TextBlockCellProps = {
   side: 'before' | 'after';
 };
 
+function isStandaloneRenderableImageUrl(s: string): boolean {
+  const t = s.trim();
+  if (t.startsWith('ipfs://')) return true;
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(t) || /\/ipfs\//i.test(t);
+  }
+  return false;
+}
+
+function isStandaloneRenderableVideoUrl(s: string): boolean {
+  const t = s.trim();
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(t);
+  }
+  if (t.startsWith('ipfs://')) {
+    return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(t);
+  }
+  return false;
+}
+
 const TextBlockCell = ({ block, side }: TextBlockCellProps) => {
   const value = side === 'before' ? block.before : block.after;
 
   if (value === null) {
     return <div />;
+  }
+
+  const trimmed = value.trim();
+  if (isStandaloneRenderableImageUrl(trimmed)) {
+    const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+    return (
+      <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
+        <NativeGeoImage value={trimmed} alt="" className="h-full w-full object-cover" />
+      </div>
+    );
+  }
+  if (isStandaloneRenderableVideoUrl(trimmed)) {
+    const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+    const videoSrc = getVideoPath(trimmed);
+    return (
+      <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
+        <video src={videoSrc} controls className="h-full w-full object-cover" />
+      </div>
+    );
   }
 
   const diff = 'diff' in block ? block.diff : undefined;
@@ -845,13 +884,23 @@ const VIEW_NAMES: Record<string, string> = {
   [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
 };
 
+function isUuidForEntityBatch(id: string): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const h = id.replace(/-/g, '').toLowerCase();
+  return h.length === 32 && /^[0-9a-f]+$/.test(h);
+}
+
+function maybeAddEntityBatchId(ids: Set<string>, raw: unknown): void {
+  if (typeof raw === 'string' && isUuidForEntityBatch(raw)) ids.add(raw);
+}
+
 function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[] {
   const ids = new Set<string>();
 
   const extractFromSortJson = (raw: string) => {
     try {
       const parsed = JSON.parse(raw);
-      if (parsed.sort_by) ids.add(parsed.sort_by);
+      maybeAddEntityBatchId(ids, parsed.sort_by);
     } catch {
       // ignore
     }
@@ -862,28 +911,28 @@ function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[]
       const parsed = JSON.parse(raw);
       if (parsed.filter) {
         for (const [key, filterValue] of Object.entries(parsed.filter as Record<string, unknown>)) {
-          if (key !== '_relation') ids.add(key);
+          if (key !== '_relation') maybeAddEntityBatchId(ids, key);
           if (filterValue && typeof filterValue === 'object') {
             const fv = filterValue as Record<string, unknown>;
-            if (typeof fv.is === 'string') ids.add(fv.is);
+            maybeAddEntityBatchId(ids, fv.is);
             if (Array.isArray(fv.in))
               fv.in.forEach((v: unknown) => {
-                if (typeof v === 'string') ids.add(v);
+                maybeAddEntityBatchId(ids, v);
               });
             if (
               fv.fromEntity &&
               typeof fv.fromEntity === 'object' &&
               typeof (fv.fromEntity as Record<string, unknown>).is === 'string'
             )
-              ids.add((fv.fromEntity as Record<string, unknown>).is as string);
+              maybeAddEntityBatchId(ids, (fv.fromEntity as Record<string, unknown>).is);
             if (fv.type && typeof fv.type === 'object' && typeof (fv.type as Record<string, unknown>).is === 'string')
-              ids.add((fv.type as Record<string, unknown>).is as string);
+              maybeAddEntityBatchId(ids, (fv.type as Record<string, unknown>).is);
           }
         }
       }
       if (parsed.spaceId?.in && Array.isArray(parsed.spaceId.in)) {
         parsed.spaceId.in.forEach((v: unknown) => {
-          if (typeof v === 'string') ids.add(v);
+          maybeAddEntityBatchId(ids, v);
         });
       }
     } catch {
@@ -902,14 +951,15 @@ function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[]
 
 function useConfigNameMap(configValues: ValueChange[]) {
   const entityIds = React.useMemo(() => extractEntityIdsFromConfigValues(configValues), [configValues]);
-  const key = entityIds.sort().join(',');
+  const validIds = React.useMemo(() => entityIds.filter(isUuidForEntityBatch), [entityIds]);
+  const key = validIds.sort().join(',');
 
   const { data: nameMap = new Map<string, string>() } = useQuery({
     queryKey: ['config-entity-names', key],
-    enabled: entityIds.length > 0,
+    enabled: validIds.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const entities = await Effect.runPromise(getBatchEntities(entityIds));
+      const entities = await Effect.runPromise(getBatchEntities(validIds));
       const map = new Map<string, string>();
       for (const e of entities) {
         if (e.name) map.set(e.id, e.name);
