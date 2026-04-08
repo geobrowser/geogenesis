@@ -30,7 +30,6 @@ const nextConfig: NextConfig = {
       'permissionless',
       'date-fns',
       'date-fns-tz',
-      'graphql',
       'graphql-request',
 
       // Editor
