@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -27,7 +27,7 @@ export const DataBlockSourceMenu = ({
   onBack = () => null,
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
-  const { entityId } = useDataBlock();
+  const { entityId } = useDataBlockInstance();
   const { filterState, setFilterState } = useFilters();
   const { setSource, source } = useSource({ filterState, setFilterState });
   const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
