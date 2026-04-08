@@ -8,7 +8,6 @@ import { Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import Underline from '@tiptap/extension-underline';
 
 import { CodeBlockNode } from './code-block-node';
-import { ConfiguredCommandExtension } from './command-extension';
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ImageNode } from './image-node';
