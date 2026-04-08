@@ -7,6 +7,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 
+import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
@@ -107,7 +108,7 @@ type SpacesMenuProps = {
 };
 
 const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
-  const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
+  const { query, setQuery, spaces: queriedSpaces, isLoading } = useSpacesQuery();
   const { filterState, setFilterState } = useFilters();
   const { setSource, source } = useSource({ filterState, setFilterState });
 
@@ -130,6 +131,11 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
         <Input withSearchIcon placeholder="Search..." value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
+        {isLoading && (
+          <div className="flex h-12 items-center justify-center">
+            <Dots />
+          </div>
+        )}
         {queriedSpaces
           .filter(space => space.name?.trim())
           .map(space => {
