@@ -70,9 +70,60 @@ interface TableBlockFilterPromptProps {
   filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
+  onFilterPromptOpenChange?: (open: boolean) => void;
 }
 
 const MAX_SCOPED_SUGGESTIONS = 100;
+
+function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
+  const [focused, setFocused] = React.useState(false);
+  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearBlurTimeout = React.useCallback(() => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const onFocus = React.useCallback(() => {
+    clearBlurTimeout();
+    setFocused(true);
+  }, [clearBlurTimeout]);
+
+  const onBlur = React.useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      const next = e.relatedTarget;
+      if (next instanceof Node && filterInteractionRootRef?.current?.contains(next)) {
+        return;
+      }
+      clearBlurTimeout();
+      blurTimeoutRef.current = setTimeout(() => {
+        blurTimeoutRef.current = null;
+        const ae = document.activeElement;
+        if (ae instanceof Node && filterInteractionRootRef?.current?.contains(ae)) {
+          return;
+        }
+        if (ae?.closest?.('[data-radix-select-content]')) {
+          return;
+        }
+        setFocused(false);
+      }, 120);
+    },
+    [clearBlurTimeout, filterInteractionRootRef]
+  );
+
+  return { focused, setFocused, onFocus, onBlur, clearBlurTimeout };
+}
 
 function useRelationColumnTargetTypeIds(
   propertyId: string | undefined,
@@ -1004,7 +1055,15 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt(
-    { trigger, onCreate, options, filterSuggestionRows, filterSuggestionEntityIds, filterSuggestionSpaceId },
+    {
+      trigger,
+      onCreate,
+      options,
+      filterSuggestionRows,
+      filterSuggestionEntityIds,
+      filterSuggestionSpaceId,
+      onFilterPromptOpenChange,
+    },
     ref
   ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
@@ -1032,6 +1091,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const [relationType, setRelationType] = React.useState<Filter | null>(
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
+
+    React.useEffect(() => {
+      onFilterPromptOpenChange?.(state.open);
+    }, [state.open, onFilterPromptOpenChange]);
 
     const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
       if (queryMode === 'RELATIONS') {
@@ -1219,6 +1282,8 @@ function DynamicFilters({
     [state, options]
   );
 
+  const filterInteractionRootRef = React.useRef<HTMLDivElement>(null);
+
   return (
     <div className="flex w-full flex-col gap-3 px-2">
       {pendingFilterChips.length > 0 && (
@@ -1256,7 +1321,7 @@ function DynamicFilters({
           </div>
         </div>
       )}
-      <div className="flex items-start gap-3">
+      <div ref={filterInteractionRootRef} className="flex items-start gap-3">
         <div className="flex flex-1">
           <Select
             options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
@@ -1268,6 +1333,7 @@ function DynamicFilters({
         <div className="relative flex flex-1">
           {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
+              filterInteractionRootRef={filterInteractionRootRef}
               selectedValue=""
               scopedSuggestions={scoped.spaceSuggestions}
               selectedSpaceIds={selectedSpaceIds}
@@ -1276,9 +1342,10 @@ function DynamicFilters({
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
+              filterInteractionRootRef={filterInteractionRootRef}
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
-              restrictSearchToTypes
+              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
               suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
@@ -1289,6 +1356,7 @@ function DynamicFilters({
             />
           ) : (
             <TableBlockTextFilterInput
+              filterInteractionRootRef={filterInteractionRootRef}
               value={getFilterValue(state.value)}
               onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
               stringSuggestions={scoped.stringSuggestions}
@@ -1372,6 +1440,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 }
 
 interface TableBlockEntityFilterInputProps {
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
@@ -1386,6 +1455,7 @@ interface TableBlockEntityFilterInputProps {
 }
 
 function TableBlockEntityFilterInput({
+  filterInteractionRootRef,
   onSelect,
   selectedValue,
   filterByTypes,
@@ -1408,24 +1478,8 @@ function TableBlockEntityFilterInput({
         }
       : undefined
   );
-  const [focused, setFocused] = React.useState(false);
-  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearBlurTimeout = () => {
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current);
-      blurTimeoutRef.current = null;
-    }
-  };
-
-  const onFocus = () => {
-    clearBlurTimeout();
-    setFocused(true);
-  };
-
-  const onBlur = () => {
-    blurTimeoutRef.current = setTimeout(() => setFocused(false), 120);
-  };
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
 
   const filteredScoped = React.useMemo(() => {
     if (!scopedSuggestions?.length) return [];
@@ -1640,6 +1694,7 @@ function TableBlockEntityFilterInput({
 }
 
 interface TableBlockSpaceFilterInputProps {
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   scopedSuggestions?: { id: string; name: string | null; image: string | null }[];
@@ -1649,6 +1704,7 @@ interface TableBlockSpaceFilterInputProps {
 }
 
 function TableBlockSpaceFilterInput({
+  filterInteractionRootRef,
   onSelect,
   selectedValue,
   scopedSuggestions,
@@ -1657,15 +1713,8 @@ function TableBlockSpaceFilterInput({
   onToggleSpace,
 }: TableBlockSpaceFilterInputProps) {
   const { query, setQuery, spaces: results } = useSpacesQuery();
-  const [focused, setFocused] = React.useState(false);
-  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearBlurTimeout = () => {
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current);
-      blurTimeoutRef.current = null;
-    }
-  };
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
 
   const scopedWhenEmpty = React.useMemo(() => {
     if (!scopedSuggestions?.length) return [];
@@ -1762,13 +1811,8 @@ function TableBlockSpaceFilterInput({
         placeholder={multi ? 'Search…' : undefined}
         value={inputDisplay}
         onChange={e => setQuery(e.target.value)}
-        onFocus={() => {
-          clearBlurTimeout();
-          setFocused(true);
-        }}
-        onBlur={() => {
-          blurTimeoutRef.current = setTimeout(() => setFocused(false), 120);
-        }}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
       {showScopedOnlyPanel && (
         <div
@@ -1858,6 +1902,7 @@ function TableBlockSpaceFilterInput({
 }
 
 interface TableBlockTextFilterInputProps {
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   value: string;
   onChange: (value: string) => void;
   stringSuggestions: string[];
@@ -1866,21 +1911,15 @@ interface TableBlockTextFilterInputProps {
 }
 
 function TableBlockTextFilterInput({
+  filterInteractionRootRef,
   value,
   onChange,
   stringSuggestions,
   selectedStrings,
   onToggleString,
 }: TableBlockTextFilterInputProps) {
-  const [focused, setFocused] = React.useState(false);
-  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearBlurTimeout = () => {
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current);
-      blurTimeoutRef.current = null;
-    }
-  };
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
 
   const filtered = React.useMemo(() => {
     if (!stringSuggestions.length) return [];
@@ -1900,13 +1939,8 @@ function TableBlockTextFilterInput({
       <Input
         value={value}
         onChange={e => onChange(e.target.value)}
-        onFocus={() => {
-          clearBlurTimeout();
-          setFocused(true);
-        }}
-        onBlur={() => {
-          blurTimeoutRef.current = setTimeout(() => setFocused(false), 120);
-        }}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
       {showDropdown && (
         <div

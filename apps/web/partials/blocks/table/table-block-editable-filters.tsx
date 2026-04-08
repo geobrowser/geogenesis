@@ -28,11 +28,19 @@ interface TableBlockEditableFiltersProps {
   /** All row entity IDs matching active table filters (COLLECTION blocks). Powers suggestions across the full filtered set, not only the current page. */
   filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
+  onFilterPromptOpenChange?: (open: boolean) => void;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
   function TableBlockEditableFilters(
-    { filterState, setFilterState, filterSuggestionRows, filterSuggestionEntityIds, filterSuggestionSpaceId },
+    {
+      filterState,
+      setFilterState,
+      filterSuggestionRows,
+      filterSuggestionEntityIds,
+      filterSuggestionSpaceId,
+      onFilterPromptOpenChange,
+    },
     ref
   ) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
@@ -112,6 +120,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         filterSuggestionEntityIds={filterSuggestionEntityIds}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
         onCreate={onCreateFilter}
+        onFilterPromptOpenChange={onFilterPromptOpenChange}
         trigger={
           <SmallButton icon={<CreateSmall />} variant="secondary">
             Filter

@@ -47,11 +47,13 @@ interface UseDataBlockOptions {
   filterState?: Filter[];
   filterMode?: FilterMode;
   canEdit?: boolean;
+  fetchFilterSuggestions?: boolean;
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
+  const fetchFilterSuggestions = options?.fetchFilterSuggestions ?? false;
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
     spaceId: spaceId,
@@ -142,7 +144,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   useQueryEntities({
     where: { id: { in: collectionSuggestionIdSlice ?? [] } },
-    enabled: Boolean(collectionSuggestionIdSlice?.length),
+    enabled: fetchFilterSuggestions && Boolean(collectionSuggestionIdSlice?.length),
     first: collectionSuggestionIdSlice?.length ?? 0,
     skip: 0,
     placeholderData: keepPreviousData,
@@ -154,7 +156,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isFetched: isQueryBlockSuggestionEntitiesFetched,
   } = useQueryEntities({
     where,
-    enabled: source.type === 'SPACES' || source.type === 'GEO',
+    enabled: fetchFilterSuggestions && (source.type === 'SPACES' || source.type === 'GEO'),
     first: FILTER_SUGGESTION_ENTITY_CAP,
     skip: 0,
     placeholderData: keepPreviousData,
