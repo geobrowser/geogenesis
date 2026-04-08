@@ -19,9 +19,7 @@ function getSubtopicCardImage(subtopic: TopicUsage) {
 }
 
 export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
-  const subspaces = subtopics.filter(s => s.spacesCount > 0);
-
-  if (subspaces.length === 0) {
+  if (subtopics.length === 0) {
     return null;
   }
 
@@ -30,7 +28,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
       <h4 className="text-mediumTitle font-medium">Subspaces</h4>
       <Spacer height={8} />
       <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
-        {subspaces.map(subtopic => {
+        {subtopics.map(subtopic => {
           const topSpaceId = Spaces.getTopRankedSpaceId(subtopic.spaces.map(s => s.id));
           const href = topSpaceId ? NavUtils.toSpace(topSpaceId) : NavUtils.toEntity(spaceId, subtopic.id);
 
