@@ -160,7 +160,6 @@ function DefaultPropertySelector() {
     queryFn: async () => {
       const typeFilters = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }));
       const spaceIds = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
-      // Include the current space so type properties defined in this space are available
       if (!spaceIds.includes(spaceId)) spaceIds.push(spaceId);
       const schema = await getSchemaFromTypeIds(typeFilters, spaceIds);
 

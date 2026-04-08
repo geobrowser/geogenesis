@@ -60,7 +60,6 @@ export function useFilters(canEdit?: boolean) {
     queryFn: async () => {
       const typesInFilter = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value);
       const spacesInFilter = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
-      // Include the current space so type properties defined in this space are available
       if (!spacesInFilter.includes(spaceId)) spacesInFilter.push(spaceId);
       return await getSchemaFromTypeIds(
         typesInFilter.map(id => ({ id })),

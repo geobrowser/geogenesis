@@ -194,7 +194,6 @@ export async function getSchemaFromTypeIds(
 
   const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
 
-  // Collect PROPERTIES from the type's native space
   const nativePropertyIds = typeEntities
     .flatMap(entity => {
       const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
@@ -204,24 +203,26 @@ export async function getSchemaFromTypeIds(
     })
     .map(r => r.toEntity.id);
 
-  // Also collect properties defined in the filter-specified spaces.
-  // A type may have additional properties in a specific space (e.g.,
-  // the "Network" type has extra properties in the Crypto space).
+  // Collect additional properties from filter-specified spaces (e.g. a type
+  // may define extra properties in a space different from its native one).
   let filterPropertyIds: string[] = [];
   if (filterSpaceIds && filterSpaceIds.length > 0) {
     const uniqueFilterSpaces = [...new Set(filterSpaceIds)];
-    const filterEntities = (
-      await Promise.all(
-        uniqueFilterSpaces.map(spaceId => {
-          const spaceMap = new Map(dedupedTypeIds.map(id => [id, spaceId] as const));
-          return fetchEntitiesWithRelations(dedupedTypeIds, spaceMap);
-        })
-      )
-    ).flat();
+    const results = await Promise.all(
+      uniqueFilterSpaces.map(async spaceId => {
+        const spaceMap = new Map(dedupedTypeIds.map(id => [id, spaceId] as const));
+        const entities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceMap);
+        return { spaceId, entities };
+      })
+    );
 
-    filterPropertyIds = filterEntities
-      .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
-      .map(r => r.toEntity.id);
+    filterPropertyIds = results.flatMap(({ spaceId, entities }) =>
+      entities
+        .flatMap(entity =>
+          entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId)
+        )
+        .map(r => r.toEntity.id)
+    );
   }
 
   const allPropertyIds = [...new Set([...nativePropertyIds, ...filterPropertyIds])];
