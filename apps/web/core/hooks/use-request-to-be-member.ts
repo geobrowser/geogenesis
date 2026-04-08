@@ -1,11 +1,12 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useMutation } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
-import { encodeFunctionData } from 'viem';
 
 import { useCallback } from 'react';
+
+import { Effect, Either } from 'effect';
+import { encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

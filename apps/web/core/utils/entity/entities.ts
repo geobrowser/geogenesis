@@ -1,8 +1,8 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
-import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -37,7 +37,13 @@ export function name(values: Value[]): string | null {
 }
 
 export function nameValue(values: Value[]): Value | undefined {
-  return values.find(value => value.property.id === SystemIds.NAME_PROPERTY);
+  const nameValues = values.filter(value => value.property.id === SystemIds.NAME_PROPERTY);
+  if (nameValues.length <= 1) return nameValues[0];
+
+  // Skip empty names, then pick from the highest-ranked space
+  const nonEmpty = nameValues.filter(v => v.value);
+  const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
+  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
 }
 
 /**

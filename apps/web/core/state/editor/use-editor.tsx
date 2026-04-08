@@ -1,30 +1,30 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
-import { generateJSON as generateServerJSON } from '@tiptap/html';
-import { JSONContent, generateJSON } from '@tiptap/react';
-import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { JSONContent } from '@tiptap/react';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
-import { tiptapExtensions } from '~/partials/editor/extensions';
+import type { ServerBlock } from '~/partials/editor/server-content';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorInstance } from './editor-provider';
+import { useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
-import * as Parser from './parser';
+import { markdownToEditorJson } from './markdown-adapter';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
-import { RelationWithBlock, useBlocks } from './use-blocks';
+import { RelationWithBlock } from './use-blocks';
 import { getNodeId } from './utils';
 import { editorHasContentAtom } from '~/atoms';
 
@@ -92,6 +92,7 @@ function makeNewBlockRelation({
       case 'listItem':
       case 'bulletList':
       case 'orderedList':
+      case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
         return 'DATA';
@@ -99,6 +100,8 @@ function makeNewBlockRelation({
         return 'IMAGE';
       case 'video':
         return 'VIDEO';
+      default:
+        return 'TEXT';
     }
   })();
 
@@ -233,27 +236,22 @@ export const useTabId = () => {
   return maybeTabId;
 };
 
+export function useEditorStoreLite() {
+  return useEditorBlocks();
+}
+
 export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+  const { id: entityId, spaceId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useTabId();
   const activeEntityId = tabId ?? entityId;
-  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
 
-  const blockRelations = useBlocks(
-    activeEntityId,
-    spaceId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
-  );
+  const { blockRelations, initialBlockEntities } = useEditorBlocks();
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
-
-  const initialBlockEntities = React.useMemo(() => {
-    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-  }, [initialBlocks, initialTabs, isTab, tabId]);
 
   const initialBlockValues = React.useMemo(() => {
     return initialBlockEntities.flatMap(b => b.values);
@@ -274,7 +272,9 @@ export function useEditorStore() {
    * in a Knowledge Graph-specific data model. We need to map from our KG representation
    * back to the Tiptap representation whenever the KG data changes.
    */
-  const editorJson = React.useMemo(() => {
+  const { editorJson, serverBlocks } = React.useMemo(() => {
+    const sBlocks: ServerBlock[] = [];
+
     const json = {
       type: 'doc',
       content: blockRelations.flatMap(block => {
@@ -301,6 +301,8 @@ export function useEditorStore() {
             selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
           });
           const titleValue = titleValues?.[0]?.value || '';
+
+          sBlocks.push({ type: 'image', src: getImagePath(imageUrlValue) });
 
           return [
             {
@@ -331,6 +333,8 @@ export function useEditorStore() {
           });
           const titleValue = titleValues?.[0]?.value || '';
 
+          sBlocks.push({ type: 'video', src: getVideoPath(videoUrlValue) });
+
           return [
             {
               type: 'video',
@@ -346,6 +350,8 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
+          sBlocks.push({ type: 'data' });
+
           return [
             {
               type: 'tableNode',
@@ -358,14 +364,14 @@ export function useEditorStore() {
           ];
         }
 
-        const html = markdownValueForBlockId ? Parser.markdownToHtml(markdownValueForBlockId.value || '') : '';
-        /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
-        const isSSR = typeof window === 'undefined';
-        const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
+        const markdownStr = markdownValueForBlockId?.value || '';
+        sBlocks.push({ type: 'text', markdown: markdownStr });
+
+        const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
 
         // A single block's markdown can produce multiple Tiptap nodes (e.g. heading + paragraph + list).
         // Return all of them so multi-element content renders fully.
-        if (!json.content || json.content.length === 0) {
+        if (!parsed.content || parsed.content.length === 0) {
           return [
             {
               type: 'paragraph',
@@ -378,7 +384,7 @@ export function useEditorStore() {
           ];
         }
 
-        return json.content.map((nodeData: JSONContent, index: number) => ({
+        return parsed.content.map((nodeData: JSONContent, index: number) => ({
           ...nodeData,
           attrs: {
             ...nodeData.attrs,
@@ -396,10 +402,10 @@ export function useEditorStore() {
     if (json.content.length === 0) {
       json.content.push({
         type: 'paragraph',
-      });
+      } as (typeof json.content)[number]);
     }
 
-    return json;
+    return { editorJson: json, serverBlocks: sBlocks };
   }, [blockRelations, spaceId, initialBlockValues, markdownValues]);
 
   const upsertEditorState = React.useCallback(
@@ -412,8 +418,7 @@ export function useEditorStore() {
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content[0].text &&
-          !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
+          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
 
         return isNonParagraph || isParagraphWithContent;
       });
@@ -461,6 +466,7 @@ export function useEditorStore() {
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
+            case 'codeBlock':
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
@@ -529,7 +535,8 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'heading':
-          case 'paragraph': {
+          case 'paragraph':
+          case 'codeBlock': {
             const markdownValue = TextEntity.getTextEntityMarkdownValue(node);
             storage.values.set(markdownValue);
 
@@ -554,9 +561,11 @@ export function useEditorStore() {
   return {
     upsertEditorState,
     editorJson,
+    serverBlocks,
     activeEntityId,
     blockIds,
     blockRelations,
+    initialBlockEntities,
     hasContent,
     setHasContent,
   };

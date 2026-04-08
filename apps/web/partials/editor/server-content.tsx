@@ -1,129 +1,64 @@
-import { Content } from '~/core/state/editor/types';
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 
+export type ServerBlock =
+  | { type: 'text'; markdown: string }
+  | { type: 'image'; src: string }
+  | { type: 'video'; src: string }
+  | { type: 'data' };
+
 type ServerContentProps = {
-  content: Content[];
+  blocks: ServerBlock[];
 };
 
-export const ServerContent = ({ content }: ServerContentProps) => {
-  if (!content) {
-    console.error('Content is undefined');
+export const ServerContent = ({ blocks }: ServerContentProps) => {
+  if (!blocks) {
+    console.error('Blocks is undefined');
     return null;
   }
 
   return (
     <div className="tiptap ProseMirror pb-8!">
-      {content.map((block, index) => (
-        <Block key={index} block={block} />
+      {blocks.map((block, index) => (
+        <ServerBlockRenderer key={index} block={block} />
       ))}
       <TrailingBreak />
     </div>
   );
 };
 
-type BlockProps = {
-  block: Content;
-};
-
-const Block = ({ block }: BlockProps) => {
-  /**
-   * If a paragraph block is empty the editor might not store the content
-   * array on the block. This can cause errors in here since we expect the
-   * content array to exist. If the content does not exist we set it here
-   * to an empty array.
-   */
-  if (!block.content) {
-    block.content = [];
-  }
-
+const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
   switch (block.type) {
-    case 'paragraph': {
-      return (
-        <div className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>
-              {block.content.map((block, index) => (
-                <Block key={index} block={block} />
-              ))}
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    case 'bulletList': {
-      return (
-        <ul>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </ul>
-      );
-    }
-
-    case 'orderedList': {
-      return (
-        <ol>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </ol>
-      );
-    }
-
-    case 'listItem': {
-      return (
-        <li>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </li>
-      );
-    }
-
-    case 'heading': {
-      const Component = getHeading(block.attrs.level);
-
-      return (
-        <div className="react-renderer node-heading">
-          <Component>
-            {block.content.map((block, index) => (
-              <Block key={index} block={block} />
-            ))}
-          </Component>
-        </div>
-      );
-    }
-
     case 'text': {
-      if (block?.marks?.[0]?.type === 'bold') {
-        return <strong>{block.text}</strong>;
+      if (!block.markdown.trim()) {
+        return (
+          <div className="react-renderer node-paragraph">
+            <div className="whitespace-normal">
+              <p>
+                <br className="ProseMirror-trailingBreak" />
+              </p>
+            </div>
+          </div>
+        );
       }
-
-      if (block?.marks?.[0]?.type === 'italic') {
-        return <em>{block.text}</em>;
-      }
-
-      return <>{block.text}</>;
+      return <>{renderMarkdownDocument(block.markdown)}</>;
     }
 
-    case 'image': {
-      return <img src={block.attrs.src} alt="" />;
-    }
+    case 'image':
+      return <img src={block.src} alt="" />;
 
-    case 'video': {
+    case 'video':
       return (
-        <video src={block.attrs.src} controls className="h-auto w-full rounded-lg">
+        <video src={block.src} controls className="h-auto w-full rounded-lg">
           Your browser does not support the video tag.
         </video>
       );
-    }
 
-    case 'tableNode': {
+    case 'data':
       return (
         <>
           <Spacer height={24} />
@@ -136,26 +71,6 @@ const Block = ({ block }: BlockProps) => {
           </div>
         </>
       );
-    }
-  }
-};
-
-const getHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
-  switch (level) {
-    case 1:
-      return 'h1';
-    case 2:
-      return 'h2';
-    case 3:
-      return 'h3';
-    case 4:
-      return 'h4';
-    case 5:
-      return 'h5';
-    case 6:
-      return 'h6';
-    default:
-      return 'p';
   }
 };
 

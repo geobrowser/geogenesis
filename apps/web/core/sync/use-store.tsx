@@ -3,14 +3,15 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
-import { Effect } from 'effect';
-import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
+import { Effect } from 'effect';
+import equal from 'fast-deep-equal';
+
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
-import { Property, Relation, Value } from '../types';
+import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
@@ -40,10 +41,19 @@ type QueryEntityOptions = {
   enabled?: boolean;
 };
 
-const reactive = createAtom(() => ({
-  values: reactiveValues.get(),
-  relations: reactiveRelations.get(),
-}));
+// Signal that fires when the store changes. Derived from both atoms so
+// useSelector subscribers re-evaluate when either values or relations update.
+// Selectors don't read this value — they call store.getEntity() directly.
+// compare: () => false ensures the atom always notifies subscribers when
+// dependencies change, even though the returned value is constant.
+const reactive = createAtom(
+  () => {
+    reactiveValues.get();
+    reactiveRelations.get();
+    return 0;
+  },
+  { compare: () => false }
+);
 
 /**
  * Triggers sync for a specific entity. This is useful when we want to
@@ -181,7 +191,10 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
-}: QueryEntitiesOptions) {
+  sort,
+}: QueryEntitiesOptions & {
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+}) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
@@ -201,14 +214,18 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading } = useQuery({
+  const {
+    isFetched,
+    isLoading,
+    data: orderedIds,
+  } = useQuery({
     enabled,
     placeholderData,
-    queryKey: GeoStore.queryKeys(where, first, skip),
+    queryKey: [...GeoStore.queryKeys(where, first, skip), sort ?? null],
     queryFn: async () => {
-      const entities = await E.findMany({ store, cache, where, first, skip });
+      const entities = await E.findMany({ store, cache, where, first, skip, sort });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-      return entities;
+      return entities.map(e => e.id);
     },
   });
 
@@ -223,14 +240,19 @@ export function useQueryEntities({
         return [];
       }
 
-      const result = new EntityQuery(store.getEntities())
+      // When a server-side sort is active, preserve the server-returned order
+      // but read fresh entity data from the store to pick up local edits.
+      if (sort && orderedIds) {
+        return orderedIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+      }
+
+      const query = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
         .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
+        .sortBy({ field: 'updatedAt', direction: 'desc' });
 
-      return result;
+      return query.execute();
     },
     equal
   );
@@ -238,6 +260,7 @@ export function useQueryEntities({
   return {
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
+    isFetched: isFetched && enabled,
   };
 }
 
@@ -286,7 +309,7 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     if (!remoteProperty) return property;
     if (!property) return remoteProperty;
 
-    return { ...remoteProperty, ...property };
+    return { ...remoteProperty, ...property, name: property.name || remoteProperty.name };
   }, [remoteProperty, property]);
 
   return {
@@ -305,6 +328,7 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
   const { data: remoteProperties, isFetched } = useQuery({
     enabled: enabled,
+    placeholderData: keepPreviousData,
     queryKey: ['store', 'properties', JSON.stringify({ ids, enabled })],
     queryFn: async (): Promise<Property[]> => {
       return await Effect.runPromise(getProperties(ids));
@@ -354,8 +378,16 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       if (remoteProp) {
         const localRelationValueTypes = localProp?.relationValueTypes;
+        const localRelationEntityTypes = localProp?.relationEntityTypes;
+        const overrides: Partial<Property> = {};
         if (localRelationValueTypes && localRelationValueTypes.length > 0) {
-          merged.push({ ...remoteProp, relationValueTypes: localRelationValueTypes });
+          overrides.relationValueTypes = localRelationValueTypes;
+        }
+        if (localRelationEntityTypes && localRelationEntityTypes.length > 0) {
+          overrides.relationEntityTypes = localRelationEntityTypes;
+        }
+        if (Object.keys(overrides).length > 0) {
+          merged.push({ ...remoteProp, ...overrides });
         } else {
           merged.push(remoteProp);
         }
@@ -513,8 +545,9 @@ export function useRelations(options: UseRelationsParams = {}) {
   const { selector, includeDeleted = false, mergeWith = [] } = options;
 
   const values = useSelector(
-    reactiveRelations,
-    relations => {
+    reactive,
+    () => {
+      const relations = reactiveRelations.get();
       const filtered =
         mergeWith.length === 0
           ? relations.filter(r =>
@@ -558,8 +591,9 @@ export function useRelation(options: UseRelationParams) {
   const { id, selector, includeDeleted = false, mergeWith = [] } = options;
 
   const relation = useSelector(
-    reactiveRelations,
-    relations => {
+    reactive,
+    () => {
+      const relations = reactiveRelations.get();
       const searchableRelations = mergeWith.length === 0 ? relations : mergeRelations(relations, mergeWith);
 
       let found: Relation | null = null;

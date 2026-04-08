@@ -156,6 +156,122 @@
   @apply ml-4 list-item list-disc;
 }
 
+/* Code blocks */
+.code-block {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.code-block-line-numbers {
+  user-select: none;
+  text-align: right;
+  color: #999;
+  padding-right: 16px;
+  margin-right: 16px;
+  border-right: 1px solid #ddd;
+  min-width: 24px;
+}
+
+.code-block code {
+  flex: 1;
+  white-space: pre;
+}
+
+/* Inline code */
+.inline-code,
+.ProseMirror code:not(pre code) {
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* Math extension styles */
+.Tiptap-mathematics-editor {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.Tiptap-mathematics-render {
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.Tiptap-mathematics-editor--active {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Code blocks */
+.code-block {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.code-block-line-numbers {
+  user-select: none;
+  text-align: right;
+  color: #999;
+  padding-right: 16px;
+  margin-right: 16px;
+  border-right: 1px solid #ddd;
+  min-width: 24px;
+}
+
+.code-block code {
+  flex: 1;
+  white-space: pre;
+}
+
+/* Inline code */
+.inline-code,
+.ProseMirror code:not(pre code) {
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* Math extension styles */
+.Tiptap-mathematics-editor {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.Tiptap-mathematics-render {
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.Tiptap-mathematics-editor--active {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
 /* Valid entity links */
 .ProseMirror a.entity-link-valid {
   @apply text-grey-04 underline transition-colors duration-100;

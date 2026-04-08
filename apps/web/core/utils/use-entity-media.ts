@@ -1,9 +1,10 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
 
 import { getEntity } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';

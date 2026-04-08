@@ -1,9 +1,10 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useEffect, useRef } from 'react';
+
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
 
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';

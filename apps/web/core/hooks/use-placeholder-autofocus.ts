@@ -21,7 +21,7 @@ export function usePlaceholderAutofocus(entries: Entry[]): boolean {
         lastPlaceholderIdRef.current = placeholderId;
         setShouldAutoFocus(true);
       }
-    } else {
+    } else if (lastPlaceholderIdRef.current !== null) {
       // No placeholder present, reset
       lastPlaceholderIdRef.current = null;
       setShouldAutoFocus(false);

@@ -1,17 +1,14 @@
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData } from '@tanstack/react-query';
 
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 
+import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
-import { useSource } from './use-source';
 
-/**
- * Deduplicates relations by toEntity.id, keeping the first occurrence.
- * This handles cases where multiple collection relations point to the same entity.
- */
 function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(relations: T[]): T[] {
   const seen = new Set<string>();
   return relations.filter(relation => {
@@ -24,14 +21,18 @@ function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(re
 }
 
 export interface CollectionProps {
+  source: Source;
   first?: number;
   skip?: number;
   where?: WhereCondition;
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
 }
 
-export function useCollection({ first, skip, where }: CollectionProps) {
+export function useCollection({ source, first, skip, where, sort }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
-  const { source } = useSource();
+
+  const { initialBlockEntities, initialCollectionItems } = useEditorStoreLite();
+  const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({
     spaceId,
@@ -39,9 +40,11 @@ export function useCollection({ first, skip, where }: CollectionProps) {
     enabled: source.type === 'COLLECTION',
   });
 
+  const effectiveEntity = blockEntity ?? initialBlockEntity;
+
   const collectionRelations =
     source.type === 'COLLECTION'
-      ? (blockEntity?.relations.filter(
+      ? (effectiveEntity?.relations.filter(
           r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];
@@ -53,15 +56,17 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   });
 
   // When filters are present, we need to fetch ALL collection items first,
-  // apply the filter, then paginate the filtered results
+  // apply the filter, then paginate the filtered results.
+  // When sort is active, we fetch ALL IDs but let the server sort + paginate.
   const hasFilters = where && Object.keys(where).length > 0;
 
-  // Get all entity IDs when filtering, or just the current page when not filtering
-  const entityIdsToFetch = hasFilters
-    ? orderedCollectionRelations.map(r => r.toEntity.id)
-    : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
+  const allEntityIds = orderedCollectionRelations.map(r => r.toEntity.id);
 
-  // Build the where condition for collection items
+  const entityIdsToFetch =
+    hasFilters || sort
+      ? allEntityIds
+      : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
+
   const collectionItemsWhere: WhereCondition = {
     id: {
       in: entityIdsToFetch,
@@ -72,17 +77,12 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
+    first: sort ? first || 9 : entityIdsToFetch.length || undefined,
+    skip: sort ? skip || 0 : undefined,
     placeholderData: keepPreviousData,
+    sort,
   });
 
-  /**
-   * When filtering is active, we need to:
-   * 1. Get all entities that match both the collection AND the filter
-   * 2. Filter the relations to only include those that point to filtered entities
-   * 3. Deduplicate filtered relations (in case filtering reveals duplicates)
-   * 4. Apply pagination to the filtered relations
-   * 5. Return the paginated items in the correct order
-   */
   const filteredRelations = hasFilters
     ? deduplicateRelationsByEntityId(
         orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
@@ -93,25 +93,37 @@ export function useCollection({ first, skip, where }: CollectionProps) {
   const pageEndIndex = pageStartIndex + (first || 9);
   const paginatedRelations = hasFilters ? filteredRelations.slice(pageStartIndex, pageEndIndex) : filteredRelations;
 
-  /**
-   * There's currently no guarantee of ordering when using the `id: { in: [...]}`
-   * query in the sync engine. Here we use the ordered relations list as the source
-   * of truth for ordering to return the collection item entities in the correct order.
-   */
+  // When sort is active, the server already returned items in the right order and page.
+  // Use the server-returned order directly instead of re-ordering by position.
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = paginatedRelations
-    .map(relation => {
-      const entity = collectionItemsMap.get(relation.toEntity.id);
-      return entity;
-    })
-    .filter(item => item !== undefined);
+  const orderedCollectionItems = sort
+    ? collectionItems
+    : paginatedRelations
+        .map(relation => collectionItemsMap.get(relation.toEntity.id))
+        .filter(item => item !== undefined);
+
+  // When sort is active, build relations matching the server-returned item order
+  // so that downstream features (drag-and-drop, position tracking) still work.
+  const sortedRelations = sort
+    ? collectionItems
+        .map(item => deduplicatedRelations.find(r => r.toEntity.id === item.id))
+        .filter(r => r !== undefined)
+    : paginatedRelations;
+
+  const ssrItems = initialCollectionItems[entityId];
+  const isFirstPage = (skip || 0) === 0;
+  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters && !sort;
+  const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
+
+  const items = shouldFallbackToSSR ? ssrItems : orderedCollectionItems;
+  const hasData = items.length > 0;
 
   return {
-    collectionItems: orderedCollectionItems,
-    collectionRelations: paginatedRelations,
-    isLoading: isCollectionItemsLoading,
-    isFetched: !isCollectionItemsLoading,
+    collectionItems: items,
+    collectionRelations: sortedRelations,
+    isLoading: hasData ? false : isCollectionItemsLoading,
+    isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
   };
 }

@@ -1,15 +1,16 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk';
+import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
+
+import * as React from 'react';
+import { ChangeEvent, useCallback, useRef, useState } from 'react';
+
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -31,7 +32,7 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
-export const entityIdAtom = atomWithStorage<string>('onboardingEntityId', '');
+export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
@@ -50,7 +51,7 @@ export const OnboardingDialog = () => {
   const { smartAccount } = useSmartAccount();
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
-  const entityId = useAtomValue(entityIdAtom);
+  const topicId = useAtomValue(topicIdAtom);
   const { createPersonalSpace } = useCreatePersonalSpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
 
@@ -70,7 +71,7 @@ export const OnboardingDialog = () => {
       const spaceId = await createPersonalSpace({
         spaceName: name,
         spaceImage: avatar,
-        entityId,
+        topicId,
       });
 
       if (!spaceId) {
@@ -159,13 +160,13 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
-  const setEntityId = useSetAtom(entityIdAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
 
   const showBack = step === 'enter-profile';
 
   const handleBack = () => {
     setName('');
-    setEntityId('');
+    setTopicId('');
     switch (step) {
       case 'enter-profile':
         setStep('start');
@@ -243,7 +244,7 @@ type StepOnboardingProps = {
 
 function StepOnboarding({ onNext }: StepOnboardingProps) {
   const [name, setName] = useAtom(nameAtom);
-  const [entityId, setEntityId] = useAtom(entityIdAtom);
+  const [topicId, setTopicId] = useAtom(topicIdAtom);
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
@@ -301,27 +302,27 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
       </StepContents>
       <div className="flex w-full flex-col items-center justify-center gap-3">
         <div className="relative z-100 inline-block">
-          <div className={cx(entityId && 'invisible')}>
+          <div className={cx(topicId && 'invisible')}>
             <FindEntity
               allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
-                setEntityId(entity.id);
+                setTopicId(entity.id);
               }}
               onCreateEntity={entity => {
                 setName(entity.name ?? '');
-                setEntityId('');
+                setTopicId('');
               }}
               placeholder="Your name..."
             />
           </div>
-          {entityId && (
+          {topicId && (
             <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
               <div className="text-bodySemibold">Space for</div>
               <SmallButton
                 onClick={() => {
                   setName('');
-                  setEntityId('');
+                  setTopicId('');
                 }}
               >
                 <span>{name}</span>

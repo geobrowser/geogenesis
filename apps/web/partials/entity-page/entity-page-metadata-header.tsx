@@ -1,8 +1,10 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import {
   DATA_TYPE_ENTITY_IDS,
@@ -30,23 +32,24 @@ import { Divider } from '~/design-system/divider';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
+import { EntityVoteButtons } from './entity-vote-buttons';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  isRelationPage?: boolean;
+  isVoteable?: boolean;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
 
-  // Include deleted relations so handlePropertyTypeChange can reuse/update
-  // them instead of creating new ones each time the dropdown changes.
+  // Include deleted relations so handlePropertyTypeChange can find existing
+  // relations to delete before creating replacements.
   const allRelations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
     includeDeleted: true,
@@ -153,38 +156,38 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
       // Register the data type so store.getProperty() returns the updated type
       storage.properties.setDataType(entityId, baseDataType);
 
-      // Update the data type relation. Every property gets an explicit Data Type relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
+      // Replace the data type relation. For locally-created relations we can update
+      // in place to avoid accumulating dead relations with each type change. For remote
+      // relations we must delete + create because GRC-20 createRelation with an existing
+      // ID won't update the `to` target.
       const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[baseDataType];
       if (dataTypeEntityId) {
         const existingDataTypeRelation = allRelations.find(
-          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY
+          r => r.fromEntity.id === entityId && r.type.id === DATA_TYPE_PROPERTY && !r.isDeleted
         );
 
-        if (existingDataTypeRelation) {
-          storage.relations.update(existingDataTypeRelation, draft => {
-            draft.toEntity.id = dataTypeEntityId;
-            draft.toEntity.name =
-              (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType;
-            draft.toEntity.value = dataTypeEntityId;
+        if (existingDataTypeRelation && !existingDataTypeRelation.isLocal) {
+          storage.relations.delete(existingDataTypeRelation);
+        }
+
+        const newToEntity = {
+          id: dataTypeEntityId,
+          name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
+          value: dataTypeEntityId,
+        };
+
+        if (existingDataTypeRelation?.isLocal) {
+          storage.relations.set({
+            ...existingDataTypeRelation,
+            toEntity: newToEntity,
           });
         } else {
           storage.relations.set({
             id: IdUtils.generate(),
             entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: name || '',
-            },
-            type: {
-              id: DATA_TYPE_PROPERTY,
-              name: 'Data Type',
-            },
-            toEntity: {
-              id: dataTypeEntityId,
-              name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
-              value: dataTypeEntityId,
-            },
+            fromEntity: { id: entityId, name: name || '' },
+            type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+            toEntity: newToEntity,
             spaceId,
             position: Position.generate(),
             verified: false,
@@ -193,39 +196,33 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
         }
       }
 
-      // Handle the renderableType relation.
-      // Use allRelations (includes deleted) to reuse existing relations instead of accumulating tombstones.
       const existingRelation = allRelations.find(
-        r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
+        r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY && !r.isDeleted
       );
 
       if (renderableTypeId) {
-        // Need to set or update the renderableType relation
-        if (existingRelation) {
-          // Update existing relation
-          storage.relations.update(existingRelation, draft => {
-            draft.toEntity.id = renderableTypeId;
-            draft.toEntity.name = SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType;
-            draft.toEntity.value = renderableTypeId;
+        if (existingRelation && !existingRelation.isLocal) {
+          storage.relations.delete(existingRelation);
+        }
+
+        const newRenderableToEntity = {
+          id: renderableTypeId,
+          name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
+          value: renderableTypeId,
+        };
+
+        if (existingRelation?.isLocal) {
+          storage.relations.set({
+            ...existingRelation,
+            toEntity: newRenderableToEntity,
           });
         } else {
-          // Create new relation
           storage.relations.set({
             id: IdUtils.generate(),
             entityId: ID.createEntityId(),
-            fromEntity: {
-              id: entityId,
-              name: propertyData?.name || '',
-            },
-            type: {
-              id: RENDERABLE_TYPE_PROPERTY,
-              name: 'Renderable Type',
-            },
-            toEntity: {
-              id: renderableTypeId,
-              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
-              value: renderableTypeId,
-            },
+            fromEntity: { id: entityId, name: propertyData?.name || '' },
+            type: { id: RENDERABLE_TYPE_PROPERTY, name: 'Renderable Type' },
+            toEntity: newRenderableToEntity,
             spaceId,
             position: Position.generate(),
             verified: false,
@@ -265,30 +262,33 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   }, [propertyData, entityId, spaceId, storage, name, relations]);
 
   return (
-    <div className="flex items-center gap-1 text-text">
-      {isPropertyEntity && editable && (
-        <>
-          <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
-          <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-        </>
-      )}
-      {propertyDataType && !editable && (
-        <DataTypePill
-          dataType={propertyDataType.dataType}
-          renderableType={propertyDataType.renderableType}
-          spaceId={spaceId}
-        />
-      )}
-      {editable ? (
-        <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-      ) : (
-        <ReadableRelationsGroup
-          entityId={id}
-          spaceId={spaceId}
-          propertyId={SystemIds.TYPES_PROPERTY}
-          isMetadataHeader={true}
-        />
-      )}
+    <div className={cx('flex items-center text-text', isVoteable ? 'justify-between' : 'gap-1')}>
+      <div className="flex items-center gap-1">
+        {isPropertyEntity && editable && (
+          <>
+            <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
+            <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
+          </>
+        )}
+        {propertyDataType && !editable && (
+          <DataTypePill
+            dataType={propertyDataType.dataType}
+            renderableType={propertyDataType.renderableType}
+            spaceId={spaceId}
+          />
+        )}
+        {editable ? (
+          <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+        ) : (
+          <ReadableRelationsGroup
+            entityId={id}
+            spaceId={spaceId}
+            propertyId={SystemIds.TYPES_PROPERTY}
+            isMetadataHeader={true}
+          />
+        )}
+      </div>
+      {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
     </div>
   );
 }

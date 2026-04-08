@@ -1,6 +1,10 @@
 'use client';
 
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import * as React from 'react';
+import { useCallback, useState } from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
@@ -8,10 +12,7 @@ import { useAtom } from 'jotai';
 import type { LinkProps } from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import * as React from 'react';
-import { useCallback, useState } from 'react';
-
-import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -30,7 +31,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { SpacePageType } from '~/app/space/[id]/page';
+import { SpacePageType } from '~/app/space/[id]/(space)/page';
 import { dismissedNoticesAtom } from '~/atoms';
 import { teamNoticeDismissedAtom } from '~/atoms';
 import type { RepeatingNotice } from '~/atoms';
@@ -354,7 +355,7 @@ const JoinSpaces = () => {
 };
 
 const JoinSpaceItem = ({ space }: { space: (typeof spaces)[number] }) => {
-  const imageValue = space?.image ? `${IPFS_GATEWAY_READ_PATH}/${space.image}` : PLACEHOLDER_SPACE_IMAGE;
+  const imageValue = space?.image ? `${PINATA_GATEWAY_READ_PATH}${space.image}` : PLACEHOLDER_SPACE_IMAGE;
 
   return (
     <Link href={NavUtils.toSpace(space.id)} className="inline-flex items-center gap-1.5 rounded bg-white p-1">

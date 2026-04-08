@@ -1,16 +1,17 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 
 import { Filter } from './filters';
-import { useFilters } from './use-filters';
-import { useSource } from './use-source';
+import { Source } from './source';
 
-export function useRelationsBlock() {
-  const { source } = useSource();
-  const { filterState } = useFilters();
+type UseRelationsBlockOptions = {
+  source: Source;
+  filterState: Filter[];
+};
 
+export function useRelationsBlock({ source, filterState }: UseRelationsBlockOptions) {
   const { entity: relationBlockSourceEntity } = useQueryEntity({
     id: source.type === 'RELATIONS' ? source.value : undefined,
     enabled: source.type === 'RELATIONS',

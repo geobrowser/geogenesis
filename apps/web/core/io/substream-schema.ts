@@ -380,6 +380,7 @@ export const ProposalType = Schema.Union(
   Schema.Literal('REMOVE_MEMBER'),
   Schema.Literal('ADD_SUBSPACE'),
   Schema.Literal('REMOVE_SUBSPACE'),
+  Schema.Literal('SET_TOPIC'),
   Schema.Literal('ADD_EDITOR'),
   Schema.Literal('REMOVE_EDITOR')
 );

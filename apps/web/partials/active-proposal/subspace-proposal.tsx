@@ -1,216 +1,284 @@
-import { Schema } from 'effect';
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal } from '~/core/io/dto/proposals';
-import { SubspaceDto } from '~/core/io/dto/subspaces';
+import { uuidToHex } from '~/core/id/normalize';
+import type { Proposal } from '~/core/io/dto/proposals';
+import type { Space } from '~/core/io/dto/spaces';
 import { getSpace } from '~/core/io/queries';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
+import { isTopicSubspaceActionType } from '~/core/io/rest';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamSubspace } from '~/core/io/substream-schema';
+import {
+  AVATAR_PROPERTY_ID,
+  COVER_PROPERTY_ID,
+  IMAGE_URL_PROPERTY_ID,
+  type SpaceImageRelationNode,
+  resolveSpaceImage,
+} from '~/core/io/subgraph/space-image';
+import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
-import { GeoImage } from '~/design-system/geo-image';
-import { AddTo } from '~/design-system/icons/add-to';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { Member } from '~/design-system/icons/member';
+import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 
 interface Props {
   proposal: Proposal;
 }
 
-export async function SubspaceProposal({ proposal }: Props) {
-  const [subspace, space] = await Promise.all([
-    fetchProposedSubspace(proposal.id, proposal.space.id),
-    Effect.runPromise(getSpace(proposal.space.id)),
-  ]);
+type AssociatedSpace = {
+  id: string;
+  name: string;
+  image: string;
+  editorsCount: number;
+  membersCount: number;
+};
 
-  if (!subspace) {
-    // @TODO: Error handle though this should never happen
+type TopicProposalMetadata = {
+  id: string;
+  name: string | null;
+  image: string;
+  associatedSpaces: AssociatedSpace[];
+};
+
+type TopicProposalMetadataResult = {
+  entity: {
+    id: string;
+    name: string | null;
+    relationsList: SpaceImageRelationNode[];
+    spacesByTopicId: Array<{
+      id: string;
+      membersList: Array<{ memberSpaceId: string }>;
+      editorsList: Array<{ memberSpaceId: string }>;
+      page: {
+        name: string | null;
+        relationsList: SpaceImageRelationNode[];
+      } | null;
+    }>;
+  } | null;
+};
+
+export async function SubspaceProposal({ proposal }: Props) {
+  const subspaceDetails = proposal.subspaceDetails;
+
+  if (!subspaceDetails) {
     return null;
   }
 
-  const isAddSubspace = proposal.type === 'ADD_SUBSPACE';
+  const isTopicProposal = isTopicSubspaceActionType(subspaceDetails.actionType) && 'targetTopicId' in subspaceDetails;
+  const targetSpaceId = 'targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : proposal.space.id;
+
+  const [sourceSpace, targetSpace, topicMetadata] = await Promise.all([
+    Effect.runPromise(getSpace(proposal.space.id)),
+    isTopicProposal ? Promise.resolve(null) : Effect.runPromise(getSpace(targetSpaceId)),
+    isTopicProposal && subspaceDetails.targetTopicId
+      ? fetchTopicProposalMetadata(subspaceDetails.targetTopicId)
+      : Promise.resolve(null),
+  ]);
+
+  const heroTitle = isTopicProposal
+    ? (topicMetadata?.name ?? subspaceDetails.targetTopicId)
+    : (targetSpace?.entity.name ??
+      ('targetSpaceId' in subspaceDetails ? subspaceDetails.targetSpaceId : targetSpaceId));
+  const heroImage = isTopicProposal ? (topicMetadata?.image ?? PLACEHOLDER_SPACE_IMAGE) : spaceImage(targetSpace);
+  const changeLabel = proposalActionLabel(subspaceDetails.actionType);
+  const changeValue = proposalActionValue({
+    actionType: subspaceDetails.actionType,
+    sourceSpaceName: sourceSpace?.entity.name ?? proposal.space.id,
+    targetSpaceName: targetSpace?.entity.name ?? targetSpaceId,
+    topicName: isTopicProposal ? (topicMetadata?.name ?? subspaceDetails.targetTopicId) : undefined,
+  });
 
   return (
     <div className="flex w-full justify-center">
-      <div className="mt-20 flex w-[585px] flex-col items-center rounded-lg border border-grey-02 p-5">
-        <div className="flex w-full flex-col gap-5 divide-y divide-grey-02">
-          <div className="flex w-full flex-col items-center gap-6">
-            <div className="relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-white object-cover shadow-lg">
-              <GeoImage
-                value={space?.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
-                alt={`Space cover image for ${space?.entity?.name ?? space?.id}`}
-                className="h-[72px] w-[72px] rounded-lg"
-                style={{ objectFit: 'cover' }}
-                fill
-              />
-            </div>
-            <div className="space-y-5">
-              <h2 className="text-mainPage break-all">{space?.entity?.name ?? space?.id}</h2>
-              <div className="flex items-center justify-center gap-2">
-                <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">
-                  Space
-                </span>
-                <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
-                  <EditSmall color="grey-04" />
-                  {space?.editors.length}
-                </div>
-                <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
-                  <Member color="grey-04" />
-                  {space?.members.length}
-                </div>
-              </div>
-            </div>
+      <div className="mt-24 w-full max-w-[860px] px-6 pb-24">
+        <div className="flex flex-col items-center gap-5">
+          <div className="shadow-sm size-20 overflow-hidden rounded-xl border border-grey-02 bg-grey-01">
+            <NativeGeoImage
+              value={heroImage}
+              alt={`Image for ${heroTitle}`}
+              className="h-full w-full rounded-xl object-cover"
+            />
           </div>
-          <div className="flex w-full flex-col gap-3">
-            <p className="mt-5 text-metadataMedium text-grey-04">
-              {isAddSubspace ? 'Add subspace' : 'Remove subspace'}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                {/* Optically align centered */}
-                <div className="-mt-1">
-                  <AddTo color="grey-04" />
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative h-4 w-4 overflow-hidden rounded-sm object-cover">
-                    <GeoImage
-                      value={subspace?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE}
-                      alt={`Space cover image for ${subspace?.spaceConfig?.name ?? space?.id}`}
-                      className="h-4 w-4 rounded-sm"
-                      style={{ objectFit: 'cover' }}
-                      fill
-                    />
-                  </div>
-                </div>
-                <p className="text-smallTitle">{subspace?.spaceConfig?.name ?? subspace?.id}</p>
-              </div>
+          <h2 className="max-w-[400px] text-center text-mainPage text-text">{heroTitle}</h2>
+        </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
-                  <EditSmall color="grey-04" />
-                  {subspace?.totalEditors}
-                </div>
-                <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
-                  <Member color="grey-04" />
-                  {subspace?.totalMembers}
-                </div>
+        <div className="mx-auto mt-9 w-full max-w-[400px] border-t border-grey-02">
+          <div className="flex items-center justify-between gap-6 border-b border-grey-02 py-4">
+            <p className="text-metadata text-text">{changeLabel}</p>
+            <div className="flex items-center gap-2 text-metadata text-text">{changeValue}</div>
+          </div>
+
+          {isTopicProposal ? (
+            <div className="py-4">
+              <p className="text-metadata text-text">Associated spaces</p>
+
+              <div className="mt-6 flex flex-col gap-5">
+                {topicMetadata?.associatedSpaces.length ? (
+                  topicMetadata.associatedSpaces.map(space => <AssociatedSpaceRow key={space.id} space={space} />)
+                ) : (
+                  <p className="text-metadata text-grey-04">No associated spaces found yet.</p>
+                )}
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-const getSubspaceInProposalQuery = (proposalId: string) => `query {
-  proposedSubspaces(
-    first: 1
-    filter: { proposalId: { equalTo: "${proposalId}" } }
-  ) {
-    nodes {
-      spaceBySubspace {
-        id
-        daoAddress
-        spaceEditors {
-          totalCount
-        }
-        spaceMembers {
-          totalCount
-        }
-        ${spaceMetadataFragment}
-      }
-    }
-  }
-}`;
+function AssociatedSpaceRow({ space }: { space: AssociatedSpace }) {
+  return (
+    <div className="flex items-start gap-2">
+      <div className="mt-0.5 size-4 overflow-hidden rounded-[4px] border border-grey-02 bg-grey-01">
+        <NativeGeoImage
+          value={space.image}
+          alt={`Image for ${space.name}`}
+          className="h-full w-full rounded-[4px] object-cover"
+        />
+      </div>
 
-interface NetworkResult {
-  proposedSubspaces: {
-    nodes: {
-      spaceBySubspace: SubstreamSubspace;
-    }[];
+      <div className="flex flex-col gap-1.5">
+        <p className="text-button text-text">{space.name}</p>
+        <div className="flex flex-wrap items-center gap-2 text-metadata text-grey-04">
+          <span className="inline-flex items-center gap-1.5">
+            <EditSmall color="grey-04" />
+            {space.editorsCount} editors
+          </span>
+          <span>·</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Member color="grey-04" />
+            {space.membersCount} members
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposalMetadata | null> {
+  const normalizedTopicId = uuidToHex(topicId);
+  const result = await Effect.runPromise(
+    graphql<TopicProposalMetadataResult>({
+      endpoint: Environment.getConfig().api,
+      query: `
+        {
+          entity(id: ${JSON.stringify(normalizedTopicId)}) {
+            id
+            name
+            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+              typeId
+              toEntity {
+                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                  propertyId
+                  text
+                }
+              }
+            }
+            spacesByTopicId {
+              id
+              membersList {
+                memberSpaceId
+              }
+              editorsList {
+                memberSpaceId
+              }
+              page {
+                name
+                relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+                  typeId
+                  toEntity {
+                    valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                      propertyId
+                      text
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+    })
+  );
+
+  if (!result.entity) {
+    return null;
+  }
+
+  return {
+    id: result.entity.id,
+    name: result.entity.name,
+    image: resolveSpaceImage(result.entity.relationsList),
+    associatedSpaces: result.entity.spacesByTopicId.map(space => ({
+      id: space.id,
+      name: space.page?.name ?? space.id,
+      image: resolveSpaceImage(space.page?.relationsList ?? []),
+      editorsCount: space.editorsList.length,
+      membersCount: space.membersList.length,
+    })),
   };
 }
 
-async function fetchProposedSubspace(proposalId: string, spaceId: string) {
-  const endpoint = Environment.getConfig().api;
-
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint,
-    query: getSubspaceInProposalQuery(proposalId),
-  });
-
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
-
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
-
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchProposedSubspace. spaceId: ${spaceId} proposalId: ${proposalId} endpoint: ${endpoint}
-
-            queryString: ${getSubspaceInProposalQuery(proposalId)}
-            `,
-            error.message
-          );
-
-          return {
-            proposedSubspaces: {
-              nodes: [],
-            },
-          };
-
-        default:
-          console.error(
-            `${error._tag}: Unable to fetch subspace, spaceId: ${spaceId} proposalId: ${proposalId} endpoint: ${endpoint}`
-          );
-
-          return {
-            proposedSubspaces: {
-              nodes: [],
-            },
-          };
-      }
-    }
-
-    return resultOrError.right;
-  });
-
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposedSubspaces = result.proposedSubspaces.nodes;
-
-  if (proposedSubspaces.length === 0) {
-    return null;
+function proposalActionLabel(actionType: NonNullable<Proposal['subspaceDetails']>['actionType']) {
+  switch (actionType) {
+    case 'SUBSPACE_VERIFIED':
+      return 'Add verified space';
+    case 'SUBSPACE_UNVERIFIED':
+      return 'Remove verified space';
+    case 'SUBSPACE_RELATED':
+      return 'Add related space';
+    case 'SUBSPACE_UNRELATED':
+      return 'Remove related space';
+    case 'SUBSPACE_TOPIC_DECLARED':
+      return 'Add subtopic';
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return 'Remove subtopic';
   }
+}
 
-  // There should only be one proposed space in a single proposal
-  const proposedSpace = proposedSubspaces[0].spaceBySubspace;
-
-  const spaceOrError = Schema.decodeEither(SubstreamSubspace)(proposedSpace);
-
-  const decodedSpace = Either.match(spaceOrError, {
-    onLeft: error => {
-      console.error(`Encountered error decoding proposed subspace for space with id ${spaceId} – error: ${error}`);
-      return null;
-    },
-    onRight: space => {
-      return space;
-    },
-  });
-
-  if (decodedSpace === null) {
-    return null;
+function proposalActionValue({
+  actionType,
+  sourceSpaceName,
+  targetSpaceName,
+  topicName,
+}: {
+  actionType: NonNullable<Proposal['subspaceDetails']>['actionType'];
+  sourceSpaceName: string;
+  targetSpaceName: string;
+  topicName?: string;
+}) {
+  switch (actionType) {
+    case 'SUBSPACE_VERIFIED':
+    case 'SUBSPACE_UNVERIFIED':
+    case 'SUBSPACE_RELATED':
+    case 'SUBSPACE_UNRELATED':
+      return (
+        <>
+          <span>{sourceSpaceName}</span>
+          <RightArrowLong color="grey-04" />
+          <span>{targetSpaceName}</span>
+        </>
+      );
+    case 'SUBSPACE_TOPIC_DECLARED':
+    case 'SUBSPACE_TOPIC_REMOVED':
+      return (
+        <>
+          <span>{sourceSpaceName}</span>
+          <RightArrowLong color="grey-04" />
+          <span>{topicName ?? 'Topic'}</span>
+        </>
+      );
   }
+}
 
-  return SubspaceDto(decodedSpace);
+function entityImage(entity: Entity | null): string {
+  return Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? PLACEHOLDER_SPACE_IMAGE;
+}
+
+function spaceImage(space: Space | null): string {
+  return space?.entity.image || entityImage(space?.entity ?? null) || PLACEHOLDER_SPACE_IMAGE;
 }

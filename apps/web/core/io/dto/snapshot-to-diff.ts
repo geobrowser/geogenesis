@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import type { BlockChange, EntityDiff, RelationChange, SimpleValueType, ValueChange } from '~/core/utils/diff/types';
 
@@ -61,7 +61,9 @@ function serializeSnapshotValue(v: ApiVersionedValue): { type: string; value: st
   if (v.datetime !== undefined && v.datetime !== null) return { type: 'DATETIME', value: v.datetime };
   if (v.point !== undefined && v.point !== null) return { type: 'POINT', value: v.point };
   if (v.rect !== undefined && v.rect !== null) return { type: 'RECT', value: v.rect };
-  // Unsupported types (schedule, embedding) — can't serialize to string meaningfully
+  if (v.schedule !== undefined && v.schedule !== null && typeof v.schedule === 'string')
+    return { type: 'SCHEDULE', value: v.schedule };
+  // Unsupported types (embedding) — can't serialize to string meaningfully
   return { type: 'TEXT', value: null };
 }
 

@@ -2,19 +2,22 @@
 
 import { personalSpace } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
+
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
+import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/utils/contracts/space-registry';
+import { buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 
 type CreatePersonalSpaceArgs = {
   spaceName: string;
   spaceImage?: string;
-  entityId?: string;
+  topicId?: string;
 };
 
 export function useCreatePersonalSpace() {
@@ -22,7 +25,7 @@ export function useCreatePersonalSpace() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async ({ spaceName, spaceImage, entityId }: CreatePersonalSpaceArgs): Promise<string | null> => {
+    mutationFn: async ({ spaceName, spaceImage, topicId }: CreatePersonalSpaceArgs): Promise<string | null> => {
       if (!smartAccount) return null;
 
       const walletAddress = smartAccount.account.address;
@@ -61,13 +64,13 @@ export function useCreatePersonalSpace() {
       }
 
       // 3. Generate ops for personal space content
-      const { ops } = await generateOpsForSpaceType({
+      const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
         type: 'personal',
         spaceName,
         spaceAvatarUri: spaceImage ? getImagePath(spaceImage) : null,
         spaceCoverUri: null,
         initialEditorAddress: walletAddress,
-        entityId,
+        topicId,
       });
 
       // 4. Publish ops using SDK (uploads to IPFS + encodes enter() calldata)
@@ -101,8 +104,50 @@ export function useCreatePersonalSpace() {
         throw submitResult.left;
       }
 
-      // 6. Wait for content to be indexed
-      await waitForSpaceContent(spaceId);
+      const topicDeclarationResult = await runEffectEither(
+        Effect.retry(
+          Effect.tryPromise({
+            try: () =>
+              smartAccount.sendUserOperation({
+                calls: [
+                  {
+                    to: SPACE_REGISTRY_ADDRESS_HEX,
+                    value: 0n,
+                    data: buildPersonalTopicDeclaredCalldata({
+                      authorSpaceId: spaceId,
+                      spaceId,
+                      topicId: resolvedTopicId,
+                    }),
+                  },
+                ],
+              }),
+            catch: error => new Error('Failed to declare personal space topic', { cause: error }),
+          }).pipe(
+            Effect.withSpan('web.write.createPersonalSpace.declareTopic'),
+            Effect.annotateSpans({
+              'io.operation': 'declare_space_topic',
+              'space.type': 'PERSONAL',
+              'governance.action': 'topic_declared',
+            })
+          ),
+          topicDeclarationRetrySchedule('createPersonalSpace.topic')
+        )
+      );
+
+      if (Either.isLeft(topicDeclarationResult)) {
+        throw topicDeclarationResult.left;
+      }
+
+      // 6. Wait for content and topic to be indexed
+      const hasIndexedContent = await waitForSpaceContent(spaceId);
+      if (!hasIndexedContent) {
+        throw new Error('Timed out waiting for personal space content to index.');
+      }
+
+      const hasIndexedTopic = await waitForSpaceTopic(spaceId, resolvedTopicId);
+      if (!hasIndexedTopic) {
+        throw new Error('Timed out waiting for personal space topic to index.');
+      }
 
       return spaceId;
     },
@@ -121,6 +166,14 @@ export function useCreatePersonalSpace() {
   };
 }
 
+function topicDeclarationRetrySchedule(label: string) {
+  return Schedule.exponential(Duration.millis(500)).pipe(
+    Schedule.jittered,
+    Schedule.tapInput(() => Effect.sync(() => console.log(`[CREATE_SPACE][${label}] Retrying topic declaration`))),
+    Schedule.intersect(Schedule.recurs(2))
+  );
+}
+
 async function waitForSpaceId(walletAddress: string, maxAttempts = 30, intervalMs = 2_000): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const spaceId = await getPersonalSpaceId(walletAddress);
@@ -137,6 +190,21 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 15, intervalMs
     try {
       const space = await Effect.runPromise(getSpace(spaceId));
       if (space?.entity?.name) return true;
+    } catch {
+      // Continue polling
+    }
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+  return false;
+}
+
+async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 15, intervalMs = 2_000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const space = await Effect.runPromise(getSpace(spaceId));
+      if (space?.topicId === topicId) return true;
     } catch {
       // Continue polling
     }

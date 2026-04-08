@@ -1,4 +1,5 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect } from 'effect';
 
 import { ROOT_SPACE } from '~/core/constants';

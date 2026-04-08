@@ -1,4 +1,5 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Draft, produce } from 'immer';
 
 import {
@@ -13,28 +14,10 @@ import {
 import { ID } from '../id';
 import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
+import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
-
-/** Convert a Uint8Array or string ID to a hex string. */
-function toHexId(id: unknown): string {
-  if (typeof id === 'string') {
-    return id;
-  }
-  if (id instanceof Uint8Array) {
-    return Array.from(id)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  // Fallback for other array-like types
-  if (Array.isArray(id) || (id && typeof id === 'object' && 'length' in id)) {
-    return Array.from(id as ArrayLike<number>)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  return String(id);
-}
 
 const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [SystemIds.URL]: 'Url',
@@ -87,12 +70,14 @@ export interface Mutator {
     set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
+    deleteMany: (values: Value[]) => void;
   };
   relations: {
     get: (id: string, entityId: string) => Relation | null;
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
+    deleteMany: (relations: Relation[]) => void;
   };
   images: {
     createAndLink: (params: {
@@ -103,6 +88,7 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ imageId: string; relationId: string }>;
+    createOnly: (params: { file: File; spaceId: string }) => Promise<{ imageId: string }>;
   };
   videos: {
     createAndLink: (params: {
@@ -309,6 +295,9 @@ function createMutator(store: GeoStore): Mutator {
       delete: newValue => {
         store.deleteValue(newValue);
       },
+      deleteMany: values => {
+        store.deleteValues(values);
+      },
     },
     relations: {
       get: (id, entityId) => store.getRelation(id, entityId),
@@ -321,6 +310,9 @@ function createMutator(store: GeoStore): Mutator {
       },
       delete: newRelation => {
         store.deleteRelation(newRelation);
+      },
+      deleteMany: relations => {
+        store.deleteRelations(relations);
       },
     },
     images: {
@@ -413,6 +405,62 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { imageId: imageIdStr, relationId };
+      },
+      createOnly: async ({ file, spaceId }) => {
+        const { id: imageId, ops: createImageOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        for (const op of createImageOps) {
+          if (op.type === 'createRelation') {
+            store.setRelation({
+              id: toHexId(op.id),
+              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+              fromEntity: {
+                id: toHexId(op.from),
+                name: null,
+              },
+              type: {
+                id: toHexId(op.relationType),
+                name: 'Image',
+              },
+              toEntity: {
+                id: toHexId(op.to),
+                name: 'Image',
+                value: toHexId(op.to),
+              },
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              renderableType: 'RELATION',
+            });
+          } else if (op.type === 'createEntity') {
+            for (const pv of op.values) {
+              store.setValue({
+                id: ID.createValueId({
+                  entityId: toHexId(op.id),
+                  propertyId: toHexId(pv.property),
+                  spaceId,
+                }),
+                entity: {
+                  id: toHexId(op.id),
+                  name: null,
+                },
+                property: {
+                  id: toHexId(pv.property),
+                  name: 'Image Property',
+                  dataType: 'TEXT',
+                  renderableType: 'URL',
+                },
+                spaceId,
+                value: extractValueString(pv.value),
+              });
+            }
+          }
+        }
+
+        return { imageId: toHexId(imageId) };
       },
     },
     videos: {

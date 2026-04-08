@@ -2,15 +2,15 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 
 import { Proposal } from '../dto/proposals';
 import {
   ApiError,
-  type ApiProposalStatusResponse,
   ApiProposalStatusResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  getSpaceTopicProposalDetails,
+  getSubspaceProposalDetails,
   mapActionTypeToProposalType,
   mapProposalStatus,
   restFetch,
@@ -83,6 +83,8 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   // Determine proposal type from the first action
   const firstAction = apiProposal.actions[0];
   const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+  const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
+  const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
 
   // Convert votes to internal format
   const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
@@ -120,5 +122,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       totalCount: apiProposal.votes.total,
       nodes: votesWithProfiles,
     },
+    subspaceDetails: subspaceDetails ?? undefined,
+    spaceTopicDetails: spaceTopicDetails ?? undefined,
   };
 }

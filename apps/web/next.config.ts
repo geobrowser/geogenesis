@@ -6,10 +6,17 @@ import { ServerEnvironment } from './app/api/environment';
 
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
-  reactCompiler: true,
+  reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   allowedDevOrigins: ['localhost', '127.0.0.1'],
+  turbopack: {
+    resolveAlias: {
+      '@sentry/nextjs': './prebundled/sentry-stub.js',
+      '@sentry/browser': './prebundled/sentry-stub.js',
+      '@sentry/opentelemetry': './prebundled/sentry-stub.js',
+    },
+  },
   experimental: {
-    optimizePackageImports: ['effect', 'viem', 'wagmi', 'mapbox-gl', '@tiptap/core', '@tiptap/react'],
+    optimizePackageImports: ['effect', 'mapbox-gl', 'permissionless', 'viem', 'wagmi', '@tiptap/core', '@tiptap/react'],
   },
   images: {
     remotePatterns: [
@@ -124,14 +131,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  org: ServerEnvironment.sentryBuild?.org,
-  project: ServerEnvironment.sentryBuild?.project,
-  authToken: ServerEnvironment.sentryBuild?.authToken,
+export default process.env.DISABLE_SENTRY === '1'
+  ? nextConfig
+  : withSentryConfig(nextConfig, {
+      org: ServerEnvironment.sentryBuild?.org,
+      project: ServerEnvironment.sentryBuild?.project,
+      authToken: ServerEnvironment.sentryBuild?.authToken,
 
-  // Route Sentry requests through the app to avoid ad-blockers
-  tunnelRoute: '/monitoring',
+      // Route Sentry requests through the app to avoid ad-blockers
+      tunnelRoute: '/monitoring',
 
-  // Only log source map upload output in CI
-  silent: !process.env.CI,
-});
+      // Only log source map upload output in CI
+      silent: !process.env.CI,
+    });

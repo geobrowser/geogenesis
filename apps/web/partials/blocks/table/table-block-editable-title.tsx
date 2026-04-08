@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
@@ -13,7 +14,8 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { name, setName, isLoading } = useDataBlock();
-  const { source } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
   const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
   const userCanEdit = useUserIsEditing(spaceId);
 

@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
-
-import * as React from 'react';
 
 import { editingPropertiesAtom } from '~/atoms';
 

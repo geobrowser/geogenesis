@@ -5,10 +5,10 @@
  * Separates proposals into categories: executable, active, and completed.
  * Supports filtering by proposal type (content proposals vs membership requests).
  */
+import React from 'react';
+
 import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
-
-import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
@@ -32,6 +32,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
+import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from './governance-status-chip';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -111,6 +112,10 @@ export async function GovernanceProposalsList({
                 },
               });
 
+          const nowSec = Math.floor(Date.now() / 1000);
+          const showReopenMenu =
+            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && nowSec >= p.endTime;
+
           return (
             <Link
               key={p.id}
@@ -118,7 +123,12 @@ export async function GovernanceProposalsList({
               className="flex w-full flex-col gap-4 py-6"
             >
               <div className="flex flex-col gap-2">
-                <h3 className="text-smallTitle">{proposalTitle}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
+                  {showReopenMenu ? (
+                    <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
                   <div className="relative h-3 w-3 overflow-hidden rounded-full">
                     <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
@@ -291,7 +301,7 @@ async function fetchGovernanceProposals({
   connectedAddress: string | undefined;
   proposalType?: GovernanceProposalType;
 }): Promise<FetchGovernanceProposalsResult> {
-  const effectiveType = proposalType ?? 'proposals';
+  const effectiveType = proposalType ?? 'all';
 
   const [executableProposals, activeProposals, completedProposals] = await Promise.all([
     fetchProposalsByStatus({

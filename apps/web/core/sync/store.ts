@@ -1,17 +1,28 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { createAtom } from '@xstate/store';
+
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '../constants';
+import {
+  FORMAT_PROPERTY,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
+  RENDERABLE_TYPE_PROPERTY,
+  UNIT_PROPERTY,
+} from '../constants';
 import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
+import { getSpaceRank } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
+
+function relationKey(r: Relation): string {
+  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
 
 /**
  * Stable JSON stringify that produces consistent output regardless of object key order.
@@ -45,30 +56,80 @@ export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
 
-export function resolveRelationNames(r: Relation): Relation {
-  const resolvedFromName = r.fromEntity.name ?? resolveEntityName(r.fromEntity.id);
-  const resolvedToName = r.toEntity.name ?? resolveEntityName(r.toEntity.id);
+// Lazy indexes for O(1) entity lookups instead of O(N) array scans.
+// Rebuilt automatically when the underlying array reference changes.
+let _valueIndex: Map<string, Value[]> = new Map();
+let _valueIndexSource: Value[] | null = null;
 
-  if (resolvedFromName === r.fromEntity.name && resolvedToName === r.toEntity.name) {
+function getValueIndex(): Map<string, Value[]> {
+  const current = reactiveValues.get();
+  if (current !== _valueIndexSource) {
+    _valueIndex = new Map();
+    for (const v of current) {
+      const key = v.entity.id;
+      const arr = _valueIndex.get(key);
+      if (arr) arr.push(v);
+      else _valueIndex.set(key, [v]);
+    }
+    _valueIndexSource = current;
+  }
+  return _valueIndex;
+}
+
+let _relationIndex: Map<string, Relation[]> = new Map();
+let _relationIndexSource: Relation[] | null = null;
+
+function getRelationIndex(): Map<string, Relation[]> {
+  const current = reactiveRelations.get();
+  if (current !== _relationIndexSource) {
+    _relationIndex = new Map();
+    for (const r of current) {
+      const key = r.fromEntity.id;
+      const arr = _relationIndex.get(key);
+      if (arr) arr.push(r);
+      else _relationIndex.set(key, [r]);
+    }
+    _relationIndexSource = current;
+  }
+  return _relationIndex;
+}
+
+export function resolveRelationNames(r: Relation): Relation {
+  const resolvedFromName = resolveEntityName(r.fromEntity.id) ?? r.fromEntity.name;
+  const resolvedToName = resolveEntityName(r.toEntity.id) ?? r.toEntity.name;
+  const resolvedTypeName = resolveEntityName(r.type.id) ?? r.type.name;
+
+  if (
+    resolvedFromName === r.fromEntity.name &&
+    resolvedToName === r.toEntity.name &&
+    resolvedTypeName === r.type.name
+  ) {
     return r;
   }
 
   return {
     ...r,
+    type: { ...r.type, name: resolvedTypeName },
     fromEntity: { ...r.fromEntity, name: resolvedFromName },
     toEntity: { ...r.toEntity, name: resolvedToName },
   };
 }
 
 function resolveEntityName(entityId: string): string | null {
-  const synced = syncedEntities.get(entityId);
-  if (synced?.name != null) return synced.name;
+  const entityValues = getValueIndex().get(entityId) ?? [];
+  const nameValues = entityValues.filter(v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted);
 
-  const values = reactiveValues.get();
-  const nameValue = values.find(
-    v => v.entity.id === entityId && v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
-  );
-  return nameValue?.value ?? null;
+  if (nameValues.length === 0) {
+    const synced = syncedEntities.get(entityId);
+    return synced?.name ?? null;
+  }
+
+  if (nameValues.length === 1) return nameValues[0].value ?? null;
+
+  // Skip empty names, then pick from the highest-ranked space
+  const nonEmpty = nameValues.filter(v => v.value);
+  const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
+  return candidates.reduce((a, b) => (getSpaceRank(a.spaceId) <= getSpaceRank(b.spaceId) ? a : b)).value ?? null;
 }
 
 /**
@@ -103,25 +164,36 @@ export class GeoStore {
 
   private stream: GeoEventStream;
 
+  private pendingSyncEntities: Entity[] = [];
+  private syncScheduled = false;
+
   constructor(stream: GeoEventStream) {
     this.stream = stream;
 
-    /**
-     * The sync engine listens for events from the event stream. When it receives
-     * an event it queues it up in the background for syncing. Once syncing is
-     * complete it emits an event to the event stream to notify consumers that
-     * syncing is complete.
-     */
-    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities));
+    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
+      // Buffer entities and flush once per microtask to coalesce
+      // multiple ENTITIES_SYNCED events into a single hydrateWith call.
+      for (const entity of event.entities) {
+        syncedEntities.set(entity.id, entity);
+      }
+      this.pendingSyncEntities.push(...event.entities);
+      if (!this.syncScheduled) {
+        this.syncScheduled = true;
+        queueMicrotask(() => this.flushSync());
+      }
+    });
   }
 
-  private syncEntities(entities: Entity[]) {
+  private flushSync() {
+    this.syncScheduled = false;
+    const entities = [...new Map(this.pendingSyncEntities.map(e => [e.id, e])).values()];
+    this.pendingSyncEntities = [];
+    if (entities.length === 0) return;
+
     this.hydrateWith(entities);
 
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
-      console.log(`
-Finished syncing entities to store.
-Entity ids: ${entities.map(e => e.id).join(', ')}`);
+      console.log(`Finished syncing ${entities.length} entities to store.`);
     }
   }
 
@@ -177,13 +249,44 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
   }
 
+  /**
+   * Clear specific local (unpublished) changes by ID.
+   * Only local rows are removed so synced server state is preserved.
+   */
+  clearLocalChangesByIds(params: { spaceId: string; valueIds: string[]; relationIds: string[] }) {
+    const { spaceId, valueIds, relationIds } = params;
+    if (valueIds.length === 0 && relationIds.length === 0) return;
+
+    const valueIdsSet = new Set(valueIds);
+    const relationIdsSet = new Set(relationIds);
+    const affectedEntityIds = new Set<string>();
+
+    const currentValues = reactiveValues.get();
+    const currentRelations = reactiveRelations.get();
+
+    for (const value of currentValues) {
+      if (valueIdsSet.has(value.id) && value.isLocal === true) {
+        affectedEntityIds.add(value.entity.id);
+      }
+    }
+
+    for (const relation of currentRelations) {
+      if (relationIdsSet.has(relation.id) && relation.isLocal === true) {
+        affectedEntityIds.add(relation.fromEntity.id);
+      }
+    }
+
+    reactiveValues.set(prev => prev.filter(v => !(valueIdsSet.has(v.id) && v.isLocal === true)));
+    reactiveRelations.set(prev => prev.filter(r => !(relationIdsSet.has(r.id) && r.isLocal === true)));
+
+    if (affectedEntityIds.size > 0) {
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
+    }
+
+    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
+  }
+
   public hydrateWith(entities: Entity[]) {
-    /**
-     * We set the synced entities before we update values and relations
-     * so that the synced entities are immediately available as soon as
-     * any downstream reactive consumers update as a result of changes to
-     * reactiveValues or reactiveRelations.
-     */
     for (const entity of entities) {
       syncedEntities.set(entity.id, entity);
     }
@@ -191,28 +294,37 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
 
+    if (newValues.length === 0 && newRelations.length === 0) return;
+
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
     const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
-    reactiveValues.set(prev => {
-      const prevById = new Map(prev.map(v => [v.id, v]));
-      const mergedIncoming = newValues.map(v => {
-        const local = prevById.get(v.id);
-        return local && local.isLocal && !local.hasBeenPublished ? local : v;
+    if (newValues.length > 0) {
+      reactiveValues.set(prev => {
+        const prevById = new Map(prev.map(v => [v.id, v]));
+        const mergedIncoming = newValues.map(v => {
+          const local = prevById.get(v.id);
+          return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : v;
+        });
+        const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
+        return [...unchangedValues, ...mergedIncoming];
       });
-      const unchangedValues = prev.filter(t => !valueIdsToWrite.has(t.id));
-      return [...unchangedValues, ...mergedIncoming];
-    });
+    }
 
-    reactiveRelations.set(prev => {
-      const prevById = new Map(prev.map(r => [r.id, r]));
-      const mergedIncoming = newRelations.map(r => {
-        const local = prevById.get(r.id);
-        return local && local.isLocal && !local.hasBeenPublished ? local : r;
+    if (newRelations.length > 0) {
+      reactiveRelations.set(prev => {
+        const prevById = new Map(prev.map(r => [r.id, r]));
+        const deletedRelationKeys = new Set(prev.filter(r => r.isDeleted && r.isLocal).map(r => relationKey(r)));
+        const mergedIncoming = newRelations
+          .filter(r => !deletedRelationKeys.has(relationKey(r)))
+          .map(r => {
+            const local = prevById.get(r.id);
+            return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
+          });
+        const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
+        return [...unchangedRelations, ...mergedIncoming];
       });
-      const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
-      return [...unchangedRelations, ...mergedIncoming];
-    });
+    }
   }
 
   /**
@@ -280,7 +392,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get all triples for an entity including optimistic updates
    */
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
-    const values = reactiveValues.get().filter(v => v.entity.id === entityId);
+    const values = getValueIndex().get(entityId) ?? [];
 
     if (!includeDeleted) {
       return values.filter(v => Boolean(v.isDeleted) === false);
@@ -309,7 +421,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const stableDataType = this.getStableDataType(id);
     const pendingDataType = this.pendingDataTypes.get(id);
 
-    const dataType = stableDataType ?? pendingDataType ?? null;
+    const dataType = pendingDataType ?? stableDataType ?? null;
 
     if (!dataType) {
       return null;
@@ -320,6 +432,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       .map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
+        spaceId: r.toSpaceId,
+      }));
+
+    const relationEntityTypes = entity?.relations
+      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+        spaceId: r.toSpaceId,
       }));
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
@@ -334,6 +455,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
+      relationEntityTypes,
       renderableType: renderableTypeId,
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
       format: formatValue?.value ?? null,
@@ -349,7 +471,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get all relations for an entity including optimistic updates
    */
   public getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
-    const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
+    const relations = getRelationIndex().get(entityId) ?? [];
 
     if (!includeDeleted) {
       return relations.filter(r => Boolean(r.isDeleted) === false);
@@ -379,6 +501,39 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: newValue });
+  }
+
+  /**
+   * Add or update many values in one pass to avoid quadratic array rewrites.
+   */
+  public setValues(values: Value[]): void {
+    if (values.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newValues = values.map(value =>
+      produce(value, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    // Deduplicate by id, keeping the last occurrence for each id
+    const valueById = new Map<string, Value>();
+    for (const value of newValues) {
+      valueById.set(value.id, value);
+    }
+    const dedupedValues = Array.from(valueById.values());
+    const valueIds = new Set(valueById.keys());
+
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(value => !valueIds.has(value.id));
+      return [...unchangedValues, ...dedupedValues];
+    });
+
+    dedupedValues.forEach(value => {
+      this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value });
+    });
   }
 
   /**
@@ -429,6 +584,39 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   /**
+   * Add or update many relations in one pass to avoid quadratic array rewrites.
+   */
+  public setRelations(relations: Relation[]): void {
+    if (relations.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    const newRelations = relations.map(relation =>
+      produce(relation, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = false;
+        draft.isLocal = true;
+        draft.timestamp = timestamp;
+      })
+    );
+    // Deduplicate by id, keeping the last occurrence for each id
+    const relationById = new Map<string, Relation>();
+    for (const relation of newRelations) {
+      relationById.set(relation.id, relation);
+    }
+    const dedupedRelations = Array.from(relationById.values());
+    const relationIds = new Set(relationById.keys());
+
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(relation => !relationIds.has(relation.id));
+      return [...unchangedRelations, ...dedupedRelations];
+    });
+
+    dedupedRelations.forEach(relation => {
+      this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
+    });
+  }
+
+  /**
    * Delete a relation with optimistic updates
    */
   public deleteRelation(relation: Relation): void {
@@ -439,17 +627,54 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.timestamp = new Date().toISOString();
     });
 
-    // Remove from reactive relations
     reactiveRelations.set(prev => {
-      const unchangedRelations = prev.filter(t => {
-        return t.id !== newRelation.id;
-      });
-
+      const unchangedRelations = prev.filter(t => t.id !== newRelation.id);
       return [...unchangedRelations, newRelation];
     });
 
-    // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
+  }
+
+  /**
+   * Delete multiple values in one update to avoid multiple re-renders (e.g. entity delete).
+   */
+  public deleteValues(values: Value[]): void {
+    if (values.length === 0) return;
+    const deletedIds = new Set(values.map(v => v.id));
+    const newValues = values.map(v =>
+      produce(v, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = true;
+        draft.isLocal = true;
+        draft.timestamp = new Date().toISOString();
+      })
+    );
+    reactiveValues.set(prev => {
+      const unchanged = prev.filter(t => !deletedIds.has(t.id));
+      return [...unchanged, ...newValues];
+    });
+    newValues.forEach(v => this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: v }));
+  }
+
+  /**
+   * Delete multiple relations in one update to avoid multiple re-renders (e.g. entity delete).
+   */
+  public deleteRelations(relations: Relation[]): void {
+    if (relations.length === 0) return;
+    const deletedIds = new Set(relations.map(r => r.id));
+    const newRelations = relations.map(r =>
+      produce(r, draft => {
+        draft.hasBeenPublished = false;
+        draft.isDeleted = true;
+        draft.isLocal = true;
+        draft.timestamp = new Date().toISOString();
+      })
+    );
+    reactiveRelations.set(prev => {
+      const unchanged = prev.filter(t => !deletedIds.has(t.id));
+      return [...unchanged, ...newRelations];
+    });
+    newRelations.forEach(r => this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: r }));
   }
 
   /**

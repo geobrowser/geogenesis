@@ -1,6 +1,6 @@
-import cx from 'classnames';
-
 import type { ComponentPropsWithoutRef } from 'react';
+
+import cx from 'classnames';
 
 import { Dots } from '~/design-system/dots';
 

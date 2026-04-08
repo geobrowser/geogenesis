@@ -1,4 +1,8 @@
-import { Filter } from '~/core/blocks/data/filters';
+import * as React from 'react';
+
+import cx from 'classnames';
+
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -17,19 +21,107 @@ function PublishedFilterIconFilled() {
   );
 }
 
-export function TableBlockFilterPill({ filter, onDelete }: { filter: Filter; onDelete: () => void }) {
-  const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
+export type FilterGroup = {
+  columnId: string;
+  columnName: string | null;
+  filters: { filter: Filter; originalIndex: number }[];
+};
+
+export function groupFilters(filters: Filter[]): FilterGroup[] {
+  const groups = new Map<string, FilterGroup>();
+
+  filters.forEach((f, index) => {
+    const existing = groups.get(f.columnId);
+    if (existing) {
+      existing.filters.push({ filter: f, originalIndex: index });
+    } else {
+      groups.set(f.columnId, {
+        columnId: f.columnId,
+        columnName: f.columnName,
+        filters: [{ filter: f, originalIndex: index }],
+      });
+    }
+  });
+
+  return Array.from(groups.values());
+}
+
+type TableBlockFilterGroupPillProps = {
+  group: FilterGroup;
+  mode: FilterMode;
+  onToggleMode: () => void;
+  onDeleteValue: (originalIndex: number) => void;
+  onAddSimilar?: () => void;
+  isEditing: boolean;
+  serverFilterKeys: Set<string>;
+};
+
+function filterKey(f: Filter): string {
+  return `${f.columnId}:${f.value}`;
+}
+
+export function TableBlockFilterGroupPill({
+  group,
+  mode,
+  onToggleMode,
+  onDeleteValue,
+  onAddSimilar,
+  isEditing,
+  serverFilterKeys,
+}: TableBlockFilterGroupPillProps) {
+  const hasMultipleValues = group.filters.length > 1;
+
+  // The mode toggle is only interactive when the user can actually modify
+  // at least one value in the group (i.e. is editing, or has local filters).
+  const hasAnyLocalFilter = group.filters.some(({ filter }) => !serverFilterKeys.has(filterKey(filter)));
+  const canToggleMode = isEditing || hasAnyLocalFilter;
+  const hasAnyDeletable = isEditing || hasAnyLocalFilter;
 
   return (
     <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pr-1 pl-2 text-metadata">
-      {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filter.columnName} is</span>
-        <span>·</span>
-        <span>{value}</span>
+        <span className="whitespace-nowrap">
+          {onAddSimilar ? (
+            <button type="button" className="transition-colors hover:text-ctaPrimary" onClick={onAddSimilar}>
+              {group.columnName} is
+            </button>
+          ) : (
+            <>{group.columnName} is</>
+          )}
+          {hasMultipleValues && (
+            <>
+              {' '}
+              {canToggleMode ? (
+                <button type="button" className="text-grey-04 transition-colors hover:text-text" onClick={onToggleMode}>
+                  ({mode === 'OR' ? 'or' : 'and'})
+                </button>
+              ) : (
+                <span className="text-grey-04">({mode === 'OR' ? 'or' : 'and'})</span>
+              )}
+            </>
+          )}
+          :
+        </span>
+        <div className={cx('flex items-center', hasAnyDeletable ? 'gap-1' : 'gap-0')}>
+          {group.filters.map(({ filter, originalIndex }, i) => {
+            const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
+            const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
+
+            return (
+              <React.Fragment key={`${filter.columnId}-${filter.value}`}>
+                <span className="whitespace-nowrap">
+                  {i > 0 && <span className="text-grey-04">, </span>}
+                  {value}
+                </span>
+                {canDelete && (
+                  <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={() => onDeleteValue(originalIndex)} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
-      <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />
     </div>
   );
 }

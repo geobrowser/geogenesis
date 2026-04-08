@@ -1,11 +1,12 @@
-import { redirect } from 'next/navigation';
-
 import * as React from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
   getIsProposalEnded,
   getNoVotePercentage,
+  getProposalName,
   getProposalTimeRemaining,
   getUserVote,
   getYesVotePercentage,
@@ -22,6 +23,7 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
+import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
 interface Props {
@@ -60,6 +62,10 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+  const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
+  const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
+  const proposalTitle =
+    proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
   return (
     <>
@@ -75,6 +81,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           isProposalEnded={isProposalEnded}
           status={proposal.status}
           canExecute={proposal.canExecute}
+          proposalType={proposal.type}
           userVote={userVote}
         />
       </div>
@@ -83,7 +90,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
             <div className="flex flex-col items-center gap-8">
               <div className="flex flex-col items-center gap-3">
-                <div className="text-mediumTitle">{proposal.name}</div>
+                <div className="text-mediumTitle">{proposalTitle}</div>
                 <div className="flex items-center justify-between">
                   <div className="inline-flex items-center gap-2 text-metadataMedium">
                     <Link
@@ -144,9 +151,8 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
         <div className="h-full overflow-x-clip border-t border-divider">
           <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
             {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
-            {(proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE') && (
-              <SubspaceProposal proposal={proposal} />
-            )}
+            {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
+            {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
           </div>
         </div>
       </div>

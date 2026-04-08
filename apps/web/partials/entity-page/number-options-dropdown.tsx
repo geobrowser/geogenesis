@@ -1,10 +1,11 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
-import cx from 'classnames';
 
 import * as React from 'react';
+
+import cx from 'classnames';
 
 import { useSearch } from '~/core/hooks/use-search';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';

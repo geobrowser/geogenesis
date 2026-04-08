@@ -40,10 +40,21 @@ export const GOVERNANCE_ACTIONS = {
   SUBSPACE_RELATED: '0xe1dfc59a5ffb6192be6bd82457a48b1b675f4ff2886a6c1471f5c47631448de5' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_UNRELATED') - removes related status from a subspace */
   SUBSPACE_UNRELATED: '0xa5ad9ae41010e3b9b1d8db394f518a795fcee6b8e4dacf924fd493f2fa8fa79c' as Hex,
+  /** keccak256('GOVERNANCE.TOPIC_DECLARED') - declares the primary topic for a space */
+  TOPIC_DECLARED: '0xd020fbe5a0270daba9a9031c59402c03d5093ebfa8c4caa2203c2c72f95ce30c' as Hex,
+  /** keccak256('GOVERNANCE.TOPIC_REMOVED') - removes the primary topic for a space */
+  TOPIC_REMOVED: '0x6311f3c439cf906060b1d174cabab01645a7c8c628bee916f91d714030e3f195' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_DECLARED') - declares a subtopic for a subspace using an entity UUID */
   SUBSPACE_TOPIC_DECLARED: '0xf475121947612f07c138e5ac27aa31355aaea0da3096cea1b702daeb5e8477aa' as Hex,
   /** keccak256('GOVERNANCE.SUBSPACE_TOPIC_REMOVED') - removes a subtopic from a subspace */
   SUBSPACE_TOPIC_REMOVED: '0x98ee515a05d2eb17f8e4c1e997a36ee6a8eca03af78d98943787935f9e39adda' as Hex,
+} as const;
+
+/** Permissionless action constants (keccak256 hashes) for curation votes */
+export const PERMISSIONLESS_ACTIONS = {
+  UPVOTED: '0x1fc04a8d9387c7bd1199a2a77c8e531a7a7b11991df5dcc8c9acb6abcb481725' as Hex,
+  DOWNVOTED: '0xde8b897ce7cc541dacb388d5aabb3dc0fb7856920284f41582c15b5fc31a8662' as Hex,
+  UNVOTED: '0x3bd4c337382f79aa5007a91169bb57723b5dd59e6b4bb60d20362bcc0d9d998b' as Hex,
 } as const;
 
 /**

@@ -1,13 +1,15 @@
 'use client';
 
-import { WagmiProvider, createGeoWalletConfig, createMockConfig, getGeoChain, useGeoLogin } from '@geogenesis/auth';
-import { useSetAtom } from 'jotai';
+import { WagmiProvider, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import { Button } from '~/design-system/button';
 
-import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
 
@@ -34,14 +36,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
 export function GeoConnectButton() {
   const setName = useSetAtom(nameAtom);
-  const setEntityId = useSetAtom(entityIdAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setName('');
-    setEntityId('');
+    setTopicId('');
     setAvatar('');
     setSpaceId('');
     setStep('start');

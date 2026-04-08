@@ -1,9 +1,9 @@
 'use client';
 
-import { cva } from 'class-variance-authority';
-
 import * as React from 'react';
 import { forwardRef } from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 

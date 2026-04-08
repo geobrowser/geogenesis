@@ -1,11 +1,12 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
-import { Effect } from 'effect';
-import { useParams, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
+import { useParams, useSearchParams } from 'next/navigation';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { getRelationEntityRelations } from '~/core/io/queries';

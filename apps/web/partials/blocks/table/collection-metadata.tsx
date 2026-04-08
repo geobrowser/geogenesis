@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import cx from 'classnames';
 
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+
+import cx from 'classnames';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';

@@ -1,8 +1,9 @@
 import { IdUtils } from '@geoprotocol/geo-sdk';
 import { renderHook } from '@testing-library/react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
+import { PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
 import { Value } from '../types';
 import { useImageUrlFromEntity } from './use-entity-media';
@@ -13,7 +14,6 @@ import {
   formatShortAddress,
   getImageHash,
   getImagePath,
-  getOpenGraphImageUrl,
   getPaginationPages,
   validateSpaceId,
 } from './utils';
@@ -73,6 +73,54 @@ describe('GeoNumber', () => {
     const result = GeoNumber.format('not-a-number');
     expect(result).toBe('not-a-number');
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  describe('compact number formatting (K, M, B, T)', () => {
+    it('should format thousands with K suffix', () => {
+      expect(GeoNumber.format(1500, 'K')).toBe('1.5K');
+      expect(GeoNumber.format(1000, 'K')).toBe('1K');
+      expect(GeoNumber.format(999999, 'K')).toBe('999.999K');
+    });
+
+    it('should format millions with M suffix', () => {
+      expect(GeoNumber.format(1000000, 'M')).toBe('1M');
+      expect(GeoNumber.format(2500000, 'M')).toBe('2.5M');
+    });
+
+    it('should format billions with B suffix', () => {
+      expect(GeoNumber.format(1000000000, 'B')).toBe('1B');
+      expect(GeoNumber.format(3750000000, 'B')).toBe('3.75B');
+    });
+
+    it('should format trillions with T suffix', () => {
+      expect(GeoNumber.format(1000000000000, 'T')).toBe('1T');
+      expect(GeoNumber.format(1500000000000, 'T')).toBe('1.5T');
+    });
+
+    it('should handle compact format with :: prefix', () => {
+      expect(GeoNumber.format(1500, '::K')).toBe('1.5K');
+      expect(GeoNumber.format(2500000, '::M')).toBe('2.5M');
+    });
+
+    it('should handle compact format with currency symbol', () => {
+      expect(GeoNumber.format(1500, 'K', '$')).toBe('$1.5K');
+      expect(GeoNumber.format(1000000, 'M', '€')).toBe('€1M');
+    });
+
+    it('should handle small values with compact format', () => {
+      expect(GeoNumber.format(500, 'K')).toBe('0.5K');
+      expect(GeoNumber.format(1, 'M')).toBe('0.000001M');
+    });
+
+    it('should strip trailing zeros from compact format', () => {
+      expect(GeoNumber.format(2000, 'K')).toBe('2K');
+      expect(GeoNumber.format(5000000, 'M')).toBe('5M');
+    });
+
+    it('should handle string values with compact format', () => {
+      expect(GeoNumber.format('1500', 'K')).toBe('1.5K');
+      expect(GeoNumber.format('2500000', 'M')).toBe('2.5M');
+    });
   });
 });
 
@@ -280,38 +328,16 @@ describe('getImageHash', () => {
     expect(getImageHash('ipfs://QmBananaSandwich')).toBe('QmBananaSandwich');
   });
 
-  it('an HTTP path returns the IPFS hash', () => {
-    expect(getImageHash(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
+  it('an IPFS gateway URL returns the IPFS hash', () => {
+    expect(getImageHash('https://gateway.example.com/ipfs/QmBananaSandwich')).toBe('QmBananaSandwich');
+  });
+
+  it('a Pinata gateway URL returns the IPFS hash', () => {
+    expect(getImageHash(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {
     expect(getImageHash('QmBananaSandwich')).toBe('QmBananaSandwich');
-  });
-});
-
-describe('getOpenGraphImageUrl', () => {
-  it('a Geo IPFS gateway path returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe(
-      'https://www.geobrowser.io/preview/QmBananaSandwich.png'
-    );
-  });
-
-  it('an HTTP path returns the same string', () => {
-    expect(getOpenGraphImageUrl('https://banana.sandwich')).toBe('https://banana.sandwich');
-  });
-
-  it('an IPFS-prefixed path returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('ipfs://QmBananaSandwich')).toBe(
-      'https://www.geobrowser.io/preview/QmBananaSandwich.png'
-    );
-  });
-
-  it('a non-empty string that does not match the other values returns the Geo OG preview route', () => {
-    expect(getOpenGraphImageUrl('QmBananaSandwich')).toBe('https://www.geobrowser.io/preview/QmBananaSandwich.png');
-  });
-
-  it('an empty string returns the default OG image', () => {
-    expect(getOpenGraphImageUrl('')).toBe(null);
   });
 });
 

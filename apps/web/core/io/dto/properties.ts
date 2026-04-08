@@ -1,6 +1,6 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
+import { ADDRESS, GEO_LOCATION, PLACE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
 import { DataType as AppDataType, Property, RenderableType } from '~/core/types';
 import { getDataTypeFromEntityId } from '~/core/utils/property/properties';
 
@@ -40,6 +40,8 @@ export function getStrictRenderableType(renderableType: string | null): Renderab
       return 'GEO_LOCATION';
     case PLACE:
       return 'PLACE';
+    case ADDRESS:
+      return 'ADDRESS';
     default:
       return undefined;
   }

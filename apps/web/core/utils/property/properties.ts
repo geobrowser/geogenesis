@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import {
   ADDRESS,
@@ -7,12 +7,14 @@ import {
   FORMAT_PROPERTY,
   GEO_LOCATION,
   PLACE,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
   RENDERABLE_TYPE_PROPERTY,
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 /** Reverse mapping: data type entity ID → DataType string */
 const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
@@ -196,10 +198,18 @@ export function reconstructFromStore(
 
   const dataType: DataType = getDataTypeFromEntityId(dataTypeRelation.toEntity.id);
 
-  // Get the name value
-  const nameValue = getValues({
+  // Skip empty names, then pick from the highest-ranked space
+  const allNameValues = getValues({
     selector: v => v.entity.id === id && v.property.id === SystemIds.NAME_PROPERTY,
-  })[0];
+  });
+  const nameValue =
+    allNameValues.length <= 1
+      ? allNameValues[0]
+      : (() => {
+          const nonEmpty = allNameValues.filter(v => v.value);
+          const candidates = nonEmpty.length > 0 ? nonEmpty : allNameValues;
+          return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+        })();
 
   // Get the renderableType relation (if any)
   const renderableTypeRelation = getRelations({
@@ -222,6 +232,16 @@ export function reconstructFromStore(
   }).map(r => ({
     id: r.toEntity.id,
     name: r.toEntity.name || null,
+    spaceId: r.toSpaceId,
+  }));
+
+  // Get relation entity types
+  const relationEntityTypes = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE,
+  }).map(r => ({
+    id: r.toEntity.id,
+    name: r.toEntity.name || null,
+    spaceId: r.toSpaceId,
   }));
 
   const renderableTypeId = renderableTypeRelation?.toEntity.id || null;
@@ -229,9 +249,10 @@ export function reconstructFromStore(
   // Construct a Property object
   const property: Property = {
     id,
-    name: nameValue?.value || null, // Fixed: use null instead of empty string
+    name: nameValue?.value || null,
     dataType,
-    relationValueTypes, // Added: missing field
+    relationValueTypes,
+    relationEntityTypes,
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
     format: formatValue?.value || null,

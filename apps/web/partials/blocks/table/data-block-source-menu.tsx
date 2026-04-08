@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -27,7 +28,8 @@ export const DataBlockSourceMenu = ({
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
   const { entityId } = useDataBlock();
-  const { setSource, source } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { setSource, source } = useSource({ filterState, setFilterState });
   const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
 
   return (
@@ -106,7 +108,8 @@ type SpacesMenuProps = {
 
 const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
-  const { setSource, source } = useSource();
+  const { filterState, setFilterState } = useFilters();
+  const { setSource, source } = useSource({ filterState, setFilterState });
 
   const handleToggleSpace = (spaceId: string) => {
     setSource({

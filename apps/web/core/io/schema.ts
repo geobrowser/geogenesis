@@ -87,6 +87,7 @@ export const Relation = Schema.Struct({
     types: Schema.Array(EntityType),
     valuesList: Schema.Array(
       Schema.Struct({
+        spaceId: HexId,
         propertyId: HexId,
         text: Schema.NullOr(Schema.String),
       })
@@ -133,6 +134,7 @@ export const Space = Schema.Struct({
   id: HexId,
   type: SpaceGovernanceType,
   address: AddressWithValidation,
+  topicId: Schema.NullOr(HexId),
 
   membersList: Schema.Array(
     Schema.Struct({
@@ -145,10 +147,15 @@ export const Space = Schema.Struct({
     })
   ),
 
+  topic: Schema.optional(Schema.NullOr(Schema.Unknown)),
   page: Schema.NullOr(Entity),
 });
 
-export type RemoteSpace = Schema.Schema.Type<typeof Space>;
+type RemoteSpaceBase = Schema.Schema.Type<typeof Space>;
+
+export type RemoteSpace = Omit<RemoteSpaceBase, 'topic'> & {
+  topic?: RemoteEntity | null;
+};
 
 export const SearchResult = Schema.Struct({
   id: HexId,

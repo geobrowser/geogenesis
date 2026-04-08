@@ -1,9 +1,10 @@
-import 'mapbox-gl/dist/mapbox-gl.css';
-
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+import 'mapbox-gl/dist/mapbox-gl.css';
+
 import { GeoPoint } from '~/core/utils/utils';
+
 import { Skeleton } from './skeleton';
 
 const DEFAULT_ZOOM = 9;

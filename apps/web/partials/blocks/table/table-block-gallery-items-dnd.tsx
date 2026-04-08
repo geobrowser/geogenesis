@@ -1,5 +1,5 @@
 import { rectSortingStrategy } from '@dnd-kit/sortable';
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItemsProps } from './table-block-dnd-items';
 import { TableBlockGalleryItem } from './table-block-gallery-item';
@@ -14,6 +14,7 @@ const renderItem = ({
   source,
   isPlaceholder,
   autoFocus,
+  collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockGalleryItem
     isEditing={isEditing}
@@ -27,6 +28,7 @@ const renderItem = ({
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    collectionTypeFilters={collectionTypeFilters}
   />
 );
 

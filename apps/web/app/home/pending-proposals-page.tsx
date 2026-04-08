@@ -1,6 +1,6 @@
-import { Effect } from 'effect';
-
 import * as React from 'react';
+
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
@@ -159,6 +159,7 @@ async function PendingContentProposal({
           return await getMembershipProposalName(proposal.type, proposal);
         case 'ADD_SUBSPACE':
         case 'REMOVE_SUBSPACE':
+        case 'SET_TOPIC':
           return proposal.name;
         default:
           throw new Error('Unsupported proposal type');

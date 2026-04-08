@@ -29,7 +29,7 @@ export function EntityPageHeader({
     <div className="space-y-2">
       <EntityPageRelations entityId={entityId} spaceId={spaceId} serverRelations={serverRelations} />
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
-      {showHeader && !isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />}
+      {showHeader && !isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
     </div>
   );
 }

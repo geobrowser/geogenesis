@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import {
   ColumnDef,
   createColumnHelper,
@@ -8,15 +8,18 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+
+import * as React from 'react';
+import { useState } from 'react';
+
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
-
-import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
+import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -26,8 +29,10 @@ import { Text } from '~/design-system/text';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
+import { SortableColumnHeader } from './sortable-column-header';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -37,23 +42,39 @@ const ColumnHeader = ({
   isEditMode,
   spaceId,
   isLastColumn,
+  sort,
+  onSort,
 }: {
   column: Property;
   isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
+  sort: ColumnSortState;
+  onSort: (next: ColumnSortState) => void;
 }) => {
   const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
-  return isEditMode && !isNameColumn ? (
-    <EditableEntityTableColumnHeader
-      unpublishedColumns={[]}
-      column={column}
-      entityId={column.id}
-      spaceId={spaceId}
-      isLastColumn={isLastColumn}
-    />
-  ) : (
-    <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
+  const label = isNameColumn ? 'Name' : (column.name ?? column.id);
+  const isSortable = SORTABLE_DATA_TYPES.includes(column.dataType);
+
+  const editableHeader =
+    isEditMode && !isNameColumn ? (
+      <EditableEntityTableColumnHeader
+        unpublishedColumns={[]}
+        column={column}
+        entityId={column.id}
+        spaceId={spaceId}
+        isLastColumn={isLastColumn}
+      />
+    ) : undefined;
+
+  if (!isSortable) {
+    return editableHeader ?? <Text variant="smallTitle">{label}</Text>;
+  }
+
+  return (
+    <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
+      {editableHeader}
+    </SortableColumnHeader>
   );
 };
 
@@ -99,6 +120,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
+    const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -147,6 +169,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
+          collectionTypeFilters={collectionTypeFilters}
         />
       );
     }
@@ -178,11 +201,16 @@ type TableBlockTableProps = {
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
+  isLoading: boolean;
+  isFetched: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   onAddPlaceholder?: () => void;
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
+  sortState: ColumnSortState;
+  onSort: (next: ColumnSortState) => void;
 };
 
 export const TableBlockTable = ({
@@ -192,11 +220,16 @@ export const TableBlockTable = ({
   propertiesSchema,
   shownColumnIds,
   placeholder,
+  isLoading,
+  isFetched,
   onChangeEntry,
   onLinkEntry,
   onAddPlaceholder,
   source,
   shouldAutoFocusPlaceholder,
+  collectionTypeFilters,
+  sortState,
+  onSort,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -225,15 +258,16 @@ export const TableBlockTable = ({
       propertiesSchema,
       source,
       shouldAutoFocusPlaceholder,
+      collectionTypeFilters,
     },
   });
 
   const isEmpty = rows.length === 0;
 
-  if (isEmpty) {
+  if (isEmpty && isFetched && !isLoading) {
     return (
-      <div className="block rounded-lg bg-grey-01">
-        <div className="flex flex-col items-center justify-center gap-4 p-4 text-resultLink">
+      <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
+        <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholder.text}</div>
           <div>
             <img src={placeholder.image} className="h-[64px]! w-auto object-contain" alt="" />
@@ -277,7 +311,7 @@ export const TableBlockTable = ({
                       !isEditingDateTime ? 'min-w-[250px]' : 'min-w-[300px]'
                     )}
                   >
-                    <div className="flex h-full w-full items-center gap-[10px]">
+                    <div className="group/header flex h-full w-full items-center gap-[10px]">
                       {isEditing && !isShown ? <EyeHide /> : null}
                       <ColumnHeader
                         key={column.id}
@@ -285,11 +319,14 @@ export const TableBlockTable = ({
                         isEditMode={isEditing}
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
+                        sort={sortState}
+                        onSort={onSort}
                       />
                     </div>
                   </th>
                 );
               })}
+              {!isEditing && <th className="w-px p-[10px]" />}
             </tr>
           </thead>
           <tbody>
@@ -308,6 +345,11 @@ export const TableBlockTable = ({
                       </TableCell>
                     );
                   })}
+                  {!isEditing && (
+                    <TableCell isShown={true} isEditMode={false}>
+                      <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
+                    </TableCell>
+                  )}
                 </tr>
               );
             })}

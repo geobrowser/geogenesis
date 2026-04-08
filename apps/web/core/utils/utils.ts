@@ -1,12 +1,11 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
-import { Position } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
+
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
-import { getAddress } from 'viem';
 
-import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -23,6 +22,9 @@ export const NavUtils = {
     `/space/${spaceId}/governance?proposalId=${proposalId}${from ? `&from=${from}` : ''}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
+  },
+  toImport: (spaceId: string, editParam = true) => {
+    return `/space/${spaceId}/import${editParam ? '?edit=true' : ''}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
@@ -64,6 +66,8 @@ export class GeoNumber {
   static defaultFormat = 'precision-unlimited';
 
   static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
+    const safeFormatPattern = typeof formatPattern === 'string' ? formatPattern.trim() : undefined;
+
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
@@ -71,13 +75,57 @@ export class GeoNumber {
         throw new Error('Invalid number');
       }
 
-      const formatToUse = formatPattern || GeoNumber.defaultFormat;
-      const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
+      const bareFormat = safeFormatPattern?.replace(/^::/, '');
+      const compactUnit: Record<string, { divisor: number; suffix: string }> = {
+        K: { divisor: 1_000, suffix: 'K' },
+        M: { divisor: 1_000_000, suffix: 'M' },
+        B: { divisor: 1_000_000_000, suffix: 'B' },
+        T: { divisor: 1_000_000_000_000, suffix: 'T' },
+      };
 
-      const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
-      return `${currencySymbol}${message.format({ value: numericValue })}`;
+      if (bareFormat && compactUnit[bareFormat]) {
+        const { divisor, suffix } = compactUnit[bareFormat];
+        const scaled = numericValue / divisor;
+        const formattedScaled = new Intl.NumberFormat(locale, {
+          useGrouping: false,
+          maximumFractionDigits: 12,
+          minimumFractionDigits: 0,
+        }).format(scaled);
+
+        // Intl can return "0" or "0.000000000000"; normalize.
+        const normalized = formattedScaled.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+
+        return `${currencySymbol}${normalized}${suffix}`;
+      }
+
+      const tryFormat = (pattern: string) => {
+        const normalized = pattern.startsWith('::') ? pattern : `::${pattern}`;
+        const message = new IntlMessageFormat(`{value, number, ${normalized}}`, locale);
+        return `${currencySymbol}${message.format({ value: numericValue })}`;
+      };
+
+      const primaryPattern =
+        safeFormatPattern && safeFormatPattern.length > 0 ? safeFormatPattern : GeoNumber.defaultFormat;
+
+      try {
+        // First, try the user-specified or property-specified pattern
+        return tryFormat(primaryPattern);
+      } catch (primaryError) {
+        console.warn(
+          `Unable to format number with pattern "${safeFormatPattern}". Falling back to default pattern "${GeoNumber.defaultFormat}".`,
+          primaryError
+        );
+
+        // If the primary pattern already was the default, rethrow to be handled below
+        if (primaryPattern === GeoNumber.defaultFormat) {
+          throw primaryError;
+        }
+
+        // Fallback to a safe default ICU skeleton
+        return tryFormat(GeoNumber.defaultFormat);
+      }
     } catch (e) {
-      console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
+      console.error(`Unable to format number: "${value}" with format: "${safeFormatPattern}".`, e);
       return value;
     }
   }
@@ -352,123 +400,55 @@ export class GeoDate {
   };
 }
 
-// We rewrite the URL to use the geobrowser preview API in vercel.json.
-// This forces the image to be fetched with a file extension as a workaround
-// for some services not parsing images without a file extension. Looking at
-// you TWITTER.
-// https://geobrowser.io/preview/{hash}.png -> https://geobrowser.io/api/og?hash=
-export const getOpenGraphImageUrl = (value: string) => {
-  if (value.startsWith('https://api.thegraph.com/ipfs')) {
-    const hash = value.split('=')[1];
-    return `https://www.geobrowser.io/preview/${hash}.png`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else if (value.startsWith('ipfs://')) {
-    return `https://www.geobrowser.io/preview/${getImageHash(value)}.png`;
-  } else if (value) {
-    return `https://www.geobrowser.io/preview/${value}.png`;
-  }
-
-  return null;
-};
-
-export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
-  const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entities.avatar(entity?.relations) ?? null;
-  const serverCoverUrl = Entities.cover(entity?.relations);
-
-  const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entities.description(entity?.values ?? []);
-
-  return {
-    entityName,
-    openGraphImageUrl,
-    description,
-  };
-};
-
-// Get the image hash from an image path
-// e.g., https://gateway.lighthouse.storage/ipfs/HASH
-// e.g., https://magenta-naval-crow-536.mypinata.cloud/files/HASH
-// e.g., ipfs://HASH -> HASH
+// Extract the IPFS CID from a gateway URL, ipfs:// URI, or raw hash
 export const getImageHash = (value: string) => {
-  // Handle Lighthouse gateway URLs
-  if (value.startsWith(IPFS_GATEWAY_READ_PATH)) {
-    const [, hash] = value.split(IPFS_GATEWAY_READ_PATH);
-    return hash;
-  }
-  // Handle Pinata gateway URLs
   if (value.startsWith(PINATA_GATEWAY_READ_PATH)) {
     const [, hash] = value.split(PINATA_GATEWAY_READ_PATH);
     return hash;
   }
-  // Handle ipfs:// protocol
+  const ipfsPathIndex = value.indexOf('/ipfs/');
+  if (ipfsPathIndex !== -1) {
+    return value.slice(ipfsPathIndex + '/ipfs/'.length);
+  }
   if (value.startsWith('ipfs://')) {
     const [, hash] = value.split('ipfs://');
     return hash;
   }
-  // If the value does not contain a known gateway or protocol prefix, it already is a hash
   return value;
 };
 
-// Get the image URL from an image triple value
-// this allows us to render images on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
+// Resolve an image triple value to a Pinata gateway URL
 export const getImagePath = (value: string) => {
-  // Use Pinata gateway as the primary source for IPFS images
   if (value.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
-    // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
-    // The image is likely a static, bundled path
     return value;
   }
 };
 
-// Get the fallback image URL (Lighthouse gateway) for when Pinata fails
+// Lighthouse fallback for legacy CIDs not yet migrated to Pinata
 export const getImagePathFallback = (value: string) => {
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
+    return `${LIGHTHOUSE_GATEWAY_READ_PATH}${getImageHash(value)}`;
   }
+  return value;
 };
 
-// Get the video hash from a video path
-// Uses the same logic as image hash extraction
 export const getVideoHash = getImageHash;
 
-// Get the video URL from a video triple value
-// this allows us to render videos on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getVideoPath = (value: string) => {
-  // Use Pinata gateway as the primary source for IPFS videos
   if (value.startsWith('ipfs://')) {
     return `${PINATA_GATEWAY_READ_PATH}${getVideoHash(value)}`;
-    // The video likely resolves to a video resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
-    // The video is likely a static, bundled path
     return value;
   }
 };
 
-// Get the fallback video URL (Lighthouse gateway) for when Pinata fails
-export const getVideoPathFallback = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getVideoHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
-  }
-};
+export const getVideoPathFallback = getImagePathFallback;
 
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);
@@ -533,9 +513,11 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
     case 'REMOVE_MEMBER':
       return `Remove member from ${proposal.space.name}`;
     case 'ADD_SUBSPACE':
-      return `Add subspace to ${proposal.space.name}`;
+      return `Add space to ${proposal.space.name}`;
     case 'REMOVE_SUBSPACE':
-      return `Remove subspace from ${proposal.space.name}`;
+      return `Remove space from ${proposal.space.name}`;
+    case 'SET_TOPIC':
+      return `Set topic for ${proposal.space.name}`;
   }
 }
 
@@ -573,7 +555,7 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
 }
 
 export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId === getAddress(address));
+  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
 }
 
 export function getProposalTimeRemaining(endTime: number) {

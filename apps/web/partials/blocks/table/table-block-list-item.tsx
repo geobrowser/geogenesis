@@ -1,6 +1,7 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -19,7 +20,13 @@ import { SelectEntity } from '~/design-system/select-entity';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import {
+  LIST_GALLERY_BROWSE_BODY_CLASS,
+  browseListStackMarginTopForField,
+  orderCellsForBrowseFigma,
+} from './table-block-browse-layout';
 import { TableBlockPropertyField } from './table-block-property-field';
 
 type Props = {
@@ -34,6 +41,7 @@ type Props = {
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export function TableBlockListItem({
@@ -48,6 +56,7 @@ export function TableBlockListItem({
   relationId,
   source,
   autoFocus = false,
+  collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
@@ -127,7 +136,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-3">
+        <div className="min-w-0 w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -142,6 +151,7 @@ export function TableBlockListItem({
                 }}
                 spaceId={currentSpaceId}
                 autoFocus={autoFocus}
+                relationValueTypes={collectionTypeFilters}
               />
             ) : (
               <>
@@ -182,6 +192,7 @@ export function TableBlockListItem({
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
+              variant="tableCell"
               placeholder="Add description..."
               onChange={value => {
                 onChangeEntry(rowEntityId, currentSpaceId, {
@@ -222,75 +233,82 @@ export function TableBlockListItem({
   }
 
   return (
-    <Link
-      entityId={rowEntityId}
-      spaceId={currentSpaceId}
-      href={href}
-      className="group flex w-full max-w-full grow items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
-    >
-      <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
-        {image ? (
-          <GeoImage
-            value={image}
-            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-            alt=""
-            fill
-          />
-        ) : (
-          <NextImage
-            src={PLACEHOLDER_SPACE_IMAGE}
-            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-            alt=""
-            fill
-            sizes={DEFAULT_IMAGE_SIZES}
-            loading="eager"
-          />
-        )}
-      </div>
-      <div className="w-full">
-        {source.type !== 'COLLECTION' ? (
-          <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-        ) : (
-          <CollectionMetadata
-            view="LIST"
-            isEditing={false}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={rowEntityId}
-            spaceId={nameCell?.space}
-            collectionId={nameCell?.collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
+    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider">
+      <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="flex grow items-start gap-6">
+        <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
+          {image ? (
+            <GeoImage
+              value={image}
+              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              alt=""
+              fill
+            />
+          ) : (
+            <NextImage
+              src={PLACEHOLDER_SPACE_IMAGE}
+              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              alt=""
+              fill
+              sizes={DEFAULT_IMAGE_SIZES}
+              loading="eager"
+            />
+          )}
+        </div>
+        <div className="min-w-0 w-full">
+          {source.type !== 'COLLECTION' ? (
             <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-          </CollectionMetadata>
-        )}
-        {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
-
-        {otherPropertyData.map(p => {
-          const property = properties?.[p.slotId];
-
-          if (!property) {
-            return null;
-          }
-
-          return (
-            <div key={`${p.slotId}-${cellId}`}>
-              <TableBlockPropertyField
-                key={p.slotId}
-                spaceId={currentSpaceId}
-                entityId={cellId}
-                property={property}
-                onChangeEntry={onChangeEntry}
-                source={source}
-                disableLink={true}
-                entityName={name}
-              />
+          ) : (
+            <CollectionMetadata
+              view="LIST"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
+              entityId={rowEntityId}
+              spaceId={nameCell?.space}
+              collectionId={nameCell?.collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+            >
+              <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+            </CollectionMetadata>
+          )}
+          {description && (
+            <div
+              className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}
+            >
+              {description}
             </div>
-          );
-        })}
-      </div>
-    </Link>
+          )}
+
+          {orderCellsForBrowseFigma(otherPropertyData, properties).map(p => {
+            const property = properties?.[p.slotId];
+
+            if (!property) {
+              return null;
+            }
+
+            const isRelation = property.dataType === 'RELATION';
+
+            return (
+              <div key={`${p.slotId}-${rowEntityId}`} className={browseListStackMarginTopForField(isRelation)}>
+                <TableBlockPropertyField
+                  key={p.slotId}
+                  spaceId={currentSpaceId}
+                  entityId={rowEntityId}
+                  property={property}
+                  onChangeEntry={onChangeEntry}
+                  source={source}
+                  disableLink={true}
+                  entityName={name}
+                  browseListBody
+                />
+              </div>
+            );
+          })}
+        </div>
+      </Link>
+      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+    </div>
   );
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useSelector } from '@xstate/store/react';
-import Link from 'next/link';
 
 import * as React from 'react';
+
+import Link from 'next/link';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -90,7 +91,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
             )}
           </>
         ) : (
-          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isRelationPage={true} />
+          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
         )}
 
         <div className="flex items-center gap-5">

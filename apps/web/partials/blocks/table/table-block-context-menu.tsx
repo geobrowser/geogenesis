@@ -1,9 +1,10 @@
 'use client';
 
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { useAtom } from 'jotai';
 
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -66,7 +67,7 @@ export function TableBlockContextMenu() {
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-1001 block w-[200px]! overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-1001 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
           align="start"
         >
           {isInitialState && (

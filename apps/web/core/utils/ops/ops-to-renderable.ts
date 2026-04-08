@@ -1,4 +1,4 @@
-import { Op } from '@geoprotocol/geo-sdk';
+import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
 import { Relation, Value } from '~/core/types';

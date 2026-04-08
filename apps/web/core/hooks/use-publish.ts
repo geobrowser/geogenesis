@@ -1,9 +1,11 @@
 'use client';
 
-import { Op, daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
-import { Duration, Effect, Either, Schedule } from 'effect';
+import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
+
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { Relation, Value } from '~/core/types';
 
@@ -139,6 +141,7 @@ export function useBulkPublish() {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
+  const { storage } = useMutate();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
@@ -200,13 +203,17 @@ export function useBulkPublish() {
         return;
       }
 
+      storage.setAsPublished(
+        triples.map(v => v.id),
+        relations.map(r => r.id)
+      );
       dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
       onSuccess?.();
 
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [smartAccount, personalSpaceId, dispatch]
+    [smartAccount, personalSpaceId, dispatch, storage]
   );
 
   return {

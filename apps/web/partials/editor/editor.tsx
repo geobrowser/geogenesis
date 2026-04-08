@@ -1,13 +1,14 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk';
+import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import type { EditorView } from '@tiptap/pm/view';
-import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+
+import * as React from 'react';
+
 import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
@@ -47,7 +48,7 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
-  const { upsertEditorState, editorJson, activeEntityId, blockIds, setHasContent } = useEditorStore();
+  const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
@@ -150,7 +151,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         if (editable) {
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
+            (editor
+              .getJSON()
+              .content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ??
+              false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
@@ -164,23 +168,34 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     [editable, activeEntityId, editorContentVersion]
   );
 
-  // Keep editorRef in sync with the current editor instance
-  React.useLayoutEffect(() => {
-    editorRef.current = editor ?? null;
-  });
+  const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
-  // Save editor state synchronously when switching from edit mode to read mode.
-  // This ensures formatting changes (like underline) are persisted even if
-  // the editor doesn't fire onBlur before being recreated on mode switch.
-  React.useLayoutEffect(() => {
-    const wasEditable = prevEditableRef.current;
-    prevEditableRef.current = editable;
+  React.useEffect(() => {
+    if (!editor) return;
 
-    // Only save when transitioning from edit → read mode
-    if (wasEditable && !editable && editorRef.current && !editorRef.current.isDestroyed) {
-      upsertEditorStateRef.current(editorRef.current.getJSON());
+    const currentDoc = normalizeEditorContent(editor.getJSON());
+    const nextDoc = normalizeEditorContent(editorJson);
+
+    if (JSON.stringify(currentDoc) === JSON.stringify(nextDoc)) {
+      return;
     }
-  }, [editable]);
+
+    // Keep the editor instance alive for data blocks, but sync external store
+    // changes like entity/block deletion into the active ProseMirror document.
+    editor.commands.setContent(editorJson);
+  }, [editor, editorJson]);
+
+  const handleGutterClick = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!editor || !editable) return;
+
+      // Only focus when clicking on the editor wrapper itself, not inner content.
+      if (e.target === e.currentTarget) {
+        editor.commands.focus();
+      }
+    },
+    [editor, editable]
+  );
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -205,8 +220,13 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   return (
     <LayoutGroup id="editor">
-      <div className={editable ? 'editable' : 'not-editable'}>
-        {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
+      <div
+        ref={editorWrapperRef}
+        className={editable ? 'editable' : 'not-editable'}
+        onClick={handleGutterClick}
+        style={editable ? { minHeight: '8rem' } : undefined}
+      >
+        {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}
       </div>
@@ -336,3 +356,25 @@ const useSuppressFlushSyncWarning = () => {
     };
   }, []);
 };
+
+function normalizeEditorContent(content: JSONContent): JSONContent {
+  const normalizedAttrs = content.attrs
+    ? Object.fromEntries(
+        Object.entries(content.attrs).filter(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          return key !== 'spaceId' && key !== 'relationId';
+        })
+      )
+    : undefined;
+
+  return {
+    ...content,
+    ...(normalizedAttrs && Object.keys(normalizedAttrs).length > 0 ? { attrs: normalizedAttrs } : {}),
+    ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
+    ...(content.content
+      ? {
+          content: content.content.map(child => normalizeEditorContent(child)),
+        }
+      : {}),
+  };
+}

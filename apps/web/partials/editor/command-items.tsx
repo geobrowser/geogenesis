@@ -3,6 +3,8 @@ import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/d
 
 import * as React from 'react';
 
+import { EditorCode } from '~/design-system/icons/editor-code';
+import { EditorFormula } from '~/design-system/icons/editor-formula';
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
@@ -215,6 +217,28 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
     title: 'Heading 3',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+    },
+  },
+  {
+    icon: <EditorCode />,
+    title: 'Code Block',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setCodeBlock().run();
+    },
+  },
+  {
+    icon: <EditorFormula />,
+    title: 'Formula',
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: 'inlineMath',
+          attrs: { latex: 'x^2' },
+        })
+        .run();
     },
   },
   {

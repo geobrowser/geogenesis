@@ -1,11 +1,11 @@
 'use client';
 
+import React, { useEffect, useRef, useState } from 'react';
+
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
-
-import React, { useEffect, useRef, useState } from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
 import { useTabId } from '~/core/state/editor/use-editor';

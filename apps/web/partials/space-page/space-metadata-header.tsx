@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -11,11 +11,11 @@ import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-st
 import { Create } from '~/design-system/icons/create';
 
 import { RelationsGroup } from '../entity-page/editable-entity-page';
+import { EntityVoteButtons } from '../entity-page/entity-vote-buttons';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement<any>;
-  entityId: string;
 }
 
 export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
@@ -56,6 +56,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
         )}
         {membersComponent}
       </div>
+      <EntityVoteButtons entityId={id} spaceId={spaceId} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import { Effect } from 'effect';
-
 import { cache } from 'react';
+
+import { Effect } from 'effect';
 
 import { getBatchEntities, getEntity, getEntityPage } from '~/core/io/queries';
 import { Entity, Relation } from '~/core/types';

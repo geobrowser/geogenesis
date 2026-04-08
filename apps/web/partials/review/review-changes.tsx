@@ -1,12 +1,14 @@
 'use client';
 
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
@@ -50,7 +52,13 @@ import { editorContentVersionAtom } from '~/atoms';
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
+  const {
+    isReviewOpen,
+    setIsReviewOpen,
+    reviewVersion,
+    activeSpace: diffPreferredSpaceId,
+    setActiveSpace: setDiffPreferredSpaceId,
+  } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
@@ -86,12 +94,31 @@ export const ReviewChanges = () => {
 
   const spacesKey = dedupedSpacesWithActions.sort().join(',');
   const [activeSpace, setActiveSpace] = React.useState<string>('');
+  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
 
   React.useEffect(() => {
+    if (!isReviewOpen) {
+      setDiffPreferredSpaceId('');
+      appliedPreferredSpaceForVersion.current = null;
+    }
+  }, [isReviewOpen, setDiffPreferredSpaceId]);
+
+  React.useEffect(() => {
+    const shouldApplyPreferred =
+      reviewVersion !== appliedPreferredSpaceForVersion.current &&
+      Boolean(diffPreferredSpaceId) &&
+      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
+
+    if (shouldApplyPreferred) {
+      appliedPreferredSpaceForVersion.current = reviewVersion;
+      setActiveSpace(diffPreferredSpaceId);
+      return;
+    }
+
     if (activeSpace === '' && dedupedSpacesWithActions[0]) {
       setActiveSpace(dedupedSpacesWithActions[0]);
     }
-  }, [spacesKey, activeSpace]);
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -113,9 +140,13 @@ export const ReviewChanges = () => {
     if (dedupedSpacesWithActions.length === 0 && statusBarState.reviewState !== 'publishing-contract') {
       setIsReviewOpen(false);
     } else if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-      setActiveSpace(dedupedSpacesWithActions[0] ?? '');
+      const next =
+        diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
+          ? diffPreferredSpaceId
+          : (dedupedSpacesWithActions[0] ?? '');
+      setActiveSpace(next);
     }
-  }, [spacesKey, activeSpace, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
@@ -269,6 +300,15 @@ export const ReviewChanges = () => {
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: visibleEntities.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 300,
+    overscan: 3,
+    gap: 8,
+  });
 
   const handleProposalNameChange = (name: string) => {
     setProposals(prev => ({
@@ -535,7 +575,7 @@ export const ReviewChanges = () => {
               )}
               <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
                 <Pending isPending={isPublishing}>
-                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edits' : 'Propose edits'}
+                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
                 </Pending>
               </Button>
             </div>
@@ -566,7 +606,7 @@ export const ReviewChanges = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex grow flex-col gap-2 overflow-y-scroll px-2 pb-2">
+              <div ref={scrollContainerRef} className="grow overflow-y-scroll px-2 pb-2">
                 {isLoadingChanges ? (
                   <div className="rounded-xl bg-white p-4">
                     <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
@@ -599,13 +639,31 @@ export const ReviewChanges = () => {
                     </div>
                   </div>
                 ) : (
-                  visibleEntities.map(entity => (
-                    <div key={entity.entityId} className="rounded-xl bg-white p-4">
-                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                        <ChangedEntity entity={entity} spaceId={activeSpace} />
-                      </div>
-                    </div>
-                  ))
+                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                      const entity = visibleEntities[virtualRow.index];
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={node => rowVirtualizer.measureElement(node)}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <div className="rounded-xl bg-white p-4">
+                            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                              <ChangedEntity entity={entity} spaceId={activeSpace} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

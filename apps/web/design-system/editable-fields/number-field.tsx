@@ -1,9 +1,10 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { cva } from 'class-variance-authority';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { DataType } from '~/core/types';

@@ -1,4 +1,5 @@
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { notFound } from 'next/navigation';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';

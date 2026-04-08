@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -15,6 +15,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -28,6 +29,7 @@ type Props = {
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export function TableBlockBulletedListItem({
@@ -41,6 +43,7 @@ export function TableBlockBulletedListItem({
   relationId,
   source,
   autoFocus = false,
+  collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
@@ -69,6 +72,7 @@ export function TableBlockBulletedListItem({
               }}
               spaceId={currentSpaceId}
               autoFocus={autoFocus}
+              relationValueTypes={collectionTypeFilters}
             />
           ) : (
             <div>
@@ -112,30 +116,33 @@ export function TableBlockBulletedListItem({
   }
 
   return (
-    <div className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
+    <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
-      {source.type !== 'COLLECTION' ? (
-        <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
-          {name}
-        </Link>
-      ) : (
-        <CollectionMetadata
-          view="BULLETED_LIST"
-          isEditing={false}
-          name={name}
-          currentSpaceId={currentSpaceId}
-          entityId={rowEntityId}
-          spaceId={nameCell?.space}
-          collectionId={nameCell?.collectionId}
-          relationId={relationId}
-          verified={verified}
-          onLinkEntry={onLinkEntry}
-        >
+      <div className="grow">
+        {source.type !== 'COLLECTION' ? (
           <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
             {name}
           </Link>
-        </CollectionMetadata>
-      )}
+        ) : (
+          <CollectionMetadata
+            view="BULLETED_LIST"
+            isEditing={false}
+            name={name}
+            currentSpaceId={currentSpaceId}
+            entityId={rowEntityId}
+            spaceId={nameCell?.space}
+            collectionId={nameCell?.collectionId}
+            relationId={relationId}
+            verified={verified}
+            onLinkEntry={onLinkEntry}
+          >
+            <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
+              {name}
+            </Link>
+          </CollectionMetadata>
+        )}
+      </div>
+      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
     </div>
   );
 }

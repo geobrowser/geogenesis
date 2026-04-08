@@ -1,12 +1,18 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
-import cx from 'classnames';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+import { Effect } from 'effect';
+
+import { getBatchEntities } from '~/core/io/queries';
+import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { SORT_PROPERTY } from '~/core/system-ids';
 import type {
   BlockChange,
   DataBlockChange,
@@ -16,6 +22,7 @@ import type {
   TextValueChange,
   ValueChange,
 } from '~/core/utils/diff/types';
+import { formatSchedule } from '~/core/utils/schedule';
 import { useEntityMediaUrl, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { getVideoPath } from '~/core/utils/utils';
 
@@ -25,6 +32,8 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
+
+import { getFenceLength, readFencedCodeBlock } from './markdown-fences';
 
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
 const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
@@ -91,7 +100,7 @@ type ChangedEntityProps = {
   spaceId: string;
 };
 
-export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
+export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId }: ChangedEntityProps) {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
@@ -275,7 +284,7 @@ export const ChangedEntity = ({ entity, spaceId }: ChangedEntityProps) => {
       </div>
     </div>
   );
-};
+});
 
 type MediaChangeRowProps = {
   avatarRelations: RelationChange[];
@@ -523,62 +532,15 @@ type MarkdownDiffProps = {
 };
 
 const MarkdownDiffRenderer = ({ text, highlightClass }: MarkdownDiffProps) => {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const content = headingMatch[2];
-      elements.push(
-        <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, <span className={cx(highlightClass)}>{content}</span>)}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    if (line.match(/^[-*]\s+/)) {
-      const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+(.+)$/)) {
-        const itemContent = lines[i].replace(/^[-*]\s+/, '');
-        listItems.push(
-          <li key={i}>
-            <div className="react-renderer node-paragraph">
-              <div className="whitespace-normal">
-                <p>
-                  <span className={cx(highlightClass)}>{itemContent}</span>
-                </p>
-              </div>
-            </div>
-          </li>
-        );
-        i++;
-      }
-      elements.push(<ul key={`ul-${i}`}>{listItems}</ul>);
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <div key={i} className="react-renderer node-paragraph">
-          <div className="whitespace-normal">
-            <p>
-              <span className={cx(highlightClass)}>{line}</span>
-            </p>
-          </div>
-        </div>
-      );
-    }
-    i++;
-  }
-
-  return <>{elements}</>;
+  return (
+    <>
+      {renderMarkdownDocument(text, {
+        textClassName: highlightClass,
+        markClassName: highlightClass,
+        codeBlockClassName: highlightClass ? 'rounded ring-2 ring-current' : undefined,
+      })}
+    </>
+  );
 };
 
 type TextBlockCellProps = {
@@ -586,11 +548,50 @@ type TextBlockCellProps = {
   side: 'before' | 'after';
 };
 
+function isStandaloneRenderableImageUrl(s: string): boolean {
+  const t = s.trim();
+  if (t.startsWith('ipfs://')) return true;
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(t) || /\/ipfs\//i.test(t);
+  }
+  return false;
+}
+
+function isStandaloneRenderableVideoUrl(s: string): boolean {
+  const t = s.trim();
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(t);
+  }
+  if (t.startsWith('ipfs://')) {
+    return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(t);
+  }
+  return false;
+}
+
 const TextBlockCell = ({ block, side }: TextBlockCellProps) => {
   const value = side === 'before' ? block.before : block.after;
 
   if (value === null) {
     return <div />;
+  }
+
+  const trimmed = value.trim();
+  if (isStandaloneRenderableImageUrl(trimmed)) {
+    const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+    return (
+      <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
+        <NativeGeoImage value={trimmed} alt="" className="h-full w-full object-cover" />
+      </div>
+    );
+  }
+  if (isStandaloneRenderableVideoUrl(trimmed)) {
+    const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+    const videoSrc = getVideoPath(trimmed);
+    return (
+      <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
+        <video src={videoSrc} controls className="h-full w-full object-cover" />
+      </div>
+    );
   }
 
   const diff = 'diff' in block ? block.diff : undefined;
@@ -627,9 +628,7 @@ type MarkdownDiffWithChunksProps = {
 };
 
 const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunksProps) => {
-  const hasMarkdown = /^#{1,6}\s|^[-*]\s/.test(fullText);
-
-  if (!hasMarkdown) {
+  if (!hasMarkdownSyntax(fullText)) {
     return <DiffRenderer diff={diff} side={side} />;
   }
 
@@ -691,6 +690,11 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
     return result;
   };
 
+  /** Advance the chunk cursor through `count` characters without emitting any nodes. */
+  const skipChars = (count: number) => {
+    charIndex += count;
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
@@ -698,34 +702,102 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       charIndex++;
     }
 
+    // Code block (``` ... ```)
+    if (getFenceLength(line)) {
+      const block = readFencedCodeBlock(lines, i);
+      if (!block) {
+        i++;
+        continue;
+      }
+
+      skipChars(block.openingLine.length);
+
+      if (block.codeText.length > 0) {
+        charIndex++;
+      }
+
+      const codeNodes = getStyledText(block.codeText);
+      const codeLinesArray = block.codeText.split('\n');
+      elements.push(
+        <div key={`code-${i}`} className="code-block">
+          <div className="code-block-line-numbers" aria-hidden>
+            {codeLinesArray.map((_, idx) => (
+              <div key={idx}>{idx + 1}</div>
+            ))}
+          </div>
+          <code>{codeNodes}</code>
+        </div>
+      );
+
+      if (block.closingLine) {
+        charIndex++;
+        skipChars(block.closingLine.length);
+      }
+
+      i = block.nextIndex - 1;
+      continue;
+    }
+
+    /** Apply inline mark rendering (code, math) to unchanged diff spans. */
+    const applyInlineMarks = (nodes: React.ReactNode[]): React.ReactNode[] => {
+      return nodes.map((node, idx) => {
+        if (React.isValidElement<{ className?: string; children?: React.ReactNode }>(node)) {
+          const { className, children } = node.props;
+          if (!className && typeof children === 'string' && hasMarkdownSyntax(children)) {
+            return <React.Fragment key={`im-${idx}`}>{renderMarkdownInline(children)}</React.Fragment>;
+          }
+        }
+        return node;
+      });
+    };
+
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       charIndex += headingMatch[1].length + 1;
       elements.push(
         <div key={i} className="react-renderer node-heading">
-          {renderHeading(level, getStyledText(headingMatch[2]))}
+          {renderHeading(level, applyInlineMarks(getStyledText(headingMatch[2])))}
         </div>
       );
       charIndex += headingMatch[2].length;
       continue;
     }
 
-    const listMatch = line.match(/^([-*])\s+(.+)$/);
-    if (listMatch) {
+    const unorderedListMatch = line.match(/^([-*])\s+(.+)$/);
+    if (unorderedListMatch) {
       charIndex += 2;
       elements.push(
         <ul key={`ul-${i}`}>
           <li>
             <div className="react-renderer node-paragraph">
               <div className="whitespace-normal">
-                <p>{getStyledText(listMatch[2])}</p>
+                <p>{applyInlineMarks(getStyledText(unorderedListMatch[2]))}</p>
               </div>
             </div>
           </li>
         </ul>
       );
-      charIndex += listMatch[2].length;
+      charIndex += unorderedListMatch[2].length;
+      continue;
+    }
+
+    const orderedListMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    if (orderedListMatch) {
+      const prefixLen = orderedListMatch[1].length + 2; // "1. " = digit + dot + space
+      charIndex += prefixLen;
+      elements.push(
+        <ol key={`ol-${i}`} start={Number(orderedListMatch[1])}>
+          <li>
+            <div className="react-renderer node-paragraph">
+              <div className="whitespace-normal">
+                <p>{applyInlineMarks(getStyledText(orderedListMatch[2]))}</p>
+              </div>
+            </div>
+          </li>
+        </ol>
+      );
+      charIndex += orderedListMatch[2].length;
       continue;
     }
 
@@ -733,7 +805,7 @@ const MarkdownDiffWithChunks = ({ diff, side, fullText }: MarkdownDiffWithChunks
       elements.push(
         <div key={i} className="react-renderer node-paragraph">
           <div className="whitespace-normal">
-            <p>{getStyledText(line)}</p>
+            <p>{applyInlineMarks(getStyledText(line))}</p>
           </div>
         </div>
       );
@@ -812,6 +884,93 @@ const VIEW_NAMES: Record<string, string> = {
   [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
 };
 
+function isUuidForEntityBatch(id: string): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const h = id.replace(/-/g, '').toLowerCase();
+  return h.length === 32 && /^[0-9a-f]+$/.test(h);
+}
+
+function maybeAddEntityBatchId(ids: Set<string>, raw: unknown): void {
+  if (typeof raw === 'string' && isUuidForEntityBatch(raw)) ids.add(raw);
+}
+
+function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[] {
+  const ids = new Set<string>();
+
+  const extractFromSortJson = (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+      maybeAddEntityBatchId(ids, parsed.sort_by);
+    } catch {
+      // ignore
+    }
+  };
+
+  const extractFromFilterJson = (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.filter) {
+        for (const [key, filterValue] of Object.entries(parsed.filter as Record<string, unknown>)) {
+          if (key !== '_relation') maybeAddEntityBatchId(ids, key);
+          if (filterValue && typeof filterValue === 'object') {
+            const fv = filterValue as Record<string, unknown>;
+            maybeAddEntityBatchId(ids, fv.is);
+            if (Array.isArray(fv.in))
+              fv.in.forEach((v: unknown) => {
+                maybeAddEntityBatchId(ids, v);
+              });
+            if (
+              fv.fromEntity &&
+              typeof fv.fromEntity === 'object' &&
+              typeof (fv.fromEntity as Record<string, unknown>).is === 'string'
+            )
+              maybeAddEntityBatchId(ids, (fv.fromEntity as Record<string, unknown>).is);
+            if (fv.type && typeof fv.type === 'object' && typeof (fv.type as Record<string, unknown>).is === 'string')
+              maybeAddEntityBatchId(ids, (fv.type as Record<string, unknown>).is);
+          }
+        }
+      }
+      if (parsed.spaceId?.in && Array.isArray(parsed.spaceId.in)) {
+        parsed.spaceId.in.forEach((v: unknown) => {
+          maybeAddEntityBatchId(ids, v);
+        });
+      }
+    } catch {
+      // not JSON, skip
+    }
+  };
+
+  for (const v of configValues) {
+    const extract = v.propertyId === SORT_PROPERTY ? extractFromSortJson : extractFromFilterJson;
+    if (v.before) extract(v.before);
+    if (v.after) extract(v.after);
+  }
+
+  return [...ids];
+}
+
+function useConfigNameMap(configValues: ValueChange[]) {
+  const entityIds = React.useMemo(() => extractEntityIdsFromConfigValues(configValues), [configValues]);
+  const validIds = React.useMemo(() => entityIds.filter(isUuidForEntityBatch), [entityIds]);
+  const key = validIds.sort().join(',');
+
+  const { data: nameMap = new Map<string, string>() } = useQuery({
+    queryKey: ['config-entity-names', key],
+    enabled: validIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const entities = await Effect.runPromise(getBatchEntities(validIds));
+      const map = new Map<string, string>();
+      for (const e of entities) {
+        if (e.name) map.set(e.id, e.name);
+      }
+      return map;
+    },
+  });
+
+  return nameMap;
+}
+
 type DataBlockCellProps = {
   block: BlockChange & { type: 'dataBlock' };
   side: 'before' | 'after';
@@ -825,12 +984,15 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
   const displayName = nameValue ?? dataBlock.blockName ?? 'Data Block';
 
   const allRelations = dataBlock.relations ?? [];
-  const configValues = dataBlock.values ?? [];
+  const allConfigValues = dataBlock.values ?? [];
+  const filterValues = allConfigValues.filter(v => v.propertyId !== SORT_PROPERTY);
+  const sortValues = allConfigValues.filter(v => v.propertyId === SORT_PROPERTY);
+  const nameMap = useConfigNameMap(allConfigValues);
 
   const viewRelations = allRelations.filter(r => r.typeId === SystemIds.VIEW_PROPERTY);
   const columnRelations = allRelations.filter(r => r.typeId === SystemIds.SHOWN_COLUMNS);
   const collectionItemRelations = allRelations.filter(r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE);
-  const hasConfigChanges = allRelations.length > 0 || configValues.length > 0;
+  const hasConfigChanges = allRelations.length > 0 || allConfigValues.length > 0;
 
   const storeViewEntityId = useBlockViewEntityId(dataBlock.id, spaceId);
   const diffViewInfo = getViewInfo(viewRelations, side);
@@ -839,14 +1001,18 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
     (storeViewEntityId
       ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
       : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
-  const filterValue = getFilterValue(configValues, side);
+  const filterValue = getFilterValue(filterValues, side);
 
   const hasViewChange = viewRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
   );
-  const hasFilterChange = configValues.some(v => v.before !== v.after);
-  const isFilterAdded = configValues.some(v => v.before === null && v.after !== null);
-  const isFilterRemoved = configValues.some(v => v.before !== null && v.after === null);
+  const hasFilterChange = filterValues.some(v => (v.before || null) !== (v.after || null));
+  const isFilterAdded = filterValues.some(v => !v.before && !!v.after);
+  const isFilterRemoved = filterValues.some(v => !!v.before && !v.after);
+  const hasSortChange = sortValues.some(v => (v.before || null) !== (v.after || null));
+  const isSortAdded = sortValues.some(v => !v.before && !!v.after);
+  const isSortRemoved = sortValues.some(v => !!v.before && !v.after);
+  const sortValue = getSortValue(sortValues, side);
   const hasColumnsChange = columnRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
   );
@@ -900,8 +1066,35 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
               }
               label={
                 <div className="max-w-[400px] text-left">
-                  <div className="font-mono text-xs break-all whitespace-pre-wrap">
-                    {filterValue ? formatJsonSafe(filterValue) : 'None'}
+                  <div className="text-xs break-all whitespace-pre-wrap">
+                    {filterValue ? formatFilterDisplay(filterValue, nameMap) : 'None'}
+                  </div>
+                </div>
+              }
+              position="top"
+              variant="light"
+            />
+          )}
+
+          {hasSortChange && !(isSortAdded && side === 'before') && !(isSortRemoved && side === 'after') && (
+            <Tooltip
+              trigger={
+                <div
+                  className={cx(
+                    'inline-flex cursor-help items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1',
+                    side === 'before' && 'ring-2 ring-deleted',
+                    side === 'after' && 'ring-2 ring-added'
+                  )}
+                >
+                  <span className="text-metadata text-grey-04">
+                    {isSortAdded ? 'Sort added' : isSortRemoved ? 'Sort removed' : 'Sort changed'}
+                  </span>
+                </div>
+              }
+              label={
+                <div className="max-w-[400px] text-left">
+                  <div className="text-xs break-all whitespace-pre-wrap">
+                    {sortValue ? formatSortDisplay(sortValue, nameMap) : 'None'}
                   </div>
                 </div>
               }
@@ -1107,9 +1300,68 @@ function getFilterValue(configValues: ValueChange[], side: 'before' | 'after'): 
   return null;
 }
 
-function formatJsonSafe(value: string): string {
+function getSortValue(sortValues: ValueChange[], side: 'before' | 'after'): string | null {
+  for (const v of sortValues) {
+    const val = side === 'before' ? v.before : v.after;
+    if (val !== null && val !== '') return val;
+  }
+  return null;
+}
+
+function formatSortDisplay(value: string, nameMap: Map<string, string>): string {
   try {
-    return JSON.stringify(JSON.parse(value), null, 2);
+    const parsed = JSON.parse(value);
+    const direction = parsed.sort_direction === 'ascending' ? 'Ascending' : 'Descending';
+    const columnId = parsed.sort_by ?? 'unknown';
+    const columnName = nameMap.get(columnId) ?? columnId;
+    return `${columnName}, ${direction}`;
+  } catch {
+    return value;
+  }
+}
+
+function formatFilterDisplay(value: string, nameMap: Map<string, string>): string {
+  try {
+    const parsed = JSON.parse(value);
+    const lines: string[] = [];
+
+    if (parsed.mode === 'OR') lines.push('Mode: OR');
+
+    if (parsed.spaceId?.in && Array.isArray(parsed.spaceId.in)) {
+      const spaceNames = parsed.spaceId.in.map((id: string) => nameMap.get(id) ?? id);
+      lines.push(`Space: ${spaceNames.join(', ')}`);
+    }
+
+    if (parsed.filter) {
+      for (const [key, filterValue] of Object.entries(parsed.filter as Record<string, unknown>)) {
+        if (!filterValue || typeof filterValue !== 'object') continue;
+        const fv = filterValue as Record<string, unknown>;
+
+        if (key === '_relation') {
+          if (fv.fromEntity && typeof fv.fromEntity === 'object') {
+            const entityId = (fv.fromEntity as Record<string, unknown>).is as string;
+            const typeId =
+              fv.type && typeof fv.type === 'object' ? ((fv.type as Record<string, unknown>).is as string) : '';
+            const entityName = nameMap.get(entityId) ?? entityId;
+            const typeName = typeId ? (nameMap.get(typeId) ?? typeId) : '';
+            lines.push(`Backlink: ${entityName}${typeName ? ` (${typeName})` : ''}`);
+          } else if (fv.type && typeof fv.type === 'object') {
+            const typeId = (fv.type as Record<string, unknown>).is as string;
+            lines.push(`Relation type: ${nameMap.get(typeId) ?? typeId}`);
+          }
+        } else {
+          const propName = nameMap.get(key) ?? key;
+          if (typeof fv.is === 'string') {
+            lines.push(`${propName}: ${nameMap.get(fv.is) ?? fv.is}`);
+          } else if (Array.isArray(fv.in)) {
+            const values = fv.in.map((v: string) => nameMap.get(v) ?? v);
+            lines.push(`${propName}: ${values.join(', ')}`);
+          }
+        }
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : 'No filters';
   } catch {
     return value;
   }
@@ -1187,6 +1439,8 @@ const ValueChangeCell = ({ value, side }: ValueChangeCellProps) => {
           <PointDisplay value={displayValue} side={side} />
         ) : value.type === 'DATE' || value.type === 'DATETIME' ? (
           <DateDisplay value={displayValue} side={side} />
+        ) : value.type === 'SCHEDULE' ? (
+          <ScheduleDisplay value={displayValue} side={side} />
         ) : (
           <SimpleValueDisplay value={displayValue} side={side} />
         )}
@@ -1390,6 +1644,23 @@ const DateDisplay = ({ value, side }: DateDisplayProps) => {
       suppressHydrationWarning
       className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}
     >
+      {displayValue}
+    </span>
+  );
+};
+
+type ScheduleDisplayProps = {
+  value: string | null;
+  side: 'before' | 'after';
+};
+
+const ScheduleDisplay = ({ value, side }: ScheduleDisplayProps) => {
+  if (value === null) return null;
+
+  const displayValue = formatSchedule(value);
+
+  return (
+    <span className={cx('inline rounded', side === 'before' ? 'bg-deleted line-through decoration-1' : 'bg-added')}>
       {displayValue}
     </span>
   );

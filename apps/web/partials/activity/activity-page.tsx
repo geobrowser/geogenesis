@@ -1,7 +1,8 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { Effect } from 'effect';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Suspense } from 'react';
+
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';

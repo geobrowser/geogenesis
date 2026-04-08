@@ -1,10 +1,10 @@
 'use client';
 
-import { cva } from 'class-variance-authority';
-import Textarea from 'react-textarea-autosize';
-
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
+
+import { cva } from 'class-variance-authority';
+import Textarea from 'react-textarea-autosize';
 
 import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { GeoPoint } from '~/core/utils/utils';
@@ -61,9 +61,13 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
       const lat = Number.isNaN(latNum) ? 0 : GeoPoint.clampLatForMap(latNum);
       const lon = Number.isNaN(lonNum) ? 0 : GeoPoint.clampLngForMap(lonNum);
       const displayLat =
-        updatedPoints.latitude !== '' && !Number.isNaN(latNum) && lat !== latNum ? lat.toString() : updatedPoints.latitude;
+        updatedPoints.latitude !== '' && !Number.isNaN(latNum) && lat !== latNum
+          ? lat.toString()
+          : updatedPoints.latitude;
       const displayLon =
-        updatedPoints.longitude !== '' && !Number.isNaN(lonNum) && lon !== lonNum ? lon.toString() : updatedPoints.longitude;
+        updatedPoints.longitude !== '' && !Number.isNaN(lonNum) && lon !== lonNum
+          ? lon.toString()
+          : updatedPoints.longitude;
       setPointsValues({ latitude: displayLat, longitude: displayLon });
       props.onChange(GeoPoint.formatCoordinates(lat, lon));
     } else {

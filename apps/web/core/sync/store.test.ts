@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
@@ -148,7 +149,7 @@ describe('GeoStore', () => {
       expect(syncedEntities.get('entity-2')).toEqual(mockEntity2);
     });
 
-    it('should log entity IDs in development environment', () => {
+    it('should log sync summary in development environment', async () => {
       vi.stubEnv('NODE_ENV', 'development');
       const entities = [mockEntity1, mockEntity2];
 
@@ -161,11 +162,13 @@ describe('GeoStore', () => {
       // Trigger the callback to simulate the event
       syncCallback?.({ entities });
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Finished syncing entities to store'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('entity-1, entity-2'));
+      // Hydration is batched via queueMicrotask
+      await Promise.resolve();
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Finished syncing'));
     });
 
-    it('should not log in production environment', () => {
+    it('should not log in production environment', async () => {
       vi.stubEnv('NODE_ENV', 'production');
       const entities = [mockEntity1];
 
@@ -177,6 +180,8 @@ describe('GeoStore', () => {
 
       // Trigger the callback to simulate the event
       syncCallback?.({ entities });
+
+      await Promise.resolve();
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
@@ -505,6 +510,58 @@ describe('GeoStore', () => {
     });
   });
 
+  describe('setValues', () => {
+    it('should add many values with optimistic updates and emit events for each', () => {
+      const newValues = [
+        { ...mockValue1, id: 'bulk-value-1' },
+        { ...mockValue2, id: 'bulk-value-2' },
+      ];
+
+      store.setValues(newValues);
+
+      const values = reactiveValues.get();
+      expect(values.find(v => v.id === 'bulk-value-1')).toEqual(
+        expect.objectContaining({
+          id: 'bulk-value-1',
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        })
+      );
+      expect(values.find(v => v.id === 'bulk-value-2')).toEqual(
+        expect.objectContaining({
+          id: 'bulk-value-2',
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        })
+      );
+
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.VALUES_CREATED,
+        value: expect.objectContaining({ id: 'bulk-value-1' }),
+      });
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.VALUES_CREATED,
+        value: expect.objectContaining({ id: 'bulk-value-2' }),
+      });
+    });
+
+    it('should replace existing values with matching IDs in one pass', () => {
+      reactiveValues.set([mockValue1, mockValue2]);
+
+      store.setValues([
+        { ...mockValue1, value: 'updated-1' },
+        { ...mockValue2, value: 'updated-2' },
+      ]);
+
+      const values = reactiveValues.get();
+      expect(values).toHaveLength(2);
+      expect(values.find(v => v.id === mockValue1.id)?.value).toBe('updated-1');
+      expect(values.find(v => v.id === mockValue2.id)?.value).toBe('updated-2');
+    });
+  });
+
   describe('deleteValue', () => {
     it('should mark value as deleted and emit event', () => {
       store.deleteValue(mockValue1);
@@ -545,6 +602,56 @@ describe('GeoStore', () => {
     });
   });
 
+  describe('setRelations', () => {
+    it('should add many relations with optimistic updates and emit events for each', () => {
+      const newRelations = [
+        { ...mockRelation1, id: 'bulk-relation-1' },
+        { ...mockRelation2, id: 'bulk-relation-2', isDeleted: false },
+      ];
+
+      store.setRelations(newRelations);
+
+      const relations = reactiveRelations.get();
+      expect(relations.find(r => r.id === 'bulk-relation-1')).toEqual(
+        expect.objectContaining({
+          id: 'bulk-relation-1',
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        })
+      );
+      expect(relations.find(r => r.id === 'bulk-relation-2')).toEqual(
+        expect.objectContaining({
+          id: 'bulk-relation-2',
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        })
+      );
+
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.RELATION_CREATED,
+        relation: expect.objectContaining({ id: 'bulk-relation-1' }),
+      });
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.RELATION_CREATED,
+        relation: expect.objectContaining({ id: 'bulk-relation-2' }),
+      });
+    });
+
+    it('should replace existing relations when IDs already exist', () => {
+      store.setRelations([mockRelation1]);
+
+      const relationsAfterFirst = reactiveRelations.get();
+      expect(relationsAfterFirst.filter(r => r.id === 'relation-1')).toHaveLength(1);
+
+      store.setRelations([mockRelation1]);
+
+      const relationsAfterSecond = reactiveRelations.get();
+      expect(relationsAfterSecond.filter(r => r.id === 'relation-1')).toHaveLength(1);
+    });
+  });
+
   describe('deleteRelation', () => {
     it('should mark relation as deleted and emit event', () => {
       store.deleteRelation(mockRelation1);
@@ -560,6 +667,56 @@ describe('GeoStore', () => {
       expect(mockStream.emit).toHaveBeenCalledWith({
         type: GeoEventStream.RELATION_DELETED,
         relation: expect.objectContaining({ isDeleted: true }),
+      });
+    });
+  });
+
+  describe('clearLocalChangesByIds', () => {
+    it('should only clear matching local changes and emit hydrate + cleared events', () => {
+      const localValue: Value = {
+        ...mockValue1,
+        id: 'local-value-1',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const syncedValue: Value = {
+        ...mockValue1,
+        id: 'synced-value-1',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      const localRelation: Relation = {
+        ...mockRelation1,
+        id: 'local-relation-1',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const syncedRelation: Relation = {
+        ...mockRelation1,
+        id: 'synced-relation-1',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+
+      reactiveValues.set([localValue, syncedValue]);
+      reactiveRelations.set([localRelation, syncedRelation]);
+
+      store.clearLocalChangesByIds({
+        spaceId: 'space-1',
+        valueIds: ['local-value-1', 'synced-value-1'],
+        relationIds: ['local-relation-1', 'synced-relation-1'],
+      });
+
+      expect(reactiveValues.get().map(v => v.id)).toEqual(['synced-value-1']);
+      expect(reactiveRelations.get().map(r => r.id)).toEqual(['synced-relation-1']);
+
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.HYDRATE,
+        entities: ['entity-1'],
+      });
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.LOCAL_CHANGES_CLEARED,
+        spaceId: 'space-1',
       });
     });
   });

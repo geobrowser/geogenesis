@@ -4,9 +4,9 @@
  * These use React's cache() to deduplicate requests within a single render pass.
  * This is especially useful when multiple components need the same data.
  */
-import { Effect } from 'effect';
-
 import { cache } from 'react';
+
+import { Effect } from 'effect';
 
 import { fetchProfile, fetchProfileBySpaceId, fetchProfilesBySpaceIds } from './fetch-profile';
 import { type FetchProposalOptions, fetchProposal } from './fetch-proposal';

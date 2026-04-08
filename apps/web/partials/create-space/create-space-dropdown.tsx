@@ -1,8 +1,8 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-
 import { useState } from 'react';
+
+import { usePathname, useRouter } from 'next/navigation';
 
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { ID } from '~/core/id';

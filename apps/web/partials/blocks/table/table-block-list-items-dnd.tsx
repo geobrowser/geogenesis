@@ -1,5 +1,6 @@
 import { verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import cx from 'classnames';
 
 import { OrderDots } from '~/design-system/icons/order-dots';
@@ -17,6 +18,7 @@ const renderItem = ({
   source,
   isPlaceholder,
   autoFocus,
+  collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockListItem
     isEditing={isEditing}
@@ -30,6 +32,7 @@ const renderItem = ({
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    collectionTypeFilters={collectionTypeFilters}
   />
 );
 

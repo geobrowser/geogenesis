@@ -1,9 +1,10 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useRouter } from 'next/navigation';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import type { MouseEvent } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -46,7 +47,9 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   onAddPlaceholder?: () => void;
   source: Source;
+  imageUploadingFor?: Set<string>;
   autoFocus?: boolean;
+  collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
 export function EditableEntityTableCell({
@@ -64,7 +67,9 @@ export function EditableEntityTableCell({
   onLinkEntry,
   onAddPlaceholder,
   source,
+  imageUploadingFor,
   autoFocus = false,
+  collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
@@ -92,6 +97,7 @@ export function EditableEntityTableCell({
           variant="tableCell"
           width="full"
           autoFocus={autoFocus}
+          relationValueTypes={collectionTypeFilters}
         />
       );
     }
@@ -153,6 +159,7 @@ export function EditableEntityTableCell({
         spaceId={spaceId}
         onLinkEntry={onLinkEntry}
         entityName={name}
+        imageUploadingFor={imageUploadingFor}
       />
     );
   }
@@ -170,9 +177,17 @@ interface RelationsGroupProps {
   property: Property;
   onLinkEntry: onLinkEntryFn;
   entityName?: string | null;
+  imageUploadingFor?: Set<string>;
 }
 
-function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }: RelationsGroupProps) {
+function RelationsGroup({
+  entityId,
+  property,
+  spaceId,
+  onLinkEntry,
+  entityName,
+  imageUploadingFor,
+}: RelationsGroupProps) {
   const { storage } = useMutate();
 
   // We don't filter by space id as we want to render data from all spaces.
@@ -194,6 +209,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
           entityName={entityName}
           propertyId={property.id}
           propertyName={property.name ?? 'Image'}
+          isUploadingFromExternal={imageUploadingFor?.has(`${entityId}:${property.id}`) ?? false}
         />
       );
     }
@@ -228,6 +244,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry, entityName }
         entityName={entityName}
         propertyId={property.id}
         propertyName={property.name ?? 'Image'}
+        isUploadingFromExternal={imageUploadingFor?.has(`${entityId}:${property.id}`) ?? false}
       />
     );
   }
@@ -354,6 +371,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     case 'TIME':
       return (
         <DateField
+          key={value || 'empty'}
           isEditing={true}
           value={value}
           propertyId={property.id}

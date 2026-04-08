@@ -1,25 +1,27 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Effect } from 'effect';
 
 import * as React from 'react';
+
+import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Cell, Property, Relation, Row } from '~/core/types';
+import { Cell, Property, Row } from '~/core/types';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
-import { Filter } from './filters';
+import { Filter, FilterMode } from './filters';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
-import { Mapping, mappingToCell, mappingToRows } from './use-mapping';
+import { mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useRelationsBlock } from './use-relations-block';
+import { useSort } from './use-sort';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
@@ -40,6 +42,8 @@ const queryKeys = {
 
 interface UseDataBlockOptions {
   filterState?: Filter[];
+  filterMode?: FilterMode;
+  canEdit?: boolean;
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
@@ -51,18 +55,68 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     id: entityId,
   });
 
-  const { relationBlockSourceRelations } = useRelationsBlock();
-  const { filterState: dbFilterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const {
+    filterState: dbFilterState,
+    resolvedFilterState: dbResolvedFilterState,
+    isFilterResolving,
+    filterMode: dbFilterMode,
+    filterableProperties,
+    setFilterState,
+    setFilterMode,
+    temporaryFilters,
+    temporaryFilterMode,
+    setTemporaryFilters,
+    setTemporaryFilterMode,
+  } = useFilters(options?.canEdit);
 
-  // Use provided filter state or fall back to database filter state
-  const effectiveFilterState = options?.filterState ?? dbFilterState;
-  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
-  const { source } = useSource();
+  const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
+  const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
+
+  const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
+  const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
+  const effectiveFilterState = options?.filterState ?? activeFilterState;
+  const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
+  const {
+    shownColumnIds,
+    mapping,
+    isLoading: isViewLoading,
+    isFetched: isViewFetched,
+    view,
+    placeholder,
+    viewRelation,
+    setView,
+    shownColumnRelations,
+    toggleProperty,
+  } = useView();
+
+  const { sortState, setSortState } = useSort(options?.canEdit);
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
-  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [filterStateKey]);
+  const where = React.useMemo(
+    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
+    [filterStateKey, effectiveFilterMode]
+  );
 
-  // Fetch collection data with server-side filtering
+  // Use the mapping to get the potential renderable properties.
+  const propertiesSchema = useProperties(shownColumnIds);
+
+  // Map sortState to server-side sort params — used by all source types.
+  // dataType is required by the backend's entitiesOrderedByProperty SQL function
+  // to resolve which value column to sort on.
+  // Look up from shown columns first, then fall back to all filterable properties
+  // (allows sorting by properties not currently visible in the table).
+  const serverSort = React.useMemo(() => {
+    if (!sortState) return undefined;
+    const property =
+      propertiesSchema?.[sortState.columnId] ?? filterableProperties.find(p => p.id === sortState.columnId);
+    return {
+      propertyId: sortState.columnId,
+      direction: sortState.direction,
+      dataType: property?.dataType?.toLowerCase(),
+    };
+  }, [sortState, propertiesSchema, filterableProperties]);
+
+  // Fetch collection data with server-side filtering and sorting
   const {
     collectionItems,
     collectionRelations,
@@ -70,9 +124,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
+    source,
     first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
     where: where,
+    sort: serverSort,
   });
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
@@ -85,17 +141,19 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     };
   }, [collectionItems, collectionRelations, collectionLength]);
 
-  const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryEntitiesLoading,
+    isFetched: isQueryEntitiesFetched,
+  } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
+    sort: serverSort,
   });
-
-  // Use the mapping to get the potential renderable properties.
-  const propertiesSchema = useProperties(shownColumnIds);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
@@ -224,7 +282,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }, [collectionData.items, collectionData.relations, queriedEntities, relationsMapping, shownColumnIds, source.type]);
 
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
-  const sortedRows = React.useMemo(() => sortRows(rows)?.slice(0, PAGE_SIZE) ?? [], [rows]);
+  const sortedRows = React.useMemo(
+    () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
+    [rows, sortState]
+  );
   const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
 
   const setName = (newName: string) => {
@@ -232,8 +293,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   };
 
   let isLoading = true;
-  const isSharedDataLoading =
-    isBlockEntityLoading || isLoadingFilterState || !isFilterStateFetched || isViewLoading || !isViewFetched;
+  const isSharedDataLoading = isBlockEntityLoading || isFilterResolving || isViewLoading || !isViewFetched;
 
   if (source.type === 'COLLECTION') {
     isLoading = isCollectionLoading || !isCollectionFetched || isSharedDataLoading;
@@ -245,6 +305,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   if (source.type === 'GEO' || source.type === 'SPACES') {
     isLoading = isQueryEntitiesLoading || isSharedDataLoading;
+  }
+
+  let isFetched = false;
+  if (source.type === 'COLLECTION') {
+    isFetched = isCollectionFetched && !isSharedDataLoading;
+  } else if (source.type === 'RELATIONS') {
+    isFetched = isRelationDataFetched && !isSharedDataLoading;
+  } else if (source.type === 'GEO' || source.type === 'SPACES') {
+    isFetched = isQueryEntitiesFetched && !isSharedDataLoading;
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
@@ -273,6 +342,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setPage,
 
     isLoading,
+    isFetched,
 
     name: entity?.name ?? null,
     setName,
@@ -281,6 +351,38 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
+
+    // From useView
+    view,
+    placeholder,
+    shownColumnIds,
+    viewRelation,
+    setView,
+    shownColumnRelations,
+    toggleProperty,
+
+    // From useSource
+    source,
+    setSource,
+
+    // From useFilters
+    filterState: effectiveFilterState,
+    resolvedFilterState: dbResolvedFilterState,
+    filterMode: effectiveFilterMode,
+    dbFilterState,
+    dbFilterMode,
+    setFilterState,
+    setFilterMode,
+    filterableProperties,
+
+    temporaryFilters,
+    temporaryFilterMode,
+    setTemporaryFilters,
+    setTemporaryFilterMode,
+
+    // From useSort
+    sortState,
+    setSortState,
   };
 
   return result;
@@ -327,89 +429,123 @@ export function useDataBlockInstance() {
   return context;
 }
 
-export function filterStateToWhere(filterState: Filter[]): WhereCondition {
-  const where: WhereCondition = {};
+export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AND'): WhereCondition {
+  if (filterState.length === 0) return {};
+  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
 
-  for (const filter of filterState) {
-    if (filter.valueType === 'TEXT') {
-      // For NAME_PROPERTY, filter on the entity name field directly
-      if (ID.equals(filter.columnId, SystemIds.NAME_PROPERTY)) {
-        where['name'] = {
-          contains: filter.value,
-        };
-      } else {
-        // For other text properties, filter on values
-        if (!where.values) {
-          where.values = [];
-        }
-        where['values'].push({
-          propertyId: {
-            equals: filter.columnId,
-          },
-          value: {
-            contains: filter.value,
-          },
-        });
-      }
-    }
+  // Group filters by columnId so we can AND between groups and apply
+  // the user-chosen mode (AND/OR) only within each group.
+  const groups = new Map<string, Filter[]>();
+  for (const f of filterState) {
+    const key = f.columnId;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  }
 
-    if (filter.valueType === 'RELATION') {
-      if (ID.equals(filter.columnId, SystemIds.SPACE_FILTER)) {
-        where['spaces'] = [{ equals: filter.value }];
-        continue;
-      }
-
-      if (ID.equals(filter.columnId, SystemIds.TYPES_PROPERTY)) {
-        if (!where.types) {
-          where.types = [];
-        }
-        where['types'].push({
-          id: {
-            equals: filter.value,
-          },
-        });
-        continue;
-      }
-
-      if (filter.columnName === 'Backlink') {
-        if (!where.backlinks) {
-          where.backlinks = [];
-        }
-
-        where['backlinks'].push({
-          typeOf: {
-            id: {
-              equals: filter.columnId,
-            },
-          },
-          fromEntity: {
-            id: {
-              equals: filter.value,
-            },
-          },
-        });
-      } else {
-        if (!where.relations) {
-          where.relations = [];
-        }
-
-        where['relations'].push({
-          typeOf: {
-            id: {
-              equals: filter.columnId,
-            },
-          },
-          toEntity: {
-            id: {
-              equals: filter.value,
-            },
-          },
-        });
-      }
+  const groupConditions: WhereCondition[] = [];
+  for (const [, filters] of groups) {
+    if (filters.length === 1) {
+      groupConditions.push(buildSingleFilterWhere(filters[0]));
+    } else if (mode === 'OR') {
+      groupConditions.push(buildOrWhere(filters));
+    } else {
+      groupConditions.push(buildAndWhere(filters));
     }
   }
 
-  return where;
+  if (groupConditions.length === 1) return groupConditions[0];
+
+  // Flat merge keeps `spaces`/`types` at the top level so they get promoted
+  // to fast top-level GraphQL query params instead of buried in a nested AND filter.
+  return mergeWhereConditions(groupConditions);
+}
+
+function mergeWhereConditions(conditions: WhereCondition[]): WhereCondition {
+  const arrayKeys = new Set(['spaces', 'types', 'values', 'relations', 'backlinks', 'AND', 'OR']);
+  const merged: WhereCondition = {};
+  const unmerged: WhereCondition[] = [];
+
+  for (const cond of conditions) {
+    const keys = Object.keys(cond) as (keyof WhereCondition)[];
+    let canMerge = true;
+
+    for (const key of keys) {
+      if (arrayKeys.has(key)) continue; // arrays are always mergeable
+      if (key in merged) {
+        canMerge = false;
+        break;
+      }
+    }
+
+    if (canMerge) {
+      for (const key of keys) {
+        if (arrayKeys.has(key)) {
+          const existing = (merged as any)[key] as unknown[] | undefined;
+          const incoming = (cond as any)[key] as unknown[];
+          (merged as any)[key] = existing ? [...existing, ...incoming] : [...incoming];
+        } else {
+          (merged as any)[key] = (cond as any)[key];
+        }
+      }
+    } else {
+      unmerged.push(cond);
+    }
+  }
+
+  if (unmerged.length === 0) return merged;
+  return { AND: [merged, ...unmerged] };
+}
+
+function buildSingleFilterWhere(f: Filter): WhereCondition {
+  if (f.valueType === 'TEXT') {
+    if (ID.equals(f.columnId, SystemIds.NAME_PROPERTY)) {
+      return { name: { contains: f.value } };
+    }
+    return {
+      values: [{ propertyId: { equals: f.columnId }, value: { contains: f.value } }],
+    };
+  }
+
+  if (f.valueType === 'RELATION') {
+    if (ID.equals(f.columnId, SystemIds.SPACE_FILTER)) {
+      return { spaces: [{ equals: f.value }] };
+    }
+    if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
+      return { types: [{ id: { equals: f.value } }] };
+    }
+    if (f.isBacklink || f.columnName === 'Backlink') {
+      return {
+        backlinks: [{ typeOf: { id: { equals: f.columnId } }, fromEntity: { id: { equals: f.value } } }],
+      };
+    }
+    return {
+      relations: [{ typeOf: { id: { equals: f.columnId } }, toEntity: { id: { equals: f.value } } }],
+    };
+  }
+
+  return {};
+}
+
+function buildOrWhere(filterState: Filter[]): WhereCondition {
+  if (filterState.length === 0) return {};
+  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
+
+  return {
+    OR: filterState.map(f => buildSingleFilterWhere(f)),
+  };
+}
+
+function buildAndWhere(filterState: Filter[]): WhereCondition {
+  if (filterState.length === 0) return {};
+  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
+
+  // Wrap each filter in AND so ALL conditions must match.
+  // We use individual sub-conditions (via buildSingleFilterWhere) rather than
+  // merging into one flat object, because the local query engine's matchesCondition
+  // returns early when it sees AND/OR — mixing AND with other fields on the same
+  // object would skip those fields. Using AND: [...] also correctly handles types
+  // and spaces which need per-condition evaluation for true AND semantics.
+  return { AND: filterState.map(f => buildSingleFilterWhere(f)) };
 }
 
 function stableStringify(value: unknown): string {
@@ -439,6 +575,7 @@ function stableStringify(value: unknown): string {
 
   try {
     return JSON.stringify(walk(value));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_err) {
     return '"[unstringifiable]"';
   }

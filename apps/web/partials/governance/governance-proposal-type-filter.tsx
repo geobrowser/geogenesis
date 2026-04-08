@@ -1,8 +1,8 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-
 import * as React from 'react';
+
+import { useSearchParams } from 'next/navigation';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -26,8 +26,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const params = useSearchParams();
   const proposalType = params?.get('proposalType') as GovernanceProposalType | null;
-  const activeFilter: GovernanceProposalType =
-    proposalType && proposalType in filterLabels ? proposalType : 'proposals';
+  const activeFilter: GovernanceProposalType = proposalType && proposalType in filterLabels ? proposalType : 'all';
   const label = filterLabels[activeFilter];
 
   const baseHref = `/space/${spaceId}/governance`;

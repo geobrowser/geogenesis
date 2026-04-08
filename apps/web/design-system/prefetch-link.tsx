@@ -1,9 +1,9 @@
 'use client';
 
+import * as React from 'react';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-
-import * as React from 'react';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { NavUtils } from '~/core/utils/utils';

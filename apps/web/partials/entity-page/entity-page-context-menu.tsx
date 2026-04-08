@@ -1,15 +1,18 @@
 'use client';
 
-import cx from 'classnames';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import cx from 'classnames';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -18,6 +21,7 @@ import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
+import { MoveEntityToSpace } from '~/partials/versions/move-entity-to-space';
 
 type Props = {
   entityId: string;
@@ -28,7 +32,8 @@ type Props = {
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
-  const { isMember } = useAccessControl(spaceId);
+  const { store } = useSyncEngine();
+  const { isMember, isEditor } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
 
@@ -36,9 +41,53 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
     selector: v => v.entity.id === entityId && v.spaceId === spaceId,
   });
 
-  const relations = useRelations({
-    selector: v => v.fromEntity.id === entityId && v.spaceId === spaceId,
+  const outgoingRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
+
+  const performDelete = React.useCallback(() => {
+    // 1. Find block entities (toEntity of BLOCKS relations).
+    const blocksRelations = outgoingRelations.filter(r => r.type.id === SystemIds.BLOCKS);
+    const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
+
+    // A block is considered orphaned if, after removing this entity's BLOCKS relations,
+    // no other relations (from any entity or space) still point to the block.
+    const orphanedBlockIds = blockIds.filter(blockId => {
+      const remainingRefs = getRelations({
+        selector: r =>
+          r.toEntity.id === blockId &&
+          // Ignore the BLOCKS relation from the entity we're deleting in this space.
+          !(r.fromEntity.id === entityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId),
+      });
+      return remainingRefs.length === 0;
+    });
+
+    // 2. Collect all values and relations to delete so we can batch (one store update each = no flash).
+    const allValuesToDelete = [...values];
+    const relationIds = new Set<string>();
+    const allRelationsToDelete: typeof outgoingRelations = [];
+    for (const r of [...outgoingRelations, ...getRelations({ selector: r => r.toEntity.id === entityId })]) {
+      if (!relationIds.has(r.id)) {
+        relationIds.add(r.id);
+        allRelationsToDelete.push(r);
+      }
+    }
+
+    for (const blockId of orphanedBlockIds) {
+      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
+      for (const r of getRelations({
+        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
+      })) {
+        if (!relationIds.has(r.id)) {
+          relationIds.add(r.id);
+          allRelationsToDelete.push(r);
+        }
+      }
+    }
+
+    storage.values.deleteMany(allValuesToDelete);
+    storage.relations.deleteMany(allRelationsToDelete);
+  }, [entityId, outgoingRelations, store, storage.relations, storage.values, values]);
 
   const onCopyEntityId = async () => {
     try {
@@ -50,31 +99,28 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   };
 
   const onDelete = () => {
+    setIsMenuOpen(false);
     if (editable) {
-      values.forEach(t => storage.values.delete(t));
-      relations.forEach(r => storage.relations.delete(r));
-      setIsMenuOpen(false);
+      requestAnimationFrame(() => performDelete());
     } else {
       setEditable(true);
-
-      // Why?
-      setTimeout(() => {
-        values.forEach(t => storage.values.delete(t));
-        relations.forEach(r => storage.relations.delete(r));
-        setIsMenuOpen(false);
-      }, 500);
+      setTimeout(() => performDelete(), 500);
     }
   };
 
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
+  const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
+
+  const isSubMenu = isCreatingNewVersion || isMovingEntity;
 
   return (
     <Menu
-      className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+      className={cx(!isSubMenu ? 'max-w-[160px]' : 'max-w-[320px]')}
       open={isMenuOpen}
       onOpenChange={() => {
         setIsMenuOpen(!isMenuOpen);
         setIsCreatingNewVersion(false);
+        setIsMovingEntity(false);
       }}
       trigger={<Context color="grey-04" />}
       side="bottom"
@@ -90,7 +136,18 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
           }}
         />
       )}
-      {!isCreatingNewVersion && (
+      {isMovingEntity && (
+        <MoveEntityToSpace
+          entityId={entityId as EntityId}
+          entityName={entityName}
+          sourceSpaceId={spaceId}
+          setIsMovingEntity={setIsMovingEntity}
+          onDone={() => {
+            setIsMenuOpen(false);
+          }}
+        />
+      )}
+      {!isSubMenu && (
         <>
           <EntityPageContextMenuItem>
             <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
@@ -109,7 +166,20 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               Create in space
             </button>
           </EntityPageContextMenuItem>
-          {isMember && (
+          {(isMember || isEditor) && editable && (
+            <EntityPageContextMenuItem>
+              <button
+                onClick={() => setIsMovingEntity(true)}
+                className="flex h-full w-full items-center gap-2 px-2 py-2"
+              >
+                <div className="shrink-0">
+                  <MoveSpace />
+                </div>
+                Move to space
+              </button>
+            </EntityPageContextMenuItem>
+          )}
+          {(isMember || isEditor) && editable && (
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
                 <Trash />

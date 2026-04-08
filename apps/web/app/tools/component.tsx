@@ -1,12 +1,13 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Tabs from '@radix-ui/react-tabs';
+
+import * as React from 'react';
+
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useAtom } from 'jotai';
-
-import * as React from 'react';
 
 import { fromGeoFilterString } from '~/core/blocks/data/filters';
 import { filterStateToWhere } from '~/core/blocks/data/use-data-block';
@@ -301,7 +302,7 @@ const ConvertFilter = () => {
   const handleConvertFilter = async (event: any) => {
     event.preventDefault();
 
-    const newFilterState = await fromGeoFilterString(filterString.trim());
+    const { filters: newFilterState } = await fromGeoFilterString(filterString.trim());
     setFilterState(newFilterState);
 
     const newWhere = filterStateToWhere(newFilterState);

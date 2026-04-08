@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useMemo } from 'react';
@@ -76,7 +76,7 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
-  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? t.spaceId}`).sort(), [types]);
+  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? ''}`).sort(), [types]);
   const hasTypes = types.length > 0;
 
   const allRelations = useRelations({
@@ -89,12 +89,11 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
 
   const { data: schema } = useQuery({
     enabled: hasTypes || allRelations.length > 0,
-    initialData: DEFAULT_ENTITY_SCHEMA,
     placeholderData: keepPreviousData,
     queryKey: ['entity-schema-for-merging', entityId, spaceId, stableTypeKey, stableRelationKey],
     queryFn: async () =>
       await getSchemaFromTypeIdsAndRelations(
-        types.map(t => ({ id: t.id, spaceId: t.toSpaceId ?? t.spaceId })),
+        types.map(t => ({ id: t.id, spaceId: t.toSpaceId })),
         allRelations
       ),
   });

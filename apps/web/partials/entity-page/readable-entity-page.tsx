@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -24,6 +24,7 @@ import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
+import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -405,6 +406,9 @@ function RenderedValue({
           dataType={renderableType}
         />
       );
+    }
+    case 'SCHEDULE': {
+      return <ScheduleField key={`schedule-${propertyId}-${value}`} isEditing={false} value={value} />;
     }
   }
 }

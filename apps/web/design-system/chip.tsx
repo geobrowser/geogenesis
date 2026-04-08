@@ -1,10 +1,11 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 import { useState } from 'react';
+
+import { cva } from 'class-variance-authority';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
@@ -79,7 +80,7 @@ const linkableRelationChipStyles = cva(
     variants: {
       shouldClamp: {
         false: 'items-center',
-        true: 'line-clamp-4 items-start',
+        true: 'line-clamp-4 items-center',
       },
       isDotsHovered: {
         true: 'border-grey-02!',
@@ -140,7 +141,7 @@ const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
 });
 
 const relationChipPopoverTriggerStyles = cva(
-  'relative flex items-start px-1.5 py-1 text-grey-03 group-hover:text-text focus-within:text-text',
+  'relative flex items-center px-1.5 py-1 text-grey-03 group-hover:text-text focus-within:text-text',
   {
     variants: {
       isSpaceHovered: {
@@ -183,13 +184,15 @@ export function LinkableRelationChip({
 
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
 
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
   const shouldClamp = typeof children === 'string' && children.length >= 42;
 
   const { space } = useSpace(spaceId);
 
   return (
     <div
-      onMouseLeave={() => setIsPopoverOpen(false)}
       className={linkableRelationChipStyles({
         shouldClamp,
         isDotsHovered,
@@ -219,27 +222,43 @@ export function LinkableRelationChip({
       <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
         <Popover.Trigger asChild>
           <button
+            ref={triggerRef}
+            type="button"
             onMouseEnter={() => {
               setIsPopoverOpen(true);
               setIsDotsHovered(true);
             }}
-            onMouseLeave={() => setIsDotsHovered(false)}
+            onMouseLeave={e => {
+              setIsDotsHovered(false);
+              const next = e.relatedTarget as Node | null;
+              if (next && contentRef.current?.contains(next)) {
+                return;
+              }
+              setIsPopoverOpen(false);
+            }}
             className={relationChipPopoverTriggerStyles({
               isSpaceHovered,
               isDeleteHovered,
               isRelationHovered,
             })}
           >
-            {/* Expands hoverable area */}
-            <div className="absolute -top-2 right-0 bottom-0 left-0" />
             <RelationDots color="current" />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
+            ref={contentRef}
             side="top"
             sideOffset={-4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+            onCloseAutoFocus={e => e.preventDefault()}
+            onMouseLeave={e => {
+              const next = e.relatedTarget as Node | null;
+              if (next && triggerRef.current?.contains(next)) {
+                return;
+              }
+              setIsPopoverOpen(false);
+            }}
           >
             {isEditing && (
               <div
@@ -470,6 +489,7 @@ export function LinkableMediaChip({
             side="top"
             sideOffset={4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+            onCloseAutoFocus={e => e.preventDefault()}
           >
             {isEditing && (
               <div

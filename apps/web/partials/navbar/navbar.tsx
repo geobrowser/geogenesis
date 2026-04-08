@@ -1,15 +1,12 @@
 import cx from 'classnames';
 
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
-import { Search } from '~/design-system/icons/search';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { CreateEntityDropdown } from '../create-entity/create-entity-dropdown';
-import { NavbarActions } from './navbar-actions';
+import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
 interface Props {
@@ -17,8 +14,6 @@ interface Props {
 }
 
 export function Navbar({ onSearchClick }: Props) {
-  const { shouldShowElement } = useOnboardGuard();
-
   return (
     <nav
       className={cx(
@@ -44,31 +39,7 @@ export function Navbar({ onSearchClick }: Props) {
           we don't get any layout shift when the navbar actions appear.
       */}
       <ClientOnly>
-        <div className="flex items-center gap-3">
-          {!shouldShowElement && (
-            <a
-              className="text-button font-normal text-ctaPrimary transition-colors duration-200 hover:text-ctaHover"
-              href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
-              rel="noreferrer noopener"
-              target="_blank"
-            >
-              Early access
-            </a>
-          )}
-
-          <CreateEntityDropdown />
-
-          <button
-            className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"
-            onClick={onSearchClick}
-          >
-            <Search />
-          </button>
-
-          <div className="flex items-center sm:hidden">
-            <NavbarActions />
-          </div>
-        </div>
+        <NavbarClientActions onSearchClick={onSearchClick} />
       </ClientOnly>
     </nav>
   );

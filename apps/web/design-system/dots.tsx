@@ -1,8 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
-
 import * as React from 'react';
+
+import { motion } from 'framer-motion';
 
 interface Props {
   color?: 'bg-grey-03' | 'bg-grey-02';

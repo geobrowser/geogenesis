@@ -1,4 +1,5 @@
-import type { Op } from '@geoprotocol/geo-sdk';
+import type { Op } from '@geoprotocol/geo-sdk/lite';
+
 import { atom } from 'jotai';
 
 export const cloneSpaceNameAtom = atom('');

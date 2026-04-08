@@ -1,4 +1,4 @@
-import { Id, Op } from '@geoprotocol/geo-sdk';
+import { Id, Op } from '@geoprotocol/geo-sdk/lite';
 
 /** Convert hex ID string to Uint8Array (16 bytes). */
 function hexToBytes(hex: string): Uint8Array {

@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
@@ -50,6 +51,7 @@ vi.mock('~/core/constants', () => ({
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
   VIDEO_RENDERABLE_TYPE: 'VIDEO_RENDERABLE_TYPE_ID',
   PLACE: 'PLACE_ID',
+  RELATION_ENTITY_RELATIONSHIP_TYPE: 'RELATION_ENTITY_RELATIONSHIP_TYPE_ID',
 }));
 
 describe('Properties', () => {
@@ -185,6 +187,7 @@ describe('Properties', () => {
         name: 'Test Property',
         dataType: 'TEXT',
         relationValueTypes: [],
+        relationEntityTypes: [],
         renderableType: null,
         renderableTypeStrict: undefined,
 
@@ -243,6 +246,7 @@ describe('Properties', () => {
         name: 'Test Property',
         dataType: 'TEXT',
         relationValueTypes: [],
+        relationEntityTypes: [],
         renderableType: SystemIds.URL,
         renderableTypeStrict: 'URL',
 

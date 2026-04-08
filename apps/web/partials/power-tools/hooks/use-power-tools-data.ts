@@ -1,11 +1,11 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -22,6 +22,12 @@ const DEFAULT_PAGE_SIZE = 25;
 // Keep a bounded window in memory to avoid re-render costs after long scroll sessions.
 const MAX_PAGES_IN_MEMORY = 6;
 const MAX_FETCH_PAGES = 200;
+
+/**
+ * SPACES/GEO: upper bound on how many entity ids `fetchAllIds` pulls over the network.
+ * `getAllEntities` chunks each GraphQL request to `first` ≤ 1000 (API cap).
+ */
+const FETCH_ALL_IDS_FIRST = 100_000;
 
 function buildRowMeta(
   entityId: string,
@@ -46,19 +52,34 @@ function buildRowMeta(
 export function usePowerToolsData(options?: {
   pageSize?: number;
   filterStateOverride?: Filter[];
+  filterModeOverride?: FilterMode;
+  /** Extra column (property) IDs to always show, e.g. newly created properties. */
+  extraColumnIds?: string[];
+  /** Column (property) IDs to hide from the table, e.g. after "Remove Property". */
+  excludedColumnIds?: string[];
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
 }): PowerToolsData & {
   sourceType: string;
   fetchAllIds: () => Promise<string[]>;
 } {
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const extraColumnIds = options?.extraColumnIds ?? [];
+  const excludedColumnIdsSet = React.useMemo(
+    () => new Set(options?.excludedColumnIds ?? []),
+    [options?.excludedColumnIds]
+  );
   const { spaceId } = useDataBlockInstance();
-  const { source } = useSource();
-  const { filterState } = useFilters();
+  const { resolvedFilterState, isFilterResolving, filterMode, filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
-  const effectiveFilterState = options?.filterStateOverride ?? filterState;
-  const where = React.useMemo(() => filterStateToWhere(effectiveFilterState), [effectiveFilterState]);
+  const effectiveFilterState = options?.filterStateOverride ?? resolvedFilterState;
+  const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
+  const where = React.useMemo(
+    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
+    [effectiveFilterState, effectiveFilterMode]
+  );
 
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
@@ -87,13 +108,16 @@ export function usePowerToolsData(options?: {
 
   const sourceValue = 'value' in source ? source.value : null;
 
+  const sort = options?.sort;
+
   const sourceKey = React.useMemo(() => {
     return JSON.stringify({
       type: source.type,
       value: sourceValue,
       where,
+      sort,
     });
-  }, [source.type, sourceValue, where]);
+  }, [source.type, sourceValue, where, sort]);
 
   React.useEffect(() => {
     setPage(0);
@@ -159,9 +183,11 @@ export function usePowerToolsData(options?: {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
+    source,
     first: pageSize,
     skip: page * pageSize,
     where,
+    sort,
   });
 
   const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
@@ -170,6 +196,7 @@ export function usePowerToolsData(options?: {
     skip: page * pageSize,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
+    sort,
   });
 
   React.useEffect(() => {
@@ -181,7 +208,8 @@ export function usePowerToolsData(options?: {
         setLoadedCollectionRelationPages(prev => upsertRelationPage(prev, page, collectionRelations));
       }
     }
-  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage]);
+    // sourceKey: re-fire after reset clears pages
+  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, sourceKey]);
 
   React.useEffect(() => {
     if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -189,7 +217,8 @@ export function usePowerToolsData(options?: {
       setLoadedEntityPages(prev => upsertEntityPage(prev, page, queriedEntities));
       setLastPageCount(queriedEntities.length);
     }
-  }, [queriedEntities, source.type, page, upsertEntityPage]);
+    // sourceKey: re-fire after reset clears pages
+  }, [queriedEntities, source.type, page, upsertEntityPage, sourceKey]);
 
   const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
@@ -313,6 +342,13 @@ export function usePowerToolsData(options?: {
     const next = [...columnIds];
     const known = new Set(columnIds);
 
+    for (const id of extraColumnIds) {
+      if (!known.has(id)) {
+        known.add(id);
+        next.push(id);
+      }
+    }
+
     for (const id of propertyIdSet) {
       if (!known.has(id)) {
         known.add(id);
@@ -327,16 +363,18 @@ export function usePowerToolsData(options?: {
       }
     }
 
-    if (!arraysEqual(next, columnIds)) {
-      setColumnIds(next);
+    const filtered = excludedColumnIdsSet.size > 0 ? next.filter(id => !excludedColumnIdsSet.has(id)) : next;
+
+    if (!arraysEqual(filtered, columnIds)) {
+      setColumnIds(filtered);
     }
-  }, [propertyIdSet, schemaProperties, columnIds, arraysEqual]);
+  }, [extraColumnIds, excludedColumnIdsSet, propertyIdSet, schemaProperties, columnIds, arraysEqual]);
 
   const propertiesById = useProperties(columnIds);
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
-  const isInitialLoading = isLoading && rows.length === 0;
+  const isInitialLoading = isFilterResolving || (isLoading && rows.length === 0);
 
   const fetchAllIds = React.useCallback(async () => {
     if (source.type === 'COLLECTION') {
@@ -366,22 +404,12 @@ export function usePowerToolsData(options?: {
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      const ids: string[] = [];
-      let skip = 0;
-      let pageCount = 0;
-      while (true) {
-        const pageResults = await queryEntitiesAsync({
-          where,
-          first: pageSize,
-          skip,
-        });
-        ids.push(...pageResults.map(entity => entity.id));
-        if (pageResults.length < pageSize) break;
-        skip += pageSize;
-        pageCount += 1;
-        if (pageCount >= MAX_FETCH_PAGES) break;
-      }
-      return ids;
+      const pageResults = await queryEntitiesAsync({
+        where,
+        first: FETCH_ALL_IDS_FIRST,
+        skip: 0,
+      });
+      return pageResults.map(entity => entity.id);
     }
 
     return [];
