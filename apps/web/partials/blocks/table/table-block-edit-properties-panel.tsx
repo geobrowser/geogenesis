@@ -12,6 +12,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import Image from 'next/legacy/image';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
@@ -150,15 +151,18 @@ function RelationsPropertySelector() {
 function DefaultPropertySelector() {
   const { filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
+  const { spaceId } = useDataBlockInstance();
 
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
   const { data: availableColumns, isLoading } = useQuery({
-    queryKey: ['available-columns', filterState],
+    queryKey: ['available-columns', filterState, spaceId],
     queryFn: async () => {
-      const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }))
-      );
+      const typeFilters = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }));
+      const spaceIds = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+      // Include the current space so type properties defined in this space are available
+      if (!spaceIds.includes(spaceId)) spaceIds.push(spaceId);
+      const schema = await getSchemaFromTypeIds(typeFilters, spaceIds);
 
       return schema;
     },
