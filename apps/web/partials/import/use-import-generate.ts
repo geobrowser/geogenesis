@@ -1,10 +1,10 @@
 'use client';
 
-const DEBUG_IMPORT = process.env.NODE_ENV === 'development';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -33,10 +33,12 @@ import {
 import { buildImageValuesAndRelations, collectImageTasks, uploadImportImages } from './image-upload';
 import { buildImportPlan, collectRelationCells, createGenerationTracker } from './import-generation';
 import type { ImportPlan, ResolvedEntity } from './import-generation';
-import { ImportSessionStore } from './import-session-store';
 import { resolveRelationEntities, resolveRowsByNameAndType, resolveTypesForRows } from './import-resolution';
+import { ImportSessionStore } from './import-session-store';
 import { useImportSchema } from './use-import-schema';
 import { useImportSession } from './use-import-session';
+
+const DEBUG_IMPORT = process.env.NODE_ENV === 'development';
 
 export function useImportGenerate(spaceId: string) {
   const { store } = useSyncEngine();
@@ -79,10 +81,7 @@ export function useImportGenerate(spaceId: string) {
   const hasTypeSource = Boolean(selectedType) || typesColumnIndex !== undefined;
 
   const canGenerate =
-    hasTypeSource &&
-    rowCount > 0 &&
-    nameColIdx !== undefined &&
-    Object.keys(columnMapping).length > 0;
+    hasTypeSource && rowCount > 0 && nameColIdx !== undefined && Object.keys(columnMapping).length > 0;
   const generationTrackerRef = useRef(createGenerationTracker());
 
   // ── Shared side-effect writer ─────────────────────────────────────────
@@ -135,11 +134,12 @@ export function useImportGenerate(spaceId: string) {
   // ── Full async generation ─────────────────────────────────────────────
   // Phase 1: Build initial plan with empty resolution (instant — shows review immediately)
   // Phase 2: Resolve in background (100 concurrent searches), rebuild as results arrive
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (): Promise<boolean> => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) return false;
     const dataRows = ImportSessionStore.getRows(sid);
-    if ((!selectedType && typesColumnIndex === undefined) || dataRows.length === 0 || nameColIdx === undefined) return;
+    if ((!selectedType && typesColumnIndex === undefined) || dataRows.length === 0 || nameColIdx === undefined)
+      return false;
     const generationId = generationTrackerRef.current.start();
     const isCurrent = () => generationTrackerRef.current.isCurrent(generationId);
     isLoadingRef.current = true;
@@ -147,7 +147,8 @@ export function useImportGenerate(spaceId: string) {
 
     try {
       const t0 = performance.now();
-      if (DEBUG_IMPORT) console.log(`[import:generate] START — ${dataRows.length} rows, ${Object.keys(columnMapping).length} columns`);
+      if (DEBUG_IMPORT)
+        console.log(`[import:generate] START — ${dataRows.length} rows, ${Object.keys(columnMapping).length} columns`);
 
       clearGeneratedChanges();
 
@@ -183,7 +184,7 @@ export function useImportGenerate(spaceId: string) {
       applyPlan(initialPlan);
       setStep('step5');
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       // ── Phase 2: Background resolution ──────────────────────────────
       // Relation entities
@@ -192,8 +193,11 @@ export function useImportGenerate(spaceId: string) {
         relationProperties,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveRelationEntities: ${(performance.now() - t2).toFixed(1)}ms — found=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'found').length}, created=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'created').length}, unresolved=${relationResolution.unresolvedCount}`);
-      if (relationResolution.aborted) return;
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveRelationEntities: ${(performance.now() - t2).toFixed(1)}ms — found=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'found').length}, created=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'created').length}, unresolved=${relationResolution.unresolvedCount}`
+        );
+      if (relationResolution.aborted) return false;
 
       const mergedResolvedEntities = new Map(relationResolution.resolvedEntities);
       for (const [cacheKey, override] of Object.entries(relationOverrides)) {
@@ -207,8 +211,11 @@ export function useImportGenerate(spaceId: string) {
         typesColumnIndex,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveTypesForRows: ${(performance.now() - t3).toFixed(1)}ms — ${typeResolution.resolvedTypes.size} types resolved`);
-      if (typeResolution.aborted) return;
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveTypesForRows: ${(performance.now() - t3).toFixed(1)}ms — ${typeResolution.resolvedTypes.size} types resolved`
+        );
+      if (typeResolution.aborted) return false;
 
       const mergedResolvedTypes = new Map(typeResolution.resolvedTypes);
       for (const [rawType, override] of Object.entries(typeOverrides)) {
@@ -225,8 +232,11 @@ export function useImportGenerate(spaceId: string) {
         resolvedTypes: mergedResolvedTypes,
         guard: { isCurrent },
       });
-      if (DEBUG_IMPORT) console.log(`[import:generate] resolveRowsByNameAndType: ${(performance.now() - t4).toFixed(1)}ms — resolved=${rowResolution.resolvedRows.size}, unresolved=${rowResolution.unresolvedRowCount}`);
-      if (rowResolution.aborted) return;
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] resolveRowsByNameAndType: ${(performance.now() - t4).toFixed(1)}ms — resolved=${rowResolution.resolvedRows.size}, unresolved=${rowResolution.unresolvedRowCount}`
+        );
+      if (rowResolution.aborted) return false;
 
       const mergedResolvedRows = new Map(rowResolution.resolvedRows);
       for (const [rowIndexStr, override] of Object.entries(rowOverrides)) {
@@ -236,7 +246,7 @@ export function useImportGenerate(spaceId: string) {
       // ── Rebuild with full resolution ────────────────────────────────
       // Yield to let the browser breathe before heavy sync work
       await new Promise(resolve => setTimeout(resolve, 0));
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       const finalPlan = buildImportPlan({
         dataRows,
@@ -253,7 +263,7 @@ export function useImportGenerate(spaceId: string) {
         checkboxOverrides,
       });
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       // Upload images for IMAGE columns and merge into the plan
       const { tasks: imageTasks, flags: imageFlags } = collectImageTasks({
@@ -271,7 +281,7 @@ export function useImportGenerate(spaceId: string) {
 
       if (imageTasks.length > 0) {
         const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
-        if (!isCurrent()) return;
+        if (!isCurrent()) return false;
 
         // Cache per-cell image entity data (linking relations are regenerated from current rows)
         setImageEntityCache(imageResult.cache);
@@ -339,13 +349,18 @@ export function useImportGenerate(spaceId: string) {
       setResolvedRowsSnapshot(finalPlan.resolvedRowsSnapshot);
       setResolvedTypesSnapshot(finalPlan.resolvedTypesSnapshot);
       setResolvedEntitiesSnapshot(finalPlan.resolvedEntitiesSnapshot);
-      if (DEBUG_IMPORT) console.log(`[import:generate] DONE — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations in ${(performance.now() - t0).toFixed(0)}ms`);
+      if (DEBUG_IMPORT)
+        console.log(
+          `[import:generate] DONE — ${finalPlan.values.length} values, ${finalPlan.relations.length} relations in ${(performance.now() - t0).toFixed(0)}ms`
+        );
 
       if (rowResolution.unresolvedRowCount > 0 || relationResolution.unresolvedCount > 0) {
-        if (DEBUG_IMPORT) console.warn(
-          `[import] unresolved links: rows=${rowResolution.unresolvedRowCount}, relationCells=${relationResolution.unresolvedCount}`
-        );
+        if (DEBUG_IMPORT)
+          console.warn(
+            `[import] unresolved links: rows=${rowResolution.unresolvedRowCount}, relationCells=${relationResolution.unresolvedCount}`
+          );
       }
+      return true;
     } finally {
       if (generationTrackerRef.current.isCurrent(generationId)) {
         setIsLoading(false);
@@ -451,7 +466,9 @@ export function useImportGenerate(spaceId: string) {
         getProperty: (propertyId: string) => store.getProperty(propertyId),
       };
 
-      const mergedEntities = new Map<string, ResolvedEntity>(ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>);
+      const mergedEntities = new Map<string, ResolvedEntity>(
+        ctx.resolvedEntitiesSnapshot as Map<string, ResolvedEntity>
+      );
       for (const [key, override] of Object.entries(ctx.relationOverrides)) {
         mergedEntities.set(key, override);
       }
@@ -506,9 +523,7 @@ export function useImportGenerate(spaceId: string) {
       }
 
       // Find tasks for rows that don't have cached image data yet
-      const newImageTasks = rebuildImageTasks.filter(
-        task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]
-      );
+      const newImageTasks = rebuildImageTasks.filter(task => !ctx.imageEntityCache[`${task.rowIndex}:${task.colIdx}`]);
 
       let mergedCache = { ...ctx.imageEntityCache };
 
@@ -570,7 +585,16 @@ export function useImportGenerate(spaceId: string) {
       if (ctx.relations.length > 0) store.setRelations(ctx.relations);
       console.error('[import:rebuild] failed', error);
     }
-  }, [store, spaceId, setValues, setRelations, setUnresolvedLinks, setResolvedRowsSnapshot, setResolvedTypesSnapshot, setResolvedEntitiesSnapshot]);
+  }, [
+    store,
+    spaceId,
+    setValues,
+    setRelations,
+    setUnresolvedLinks,
+    setResolvedRowsSnapshot,
+    setResolvedTypesSnapshot,
+    setResolvedEntitiesSnapshot,
+  ]);
 
   // Drain pending rebuild when isLoading transitions to false.
   // Using an effect guarantees React has committed the state change,

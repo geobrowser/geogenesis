@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { EntityId } from '~/core/io/substream-schema';

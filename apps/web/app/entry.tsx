@@ -13,18 +13,21 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
+import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { SearchDialog } from '~/partials/search';
 
-const OnboardingDialog = dynamic(() => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })), {
-  ssr: false,
-});
+const OnboardingDialog = dynamic(
+  () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
+  { ssr: false }
+);
 
-const ReviewChanges = dynamic(() => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })), {
-  ssr: false,
-});
+const ReviewChanges = dynamic(
+  () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
+  { ssr: false }
+);
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -56,6 +59,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <ClientOnly>
         <OnboardingDialog />
         <Toast />
+        <GovernanceReopenEditLoadingBar />
         <FlowBar />
         <ReviewChanges />
         <Persistence />

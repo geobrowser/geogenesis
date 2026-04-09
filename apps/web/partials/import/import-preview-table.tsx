@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
@@ -438,35 +438,40 @@ export function ImportPreviewTable({
                         key={`${virtualRow.index}-${col.csvColumnIndex}`}
                         className="overflow-hidden border-r border-grey-02 px-4 py-2"
                       >
-                        {col.dataType === 'BOOLEAN' && value ? (() => {
-                          const isUnparseable = cellFlag?.kind === 'checkbox';
-                          const overrideKey = `${virtualRow.index}:${col.csvColumnIndex}`;
-                          const override = checkboxOverrides[overrideKey];
-                          const checkboxResult = parseCheckboxValue(value);
-                          const checked = override !== undefined
-                            ? override === '1'
-                            : checkboxResult.parsed ? checkboxResult.value : null;
-                          return (
-                            <span className="inline-flex items-center gap-2">
-                              {isUnparseable && <WarningIcon />}
-                              <Checkbox
-                                checked={checked}
-                                onChange={() => {
-                                  if (onResolveCheckboxValue) {
-                                    onResolveCheckboxValue(
-                                      virtualRow.index,
-                                      col.csvColumnIndex,
-                                      !checked ? '1' : '0'
-                                    );
-                                  }
-                                }}
-                              />
-                              {isUnparseable && cellFlag?.kind === 'checkbox' && (
-                                <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
-                              )}
-                            </span>
-                          );
-                        })() : isImageColumn && cellFlag?.kind === 'image-invalid' ? (
+                        {col.dataType === 'BOOLEAN' && value ? (
+                          (() => {
+                            const isUnparseable = cellFlag?.kind === 'checkbox';
+                            const overrideKey = `${virtualRow.index}:${col.csvColumnIndex}`;
+                            const override = checkboxOverrides[overrideKey];
+                            const checkboxResult = parseCheckboxValue(value);
+                            const checked =
+                              override !== undefined
+                                ? override === '1'
+                                : checkboxResult.parsed
+                                  ? checkboxResult.value
+                                  : null;
+                            return (
+                              <span className="inline-flex items-center gap-2">
+                                {isUnparseable && <WarningIcon />}
+                                <Checkbox
+                                  checked={checked}
+                                  onChange={() => {
+                                    if (onResolveCheckboxValue) {
+                                      onResolveCheckboxValue(
+                                        virtualRow.index,
+                                        col.csvColumnIndex,
+                                        !checked ? '1' : '0'
+                                      );
+                                    }
+                                  }}
+                                />
+                                {isUnparseable && cellFlag?.kind === 'checkbox' && (
+                                  <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
+                                )}
+                              </span>
+                            );
+                          })()
+                        ) : isImageColumn && cellFlag?.kind === 'image-invalid' ? (
                           <span className="inline-flex items-center gap-1 text-metadata text-red-01">
                             <WarningIcon />
                             <span className="truncate">Invalid image URL: {cellFlag.rawValue}</span>

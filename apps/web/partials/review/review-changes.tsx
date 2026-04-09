@@ -1,6 +1,6 @@
 'use client';
 
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -52,7 +52,13 @@ import { editorContentVersionAtom } from '~/atoms';
 type Proposals = Record<string, { name: string; description: string }>;
 
 export const ReviewChanges = () => {
-  const { isReviewOpen, setIsReviewOpen, reviewVersion } = useDiff();
+  const {
+    isReviewOpen,
+    setIsReviewOpen,
+    reviewVersion,
+    activeSpace: diffPreferredSpaceId,
+    setActiveSpace: setDiffPreferredSpaceId,
+  } = useDiff();
   const { state: statusBarState } = useStatusBar();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
@@ -86,14 +92,33 @@ export const ReviewChanges = () => {
     return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
   }, [valuesWithChanges, relationsWithChanges]);
 
-  const spacesKey = dedupedSpacesWithActions.sort().join(',');
+  const spacesKey = [...dedupedSpacesWithActions].sort().join(',');
   const [activeSpace, setActiveSpace] = React.useState<string>('');
+  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
 
   React.useEffect(() => {
+    if (!isReviewOpen) {
+      setDiffPreferredSpaceId('');
+      appliedPreferredSpaceForVersion.current = null;
+    }
+  }, [isReviewOpen, setDiffPreferredSpaceId]);
+
+  React.useEffect(() => {
+    const shouldApplyPreferred =
+      reviewVersion !== appliedPreferredSpaceForVersion.current &&
+      Boolean(diffPreferredSpaceId) &&
+      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
+
+    if (shouldApplyPreferred) {
+      appliedPreferredSpaceForVersion.current = reviewVersion;
+      setActiveSpace(diffPreferredSpaceId);
+      return;
+    }
+
     if (activeSpace === '' && dedupedSpacesWithActions[0]) {
       setActiveSpace(dedupedSpacesWithActions[0]);
     }
-  }, [spacesKey, activeSpace]);
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -111,24 +136,47 @@ export const ReviewChanges = () => {
     fetchSpaces();
   }, [spacesKey]);
 
+  // Debounced auto-close: avoids flashing closed during import's clear→rebuild gap.
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   React.useEffect(() => {
     if (dedupedSpacesWithActions.length === 0 && statusBarState.reviewState !== 'publishing-contract') {
-      setIsReviewOpen(false);
-    } else if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-      setActiveSpace(dedupedSpacesWithActions[0] ?? '');
+      closeTimerRef.current = setTimeout(() => {
+        setIsReviewOpen(false);
+      }, 500);
+    } else {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+
+      if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
+        const next =
+          diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
+            ? diffPreferredSpaceId
+            : (dedupedSpacesWithActions[0] ?? '');
+        setActiveSpace(next);
+      }
     }
-  }, [spacesKey, activeSpace, statusBarState.reviewState, setIsReviewOpen]);
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
 
   const valuesFromSpace = useValues({
-    selector: t => t.spaceId === activeSpace && t.isLocal === true,
+    selector: t => t.spaceId === activeSpace && t.isLocal === true && t.hasBeenPublished === false,
     includeDeleted: true,
   });
 
   const relationsFromSpace = useRelations({
-    selector: r => r.spaceId === activeSpace && r.isLocal === true,
+    selector: r => r.spaceId === activeSpace && r.isLocal === true && r.hasBeenPublished === false,
     includeDeleted: true,
   });
 

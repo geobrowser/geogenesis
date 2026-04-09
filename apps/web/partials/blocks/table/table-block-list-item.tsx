@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import NextImage from 'next/image';
 
@@ -22,6 +22,11 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import {
+  LIST_GALLERY_BROWSE_BODY_CLASS,
+  browseListStackMarginTopForField,
+  orderCellsForBrowseFigma,
+} from './table-block-browse-layout';
 import { TableBlockPropertyField } from './table-block-property-field';
 
 type Props = {
@@ -131,7 +136,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-3">
+        <div className="min-w-0 w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -187,6 +192,7 @@ export function TableBlockListItem({
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
+              variant="tableCell"
               placeholder="Add description..."
               onChange={value => {
                 onChangeEntry(rowEntityId, currentSpaceId, {
@@ -248,7 +254,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full">
+        <div className="min-w-0 w-full">
           {source.type !== 'COLLECTION' ? (
             <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           ) : (
@@ -267,26 +273,35 @@ export function TableBlockListItem({
               <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
             </CollectionMetadata>
           )}
-          {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
+          {description && (
+            <div
+              className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}
+            >
+              {description}
+            </div>
+          )}
 
-          {otherPropertyData.map(p => {
+          {orderCellsForBrowseFigma(otherPropertyData, properties).map(p => {
             const property = properties?.[p.slotId];
 
             if (!property) {
               return null;
             }
 
+            const isRelation = property.dataType === 'RELATION';
+
             return (
-              <div key={`${p.slotId}-${cellId}`}>
+              <div key={`${p.slotId}-${rowEntityId}`} className={browseListStackMarginTopForField(isRelation)}>
                 <TableBlockPropertyField
                   key={p.slotId}
                   spaceId={currentSpaceId}
-                  entityId={cellId}
+                  entityId={rowEntityId}
                   property={property}
                   onChangeEntry={onChangeEntry}
                   source={source}
                   disableLink={true}
                   entityName={name}
+                  browseListBody
                 />
               </div>
             );

@@ -1,4 +1,4 @@
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Mutator } from '~/core/sync/use-mutate';
 import { Property, Value } from '~/core/types';
@@ -79,17 +79,21 @@ export function writeValue(
 /**
  * Create a property relation linking fromEntity → toEntity via the given property type.
  * Used by RelationsGroup and EditableRelationsGroup when the user picks an existing entity.
+ * If the property defines relationEntityTypes, those types are automatically assigned to the
+ * relation entity (the edge/join entity).
  */
 export function createPropertyRelation(
   storage: Mutator,
   spaceId: string,
   fromEntityId: string,
-  property: Pick<Property, 'id' | 'name'>,
+  property: Pick<Property, 'id' | 'name' | 'relationEntityTypes'>,
   target: { id: string; name: string | null; space?: string }
 ) {
+  const relationEntityId = IdUtils.generate();
+
   storage.relations.set({
     id: IdUtils.generate(),
-    entityId: IdUtils.generate(),
+    entityId: relationEntityId,
     spaceId,
     renderableType: 'RELATION',
     toSpaceId: target.space,
@@ -97,6 +101,10 @@ export function createPropertyRelation(
     fromEntity: { id: fromEntityId, name: null },
     toEntity: { id: target.id, name: target.name, value: target.id },
   });
+
+  for (const relationType of property.relationEntityTypes ?? []) {
+    createRelationEntityTypeRelation(storage, spaceId, relationEntityId, relationType);
+  }
 }
 
 /**
@@ -107,7 +115,7 @@ export function createTypeRelationForNewEntity(
   storage: Mutator,
   spaceId: string,
   newEntity: { id: string; name: string | null; space?: string; verified?: boolean },
-  relationType: { id: string; name: string | null }
+  relationType: { id: string; name: string | null; spaceId?: string }
 ) {
   storage.relations.set({
     id: IdUtils.generate(),
@@ -115,7 +123,7 @@ export function createTypeRelationForNewEntity(
     spaceId,
     renderableType: 'RELATION',
     verified: newEntity.verified,
-    toSpaceId: newEntity.space,
+    toSpaceId: relationType.spaceId,
     type: {
       id: SystemIds.TYPES_PROPERTY,
       name: 'Types',
@@ -123,6 +131,39 @@ export function createTypeRelationForNewEntity(
     fromEntity: {
       id: newEntity.id,
       name: newEntity.name,
+    },
+    toEntity: {
+      id: relationType.id,
+      name: relationType.name,
+      value: relationType.id,
+    },
+  });
+}
+
+/**
+ * Create a Types relation on a relation entity (relation.entityId), linking it to its expected type.
+ * Used to auto-assign types to the edge/join entity when a new relation is created via a property
+ * that has "Relation entity types" defined.
+ */
+export function createRelationEntityTypeRelation(
+  storage: Mutator,
+  spaceId: string,
+  relationEntityId: string,
+  relationType: { id: string; name: string | null; spaceId?: string }
+) {
+  storage.relations.set({
+    id: IdUtils.generate(),
+    entityId: IdUtils.generate(),
+    spaceId,
+    renderableType: 'RELATION',
+    toSpaceId: relationType.spaceId,
+    type: {
+      id: SystemIds.TYPES_PROPERTY,
+      name: 'Types',
+    },
+    fromEntity: {
+      id: relationEntityId,
+      name: null,
     },
     toEntity: {
       id: relationType.id,

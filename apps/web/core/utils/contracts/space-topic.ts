@@ -1,4 +1,4 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { type Hex, encodeFunctionData } from 'viem';
 
@@ -74,3 +74,55 @@ export function buildDaoTopicDeclaredCalldata({
     args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
   });
 }
+
+// TODO: Remove topic is not yet supported by the backend.
+// export function buildPersonalTopicRemovedCalldata({
+//   authorSpaceId,
+//   spaceId,
+// }: {
+//   authorSpaceId: string;
+//   spaceId: string;
+// }): Hex {
+//   const fromSpaceId = `0x${authorSpaceId}` as const;
+//   const toSpaceId = `0x${spaceId}` as const;
+//
+//   return encodeFunctionData({
+//     functionName: 'enter',
+//     abi: SpaceRegistryAbi,
+//     args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.TOPIC_REMOVED, EMPTY_TOPIC_HEX, '0x', EMPTY_SIGNATURE],
+//   });
+// }
+//
+// export function buildDaoTopicRemovedCalldata({
+//   authorSpaceId,
+//   spaceId,
+//   spaceAddress,
+// }: {
+//   authorSpaceId: string;
+//   spaceId: string;
+//   spaceAddress: Hex;
+// }): Hex {
+//   const proposalId = `0x${IdUtils.generate()}` as const;
+//   const fromSpaceId = `0x${authorSpaceId}` as const;
+//   const toSpaceId = `0x${spaceId}` as const;
+//
+//   const pingCallData = encodeFunctionData({
+//     functionName: 'ping',
+//     abi: DAOSpaceAbi,
+//     args: [GOVERNANCE_ACTIONS.TOPIC_REMOVED, EMPTY_TOPIC_HEX, '0x'],
+//   });
+//
+//   const data = encodeProposalCreatedData(proposalId, VOTING_MODE.FAST, [
+//     {
+//       to: spaceAddress,
+//       value: 0n,
+//       data: pingCallData,
+//     },
+//   ]);
+//
+//   return encodeFunctionData({
+//     functionName: 'enter',
+//     abi: SpaceRegistryAbi,
+//     args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
+//   });
+// }

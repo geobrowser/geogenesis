@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk';
+import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 

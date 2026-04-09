@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -49,7 +49,7 @@ export default async function DefaultEntityPage({
   const showSpacer = showCover || showHeading || showHeader;
 
   const isEditing = searchParams?.edit === 'true';
-  const props = await getData(params.id, params.entityId, isEditing);
+  const props = await getData(params.id, params.entityId);
 
   return (
     <SpaceRedirect
@@ -111,7 +111,7 @@ export default async function DefaultEntityPage({
   );
 }
 
-const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
+const getData = async (spaceId: string, entityId: string) => {
   const entityPage = await cachedFetchEntityPage(entityId, spaceId);
 
   const entity = entityPage?.entity;
@@ -123,9 +123,9 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
    * Only redirect to the space front page if this entity is the page
    * entity for the current space, not a SPACE_TYPE from another space.
    */
-  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && !preventRedirect && deterministicSpaceId) {
+  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && deterministicSpaceId) {
     const space = await cachedFetchSpace(deterministicSpaceId);
-    if (space?.entity?.id === entityId) {
+    if (space?.entity?.id === entityId && !Spaces.hasExternalTopic(space)) {
       return redirect(NavUtils.toSpace(deterministicSpaceId));
     }
   }

@@ -105,7 +105,7 @@ export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
     }
   }
 
-  const nodes = resultOrError.right.subspaceTopicsConnection.nodes;
+  const nodes = resultOrError.right?.subspaceTopicsConnection?.nodes ?? [];
   const subtopicsById = new Map<
     string,
     { name: string; image: string; spaces: TopicUsageSpaceNode[]; spacesCount: number }

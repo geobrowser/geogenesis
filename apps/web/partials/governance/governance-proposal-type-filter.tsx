@@ -26,8 +26,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const params = useSearchParams();
   const proposalType = params?.get('proposalType') as GovernanceProposalType | null;
-  const activeFilter: GovernanceProposalType =
-    proposalType && proposalType in filterLabels ? proposalType : 'proposals';
+  const activeFilter: GovernanceProposalType = proposalType && proposalType in filterLabels ? proposalType : 'all';
   const label = filterLabels[activeFilter];
 
   const baseHref = `/space/${spaceId}/governance`;

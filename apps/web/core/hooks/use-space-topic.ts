@@ -11,13 +11,8 @@ import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-trans
 import { useSpace } from '~/core/hooks/use-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import {
-  buildDaoTopicDeclaredCalldata,
-  buildPersonalTopicDeclaredCalldata,
-} from '~/core/utils/contracts/space-topic';
-import {
-  SPACE_REGISTRY_ADDRESS,
-} from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { buildDaoTopicDeclaredCalldata, buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 interface UseSpaceTopicArgs {
@@ -38,31 +33,37 @@ export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
     address: SPACE_REGISTRY_ADDRESS,
   });
 
+  const validatePrerequisites = () => {
+    if (!smartAccount) {
+      const message = 'Please connect your wallet to manage this topic';
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
+    }
+
+    if (!personalSpaceId || !isRegistered) {
+      const message = 'You need a registered personal space to manage a topic';
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
+    }
+
+    if (!validateSpaceId(spaceId)) {
+      const message = 'Invalid space ID format. Please try again.';
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
+    }
+
+    if (!space?.address) {
+      const message = 'Space information is still loading. Please try again.';
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
+    }
+
+    return { personalSpaceId, spaceId: spaceId!, spaceAddress: space.address as Hex, spaceType: space.type };
+  };
+
   const mutation = useMutation({
     mutationFn: async ({ topicEntityId }: SetTopicParams) => {
-      if (!smartAccount) {
-        const message = 'Please connect your wallet to manage this topic';
-        dispatch({ type: 'ERROR', payload: message });
-        throw new Error(message);
-      }
-
-      if (!personalSpaceId || !isRegistered) {
-        const message = 'You need a registered personal space to manage a topic';
-        dispatch({ type: 'ERROR', payload: message });
-        throw new Error(message);
-      }
-
-      if (!validateSpaceId(spaceId)) {
-        const message = 'Invalid space ID format. Please try again.';
-        dispatch({ type: 'ERROR', payload: message });
-        throw new Error(message);
-      }
-
-      if (!space?.address) {
-        const message = 'Space information is still loading. Please try again.';
-        dispatch({ type: 'ERROR', payload: message });
-        throw new Error(message);
-      }
+      const prereqs = validatePrerequisites();
 
       if (!validateEntityId(topicEntityId)) {
         const message = 'Invalid topic ID format. Please try again.';
@@ -72,21 +73,21 @@ export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
 
       const writeTxEffect = Effect.gen(function* () {
         const callData =
-          space.type === 'DAO'
+          prereqs.spaceType === 'DAO'
             ? buildDaoTopicDeclaredCalldata({
-                authorSpaceId: personalSpaceId,
-                spaceId: spaceId!,
-                spaceAddress: space.address as Hex,
+                authorSpaceId: prereqs.personalSpaceId,
+                spaceId: prereqs.spaceId,
+                spaceAddress: prereqs.spaceAddress,
                 topicId: topicEntityId,
               })
             : buildPersonalTopicDeclaredCalldata({
-                authorSpaceId: personalSpaceId,
-                spaceId: spaceId!,
+                authorSpaceId: prereqs.personalSpaceId,
+                spaceId: prereqs.spaceId,
                 topicId: topicEntityId,
               });
 
         const telemetryAttributes =
-          space.type === 'DAO'
+          prereqs.spaceType === 'DAO'
             ? {
                 'io.operation': 'set_space_topic',
                 'space.type': 'DAO',
@@ -122,6 +123,62 @@ export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
       });
     },
   });
+
+  // TODO: Remove topic is not yet supported by the backend.
+  // const removeMutation = useMutation({
+  //   mutationFn: async () => {
+  //     const prereqs = validatePrerequisites();
+  //
+  //     const writeTxEffect = Effect.gen(function* () {
+  //       const callData =
+  //         prereqs.spaceType === 'DAO'
+  //           ? buildDaoTopicRemovedCalldata({
+  //               authorSpaceId: prereqs.personalSpaceId,
+  //               spaceId: prereqs.spaceId,
+  //               spaceAddress: prereqs.spaceAddress,
+  //             })
+  //           : buildPersonalTopicRemovedCalldata({
+  //               authorSpaceId: prereqs.personalSpaceId,
+  //               spaceId: prereqs.spaceId,
+  //             });
+  //
+  //       const telemetryAttributes =
+  //         prereqs.spaceType === 'DAO'
+  //           ? {
+  //               'io.operation': 'remove_space_topic',
+  //               'space.type': 'DAO',
+  //               'governance.action': 'proposal_created',
+  //               'governance.proposal_action': 'topic_removed',
+  //             }
+  //           : {
+  //               'io.operation': 'remove_space_topic',
+  //               'space.type': 'PERSONAL',
+  //               'governance.action': 'topic_removed',
+  //             };
+  //
+  //       const hash = yield* tx(callData).pipe(
+  //         Effect.withSpan('web.write.space_topic.remove'),
+  //         Effect.annotateSpans(telemetryAttributes)
+  //       );
+  //       return hash;
+  //     });
+  //
+  //     const result = await runEffectEither(writeTxEffect);
+  //
+  //     Either.match(result, {
+  //       onLeft: error => {
+  //         console.error('Failed to remove space topic', { spaceId }, error);
+  //         dispatch({
+  //           type: 'ERROR',
+  //           payload: String(error),
+  //           retry: () => removeMutation.mutate(),
+  //         });
+  //         throw error;
+  //       },
+  //       onRight: () => console.log('Successfully removed space topic'),
+  //     });
+  //   },
+  // });
 
   return {
     setTopic: mutation.mutate,

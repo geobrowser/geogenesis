@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
@@ -128,35 +128,37 @@ function AssociatedSpaceRow({
 async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposalMetadata | null> {
   const normalizedTopicId = uuidToHex(topicId);
   const result = await Effect.runPromise(
-    graphql<TopicProposalMetadataResult>({
-      endpoint: Environment.getConfig().api,
-      query: `
-        {
-          entity(id: ${JSON.stringify(normalizedTopicId)}) {
-            id
-            name
-            description
-            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-              typeId
-              toEntity {
-                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-                  propertyId
-                  text
+    Effect.either(
+      graphql<TopicProposalMetadataResult>({
+        endpoint: Environment.getConfig().api,
+        query: `
+          {
+            entity(id: ${JSON.stringify(normalizedTopicId)}) {
+              id
+              name
+              description
+              relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+                typeId
+                toEntity {
+                  valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                    propertyId
+                    text
+                  }
                 }
               }
-            }
-            spacesByTopicIdConnection(first: 3) {
-              totalCount
-              nodes {
-                id
-                page {
-                  name
-                  relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-                    typeId
-                    toEntity {
-                      valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-                        propertyId
-                        text
+              spacesByTopicIdConnection(first: 3) {
+                totalCount
+                nodes {
+                  id
+                  page {
+                    name
+                    relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+                      typeId
+                      toEntity {
+                        valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                          propertyId
+                          text
+                        }
                       }
                     }
                   }
@@ -164,22 +166,29 @@ async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposa
               }
             }
           }
-        }
-      `,
-    })
+        `,
+      })
+    )
   );
 
-  if (!result.entity) {
+  if (Either.isLeft(result)) {
+    console.warn('Failed to fetch topic proposal metadata', result.left);
     return null;
   }
 
-  const associatedSpaces = mergeTopicUsageSpaces(result.entity.spacesByTopicIdConnection.nodes);
+  if (!result.right.entity) {
+    return null;
+  }
+
+  const entity = result.right.entity;
+
+  const associatedSpaces = mergeTopicUsageSpaces(entity.spacesByTopicIdConnection.nodes);
 
   return {
-    id: result.entity.id,
-    name: result.entity.name,
-    image: resolveSpaceImage(result.entity.relationsList),
+    id: entity.id,
+    name: entity.name,
+    image: resolveSpaceImage(entity.relationsList),
     associatedSpaces,
-    associatedSpacesCount: result.entity.spacesByTopicIdConnection.totalCount,
+    associatedSpacesCount: entity.spacesByTopicIdConnection.totalCount,
   };
 }

@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { diffWords } from 'diff';
 import { Effect } from 'effect';

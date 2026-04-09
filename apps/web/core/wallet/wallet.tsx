@@ -1,6 +1,7 @@
 'use client';
 
-import { WagmiProvider, createGeoWalletConfig, createMockConfig, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
 
 import * as React from 'react';
 

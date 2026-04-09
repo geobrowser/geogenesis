@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';

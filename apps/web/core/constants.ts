@@ -1,9 +1,8 @@
 export const ZERO_WIDTH_SPACE = '\u200b';
 export const ALL_SPACES_IMAGE = 'ipfs://QmQXJYrbJJZcukgkzk8C71nQL1V8ND9TQjrtP4sKWjYPFH';
 export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
-export const IPFS_GATEWAY_PATH = 'https://upload.lighthouse.storage';
-export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
+export const LIGHTHOUSE_GATEWAY_READ_PATH = 'https://gateway.lighthouse.storage/ipfs/';
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
@@ -59,6 +58,9 @@ export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
 };
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+
+// Like RELATION_VALUE_RELATIONSHIP_TYPE but for the edge entity (relation.entityId)
+export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';
 
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 

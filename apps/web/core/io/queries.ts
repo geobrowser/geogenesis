@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
@@ -6,13 +6,13 @@ import { getConfig } from '~/core/environment/environment';
 import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
+import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
-import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
@@ -83,9 +83,7 @@ type GetAllEntitiesOptions = {
 /** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
 const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
-function decodeEntitiesConnectionNodes(data: {
-  entitiesConnection?: { nodes?: unknown[] } | null;
-}): Entity[] {
+function decodeEntitiesConnectionNodes(data: { entitiesConnection?: { nodes?: unknown[] } | null }): Entity[] {
   return (
     data.entitiesConnection?.nodes
       ?.map((n: unknown) => EntityDecoder.decode(n))

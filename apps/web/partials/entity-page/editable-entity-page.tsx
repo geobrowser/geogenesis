@@ -1,11 +1,10 @@
 'use client';
 
-import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useAtom } from 'jotai';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -18,7 +17,6 @@ import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
-import { useEditorStore } from '~/core/state/editor/use-editor';
 import {
   useEntitySchema,
   useEntityTypes,
@@ -57,10 +55,9 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
+import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
-
-import { editorHasContentAtom } from '~/atoms';
 
 type EditableEntityPageProps = {
   id: string;
@@ -238,8 +235,8 @@ function RelationPropertyWithDelete({
           <SquareButton
             icon={<Trash />}
             onClick={() => {
-              // Delete all relations for this property
-              propertyRelations.forEach(relation => storage.relations.delete(relation));
+              // Batch-delete all relations for this property in a single store update
+              storage.relations.deleteMany(propertyRelations);
               // Also delete the value entry to fully remove the property from the entity
               if (propertyValue) {
                 storage.values.delete(propertyValue);
@@ -478,7 +475,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                       spaceId,
                       renderableType: 'RELATION',
                       verified: result.verified,
-                      toSpaceId: result.space,
+                      toSpaceId: valueType.spaceId,
                       type: {
                         id: SystemIds.TYPES_PROPERTY,
                         name: 'Types',
@@ -533,6 +530,10 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 }
 
                 storage.relations.set(newRelation);
+
+                for (const relationType of property.relationEntityTypes ?? []) {
+                  createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
+                }
 
                 await applyTemplate({ ...templateOptions, typeId: result.id });
               }}
@@ -671,7 +672,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                     entityId: IdUtils.generate(),
                     spaceId,
                     renderableType: 'RELATION',
-                    toSpaceId: result.space,
+                    toSpaceId: valueType.spaceId,
                     type: {
                       id: SystemIds.TYPES_PROPERTY,
                       name: 'Types',
@@ -725,6 +726,10 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               }
 
               storage.relations.set(newRelation);
+
+              for (const relationType of property.relationEntityTypes ?? []) {
+                createRelationEntityTypeRelation(storage, spaceId, newEntityId, relationType);
+              }
 
               await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
             }}
@@ -901,7 +906,7 @@ function RenderedValue({
           <>
             <PageStringField
               key={propertyId}
-              variant="body"
+              variant="tableCell"
               placeholder="Add value..."
               aria-label="text-field"
               value={value}
@@ -978,7 +983,7 @@ function RenderedValue({
             ) : (
               <PageStringField
                 key={propertyId}
-                variant="body"
+                variant="tableCell"
                 placeholder="Add value..."
                 aria-label="text-field"
                 value={value}
@@ -1080,31 +1085,12 @@ function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string
 
 /**
  * Returns true if the properties panel should be visible.
- * Panel shows when entity has name, content, types, or non-system properties.
+ *
+ * Always returns true — this function is only called from EditableEntityPage,
+ * which only renders when the user is in edit mode. In edit mode, the panel
+ * must always be visible so users can add properties to new (empty) entities
+ * via the "+" button at the bottom of the panel.
  */
-function useShouldShowPropertiesPanel(entityId: string, spaceId: string): boolean {
-  const name = useName(entityId, spaceId);
-  const types = useEntityTypes(entityId, spaceId);
-
-  const { blockIds } = useEditorStore();
-  const [editorHasContent] = useAtom(editorHasContentAtom);
-
-  const values = useValues({
-    selector: v => v.entity.id === entityId && v.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(v.property.id),
-  });
-
-  const relations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(r.type.id),
-  });
-
-  const hasActualProperties = values.length > 0 || relations.length > 0;
-
-  const shouldShow =
-    (name !== null && name.length > 0) ||
-    (blockIds && blockIds.length > 0) ||
-    editorHasContent ||
-    types.length > 0 ||
-    hasActualProperties;
-
-  return shouldShow;
+function useShouldShowPropertiesPanel(_entityId: string, _spaceId: string): boolean {
+  return true;
 }

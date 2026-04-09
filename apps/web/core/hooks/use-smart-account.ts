@@ -1,6 +1,6 @@
 'use client';
 
-import { generateSmartAccount, useWalletClient } from '@geogenesis/auth';
+import { useWalletClient } from '@geogenesis/auth';
 import { useQuery } from '@tanstack/react-query';
 
 import { useCookies } from 'react-cookie';
@@ -21,6 +21,8 @@ export function useSmartAccount() {
       }
 
       const config = Environment.getConfig();
+
+      const { generateSmartAccount } = await import('@geogenesis/auth/account');
 
       const smartAccount = await generateSmartAccount({
         bundlerUrl: config.bundler,

@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -259,7 +259,7 @@ export function usePowerToolsData(options?: {
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      return lastPageCount === pageSize;
+      return lastPageCount >= pageSize;
     }
 
     return false;

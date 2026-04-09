@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { JSONContent } from '@tiptap/core';
 
 import { ID } from '~/core/id';

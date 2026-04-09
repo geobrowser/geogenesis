@@ -17,7 +17,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
@@ -47,10 +47,10 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 
 import {
-  EditEntitiesPopover,
+  type EditAddExistingPropertyPayload,
   type EditApplyNewPropertyPayload,
   type EditCreatePropertyEntityPayload,
-  type EditAddExistingPropertyPayload,
+  EditEntitiesPopover,
   type EditRemovePropertiesPayload,
 } from './edit-entities-popover';
 import { PowerToolsRow } from './types';

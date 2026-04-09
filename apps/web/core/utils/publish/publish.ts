@@ -1,4 +1,11 @@
-import { ContentIds, type DecimalMantissa, Graph, Op, type PropertyValueParam, SystemIds } from '@geoprotocol/geo-sdk';
+import {
+  ContentIds,
+  type DecimalMantissa,
+  Graph,
+  Op,
+  type PropertyValueParam,
+  SystemIds,
+} from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 

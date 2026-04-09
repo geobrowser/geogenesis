@@ -1,10 +1,15 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { createAtom } from '@xstate/store';
 
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '../constants';
+import {
+  FORMAT_PROPERTY,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
+  RENDERABLE_TYPE_PROPERTY,
+  UNIT_PROPERTY,
+} from '../constants';
 import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
@@ -169,7 +174,13 @@ export class GeoStore {
       // Buffer entities and flush once per microtask to coalesce
       // multiple ENTITIES_SYNCED events into a single hydrateWith call.
       for (const entity of event.entities) {
-        syncedEntities.set(entity.id, entity);
+        // E.merge bakes isLocal entries into entities — strip them so
+        // syncedEntities stays a clean remote baseline for net-change diffing.
+        syncedEntities.set(entity.id, {
+          ...entity,
+          values: entity.values.filter(v => !v.isLocal),
+          relations: entity.relations.filter(r => !r.isLocal),
+        });
       }
       this.pendingSyncEntities.push(...event.entities);
       if (!this.syncScheduled) {
@@ -283,7 +294,11 @@ export class GeoStore {
 
   public hydrateWith(entities: Entity[]) {
     for (const entity of entities) {
-      syncedEntities.set(entity.id, entity);
+      syncedEntities.set(entity.id, {
+        ...entity,
+        values: entity.values.filter(v => !v.isLocal),
+        relations: entity.relations.filter(r => !r.isLocal),
+      });
     }
 
     const newValues = entities.flatMap(e => e.values);
@@ -427,6 +442,15 @@ export class GeoStore {
       .map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
+        spaceId: r.toSpaceId,
+      }));
+
+    const relationEntityTypes = entity?.relations
+      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+        spaceId: r.toSpaceId,
       }));
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
@@ -441,6 +465,7 @@ export class GeoStore {
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
+      relationEntityTypes,
       renderableType: renderableTypeId,
       renderableTypeStrict: getStrictRenderableType(renderableTypeId),
       format: formatValue?.value ?? null,

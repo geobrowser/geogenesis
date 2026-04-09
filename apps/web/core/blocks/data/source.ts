@@ -1,9 +1,10 @@
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { storage } from '~/core/sync/use-mutate';
+import { store } from '~/core/sync/use-sync-engine';
 import { Relation } from '~/core/types';
 
 type EntitySource = {
@@ -104,18 +105,16 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
 }
 
 /**
- * Deletes the existing source type relation and any existing sources relations.
- * Depending on the source typ there might be one or many of these relations.
+ * Deletes any existing DATA_SOURCE_TYPE_RELATION_TYPE relations on a block.
+ * There should only be one, but we delete all matches defensively.
  *
- * We should delete any existing source types and sources when changing source
- * types or deleting a data block.
+ * Reads fresh relations directly from the store to avoid stale closure data
+ * when called from React event handlers.
  *
- * @param relations - The relations to delete as an array of {@link Relation}
- * @param spaceId - The space id as a {@link SpaceId}
+ * @param blockId - The block entity id to remove source type relations from
  */
-export function removeSourceType({ relations }: { relations: Relation[] }) {
-  // Delete the existing source type relation. There should only be one source type
-  // relation, but delete many just in case.
+export function removeSourceType({ blockId }: { blockId: string }) {
+  const relations = store.getResolvedRelations(blockId);
   const sourceTypeRelations = relations.filter(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE);
 
   for (const relation of sourceTypeRelations) {

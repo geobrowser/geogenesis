@@ -1,4 +1,4 @@
-import { Position, SystemIds } from '@geoprotocol/geo-sdk';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 
@@ -444,8 +444,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
         // IMAGE columns contain URLs that are uploaded to IPFS during generation and merged into the plan separately — skip here
         if (property.renderableTypeStrict === 'IMAGE') continue;
 
-        const renderableType: RenderableEntityType =
-          property.renderableTypeStrict === 'VIDEO' ? 'VIDEO' : 'RELATION';
+        const renderableType: RenderableEntityType = property.renderableTypeStrict === 'VIDEO' ? 'VIDEO' : 'RELATION';
 
         for (const part of splitRelationCell(raw)) {
           const resolved = resolvedEntities.get(`${propertyId}::${part}`);

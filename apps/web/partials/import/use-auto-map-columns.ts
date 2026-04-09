@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useCallback, useState } from 'react';
 
@@ -31,7 +31,7 @@ export function useAutoMapColumns(spaceId: string) {
   const { store } = useSyncEngine();
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
-  const runWithConcurrency = useCallback(async <T,>(tasks: Array<() => Promise<T>>, concurrency: number) => {
+  const runWithConcurrency = useCallback(async <T>(tasks: Array<() => Promise<T>>, concurrency: number) => {
     if (tasks.length === 0) return [] as T[];
 
     const results = new Array<T>(tasks.length);

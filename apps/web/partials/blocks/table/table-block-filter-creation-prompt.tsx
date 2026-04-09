@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -21,6 +21,7 @@ import { ResultContent, ResultsList } from '~/design-system/autocomplete/results
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Divider } from '~/design-system/divider';
+import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -537,6 +538,11 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }:
                 </motion.div>
               ))}
             </ResultsList>
+            {autocomplete.isLoading && (
+              <div className="flex items-center justify-center py-3">
+                <Dots />
+              </div>
+            )}
           </ResizableContainer>
         </div>
       )}
@@ -550,7 +556,7 @@ interface TableBlockSpaceFilterInputProps {
 }
 
 function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpaceFilterInputProps) {
-  const { query, setQuery, spaces: results } = useSpacesQuery();
+  const { query, setQuery, spaces: results, isLoading } = useSpacesQuery();
 
   const onSelectSpace = (space: (typeof results)[number]) => {
     setQuery('');
@@ -597,6 +603,11 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                 </motion.div>
               ))}
             </ResultsList>
+            {isLoading && (
+              <div className="flex items-center justify-center py-3">
+                <Dots />
+              </div>
+            )}
           </ResizableContainer>
         </div>
       )}

@@ -8,8 +8,72 @@ const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   allowedDevOrigins: ['localhost', '127.0.0.1'],
+  turbopack: {
+    resolveAlias: {
+      '@sentry/nextjs': './prebundled/sentry-stub.js',
+      '@sentry/browser': './prebundled/sentry-stub.js',
+      '@sentry/opentelemetry': './prebundled/sentry-stub.js',
+    },
+  },
   experimental: {
-    optimizePackageImports: ['effect', 'viem', 'wagmi', 'mapbox-gl', '@tiptap/core', '@tiptap/react'],
+    turbopackInferModuleSideEffects: false,
+    turbopackInputSourceMaps: false,
+    turbopackSourceMaps: false,
+    turbopackMinify: false,
+    turbopackPluginRuntimeStrategy: 'workerThreads',
+    turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
+    optimizePackageImports: [
+      // Core heavy deps
+      'effect',
+      'viem',
+      'wagmi',
+      'permissionless',
+      'date-fns',
+      'date-fns-tz',
+      'graphql-request',
+
+      // Editor
+      '@tiptap/core',
+      '@tiptap/react',
+      '@tiptap/pm',
+      '@tiptap/extensions',
+      '@tiptap/extension-bold',
+      '@tiptap/extension-code',
+      '@tiptap/extension-code-block',
+      '@tiptap/extension-document',
+      '@tiptap/extension-hard-break',
+      '@tiptap/extension-heading',
+      '@tiptap/extension-italic',
+      '@tiptap/extension-link',
+      '@tiptap/extension-list',
+      '@tiptap/extension-paragraph',
+      '@tiptap/extension-text',
+      '@tiptap/suggestion',
+      'katex',
+      'markdown-it',
+
+      // UI
+      'framer-motion',
+      'jotai',
+      '@dnd-kit/core',
+      '@dnd-kit/sortable',
+      '@dnd-kit/utilities',
+      '@tanstack/react-query',
+      '@tanstack/react-table',
+      '@tanstack/pacer',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tooltip',
+      '@xstate/store',
+      'mapbox-gl',
+
+      // Misc
+      'immer',
+      'dexie',
+      'classnames',
+      'class-variance-authority',
+    ],
   },
   images: {
     remotePatterns: [
