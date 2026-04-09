@@ -10,6 +10,7 @@ import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -194,11 +195,13 @@ function RelationsGroup({
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
   });
+  const dedupedRelations = dedupeRelationsByToEntityId(relations);
 
   const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
   const firstRelationValueType = property?.relationValueTypes?.[0];
+  const hasRelationToEntity = (targetEntityId: string) => dedupedRelations.some(r => r.toEntity.id === targetEntityId);
 
-  if (relations.length === 0) {
+  if (dedupedRelations.length === 0) {
     // For IMAGE type properties, show an image upload field instead of SelectEntity
     if (property.renderableTypeStrict === 'IMAGE') {
       return (
@@ -226,6 +229,10 @@ function RelationsGroup({
             }
           }}
           onDone={result => {
+            if (hasRelationToEntity(result.id)) {
+              return;
+            }
+
             createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           variant="tableCell"
@@ -238,7 +245,7 @@ function RelationsGroup({
   if (property.renderableTypeStrict === 'IMAGE') {
     return (
       <TableImageField
-        imageRelation={relations[0]}
+        imageRelation={dedupedRelations[0]}
         spaceId={spaceId}
         entityId={entityId}
         entityName={entityName}
@@ -251,7 +258,7 @@ function RelationsGroup({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {relations.map(r => {
+      {dedupedRelations.map(r => {
         return (
           <div key={`relation-${r.id}-${r.toEntity.value}`}>
             <LinkableRelationChip
@@ -295,6 +302,10 @@ function RelationsGroup({
             }
           }}
           onDone={result => {
+            if (hasRelationToEntity(result.id)) {
+              return;
+            }
+
             createPropertyRelation(storage, spaceId, entityId, property, result);
           }}
           spaceId={spaceId}
