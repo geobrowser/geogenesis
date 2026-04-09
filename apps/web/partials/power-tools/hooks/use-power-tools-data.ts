@@ -259,7 +259,7 @@ export function usePowerToolsData(options?: {
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      return lastPageCount === pageSize;
+      return lastPageCount >= pageSize;
     }
 
     return false;
