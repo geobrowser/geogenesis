@@ -150,7 +150,7 @@ export const ReviewChanges = () => {
         closeTimerRef.current = null;
       }
 
-      if (!dedupedSpacesWithActions.includes(activeSpace)) {
+      if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
         const next =
           diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
             ? diffPreferredSpaceId

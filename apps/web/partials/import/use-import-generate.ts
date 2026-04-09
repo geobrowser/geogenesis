@@ -184,7 +184,7 @@ export function useImportGenerate(spaceId: string) {
       applyPlan(initialPlan);
       setStep('step5');
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       // ── Phase 2: Background resolution ──────────────────────────────
       // Relation entities
@@ -197,7 +197,7 @@ export function useImportGenerate(spaceId: string) {
         console.log(
           `[import:generate] resolveRelationEntities: ${(performance.now() - t2).toFixed(1)}ms — found=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'found').length}, created=${[...relationResolution.resolvedEntities.values()].filter(e => e.status === 'created').length}, unresolved=${relationResolution.unresolvedCount}`
         );
-      if (relationResolution.aborted) return;
+      if (relationResolution.aborted) return false;
 
       const mergedResolvedEntities = new Map(relationResolution.resolvedEntities);
       for (const [cacheKey, override] of Object.entries(relationOverrides)) {
@@ -215,7 +215,7 @@ export function useImportGenerate(spaceId: string) {
         console.log(
           `[import:generate] resolveTypesForRows: ${(performance.now() - t3).toFixed(1)}ms — ${typeResolution.resolvedTypes.size} types resolved`
         );
-      if (typeResolution.aborted) return;
+      if (typeResolution.aborted) return false;
 
       const mergedResolvedTypes = new Map(typeResolution.resolvedTypes);
       for (const [rawType, override] of Object.entries(typeOverrides)) {
@@ -236,7 +236,7 @@ export function useImportGenerate(spaceId: string) {
         console.log(
           `[import:generate] resolveRowsByNameAndType: ${(performance.now() - t4).toFixed(1)}ms — resolved=${rowResolution.resolvedRows.size}, unresolved=${rowResolution.unresolvedRowCount}`
         );
-      if (rowResolution.aborted) return;
+      if (rowResolution.aborted) return false;
 
       const mergedResolvedRows = new Map(rowResolution.resolvedRows);
       for (const [rowIndexStr, override] of Object.entries(rowOverrides)) {
@@ -246,7 +246,7 @@ export function useImportGenerate(spaceId: string) {
       // ── Rebuild with full resolution ────────────────────────────────
       // Yield to let the browser breathe before heavy sync work
       await new Promise(resolve => setTimeout(resolve, 0));
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       const finalPlan = buildImportPlan({
         dataRows,
@@ -263,7 +263,7 @@ export function useImportGenerate(spaceId: string) {
         checkboxOverrides,
       });
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
 
       // Upload images for IMAGE columns and merge into the plan
       const { tasks: imageTasks, flags: imageFlags } = collectImageTasks({
@@ -281,7 +281,7 @@ export function useImportGenerate(spaceId: string) {
 
       if (imageTasks.length > 0) {
         const imageResult = await uploadImportImages({ tasks: imageTasks, spaceId });
-        if (!isCurrent()) return;
+        if (!isCurrent()) return false;
 
         // Cache per-cell image entity data (linking relations are regenerated from current rows)
         setImageEntityCache(imageResult.cache);
