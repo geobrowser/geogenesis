@@ -134,11 +134,12 @@ export function useImportGenerate(spaceId: string) {
   // ── Full async generation ─────────────────────────────────────────────
   // Phase 1: Build initial plan with empty resolution (instant — shows review immediately)
   // Phase 2: Resolve in background (100 concurrent searches), rebuild as results arrive
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (): Promise<boolean> => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) return false;
     const dataRows = ImportSessionStore.getRows(sid);
-    if ((!selectedType && typesColumnIndex === undefined) || dataRows.length === 0 || nameColIdx === undefined) return;
+    if ((!selectedType && typesColumnIndex === undefined) || dataRows.length === 0 || nameColIdx === undefined)
+      return false;
     const generationId = generationTrackerRef.current.start();
     const isCurrent = () => generationTrackerRef.current.isCurrent(generationId);
     isLoadingRef.current = true;
@@ -359,6 +360,7 @@ export function useImportGenerate(spaceId: string) {
             `[import] unresolved links: rows=${rowResolution.unresolvedRowCount}, relationCells=${relationResolution.unresolvedCount}`
           );
       }
+      return true;
     } finally {
       if (generationTrackerRef.current.isCurrent(generationId)) {
         setIsLoading(false);

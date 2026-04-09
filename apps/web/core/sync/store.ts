@@ -174,7 +174,13 @@ export class GeoStore {
       // Buffer entities and flush once per microtask to coalesce
       // multiple ENTITIES_SYNCED events into a single hydrateWith call.
       for (const entity of event.entities) {
-        syncedEntities.set(entity.id, entity);
+        // E.merge bakes isLocal entries into entities — strip them so
+        // syncedEntities stays a clean remote baseline for net-change diffing.
+        syncedEntities.set(entity.id, {
+          ...entity,
+          values: entity.values.filter(v => !v.isLocal),
+          relations: entity.relations.filter(r => !r.isLocal),
+        });
       }
       this.pendingSyncEntities.push(...event.entities);
       if (!this.syncScheduled) {
@@ -288,7 +294,11 @@ export class GeoStore {
 
   public hydrateWith(entities: Entity[]) {
     for (const entity of entities) {
-      syncedEntities.set(entity.id, entity);
+      syncedEntities.set(entity.id, {
+        ...entity,
+        values: entity.values.filter(v => !v.isLocal),
+        relations: entity.relations.filter(r => !r.isLocal),
+      });
     }
 
     const newValues = entities.flatMap(e => e.values);
