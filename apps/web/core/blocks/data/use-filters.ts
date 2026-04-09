@@ -56,10 +56,15 @@ export function useFilters(canEdit?: boolean) {
 
   const { data: filterableProperties } = useQuery({
     enabled: true,
-    queryKey: ['blocks', 'data', 'filterable-properties', geoFilterString],
+    queryKey: ['blocks', 'data', 'filterable-properties', geoFilterString, spaceId],
     queryFn: async () => {
       const typesInFilter = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value);
-      return await getSchemaFromTypeIds(typesInFilter.map(id => ({ id })));
+      const spacesInFilter = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+      if (!spacesInFilter.includes(spaceId)) spacesInFilter.push(spaceId);
+      return await getSchemaFromTypeIds(
+        typesInFilter.map(id => ({ id })),
+        spacesInFilter
+      );
     },
   });
 
