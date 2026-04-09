@@ -567,6 +567,32 @@ export function getProposalTimeRemaining(endTime: number) {
 
   return { days, hours, minutes, seconds };
 }
+
+/**
+ * Calendar date for a resolved proposal (uses voting end time as resolution time; UTC).
+ * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
+ */
+export function formatGovernanceOutcomeDate(geoTimeSeconds: number, nowMs: number = Date.now()): string {
+  const date = GeoDate.fromGeoTime(geoTimeSeconds);
+  const now = new Date(nowMs);
+  if (date.getUTCFullYear() === now.getUTCFullYear()) {
+    return formatInTimeZone(date, 'UTC', 'MMM d');
+  }
+  return formatInTimeZone(date, 'UTC', 'MMM d, yyyy');
+}
+
+/** Time of day (UTC) for governance resolution, e.g. "2:30pm". */
+export function formatGovernanceOutcomeTime(geoTimeSeconds: number): string {
+  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), 'UTC', 'h:mmaaa');
+}
+
+/**
+ * Single string date + time (UTC). Prefer separate `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime`
+ * in flex layouts so middot spacing matches between name, date, and time.
+ */
+export function formatGovernanceOutcomeDateTime(geoTimeSeconds: number, nowMs: number = Date.now()): string {
+  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs)} · ${formatGovernanceOutcomeTime(geoTimeSeconds)}`;
+}
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;
 
