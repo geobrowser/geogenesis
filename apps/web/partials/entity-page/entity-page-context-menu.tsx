@@ -14,6 +14,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
+import { AddTo } from '~/design-system/icons/add-to';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { MoveSpace } from '~/design-system/icons/move-space';
@@ -22,6 +23,8 @@ import { Menu } from '~/design-system/menu';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 import { MoveEntityToSpace } from '~/partials/versions/move-entity-to-space';
+
+import { EntityToSpaceDialog } from './entity-to-space-dialog';
 
 type Props = {
   entityId: string;
@@ -110,86 +113,140 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
   const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
+  const [convertToSpaceOpen, setConvertToSpaceOpen] = useState(false);
+  const [duplicateToSpaceOpen, setDuplicateToSpaceOpen] = useState(false);
+
+  // Check if entity exists in multiple spaces
+  const entity = store.getEntity(entityId);
+  const isMultiSpaceEntity = (entity?.spaces?.length ?? 0) > 1;
 
   const isSubMenu = isCreatingNewVersion || isMovingEntity;
 
   return (
-    <Menu
-      className={cx(!isSubMenu ? 'max-w-[160px]' : 'max-w-[320px]')}
-      open={isMenuOpen}
-      onOpenChange={() => {
-        setIsMenuOpen(!isMenuOpen);
-        setIsCreatingNewVersion(false);
-        setIsMovingEntity(false);
-      }}
-      trigger={<Context color="grey-04" />}
-      side="bottom"
-    >
-      {isCreatingNewVersion && (
-        <CreateNewVersionInSpace
-          entityId={entityId as EntityId}
-          entityName={entityName}
-          sourceSpaceId={spaceId}
-          setIsCreatingNewVersion={setIsCreatingNewVersion}
-          onDone={() => {
-            setIsMenuOpen(false);
-          }}
-        />
-      )}
-      {isMovingEntity && (
-        <MoveEntityToSpace
-          entityId={entityId as EntityId}
-          entityName={entityName}
-          sourceSpaceId={spaceId}
-          setIsMovingEntity={setIsMovingEntity}
-          onDone={() => {
-            setIsMenuOpen(false);
-          }}
-        />
-      )}
-      {!isSubMenu && (
-        <>
-          <EntityPageContextMenuItem>
-            <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
-              <Copy color="grey-04" />
-              Copy ID
-            </button>
-          </EntityPageContextMenuItem>
-          <EntityPageContextMenuItem>
-            <button
-              onClick={() => setIsCreatingNewVersion(true)}
-              className="flex h-full w-full items-center gap-2 px-2 py-2"
-            >
-              <div className="shrink-0">
-                <MoveSpace />
-              </div>
-              Create in space
-            </button>
-          </EntityPageContextMenuItem>
-          {(isMember || isEditor) && editable && (
+    <>
+      <Menu
+        className={cx(!isSubMenu ? 'max-w-[240px]' : 'max-w-[320px]')}
+        open={isMenuOpen}
+        onOpenChange={() => {
+          setIsMenuOpen(!isMenuOpen);
+          setIsCreatingNewVersion(false);
+          setIsMovingEntity(false);
+        }}
+        trigger={<Context color="grey-04" />}
+        side="bottom"
+      >
+        {isCreatingNewVersion && (
+          <CreateNewVersionInSpace
+            entityId={entityId as EntityId}
+            entityName={entityName}
+            sourceSpaceId={spaceId}
+            setIsCreatingNewVersion={setIsCreatingNewVersion}
+            onDone={() => {
+              setIsMenuOpen(false);
+            }}
+          />
+        )}
+        {isMovingEntity && (
+          <MoveEntityToSpace
+            entityId={entityId as EntityId}
+            entityName={entityName}
+            sourceSpaceId={spaceId}
+            setIsMovingEntity={setIsMovingEntity}
+            onDone={() => {
+              setIsMenuOpen(false);
+            }}
+          />
+        )}
+        {!isSubMenu && (
+          <>
+            <EntityPageContextMenuItem>
+              <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
+                <Copy color="grey-04" />
+                Copy ID
+              </button>
+            </EntityPageContextMenuItem>
             <EntityPageContextMenuItem>
               <button
-                onClick={() => setIsMovingEntity(true)}
+                onClick={() => setIsCreatingNewVersion(true)}
                 className="flex h-full w-full items-center gap-2 px-2 py-2"
               >
                 <div className="shrink-0">
-                  <MoveSpace />
+                  <AddTo color="grey-04" />
                 </div>
-                Move to space
+                Create in existing space
               </button>
             </EntityPageContextMenuItem>
-          )}
-          {(isMember || isEditor) && editable && (
+            {(isMember || isEditor) && editable && (
+              <EntityPageContextMenuItem>
+                <button
+                  onClick={() => setIsMovingEntity(true)}
+                  className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
+                >
+                  <div className="shrink-0">
+                    <MoveSpace color="red-01" />
+                  </div>
+                  Move to existing space
+                </button>
+              </EntityPageContextMenuItem>
+            )}
             <EntityPageContextMenuItem>
-              <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
-                <Trash />
-                Delete entity
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setDuplicateToSpaceOpen(true);
+                }}
+                className="flex h-full w-full items-center gap-2 px-2 py-2"
+              >
+                <div className="shrink-0">
+                  <AddTo color="grey-04" />
+                </div>
+                Clone to new space
               </button>
             </EntityPageContextMenuItem>
-          )}
-        </>
-      )}
-    </Menu>
+            {(isMember || isEditor) && editable && !isMultiSpaceEntity && (
+              <EntityPageContextMenuItem>
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setConvertToSpaceOpen(true);
+                  }}
+                  className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
+                >
+                  <div className="shrink-0">
+                    <MoveSpace color="red-01" />
+                  </div>
+                  Convert to new space
+                </button>
+              </EntityPageContextMenuItem>
+            )}
+            {(isMember || isEditor) && editable && (
+              <EntityPageContextMenuItem>
+                <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
+                  <Trash />
+                  Delete entity
+                </button>
+              </EntityPageContextMenuItem>
+            )}
+          </>
+        )}
+      </Menu>
+      <EntityToSpaceDialog
+        entityId={entityId}
+        entityName={entityName}
+        sourceSpaceId={spaceId}
+        mode="convert"
+        open={convertToSpaceOpen}
+        onOpenChange={setConvertToSpaceOpen}
+      />
+      <EntityToSpaceDialog
+        entityId={entityId}
+        entityName={entityName}
+        sourceSpaceId={spaceId}
+        mode="duplicate"
+        open={duplicateToSpaceOpen}
+        onOpenChange={setDuplicateToSpaceOpen}
+      />
+    </>
   );
 }
 
