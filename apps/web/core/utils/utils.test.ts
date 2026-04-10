@@ -11,6 +11,9 @@ import {
   GeoDate,
   GeoNumber,
   PagesPaginationPlaceholder,
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeDateTime,
+  formatGovernanceOutcomeTime,
   formatShortAddress,
   getImageHash,
   getImagePath,
@@ -306,6 +309,41 @@ describe('GeoDate', () => {
       const result = GeoDate.format(date, 'invalid-format');
       expect(result).toBe('Jan 15, 2023 - 12:30pm');
     });
+  });
+});
+
+describe('formatGovernanceOutcomeDate', () => {
+  const now2026 = Date.UTC(2026, 3, 7);
+
+  it('uses month and day only when the year matches now (UTC)', () => {
+    const geoSeconds = Math.floor(Date.UTC(2026, 1, 26) / 1000);
+    expect(formatGovernanceOutcomeDate(geoSeconds, now2026)).toBe('Feb 26');
+  });
+
+  it('includes the year when the date is in a different calendar year than now (UTC)', () => {
+    const geoSeconds = Math.floor(Date.UTC(2025, 11, 31) / 1000);
+    expect(formatGovernanceOutcomeDate(geoSeconds, now2026)).toBe('Dec 31, 2025');
+  });
+});
+
+describe('formatGovernanceOutcomeTime', () => {
+  it('formats UTC time of day', () => {
+    const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
+    expect(formatGovernanceOutcomeTime(geoSeconds)).toBe('2:21pm');
+  });
+});
+
+describe('formatGovernanceOutcomeDateTime', () => {
+  const now2026 = Date.UTC(2026, 3, 7);
+
+  it('includes time and omits year when the year matches now (UTC)', () => {
+    const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
+    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026)).toBe('Apr 7 · 2:21pm');
+  });
+
+  it('includes year and time when the date is in another calendar year than now (UTC)', () => {
+    const geoSeconds = Math.floor(Date.UTC(2025, 11, 31, 23, 59, 0) / 1000);
+    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026)).toBe('Dec 31, 2025 · 11:59pm');
   });
 });
 

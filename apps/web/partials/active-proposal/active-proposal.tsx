@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeTime,
   getIsProposalEnded,
   getNoVotePercentage,
   getProposalName,
@@ -92,17 +94,39 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
               <div className="flex flex-col items-center gap-3">
                 <div className="text-mediumTitle">{proposalTitle}</div>
                 <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center gap-2 text-metadataMedium">
+                  <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
                     <Link
                       href={proposal.createdBy.profileLink ?? ''}
-                      className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
+                      className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
                     >
-                      <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
                         <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
                       </div>
                       <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                     </Link>
-                    <span className="text-grey-04">·</span>
+                    {isProposalEnded &&
+                      (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
+                        <>
+                          <span aria-hidden className="shrink-0 select-none text-grey-04">
+                            ·
+                          </span>
+                          <span className="shrink-0 text-grey-04">
+                            {formatGovernanceOutcomeDate(proposal.endTime)}
+                          </span>
+                          <span aria-hidden className="shrink-0 select-none text-grey-04">
+                            ·
+                          </span>
+                          <time
+                            className="shrink-0 tabular-nums text-grey-04"
+                            dateTime={new Date(proposal.endTime * 1000).toISOString()}
+                          >
+                            {formatGovernanceOutcomeTime(proposal.endTime)}
+                          </time>
+                        </>
+                      )}
+                    <span aria-hidden className="shrink-0 select-none text-grey-04">
+                      ·
+                    </span>
                     <span className="text-text">
                       {isProposalEnded
                         ? proposal.status === 'ACCEPTED'
