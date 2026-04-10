@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { mergeSearchResult } from '~/core/database/result';
@@ -20,7 +20,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getSpacesWhereMember } from '~/core/io/queries';
+import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
@@ -31,7 +31,8 @@ import {
   fetchRelationTargetTypeIdsForProperty,
   mergeRelationValueTypesFromStore,
 } from '~/core/utils/property/properties';
-import type { Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import type { Entity, Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -74,6 +75,8 @@ interface TableBlockFilterPromptProps {
 }
 
 const MAX_SCOPED_SUGGESTIONS = 100;
+
+const FILTER_DROPDOWN_PAGE_SIZE = 25;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -192,6 +195,33 @@ function stubSearchResultForFilter(id: string, displayName: string | null): Sear
     description: null,
     spaces: [placeholderSpace],
     types: [],
+  };
+}
+
+function searchResultFromBrowseEntityWithSpaces(
+  entity: Entity,
+  spaceEntityById: Map<string, SpaceEntity>,
+  preferredSpaceId?: string
+): SearchResult {
+  let candidateSpaceIds = entity.spaces.filter(id => spaceEntityById.has(id));
+  if (
+    candidateSpaceIds.length === 0 &&
+    preferredSpaceId &&
+    spaceEntityById.has(preferredSpaceId)
+  ) {
+    candidateSpaceIds = [preferredSpaceId];
+  }
+  const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
+  const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
+  if (spaces.length === 0) {
+    return { ...stubSearchResultForFilter(entity.id, entity.name), types: entity.types };
+  }
+  return {
+    id: entity.id,
+    name: entity.name,
+    description: entity.description,
+    spaces,
+    types: entity.types,
   };
 }
 
@@ -1511,14 +1541,15 @@ function TableBlockEntityFilterInput({
     !autocomplete.query.trim() &&
     canBrowseByType;
 
-  const { data: browseResults = [], isFetching: isBrowseFetching } = useQuery({
+  const { data: browsePages, isFetching: isBrowseFetching, isFetchingNextPage: isBrowseFetchingNextPage, fetchNextPage: fetchNextBrowsePage, hasNextPage: hasNextBrowsePage } = useInfiniteQuery({
     queryKey: [
       'table-block-filter-entity-browse',
       filterByTypes?.slice().sort().join(',') ?? '',
       suggestionSpaceId ?? '',
     ],
     enabled: browseEnabled,
-    queryFn: async () => {
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
       const where = {
         types: filterByTypes!.map(id => ({ id: { equals: id } })),
       };
@@ -1526,15 +1557,43 @@ function TableBlockEntityFilterInput({
         store,
         cache,
         where,
-        first: 25,
-        skip: 0,
+        first: FILTER_DROPDOWN_PAGE_SIZE,
+        skip: pageParam,
         spaceId: suggestionSpaceId,
       });
-      const merged = await Promise.all(entities.map(e => mergeSearchResult({ id: e.id, store })));
-      return merged.filter((r): r is SearchResult => r != null);
+      const nonNull = entities.filter((e): e is Entity => e != null);
+
+      const spaceIdSet = new Set<string>();
+      for (const e of nonNull) {
+        for (const sid of e.spaces) {
+          if (sid) spaceIdSet.add(sid);
+        }
+      }
+      if (suggestionSpaceId) spaceIdSet.add(suggestionSpaceId);
+      const uniqueSpaceIds = [...spaceIdSet];
+
+      const spaceEntityById = new Map<string, SpaceEntity>();
+      if (uniqueSpaceIds.length > 0) {
+        const fetchedSpaces = await cache.fetchQuery({
+          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
+          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
+          staleTime: Duration.toMillis(Duration.seconds(60)),
+        });
+        for (const s of fetchedSpaces) {
+          spaceEntityById.set(s.id, s.entity);
+        }
+      }
+
+      return nonNull
+        .map(e => searchResultFromBrowseEntityWithSpaces(e, spaceEntityById, suggestionSpaceId))
+        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
     },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < FILTER_DROPDOWN_PAGE_SIZE ? undefined : allPages.length * FILTER_DROPDOWN_PAGE_SIZE,
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
+
+  const browseResults = browsePages?.pages.flat() ?? [];
 
   const rowsToRender = React.useMemo(() => {
     const q = autocomplete.query.trim();
@@ -1569,23 +1628,74 @@ function TableBlockEntityFilterInput({
     restrictSearchToTypes,
   ]);
 
+  const entityListResetKey = [
+    autocomplete.query,
+    filteredScopedByTargetType.map(s => s.id).join('\0'),
+    browseEnabled ? 'browse' : '',
+    autocomplete.query.trim() ? autocomplete.results.map(r => r.id).join('\0') : '',
+  ].join('|');
+
+  const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setEntityVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [entityListResetKey]);
+
+  const visibleEntityRows = React.useMemo(
+    () => rowsToRender.slice(0, entityVisibleCount),
+    [rowsToRender, entityVisibleCount]
+  );
+
+  const visibleScopedIds = React.useMemo(
+    () => visibleEntityRows.flatMap(r => (r.kind === 'scoped' ? [r.scoped.id] : [])),
+    [visibleEntityRows]
+  );
+
   const scopedResultQueries = useQueries({
-    queries: filteredScopedByTargetType.map(s => ({
-      queryKey: ['table-block-filter-scoped-entity', s.id] as const,
-      queryFn: () => mergeSearchResult({ id: s.id, store }),
-      enabled: focused && filteredScopedByTargetType.length > 0,
+    queries: visibleScopedIds.map(id => ({
+      queryKey: ['table-block-filter-scoped-entity', id] as const,
+      queryFn: () => mergeSearchResult({ id, store }),
+      enabled: focused && visibleScopedIds.length > 0,
       staleTime: Duration.toMillis(Duration.seconds(60)),
     })),
   });
 
   const scopedResultById = React.useMemo(() => {
     const m = new Map<string, SearchResult>();
-    filteredScopedByTargetType.forEach((s, idx) => {
+    visibleScopedIds.forEach((id, idx) => {
       const data = scopedResultQueries[idx]?.data;
-      if (data != null) m.set(s.id, data);
+      if (data != null) m.set(id, data);
     });
     return m;
-  }, [filteredScopedByTargetType, scopedResultQueries]);
+  }, [visibleScopedIds, scopedResultQueries]);
+
+  const entityResultsListRef = React.useRef<HTMLUListElement>(null);
+
+  const expandVisibleEntityRowsIfListHasNoScrollbar = React.useCallback(() => {
+    const el = entityResultsListRef.current;
+    if (!el) return;
+    const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+    if (!noOverflow) return;
+    if (entityVisibleCount < rowsToRender.length) {
+      setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
+    }
+  }, [entityVisibleCount, rowsToRender.length]);
+
+  const handleEntityResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (entityVisibleCount < rowsToRender.length) {
+        setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
+        return;
+      }
+      if (browseEnabled && hasNextBrowsePage && !isBrowseFetchingNextPage) {
+        void fetchNextBrowsePage();
+      }
+    }, [ entityVisibleCount, rowsToRender.length, browseEnabled, hasNextBrowsePage, isBrowseFetchingNextPage, fetchNextBrowsePage ]);
 
   const showEmptyBrowseHint =
     canBrowseByType &&
@@ -1597,6 +1707,12 @@ function TableBlockEntityFilterInput({
   const showDropdown =
     focused &&
     (rowsToRender.length > 0 || (browseEnabled && isBrowseFetching) || showEmptyBrowseHint);
+
+  React.useLayoutEffect(() => {
+    if (!showDropdown) return;
+    expandVisibleEntityRowsIfListHasNoScrollbar();
+  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
+
   const multi = Boolean(onToggleEntity);
   const inputValue = multi
     ? autocomplete.query
@@ -1630,7 +1746,7 @@ function TableBlockEntityFilterInput({
           onPointerDown={e => e.preventDefault()}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
+            <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
               {rowsToRender.length === 0 && isBrowseFetching ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
@@ -1645,7 +1761,7 @@ function TableBlockEntityFilterInput({
                   </Text>
                 </ResultItem>
               ) : null}
-              {rowsToRender.map((row, i) =>
+              {visibleEntityRows.map((row, i) =>
                 row.kind === 'scoped' ? (
                   <motion.div
                     initial={{ opacity: 0, y: -5 }}
@@ -1680,6 +1796,28 @@ function TableBlockEntityFilterInput({
                   </motion.div>
                 )
               )}
+              {browseEnabled &&
+              hasNextBrowsePage &&
+              !isBrowseFetchingNextPage &&
+              entityVisibleCount >= rowsToRender.length &&
+              rowsToRender.length > 0 ? (
+                <ResultItem
+                  onPointerDown={e => e.preventDefault()}
+                  onClick={() => {
+                    clearBlurTimeout();
+                    void fetchNextBrowsePage();
+                  }}
+                >
+                  <Text variant="metadataMedium">Load more</Text>
+                </ResultItem>
+              ) : null}
+              {isBrowseFetchingNextPage ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Loading more…
+                  </Text>
+                </ResultItem>
+              ) : null}
             </ResultsList>
             {autocomplete.isLoading && (
               <div className="flex items-center justify-center py-3">
@@ -1760,6 +1898,80 @@ function TableBlockSpaceFilterInput({
   const showQueryPanel = Boolean(query.trim());
   const multi = Boolean(onToggleSpace);
 
+  const spaceQueryRows = React.useMemo(() => {
+    if (!showQueryPanel) return [] as Array<
+      | { kind: 'scoped'; scoped: { id: string; name: string | null; image: string | null } }
+      | { kind: 'remote'; result: (typeof results)[number] }
+    >;
+    if (mergedWhenQuery.length > 0) return mergedWhenQuery;
+    return results.map(r => ({ kind: 'remote' as const, result: r }));
+  }, [showQueryPanel, mergedWhenQuery, results]);
+
+  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : spaceQueryRows.length;
+
+  const [spaceVisibleCount, setSpaceVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setSpaceVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [
+    query,
+    showScopedOnlyPanel,
+    showQueryPanel,
+    defaultSpaceSuggestions.length,
+    mergedWhenQuery.length,
+    results.length,
+  ]);
+
+  const visibleScopedSpaceSuggestions = React.useMemo(
+    () => defaultSpaceSuggestions.slice(0, spaceVisibleCount),
+    [defaultSpaceSuggestions, spaceVisibleCount]
+  );
+
+  const visibleSpaceQueryRows = React.useMemo(
+    () => spaceQueryRows.slice(0, spaceVisibleCount),
+    [spaceQueryRows, spaceVisibleCount]
+  );
+
+  const applySpaceListPagination = React.useCallback(
+    (el: HTMLUListElement) => {
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (spaceVisibleCount < spaceFullRowCount) {
+        setSpaceVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, spaceFullRowCount));
+      }
+    },
+    [spaceVisibleCount, spaceFullRowCount]
+  );
+
+  const spaceScopedListRef = React.useRef<HTMLUListElement>(null);
+  const spaceQueryListRef = React.useRef<HTMLUListElement>(null);
+  const handleSpaceResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      applySpaceListPagination(e.currentTarget);
+    },
+    [applySpaceListPagination]
+  );
+
+  React.useLayoutEffect(() => {
+    if (showScopedOnlyPanel) {
+      const el = spaceScopedListRef.current;
+      if (el) applySpaceListPagination(el);
+    } else if (showQueryPanel) {
+      const el = spaceQueryListRef.current;
+      if (el) applySpaceListPagination(el);
+    }
+  }, [
+    showScopedOnlyPanel,
+    showQueryPanel,
+    applySpaceListPagination,
+    spaceFullRowCount,
+    spaceVisibleCount,
+    defaultSpaceSuggestions.length,
+    spaceQueryRows.length,
+  ]);
+
   const renderSpaceRow = (
     id: string,
     name: string | null,
@@ -1820,8 +2032,8 @@ function TableBlockSpaceFilterInput({
           onPointerDown={e => e.preventDefault()}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {defaultSpaceSuggestions.map((s, i) =>
+            <ResultsList ref={spaceScopedListRef} onScroll={handleSpaceResultsScroll}>
+              {visibleScopedSpaceSuggestions.map((s, i) =>
                 renderSpaceRow(
                   s.id,
                   s.name,
@@ -1844,55 +2056,38 @@ function TableBlockSpaceFilterInput({
           onPointerDown={e => e.preventDefault()}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {mergedWhenQuery.length > 0
-                ? mergedWhenQuery.map((row, i) =>
-                    row.kind === 'scoped'
-                      ? renderSpaceRow(
-                          row.scoped.id,
-                          row.scoped.name,
-                          row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
-                          () =>
-                            multi
-                              ? onToggleSpace?.(row.scoped)
-                              : onSelect?.(row.scoped),
-                          i,
-                          Boolean(selectedSpaceIds?.has(row.scoped.id))
-                        )
-                      : renderSpaceRow(
-                          row.result.id,
-                          row.result.name,
-                          row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
-                          () =>
-                            multi
-                              ? onToggleSpace?.({
-                                  id: row.result.id,
-                                  name: row.result.name,
-                                })
-                              : onSelect?.({
-                                  id: row.result.id,
-                                  name: row.result.name,
-                                }),
-                          i,
-                          Boolean(selectedSpaceIds?.has(row.result.id))
-                        )
-                  )
-                : results.map((result, i) =>
-                    renderSpaceRow(
-                      result.id,
-                      result.name,
-                      result.image ?? PLACEHOLDER_SPACE_IMAGE,
+            <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
+              {visibleSpaceQueryRows.map((row, i) =>
+                row.kind === 'scoped'
+                  ? renderSpaceRow(
+                      row.scoped.id,
+                      row.scoped.name,
+                      row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
                       () =>
                         multi
-                          ? onToggleSpace?.({ id: result.id, name: result.name })
+                          ? onToggleSpace?.(row.scoped)
+                          : onSelect?.(row.scoped),
+                      i,
+                      Boolean(selectedSpaceIds?.has(row.scoped.id))
+                    )
+                  : renderSpaceRow(
+                      row.result.id,
+                      row.result.name,
+                      row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
+                      () =>
+                        multi
+                          ? onToggleSpace?.({
+                              id: row.result.id,
+                              name: row.result.name,
+                            })
                           : onSelect?.({
-                              id: result.id,
-                              name: result.name,
+                              id: row.result.id,
+                              name: row.result.name,
                             }),
                       i,
-                      Boolean(selectedSpaceIds?.has(result.id))
+                      Boolean(selectedSpaceIds?.has(row.result.id))
                     )
-                  )}
+              )}
             </ResultsList>
           </ResizableContainer>
         </div>
@@ -1930,8 +2125,47 @@ function TableBlockTextFilterInput({
     return list.slice(0, MAX_SCOPED_SUGGESTIONS);
   }, [stringSuggestions, value]);
 
+  const [textVisibleCount, setTextVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setTextVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [value, filtered.length, stringSuggestions.length]);
+
+  const visibleTextSuggestions = React.useMemo(
+    () => filtered.slice(0, textVisibleCount),
+    [filtered, textVisibleCount]
+  );
+
+  const applyTextListPagination = React.useCallback(
+    (el: HTMLUListElement) => {
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (textVisibleCount < filtered.length) {
+        setTextVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, filtered.length));
+      }
+    },
+    [textVisibleCount, filtered.length]
+  );
+
+  const textResultsListRef = React.useRef<HTMLUListElement>(null);
+  const handleTextResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      applyTextListPagination(e.currentTarget);
+    },
+    [applyTextListPagination]
+  );
+
   const showEmptyTextHint = focused && stringSuggestions.length === 0;
   const showDropdown = focused && (showEmptyTextHint || filtered.length > 0);
+
+  React.useLayoutEffect(() => {
+    if (!showDropdown) return;
+    const el = textResultsListRef.current;
+    if (el) applyTextListPagination(el);
+  }, [showDropdown, applyTextListPagination, filtered.length, textVisibleCount]);
+
   const multi = Boolean(onToggleString);
 
   return (
@@ -1948,7 +2182,7 @@ function TableBlockTextFilterInput({
           onPointerDown={e => e.preventDefault()}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
+            <ResultsList ref={textResultsListRef} onScroll={handleTextResultsScroll}>
               {showEmptyTextHint ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
@@ -1956,7 +2190,7 @@ function TableBlockTextFilterInput({
                   </Text>
                 </ResultItem>
               ) : null}
-              {filtered.map((s, i) => {
+              {visibleTextSuggestions.map((s, i) => {
                 const isSel = Boolean(selectedStrings?.has(s));
                 return (
                   <motion.div

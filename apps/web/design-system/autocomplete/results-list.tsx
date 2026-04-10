@@ -20,12 +20,18 @@ import { RightArrowLong } from '../icons/right-arrow-long';
 
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
-export const ResultsList = (props: ResultsListProps) => (
-  <ul
-    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
-    {...props}
-  />
-);
+export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
+  props,
+  ref
+) {
+  return (
+    <ul
+      ref={ref}
+      className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
+      {...props}
+    />
+  );
+});
 
 type ResultItemProps = React.ComponentPropsWithoutRef<'button'> & { existsOnEntity?: boolean };
 
