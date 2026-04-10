@@ -677,3 +677,7 @@ export function sortRelations(relations: Relation[]) {
 export function sortRows(rows: Row[]) {
   return [...rows].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
+
+export function hasName(name: string | null | undefined): boolean {
+  return Boolean(name?.trim());
+}

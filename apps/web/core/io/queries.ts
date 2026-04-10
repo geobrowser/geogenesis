@@ -446,6 +446,8 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
     const entityId = stripHyphens(r.entityId);
     const spaceId = stripHyphens(r.space.id);
 
+    const spaceTypes = (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null }));
+
     const existing = byEntity.get(entityId);
 
     if (existing) {
@@ -475,12 +477,18 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
 
         existing.types.push({ id: typeId, name: type.name ?? null });
       }
+
+      // Track types per space
+      if (existing.typesBySpace) {
+        existing.typesBySpace[spaceId] = spaceTypes;
+      }
     } else {
       byEntity.set(entityId, {
         id: entityId,
         name: r.name ?? null,
         description: r.description ?? null,
         types: (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null })),
+        typesBySpace: { [spaceId]: spaceTypes },
         spaces: [
           {
             id: spaceId,

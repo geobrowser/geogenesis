@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { getAllEntities } from '~/core/io/queries';
+import { hasName } from '~/core/utils/utils';
 
 import { Activity } from '~/partials/activity/activity';
 
@@ -22,7 +23,7 @@ export const ActivityServerContainer = async ({ spaceId }: ActivityServerContain
 
   // @TODO remove sorting when API returns sorted array
   const namedEntities = entities
-    .filter(entity => entity.name && entity.name.trim() !== '')
+    .filter(entity => hasName(entity.name))
     .sort((a, b) => {
       const aTime = a.updatedAt ? parseInt(a.updatedAt) : 0;
       const bTime = b.updatedAt ? parseInt(b.updatedAt) : 0;
