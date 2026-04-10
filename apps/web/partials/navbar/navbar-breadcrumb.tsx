@@ -11,7 +11,7 @@ import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, hasName } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
 import { GeoImage } from '~/design-system/geo-image';
@@ -94,7 +94,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const spaceImage = space.entity.image;
 
   const otherSpaces = spaces
-    .filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && space.entity.name?.trim())
+    .filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id) && hasName(space.entity.name))
     .sort(compareBySpaceRank(s => s.id));
 
   const formattedQuery = query.trim().toLowerCase();
