@@ -1017,6 +1017,7 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
   const hasSortChange = sortValues.some(v => (v.before || null) !== (v.after || null));
   const isSortAdded = sortValues.some(v => !v.before && !!v.after);
   const isSortRemoved = sortValues.some(v => !!v.before && !v.after);
+  const filterValue = getFilterValue(filterValues, side);
   const sortValue = getSortValue(sortValues, side);
   const hasColumnsChange = columnRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
