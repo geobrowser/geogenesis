@@ -8,7 +8,12 @@ import { ApiProposalDiffResponseSchema } from '../rest';
 import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';
 
-export async function fetchProposalDiffs(proposalId: string, spaceId: string): Promise<EntityDiff[]> {
+export type ProposalDiffResult =
+  | { status: 'success'; entities: EntityDiff[] }
+  | { status: 'not_cached' }
+  | { status: 'encoding_error' };
+
+export async function fetchProposalDiffs(proposalId: string, spaceId: string): Promise<ProposalDiffResult> {
   const config = Environment.getConfig();
 
   const allEntities: EntityDiff[] = [];
@@ -43,18 +48,22 @@ export async function fetchProposalDiffs(proposalId: string, spaceId: string): P
       }
 
       if (error instanceof ApiError && error.status === 404) {
-        return [];
+        return { status: 'not_cached' };
+      }
+
+      if (error instanceof ApiError && error.status === 422) {
+        return { status: 'encoding_error' };
       }
 
       console.error(`Failed to fetch proposal diffs for ${proposalId}:`, error);
-      return allEntities;
+      return { status: 'success', entities: allEntities };
     }
 
     const decoded = Schema.decodeUnknownEither(ApiProposalDiffResponseSchema)(result.right);
 
     if (Either.isLeft(decoded)) {
       console.error(`Failed to decode proposal diffs for ${proposalId}:`, decoded.left);
-      return allEntities;
+      return { status: 'success', entities: allEntities };
     }
 
     const page = decoded.right;
@@ -67,9 +76,9 @@ export async function fetchProposalDiffs(proposalId: string, spaceId: string): P
   if (process.env.NODE_ENV === 'development') {
     console.log('[diff:proposal] before postProcessDiffs ' + JSON.stringify(allEntities));
   }
-  const result = await Diff.postProcessDiffs(allEntities, spaceId);
+  const processed = await Diff.postProcessDiffs(allEntities, spaceId);
   if (process.env.NODE_ENV === 'development') {
-    console.log('[diff:proposal] after postProcessDiffs ' + JSON.stringify(result));
+    console.log('[diff:proposal] after postProcessDiffs ' + JSON.stringify(processed));
   }
-  return result;
+  return { status: 'success', entities: processed };
 }
