@@ -33,6 +33,10 @@ describe('groupRestResults', () => {
           { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: null },
           { id: 'dddddddddddddddddddddddddddddddd', name: 'Person' },
         ],
+        typesBySpace: {
+          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: null }],
+          cccccccccccccccccccccccccccccccc: [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Person' }],
+        },
         spaces: [
           {
             id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

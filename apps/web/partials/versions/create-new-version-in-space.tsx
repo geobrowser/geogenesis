@@ -10,7 +10,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, hasName } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -50,7 +50,7 @@ export const CreateNewVersionInSpace = ({
     return spaces;
   }, [personalSpace, memberSpaces]);
 
-  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
+  const namedSpaces = allSpaces.filter(space => hasName(space?.entity?.name));
 
   const renderedSpaces =
     query.length === 0
