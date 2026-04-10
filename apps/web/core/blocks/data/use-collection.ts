@@ -119,11 +119,19 @@ export function useCollection({ source, first, skip, where, sort }: CollectionPr
   const items = shouldFallbackToSSR ? ssrItems : orderedCollectionItems;
   const hasData = items.length > 0;
 
+  const filterSuggestionEntityIds =
+    source.type === 'COLLECTION'
+      ? hasFilters
+        ? filteredRelations.map(r => r.toEntity.id)
+        : orderedCollectionRelations.map(r => r.toEntity.id)
+      : undefined;
+
   return {
     collectionItems: items,
     collectionRelations: sortedRelations,
     isLoading: hasData ? false : isCollectionItemsLoading,
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
+    filterSuggestionEntityIds,
   };
 }
