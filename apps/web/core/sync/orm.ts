@@ -360,30 +360,32 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities.map(e => {
-      const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
-        .filter(s => hasName(s.name))
-        .sort(compareBySpaceRank(s => s.spaceId));
+    return entities
+      .map(e => {
+        const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
+          .filter(s => hasName(s.name))
+          .sort(compareBySpaceRank(s => s.spaceId));
 
-      const resolvedTypesBySpace = e.typesBySpace
-        ? Object.fromEntries(
-            Object.entries(e.typesBySpace).map(([spaceId, types]) => [
-              spaceId,
-              types.map(t => ({ id: t.id, name: t.name ?? typeNamesById.get(t.id) ?? null })),
-            ])
-          )
-        : undefined;
+        const resolvedTypesBySpace = e.typesBySpace
+          ? Object.fromEntries(
+              Object.entries(e.typesBySpace).map(([spaceId, types]) => [
+                spaceId,
+                types.map(t => ({ id: t.id, name: t.name ?? typeNamesById.get(t.id) ?? null })),
+              ])
+            )
+          : undefined;
 
-      return {
-        ...e,
-        types: e.types.map(t => ({
-          id: t.id,
-          name: t.name ?? typeNamesById.get(t.id) ?? null,
-        })),
-        typesBySpace: resolvedTypesBySpace,
-        spaces: resolvedSpaces,
-      };
-    });
+        return {
+          ...e,
+          types: e.types.map(t => ({
+            id: t.id,
+            name: t.name ?? typeNamesById.get(t.id) ?? null,
+          })),
+          typesBySpace: resolvedTypesBySpace,
+          spaces: resolvedSpaces,
+        };
+      })
+      .filter(e => e.spaces.length > 0);
   }
 }
 
