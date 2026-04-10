@@ -15,6 +15,8 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
 import { EditSmall } from '~/design-system/icons/edit-small';
+import { Minus } from '~/design-system/icons/minus';
+import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
@@ -49,6 +51,22 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
       requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
   }, [entityId, spaceId]);
+
+  const [collapsedThreadIds, setCollapsedThreadIds] = React.useState<Set<string>>(() => new Set());
+
+  const isThreadCollapsed = React.useCallback(
+    (commentId: string) => collapsedThreadIds.has(commentId),
+    [collapsedThreadIds]
+  );
+
+  const toggleThreadCollapsed = React.useCallback((commentId: string) => {
+    setCollapsedThreadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+  }, []);
 
   const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
     createComment({
@@ -119,6 +137,8 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
               isCreating={isCreating}
               personalSpaceId={personalSpaceId}
               editorSpaceIds={editorSpaceIds}
+              isThreadCollapsed={isThreadCollapsed}
+              toggleThreadCollapsed={toggleThreadCollapsed}
             />
           </>
         )
@@ -303,6 +323,8 @@ function CommentList({
   isCreating,
   personalSpaceId,
   editorSpaceIds,
+  isThreadCollapsed,
+  toggleThreadCollapsed,
   depth = 0,
   ancestors = [],
 }: {
@@ -314,6 +336,8 @@ function CommentList({
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
+  isThreadCollapsed: (commentId: string) => boolean;
+  toggleThreadCollapsed: (commentId: string) => void;
   depth?: number;
   ancestors?: Array<{ id: string; spaceId: string }>;
 }) {
@@ -331,6 +355,8 @@ function CommentList({
             isCreating={isCreating}
             personalSpaceId={personalSpaceId}
             editorSpaceIds={editorSpaceIds}
+            isThreadCollapsed={isThreadCollapsed}
+            toggleThreadCollapsed={toggleThreadCollapsed}
             isLast={index === comments.length - 1}
             depth={depth}
             ancestors={ancestors}
@@ -404,6 +430,8 @@ function CommentList({
               isCreating={isCreating}
               personalSpaceId={personalSpaceId}
               editorSpaceIds={editorSpaceIds}
+              isThreadCollapsed={isThreadCollapsed}
+              toggleThreadCollapsed={toggleThreadCollapsed}
               isLast={index === comments.length - 1}
               depth={depth}
               ancestors={ancestors}
@@ -424,6 +452,8 @@ function CommentItem({
   isCreating,
   personalSpaceId,
   editorSpaceIds,
+  isThreadCollapsed,
+  toggleThreadCollapsed,
   isLast,
   depth,
   ancestors,
@@ -436,12 +466,15 @@ function CommentItem({
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
+  isThreadCollapsed: (commentId: string) => boolean;
+  toggleThreadCollapsed: (commentId: string) => void;
   isLast: boolean;
   depth: number;
   ancestors: Array<{ id: string; spaceId: string }>;
 }) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const threadCollapsed = isThreadCollapsed(comment.id);
 
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
   const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
@@ -466,44 +499,64 @@ function CommentItem({
     return getRelativeTime(comment.createdAt);
   }, [comment.createdAt]);
 
-  const hasReplies = comment.replies.length > 0;
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const hasReplies = replies.length > 0;
+  const avatarCenterLeftPx = hasReplies ? 48 : 16;
+  const bodyMarginLeftClass = hasReplies ? 'ml-[76px]' : 'ml-[44px]';
   const commentRef = React.useRef<HTMLDivElement>(null);
   const repliesRef = React.useRef<HTMLDivElement>(null);
   const [parentLineHeight, setParentLineHeight] = React.useState<number | null>(null);
 
   // Measure the distance from the avatar bottom to where the nested replies container starts
-  React.useEffect(() => {
-    if (hasReplies && commentRef.current && repliesRef.current) {
+  React.useLayoutEffect(() => {
+    if (!hasReplies || threadCollapsed) {
+      setParentLineHeight(null);
+      return;
+    }
+    if (commentRef.current && repliesRef.current) {
       const commentRect = commentRef.current.getBoundingClientRect();
       const repliesRect = repliesRef.current.getBoundingClientRect();
-      // Line goes from below avatar (32px) to the top of the replies container
       setParentLineHeight(repliesRect.top - commentRect.top - 32);
     }
-  });
+  }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying]);
 
   return (
     <div ref={commentRef} className={`relative ${!isLast ? 'mb-6' : ''}`}>
       {/* Vertical line from parent avatar down to the replies container */}
-      {hasReplies && parentLineHeight != null && (
+      {hasReplies && !threadCollapsed && parentLineHeight != null && parentLineHeight > 0 && (
         <div
           className="absolute w-px bg-grey-02"
           style={{
-            left: '16px', /* center of 32px avatar */
-            top: '32px', /* below the avatar */
+            left: `${avatarCenterLeftPx}px`,
+            top: '32px',
             height: `${parentLineHeight}px`,
           }}
         />
       )}
-      {/* Comment header: avatar + author + time */}
+      {/* One row like the original layout so nested thread lines (-28px) still line up with the avatar. */}
       <div className="flex items-center gap-3">
-        <a href={NavUtils.toSpace(comment.author.spaceId)} className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={comment.author.avatarUrl}
-            value={comment.author.address}
-            size={32}
-          />
-        </a>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {hasReplies ? (
+            <button
+              type="button"
+              aria-expanded={!threadCollapsed}
+              aria-label={threadCollapsed ? 'Expand comment thread' : 'Collapse comment thread'}
+              onClick={() => toggleThreadCollapsed(comment.id)}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 text-grey-04 hover:bg-grey-01"
+            >
+              <span className="inline-flex scale-[0.55] leading-none">
+                {threadCollapsed ? <Plus color="grey-04" /> : <Minus color="grey-04" />}
+              </span>
+            </button>
+          ) : null}
+          <a
+            href={NavUtils.toSpace(comment.author.spaceId)}
+            className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full"
+          >
+            <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={32} />
+          </a>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <a href={NavUtils.toSpace(comment.author.spaceId)} className="hover:underline">
             <Text variant="bodySemibold" as="span">
               {comment.author.name ?? 'Anonymous'}
@@ -520,89 +573,104 @@ function CommentItem({
           {comment.resolved && (
             <span className="inline-flex items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6L5 8.5L9.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M2.5 6L5 8.5L9.5 4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               <span className="text-xs font-medium">Resolved</span>
             </span>
           )}
+          {threadCollapsed && hasReplies ? (
+            <Text variant="footnote" color="grey-04" as="span">
+              · {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+            </Text>
+          ) : null}
         </div>
       </div>
-
+      
       {/* Comment body: rendered markdown */}
-      <div className="mt-1 ml-[44px]">
-        {isEditing ? (
-          <CommentInput
-            onSubmit={handleEdit}
-            isCreating={isCreating}
-            placeholder="Edit your comment..."
-            autoFocus
-            onCancel={() => setIsEditing(false)}
-            initialValue={comment.markdownContent}
-          />
-        ) : (
-          <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
-            {renderedContent}
-          </div>
-        )}
+      {!threadCollapsed && (
+        <div className={`mt-1 ${bodyMarginLeftClass}`}>
+          {isEditing ? (
+            <CommentInput
+              onSubmit={handleEdit}
+              isCreating={isCreating}
+              placeholder="Edit your comment..."
+              autoFocus
+              onCancel={() => setIsEditing(false)}
+              initialValue={comment.markdownContent}
+            />
+          ) : (
+            <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
+              {renderedContent}
+            </div>
+          )}
 
-        {/* Comment actions: vote + reply + edit */}
-        {!isEditing && (
-          <div className="mt-2 flex items-center gap-4">
-            <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
-            <button
-              onClick={() => setIsReplying(!isReplying)}
-              className="text-smallButton text-grey-04 hover:text-text"
-            >
-              Reply
-            </button>
-            {isOwnComment && (
+          {/* Comment actions: vote + reply + edit */}
+          {!isEditing && (
+            <div className="mt-2 flex items-center gap-4">
+              <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={() => setIsReplying(!isReplying)}
                 className="text-smallButton text-grey-04 hover:text-text"
               >
-                Edit
+                Reply
               </button>
-            )}
-            <a
-              href={NavUtils.toEntity(spaceId, comment.id)}
-              className="inline-flex scale-75 items-center text-grey-04 hover:text-text"
-            >
-              <RightArrowDiagonal color="grey-04" />
-            </a>
-          </div>
-        )}
+              {isOwnComment && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="text-smallButton text-grey-04 hover:text-text"
+                >
+                  Edit
+                </button>
+              )}
+              <a
+                href={NavUtils.toEntity(spaceId, comment.id)}
+                className="inline-flex scale-75 items-center text-grey-04 hover:text-text"
+              >
+                <RightArrowDiagonal color="grey-04" />
+              </a>
+            </div>
+          )}
 
-        {/* Inline reply input */}
-        {isReplying && (
-          <div className="mt-3">
-            <CommentInput
-              onSubmit={handleReply}
-              isCreating={isCreating}
-              placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
-              autoFocus
-              onCancel={() => setIsReplying(false)}
-            />
-          </div>
-        )}
+          {/* Inline reply input */}
+          {isReplying && (
+            <div className="mt-3">
+              <CommentInput
+                onSubmit={handleReply}
+                isCreating={isCreating}
+                placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
+                autoFocus
+                onCancel={() => setIsReplying(false)}
+              />
+            </div>
+          )}
 
-        {/* Nested replies */}
-        {comment.replies.length > 0 && (
-          <div className="mt-4" ref={repliesRef}>
-            <CommentList
-              comments={comment.replies}
-              entityId={entityId}
-              spaceId={spaceId}
-              onReply={onReply}
-              onEdit={onEdit}
-              isCreating={isCreating}
-              personalSpaceId={personalSpaceId}
-              editorSpaceIds={editorSpaceIds}
-              depth={depth + 1}
-              ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
-            />
-          </div>
-        )}
-      </div>
+          {/* Nested replies */}
+          {replies.length > 0 && (
+            <div className="mt-4" ref={repliesRef}>
+              <CommentList
+                comments={replies}
+                entityId={entityId}
+                spaceId={spaceId}
+                onReply={onReply}
+                onEdit={onEdit}
+                isCreating={isCreating}
+                personalSpaceId={personalSpaceId}
+                editorSpaceIds={editorSpaceIds}
+                isThreadCollapsed={isThreadCollapsed}
+                toggleThreadCollapsed={toggleThreadCollapsed}
+                depth={depth + 1}
+                ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
