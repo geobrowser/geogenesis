@@ -299,6 +299,7 @@ function PowerToolsCell({
       verified={row.verified}
       onLinkEntry={onLinkEntry}
       source={source}
+      relationChipTruncateLabel
     />
   );
 }
