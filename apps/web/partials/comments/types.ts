@@ -33,8 +33,8 @@ export interface CreateCommentParams {
   text: string;
   targetEntityId: string;
   targetSpaceId: string;
-  /** All ancestor comments from immediate parent up to the root, each with its space */
-  ancestorComments?: Array<{ id: string; spaceId: string }>;
+  /** Immediate parent when replying to a comment; omit for a top-level comment on the page entity. */
+  replyTo?: { entityId: string; spaceId: string };
 }
 
 export type CommentSortOrder = 'newest' | 'oldest';

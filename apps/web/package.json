@@ -22,7 +22,7 @@
     "@effect/opentelemetry": "^0.63.0",
     "@floating-ui/dom": "^1.7.5",
     "@geogenesis/auth": "workspace:*",
-    "@geoprotocol/geo-sdk": "^0.15.2",
+    "@geoprotocol/geo-sdk": "^0.17.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.213.0",
     "@opentelemetry/sdk-trace-base": "^2.6.0",
