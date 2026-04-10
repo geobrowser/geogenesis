@@ -13,6 +13,7 @@ import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
+import { hasName } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -54,7 +55,7 @@ export const MoveEntityToSpace = ({
     return spaces.filter(s => s.id !== sourceSpaceId);
   }, [personalSpace, memberSpaces, sourceSpaceId]);
 
-  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
+  const namedSpaces = allSpaces.filter(space => hasName(space?.entity?.name));
 
   const renderedSpaces =
     query.length === 0

@@ -15,7 +15,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { validateEntityId } from '~/core/utils/utils';
+import { hasName, validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autocomplete/results-list';
@@ -303,7 +303,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
     return spaces;
   }, [personalSpace, memberSpaces]);
 
-  const namedSpaces = allSpaces.filter(space => space?.entity?.name?.trim());
+  const namedSpaces = allSpaces.filter(space => hasName(space?.entity?.name));
 
   const renderedSpaces =
     query.length === 0
