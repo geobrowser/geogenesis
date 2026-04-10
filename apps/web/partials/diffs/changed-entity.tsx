@@ -994,18 +994,23 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
   const collectionItemRelations = allRelations.filter(r => r.typeId === SystemIds.COLLECTION_ITEM_RELATION_TYPE);
   const hasConfigChanges = allRelations.length > 0 || allConfigValues.length > 0;
 
-  const storeViewEntityId = useBlockViewEntityId(dataBlock.id, spaceId);
-  const diffViewInfo = getViewInfo(viewRelations, side);
-  const viewInfo =
-    diffViewInfo ??
-    (storeViewEntityId
-      ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
-      : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
-  const filterValue = getFilterValue(filterValues, side);
-
   const hasViewChange = viewRelations.some(
     r => r.changeType === 'ADD' || r.changeType === 'REMOVE' || r.changeType === 'UPDATE'
   );
+
+  const storeViewEntityId = useBlockViewEntityId(dataBlock.id, spaceId);
+  const diffViewInfo = getViewInfo(viewRelations, side);
+  // When a view change exists but getViewInfo returns null for this side, the
+  // original state was the implicit default (TABLE). Don't fall back to the store
+  // view — it includes local changes, so both sides would show the same view.
+  const viewInfo =
+    diffViewInfo ??
+    (hasViewChange
+      ? { name: 'Table view', entityId: SystemIds.TABLE_VIEW }
+      : storeViewEntityId
+        ? { name: VIEW_NAMES[storeViewEntityId] ?? 'Table', entityId: storeViewEntityId }
+        : { name: 'Table', entityId: SystemIds.TABLE_VIEW });
+
   const hasFilterChange = filterValues.some(v => (v.before || null) !== (v.after || null));
   const isFilterAdded = filterValues.some(v => !v.before && !!v.after);
   const isFilterRemoved = filterValues.some(v => !!v.before && !v.after);
