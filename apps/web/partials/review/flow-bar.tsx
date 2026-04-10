@@ -58,24 +58,23 @@ export const FlowBar = () => {
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
-    <AnimatePresence>
-      <>
+    <>
+      <AnimatePresence>
         {!hideFlowbar && (
-          <div
+          <motion.div
+            key="flowbar"
+            variants={flowVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={transition}
+            custom={!isReviewOpen}
             className={cx(
               'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
               RemoveScroll.classNames.fullWidth
             )}
           >
-            <motion.div
-              variants={flowVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              transition={transition}
-              custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
-            >
+            <div className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg">
               <div className="inline-flex h-full items-center justify-center">
                 <p className="inline-flex items-center px-3">
                   <span>{pluralize('edit', opsCount, true)}</span>
@@ -98,13 +97,13 @@ export const FlowBar = () => {
               >
                 Review edits
               </button>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
-      </>
-    </AnimatePresence>
+      {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
+    </>
   );
 };
 
@@ -252,7 +251,9 @@ function getNetValues(localValues: Value[]): Value[] {
     // If the value is unchanged from the remote version, skip it
     if (remoteEntity) {
       const remoteValue = remoteEntity.values.find(
-        remote => !remote.isLocal && (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
+        remote =>
+          !remote.isLocal &&
+          (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
       );
       if (remoteValue && remoteValue.value === v.value) return false;
     }
@@ -271,9 +272,7 @@ function getNetValues(localValues: Value[]): Value[] {
 function getNetRelations(localRelations: Relation[]): Relation[] {
   // Build a set of semantic keys for active local relations
   const activeKeys = new Set(
-    localRelations
-      .filter(r => !r.isDeleted)
-      .map(r => `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`)
+    localRelations.filter(r => !r.isDeleted).map(r => `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`)
   );
 
   return localRelations.filter(r => {
@@ -298,7 +297,8 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
     if (remoteEntity) {
       const key = `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`;
       const matchesRemote = remoteEntity.relations.some(
-        remote => !remote.isLocal && `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
+        remote =>
+          !remote.isLocal && `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
       );
       if (matchesRemote) return false;
     }
