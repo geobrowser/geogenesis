@@ -20,6 +20,8 @@ import {
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
+import { compareBySpaceRank } from '../utils/space/space-ranking';
+import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
@@ -332,7 +334,9 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
-    const spaceIds = [...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId))))];
+    const spaceIds = [
+      ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
+    ];
     const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
     const [spaces, typeNames] = await Promise.all([
@@ -356,16 +360,32 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities.map(e => {
-      return {
-        ...e,
-        types: e.types.map(t => ({
-          id: t.id,
-          name: t.name ?? typeNamesById.get(t.id) ?? null,
-        })),
-        spaces: resolveSearchSpaces(e.spaces, spacesById),
-      };
-    });
+    return entities
+      .map(e => {
+        const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
+          .filter(s => hasName(s.name))
+          .sort(compareBySpaceRank(s => s.spaceId));
+
+        const resolvedTypesBySpace = e.typesBySpace
+          ? Object.fromEntries(
+              Object.entries(e.typesBySpace).map(([spaceId, types]) => [
+                spaceId,
+                types.map(t => ({ id: t.id, name: t.name ?? typeNamesById.get(t.id) ?? null })),
+              ])
+            )
+          : undefined;
+
+        return {
+          ...e,
+          types: e.types.map(t => ({
+            id: t.id,
+            name: t.name ?? typeNamesById.get(t.id) ?? null,
+          })),
+          typesBySpace: resolvedTypesBySpace,
+          spaces: resolvedSpaces,
+        };
+      })
+      .filter(e => e.spaces.length > 0);
   }
 }
 
@@ -413,6 +433,7 @@ function mergeSearchResult({
     name,
     description,
     types,
+    typesBySpace: remoteEntity.typesBySpace,
     spaces: localEntity.spaces,
   };
 }

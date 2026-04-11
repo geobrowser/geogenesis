@@ -7,6 +7,7 @@ import { Fragment } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 import { isUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -112,8 +113,9 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
   });
+  const dedupedRelations = dedupeRelationsByToEntityId(relations);
 
-  return relations.map(relation => {
+  return dedupedRelations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
       return (
         <ImageRelation

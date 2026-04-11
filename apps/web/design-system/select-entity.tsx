@@ -248,6 +248,18 @@ export const SelectEntity = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const hasFocusedRef = useRef(false);
+
+  const inputCallbackRef = React.useCallback(
+    (node: HTMLInputElement | null) => {
+      inputRef.current = node;
+      if (node && autoFocus && !hasFocusedRef.current) {
+        hasFocusedRef.current = true;
+        node.focus();
+      }
+    },
+    [autoFocus]
+  );
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -288,7 +300,7 @@ export const SelectEntity = ({
       <Popover.Root open={!!query}>
         <Popover.Anchor asChild>
           <input
-            ref={inputRef}
+            ref={inputCallbackRef}
             type="text"
             value={query}
             onChange={({ currentTarget: { value } }) => {
@@ -298,7 +310,6 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
-            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (

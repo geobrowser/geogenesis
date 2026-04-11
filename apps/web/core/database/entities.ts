@@ -184,7 +184,10 @@ async function fetchEntitiesWithRelations(
   return entities;
 }
 
-export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string }[]): Promise<Property[]> {
+export async function getSchemaFromTypeIds(
+  types: { id: string; spaceId?: string }[],
+  filterSpaceIds?: string[]
+): Promise<Property[]> {
   if (types.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
 
   const spaceByType = new Map(types.map(t => [t.id, t.spaceId]));
@@ -192,7 +195,7 @@ export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string
 
   const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
 
-  const propertyIds = typeEntities
+  const nativePropertyIds = typeEntities
     .flatMap(entity => {
       const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
       return entity.relations.filter(
@@ -201,9 +204,33 @@ export async function getSchemaFromTypeIds(types: { id: string; spaceId?: string
     })
     .map(r => r.toEntity.id);
 
-  if (propertyIds.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
+  // Collect additional properties from filter-specified spaces (e.g. a type
+  // may define extra properties in a space different from its native one).
+  let filterPropertyIds: string[] = [];
+  if (filterSpaceIds && filterSpaceIds.length > 0) {
+    const uniqueFilterSpaces = [...new Set(filterSpaceIds)];
+    const results = await Promise.all(
+      uniqueFilterSpaces.map(async spaceId => {
+        const spaceMap = new Map(dedupedTypeIds.map(id => [id, spaceId] as const));
+        const entities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceMap);
+        return { spaceId, entities };
+      })
+    );
 
-  const properties = await Effect.runPromise(getProperties(propertyIds));
+    filterPropertyIds = results.flatMap(({ spaceId, entities }) =>
+      entities
+        .flatMap(entity =>
+          entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId)
+        )
+        .map(r => r.toEntity.id)
+    );
+  }
+
+  const allPropertyIds = [...new Set([...nativePropertyIds, ...filterPropertyIds])];
+
+  if (allPropertyIds.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
+
+  const properties = await Effect.runPromise(getProperties(allPropertyIds));
 
   return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties], (a, b) => a.id === b.id);
 }

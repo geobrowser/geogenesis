@@ -42,9 +42,17 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
 
   const setSource = (newSource: Source) => {
     removeSourceType({
-      relations: dataEntityRelations,
+      blockId: EntityId(entityId),
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+
+    if (newSource.type === 'COLLECTION') {
+      setFilterState(
+        produce(filterState, draft =>
+          draft.filter(f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY)
+        )
+      );
+    }
 
     if (newSource.type === 'RELATIONS') {
       setFilterState(
