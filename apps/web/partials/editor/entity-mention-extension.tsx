@@ -1,4 +1,4 @@
-import { PluginKey } from '@tiptap/pm/state';
+import { PluginKey as PmPluginKey } from '@tiptap/pm/state';
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
@@ -56,6 +56,13 @@ interface MentionListRef {
 // Extension
 // ============================================================================
 
+/**
+ * Stable plugin key for the entity mention suggestion.
+ * Exported so the editor can query whether the suggestion popup is active
+ * via `entityMentionPluginKey.getState(editor.state)?.active`.
+ */
+export const entityMentionPluginKey = new PmPluginKey('entityMention');
+
 const EntityMentionSuggestion = Extension.create<{
   suggestion: Omit<SuggestionOptions<EntityMentionItem>, 'editor'>;
 }>({
@@ -76,7 +83,7 @@ const EntityMentionSuggestion = Extension.create<{
     return [
       Suggestion({
         editor: this.editor,
-        pluginKey: new PluginKey(this.name),
+        pluginKey: entityMentionPluginKey,
         ...this.options.suggestion,
       }),
     ];
@@ -202,21 +209,26 @@ export const createEntityMentionExtension = (spaceId: string) =>
                 ...props,
                 spaceId,
                 command: (entityId: string, entityName: string, entitySpaceId: string) => {
-                  // Capture range before cleanup destroys the suggestion state
+                  // Capture range before any state changes
                   const from = props.range.from;
                   const to = props.range.to;
 
-                  cleanup();
-
-                  // Use shared function to insert graph link
+                  // Insert the link BEFORE cleanup so the suggestion plugin is
+                  // still "active" during the editor chain. This prevents the
+                  // content sync effect from overwriting the insertion with
+                  // stale store data (the effect skips when suggestion is active).
                   insertGraphLink({
                     editor: props.editor,
                     entityId,
                     linkText: entityName,
-                    spaceId: entitySpaceId,
+                    entityName,
+                    spaceId: entitySpaceId || spaceId,
                     from,
                     to,
                   });
+
+                  // Cleanup popup after the insertion chain has executed.
+                  cleanup();
                 },
                 onEscape: () => {
                   cleanup();

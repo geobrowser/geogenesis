@@ -62,10 +62,14 @@ export const FloatingToolbarExtension = Extension.create({
               return false;
             }
 
-            // Don't show if selection contains any link marks
+            // Don't show if selection contains any link or web2URL marks
             const { schema } = state;
             const hasLinkMark = state.doc.rangeHasMark(from, to, schema.marks.link);
             if (hasLinkMark) {
+              return false;
+            }
+
+            if (schema.marks.web2URL && state.doc.rangeHasMark(from, to, schema.marks.web2URL)) {
               return false;
             }
 

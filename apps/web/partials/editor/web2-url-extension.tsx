@@ -16,13 +16,62 @@ const HOVER_HIDE_DELAY_MS = 150;
 const UPDATE_DEBOUNCE_MS = 150;
 const TOOLTIP_OFFSET = 8;
 const TOOLTIP_Z_INDEX = 9999;
+const WEB2_URL_PREFIX_REGEX = /^(https?:\/\/|www\.)/i;
+
+export function isWeb2Url(url: string | null | undefined): url is string {
+  return !!url?.trim() && WEB2_URL_PREFIX_REGEX.test(url.trim());
+}
+
+export function normalizeWeb2Url(url: string): string {
+  const trimmedUrl = url.trim();
+  return /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
+}
+
+export function isStandaloneWeb2Text(text: string, url: string): boolean {
+  const trimmedText = text.trim();
+
+  if (!trimmedText) return false;
+  if (trimmedText === url) return true;
+  if (!isWeb2Url(trimmedText)) return false;
+
+  return normalizeWeb2Url(trimmedText) === normalizeWeb2Url(url);
+}
+
+export function getWeb2Replacement(text: string, url: string, isInEditMode: boolean) {
+  const trimmedUrl = url.trim();
+
+  if (isInEditMode && !isStandaloneWeb2Text(text, url)) {
+    return {
+      text: `[${text}](${trimmedUrl})`,
+      url: trimmedUrl,
+      editMode: true,
+    };
+  }
+
+  return {
+    text,
+    url: trimmedUrl,
+    editMode: isInEditMode,
+  };
+}
+
+export function stripInternalWeb2HTMLAttributes(HTMLAttributes: Record<string, unknown>) {
+  const {
+    url: _url,
+    editMode: _editMode,
+    editmode: _legacyEditMode,
+    ...rest
+  } = HTMLAttributes;
+
+  return rest;
+}
 
 // ============================================================================
 // Custom Mark for Web2 URLs
 // ============================================================================
 
 // Custom mark for web2 URLs that renders as spans with hover cards
-const Web2URLMark = Mark.create({
+export const Web2URLMark = Mark.create({
   name: 'web2URL',
 
   // Prevent mark from extending to new content (e.g., when pressing Enter)
@@ -60,13 +109,15 @@ const Web2URLMark = Mark.create({
   },
 
   renderHTML({ HTMLAttributes, mark }) {
+    const cleanHTMLAttributes = stripInternalWeb2HTMLAttributes(HTMLAttributes);
+
     // Mode-aware rendering
     if (mark.attrs.editMode) {
       // EDIT MODE: Subtle styling for markdown
       return [
         'span',
         {
-          ...HTMLAttributes,
+          ...cleanHTMLAttributes,
           class: 'web2-url-edit-mode',
           'data-web2-url': 'true',
           'data-url': mark.attrs.url,
@@ -79,7 +130,7 @@ const Web2URLMark = Mark.create({
       return [
         'span',
         {
-          ...HTMLAttributes,
+          ...cleanHTMLAttributes,
           // Keep data attributes for persistence and re-parsing
           'data-web2-url': 'true',
           'data-url': mark.attrs.url,
@@ -378,11 +429,46 @@ export const Web2URLExtension = Extension.create({
                   // Create a new transaction to avoid conflicts
                   const newTr = state.tr;
 
-                  // Process paragraph nodes to handle text that may be split across multiple text nodes
+                  // Convert parsed external link marks from imported markdown/html into our
+                  // custom web2URL mark so they render consistently with detected web2 links.
                   state.doc.descendants((node, pos) => {
-                    // Only process paragraph nodes
-                    if (node.type.name === 'paragraph') {
-                      // Early exit if paragraph has no content
+                    if (node.isText && schema.marks.web2URL && schema.marks.link) {
+                      const text = node.text ?? '';
+                      const externalLinkMark = node.marks.find(
+                        mark => mark.type.name === 'link' && isWeb2Url(mark.attrs?.href) && !mark.attrs?.href?.startsWith('graph://')
+                      );
+
+                      if (externalLinkMark && text) {
+                        const originalStart = pos;
+                        const originalEnd = originalStart + node.nodeSize;
+                        const from = newTr.mapping.map(originalStart);
+                        const to = newTr.mapping.map(originalEnd);
+
+                        if (from >= 0 && to <= newTr.doc.content.size && from < to) {
+                          const replacement = getWeb2Replacement(text, externalLinkMark.attrs.href, isInEditMode);
+                          const web2Mark = schema.marks.web2URL.create({
+                            url: replacement.url,
+                            editMode: replacement.editMode,
+                          });
+
+                          newTr.removeMark(from, to, schema.marks.link);
+                          newTr.removeMark(from, to, schema.marks.web2URL);
+
+                          if (replacement.text === text) {
+                            newTr.addMark(from, to, web2Mark);
+                          } else {
+                            newTr.replaceWith(from, to, schema.text(replacement.text, [web2Mark]));
+                          }
+
+                          hasChanges = true;
+                        }
+                      }
+                    }
+
+                    // Process text blocks to handle text that may be split across multiple text nodes.
+                    // Paragraphs and headings need this when switching between edit and browse modes.
+                    if (node.isTextblock && node.type.name !== 'codeBlock') {
+                      // Early exit if block has no content
                       if (!node.content.size) {
                         return;
                       }
@@ -402,10 +488,7 @@ export const Web2URLExtension = Extension.create({
                               const isMarkdown = /^\[.*\]\(.*\)$/.test(text);
 
                               // Check if standalone URL (heuristic)
-                              // If text looks like the URL
-                              const isStandalone =
-                                text === url ||
-                                (url.endsWith(text) && (url === `https://${text}` || url === `http://${text}`));
+                              const isStandalone = isStandaloneWeb2Text(text, url);
 
                               if (!isMarkdown && !isStandalone) {
                                 const originalStart = pos + 1 + relativePosTracker;
@@ -417,7 +500,7 @@ export const Web2URLExtension = Extension.create({
 
                                 const markdownText = `[${text}](${url})`;
                                 const newMark = schema.marks.web2URL.create({
-                                  url: url,
+                                  url,
                                   editMode: true,
                                 });
 
@@ -431,7 +514,7 @@ export const Web2URLExtension = Extension.create({
                       }
 
                       // Collect all text content from the paragraph
-                      let paragraphText = '';
+                      let blockText = '';
                       const textNodePositions: TextNodeInfo[] = [];
 
                       node.descendants((textNode, relativePos) => {
@@ -442,21 +525,25 @@ export const Web2URLExtension = Extension.create({
                             startPos: absolutePos,
                             endPos: absolutePos + textNode.nodeSize
                           });
-                          paragraphText += textNode.text;
+                          blockText += textNode.text;
                         }
                       });
 
                       // Early exit if no text content or no potential markdown/URL syntax
-                      if (!paragraphText || (!paragraphText.includes('[') && !paragraphText.includes('http'))) {
+                      if (!blockText || (!blockText.includes('[') && !blockText.includes('http') && !blockText.includes('www.'))) {
                         return;
                       }
 
-                      const urls = detectWeb2URLsInMarkdown(paragraphText);
+                      const urls = detectWeb2URLsInMarkdown(blockText);
 
                       if (urls.length > 0) {
+                        let searchStartIndex = 0;
+
                         for (const url of urls) {
-                          const urlIndex = paragraphText.indexOf(url);
+                          const urlIndex = blockText.indexOf(url, searchStartIndex);
                           if (urlIndex !== -1) {
+                            searchStartIndex = urlIndex + url.length;
+
                             // Find the actual document positions for this URL span
                             let currentTextPos = 0;
                             let fromPos = -1;
@@ -526,7 +613,7 @@ export const Web2URLExtension = Extension.create({
 
                                   // Need to update if mode doesn't match OR URL has changed
                                   needsProcessing = isCurrentlyEditMode !== shouldBeEditMode ||
-                                    existingUrl !== (currentUrl.startsWith('http') ? currentUrl : `https://${currentUrl}`);
+                                    normalizeWeb2Url(existingUrl) !== normalizeWeb2Url(currentUrl);
                                 }
                               }
 
@@ -553,7 +640,7 @@ export const Web2URLExtension = Extension.create({
                                     if (!isInEditMode) {
                                       // VIEW MODE: Convert to styled span
                                       const web2Mark = schema.marks.web2URL.create({
-                                        url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
+                                        url: actualUrl,
                                         editMode: false,
                                       });
 
@@ -563,7 +650,7 @@ export const Web2URLExtension = Extension.create({
                                     } else {
                                       // EDIT MODE: Keep as markdown but add subtle styling
                                       const web2Mark = schema.marks.web2URL.create({
-                                        url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
+                                        url: actualUrl,
                                         editMode: true,
                                       });
 
@@ -574,7 +661,7 @@ export const Web2URLExtension = Extension.create({
                                   } else {
                                     // STANDALONE URL: Mode-aware rendering
                                     const web2Mark = schema.marks.web2URL.create({
-                                      url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
+                                      url: actualUrl,
                                       editMode: isInEditMode,
                                     });
 

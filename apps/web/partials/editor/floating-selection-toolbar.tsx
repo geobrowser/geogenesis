@@ -88,7 +88,7 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
         editor: editor,
         command: (entityId: string, entityName: string, entitySpaceId: string) => {
           // Use selected text as linkText if available, otherwise use entityName
-          const linkText = selectedText;
+          const linkText = selectedText || entityName;
           // Use shared function to insert graph link with spaceId for data attributes
           insertGraphLink({
             editor,

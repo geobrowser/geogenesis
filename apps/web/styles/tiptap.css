@@ -9,10 +9,6 @@
   /* Override Tiptap's margin-bottom */
 }
 
-.ProseMirror .paragraph-node a {
-  @apply text-ctaPrimary transition-colors duration-100 hover:text-ctaHover;
-}
-
 .ProseMirror .tiptap-block {
   position: relative;
 }
@@ -26,9 +22,6 @@
   opacity: 1;
 }
 
-.ProseMirror .paragraph-node a {
-  @apply underline transition-colors duration-100 hover:text-grey-04;
-}
 
 /* Inadvertently makes editable titles grey when not focused */
 /* .ProseMirror-hideselection .data-node input {
@@ -94,9 +87,9 @@
   @apply mt-10;
 }
 
-.ProseMirror > *:first-child h1,
-.ProseMirror > *:first-child h2,
-.ProseMirror > *:first-child h3 {
+.ProseMirror>*:first-child h1,
+.ProseMirror>*:first-child h2,
+.ProseMirror>*:first-child h3 {
   @apply mt-0;
 }
 
@@ -140,7 +133,7 @@
   @apply my-4;
 }
 
-.ProseMirror > * {
+.ProseMirror>* {
   margin-bottom: 16px;
 }
 
@@ -278,18 +271,18 @@
 }
 
 /* External/Invalid link highlighting */
-.ProseMirror span.entity-link-invalid,
-.ProseMirror span[data-web2-url] {
+.ProseMirror .entity-link-invalid,
+.ProseMirror [data-web2-url] {
   @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted rounded px-0.5;
 }
 
 /* External/Invalid link and edit mode web2 URL hover */
-.ProseMirror span.entity-link-invalid:hover,
-.ProseMirror span.web2-url-edit-mode:hover {
+.ProseMirror .entity-link-invalid:hover,
+.ProseMirror .web2-url-edit-mode:hover {
   @apply bg-red-03;
 }
 
 /* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
-.ProseMirror span.web2-url-edit-mode {
+.ProseMirror .web2-url-edit-mode {
   @apply underline decoration-dotted decoration-red-01;
 }

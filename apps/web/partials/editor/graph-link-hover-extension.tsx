@@ -1,6 +1,5 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import type { Mark } from '@tiptap/pm/model';
 import { ReactRenderer } from '@tiptap/react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
@@ -95,6 +94,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 }
 
                 const entityId = linkUrl.replace('graph://', '');
+                const linkText = linkElement.textContent?.trim() || entityId;
 
                 // Read cached entity data from data attributes (avoids fetching)
                 const cachedEntityName = linkElement.getAttribute('data-entity-name');
@@ -113,6 +113,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                   component = new ReactRenderer(GraphLinkTooltip, {
                     props: {
+                      linkText,
                       linkUrl,
                       spaceId,
                       entityId,
@@ -138,25 +139,19 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                         let transaction = state.tr;
 
                         try {
-                          // Find the position of the current link element
-                          if (currentLinkElement) {
-                            const pos = editorView.posAtDOM(currentLinkElement, 0);
+                          if (currentLinkElement && state.schema.marks.link) {
+                            const from = editorView.posAtDOM(currentLinkElement, 0);
+                            const to = editorView.posAtDOM(
+                              currentLinkElement,
+                              currentLinkElement.childNodes.length
+                            );
 
-                            if (pos !== null) {
-                              // Get the node at this position
-                              const node = state.doc.nodeAt(pos);
-
-                              if (node && node.isText) {
-                                // Find and remove the link mark from this specific node
-                                node.marks.forEach((mark: Mark) => {
-                                  if (mark.type.name === 'link' && mark.attrs.href === linkUrl) {
-                                    // Remove the link mark but keep the text
-                                    const from = pos;
-                                    const to = pos + node.nodeSize;
-                                    transaction = transaction.removeMark(from, to, mark);
-                                  }
-                                });
-                              }
+                            if (from < to) {
+                              transaction = transaction.removeMark(
+                                from,
+                                to,
+                                state.schema.marks.link
+                              );
                             }
                           }
 
@@ -166,23 +161,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                           // Error removing link silently
                         }
 
-                        hide();
-                      },
-                      onCopy: () => {
-                        // Copy link URL to clipboard
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(linkUrl).catch(() => {
-                            // Failed to copy silently
-                          });
-                        } else {
-                          // Fallback for older browsers
-                          const textArea = document.createElement('textarea');
-                          textArea.value = linkUrl;
-                          document.body.appendChild(textArea);
-                          textArea.select();
-                          document.execCommand('copy');
-                          document.body.removeChild(textArea);
-                        }
                         hide();
                       },
                       onClose: () => {

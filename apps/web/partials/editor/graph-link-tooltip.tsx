@@ -4,6 +4,7 @@ import React from 'react';
 
 import { useEntity } from '~/core/database/entities';
 import { useToast } from '~/core/hooks/use-toast';
+import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Copy } from '~/design-system/icons/copy';
@@ -21,7 +22,6 @@ interface GraphLinkTooltipProps {
   entitySpaceId?: string;
   onShowConnection: () => void;
   onRemoveLink: () => void;
-  onCopy: () => void;
   onClose?: () => void;
 }
 
@@ -30,6 +30,7 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   entityId,
   entityName: propEntityName,
   entitySpaceId: propEntitySpaceId,
+  spaceId,
   onShowConnection,
   onRemoveLink,
   onClose,
@@ -39,11 +40,16 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   // Fetch entity data if not provided via props (handles rerender case)
   const { name: entityName, spaces, isLoading } = useEntity({ id: entityId || '', spaceId: propEntitySpaceId });
   const entityNameValue = propEntityName || entityName || linkText;
-  const entitySpaceId = propEntitySpaceId || spaces?.[0];
+  const entitySpaceId = propEntitySpaceId || spaces?.[0] || spaceId;
 
   const copyHandler = async () => {
+    if (!entityId || !entitySpaceId) {
+      setToast(<div className="text-button">Unable to copy link</div>);
+      return;
+    }
+
     try {
-      const fullUrl = `${window.location.origin}/space/${entitySpaceId}/${entityId}`;
+      const fullUrl = new URL(NavUtils.toEntity(entitySpaceId, entityId), window.location.origin).toString();
       await navigator.clipboard.writeText(fullUrl);
       setToast(<div className="text-button">Link copied</div>);
       onClose?.();

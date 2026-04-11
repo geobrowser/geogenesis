@@ -1,7 +1,16 @@
-import { ChainedCommands, Extension, InputRule, PasteRule, Range as TipTapRange } from '@tiptap/core';
+import { ChainedCommands, Extension, InputRule, PasteRule, Range as TipTapRange, mergeAttributes } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import { EditorState } from '@tiptap/pm/state';
 import { insertGraphLink } from './insert-graph-link';
+
+function isGraphHref(href: unknown): href is `graph://${string}` {
+  return typeof href === 'string' && href.startsWith('graph://');
+}
+
+function stripAnchorOnlyAttributes(attributes: Record<string, unknown>) {
+  const { href: _href, target: _target, rel: _rel, class: _className, ...rest } = attributes;
+  return rest;
+}
 
 // Extend Link to add custom data attributes for entity caching
 const GraphLinkExtended = Link.extend({
@@ -33,6 +42,20 @@ const GraphLinkExtended = Link.extend({
         },
       },
     };
+  },
+  renderHTML({ HTMLAttributes }) {
+    if (isGraphHref(HTMLAttributes.href)) {
+      return ['a', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0];
+    }
+
+    return [
+      'span',
+      mergeAttributes(stripAnchorOnlyAttributes(HTMLAttributes), {
+        class: 'entity-link-invalid',
+        'data-invalid-link': 'true',
+      }),
+      0,
+    ];
   },
 });
 
