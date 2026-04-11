@@ -20,9 +20,10 @@ interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
   initialQuery?: string;
+  enabled?: boolean;
 }
 
-export function useSearch({ filterByTypes, filterBySpace, initialQuery }: SearchOptions = {}) {
+export function useSearch({ filterByTypes, filterBySpace, enabled = true, initialQuery }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
@@ -31,7 +32,7 @@ export function useSearch({ filterByTypes, filterBySpace, initialQuery }: Search
   const maybeEntityId = debouncedQuery.trim();
 
   const { data: results, isLoading } = useQuery({
-    enabled: debouncedQuery !== '',
+    enabled: enabled && debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace],
     queryFn: async () => {
       if (query.length === 0) return [];

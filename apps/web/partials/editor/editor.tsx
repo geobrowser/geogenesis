@@ -17,7 +17,10 @@ import { NavUtils } from '~/core/utils/utils';
 import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
+import { createCommandExtension } from './command-extension';
+import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
+import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
 import { editorContentVersionAtom } from '~/atoms';
@@ -43,11 +46,34 @@ interface Props {
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
+  const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+  // Also keep editableRef for callbacks and extensions
+  const editableRef = React.useRef(editable);
+
+  // Keep editableRef.current updated for callbacks
+  React.useLayoutEffect(() => {
+    editableRef.current = editable;
+  }, [editable]);
+
+  // Use editable state for editor - this will be passed to extensions via editor.isEditable
+
+  // Use useMemo with stable deps to prevent extension recreation on sync engine updates
+  // This is critical for suggestion plugins (like entity mention) to maintain state
+  const extensions = React.useMemo(
+    () => [
+      ...tiptapExtensions,
+      createIdExtension(spaceId),
+      createGraphLinkHoverExtension(spaceId, router),
+      createEntityMentionExtension(spaceId),
+      createCommandExtension(spaceId),
+    ],
+    // Only recreate when spaceId changes - router is stable
+    [spaceId, router]
+  );
 
   useInterceptEditorLinks(spaceId);
 
@@ -57,10 +83,39 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
-      // Responsible for converting all editor blocks to Geo knowledge graph state
+      // Don't persist state when the blur was caused by a suggestion popup
+      // (e.g. @mention search input stealing focus). Writing to the store here
+      // would trigger editorJson to recompute and setContent to fire, which
+      // destroys the active suggestion state.
+      const isSuggestionActive = entityMentionPluginKey.getState(params.editor.state)?.active;
+      if (isSuggestionActive) return;
+
+      // Persist synchronously so the store has the latest content before
+      // the editor is potentially destroyed (e.g. on edit → view mode switch).
+      // The content sync effect's `if (editable) return` guard prevents this
+      // store write from triggering a setContent call back into the editor.
       upsertEditorStateRef.current(params.editor.getJSON());
     }
   };
+
+  // Ref to hold the current editor instance for use in effects
+  const editorRef = React.useRef<TiptapEditor | null>(null);
+
+  // Track the previous editable state to detect transitions from edit → read mode
+  const prevEditableRef = React.useRef(editable);
+
+  // When transitioning from edit → view mode, persist the editor content to the
+  // store BEFORE useEditor destroys and recreates the editor. Without this,
+  // content changes (like @mention links) would be lost because onBlur may not
+  // fire during programmatic editor destruction.
+  React.useLayoutEffect(() => {
+    const wasEditable = prevEditableRef.current;
+    prevEditableRef.current = editable;
+
+    if (wasEditable && !editable && editorRef.current) {
+      upsertEditorStateRef.current(editorRef.current.getJSON());
+    }
+  }, [editable]);
 
   const editor = useEditor(
     {
@@ -68,7 +123,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       editable: editable,
       content: editorJson,
       editorProps: {
-        transformPastedHTML: html => {
+        transformPastedHTML: (html: string) => {
           // Remove id attributes and prevent emoji conversion to images
           let cleanHtml = removeIdAttributes(html);
 
@@ -135,10 +190,23 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     [editable, activeEntityId, editorContentVersion]
   );
 
+  // Keep editorRef in sync so the edit→view transition effect can persist state
+  editorRef.current = editor;
+
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!editor) return;
+
+    // While in edit mode, the editor is the source of truth. Content is
+    // persisted to the store via onBlur. Pushing store changes back into
+    // the editor during editing causes destructive side-effects:
+    //   - Destroys active plugin state (e.g. @mention suggestion popup)
+    //   - Overwrites just-inserted content (e.g. after selecting a mention)
+    //   - Resets cursor position
+    // The editor already receives its initial content via useEditor's
+    // `content` prop (keyed on activeEntityId / editorContentVersion).
+    if (editable) return;
 
     const currentDoc = normalizeEditorContent(editor.getJSON());
     const nextDoc = normalizeEditorContent(editorJson);
@@ -147,10 +215,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       return;
     }
 
-    // Keep the editor instance alive for data blocks, but sync external store
-    // changes like entity/block deletion into the active ProseMirror document.
+    // Sync external store changes (e.g. entity/block deletion from sidebar)
+    // into the read-mode editor.
     editor.commands.setContent(editorJson);
-  }, [editor, editorJson]);
+  }, [editor, editorJson, editable]);
 
   const handleGutterClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -259,12 +327,11 @@ function useInterceptEditorLinks(spaceId: string) {
     }
 
     function handleClick(event: MouseEvent) {
-      const target = event.target;
+      const target = event.target as Element | null;
       if (!target) {
         return;
       }
 
-      // @ts-expect-error target doesn't have "closest" method in types
       const link = target.closest('a');
 
       if (!link) {
@@ -276,10 +343,18 @@ function useInterceptEditorLinks(spaceId: string) {
         const originalUrl = link.href;
 
         if (originalUrl.startsWith('graph://')) {
+          // Check if we're in edit mode - if so, don't redirect, allow text editing
+          const isInEditMode = link.closest('.editable') !== null;
+
+          if (isInEditMode) {
+            // In edit mode, don't prevent default - allow normal text selection/editing
+            return;
+          }
+
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();
-          const entityId = GraphUrl.toEntityId(originalUrl);
+          const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
           router.prefetch(NavUtils.toEntity(spaceId, entityId));
           router.push(NavUtils.toEntity(spaceId, entityId));
         }
@@ -301,9 +376,14 @@ const useSuppressFlushSyncWarning = () => {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
     const orig = console.error;
-    console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method'))
+    console.error = (...args: unknown[]) => {
+      // Only suppress the specific TipTap flushSync warning
+      if (
+        typeof args[0] === 'string' &&
+        args[0].includes('flushSync was called from inside a lifecycle method')
+      ) {
         return;
+      }
       orig.apply(console, args);
     };
     return () => {
@@ -315,11 +395,11 @@ const useSuppressFlushSyncWarning = () => {
 function normalizeEditorContent(content: JSONContent): JSONContent {
   const normalizedAttrs = content.attrs
     ? Object.fromEntries(
-        Object.entries(content.attrs).filter(([key, value]) => {
-          if (value === null || value === undefined) return false;
-          return key !== 'spaceId' && key !== 'relationId';
-        })
-      )
+      Object.entries(content.attrs).filter(([key, value]) => {
+        if (value === null || value === undefined) return false;
+        return key !== 'spaceId' && key !== 'relationId';
+      })
+    )
     : undefined;
 
   return {
@@ -328,8 +408,8 @@ function normalizeEditorContent(content: JSONContent): JSONContent {
     ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
     ...(content.content
       ? {
-          content: content.content.map(child => normalizeEditorContent(child)),
-        }
+        content: content.content.map(child => normalizeEditorContent(child)),
+      }
       : {}),
   };
 }

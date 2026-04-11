@@ -20,8 +20,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { ResultsList } from '~/design-system/autocomplete/results-list';
-import { ResultItem } from '~/design-system/autocomplete/results-list';
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -73,6 +72,7 @@ type SelectEntityProps = {
   withSearchIcon?: boolean;
   advanced?: boolean;
   autoFocus?: boolean;
+  showUrlWarning?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
@@ -95,8 +95,9 @@ export const SelectEntity = ({
   inputClassName = '',
   withSelectSpace = true,
   withSearchIcon = false,
-  advanced = true,
   autoFocus = false,
+  advanced = true,
+  showUrlWarning = false,
   showIDs = true,
   initialQuery,
   selectedEntityId,
@@ -137,6 +138,20 @@ export const SelectEntity = ({
     initialQuery,
   });
 
+  // Auto focus input when component mounts
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      // Add small delay to ensure the component is fully rendered and visible
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus]);
+
   if (query === '' && result !== null) {
     startTransition(() => {
       setResult(null);
@@ -170,13 +185,14 @@ export const SelectEntity = ({
         onCreateEntity({
           id: newEntityId,
           name: query,
+          space: spaceId,
           renderableType: isCreatingProperty ? renderableType : undefined,
         }) ?? newEntityId;
     }
 
-    // Always set the name – duplicate writes are idempotent upserts.
+    // Create new entity with name and types using internal id
     storage.entities.name.set(newEntityId, spaceId, query);
-    onDone?.({ id: newEntityId, name: query }, true);
+    onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);

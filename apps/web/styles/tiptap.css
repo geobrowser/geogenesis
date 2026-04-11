@@ -4,12 +4,9 @@
   padding-bottom: 0;
 }
 
-.ProseMirror > * {
-  margin-bottom: 0 !important; /* Override Tiptap's margin-bottom */
-}
-
-.ProseMirror .paragraph-node a {
-  @apply text-ctaPrimary transition-colors duration-100 hover:text-ctaHover;
+.ProseMirror>* {
+  margin-bottom: 0 !important;
+  /* Override Tiptap's margin-bottom */
 }
 
 .ProseMirror .tiptap-block {
@@ -25,9 +22,6 @@
   opacity: 1;
 }
 
-.ProseMirror .paragraph-node a {
-  @apply underline transition-colors duration-100 hover:text-grey-04;
-}
 
 /* Inadvertently makes editable titles grey when not focused */
 /* .ProseMirror-hideselection .data-node input {
@@ -93,9 +87,9 @@
   @apply mt-10;
 }
 
-.ProseMirror > *:first-child h1,
-.ProseMirror > *:first-child h2,
-.ProseMirror > *:first-child h3 {
+.ProseMirror>*:first-child h1,
+.ProseMirror>*:first-child h2,
+.ProseMirror>*:first-child h3 {
   @apply mt-0;
 }
 
@@ -131,7 +125,15 @@
   @apply my-4;
 }
 
-.ProseMirror > * {
+.ProseMirror video {
+  @apply h-auto w-full rounded-lg;
+}
+
+.ProseMirror .video-node {
+  @apply my-4;
+}
+
+.ProseMirror>* {
   margin-bottom: 16px;
 }
 
@@ -203,4 +205,84 @@
 .Tiptap-mathematics-editor--active {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
+}
+
+/* Code blocks */
+.code-block {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.code-block-line-numbers {
+  user-select: none;
+  text-align: right;
+  color: #999;
+  padding-right: 16px;
+  margin-right: 16px;
+  border-right: 1px solid #ddd;
+  min-width: 24px;
+}
+
+.code-block code {
+  flex: 1;
+  white-space: pre;
+}
+
+/* Inline code */
+.inline-code,
+.ProseMirror code:not(pre code) {
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* Math extension styles */
+.Tiptap-mathematics-editor {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.Tiptap-mathematics-render {
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.Tiptap-mathematics-editor--active {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Valid entity links */
+.ProseMirror a.entity-link-valid {
+  @apply text-grey-04 underline transition-colors duration-100;
+}
+
+/* External/Invalid link highlighting */
+.ProseMirror .entity-link-invalid,
+.ProseMirror [data-web2-url] {
+  @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted rounded px-0.5;
+}
+
+/* External/Invalid link and edit mode web2 URL hover */
+.ProseMirror .entity-link-invalid:hover,
+.ProseMirror .web2-url-edit-mode:hover {
+  @apply bg-red-03;
+}
+
+/* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
+.ProseMirror .web2-url-edit-mode {
+  @apply underline decoration-dotted decoration-red-01;
 }
