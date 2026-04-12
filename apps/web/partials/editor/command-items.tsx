@@ -66,7 +66,7 @@ export const commandItems: CommandSuggestionItem[] = [
   textCommandItem,
   {
     icon: <EditorList />,
-    title: 'List',
+    title: 'Bullet Points',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
