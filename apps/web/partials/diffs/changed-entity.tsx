@@ -23,8 +23,13 @@ import type {
   ValueChange,
 } from '~/core/utils/diff/types';
 import { formatSchedule } from '~/core/utils/schedule';
-import { useEntityMediaUrl, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
-import { getVideoPath } from '~/core/utils/utils';
+import {
+  useEntityMediaUrl,
+  useImageUrlFromEntity,
+  usePdfUrlFromEntity,
+  useVideoUrlFromEntity,
+} from '~/core/utils/use-entity-media';
+import { getImagePath, getVideoPath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -56,8 +61,15 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
   );
   const hasImageRelations = nonSpecialRelations.some(r => r.after?.imageUrl || r.before?.imageUrl);
   const hasVideoRelations = nonSpecialRelations.some(r => r.after?.videoUrl || r.before?.videoUrl);
+  const hasPdfRelations = nonSpecialRelations.some(r => r.after?.pdfUrl || r.before?.pdfUrl);
   const hasOtherRelations = nonSpecialRelations.some(
-    r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl
+    r =>
+      !r.after?.imageUrl &&
+      !r.before?.imageUrl &&
+      !r.after?.videoUrl &&
+      !r.before?.videoUrl &&
+      !r.after?.pdfUrl &&
+      !r.before?.pdfUrl
   );
 
   const imageRelationPropertyIds = new Set(
@@ -66,9 +78,20 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
   const videoRelationPropertyIds = new Set(
     nonSpecialRelations.filter(r => r.after?.videoUrl || r.before?.videoUrl).map(r => r.typeId)
   );
+  const pdfRelationPropertyIds = new Set(
+    nonSpecialRelations.filter(r => r.after?.pdfUrl || r.before?.pdfUrl).map(r => r.typeId)
+  );
   const otherRelationPropertyIds = new Set(
     nonSpecialRelations
-      .filter(r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl)
+      .filter(
+        r =>
+          !r.after?.imageUrl &&
+          !r.before?.imageUrl &&
+          !r.after?.videoUrl &&
+          !r.before?.videoUrl &&
+          !r.after?.pdfUrl &&
+          !r.before?.pdfUrl
+      )
       .map(r => r.typeId)
   );
   const hasValues = entity.values.some(
@@ -79,6 +102,7 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
       (v.type as string) !== 'RELATION' &&
       !imageRelationPropertyIds.has(v.propertyId) &&
       !videoRelationPropertyIds.has(v.propertyId) &&
+      !pdfRelationPropertyIds.has(v.propertyId) &&
       !otherRelationPropertyIds.has(v.propertyId) &&
       (v.before !== null || v.after !== null)
   );
@@ -90,6 +114,7 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
     hasTypes ||
     hasImageRelations ||
     hasVideoRelations ||
+    hasPdfRelations ||
     hasOtherRelations ||
     hasValues
   );
@@ -110,8 +135,15 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
   );
   const imageRelations = nonSpecialRelations.filter(r => r.after?.imageUrl || r.before?.imageUrl);
   const videoRelations = nonSpecialRelations.filter(r => r.after?.videoUrl || r.before?.videoUrl);
+  const pdfRelations = nonSpecialRelations.filter(r => r.after?.pdfUrl || r.before?.pdfUrl);
   const otherRelations = nonSpecialRelations.filter(
-    r => !r.after?.imageUrl && !r.before?.imageUrl && !r.after?.videoUrl && !r.before?.videoUrl
+    r =>
+      !r.after?.imageUrl &&
+      !r.before?.imageUrl &&
+      !r.after?.videoUrl &&
+      !r.before?.videoUrl &&
+      !r.after?.pdfUrl &&
+      !r.before?.pdfUrl
   );
 
   const nameChange = entity.values.find(v => v.propertyId === NAME_PROPERTY_ID);
@@ -126,11 +158,13 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
 
   const imageRelationPropertyIds = new Set(imageRelations.map(r => r.typeId));
   const videoRelationPropertyIds = new Set(videoRelations.map(r => r.typeId));
+  const pdfRelationPropertyIds = new Set(pdfRelations.map(r => r.typeId));
   const otherRelationPropertyIds = new Set(otherRelations.map(r => r.typeId));
   const filteredOtherValues = otherValues.filter(
     v =>
       !imageRelationPropertyIds.has(v.propertyId) &&
       !videoRelationPropertyIds.has(v.propertyId) &&
+      !pdfRelationPropertyIds.has(v.propertyId) &&
       !otherRelationPropertyIds.has(v.propertyId)
   );
 
@@ -195,12 +229,14 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
         {(filteredOtherValues.length > 0 ||
           otherRelations.length > 0 ||
           imageRelations.length > 0 ||
-          videoRelations.length > 0) && (
+          videoRelations.length > 0 ||
+          pdfRelations.length > 0) && (
           <div className="grid grid-cols-2 gap-20">
             {filteredOtherValues.some(v => v.before !== null) ||
             otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
             imageRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
-            videoRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
+            videoRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
+            pdfRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
                 {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
                   <ImagePropertyCell
@@ -214,6 +250,16 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
                 ))}
                 {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
                   <VideoPropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="before"
+                  />
+                ))}
+                {groupRelationsByType(pdfRelations).map(([typeId, typeName, relations]) => (
+                  <PdfPropertyCell
                     key={typeId}
                     typeName={typeName}
                     typeId={typeId}
@@ -241,7 +287,8 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
             {filteredOtherValues.some(v => v.after !== null) ||
             otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
             imageRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
-            videoRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
+            videoRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
+            pdfRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
               <div className="rounded-lg border border-grey-02 p-5 shadow-button">
                 {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
                   <ImagePropertyCell
@@ -255,6 +302,16 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
                 ))}
                 {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
                   <VideoPropertyCell
+                    key={typeId}
+                    typeName={typeName}
+                    typeId={typeId}
+                    relations={relations}
+                    spaceId={spaceId}
+                    side="after"
+                  />
+                ))}
+                {groupRelationsByType(pdfRelations).map(([typeId, typeName, relations]) => (
+                  <PdfPropertyCell
                     key={typeId}
                     typeName={typeName}
                     typeId={typeId}
@@ -431,6 +488,41 @@ const VideoPropertyCell = ({ typeName, typeId, relations, spaceId, side }: Video
   );
 };
 
+type PdfPropertyCellProps = {
+  typeName?: string | null;
+  typeId: string;
+  relations: RelationChange[];
+  spaceId: string;
+  side: 'before' | 'after';
+};
+
+const PdfPropertyCell = ({ typeName, typeId, relations, spaceId, side }: PdfPropertyCellProps) => {
+  const url =
+    side === 'before'
+      ? (relations.find(r => r.before?.pdfUrl)?.before?.pdfUrl ?? null)
+      : (relations.find(r => r.after?.pdfUrl)?.after?.pdfUrl ?? null);
+
+  const afterEntityId = relations.find(r => r.after)?.after?.toEntityId;
+  const localPdfUrl = usePdfUrlFromEntity(afterEntityId, spaceId);
+  const resolvedUrl = side === 'after' ? (url ?? localPdfUrl ?? null) : url;
+
+  if (resolvedUrl === null) return null;
+
+  const ringClass = side === 'before' ? 'ring-2 ring-deleted' : 'ring-2 ring-added';
+  const pdfSrc = getImagePath(resolvedUrl);
+
+  return (
+    <div className="mb-6 last:mb-0">
+      <Text as="p" variant="bodySemibold">
+        {typeName ?? typeId}
+      </Text>
+      <div className={cx('mt-1 h-[200px] w-[173px] overflow-hidden rounded-lg', ringClass)}>
+        <embed src={pdfSrc} type="application/pdf" width="173" height="200" />
+      </div>
+    </div>
+  );
+};
+
 type TypesChangeRowProps = {
   relations: RelationChange[];
 };
@@ -495,6 +587,13 @@ const BlockChangeRow = ({ block, spaceId }: BlockChangeRowProps) => {
         <div className="grid grid-cols-2 gap-20">
           <VideoBlockCell block={block} side="before" />
           <VideoBlockCell block={block} side="after" />
+        </div>
+      );
+    case 'pdfBlock':
+      return (
+        <div className="grid grid-cols-2 gap-20">
+          <PdfBlockCell block={block} side="before" />
+          <PdfBlockCell block={block} side="after" />
         </div>
       );
     case 'dataBlock':
@@ -857,6 +956,28 @@ const VideoBlockCell = ({ block, side }: VideoBlockCellProps) => {
   return (
     <div className={cx('aspect-video w-full overflow-hidden rounded bg-grey-01', ringClass)}>
       <video src={videoSrc} controls className="h-full w-full object-cover" />
+    </div>
+  );
+};
+
+type PdfBlockCellProps = {
+  block: BlockChange & { type: 'pdfBlock' };
+  side: 'before' | 'after';
+};
+
+const PdfBlockCell = ({ block, side }: PdfBlockCellProps) => {
+  const value = side === 'before' ? block.before : block.after;
+
+  if (value === null) {
+    return <div />;
+  }
+
+  const ringClass = side === 'before' ? 'ring-4 ring-deleted' : 'ring-4 ring-added';
+  const pdfSrc = getImagePath(value);
+
+  return (
+    <div className={cx('flex h-[200px] w-[173px] overflow-hidden rounded bg-grey-01', ringClass)}>
+      <embed src={pdfSrc} type="application/pdf" width="173" height="200" />
     </div>
   );
 };

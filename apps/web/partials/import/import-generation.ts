@@ -112,8 +112,9 @@ export function buildUnresolvedLinksByCell(params: {
 
       if (property.dataType !== 'RELATION') continue;
 
-      // IMAGE columns contain URLs, not entity names — skip relation resolution
+      // IMAGE and PDF columns contain URLs, not entity names — skip relation resolution
       if (property.renderableTypeStrict === 'IMAGE') continue;
+      if (property.renderableTypeStrict === 'PDF') continue;
 
       const unresolvedValues: string[] = [];
 
@@ -210,8 +211,9 @@ export function collectRelationCells(params: {
     if (propertyId === SystemIds.TYPES_PROPERTY) continue;
     const property = getPropertyFromSources(propertyId, propertyLookup);
     if (!property || property.dataType !== 'RELATION') continue;
-    // IMAGE columns contain URLs, not entity names — skip relation resolution
+    // IMAGE and PDF columns contain URLs, not entity names — skip relation resolution
     if (property.renderableTypeStrict === 'IMAGE') continue;
+    if (property.renderableTypeStrict === 'PDF') continue;
 
     const colIdx = parseInt(colIdxStr, 10);
     const uniqueCellValues = new Set<string>();
@@ -441,8 +443,9 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
       if (!property) continue;
 
       if (property.dataType === 'RELATION') {
-        // IMAGE columns contain URLs that are uploaded to IPFS during generation and merged into the plan separately — skip here
+        // IMAGE and PDF columns contain URLs that are uploaded to IPFS during generation and merged into the plan separately — skip here
         if (property.renderableTypeStrict === 'IMAGE') continue;
+        if (property.renderableTypeStrict === 'PDF') continue;
 
         const renderableType: RenderableEntityType = property.renderableTypeStrict === 'VIDEO' ? 'VIDEO' : 'RELATION';
 

@@ -12,6 +12,7 @@ import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorTable } from '~/design-system/icons/editor-table';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 
 export interface CommandSuggestionItem {
   title: string;
@@ -142,6 +143,23 @@ export const commandItems: CommandSuggestionItem[] = [
         .deleteRange({ from: range.from, to: range.to })
         .insertContent({
           type: 'video',
+        })
+        .createParagraphNear()
+        .blur()
+        .focus()
+        .run();
+    },
+  },
+  {
+    icon: <PdfFile />,
+    title: 'PDF',
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: range.from, to: range.to })
+        .insertContent({
+          type: 'pdf',
         })
         .createParagraphNear()
         .blur()

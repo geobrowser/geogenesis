@@ -37,6 +37,7 @@ export const ApiBlockDiffSchema = Schema.Struct({
     Schema.Literal('textBlock'),
     Schema.Literal('imageBlock'),
     Schema.Literal('videoBlock'),
+    Schema.Literal('pdfBlock'),
     Schema.Literal('dataBlock')
   ),
   before: Schema.NullOr(Schema.String),

@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 
@@ -16,7 +17,7 @@ import {
 } from '~/core/sync/use-store';
 import { DataType, RenderableType } from '~/core/types';
 import { isUrlTemplate } from '~/core/utils/url-template';
-import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useImageUrlFromEntity, usePdfUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -234,6 +235,17 @@ export function RelationsGroup({
               );
             }
 
+            if (property.renderableTypeStrict === 'PDF') {
+              return (
+                <PdfRelation
+                  key={`pdf-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
+            }
+
             return (
               <div key={`relation-${relationId}-${linkedEntityId}`} className={isMetadataHeader ? '' : 'mt-1'}>
                 <LinkableRelationChip
@@ -297,6 +309,23 @@ function VideoRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; re
 
   return <VideoThumbnailWithPlay videoSrc={actualVideoSrc} />;
 }
+
+function PdfRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Hydrate the PDF entity from remote to populate the reactive store
+  useHydrateEntity({ id: linkedEntityId });
+
+  const pdfSrc = usePdfUrlFromEntity(linkedEntityId, spaceId);
+
+  if (!pdfSrc) {
+    return null;
+  }
+
+  return <DynamicPdfZoom pdfSrc={pdfSrc} isEditing={false} />;
+}
+
+const DynamicPdfZoom = dynamic(() => import('~/design-system/editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 function RenderedValue({
   entityId,

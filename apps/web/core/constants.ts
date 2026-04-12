@@ -38,6 +38,11 @@ export const VALID_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'imag
 export const IMAGE_ACCEPT = VALID_IMAGE_TYPES.join(',');
 export const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
+// PDF file types and upload constraints
+export const VALID_PDF_TYPES = ['application/pdf'];
+export const PDF_ACCEPT = VALID_PDF_TYPES.join(',');
+export const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+
 export const DATA_TYPE_PROPERTY = '6d29d57849bb4959baf72cc696b1671a';
 
 /** DataType → entity ID for Data Type relations. */
@@ -66,6 +71,9 @@ export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
 export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
+
+export const PDF_TYPE = '14a39e59d9874596956ac2dd4165c210';
+export const PDF_URL = '9d69ac47702343e2b72a91a335eb54d9';
 
 export const PLACE = '783bc688e65f4e54b67fa5643d78345e';
 export const ADDRESS = '5c6e72fb834047c082818be159ecd495';

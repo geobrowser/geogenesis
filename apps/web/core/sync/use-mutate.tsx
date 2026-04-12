@@ -7,6 +7,8 @@ import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   GEO_LOCATION,
+  PDF_TYPE,
+  PDF_URL,
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
@@ -24,6 +26,7 @@ const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [SystemIds.IMAGE]: 'Image',
   [VIDEO_RENDERABLE_TYPE]: 'Video',
   [GEO_LOCATION]: 'Geo Location',
+  [PDF_TYPE]: 'PDF',
   [PLACE]: 'Place',
   [ADDRESS]: 'Address',
 };
@@ -99,6 +102,16 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ videoId: string; relationId: string }>;
+  };
+  pdfs: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ pdfId: string; relationId: string }>;
   };
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
@@ -565,6 +578,109 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { videoId: videoIdStr, relationId };
+      },
+    },
+    pdfs: {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
+        // Upload the PDF file using the same mechanism as images/videos
+        const { id: pdfId, ops: createPdfOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        let ipfsUrl: string | undefined;
+        for (const op of createPdfOps) {
+          if (op.type === 'createEntity') {
+            const ipfsValue = op.values.find(pv => {
+              const valStr = extractValueString(pv.value);
+              return valStr.startsWith('ipfs://');
+            });
+            if (ipfsValue) {
+              ipfsUrl = extractValueString(ipfsValue.value);
+              break;
+            }
+          }
+        }
+
+        // Create a PDF entity with the IPFS URL
+        const pdfIdStr = toHexId(pdfId);
+        if (ipfsUrl) {
+          store.setValue({
+            id: ID.createValueId({
+              entityId: pdfIdStr,
+              propertyId: PDF_URL,
+              spaceId,
+            }),
+            entity: {
+              id: pdfIdStr,
+              name: null,
+            },
+            property: {
+              id: PDF_URL,
+              name: 'PDF URL',
+              dataType: 'TEXT',
+              renderableType: 'URL',
+            },
+            spaceId,
+            value: ipfsUrl,
+          });
+        }
+
+        // Add Types relation to mark the entity as a PDF type
+        store.setRelation({
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: pdfIdStr,
+            name: null,
+          },
+          type: {
+            id: SystemIds.TYPES_PROPERTY,
+            name: 'Types',
+          },
+          toEntity: {
+            id: PDF_TYPE,
+            name: 'PDF',
+            value: PDF_TYPE,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
+
+        // Create relation from parent entity to PDF entity
+        const relationId = ID.createEntityId();
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: pdfIdStr,
+            name: null,
+            value: pdfIdStr,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'PDF',
+        });
+
+        return { pdfId: pdfIdStr, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {

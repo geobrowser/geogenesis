@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
+import { PDF_TYPE, PDF_URL } from '~/core/constants';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import type { ServerBlock } from '~/partials/editor/server-content';
@@ -100,6 +101,8 @@ function makeNewBlockRelation({
         return 'IMAGE';
       case 'video':
         return 'VIDEO';
+      case 'pdf':
+        return 'PDF';
       default:
         return 'TEXT';
     }
@@ -349,6 +352,30 @@ export function useEditorStore() {
           ];
         }
 
+        if (toEntity?.type === 'PDF') {
+          // Read PDF URL from Values using PDF_URL property
+          const pdfUrlValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === PDF_URL,
+          });
+          const pdfUrlValue = pdfUrlValues?.[0]?.value || toEntity.value || '';
+          const pdfSrc = pdfUrlValue ? getImagePath(pdfUrlValue) : '';
+
+          sBlocks.push({ type: 'pdf', src: pdfSrc });
+
+          return [
+            {
+              type: 'pdf',
+              attrs: {
+                id: block.block.id,
+                src: pdfSrc,
+                relationId: block.relationId,
+                spaceId,
+              },
+            },
+          ];
+        }
+
         if (toEntity?.type === 'DATA') {
           sBlocks.push({ type: 'data' });
 
@@ -472,6 +499,8 @@ export function useEditorStore() {
               return SystemIds.IMAGE_TYPE;
             case 'video':
               return SystemIds.VIDEO_TYPE;
+            case 'pdf':
+              return PDF_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }
@@ -495,6 +524,12 @@ export function useEditorStore() {
           case SystemIds.VIDEO_TYPE: {
             // Create a Types relation to mark this entity as a Video type
             const relation = getRelationForBlockType(node.id, SystemIds.VIDEO_TYPE, spaceId);
+            storage.relations.set(relation);
+            break;
+          }
+          case PDF_TYPE: {
+            // Create a Types relation to mark this entity as a PDF type
+            const relation = getRelationForBlockType(node.id, PDF_TYPE, spaceId);
             storage.relations.set(relation);
             break;
           }
@@ -549,6 +584,9 @@ export function useEditorStore() {
           case 'video':
             // Video block persistence is handled directly in video-node.tsx component
             // using storage.entities.name.set() for title
+            break;
+          case 'pdf':
+            // PDF block persistence is handled directly in pdf-node.tsx component
             break;
           default:
             break;
