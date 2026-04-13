@@ -223,6 +223,23 @@ export const Web2URLExtension = Extension.create({
               popupElement.style.top = '0';
               popupElement.style.left = '0';
               popupElement.style.zIndex = String(TOOLTIP_Z_INDEX);
+
+              popupElement.addEventListener('mouseleave', () => {
+                if (hideTimeout) {
+                  clearTimeout(hideTimeout);
+                }
+
+                hideTimeout = setTimeout(() => {
+                  const isStillHovering = currentHoveredSpan?.matches(':hover');
+                  const isTooltipHovered = popupElement?.matches(':hover');
+
+                  if (!isStillHovering && !isTooltipHovered) {
+                    hideHoverCard();
+                  }
+                  hideTimeout = null;
+                }, HOVER_HIDE_DELAY_MS);
+              });
+
               document.body.appendChild(popupElement);
 
               // Create ReactRenderer component

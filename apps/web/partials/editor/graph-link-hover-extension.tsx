@@ -109,6 +109,19 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                   popupElement.style.top = '0';
                   popupElement.style.left = '0';
                   popupElement.style.zIndex = '9999';
+
+                  popupElement.addEventListener('mouseleave', () => {
+                    setTimeout(() => {
+                      if (!currentLinkElement) return;
+                      const isHoveringLink = currentLinkElement?.matches(':hover');
+                      const isHoveringPopup = popupElement?.matches(':hover');
+
+                      if (!isHoveringLink && !isHoveringPopup) {
+                        hide();
+                      }
+                    }, 250);
+                  });
+
                   document.body.appendChild(popupElement);
 
                   component = new ReactRenderer(GraphLinkTooltip, {
