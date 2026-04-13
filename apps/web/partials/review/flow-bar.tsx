@@ -293,12 +293,16 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
       return true;
     }
 
-    // Active relation — skip if semantically identical to a remote relation
+    // Active relation — skip if semantically identical to a remote relation.
+    // Position is part of identity here: a pure reorder keeps the same
+    // (from, type, to, space) but must still count as a change.
     if (remoteEntity) {
       const key = `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`;
       const matchesRemote = remoteEntity.relations.some(
         remote =>
-          !remote.isLocal && `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
+          !remote.isLocal &&
+          `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key &&
+          (remote.position ?? null) === (r.position ?? null)
       );
       if (matchesRemote) return false;
     }
