@@ -40,7 +40,7 @@ const renderDragOverlay = (props: RenderItemProps) => (
 
 const galleryConfig: DndItemsConfig = {
   sortingStrategy: rectSortingStrategy,
-  itemsClassName: 'grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2',
+  itemsClassName: 'grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2',
   sortableItemClassName: 'relative inline-block',
   sortableItemInnerClassName: '',
   positionBoxClassName: '-right-[58px] top-4 z-50 flex-col-reverse items-center',

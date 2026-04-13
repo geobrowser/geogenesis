@@ -180,9 +180,9 @@ const SubtopicGallerySkeleton = () => {
   return (
     <>
       <div className="h-10" />
-      <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2" aria-hidden>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
+          <div key={i} className="flex flex-col gap-3 rounded-[17px] p-1">
             <Skeleton className="aspect-2/1 w-full rounded-lg" />
             <div className="px-1">
               <Skeleton className="h-5 w-2/3 rounded" />

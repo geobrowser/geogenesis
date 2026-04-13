@@ -27,7 +27,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
     <>
       <h4 className="text-mediumTitle font-medium">Subspaces</h4>
       <Spacer height={8} />
-      <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
+      <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2">
         {subtopics.map(subtopic => {
           const topSpaceId = Spaces.getTopRankedSpaceId(subtopic.spaces.map(s => s.id));
           const href = topSpaceId ? NavUtils.toSpace(topSpaceId) : NavUtils.toEntity(spaceId, subtopic.id);
@@ -35,7 +35,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
           return (
             <div
               key={subtopic.id}
-              className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider"
+              className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2 transition duration-200 hover:bg-grey-01"
             >
               <Link href={href}>
                 <div className="relative aspect-2/1 w-full overflow-clip rounded-lg bg-grey-01">
