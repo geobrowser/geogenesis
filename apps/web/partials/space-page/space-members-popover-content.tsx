@@ -42,16 +42,14 @@ export async function SpaceMembersContent({ spaceId, isPublicSpace }: Props) {
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
                 {connectedAddress ? 'Leave space' : 'Sign in to join'}
               </button>
+            ) : connectedAddress ? (
+              <SpaceMembersPopoverMemberRequestButton
+                spaceId={spaceId}
+                hasRequestedSpaceMembership={hasRequestedSpaceMembership}
+              />
             ) : (
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                {connectedAddress ? (
-                  <SpaceMembersPopoverMemberRequestButton
-                    spaceId={spaceId}
-                    hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-                  />
-                ) : (
-                  'Sign in to join'
-                )}
+                Sign in to join
               </button>
             )}
           </>

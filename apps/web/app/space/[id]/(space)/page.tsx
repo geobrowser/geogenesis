@@ -23,6 +23,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { OverviewTabOnly } from '~/partials/space-page/overview-tab-only';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -77,9 +78,11 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <>
-      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryContainer spaceId={params.id} />
-      </React.Suspense>
+      <OverviewTabOnly>
+        <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+          <SubtopicGalleryContainer spaceId={params.id} />
+        </React.Suspense>
+      </OverviewTabOnly>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       </React.Suspense>
@@ -112,9 +115,11 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         initialTabs={topic.tabs}
         initialCollectionItems={topic.initialCollectionItems}
       >
-        <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-          <SubtopicGalleryContainer spaceId={spaceId} />
-        </React.Suspense>
+        <OverviewTabOnly>
+          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+            <SubtopicGalleryContainer spaceId={spaceId} />
+          </React.Suspense>
+        </OverviewTabOnly>
         <React.Suspense fallback={null}>
           <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
         </React.Suspense>

@@ -147,6 +147,37 @@ export class E {
     return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
   }
 
+  /**
+   * Same as findOne, but also returns the raw remote entity alongside the
+   * merged result. Sync consumers need the raw remote to maintain a clean
+   * baseline in `syncedEntities` — the merged result strips remote values
+   * whose ids collide with local overrides, which would otherwise leak local
+   * edits into the baseline and break net-change diffing.
+   */
+  static async syncOne({
+    id,
+    store,
+    spaceId,
+    cache,
+  }: {
+    id: string;
+    spaceId?: string;
+    store: GeoStore;
+    cache: QueryClient;
+  }): Promise<{ merged: Entity | null; remote: Entity | null }> {
+    if (id === '') return { merged: null, remote: null };
+
+    const cachedEntity = await cache.fetchQuery({
+      queryKey: ['network', 'entity', id, spaceId],
+      queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
+    });
+
+    return {
+      merged: this.merge({ id, store, spaceId, mergeWith: cachedEntity }),
+      remote: cachedEntity ?? null,
+    };
+  }
+
   static async findOneRelation({
     id,
     spaceId,
@@ -276,6 +307,122 @@ export class E {
     });
 
     return entities.filter(e => e !== null);
+  }
+
+  /**
+   * Same as findMany, but also returns the raw remote entities alongside the
+   * merged result. Sync consumers need the raw remote to maintain a clean
+   * baseline in `syncedEntities` — the merged result strips remote values
+   * whose ids collide with local overrides, which would otherwise leak local
+   * edits into the baseline and break net-change diffing.
+   */
+  static async syncMany({
+    store,
+    cache,
+    where,
+    first,
+    skip,
+    spaceId,
+    sort,
+  }: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+    spaceId?: string;
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  }): Promise<{ merged: Entity[]; remote: Entity[] }> {
+    if (where?.id?.in) {
+      const entityIds = where.id.in.filter(id => id !== '');
+
+      if (sort) {
+        const filter = convertWhereConditionToEntityFilter(where);
+        const remoteEntities = await Effect.runPromise(
+          getEntitiesOrderedByProperty({
+            propertyId: sort.propertyId,
+            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+            dataType: sort.dataType,
+            spaceId,
+            limit: first,
+            offset: skip,
+            filter,
+          })
+        );
+
+        const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+        const merged = remoteEntities
+          .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
+          .filter((e): e is Entity => e !== null);
+        return { merged, remote: remoteEntities };
+      }
+
+      const remoteEntities = await cache.fetchQuery({
+        queryKey: ['network', 'entities', entityIds, spaceId],
+        queryFn: async ({ signal }) => {
+          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
+          return entities;
+        },
+      });
+
+      const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+      const entities = entityIds.map(entityId => {
+        return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
+      });
+
+      const nonNullEntities = entities.filter((e): e is Entity => e !== null);
+
+      const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
+      if (hasAdditionalFilters) {
+        const localQuery = new EntityQuery(nonNullEntities).where(where);
+        return { merged: localQuery.execute(), remote: remoteEntities };
+      }
+
+      return { merged: nonNullEntities, remote: remoteEntities };
+    }
+
+    const limit = first;
+    const offset = skip;
+    const filter = convertWhereConditionToEntityFilter(where);
+    const typeIds = extractTypeIdsFromWhere(where);
+
+    const remoteEntities = sort
+      ? await Effect.runPromise(
+          getEntitiesOrderedByProperty({
+            propertyId: sort.propertyId,
+            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+            dataType: sort.dataType,
+            spaceId,
+            limit,
+            offset,
+            filter,
+          })
+        )
+      : await Effect.runPromise(
+          getAllEntities({
+            limit,
+            offset,
+            filter,
+            typeIds,
+          })
+        );
+
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+
+    const remoteIds = remoteEntities.map(e => e.id);
+    const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
+    const remoteIdSet = new Set(dedupedRemoteIds);
+    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
+    const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
+
+    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+    const merged = mergedIds
+      .map(entityId => this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) }))
+      .filter((e): e is Entity => e !== null);
+
+    return { merged, remote: remoteEntities };
   }
 
   static async findFuzzy({
