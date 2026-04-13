@@ -13,8 +13,8 @@ import {
   restFetch,
   validateActionTypes,
 } from '~/core/io/rest';
+import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 
@@ -24,70 +24,92 @@ const PAGE_SIZE = 100;
 
 const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
 
-type EditorSpacesResult = {
-  spacesConnection: {
-    nodes: { id: string }[];
-  };
-};
+export type GovernanceHomeReviewCategory = 'all' | 'knowledge' | 'membership' | 'settings';
+export type GovernanceHomeStatusFilter = 'pending' | 'accepted' | 'rejected';
 
-async function fetchEditorSpaceIds(memberSpaceId: string): Promise<string[]> {
-  const query = `query {
-    spacesConnection(
-      filter: {
-        editors: {
-          some: {
-            memberSpaceId: { is: "${memberSpaceId}" }
-          }
-        }
-      }
-    ) {
-      nodes {
-        id
-      }
-    }
-  }`;
+const SETTINGS_ACTION_TYPES = [
+  'UpdateVotingSettings',
+  'SetTopic',
+  'UnsetTopic',
+  'TopicDeclared',
+  'TopicRemoved',
+  'SubspaceVerified',
+  'SubspaceUnverified',
+  'SubspaceRelated',
+  'SubspaceUnrelated',
+  'SubspaceTopicDeclared',
+  'SubspaceTopicRemoved',
+] as const;
 
-  const fetchEffect = graphql<EditorSpacesResult>({
-    endpoint: Environment.getConfig().api,
-    query,
-  });
-
-  const result = await Effect.runPromise(Effect.either(fetchEffect));
-
-  if (Either.isLeft(result)) {
-    console.error('Failed to fetch editor spaces:', result.left);
-    return [];
+export function actionTypesForGovernanceCategory(
+  category: GovernanceHomeReviewCategory
+): string[] | undefined {
+  switch (category) {
+    case 'knowledge':
+      return validateActionTypes(['Publish']);
+    case 'membership':
+      return validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
+    case 'settings':
+      return validateActionTypes([...SETTINGS_ACTION_TYPES]);
+    default:
+      return undefined;
   }
+}
 
-  return result.right.spacesConnection.nodes.map(n => n.id).filter(id => id !== memberSpaceId);
+export function matchesGovernanceCategory(
+  actionType: string | undefined,
+  category: GovernanceHomeReviewCategory
+): boolean {
+  if (category === 'all') return true;
+  const allowed = actionTypesForGovernanceCategory(category);
+  if (!allowed?.length) return false;
+  const norm = (s: string) => s.replace(/_/g, '').toUpperCase();
+  const u = norm(actionType ?? 'UNKNOWN');
+  return allowed.some(a => norm(a) === u);
+}
+
+function statusQueryParam(status: GovernanceHomeStatusFilter): string {
+  if (status === 'pending') return 'PROPOSED,EXECUTABLE';
+  if (status === 'accepted') return 'ACCEPTED';
+  return 'REJECTED';
 }
 
 async function fetchProposalsForSpace({
   spaceId,
   memberSpaceId,
   proposalType,
+  category = 'all',
+  status = 'pending',
 }: {
   spaceId: string;
   memberSpaceId: string;
   proposalType?: 'membership' | 'content';
+  category?: GovernanceHomeReviewCategory;
+  status?: GovernanceHomeStatusFilter;
 }): Promise<readonly ApiProposalListItem[]> {
   const config = Environment.getConfig();
 
   const params = new URLSearchParams();
   params.set('limit', String(PAGE_SIZE));
-  params.set('status', 'PROPOSED,EXECUTABLE');
+  params.set('status', statusQueryParam(status));
   params.set('orderBy', 'end_time');
   params.set('orderDirection', 'desc');
 
-  if (proposalType === 'content') {
-    const types = validateActionTypes(['Publish']);
-    params.set('actionTypes', types.join(','));
-  } else if (proposalType === 'membership') {
-    const types = validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
+  const resolvedCategory: GovernanceHomeReviewCategory =
+    category !== 'all'
+      ? category
+      : proposalType === 'content'
+        ? 'knowledge'
+        : proposalType === 'membership'
+          ? 'membership'
+          : 'all';
+
+  const types = actionTypesForGovernanceCategory(resolvedCategory);
+  if (types?.length) {
     params.set('actionTypes', types.join(','));
   }
 
-  if (isValidUUID(memberSpaceId)) {
+  if (isValidUUID(memberSpaceId) && status === 'pending') {
     params.set('voterId', memberSpaceId);
   }
 
@@ -120,7 +142,12 @@ async function fetchProposalsForSpace({
 export async function getActiveProposalsForSpacesWhereEditor(
   memberSpaceId?: string,
   proposalType?: 'membership' | 'content',
-  page: number = 0
+  page: number = 0,
+  filters?: {
+    spaceId?: string;
+    category?: GovernanceHomeReviewCategory;
+    status?: GovernanceHomeStatusFilter;
+  }
 ) {
   if (!memberSpaceId) {
     return {
@@ -144,7 +171,12 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   const editorSpaceIds = await fetchEditorSpaceIds(memberSpaceId);
 
-  if (editorSpaceIds.length === 0) {
+  let spaceIds = editorSpaceIds;
+  if (filters?.spaceId && filters.spaceId !== 'all') {
+    spaceIds = editorSpaceIds.includes(filters.spaceId) ? [filters.spaceId] : [];
+  }
+
+  if (spaceIds.length === 0) {
     return {
       totalCount: 0,
       proposals: [],
@@ -152,11 +184,19 @@ export async function getActiveProposalsForSpacesWhereEditor(
     };
   }
 
+  const category: GovernanceHomeReviewCategory =
+    filters?.category ??
+    (proposalType === 'content' ? 'knowledge' : proposalType === 'membership' ? 'membership' : 'all');
+  const status: GovernanceHomeStatusFilter = filters?.status ?? 'pending';
+
   const allResults = await Promise.all(
-    editorSpaceIds.map(spaceId => fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType }))
+    spaceIds.map(spaceId =>
+      fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType, category, status })
+    )
   );
 
-  const filteredProposals = deduplicateMembershipProposals(allResults.flat());
+  const merged = allResults.flat();
+  const filteredProposals = status === 'pending' ? deduplicateMembershipProposals(merged) : merged;
 
   filteredProposals.sort((a, b) => {
     const aVoted = a.userVote !== null;

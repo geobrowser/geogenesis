@@ -19,6 +19,8 @@ import { AcceptOrRejectMember } from './accept-or-reject-member';
 import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
@@ -28,6 +30,11 @@ interface Props {
   connectedAddress?: string;
   proposalType?: 'membership' | 'content';
   page?: number;
+  governanceFilters?: {
+    spaceId: string;
+    category: GovernanceHomeReviewCategory;
+    status: GovernanceHomeStatusFilter;
+  };
 }
 
 export async function PendingProposalsPage({
@@ -35,9 +42,10 @@ export async function PendingProposalsPage({
   connectedAddress,
   proposalType,
   page = 0,
+  governanceFilters,
 }: Props): Promise<{ node: React.ReactNode; hasMore: boolean }> {
   const [activeProposals, profile] = await Promise.all([
-    getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType, page),
+    getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType, page, governanceFilters),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 

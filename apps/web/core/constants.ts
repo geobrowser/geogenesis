@@ -64,6 +64,9 @@ export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4
 
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 
+/** Public product documentation (browse menu). */
+export const GEO_DOCUMENTATION_URL = 'https://docs.geobrowser.io';
+
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
 export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
 
