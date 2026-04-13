@@ -118,13 +118,19 @@ function isRelation(relation: Relation | Value): relation is Relation {
 }
 
 export function useEditableProperties(entityId: string, spaceId: string) {
+  const schema = useEntitySchema(entityId, spaceId);
   const renderedProperties = useRenderedProperties(entityId, spaceId);
-  const placeholderProperties = usePlaceholderProperties(entityId, spaceId);
 
-  const allProperties = [...Object.values(placeholderProperties), ...Object.values(renderedProperties)];
+  const schemaIds = React.useMemo(() => new Set(schema.map(p => p.id)), [schema]);
 
   const properties: Record<string, Property> = {};
-  for (const p of allProperties) {
+  for (const p of schema) {
+    properties[p.id] = renderedProperties[p.id] ?? p;
+  }
+
+  const extras = Object.values(renderedProperties).filter(p => !schemaIds.has(p.id));
+  const sortedExtras = sortProperties(extras);
+  for (const p of sortedExtras) {
     properties[p.id] = p;
   }
 

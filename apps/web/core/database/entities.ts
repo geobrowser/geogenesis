@@ -36,6 +36,17 @@ function orderPropertiesByIdList(ids: string[], fetched: Property[]): Property[]
   return ordered;
 }
 
+function dedupeTypesPreserveOrder(types: { id: string; spaceId?: string }[]): { id: string; spaceId?: string }[] {
+  const seen = new Set<string>();
+  const out: { id: string; spaceId?: string }[] = [];
+  for (const t of types) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
+
 type UseEntityOptions = {
   spaceId?: string;
   id: string;
@@ -75,7 +86,10 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     [relations]
   );
 
-  const stableTypeKey = useMemo(() => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).sort(), [typesWithSpace]);
+  const stableTypeKey = useMemo(
+    () => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).join('|'),
+    [typesWithSpace]
+  );
   const stableRelationKey = useMemo(
     () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
     [relations]
@@ -208,9 +222,9 @@ export async function getSchemaFromTypeIds(
 ): Promise<Property[]> {
   if (types.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
 
-  const typesSorted = [...types].sort((a, b) => a.id.localeCompare(b.id));
-  const spaceByType = new Map(typesSorted.map(t => [t.id, t.spaceId]));
-  const dedupedTypeIds = [...new Set(typesSorted.map(t => t.id))];
+  const typesInEntityOrder = dedupeTypesPreserveOrder(types);
+  const spaceByType = new Map(typesInEntityOrder.map(t => [t.id, t.spaceId]));
+  const dedupedTypeIds = typesInEntityOrder.map(t => t.id);
 
   const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
   const typeEntitiesOrdered = orderEntitiesByIdList(dedupedTypeIds, typeEntities);
