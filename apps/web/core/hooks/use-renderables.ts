@@ -123,11 +123,8 @@ export function useEditableProperties(entityId: string, spaceId: string) {
 
   const allProperties = [...Object.values(placeholderProperties), ...Object.values(renderedProperties)];
 
-  // Apply the same sorting logic used in useProperties to ensure consistent order
-  const sortedProperties = sortProperties(allProperties);
-
   const properties: Record<string, Property> = {};
-  for (const p of sortedProperties) {
+  for (const p of allProperties) {
     properties[p.id] = p;
   }
 
