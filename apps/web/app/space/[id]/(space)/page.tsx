@@ -14,7 +14,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
-import { sortRelations } from '~/core/utils/utils';
+import { sortRelations, validateEntityId } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
@@ -23,7 +23,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { OverviewTabOnly } from '~/partials/space-page/overview-tab-only';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -31,6 +30,7 @@ import { cachedFetchSpace } from '../cached-fetch-space';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tabId?: string | string[] }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -61,7 +61,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 }
 
 export default async function SpacePage(props0: Props) {
-  const params = await props0.params;
+  const [params, searchParams] = await Promise.all([props0.params, props0.searchParams]);
   const spaceId = params.id;
 
   if (!IdUtils.isValid(spaceId)) {
@@ -69,20 +69,22 @@ export default async function SpacePage(props0: Props) {
   }
 
   const space = await cachedFetchSpace(spaceId);
+  const rawTabId = Array.isArray(searchParams.tabId) ? searchParams.tabId[0] : searchParams.tabId;
+  const hasValidTab = validateEntityId(rawTabId);
 
   if (Spaces.hasExternalTopic(space)) {
-    return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
+    return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} hasValidTab={hasValidTab} />;
   }
 
   const props = await getSpaceFrontPage(space);
 
   return (
     <>
-      <OverviewTabOnly>
+      {!hasValidTab && (
         <React.Suspense fallback={<SubtopicGallerySkeleton />}>
           <SubtopicGalleryContainer spaceId={params.id} />
         </React.Suspense>
-      </OverviewTabOnly>
+      )}
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       </React.Suspense>
@@ -102,7 +104,15 @@ export default async function SpacePage(props0: Props) {
   );
 }
 
-async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; topicEntityId: string }) {
+async function TopicEntityBody({
+  spaceId,
+  topicEntityId,
+  hasValidTab,
+}: {
+  spaceId: string;
+  topicEntityId: string;
+  hasValidTab: boolean;
+}) {
   const topic = await getTopicEntityData(spaceId, topicEntityId);
 
   return (
@@ -115,11 +125,11 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         initialTabs={topic.tabs}
         initialCollectionItems={topic.initialCollectionItems}
       >
-        <OverviewTabOnly>
+        {!hasValidTab && (
           <React.Suspense fallback={<SubtopicGallerySkeleton />}>
             <SubtopicGalleryContainer spaceId={spaceId} />
           </React.Suspense>
-        </OverviewTabOnly>
+        )}
         <React.Suspense fallback={null}>
           <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
         </React.Suspense>

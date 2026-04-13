@@ -126,25 +126,14 @@ export class E {
     };
   }
 
-  static async findOne({
-    id,
-    store,
-    spaceId,
-    cache,
-  }: {
+  static async findOne(args: {
     id: string;
     spaceId?: string;
     store: GeoStore;
     cache: QueryClient;
   }): Promise<Entity | null> {
-    if (id === '') return null;
-
-    const cachedEntity = await cache.fetchQuery({
-      queryKey: ['network', 'entity', id, spaceId],
-      queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
-    });
-
-    return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
+    const { merged } = await this.syncOne(args);
+    return merged;
   }
 
   /**
@@ -197,15 +186,7 @@ export class E {
     return cachedEntity;
   }
 
-  static async findMany({
-    store,
-    cache,
-    where,
-    first,
-    skip,
-    spaceId,
-    sort,
-  }: {
+  static async findMany(args: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
@@ -213,100 +194,9 @@ export class E {
     skip: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
-  }) {
-    if (where?.id?.in) {
-      const entityIds = where.id.in.filter(id => id !== '');
-
-      if (sort) {
-        const filter = convertWhereConditionToEntityFilter(where);
-        const remoteEntities = await Effect.runPromise(
-          getEntitiesOrderedByProperty({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            spaceId,
-            limit: first,
-            offset: skip,
-            filter,
-          })
-        );
-
-        const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-        return remoteEntities
-          .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
-          .filter(e => e !== null);
-      }
-
-      const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds, spaceId],
-        queryFn: async ({ signal }) => {
-          // @TODO: error handle
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
-          return entities;
-        },
-      });
-
-      const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-
-      const entities = entityIds.map(entityId => {
-        return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
-      });
-
-      const nonNullEntities = entities.filter(e => e !== null);
-
-      // Apply additional filters (like name, values, etc.) if present
-      // Check if there are any filters beyond just id.in
-      const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
-      if (hasAdditionalFilters) {
-        const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return localQuery.execute();
-      }
-
-      return nonNullEntities;
-    }
-
-    const limit = first;
-    const offset = skip;
-    const filter = convertWhereConditionToEntityFilter(where);
-    const typeIds = extractTypeIdsFromWhere(where);
-
-    const remoteEntities = sort
-      ? await Effect.runPromise(
-          getEntitiesOrderedByProperty({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            spaceId,
-            limit,
-            offset,
-            filter,
-          })
-        )
-      : await Effect.runPromise(
-          getAllEntities({
-            limit,
-            offset,
-            filter,
-            typeIds,
-          })
-        );
-
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
-
-    // Preserve remote ordering; append local-only entities at the end
-    const remoteIds = remoteEntities.map(e => e.id);
-    const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
-    const remoteIdSet = new Set(dedupedRemoteIds);
-    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
-    const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
-
-    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-
-    const entities = mergedIds.map(entityId => {
-      return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
-    });
-
-    return entities.filter(e => e !== null);
+  }): Promise<Entity[]> {
+    const { merged } = await this.syncMany(args);
+    return merged;
   }
 
   /**
