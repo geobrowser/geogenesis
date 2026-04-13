@@ -76,7 +76,7 @@ export function useDescription(entityId: string, spaceId?: string) {
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
   const types = useEntityTypes(entityId, spaceId);
-  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? ''}`).sort(), [types]);
+  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? ''}`).join('|'), [types]);
   const hasTypes = types.length > 0;
 
   const allRelations = useRelations({
