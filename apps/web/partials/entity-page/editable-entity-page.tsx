@@ -344,7 +344,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   if (isEmpty) {
     return (
-      <div className="flex flex-wrap items-center gap-1 pr-1">
+      <div className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-1 pr-1">
         {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
@@ -556,7 +556,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       : 'image/png,image/jpeg';
 
   return (
-    <div className="flex flex-wrap items-center gap-1 pr-1">
+    <div className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-1 pr-1">
       {/* Hidden file input for upload */}
       <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 

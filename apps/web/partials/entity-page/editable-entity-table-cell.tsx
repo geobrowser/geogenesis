@@ -2,7 +2,7 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import type { MouseEvent } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -166,7 +166,7 @@ export function EditableEntityTableCell({
   }
 
   return (
-    <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <ValueGroup entityId={entityId} property={property} spaceId={spaceId} />
     </div>
   );
@@ -260,10 +260,11 @@ function RelationsGroup({
     <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       {dedupedRelations.map(r => {
         return (
-          <div key={`relation-${r.id}-${r.toEntity.value}`}>
+          <div key={`relation-${r.id}-${r.toEntity.value}`} className="min-w-0 max-w-full">
             <LinkableRelationChip
               small
               isEditing
+              truncateLabel
               onDelete={() => {
                 storage.relations.delete(r);
               }}
@@ -343,11 +344,15 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     writeValue(storage, entityId, spaceId, property, newValue, rawValue);
   };
 
+  const cellWrap = (node: ReactNode) => (
+    <div className="min-w-0 w-full max-w-full">{node}</div>
+  );
+
   switch (renderableType) {
     case 'INTEGER':
     case 'FLOAT':
     case 'DECIMAL':
-      return (
+      return cellWrap(
         <NumberField
           variant="tableCell"
           isEditing={true}
@@ -359,9 +364,17 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
         />
       );
     case 'TEXT':
-      return <TableStringField placeholder="Add value..." value={value} onChange={onWriteValue} />;
+      return cellWrap(
+        <TableStringField
+          variant="tableCell"
+          truncateOverflow
+          placeholder="Add value..."
+          value={value}
+          onChange={onWriteValue}
+        />
+      );
     case 'URL': {
-      return (
+      return cellWrap(
         <WebUrlField
           variant="tableCell"
           isEditing={true}
@@ -375,14 +388,18 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     case 'BOOLEAN': {
       const checked = getChecked(value);
 
-      return <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />;
+      return cellWrap(
+        <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />
+      );
     }
     case 'DATE':
     case 'DATETIME':
     case 'TIME':
-      return (
+      return cellWrap(
         <DateField
           key={value || 'empty'}
+          variant="tableCell"
+          className="min-w-0 max-w-full"
           isEditing={true}
           value={value}
           propertyId={property.id}

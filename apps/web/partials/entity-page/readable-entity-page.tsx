@@ -235,7 +235,10 @@ export function RelationsGroup({
             }
 
             return (
-              <div key={`relation-${relationId}-${linkedEntityId}`} className={isMetadataHeader ? '' : 'mt-1'}>
+              <div
+                key={`relation-${relationId}-${linkedEntityId}`}
+                className={`min-w-0 max-w-full ${isMetadataHeader ? '' : 'mt-1'}`}
+              >
                 <LinkableRelationChip
                   isEditing={false}
                   currentSpaceId={spaceId}
@@ -244,6 +247,7 @@ export function RelationsGroup({
                   relationEntityId={relationEntityId}
                   relationId={relationId}
                   small
+                  truncateLabel
                 >
                   {relationName ?? linkedEntityId}
                 </LinkableRelationChip>
