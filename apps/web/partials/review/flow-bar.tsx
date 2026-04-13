@@ -43,7 +43,7 @@ export const FlowBar = () => {
   // Filter to only count net changes (exclude no-ops like created-then-deleted
   // relations and values/relations that match the remote state).
   const values = React.useMemo(() => getNetValues(allValues), [allValues]);
-  const relations = React.useMemo(() => getNetRelations(allRelations), [allRelations]);
+  const relations = React.useMemo(() => collapseSlotReplacements(getNetRelations(allRelations)), [allRelations]);
 
   const opsCount = values.length + relations.length;
 
@@ -305,6 +305,42 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
 
     return true;
   });
+}
+
+/**
+ * Collapse a delete+add pair on the same (fromEntity, type, spaceId) slot into
+ * a single edit. Changing a relation (e.g. a data block's view) is represented
+ * on the wire as a delete of the old relation plus an add of a new one, but it
+ * should be counted — and displayed — as one conceptual edit, matching how the
+ * review UI renders it.
+ *
+ * Only collapses the unambiguous 1-delete + 1-add case. Multi-valued relations
+ * (e.g. types) may produce several deletes and/or adds in the same group; those
+ * can't be cleanly paired and are left alone so each op still counts.
+ */
+function collapseSlotReplacements(relations: Relation[]): Relation[] {
+  const groups = new Map<string, { deleted: Relation[]; added: Relation[] }>();
+  for (const r of relations) {
+    const key = `${r.fromEntity.id}:${r.type.id}:${r.spaceId}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { deleted: [], added: [] };
+      groups.set(key, group);
+    }
+    if (r.isDeleted) group.deleted.push(r);
+    else group.added.push(r);
+  }
+
+  const result: Relation[] = [];
+  for (const { deleted, added } of groups.values()) {
+    if (deleted.length === 1 && added.length === 1) {
+      // Pure slot replacement — count as a single edit (the add represents the new state).
+      result.push(added[0]);
+      continue;
+    }
+    result.push(...added, ...deleted);
+  }
+  return result;
 }
 
 const flowVariants = {
