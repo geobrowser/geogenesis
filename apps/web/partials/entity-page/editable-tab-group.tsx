@@ -113,7 +113,7 @@ export function EditableTabGroup({
     const newList = arrayMove(relations, oldIndex, newIndex);
     newList.forEach((relation, index) => {
       storage.relations.update(relation, draft => {
-        draft.position = relations[index].position ?? null;
+        draft.position = relations[index].position;
       });
     });
   };
