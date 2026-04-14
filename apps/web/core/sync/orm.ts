@@ -20,6 +20,8 @@ import {
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
+import { compareBySpaceRank } from '../utils/space/space-ranking';
+import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
@@ -124,7 +126,24 @@ export class E {
     };
   }
 
-  static async findOne({
+  static async findOne(args: {
+    id: string;
+    spaceId?: string;
+    store: GeoStore;
+    cache: QueryClient;
+  }): Promise<Entity | null> {
+    const { merged } = await this.syncOne(args);
+    return merged;
+  }
+
+  /**
+   * Same as findOne, but also returns the raw remote entity alongside the
+   * merged result. Sync consumers need the raw remote to maintain a clean
+   * baseline in `syncedEntities` — the merged result strips remote values
+   * whose ids collide with local overrides, which would otherwise leak local
+   * edits into the baseline and break net-change diffing.
+   */
+  static async syncOne({
     id,
     store,
     spaceId,
@@ -134,15 +153,18 @@ export class E {
     spaceId?: string;
     store: GeoStore;
     cache: QueryClient;
-  }): Promise<Entity | null> {
-    if (id === '') return null;
+  }): Promise<{ merged: Entity | null; remote: Entity | null }> {
+    if (id === '') return { merged: null, remote: null };
 
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
     });
 
-    return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
+    return {
+      merged: this.merge({ id, store, spaceId, mergeWith: cachedEntity }),
+      remote: cachedEntity ?? null,
+    };
   }
 
   static async findOneRelation({
@@ -164,7 +186,27 @@ export class E {
     return cachedEntity;
   }
 
-  static async findMany({
+  static async findMany(args: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+    spaceId?: string;
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  }): Promise<Entity[]> {
+    const { merged } = await this.syncMany(args);
+    return merged;
+  }
+
+  /**
+   * Same as findMany, but also returns the raw remote entities alongside the
+   * merged result. Sync consumers need the raw remote to maintain a clean
+   * baseline in `syncedEntities` — the merged result strips remote values
+   * whose ids collide with local overrides, which would otherwise leak local
+   * edits into the baseline and break net-change diffing.
+   */
+  static async syncMany({
     store,
     cache,
     where,
@@ -180,7 +222,7 @@ export class E {
     skip: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
-  }) {
+  }): Promise<{ merged: Entity[]; remote: Entity[] }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
 
@@ -199,15 +241,15 @@ export class E {
         );
 
         const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-        return remoteEntities
+        const merged = remoteEntities
           .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
-          .filter(e => e !== null);
+          .filter((e): e is Entity => e !== null);
+        return { merged, remote: remoteEntities };
       }
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds, spaceId],
         queryFn: async ({ signal }) => {
-          // @TODO: error handle
           const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
           return entities;
         },
@@ -219,17 +261,15 @@ export class E {
         return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
-      const nonNullEntities = entities.filter(e => e !== null);
+      const nonNullEntities = entities.filter((e): e is Entity => e !== null);
 
-      // Apply additional filters (like name, values, etc.) if present
-      // Check if there are any filters beyond just id.in
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
       if (hasAdditionalFilters) {
         const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return localQuery.execute();
+        return { merged: localQuery.execute(), remote: remoteEntities };
       }
 
-      return nonNullEntities;
+      return { merged: nonNullEntities, remote: remoteEntities };
     }
 
     const limit = first;
@@ -260,7 +300,6 @@ export class E {
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
-    // Preserve remote ordering; append local-only entities at the end
     const remoteIds = remoteEntities.map(e => e.id);
     const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
     const remoteIdSet = new Set(dedupedRemoteIds);
@@ -269,11 +308,11 @@ export class E {
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
-    const entities = mergedIds.map(entityId => {
-      return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
-    });
+    const merged = mergedIds
+      .map(entityId => this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) }))
+      .filter((e): e is Entity => e !== null);
 
-    return entities.filter(e => e !== null);
+    return { merged, remote: remoteEntities };
   }
 
   static async findFuzzy({
@@ -332,7 +371,9 @@ export class E {
 
     const entities = maybeEntities.filter(e => e !== null);
 
-    const spaceIds = [...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId))))];
+    const spaceIds = [
+      ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
+    ];
     const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
     const [spaces, typeNames] = await Promise.all([
@@ -356,16 +397,32 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities.map(e => {
-      return {
-        ...e,
-        types: e.types.map(t => ({
-          id: t.id,
-          name: t.name ?? typeNamesById.get(t.id) ?? null,
-        })),
-        spaces: resolveSearchSpaces(e.spaces, spacesById),
-      };
-    });
+    return entities
+      .map(e => {
+        const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
+          .filter(s => hasName(s.name))
+          .sort(compareBySpaceRank(s => s.spaceId));
+
+        const resolvedTypesBySpace = e.typesBySpace
+          ? Object.fromEntries(
+              Object.entries(e.typesBySpace).map(([spaceId, types]) => [
+                spaceId,
+                types.map(t => ({ id: t.id, name: t.name ?? typeNamesById.get(t.id) ?? null })),
+              ])
+            )
+          : undefined;
+
+        return {
+          ...e,
+          types: e.types.map(t => ({
+            id: t.id,
+            name: t.name ?? typeNamesById.get(t.id) ?? null,
+          })),
+          typesBySpace: resolvedTypesBySpace,
+          spaces: resolvedSpaces,
+        };
+      })
+      .filter(e => e.spaces.length > 0);
   }
 }
 
@@ -413,6 +470,7 @@ function mergeSearchResult({
     name,
     description,
     types,
+    typesBySpace: remoteEntity.typesBySpace,
     spaces: localEntity.spaces,
   };
 }

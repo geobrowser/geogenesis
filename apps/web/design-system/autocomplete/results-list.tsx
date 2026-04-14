@@ -72,8 +72,11 @@ export const ResultContent = ({
   const spaceImg = space.image;
   const hasOtherSpaces = otherSpaces?.length > 0;
 
-  const showBreadcrumbs = spaceName || result.types.length > 0;
-  const showBreadcrumbChevron = spaceName && result.types.length > 0;
+  // Show only the types from the displayed (top-ranked) space, falling back to aggregated types
+  const spaceTypes = result.typesBySpace?.[space.spaceId] ?? result.types;
+
+  const showBreadcrumbs = spaceName || spaceTypes.length > 0;
+  const showBreadcrumbChevron = spaceName && spaceTypes.length > 0;
 
   const onSelect = () => {
     if (alreadySelected) return;
@@ -107,9 +110,9 @@ export const ResultContent = ({
                   <ChevronDownSmall color="grey-04" />
                 </span>
               )}
-              {result.types.length > 0 && (
+              {spaceTypes.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  {result.types
+                  {spaceTypes
                     .filter((type, index, self) => self.findIndex(t => t.id === type.id) === index)
                     .map(type => (
                       <Tag key={type.id}>{type.name}</Tag>
@@ -145,7 +148,9 @@ export const ResultContent = ({
                 <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
               </div>
             ))}
-            <div className="ml-1 text-footnoteMedium text-grey-04">+ {otherSpaces.length} spaces</div>
+            <div className="ml-1 text-footnoteMedium text-grey-04">
+              + {otherSpaces.length} {otherSpaces.length === 1 ? 'space' : 'spaces'}
+            </div>
           </div>
           <div className="size-[12px] *:size-[12px]">
             <RightArrowLong color="grey-04" />

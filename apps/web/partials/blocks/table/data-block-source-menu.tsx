@@ -6,6 +6,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { hasName } from '~/core/utils/utils';
 
 import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -137,7 +138,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
           </div>
         )}
         {queriedSpaces
-          .filter(space => space.name?.trim())
+          .filter(space => hasName(space.name))
           .map(space => {
             const active = source.type === 'SPACES' && source.value.includes(space.id);
 

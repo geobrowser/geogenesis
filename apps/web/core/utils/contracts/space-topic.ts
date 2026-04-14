@@ -60,7 +60,7 @@ export function buildDaoTopicDeclaredCalldata({
     args: [GOVERNANCE_ACTIONS.TOPIC_DECLARED, topic, '0x'],
   });
 
-  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.FAST, [
+  const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, [
     {
       to: spaceAddress,
       value: 0n,
@@ -112,7 +112,7 @@ export function buildDaoTopicDeclaredCalldata({
 //     args: [GOVERNANCE_ACTIONS.TOPIC_REMOVED, EMPTY_TOPIC_HEX, '0x'],
 //   });
 //
-//   const data = encodeProposalCreatedData(proposalId, VOTING_MODE.FAST, [
+//   const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, [
 //     {
 //       to: spaceAddress,
 //       value: 0n,

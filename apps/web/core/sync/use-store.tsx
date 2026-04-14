@@ -84,10 +84,14 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
        * We explicitly don't query by space id here and let the sync
        * engine handle filtering it as the hook receives events
        */
-      const merged = await E.findOne({ id, store, cache });
+      const { merged, remote } = await E.syncOne({ id, store, cache });
 
       if (merged) {
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: [merged],
+          remoteEntities: remote ? [remote] : [],
+        });
         return merged;
       }
 
@@ -223,9 +227,9 @@ export function useQueryEntities({
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, skip), sort ?? null],
     queryFn: async () => {
-      const entities = await E.findMany({ store, cache, where, first, skip, sort });
-      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-      return entities.map(e => e.id);
+      const { merged, remote } = await E.syncMany({ store, cache, where, first, skip, sort });
+      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
+      return merged.map(e => e.id);
     },
   });
 

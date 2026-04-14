@@ -37,8 +37,8 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
     };
 
     // Filter types to only show those from the backlink's space, then deduplicate by id
-    const typesFromBacklinkSpace = backlink.types.filter(t => t.spaceIds?.includes(backlink.backlinkSpaceId));
-    const uniqueTypes = Array.from(new Map(typesFromBacklinkSpace.map(t => [t.id, t])).values());
+    // const typesFromBacklinkSpace = backlink.types.filter(t => t.spaceIds?.includes(backlink.backlinkSpaceId));
+    const uniqueTypes = Array.from(new Map(backlink.types.map(t => [t.id, t])).values());
 
     return [
       {
