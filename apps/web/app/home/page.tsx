@@ -7,7 +7,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { fetchSidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { getSpaces } from '~/core/io/queries';
 import { fetchProfile } from '~/core/io/subgraph';
-import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { compareSpaceListOrderByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 import { Component } from './component';
 import {
@@ -40,28 +40,21 @@ function parseStatus(raw?: string): GovernanceHomeStatusFilter {
   return 'pending';
 }
 
-type GovernanceSpaceOption = { id: string; name: string; image: string | null; isUnnamed: boolean };
+type GovernanceSpaceOption = { id: string; name: string; image: string | null; unnamed: boolean };
 
 function mapAndSortGovernanceSpaceOptions(spaces: Space[]): GovernanceSpaceOption[] {
   return spaces
     .map(s => {
       const rawName = s.entity?.name?.trim() ?? '';
-      const isUnnamed = rawName.length === 0;
+      const unnamed = rawName.length === 0;
       return {
         id: s.id,
-        name: isUnnamed ? s.id.slice(0, 8) : rawName,
+        name: unnamed ? s.id.slice(0, 8) : rawName,
         image: s.entity?.image && s.entity.image !== PLACEHOLDER_SPACE_IMAGE ? s.entity.image : null,
-        isUnnamed,
+        unnamed,
       };
     })
-    .sort((a, b) => {
-      const rankDelta = getSpaceRank(a.id) - getSpaceRank(b.id);
-      if (rankDelta !== 0) return rankDelta;
-      if (a.isUnnamed !== b.isUnnamed) return a.isUnnamed ? 1 : -1;
-      const nameDelta = a.name.localeCompare(b.name);
-      if (nameDelta !== 0) return nameDelta;
-      return a.id.localeCompare(b.id);
-    });
+    .sort(compareSpaceListOrderByRankNameId);
 }
 
 export default async function PersonalHomePage(props: Props) {

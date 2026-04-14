@@ -7,6 +7,7 @@ import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
+import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 import { FEATURED_BROWSE_SPACES } from './featured-spaces';
 
@@ -14,6 +15,8 @@ export type BrowseSpaceRow = {
   id: string;
   name: string;
   image: string | null;
+  /** No entity name (same semantics as governance space filter); featured overrides still count as named. */
+  unnamed?: boolean;
   pendingLabel?: 'Membership pending' | 'Editorship pending';
 };
 
@@ -37,18 +40,26 @@ async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow
 
   if (Either.isLeft(result)) {
     for (const id of unique) {
-      map.set(id, { id, name: id.slice(0, 8), image: null });
+      const featuredName = FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name;
+      map.set(id, {
+        id,
+        name: featuredName ?? id.slice(0, 8),
+        image: null,
+        unnamed: !featuredName,
+      });
     }
     return map;
   }
 
   for (const space of result.right) {
+    const rawName = space.entity.name?.trim() ?? '';
+    const featuredFallback = FEATURED_BROWSE_SPACES.find(f => f.id === space.id)?.name;
+    const unnamed = rawName.length === 0 && !featuredFallback;
+    const name = rawName || featuredFallback || space.id.slice(0, 8);
     map.set(space.id, {
       id: space.id,
-      name:
-        space.entity.name?.trim() ||
-        FEATURED_BROWSE_SPACES.find(f => f.id === space.id)?.name ||
-        space.id.slice(0, 8),
+      name,
+      unnamed,
       image:
         space.entity.image && space.entity.image !== PLACEHOLDER_SPACE_IMAGE
           ? space.entity.image
@@ -58,10 +69,12 @@ async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow
 
   for (const id of unique) {
     if (!map.has(id)) {
+      const featuredName = FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name;
       map.set(id, {
         id,
-        name: FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name ?? id.slice(0, 8),
+        name: featuredName ?? id.slice(0, 8),
         image: null,
+        unnamed: !featuredName,
       });
     }
   }
@@ -116,10 +129,13 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
       DOCUMENTATION_SPACE_ID,
     ]);
     return {
-      featured: FEATURED_BROWSE_SPACES.map(f => {
-        const row = featuredOnly.get(f.id);
-        return row ?? { id: f.id, name: f.name, image: null };
-      }),
+      featured: sortSpaceListByRankNameId(
+        FEATURED_BROWSE_SPACES.map(f => {
+          const row = featuredOnly.get(f.id);
+          const base = row ?? { id: f.id, name: f.name, image: null as string | null };
+          return { ...base, name: f.name, unnamed: false };
+        })
+      ),
       editorOf: [],
       memberOf: [],
       documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
@@ -182,24 +198,34 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
   const allIds = [...new Set([...featuredIds, ...editorOfIds, ...memberOfIds, DOCUMENTATION_SPACE_ID])];
   const rows = await fetchSpaceRows(allIds);
 
-  const featured: BrowseSpaceRow[] = featuredIds.map(id => {
-    const base = rows.get(id)!;
-    return { ...base, name: FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name ?? base.name };
-  });
+  const featured: BrowseSpaceRow[] = sortSpaceListByRankNameId(
+    featuredIds.map(id => {
+      const base = rows.get(id)!;
+      return {
+        ...base,
+        name: FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name ?? base.name,
+        unnamed: false,
+      };
+    })
+  );
 
-  const editorOf: BrowseSpaceRow[] = editorOfIds.map(id => {
-    const base = rows.get(id)!;
-    return pendingEditorIds.has(id) && !editorIdSet.has(id)
-      ? { ...base, pendingLabel: 'Editorship pending' as const }
-      : base;
-  });
+  const editorOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
+    editorOfIds.map(id => {
+      const base = rows.get(id)!;
+      return pendingEditorIds.has(id) && !editorIdSet.has(id)
+        ? { ...base, pendingLabel: 'Editorship pending' as const }
+        : base;
+    })
+  );
 
-  const memberOf: BrowseSpaceRow[] = memberOfIds.map(id => {
-    const base = rows.get(id)!;
-    return pendingMemberIds.has(id) && !memberOnlyIdSet.has(id)
-      ? { ...base, pendingLabel: 'Membership pending' as const }
-      : base;
-  });
+  const memberOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
+    memberOfIds.map(id => {
+      const base = rows.get(id)!;
+      return pendingMemberIds.has(id) && !memberOnlyIdSet.has(id)
+        ? { ...base, pendingLabel: 'Membership pending' as const }
+        : base;
+    })
+  );
 
   return {
     featured,
