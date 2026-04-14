@@ -66,7 +66,7 @@ export const commandItems: CommandSuggestionItem[] = [
   textCommandItem,
   {
     icon: <EditorList />,
-    title: 'List',
+    title: 'Bullet points',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
@@ -94,7 +94,7 @@ export const commandItems: CommandSuggestionItem[] = [
   },
   {
     icon: <EditorCode />,
-    title: 'Code Block',
+    title: 'Code block',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setCodeBlock().run();
     },
