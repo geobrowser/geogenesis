@@ -72,6 +72,26 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 return; // Already showing for this link
               }
 
+              // Immediately destroy the old popup when switching to a new link.
+              // This prevents stale tooltips from lingering when the mouse moves
+              // quickly between adjacent graph links.
+              if (cleanupAutoUpdate) {
+                cleanupAutoUpdate();
+                cleanupAutoUpdate = null;
+              }
+              if (popupElement) {
+                popupElement.remove();
+                popupElement = null;
+              }
+              if (component) {
+                component.destroy();
+                component = null;
+              }
+
+              // Track the new link element immediately so concurrent events
+              // (e.g. mouseleave of the old link) see the updated reference.
+              currentLinkElement = linkElement;
+
               showTimeout = setTimeout(() => {
                 showTimeout = null;
                 if (isDestroyed || !editor.isEditable) return;
@@ -79,19 +99,7 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                 // Check if we are still hovering the intended element
                 if (currentLinkElement !== linkElement) return;
 
-                // Destroy existing popup and component
-                if (cleanupAutoUpdate) {
-                  cleanupAutoUpdate();
-                  cleanupAutoUpdate = null;
-                }
-                if (popupElement) {
-                  popupElement.remove();
-                  popupElement = null;
-                }
-                if (component) {
-                  component.destroy();
-                  component = null;
-                }
+                // (Old popup was already destroyed above, before the timeout.)
 
                 const entityId = linkUrl.replace('graph://', '');
                 const linkText = linkElement.textContent?.trim() || entityId;
@@ -193,8 +201,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
 
                   // Set up auto-update for position
                   cleanupAutoUpdate = autoUpdate(linkElement, popupElement, updatePosition);
-
-                  currentLinkElement = linkElement;
                 } catch (error) {
                   // GraphLinkHover error silently
                 }
@@ -244,7 +250,6 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
               // Always show the tooltip when hovering over a link
               // This fixes the issue where re-hovering the same link wouldn't show the tooltip
               lastHoverId = linkId;
-              currentLinkElement = linkElement;
               const linkUrl = linkElement.getAttribute('href') || '';
               show(linkElement, linkUrl);
             };

@@ -49,58 +49,115 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
   const handleUnderline = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    editor.chain().focus().toggleUnderline?.().run();
+    editor.chain().focus().toggleUnderline().run();
   };
 
   const handleLink = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Use spaceId from EditorProvider context
-    const currentSpaceId = spaceId;
 
-    if (!currentSpaceId) {
+    if (!spaceId) {
       console.error('No spaceId available for link creation');
       return;
     }
 
-    // Store the current selection
+    // Store the current selection before any focus changes
     const { from, to } = editor.state.selection;
 
     // Extract selected text if there is a selection
     const selectedText = from !== to ? editor.state.doc.textBetween(from, to) : '';
 
+    // Track whether a command is being executed to prevent premature cleanup
+    let isCommandExecuting = false;
+
     // Create popup container
     const popupElement = document.createElement('div');
     popupElement.style.position = 'fixed';
     popupElement.style.zIndex = String(POPUP_Z_INDEX);
+    // Mark the popup so we can identify it in click-outside checks
+    popupElement.setAttribute('data-mention-popup', 'true');
     document.body.appendChild(popupElement);
 
     // Cleanup function
-    const cleanup = () => {
+    let cleanup = () => {
       popupElement.remove();
       reactRenderer.destroy();
+    };
+
+    // Add click outside handler that accounts for Radix Popover portals.
+    // SelectEntity renders its dropdown results inside a Radix Popover.Portal,
+    // which places them in a separate DOM tree outside our popupElement.
+    // We must NOT treat clicks on those portal elements as "outside" clicks.
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isCommandExecuting) return;
+
+      const target = event.target as Node;
+
+      // Check if click is inside our popup container
+      if (popupElement.contains(target)) return;
+
+      // Check if click is inside any Radix Popover portal content.
+      // Radix wraps portal content with [data-radix-popper-content-wrapper]
+      // and the content itself has [data-radix-collection-item] or similar attributes.
+      const targetEl = target instanceof Element ? target : target.parentElement;
+      if (targetEl) {
+        // Walk up to check if the click target is inside a Radix popover content wrapper
+        const radixPopoverContent = targetEl.closest('[data-radix-popper-content-wrapper]');
+        if (radixPopoverContent) return;
+
+        // Also check for elements that might be in our mention list's Radix portal
+        const radixPortal = targetEl.closest('[data-radix-portal]');
+        if (radixPortal) return;
+      }
+
+      cleanup();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+
+    // Update cleanup to remove listener
+    const originalCleanup = cleanup;
+    cleanup = () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      originalCleanup();
     };
 
     // Create ReactRenderer for MentionList
     const reactRenderer = new ReactRenderer(MentionList, {
       props: {
-        spaceId: currentSpaceId,
+        spaceId,
         editor: editor,
         command: (entityId: string, entityName: string, entitySpaceId: string) => {
-          // Use selected text as linkText if available, otherwise use entityName
-          const linkText = selectedText || entityName;
-          // Use shared function to insert graph link with spaceId for data attributes
-          insertGraphLink({
-            editor,
-            entityId,
-            linkText,
-            entityName,
-            spaceId: entitySpaceId ?? currentSpaceId,
-            from,
-            to,
-          });
+          isCommandExecuting = true;
 
-          // Cleanup popup
+          if (from !== to && selectedText) {
+            // Re-focus the editor and restore the selection before applying the mark.
+            // When the user interacted with the MentionList, the editor lost focus and
+            // the selection collapsed. We need to restore it explicitly.
+            editor
+              .chain()
+              .focus()
+              .setTextSelection({ from, to })
+              .setLink({
+                href: `graph://${entityId}`,
+                'data-entity-name': entityName,
+                'data-space-id': entitySpaceId ?? spaceId,
+              } as any)
+              .run();
+          } else {
+            // Fallback for empty selection (though toolbar normally only shows on selection)
+            const linkText = entityName;
+            insertGraphLink({
+              editor,
+              entityId,
+              linkText,
+              entityName,
+              spaceId: entitySpaceId ?? spaceId,
+              from,
+              to,
+            });
+          }
+
+          // Cleanup popup after applying the link
           cleanup();
         },
         onEscape: () => {
