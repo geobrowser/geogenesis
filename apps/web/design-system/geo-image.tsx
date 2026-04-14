@@ -49,3 +49,29 @@ export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProp
   const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
   return <img {...props} src={src} alt={alt} onError={handleError} />;
 }
+
+type ThumbGeoImageProps = {
+  value: string;
+  alt?: string;
+  /** Parent must be `relative` with explicit width/height, e.g. `relative h-5 w-5 overflow-hidden rounded-md` */
+  loading?: ImgHTMLAttributes<HTMLImageElement>['loading'];
+  fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
+};
+
+/**
+ * Tiny space-style image: native &lt;img&gt; so remote IPFS URLs skip the Next optimizer
+ * (avoids soft/downscaled output and occasional failed optimized requests for small slots).
+ */
+export function ThumbGeoImage({ value, alt = '', loading = 'lazy', fetchPriority }: ThumbGeoImageProps) {
+  return (
+    <NativeGeoImage
+      value={value}
+      alt={alt}
+      className="absolute inset-0 h-full w-full object-cover"
+      loading={loading}
+      fetchPriority={fetchPriority}
+      decoding="async"
+      draggable={false}
+    />
+  );
+}

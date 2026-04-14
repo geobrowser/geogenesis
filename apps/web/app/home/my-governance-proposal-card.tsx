@@ -13,7 +13,7 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { GovernanceProposalVoteState } from '~/partials/governance/governance-proposal-vote-state';
@@ -68,9 +68,8 @@ export function MyGovernanceProposalCard({
   viewerAddress,
   governanceHomeReturnSearch,
 }: MyGovernanceProposalCardProps) {
-  const nowSec = Math.floor(Date.now() / 1000);
   const showReopenMenu =
-    status === 'REJECTED' && proposalType === 'ADD_EDIT' && nowSec >= endTime;
+    status === 'REJECTED' && proposalType === 'ADD_EDIT' && getIsProposalEnded(status, endTime);
 
   const yesPercentage = percentageFromCounts(yesCount, totalVotes);
   const noPercentage = percentageFromCounts(noCount, totalVotes);
@@ -109,20 +108,14 @@ export function MyGovernanceProposalCard({
           className="inline-flex min-w-0 items-center gap-1.5 transition-colors duration-75 hover:text-text"
         >
           <span className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-            <GeoImage
-              value={spaceImage || PLACEHOLDER_SPACE_IMAGE}
-              alt=""
-              fill
-              sizes="12px"
-              style={{ objectFit: 'cover' }}
-            />
+            <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" />
           </span>
           <span className="truncate">{spaceName}</span>
         </Link>
         <span className="shrink-0 text-grey-03">&middot;</span>
         <div className="inline-flex min-w-0 items-center gap-1.5">
           <span className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-            <Avatar avatarUrl={creatorAvatarUrl} value={creatorValue} />
+            <Avatar size={12} avatarUrl={creatorAvatarUrl} value={creatorValue} />
           </span>
           <span className="truncate">{creatorName}</span>
         </div>

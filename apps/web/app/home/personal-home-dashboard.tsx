@@ -16,7 +16,7 @@ import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Member } from '~/design-system/icons/member';
 import { Menu } from '~/design-system/menu';
 import { useSearchParams } from 'next/navigation';
@@ -246,7 +246,7 @@ function GovernanceFilterMenu({
             {showImages && item.showImage !== false ? (
               item.image ? (
                 <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
-                  <GeoImage value={item.image} alt="" fill sizes="20px" style={{ objectFit: 'cover' }} />
+                  <ThumbGeoImage value={item.image} alt="" />
                 </span>
               ) : (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-grey-01 text-[10px] font-medium text-grey-04">
@@ -273,11 +273,11 @@ const Notices = () => {
         title="Welcome to your governance home"
         description="Your area to see any proposals, member requests, and editor requests across the spaces you are involved in."
         media={
-          <div className="relative h-[118px] w-[128px] shrink-0 overflow-hidden sm:h-[124px] sm:w-[136px]" aria-hidden>
+          <div className="relative h-[102px] w-[128px] shrink-0 overflow-hidden sm:h-[108px] sm:w-[136px]" aria-hidden>
             <img
               src="/home.png"
               alt=""
-              className="pointer-events-none block h-full w-full min-h-0 min-w-0 select-none object-cover object-left object-top"
+              className="pointer-events-none block h-[calc(100%+21px)] w-full min-h-0 min-w-0 -translate-y-[21px] select-none object-cover object-left object-top sm:h-[calc(100%+24px)] sm:-translate-y-6"
             />
           </div>
         }
@@ -300,7 +300,7 @@ const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', 
 const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const classNames = cva('relative flex gap-4 overflow-clip rounded-lg px-4 pt-4', {
+  const classNames = cva('relative flex items-start gap-4 overflow-clip rounded-lg px-4 pt-4', {
     variants: {
       color: {
         grey: 'bg-gradient-grey',
@@ -321,11 +321,22 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
   return (
     <div id={id} className={`${classNames({ color })} ${media ? 'pb-6' : 'pb-4'}`}>
       <div className="min-w-0 flex-1">
-        <div className="text-smallTitle">{title}</div>
-        <div className="mt-2">{description}</div>
+        {media ? (
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-smallTitle">{title}</div>
+              <div className="mt-2">{description}</div>
+            </div>
+            <div className="shrink-0 leading-none">{media}</div>
+          </div>
+        ) : (
+          <>
+            <div className="text-smallTitle">{title}</div>
+            <div className="mt-2">{description}</div>
+          </>
+        )}
         {element && <div className="mt-2">{element}</div>}
       </div>
-      {media && <div className="flex shrink-0 items-end leading-none">{media}</div>}
       <div className="shrink-0">
         <button type="button" onClick={handleDismissNotice} className="rounded border p-1">
           <Close />

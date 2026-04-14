@@ -28,6 +28,7 @@ import { Profile } from '~/core/types';
 import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
+  getIsProposalEnded,
   getProposalName,
 } from '~/core/utils/utils';
 
@@ -116,9 +117,8 @@ export async function GovernanceProposalsList({
                 },
               });
 
-          const nowSec = Math.floor(Date.now() / 1000);
           const showReopenMenu =
-            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && nowSec >= p.endTime;
+            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && getIsProposalEnded(p.status, p.endTime);
 
           return (
             <Link

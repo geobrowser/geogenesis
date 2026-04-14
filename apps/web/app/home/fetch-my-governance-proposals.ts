@@ -2,7 +2,7 @@ import * as Effect from 'effect/Effect';
 
 import {
   convertVoteOption,
-  mapActionTypeToProposalType,
+  mapApiActionsToProposalType,
   mapProposalStatus,
   type ApiProposalListItem,
 } from '~/core/io/rest';
@@ -115,8 +115,7 @@ export async function getMyGovernanceProposals(opts: {
   const proposals: MyGovernanceProposalRow[] = [];
 
   for (const p of pageSlice) {
-    const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
-    const type = mapActionTypeToProposalType(actionType);
+    const type = mapApiActionsToProposalType(p.actions);
     const createdBy = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
     const targetId = p.actions[0]?.targetId;
     const targetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;

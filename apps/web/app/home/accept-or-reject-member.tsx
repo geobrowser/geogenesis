@@ -9,7 +9,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -86,12 +86,7 @@ export function AcceptOrRejectMember({ spaceId, proposalId, proposalName, propos
         <Link href={NavUtils.toSpace(space.id)} className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <GeoImage
-                value={space.image}
-                alt={`Cover image for space ${space.name ?? space.id}`}
-                fill
-                style={{ objectFit: 'cover' }}
-              />
+              <ThumbGeoImage value={space.image} alt={`Cover image for space ${space.name ?? space.id}`} />
             </div>
             <p>{space.name}</p>
           </div>

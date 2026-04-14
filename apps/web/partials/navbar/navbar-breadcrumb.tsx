@@ -14,7 +14,7 @@ import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
@@ -49,7 +49,7 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
   return (
     <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
       <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-        <GeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" priority style={{ objectFit: 'cover' }} fill />
+        <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
       </div>
       <Divider type="vertical" className="inline-block h-4 w-px" />
       <div className="truncate sm:max-w-[20ch]">
@@ -109,7 +109,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
     return (
       <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
         <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-          <GeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" priority style={{ objectFit: 'cover' }} fill />
+          <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </div>
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <div className="truncate sm:max-w-[20ch]">
@@ -130,7 +130,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <div className="inline-flex items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
         <Link href={NavUtils.toSpace(spaceId)} className="relative h-4 w-4 overflow-hidden rounded-sm">
-          <GeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" priority style={{ objectFit: 'cover' }} fill />
+          <ThumbGeoImage value={spaceImage || PLACEHOLDER_SPACE_IMAGE} alt="" loading="eager" fetchPriority="high" />
         </Link>
         <Divider type="vertical" className="inline-block h-4 w-px" />
         <Popover.Trigger className="flex items-center gap-1.5">
@@ -171,12 +171,11 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
                   {showCurrentSpace && (
                     <div className="flex items-center gap-2 rounded-md bg-grey-01 p-2">
                       <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                        <GeoImage
+                        <ThumbGeoImage
                           value={spaceImage || PLACEHOLDER_SPACE_IMAGE}
                           alt=""
-                          priority
-                          style={{ objectFit: 'cover' }}
-                          fill
+                          loading="eager"
+                          fetchPriority="high"
                         />
                       </div>
                       <div className="truncate">
@@ -201,12 +200,11 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
                           className="flex items-center gap-2 rounded-md p-2 hover:bg-grey-01"
                         >
                           <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                            <GeoImage
+                            <ThumbGeoImage
                               value={otherSpaceImage || PLACEHOLDER_SPACE_IMAGE}
                               alt=""
-                              priority
-                              style={{ objectFit: 'cover' }}
-                              fill
+                              loading="eager"
+                              fetchPriority="high"
                             />
                           </div>
                           <div className="truncate">

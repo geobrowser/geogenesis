@@ -17,7 +17,7 @@ import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-brow
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
@@ -29,13 +29,13 @@ const navLinkClass =
 
 function BrowseNavIcon({ src }: { src: string }) {
   return (
-    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-visible">
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center overflow-visible">
       <img
         src={src}
         alt=""
         width={20}
         height={20}
-        className="h-4 w-4 max-h-none max-w-none object-contain"
+        className="h-5 w-5 max-h-none max-w-none object-contain"
         draggable={false}
       />
     </span>
@@ -61,8 +61,8 @@ function BrowseNavPrimaryLinks({
       </Link>
       {personalSpaceId ? (
         <Link href={NavUtils.toSpace(personalSpaceId)} className={navLinkClass}>
-          <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full">
-            <Avatar size={16} avatarUrl={profile?.avatarUrl} value={address ?? personalSpaceId} />
+          <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
+            <Avatar size={20} avatarUrl={profile?.avatarUrl} value={address ?? personalSpaceId} />
           </span>
           <span>Personal space</span>
         </Link>
@@ -99,7 +99,7 @@ function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
   }
   return (
     <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
-      <GeoImage value={row.image} alt="" fill sizes="20px" style={{ objectFit: 'cover' }} />
+      <ThumbGeoImage value={row.image} alt="" />
     </span>
   );
 }

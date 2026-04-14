@@ -14,7 +14,7 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -239,11 +239,9 @@ async function PendingContentProposal({
           className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
         >
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
-            <GeoImage
+            <ThumbGeoImage
               value={space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
               alt={`Cover image for space ${space.entity?.name ?? space.id}`}
-              fill
-              style={{ objectFit: 'cover' }}
             />
           </div>
           <p>{space.entity?.name ?? proposal.space.id}</p>
@@ -251,7 +249,7 @@ async function PendingContentProposal({
         <span className="text-grey-03">&middot;</span>
         <div className="inline-flex items-center gap-1.5">
           <span className="relative h-3 w-3 overflow-hidden rounded-full">
-            <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
+            <Avatar size={12} avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
           </span>
           <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
         </div>
