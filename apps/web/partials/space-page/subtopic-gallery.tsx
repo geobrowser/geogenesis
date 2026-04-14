@@ -1,3 +1,7 @@
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
 import { Spaces } from '~/core/utils/space';
@@ -19,7 +23,9 @@ function getSubtopicCardImage(subtopic: TopicUsage) {
 }
 
 export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
-  if (subtopics.length === 0) {
+  const searchParams = useSearchParams();
+
+  if (subtopics.length === 0 || searchParams?.get('tabId')) {
     return null;
   }
 

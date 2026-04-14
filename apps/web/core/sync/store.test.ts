@@ -185,6 +185,85 @@ describe('GeoStore', () => {
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
+
+    it('should preserve the pristine remote baseline when merged entity differs', () => {
+      // The sync pipeline passes both `entities` (merged, with local overrides
+      // baked in) and `remoteEntities` (the raw server response). `syncedEntities`
+      // must track the raw remote so net-change diffing in the flowbar can
+      // correctly identify when a local edit has been reverted to the remote value.
+      const remoteValue: Value = {
+        id: 'shared-value-id',
+        entity: { id: 'entity-1', name: 'Test Entity 1' },
+        property: { id: 'prop-1', name: 'Test Property', dataType: 'TEXT' },
+        value: 'remote value',
+        spaceId: 'space-1',
+        timestamp: '2023-01-01T00:00:00Z',
+        isDeleted: false,
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+
+      const localOverrideValue: Value = {
+        ...remoteValue,
+        value: 'local override',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+
+      const remoteEntity: Entity = {
+        ...mockEntity1,
+        values: [remoteValue],
+        relations: [],
+      };
+
+      // `E.merge` strips the remote value when a local override shares its id,
+      // so the merged entity only carries the local override.
+      const mergedEntity: Entity = {
+        ...mockEntity1,
+        values: [localOverrideValue],
+        relations: [],
+      };
+
+      const onCall = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => call[0] === GeoEventStream.ENTITIES_SYNCED
+      );
+      const syncCallback = onCall?.[1];
+
+      syncCallback?.({ entities: [mergedEntity], remoteEntities: [remoteEntity] });
+
+      const baseline = syncedEntities.get('entity-1');
+      expect(baseline).toBeDefined();
+      expect(baseline!.values).toHaveLength(1);
+      expect(baseline!.values[0].value).toBe('remote value');
+      expect(baseline!.values[0].isLocal).toBe(false);
+    });
+
+    it('should strip local values and relations from the baseline', () => {
+      // Defensive filter: even if a remote entity somehow carries an isLocal
+      // flag, the baseline must represent the pristine server state.
+      const remoteEntity: Entity = {
+        ...mockEntity1,
+        values: [
+          { ...mockValue1, id: 'remote-only', isLocal: false },
+          { ...mockValue1, id: 'leaked-local', isLocal: true },
+        ],
+        relations: [
+          { ...mockRelation1, id: 'remote-relation', isLocal: false },
+          { ...mockRelation1, id: 'leaked-local-relation', isLocal: true },
+        ],
+      };
+
+      const onCall = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => call[0] === GeoEventStream.ENTITIES_SYNCED
+      );
+      const syncCallback = onCall?.[1];
+
+      syncCallback?.({ entities: [remoteEntity], remoteEntities: [remoteEntity] });
+
+      const baseline = syncedEntities.get('entity-1');
+      expect(baseline!.values.map(v => v.id)).toEqual(['remote-only']);
+      expect(baseline!.relations.map(r => r.id)).toEqual(['remote-relation']);
+    });
   });
 
   describe('clear', () => {
