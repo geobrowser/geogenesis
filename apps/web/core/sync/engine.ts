@@ -89,8 +89,8 @@ export class SyncEngine {
     this.batcher = new AsyncBatcher(this.processSyncQueue.bind(this), {
       wait: Duration.toMillis('100 millis'),
       started: true,
-      onSuccess: (result: Entity[]) => {
-        if (result.length > 0) {
+      onSuccess: ({ merged, remote }: { merged: Entity[]; remote: Entity[] }) => {
+        if (merged.length > 0) {
           /**
            * We track the synced entities that have actually been merged instead of
            * using the uniqueEntityIds we calculate above. This is to ensure that
@@ -99,11 +99,15 @@ export class SyncEngine {
            * and now can no longer be synced in the future.
            */
           const now = Date.now();
-          for (const entity of result) {
+          for (const entity of merged) {
             this.syncedEntities.set(entity.id, now);
           }
 
-          this.stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: result });
+          this.stream.emit({
+            type: GeoEventStream.ENTITIES_SYNCED,
+            entities: merged,
+            remoteEntities: remote,
+          });
         }
       },
     });
@@ -176,7 +180,7 @@ export class SyncEngine {
 
   // @TODO This can eventually happen in a Worker so it can happen
   // in a separate thread that doesn't block UI ever
-  private async processSyncQueue(events: GeoEvent[]) {
+  private async processSyncQueue(events: GeoEvent[]): Promise<{ merged: Entity[]; remote: Entity[] }> {
     const entityIds: string[] = [];
 
     for (const event of events) {
@@ -219,7 +223,7 @@ export class SyncEngine {
     }
 
     if (entityIds.length === 0) {
-      return [];
+      return { merged: [], remote: [] };
     }
 
     // Don't resync an entity if it was recently synced (within TTL).
@@ -238,7 +242,7 @@ export class SyncEngine {
     ];
 
     if (uniqueEntityIds.length === 0) {
-      return [];
+      return { merged: [], remote: [] };
     }
 
     let entities: Record<string, Entity>;
@@ -263,13 +267,15 @@ export class SyncEngine {
           })
         )}`
       );
-      return [];
+      return { merged: [], remote: [] };
     }
 
     const merged = uniqueEntityIds
       .map(e => E.merge({ id: e, store: this.store, mergeWith: entities[e] }))
-      .filter(e => e !== null);
+      .filter((e): e is Entity => e !== null);
 
-    return merged;
+    const remote = uniqueEntityIds.map(id => entities[id]).filter((e): e is Entity => e !== undefined);
+
+    return { merged, remote };
   }
 }

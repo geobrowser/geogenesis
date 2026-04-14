@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 import {
@@ -38,41 +39,53 @@ interface SearchNode {
 
 interface NetworkResult {
   search: SearchNode[];
+  entityLookup?: SearchNode[];
 }
 
-const subtopicSearchQuery = (query: string) => `
-  {
-    search(query: ${JSON.stringify(query)}, first: ${MAX_SUBTOPIC_SEARCH_RESULTS}) {
-      id
-      name
-      description
-      relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-        typeId
-        toEntity {
-          valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-            propertyId
-            text
-          }
-        }
+const SEARCH_NODE_FIELDS = `
+  id
+  name
+  description
+  relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+    typeId
+    toEntity {
+      valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+        propertyId
+        text
       }
-      spacesByTopicIdConnection(first: ${MAX_TOPIC_USAGE_AVATARS}) {
-        totalCount
-        nodes {
-          id
-          page {
-            name
-            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-              typeId
-              toEntity {
-                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-                  propertyId
-                  text
-                }
-              }
+    }
+  }
+  spacesByTopicIdConnection(first: ${MAX_TOPIC_USAGE_AVATARS}) {
+    totalCount
+    nodes {
+      id
+      page {
+        name
+        relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+          typeId
+          toEntity {
+            valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+              propertyId
+              text
             }
           }
         }
       }
+    }
+  }
+`;
+
+const subtopicSearchQuery = (query: string, maybeEntityId: string | null) => `
+  {
+    search(query: ${JSON.stringify(query)}, first: ${MAX_SUBTOPIC_SEARCH_RESULTS}) {
+      ${SEARCH_NODE_FIELDS}
+    }
+    ${
+      maybeEntityId
+        ? `entityLookup: entities(filter: { id: { in: [${JSON.stringify(maybeEntityId)}] } }) {
+      ${SEARCH_NODE_FIELDS}
+    }`
+        : ''
     }
   }
 `;
@@ -87,8 +100,10 @@ export async function fetchSubtopicSearch(
     return [];
   }
 
+  const maybeEntityId = validateEntityId(trimmedQuery) ? trimmedQuery : null;
+
   const queryEffect = graphql<NetworkResult>({
-    query: subtopicSearchQuery(trimmedQuery),
+    query: subtopicSearchQuery(trimmedQuery, maybeEntityId),
     endpoint: Environment.getConfig().api,
     signal,
   });
@@ -107,12 +122,25 @@ export async function fetchSubtopicSearch(
     }
   }
 
-  return resultOrError.right.search.map(result => ({
-    id: result.id,
-    name: result.name ?? PLACEHOLDER_TOPIC_NAME,
-    description: result.description,
-    image: resolveSpaceImage(result.relationsList),
-    spaces: mergeTopicUsageSpaces(result.spacesByTopicIdConnection.nodes),
-    spacesCount: result.spacesByTopicIdConnection.totalCount,
-  }));
+  const toResult = (node: SearchNode): SubtopicSearchResult => ({
+    id: node.id,
+    name: node.name ?? PLACEHOLDER_TOPIC_NAME,
+    description: node.description,
+    image: resolveSpaceImage(node.relationsList),
+    spaces: mergeTopicUsageSpaces(node.spacesByTopicIdConnection.nodes),
+    spacesCount: node.spacesByTopicIdConnection.totalCount,
+  });
+
+  const searchResults = resultOrError.right.search.map(toResult);
+  const entityLookupResults = (resultOrError.right.entityLookup ?? []).map(toResult);
+
+  const seen = new Set<string>();
+  const merged: SubtopicSearchResult[] = [];
+  for (const result of [...entityLookupResults, ...searchResults]) {
+    if (seen.has(result.id)) continue;
+    seen.add(result.id);
+    merged.push(result);
+  }
+
+  return merged;
 }
