@@ -16,6 +16,36 @@ import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { Entity, EntityWithSchema, Property, Relation } from '../types';
 import { Entities } from '../utils/entity';
+import { sortRelations } from '../utils/utils';
+
+function orderEntitiesByIdList<T extends { id: string }>(ids: string[], entities: T[]): T[] {
+  const byId = new Map(entities.map(e => [e.id, e]));
+  return ids.map(id => byId.get(id)).filter((e): e is T => e != null);
+}
+
+function orderPropertiesByIdList(ids: string[], fetched: Property[]): Property[] {
+  const byId = new Map(fetched.map(p => [p.id, p]));
+  const seen = new Set<string>();
+  const ordered: Property[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const p = byId.get(id);
+    if (p) ordered.push(p);
+  }
+  return ordered;
+}
+
+function dedupeTypesPreserveOrder(types: { id: string; spaceId?: string }[]): { id: string; spaceId?: string }[] {
+  const seen = new Set<string>();
+  const out: { id: string; spaceId?: string }[] = [];
+  for (const t of types) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
 
 type UseEntityOptions = {
   spaceId?: string;
@@ -56,7 +86,10 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     [relations]
   );
 
-  const stableTypeKey = useMemo(() => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).sort(), [typesWithSpace]);
+  const stableTypeKey = useMemo(
+    () => typesWithSpace.map(t => `${t.id}:${t.spaceId ?? ''}`).join('|'),
+    [typesWithSpace]
+  );
   const stableRelationKey = useMemo(
     () => [...new Set(relations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
     [relations]
@@ -189,19 +222,20 @@ export async function getSchemaFromTypeIds(
 ): Promise<Property[]> {
   if (types.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
 
-  const spaceByType = new Map(types.map(t => [t.id, t.spaceId]));
-  const dedupedTypeIds = [...new Set(types.map(t => t.id))];
+  const typesInEntityOrder = dedupeTypesPreserveOrder(types);
+  const spaceByType = new Map(typesInEntityOrder.map(t => [t.id, t.spaceId]));
+  const dedupedTypeIds = typesInEntityOrder.map(t => t.id);
 
   const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
+  const typeEntitiesOrdered = orderEntitiesByIdList(dedupedTypeIds, typeEntities);
 
-  const nativePropertyIds = typeEntities
-    .flatMap(entity => {
-      const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
-      return entity.relations.filter(
-        r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
-      );
-    })
-    .map(r => r.toEntity.id);
+  const nativePropertyIds = typeEntitiesOrdered.flatMap(entity => {
+    const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
+    const props = entity.relations.filter(
+      r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+    );
+    return sortRelations(props).map(r => r.toEntity.id);
+  });
 
   // Collect additional properties from filter-specified spaces (e.g. a type
   // may define extra properties in a space different from its native one).
@@ -217,11 +251,12 @@ export async function getSchemaFromTypeIds(
     );
 
     filterPropertyIds = results.flatMap(({ spaceId, entities }) =>
-      entities
-        .flatMap(entity =>
-          entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId)
-        )
-        .map(r => r.toEntity.id)
+      orderEntitiesByIdList(dedupedTypeIds, entities).flatMap(entity => {
+        const props = entity.relations.filter(
+          r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId
+        );
+        return sortRelations(props).map(r => r.toEntity.id);
+      })
     );
   }
 
@@ -229,9 +264,10 @@ export async function getSchemaFromTypeIds(
 
   if (allPropertyIds.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
 
-  const properties = await Effect.runPromise(getProperties(allPropertyIds));
+  const fetched = await Effect.runPromise(getProperties(allPropertyIds));
+  const orderedProperties = orderPropertiesByIdList(allPropertyIds, fetched);
 
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties], (a, b) => a.id === b.id);
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...orderedProperties], (a, b) => a.id === b.id);
 }
 
 /**
@@ -283,13 +319,17 @@ export async function getSchemaFromTypeIdsAndRelations(
       const spaceByDataType = new Map(dataTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
 
       const dataTypeEntities = await fetchEntitiesWithRelations(dataTypeIds, spaceByDataType);
+      const dataTypeEntitiesOrdered = orderEntitiesByIdList(dataTypeIds, dataTypeEntities);
 
-      const dataTypePropertyIds = dataTypeEntities
-        .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
-        .map(r => r.toEntity.id);
+      const dataTypePropertyIds = dataTypeEntitiesOrdered.flatMap(entity => {
+        const props = entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
+        return sortRelations(props).map(r => r.toEntity.id);
+      });
 
       if (dataTypePropertyIds.length > 0) {
-        dataTypeSchema = await Effect.runPromise(getProperties(dataTypePropertyIds));
+        const dataTypeIdsUnique = [...new Set(dataTypePropertyIds)];
+        const fetchedDt = await Effect.runPromise(getProperties(dataTypeIdsUnique));
+        dataTypeSchema = orderPropertiesByIdList(dataTypeIdsUnique, fetchedDt);
       }
     }
   }
@@ -314,19 +354,21 @@ export async function getSchemaFromTypeIdsAndRelations(
   const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
 
   const targetEntities = await fetchEntitiesWithRelations(targetIds, spaceByTarget);
+  const targetEntitiesOrdered = orderEntitiesByIdList(targetIds, targetEntities);
 
-  const additionalPropertyIds = targetEntities
-    .flatMap(entity => {
-      const targetSpaceId = spaceByTarget.get(entity.id) ?? entity.spaces[0];
-      return entity.relations.filter(
-        r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
-      );
-    })
-    .map(r => r.toEntity.id);
+  const additionalPropertyIds = targetEntitiesOrdered.flatMap(entity => {
+    const targetSpaceId = spaceByTarget.get(entity.id) ?? entity.spaces[0];
+    const props = entity.relations.filter(
+      r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
+    );
+    return sortRelations(props).map(r => r.toEntity.id);
+  });
 
   if (additionalPropertyIds.length === 0) return baseSchema;
 
-  const additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
+  const additionalIdsUnique = [...new Set(additionalPropertyIds)];
+  const fetchedAdditional = await Effect.runPromise(getProperties(additionalIdsUnique));
+  const additionalOrdered = orderPropertiesByIdList(additionalIdsUnique, fetchedAdditional);
 
-  return dedupeWith([...baseSchema, ...additionalProperties], (a, b) => a.id === b.id);
+  return dedupeWith([...baseSchema, ...additionalOrdered], (a, b) => a.id === b.id);
 }

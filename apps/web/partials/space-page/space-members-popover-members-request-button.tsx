@@ -24,11 +24,15 @@ export function SpaceMembersPopoverMemberRequestButton({
   return (
     <Pending isPending={status === 'pending'} position="end">
       {!hasRequestedSpaceMembership ? (
-        <button disabled={status !== 'idle'} onClick={() => requestToBeMember()}>
+        <button
+          className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
+          disabled={status !== 'idle'}
+          onClick={() => requestToBeMember()}
+        >
           <RequestButtonText status={status} />
         </button>
       ) : (
-        <span>Requested</span>
+        <span className="text-smallButton text-grey-04">Requested</span>
       )}
     </Pending>
   );

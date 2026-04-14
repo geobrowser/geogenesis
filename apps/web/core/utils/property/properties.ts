@@ -12,7 +12,11 @@ import {
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
+import { Effect } from 'effect';
+
+import { getEntity } from '~/core/io/queries';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
+import type { GeoStore } from '~/core/sync/store';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
@@ -260,6 +264,66 @@ export function reconstructFromStore(
   };
 
   return property;
+}
+
+/** Fills `relationValueTypes` from the sync store when the API omitted them. */
+export function mergeRelationValueTypesFromStore(p: Property, geoStore: GeoStore): Property {
+  if (p.dataType !== 'RELATION') return p;
+  if (p.relationValueTypes && p.relationValueTypes.length > 0) return p;
+
+  const fromGetProperty = geoStore.getProperty(p.id)?.relationValueTypes;
+  if (fromGetProperty && fromGetProperty.length > 0) {
+    return { ...p, relationValueTypes: fromGetProperty };
+  }
+
+  const entity = geoStore.getEntity(p.id);
+  if (!entity) return p;
+
+  const relationValueTypes = entity.relations
+    .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+    .map(r => ({ id: r.toEntity.id, name: r.toEntity.name ?? null }));
+
+  if (relationValueTypes.length === 0) return p;
+  return { ...p, relationValueTypes };
+}
+
+/**
+ * Loads relation target type ids from the network. The subgraph returns relation value types
+ * for a property entity only when queried with the right space (see `hydrateRelationValueTypes`).
+ */
+export async function fetchRelationTargetTypeIdsForProperty(
+  propertyId: string,
+  blockSpaceId: string | undefined
+): Promise<string[] | null> {
+  const hasRvts = (entity: Entity | null | undefined) =>
+    Boolean(
+      entity?.relations.some(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+    );
+
+  const candidates: Array<Entity | null> = [];
+
+  if (blockSpaceId) {
+    candidates.push(await Effect.runPromise(getEntity(propertyId, blockSpaceId)));
+  }
+
+  const stub = await Effect.runPromise(getEntity(propertyId));
+  candidates.push(stub);
+
+  const primarySpace = stub?.spaces[0];
+  if (primarySpace && primarySpace !== blockSpaceId) {
+    candidates.push(await Effect.runPromise(getEntity(propertyId, primarySpace)));
+  }
+
+  for (const entity of candidates) {
+    if (!hasRvts(entity)) continue;
+    const ids =
+      entity!.relations
+        .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+        .map(r => r.toEntity.id) ?? [];
+    if (ids.length > 0) return ids;
+  }
+
+  return null;
 }
 
 /**
