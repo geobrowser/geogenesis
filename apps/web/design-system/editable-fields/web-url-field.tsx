@@ -4,7 +4,7 @@ import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { cva } from 'class-variance-authority';
+import { cva, cx } from 'class-variance-authority';
 
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
@@ -83,7 +83,10 @@ export function WebUrlField({
     <input
       {...props}
       value={localValue}
-      className={webUrlFieldStyles({ variant, editable: isEditing, className })}
+      className={cx(
+        webUrlFieldStyles({ variant, editable: isEditing, className }),
+        variant === 'tableCell' && 'min-w-0 truncate'
+      )}
       onChange={e => setLocalValue(e.currentTarget.value)}
     />
   ) : (

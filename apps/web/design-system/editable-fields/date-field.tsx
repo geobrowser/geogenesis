@@ -1054,8 +1054,8 @@ export function DateField({ value, isEditing, variant, onBlur, className = '', p
     );
 
   return (
-    <div className={cx('flex flex-col gap-1', className)}>
-      <div className="flex flex-row items-start gap-4">
+    <div className={cx('flex min-w-0 flex-col gap-1', className)}>
+      <div className="flex min-w-0 flex-row flex-wrap items-start gap-4">
         <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} dataType={dataType} />
 
         {isDateInterval && (
