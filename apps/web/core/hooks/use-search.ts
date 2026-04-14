@@ -20,10 +20,44 @@ interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
   initialQuery?: string;
-  enabled?: boolean;
+  waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
 }
 
-export function useSearch({ filterByTypes, filterBySpace, enabled = true, initialQuery }: SearchOptions = {}) {
+function normalizeTypeId(id: string): string {
+  return id.replace(/-/g, '');
+}
+
+export function searchResultMatchesAllowedTypes(
+  result: { types: { id: string }[] },
+  filterByTypes: string[] | undefined
+): boolean {
+  if (!filterByTypes?.length) return true;
+  const allowed = new Set(filterByTypes.flatMap(id => [id, normalizeTypeId(id)]));
+  return result.types.some(t => allowed.has(t.id) || allowed.has(normalizeTypeId(t.id)));
+}
+
+export function entityTypesMatchFilter(
+  types: { id: string }[] | undefined,
+  relationTargetTypeIds: string[] | undefined
+): boolean {
+  return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
+}
+
+function resultMatchesFilterTypes(
+  result: { types: { id: string }[] },
+  filterByTypes: string[] | undefined
+): boolean {
+  return searchResultMatchesAllowedTypes(result, filterByTypes);
+}
+
+export function useSearch({
+  filterByTypes,
+  filterBySpace,
+  initialQuery,
+  waitForFilterTypes,
+  restrictToFilterTypes,
+}: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
@@ -31,9 +65,20 @@ export function useSearch({ filterByTypes, filterBySpace, enabled = true, initia
 
   const maybeEntityId = debouncedQuery.trim();
 
+  const searchBlocked =
+    (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
+    (Boolean(restrictToFilterTypes) && !filterByTypes?.length);
+
   const { data: results, isLoading } = useQuery({
-    enabled: enabled && debouncedQuery !== '',
-    queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace],
+    enabled: debouncedQuery !== '' && !searchBlocked,
+    queryKey: [
+      'search',
+      debouncedQuery,
+      filterByTypes?.join('-'),
+      filterBySpace,
+      Boolean(waitForFilterTypes),
+      Boolean(restrictToFilterTypes),
+    ],
     queryFn: async () => {
       if (query.length === 0) return [];
 
@@ -71,7 +116,12 @@ export function useSearch({ filterByTypes, filterBySpace, enabled = true, initia
           }
         }
 
-        return resultOrError.right ? [resultOrError.right] : [];
+        const merged = resultOrError.right;
+        if (!merged) return [];
+        if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+          return [];
+        }
+        return [merged];
       }
 
       const fetchResultsEffect = Effect.either(
@@ -84,13 +134,15 @@ export function useSearch({ filterByTypes, filterBySpace, enabled = true, initia
                 name: {
                   fuzzy: debouncedQuery,
                 },
-                types: filterByTypes?.map(t => {
-                  return {
-                    id: {
-                      equals: t,
-                    },
-                  };
-                }),
+                ...(filterByTypes?.length
+                  ? {
+                      types: filterByTypes.map(t => ({
+                        id: {
+                          equals: t,
+                        },
+                      })),
+                    }
+                  : {}),
                 ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
               },
               first: 10,
@@ -118,9 +170,9 @@ export function useSearch({ filterByTypes, filterBySpace, enabled = true, initia
         }
       }
 
-      // Preserve the API's relevance ordering. Append any local-only
-      // entities (not already in the remote results) to the end.
-      return resultOrError.right;
+      const rows = resultOrError.right;
+      if (!filterByTypes?.length) return rows;
+      return rows.filter(r => resultMatchesFilterTypes(r, filterByTypes));
     },
     /**
      * We don't want to return stale search results. Instead we just

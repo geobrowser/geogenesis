@@ -171,15 +171,26 @@ export class GeoStore {
     this.stream = stream;
 
     this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      // Buffer entities and flush once per microtask to coalesce
-      // multiple ENTITIES_SYNCED events into a single hydrateWith call.
+      // Prefer the raw remote entities (pre-merge) for the baseline when the
+      // event carries them. Falling back to the merged entities is only safe
+      // when no remote baseline is available — the merged entity strips remote
+      // values whose ids collide with local overrides, so it would otherwise
+      // leak local edits into the baseline and break net-change diffing in the
+      // flowbar (values and relations that were deleted locally would stop
+      // matching any remote counterpart after a re-sync).
+      const baselineById = new Map<string, Entity>();
+      if (event.remoteEntities) {
+        for (const remote of event.remoteEntities) {
+          baselineById.set(remote.id, remote);
+        }
+      }
+
       for (const entity of event.entities) {
-        // E.merge bakes isLocal entries into entities — strip them so
-        // syncedEntities stays a clean remote baseline for net-change diffing.
+        const baseline = baselineById.get(entity.id) ?? entity;
         syncedEntities.set(entity.id, {
-          ...entity,
-          values: entity.values.filter(v => !v.isLocal),
-          relations: entity.relations.filter(r => !r.isLocal),
+          ...baseline,
+          values: baseline.values.filter(v => !v.isLocal),
+          relations: baseline.relations.filter(r => !r.isLocal),
         });
       }
       this.pendingSyncEntities.push(...event.entities);
@@ -196,7 +207,11 @@ export class GeoStore {
     this.pendingSyncEntities = [];
     if (entities.length === 0) return;
 
-    this.hydrateWith(entities);
+    // Baseline was already written to `syncedEntities` by the ENTITIES_SYNCED
+    // handler using the raw (pre-merge) remote entities. Only reactive state
+    // needs updating here — writing baseline again from the merged entities
+    // would clobber the pristine remote values with locally-overridden ones.
+    this.hydrateReactiveState(entities);
 
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
       console.log(`Finished syncing ${entities.length} entities to store.`);
@@ -301,6 +316,10 @@ export class GeoStore {
       });
     }
 
+    this.hydrateReactiveState(entities);
+  }
+
+  private hydrateReactiveState(entities: Entity[]) {
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
 
