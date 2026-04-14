@@ -1,6 +1,7 @@
-import { NavUtils } from '~/core/utils/utils';
+import { Effect } from 'effect';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -9,21 +10,30 @@ import {
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { getMyGovernanceProposals } from './fetch-my-governance-proposals';
+import { serializeGovernanceHomeReturnSearch } from './governance-home-return-search';
+import { MyGovernanceProposalCard } from './my-governance-proposal-card';
 
 type Props = {
   memberSpaceId: string;
+  /** Wallet address hint for `/profile/space` when the API omits address */
+  viewerWalletAddress?: string | null;
   spaceIds: string[];
   spaceFilter?: string;
   category: GovernanceHomeReviewCategory;
   status: GovernanceHomeStatusFilter;
+  governanceTab: 'review' | 'my';
+  proposalType?: 'membership' | 'content';
 };
 
 export async function MyGovernanceProposalsList({
   memberSpaceId,
+  viewerWalletAddress,
   spaceIds,
   spaceFilter,
   category,
   status,
+  governanceTab,
+  proposalType,
 }: Props) {
   const { proposals } = await getMyGovernanceProposals({
     memberSpaceId,
@@ -41,25 +51,51 @@ export async function MyGovernanceProposalsList({
   const spaces = await Promise.all(proposals.map(p => cachedFetchSpace(p.spaceId)));
   const spaceById = new Map(proposals.map((p, i) => [p.spaceId, spaces[i]]));
 
+  const viewerProfile = await Effect.runPromise(
+    fetchProfileBySpaceId(memberSpaceId, viewerWalletAddress ?? undefined)
+  ).catch(() => null);
+
+  const governanceHomeReturnSearch = serializeGovernanceHomeReturnSearch({
+    tab: governanceTab,
+    spaceId: spaceFilter ?? 'all',
+    category,
+    status,
+    proposalType,
+  });
+
   return (
     <div className="space-y-2">
       {proposals.map(p => {
         const space = spaceById.get(p.spaceId);
         const spaceName = space?.entity?.name ?? p.spaceId;
+        const spaceImage = space?.entity?.image ?? PLACEHOLDER_SPACE_IMAGE;
+        const creator = p.createdBy;
+        const creatorName = creator.name ?? creator.address ?? creator.id;
+        const creatorValue = creator.address ?? creator.id;
+
         return (
-          <div key={p.id} className="rounded-lg border border-grey-02 p-4">
-            <Link
-              href={NavUtils.toProposal(p.spaceId, p.id, 'home')}
-              className="text-smallTitle hover:text-text"
-            >
-              {p.name}
-            </Link>
-            <div className="mt-1 text-breadcrumb text-grey-04">
-              <Link href={NavUtils.toSpace(p.spaceId)} className="hover:text-text">
-                {spaceName}
-              </Link>
-            </div>
-          </div>
+          <MyGovernanceProposalCard
+            key={p.id}
+            spaceId={p.spaceId}
+            proposalId={p.id}
+            displayTitle={p.displayTitle}
+            spaceName={spaceName}
+            spaceImage={spaceImage}
+            creatorName={creatorName}
+            creatorAvatarUrl={creator.avatarUrl}
+            creatorValue={creatorValue}
+            endTime={p.endTime}
+            status={p.status}
+            canExecute={p.canExecute}
+            proposalType={p.type}
+            yesCount={p.proposalVotes.yesCount}
+            noCount={p.proposalVotes.noCount}
+            totalVotes={p.proposalVotes.totalCount}
+            userVote={p.userVote}
+            viewerAvatarUrl={viewerProfile?.avatarUrl}
+            viewerAddress={viewerProfile?.address}
+            governanceHomeReturnSearch={governanceHomeReturnSearch}
+          />
         );
       })}
     </div>

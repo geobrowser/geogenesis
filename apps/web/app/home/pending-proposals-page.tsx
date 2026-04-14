@@ -5,7 +5,13 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Address } from '~/core/io/substream-schema';
-import { NavUtils, getIsProposalEnded, getProposalTimeRemaining } from '~/core/utils/utils';
+import {
+  NavUtils,
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeTime,
+  getIsProposalEnded,
+  getProposalTimeRemaining,
+} from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { GeoImage } from '~/design-system/geo-image';
@@ -24,6 +30,7 @@ import {
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
+import { serializeGovernanceHomeReturnSearch } from './governance-home-return-search';
 
 interface Props {
   connectedSpaceId?: string;
@@ -61,6 +68,17 @@ export async function PendingProposalsPage({
         }
       : null;
 
+  const governanceHomeReturnSearch =
+    governanceFilters != null
+      ? serializeGovernanceHomeReturnSearch({
+          tab: 'review',
+          spaceId: governanceFilters.spaceId,
+          category: governanceFilters.category,
+          status: governanceFilters.status,
+          proposalType,
+        })
+      : undefined;
+
   return {
     node: (
       <div className="space-y-2">
@@ -76,6 +94,7 @@ export async function PendingProposalsPage({
                   proposal={proposal}
                   user={user}
                   connectedSpaceId={connectedSpaceId}
+                  governanceHomeReturnSearch={governanceHomeReturnSearch}
                 />
               );
           }
@@ -155,7 +174,11 @@ async function PendingContentProposal({
   proposal,
   user,
   connectedSpaceId,
-}: PendingMembershipProposalProps & { connectedSpaceId?: string }) {
+  governanceHomeReturnSearch,
+}: PendingMembershipProposalProps & {
+  connectedSpaceId?: string;
+  governanceHomeReturnSearch?: string;
+}) {
   const [space, proposalName] = await Promise.all([
     cachedFetchSpace(proposal.space.id),
     (async () => {
@@ -187,10 +210,27 @@ async function PendingContentProposal({
     ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
     : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+  const footerLeft =
+    proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
+        <span aria-hidden className="shrink-0 select-none text-grey-03">
+          ·
+        </span>
+        <time
+          className="shrink-0 tabular-nums"
+          dateTime={new Date(proposal.endTime * 1000).toISOString()}
+        >
+          {formatGovernanceOutcomeTime(proposal.endTime)}
+        </time>
+      </div>
+    ) : (
+      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+    );
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home')}>
+      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home', governanceHomeReturnSearch)}>
         <div className="text-smallTitle">{proposalName}</div>
       </Link>
       <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">
@@ -249,7 +289,7 @@ async function PendingContentProposal({
         </div>
       </div>
       <div className="flex w-full items-center justify-between">
-        <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+        {footerLeft}
 
         <AcceptOrRejectEditor
           spaceId={proposal.space.id}

@@ -22,7 +22,9 @@ interface Props {
   modal?: boolean;
 }
 
-const contentStyles = cva('z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+const contentStyles = cva(
+  'z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
+  {
   variants: {
     align: {
       start: 'origin-top-left',

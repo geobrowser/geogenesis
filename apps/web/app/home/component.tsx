@@ -70,10 +70,13 @@ export async function Component({
               >
                 <MyGovernanceProposalsList
                   memberSpaceId={connectedSpaceId}
+                  viewerWalletAddress={connectedAddress}
                   spaceIds={myProposalSpaceIds}
                   spaceFilter={governanceFilters.spaceId}
                   category={governanceFilters.category}
                   status={governanceFilters.status}
+                  governanceTab={governanceTab}
+                  proposalType={proposalType}
                 />
               </React.Suspense>
             ) : (

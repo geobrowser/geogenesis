@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
+import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
@@ -21,6 +22,7 @@ import { Menu } from '~/design-system/menu';
 import { useSearchParams } from 'next/navigation';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import {
@@ -95,26 +97,44 @@ function GovernanceTabsRow({
   };
 
   return (
-    <div className="relative mt-8 flex w-max items-center gap-6 pb-2">
-      <Link
-        href={hrefForTab('review')}
-        className={`relative pb-2 text-quoteMedium ${governanceTab === 'review' ? 'text-text' : 'text-grey-04 hover:text-text'}`}
-      >
-        Review proposals
-        {governanceTab === 'review' ? (
-          <span className="absolute right-0 bottom-0 left-0 z-10 h-px bg-text" />
-        ) : null}
-      </Link>
-      <Link
-        href={hrefForTab('my')}
-        className={`relative pb-2 text-quoteMedium ${governanceTab === 'my' ? 'text-text' : 'text-grey-04 hover:text-text'}`}
-      >
-        My proposals
-        {governanceTab === 'my' ? (
-          <span className="absolute right-0 bottom-0 left-0 z-10 h-px bg-text" />
-        ) : null}
-      </Link>
-      <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+    <div className="relative mt-8 w-full">
+      <div className="relative z-0">
+        <div className="relative flex w-max items-center gap-6 pb-2">
+          <Link
+            href={hrefForTab('review')}
+            prefetch
+            className={tabGroupTabLinkStyles({ active: governanceTab === 'review' })}
+          >
+            Review proposals
+            {governanceTab === 'review' ? (
+              <motion.div
+                layoutId="governance-home-tab-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+              />
+            ) : null}
+          </Link>
+          <Link
+            href={hrefForTab('my')}
+            prefetch
+            className={tabGroupTabLinkStyles({ active: governanceTab === 'my' })}
+          >
+            My proposals
+            {governanceTab === 'my' ? (
+              <motion.div
+                layoutId="governance-home-tab-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+              />
+            ) : null}
+          </Link>
+        </div>
+        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+      </div>
     </div>
   );
 }
@@ -253,7 +273,13 @@ const Notices = () => {
         title="Welcome to your governance home"
         description="Your area to see any proposals, member requests, and editor requests across the spaces you are involved in."
         media={
-          <img src="/home.png" alt="" className="max-h-[140px] w-auto max-w-full object-contain object-right" />
+          <div className="relative h-[118px] w-[128px] shrink-0 overflow-hidden sm:h-[124px] sm:w-[136px]" aria-hidden>
+            <img
+              src="/home.png"
+              alt=""
+              className="pointer-events-none block h-full w-full min-h-0 min-w-0 select-none object-cover object-left object-top"
+            />
+          </div>
         }
       />
     </div>
@@ -274,7 +300,7 @@ const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', 
 const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const classNames = cva('relative flex gap-4 overflow-clip rounded-lg p-4', {
+  const classNames = cva('relative flex gap-4 overflow-clip rounded-lg px-4 pt-4', {
     variants: {
       color: {
         grey: 'bg-gradient-grey',
@@ -293,13 +319,13 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
   if (dismissedNotices.includes(id)) return null;
 
   return (
-    <div id={id} className={classNames({ color })}>
+    <div id={id} className={`${classNames({ color })} ${media ? 'pb-6' : 'pb-4'}`}>
       <div className="min-w-0 flex-1">
         <div className="text-smallTitle">{title}</div>
         <div className="mt-2">{description}</div>
         {element && <div className="mt-2">{element}</div>}
       </div>
-      {media && <div className="flex shrink-0 items-end">{media}</div>}
+      {media && <div className="flex shrink-0 items-end leading-none">{media}</div>}
       <div className="shrink-0">
         <button type="button" onClick={handleDismissNotice} className="rounded border p-1">
           <Close />

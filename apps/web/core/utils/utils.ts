@@ -18,8 +18,15 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
-  toProposal: (spaceId: string, proposalId: string, from?: string) =>
-    `/space/${spaceId}/governance?proposalId=${proposalId}${from ? `&from=${from}` : ''}`,
+  toProposal: (spaceId: string, proposalId: string, from?: string, governanceHomeReturnSearch?: string) => {
+    const params = new URLSearchParams();
+    params.set('proposalId', proposalId);
+    if (from) params.set('from', from);
+    if (from === 'home' && governanceHomeReturnSearch && governanceHomeReturnSearch.length > 0) {
+      params.set('returnSearch', governanceHomeReturnSearch);
+    }
+    return `/space/${spaceId}/governance?${params.toString()}`;
+  },
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },

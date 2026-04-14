@@ -74,7 +74,8 @@ function statusQueryParam(status: GovernanceHomeStatusFilter): string {
   return 'REJECTED';
 }
 
-async function fetchProposalsForSpace({
+/** Same REST query used for governance home review lists and “My proposals”. */
+export async function fetchProposalsForSpaceByGovernanceFilters({
   spaceId,
   memberSpaceId,
   proposalType,
@@ -191,7 +192,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   const allResults = await Promise.all(
     spaceIds.map(spaceId =>
-      fetchProposalsForSpace({ spaceId, memberSpaceId, proposalType, category, status })
+      fetchProposalsForSpaceByGovernanceFilters({ spaceId, memberSpaceId, proposalType, category, status })
     )
   );
 

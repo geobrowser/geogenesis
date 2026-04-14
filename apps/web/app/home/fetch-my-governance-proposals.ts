@@ -1,80 +1,57 @@
 import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
 
-import { Environment } from '~/core/environment';
-import { graphql } from '~/core/io/subgraph/graphql';
+import {
+  convertVoteOption,
+  mapActionTypeToProposalType,
+  mapProposalStatus,
+  type ApiProposalListItem,
+} from '~/core/io/rest';
+import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
+import type { Profile } from '~/core/types';
 
+import { buildGovernanceHomeProposalTitle } from './build-governance-home-proposal-title';
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
+  fetchProposalsForSpaceByGovernanceFilters,
   matchesGovernanceCategory,
 } from './fetch-active-proposals-in-editor-spaces';
 
 const PAGE_SIZE = 50;
 
-type NetworkProposal = {
-  id: string;
-  name: string | null;
-  spaceId: string;
-  proposalActions: { actionType: string }[];
-};
+const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
 
-type NetworkResult = {
-  proposalsConnection: { nodes: NetworkProposal[] };
-};
-
-function buildQuery(opts: {
-  memberSpaceId: string;
-  spaceIds: string[];
-  status: GovernanceHomeStatusFilter;
-  nowSec: string;
-  offset: number;
-}): string {
-  const { memberSpaceId, spaceIds, status, nowSec, offset } = opts;
-
-  const spaceClause =
-    spaceIds.length === 1
-      ? `spaceId: { is: "${spaceIds[0]}" }`
-      : `spaceId: { in: [${spaceIds.map(id => `"${id}"`).join(', ')}] }`;
-
-  const statusClause =
-    status === 'pending'
-      ? `executedAt: { isNull: true } endTime: { greaterThanOrEqualTo: "${nowSec}" }`
-      : status === 'accepted'
-        ? `executedAt: { isNull: false }`
-        : `executedAt: { isNull: true } endTime: { lessThan: "${nowSec}" }`;
-
-  const filterInner = [`proposedBy: { is: "${memberSpaceId}" }`, spaceClause, statusClause]
-    .filter(Boolean)
-    .join('\n        ');
-
-  return `query {
-    proposalsConnection(
-      first: ${PAGE_SIZE}
-      offset: ${offset}
-      orderBy: END_TIME_DESC
-      filter: {
-        ${filterInner}
-      }
-    ) {
-      nodes {
-        id
-        name
-        spaceId
-        proposalActions {
-          actionType
-        }
-      }
-    }
-  }`;
+function sameMemberSpaceId(a: string, b: string): boolean {
+  return a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
 }
 
 export type MyGovernanceProposalRow = {
   id: string;
   spaceId: string;
-  name: string;
-  actionType: string;
+  name: string | null;
+  displayTitle: string;
+  type: ProposalType;
+  endTime: number;
+  startTime: number;
+  status: ProposalStatus;
+  canExecute: boolean;
+  proposalVotes: { totalCount: number; yesCount: number; noCount: number };
+  userVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
+  createdBy: Profile;
+  targetProfile?: Profile;
 };
+
+function dedupeByProposalId(items: ApiProposalListItem[]): ApiProposalListItem[] {
+  const seen = new Set<string>();
+  const out: ApiProposalListItem[] = [];
+  for (const p of items) {
+    if (seen.has(p.proposalId)) continue;
+    seen.add(p.proposalId);
+    out.push(p);
+  }
+  return out;
+}
 
 export async function getMyGovernanceProposals(opts: {
   memberSpaceId: string;
@@ -97,41 +74,77 @@ export async function getMyGovernanceProposals(opts: {
     return { proposals: [], hasMore: false };
   }
 
-  const nowSec = String(Math.floor(Date.now() / 1000));
-  const offset = page * PAGE_SIZE;
-
-  const result = await Effect.runPromise(
-    Effect.either(
-      graphql<NetworkResult>({
-        endpoint: Environment.getConfig().api,
-        query: buildQuery({
-          memberSpaceId,
-          spaceIds: effectiveSpaceIds,
-          status,
-          nowSec,
-          offset,
-        }),
-      })
-    )
-  );
-
-  if (Either.isLeft(result)) {
-    console.error('getMyGovernanceProposals graphql error', result.left);
-    return { proposals: [], hasMore: false };
+  const allRows: ApiProposalListItem[] = [];
+  for (const spaceId of effectiveSpaceIds) {
+    const rows = await fetchProposalsForSpaceByGovernanceFilters({
+      spaceId,
+      memberSpaceId,
+      proposalType: undefined,
+      category,
+      status,
+    });
+    for (const p of rows) {
+      if (!sameMemberSpaceId(p.proposedBy, memberSpaceId)) continue;
+      if (!matchesGovernanceCategory(p.actions[0]?.actionType, category)) continue;
+      allRows.push(p);
+    }
   }
 
-  const nodes = result.right.proposalsConnection?.nodes ?? [];
-  const filtered = nodes.filter(n =>
-    matchesGovernanceCategory(n.proposalActions[0]?.actionType, category)
-  );
+  allRows.sort((a, b) => b.timing.endTime - a.timing.endTime);
+  const unique = dedupeByProposalId(allRows);
+  const offset = page * PAGE_SIZE;
+  const pageSlice = unique.slice(offset, offset + PAGE_SIZE);
+
+  const proposedByIds = pageSlice.map(p => p.proposedBy);
+  const uniqueProposedByIds = [...new Set(proposedByIds)];
+
+  const targetIds = pageSlice
+    .filter(p => MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''))
+    .map(p => p.actions[0]?.targetId)
+    .filter((id): id is string => !!id);
+  const uniqueTargetIds = [...new Set(targetIds)];
+
+  const [profilesForProposals, profilesForTargets] = await Promise.all([
+    Effect.runPromise(fetchProfilesBySpaceIds(uniqueProposedByIds)),
+    uniqueTargetIds.length > 0 ? Effect.runPromise(fetchProfilesBySpaceIds(uniqueTargetIds)) : [],
+  ]);
+
+  const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
+  const targetProfilesBySpaceId = new Map(uniqueTargetIds.map((id, i) => [id, profilesForTargets[i]]));
+
+  const proposals: MyGovernanceProposalRow[] = [];
+
+  for (const p of pageSlice) {
+    const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
+    const type = mapActionTypeToProposalType(actionType);
+    const createdBy = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
+    const targetId = p.actions[0]?.targetId;
+    const targetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
+    const displayTitle = await buildGovernanceHomeProposalTitle(type, p.proposalId, p.name, createdBy);
+
+    proposals.push({
+      id: p.proposalId,
+      spaceId: p.spaceId,
+      name: p.name,
+      displayTitle,
+      type,
+      startTime: p.timing.startTime,
+      endTime: p.timing.endTime,
+      status: mapProposalStatus(p.status),
+      canExecute: p.canExecute,
+      proposalVotes: {
+        totalCount: p.votes.total,
+        yesCount: p.votes.yes,
+        noCount: p.votes.no,
+      },
+      userVote: p.userVote ? convertVoteOption(p.userVote) : undefined,
+      createdBy,
+      targetProfile,
+    });
+  }
 
   return {
-    proposals: filtered.map(n => ({
-      id: n.id,
-      spaceId: n.spaceId,
-      name: n.name?.trim() || 'Proposal',
-      actionType: n.proposalActions[0]?.actionType ?? 'UNKNOWN',
-    })),
-    hasMore: nodes.length === PAGE_SIZE,
+    proposals,
+    hasMore: unique.length > offset + PAGE_SIZE,
   };
 }

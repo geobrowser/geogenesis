@@ -137,7 +137,8 @@ interface TabProps {
   hidden?: boolean;
 }
 
-const tabStyles = cva(
+/** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
+export const tabGroupTabLinkStyles = cva(
   'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100',
   {
     variants: {
@@ -171,7 +172,7 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
 
   if (disabled) {
     return (
-      <div className={tabStyles({ active, disabled })}>
+      <div className={tabGroupTabLinkStyles({ active, disabled })}>
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
@@ -179,7 +180,7 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   }
 
   return (
-    <Link className={tabStyles({ active, disabled })} href={href} prefetch>
+    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
       {label}
       {badge && <Badge>{badge}</Badge>}
       {active && (

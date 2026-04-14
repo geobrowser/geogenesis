@@ -10,7 +10,8 @@ export function useCloseProposal(spaceId: string) {
 
   return useCallback(() => {
     if (searchParams?.get('from') === 'home') {
-      router.push('/home');
+      const returnSearch = searchParams.get('returnSearch');
+      router.push(returnSearch && returnSearch.length > 0 ? `/home?${returnSearch}` : '/home');
     } else {
       router.push(`/space/${spaceId}/governance`);
     }
