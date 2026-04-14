@@ -1,10 +1,13 @@
 import * as Effect from 'effect/Effect';
 import { cookies } from 'next/headers';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import type { Space } from '~/core/io/dto/spaces';
 import { fetchSidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { getSpaces } from '~/core/io/queries';
 import { fetchProfile } from '~/core/io/subgraph';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { Component } from './component';
 import {
@@ -37,6 +40,30 @@ function parseStatus(raw?: string): GovernanceHomeStatusFilter {
   return 'pending';
 }
 
+type GovernanceSpaceOption = { id: string; name: string; image: string | null; isUnnamed: boolean };
+
+function mapAndSortGovernanceSpaceOptions(spaces: Space[]): GovernanceSpaceOption[] {
+  return spaces
+    .map(s => {
+      const rawName = s.entity?.name?.trim() ?? '';
+      const isUnnamed = rawName.length === 0;
+      return {
+        id: s.id,
+        name: isUnnamed ? s.id.slice(0, 8) : rawName,
+        image: s.entity?.image && s.entity.image !== PLACEHOLDER_SPACE_IMAGE ? s.entity.image : null,
+        isUnnamed,
+      };
+    })
+    .sort((a, b) => {
+      const rankDelta = getSpaceRank(a.id) - getSpaceRank(b.id);
+      if (rankDelta !== 0) return rankDelta;
+      if (a.isUnnamed !== b.isUnnamed) return a.isUnnamed ? 1 : -1;
+      const nameDelta = a.name.localeCompare(b.name);
+      if (nameDelta !== 0) return nameDelta;
+      return a.id.localeCompare(b.id);
+    });
+}
+
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const sp = await props.searchParams;
@@ -50,8 +77,8 @@ export default async function PersonalHomePage(props: Props) {
   const proposalStatus = parseStatus(sp.proposalStatus);
   const governanceSpaceId = sp.space && sp.space !== 'all' ? sp.space : 'all';
 
-  let editorSpaceOptions: { id: string; name: string }[] = [];
-  let myProposalSpaceOptions: { id: string; name: string }[] = [];
+  let editorSpaceOptions: GovernanceSpaceOption[] = [];
+  let myProposalSpaceOptions: GovernanceSpaceOption[] = [];
 
   if (person?.spaceId) {
     const ctx = await getGovernanceHomeSpaceContext(person.spaceId);
@@ -61,14 +88,8 @@ export default async function PersonalHomePage(props: Props) {
         ? Effect.runPromise(getSpaces({ spaceIds: ctx.myProposalSpaceIds }))
         : Promise.resolve([]),
     ]);
-    editorSpaceOptions = editorSpaces.map(s => ({
-      id: s.id,
-      name: s.entity?.name?.trim() || s.id.slice(0, 8),
-    }));
-    myProposalSpaceOptions = mySpaces.map(s => ({
-      id: s.id,
-      name: s.entity?.name?.trim() || s.id.slice(0, 8),
-    }));
+    editorSpaceOptions = mapAndSortGovernanceSpaceOptions(editorSpaces);
+    myProposalSpaceOptions = mapAndSortGovernanceSpaceOptions(mySpaces);
   }
 
   return (

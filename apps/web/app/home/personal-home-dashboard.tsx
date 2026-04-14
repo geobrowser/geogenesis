@@ -15,6 +15,7 @@ import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { GeoImage } from '~/design-system/geo-image';
 import { Member } from '~/design-system/icons/member';
 import { Menu } from '~/design-system/menu';
 import { useSearchParams } from 'next/navigation';
@@ -66,8 +67,8 @@ type PersonalHomeDashboardProps = {
   proposalsList: React.ReactNode;
   governanceTab: 'review' | 'my';
   governanceFilters: GovernanceFilters;
-  editorSpaceOptions: { id: string; name: string }[];
-  myProposalSpaceOptions: { id: string; name: string }[];
+  editorSpaceOptions: { id: string; name: string; image: string | null }[];
+  myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
 };
 
 function GovernanceTabsRow({
@@ -150,10 +151,18 @@ export function PersonalHomeDashboard({
       <div className="mt-4 flex flex-wrap gap-2">
         <GovernanceFilterMenu
           label={spaceLabel}
+          showImages
+          maxHeightClass="max-h-[25rem] overflow-y-auto"
           items={[
-            { label: 'All spaces', href: buildHomeHref({ tab: governanceTab, ...filterState, space: 'all' }) },
+            {
+              label: 'All spaces',
+              href: buildHomeHref({ tab: governanceTab, ...filterState, space: 'all' }),
+              showImage: false,
+            },
             ...spaceOptions.map(s => ({
               label: s.name,
+              image: s.image,
+              showImage: true,
               href: buildHomeHref({ tab: governanceTab, ...filterState, space: s.id }),
             })),
           ]}
@@ -186,7 +195,17 @@ export function PersonalHomeDashboard({
   );
 }
 
-function GovernanceFilterMenu({ label, items }: { label: string; items: { label: string; href: string }[] }) {
+function GovernanceFilterMenu({
+  label,
+  items,
+  showImages,
+  maxHeightClass,
+}: {
+  label: string;
+  items: { label: string; href: string; image?: string | null; showImage?: boolean }[];
+  showImages?: boolean;
+  maxHeightClass?: string;
+}) {
   const [open, setOpen] = React.useState(false);
   return (
     <Menu
@@ -196,18 +215,31 @@ function GovernanceFilterMenu({ label, items }: { label: string; items: { label:
       trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
       align="start"
     >
-      {items.map(item => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={() => setOpen(false)}
-          className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-        >
-          <Text variant="button" className="hover:text-text!">
-            {item.label}
-          </Text>
-        </Link>
-      ))}
+      <div className={maxHeightClass}>
+        {items.map(item => (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setOpen(false)}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+          >
+            {showImages && item.showImage !== false ? (
+              item.image ? (
+                <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
+                  <GeoImage value={item.image} alt="" fill sizes="20px" style={{ objectFit: 'cover' }} />
+                </span>
+              ) : (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-grey-01 text-[10px] font-medium text-grey-04">
+                  {(item.label.trim().slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?')}
+                </span>
+              )
+            ) : null}
+            <Text variant="button" className="hover:text-text!">
+              {item.label}
+            </Text>
+          </Link>
+        ))}
+      </div>
     </Menu>
   );
 }

@@ -1,7 +1,7 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -21,6 +21,9 @@ export type BrowseSidebarData = {
   featured: BrowseSpaceRow[];
   editorOf: BrowseSpaceRow[];
   memberOf: BrowseSpaceRow[];
+  documentationImage: string | null;
+  /** Personal space id used for membership/editor GraphQL (same as browse “member space”). */
+  personalSpaceId: string | null;
 };
 
 async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow>> {
@@ -108,7 +111,10 @@ function pendingSpaceIdsQuery(memberSpaceId: string, nowSec: string): string {
 
 export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
   if (!memberSpaceId) {
-    const featuredOnly = await fetchSpaceRows(FEATURED_BROWSE_SPACES.map(s => s.id));
+    const featuredOnly = await fetchSpaceRows([
+      ...FEATURED_BROWSE_SPACES.map(s => s.id),
+      DOCUMENTATION_SPACE_ID,
+    ]);
     return {
       featured: FEATURED_BROWSE_SPACES.map(f => {
         const row = featuredOnly.get(f.id);
@@ -116,6 +122,8 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
       }),
       editorOf: [],
       memberOf: [],
+      documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+      personalSpaceId: null,
     };
   }
 
@@ -171,7 +179,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
 
   const featuredIds = FEATURED_BROWSE_SPACES.map(f => f.id).filter(id => !excludedFromFeatured.has(id));
 
-  const allIds = [...new Set([...featuredIds, ...editorOfIds, ...memberOfIds])];
+  const allIds = [...new Set([...featuredIds, ...editorOfIds, ...memberOfIds, DOCUMENTATION_SPACE_ID])];
   const rows = await fetchSpaceRows(allIds);
 
   const featured: BrowseSpaceRow[] = featuredIds.map(id => {
@@ -197,5 +205,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     featured,
     editorOf,
     memberOf,
+    documentationImage: rows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+    personalSpaceId: memberSpaceId,
   };
 }

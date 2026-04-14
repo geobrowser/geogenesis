@@ -27,8 +27,8 @@ type Props = {
   connectedSpaceId?: string;
   governanceTab: 'review' | 'my';
   governanceFilters: GovernanceFilters;
-  editorSpaceOptions: { id: string; name: string }[];
-  myProposalSpaceOptions: { id: string; name: string }[];
+  editorSpaceOptions: { id: string; name: string; image: string | null }[];
+  myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
   myProposalSpaceIds: string[];
 };
 

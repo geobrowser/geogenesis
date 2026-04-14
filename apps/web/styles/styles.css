@@ -167,6 +167,12 @@
   --text-breadcrumb--line-height: 0.9375rem;
   --text-breadcrumb--font-weight: 500;
 
+  /* Browse sidebar menu (Figma: Calibre Regular 16 / 13 cap, -0.35 tracking) */
+  --text-browseMenu: 1rem;
+  --text-browseMenu--line-height: 0.8125rem;
+  --text-browseMenu--letter-spacing: -0.35px;
+  --text-browseMenu--font-weight: 400;
+
   --text-footnote: 0.6875rem;
   --text-footnote--line-height: 0.8125rem;
   --text-footnote--font-weight: 400;
