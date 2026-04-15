@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph';
+import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
@@ -55,6 +56,9 @@ export async function MyGovernanceProposalsList({
     fetchProfileBySpaceId(memberSpaceId, viewerWalletAddress ?? undefined)
   ).catch(() => null);
 
+  const editorSpaceIds = await fetchEditorSpaceIds(memberSpaceId);
+  const editorSpaceIdSet = new Set(editorSpaceIds);
+
   const governanceHomeReturnSearch = serializeGovernanceHomeReturnSearch({
     tab: governanceTab,
     spaceId: spaceFilter ?? 'all',
@@ -94,6 +98,8 @@ export async function MyGovernanceProposalsList({
             userVote={p.userVote}
             viewerAvatarUrl={viewerProfile?.avatarUrl}
             viewerAddress={viewerProfile?.address}
+            viewerMemberSpaceId={memberSpaceId}
+            viewerCanVoteAsEditor={editorSpaceIdSet.has(p.spaceId)}
             governanceHomeReturnSearch={governanceHomeReturnSearch}
           />
         );

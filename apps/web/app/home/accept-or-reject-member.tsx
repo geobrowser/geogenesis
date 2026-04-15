@@ -17,6 +17,8 @@ interface Props {
   spaceId: string;
   proposalId: string;
   proposalName: string;
+  /** Opens the space governance proposal (slide-up), not the member's personal space. */
+  governanceHomeReturnSearch?: string;
   proposedMember: {
     id: string;
     avatarUrl: string | null;
@@ -29,7 +31,14 @@ interface Props {
   };
 }
 
-export function AcceptOrRejectMember({ spaceId, proposalId, proposalName, proposedMember, space }: Props) {
+export function AcceptOrRejectMember({
+  spaceId,
+  proposalId,
+  proposalName,
+  governanceHomeReturnSearch,
+  proposedMember,
+  space,
+}: Props) {
   const [dismissed, setDismissed] = useState<boolean>(false);
 
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
@@ -63,10 +72,12 @@ export function AcceptOrRejectMember({ spaceId, proposalId, proposalName, propos
 
   if (dismissed) return null;
 
+  const proposalHref = NavUtils.toProposal(spaceId, proposalId, 'home', governanceHomeReturnSearch);
+
   const header = (
-    <div className="flex items-center justify-between">
-      <div className="text-smallTitle">{proposalName}</div>
-      <div className="relative h-5 w-5 overflow-hidden rounded-full">
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0 flex-1 text-smallTitle">{proposalName}</div>
+      <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
         <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
       </div>
     </div>
@@ -75,13 +86,17 @@ export function AcceptOrRejectMember({ spaceId, proposalId, proposalName, propos
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
       <div className="space-y-2">
+        <Link href={proposalHref} className="block w-full">
+          {header}
+        </Link>
         {proposedMember.profileLink ? (
-          <Link href={proposedMember.profileLink} className="w-full">
-            {header}
+          <Link
+            href={proposedMember.profileLink}
+            className="inline-block text-breadcrumb text-grey-04 underline transition-colors hover:text-text"
+          >
+            View member profile
           </Link>
-        ) : (
-          <div className="w-full">{header}</div>
-        )}
+        ) : null}
 
         <Link href={NavUtils.toSpace(space.id)} className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">

@@ -197,7 +197,13 @@ export async function getActiveProposalsForSpacesWhereEditor(
   );
 
   const merged = allResults.flat();
-  const filteredProposals = status === 'pending' ? deduplicateMembershipProposals(merged) : merged;
+  // Pending tab must only show proposals still in active voting. EXECUTABLE means the vote
+  // already passed (often already reflected as membership in the space); showing Approve/Reject
+  // for those is incorrect.
+  const activeVotingOnly =
+    status === 'pending' ? merged.filter(p => p.status === 'PROPOSED') : merged;
+  const filteredProposals =
+    status === 'pending' ? deduplicateMembershipProposals(activeVotingOnly) : activeVotingOnly;
 
   filteredProposals.sort((a, b) => {
     const aVoted = a.userVote !== null;

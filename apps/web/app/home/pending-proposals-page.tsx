@@ -88,7 +88,14 @@ export async function PendingProposalsPage({
           switch (proposal.type) {
             case 'ADD_MEMBER':
             case 'REMOVE_MEMBER':
-              return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
+              return (
+                <PendingMembershipProposal
+                  key={proposal.id}
+                  proposal={proposal}
+                  user={user}
+                  governanceHomeReturnSearch={governanceHomeReturnSearch}
+                />
+              );
             default:
               return (
                 <PendingContentProposal
@@ -117,7 +124,11 @@ type PendingMembershipProposalProps = {
   user: ProposalUser;
 };
 
-async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
+async function PendingMembershipProposal({
+  proposal,
+  user: _user,
+  governanceHomeReturnSearch,
+}: PendingMembershipProposalProps & { governanceHomeReturnSearch?: string }) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
     cachedFetchSpace(proposal.space.id),
@@ -136,6 +147,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
       spaceId={proposal.space.id}
       proposalId={proposal.id}
       proposalName={proposalName}
+      governanceHomeReturnSearch={governanceHomeReturnSearch}
       proposedMember={{
         id: proposedMember.id,
         avatarUrl: proposedMember.avatarUrl,

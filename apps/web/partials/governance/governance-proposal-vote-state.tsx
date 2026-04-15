@@ -13,39 +13,40 @@ interface Props {
   };
 }
 
+/** Matches governance home “Review proposals” card bars: full-width progress rows. */
 export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user, userVote }: Props) {
   return (
-    <>
+    <div className="flex w-full flex-col gap-4">
       <div className="flex items-center gap-2 text-metadataMedium">
         {userVote === 'ACCEPT' ? (
-          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+          <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
         ) : (
-          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
+          <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
             <TickSmall />
           </div>
         )}
-        <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
+        <div className="relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02">
           <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesPercentage}%` }} />
         </div>
-        <div>{yesPercentage}%</div>
+        <p className="shrink-0">{yesPercentage}%</p>
       </div>
       <div className="flex items-center gap-2 text-metadataMedium">
         {userVote === 'REJECT' ? (
-          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+          <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
         ) : (
-          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
+          <div className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
             <CloseSmall />
           </div>
         )}
-        <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
+        <div className="relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02">
           <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noPercentage}%` }} />
         </div>
-        <div>{noPercentage}%</div>
+        <p className="shrink-0">{noPercentage}%</p>
       </div>
-    </>
+    </div>
   );
 }

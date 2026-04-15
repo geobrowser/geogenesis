@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
+import { Address, ProposalStatus, ProposalType, type SubstreamVote } from '~/core/io/substream-schema';
 import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
@@ -16,6 +16,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 import { GovernanceProposalVoteState } from '~/partials/governance/governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from '~/partials/governance/governance-status-chip';
@@ -44,6 +45,10 @@ export type MyGovernanceProposalCardProps = {
   userVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
   viewerAvatarUrl?: string | null;
   viewerAddress?: string;
+  /** Viewer’s personal space id (for vote account mapping). */
+  viewerMemberSpaceId: string;
+  /** True when the viewer is an editor of this proposal’s space and may vote (matches Review tab). */
+  viewerCanVoteAsEditor: boolean;
   governanceHomeReturnSearch?: string;
 };
 
@@ -66,6 +71,8 @@ export function MyGovernanceProposalCard({
   userVote,
   viewerAvatarUrl,
   viewerAddress,
+  viewerMemberSpaceId,
+  viewerCanVoteAsEditor,
   governanceHomeReturnSearch,
 }: MyGovernanceProposalCardProps) {
   const showReopenMenu =
@@ -90,6 +97,11 @@ export function MyGovernanceProposalCard({
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
     );
+
+  const userVoteSubstream: SubstreamVote | undefined =
+    userVote && viewerMemberSpaceId
+      ? { vote: userVote, accountId: Address(viewerMemberSpaceId) }
+      : undefined;
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
@@ -135,7 +147,23 @@ export function MyGovernanceProposalCard({
       />
       <div className="flex w-full items-center justify-between gap-3">
         {footerDateTime}
-        <GovernanceStatusChip endTime={endTime} status={status} canExecute={canExecute} />
+        {viewerCanVoteAsEditor ? (
+          <AcceptOrRejectEditor
+            spaceId={spaceId}
+            proposalId={proposalId}
+            isProposalEnded={votingEnded}
+            canExecute={canExecute}
+            status={status}
+            userVote={userVoteSubstream}
+          />
+        ) : (
+          <GovernanceStatusChip
+            endTime={endTime}
+            status={status}
+            canExecute={canExecute}
+            viewerVote={userVote}
+          />
+        )}
       </div>
     </div>
   );
