@@ -9,7 +9,7 @@ import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/co
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
@@ -23,6 +23,19 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
 const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', false);
+
+/** Warm the HTTP cache for sidebar thumbs before the panel is opened (thumbs mount only when expanded). */
+function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
+  const seen = new Set<string>();
+  const add = (image: string | null | undefined) => {
+    if (image) seen.add(getImagePath(image));
+  };
+  for (const row of data.featured) add(row.image);
+  for (const row of data.editorOf) add(row.image);
+  for (const row of data.memberOf) add(row.image);
+  add(data.documentationImage);
+  return [...seen];
+}
 
 const navLinkClass =
   'flex items-center gap-2 rounded-md px-2 py-1.5 text-browseMenu font-normal not-italic text-text hover:bg-grey-01';
@@ -89,6 +102,8 @@ function BrowseNavPrimaryLinks({
 }
 
 function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
+  const [imageReady, setImageReady] = React.useState(false);
+
   if (!row.image) {
     const initial = row.name.trim().slice(0, 1).toUpperCase() || '?';
     return (
@@ -98,8 +113,14 @@ function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
     );
   }
   return (
-    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
-      <ThumbGeoImage value={row.image} alt="" />
+    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md bg-grey-01">
+      <ThumbGeoImage
+        value={row.image}
+        alt=""
+        loading="eager"
+        className={`transition-opacity duration-150 ${imageReady ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setImageReady(true)}
+      />
     </span>
   );
 }
@@ -163,6 +184,15 @@ export function BrowseSidebar() {
       cancelled = true;
     };
   }, [walletAddress]);
+
+  React.useEffect(() => {
+    if (!data) return;
+    for (const href of collectBrowseSidebarImageHrefs(data)) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = href;
+    }
+  }, [data]);
 
   if (!open) {
     return (

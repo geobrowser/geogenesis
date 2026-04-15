@@ -19,6 +19,8 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
+
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
 import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 import { AcceptOrRejectMember } from './accept-or-reject-member';
@@ -210,6 +212,8 @@ async function PendingContentProposal({
     ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
     : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+  const showReopenMenu =
+    proposal.status === 'REJECTED' && proposal.type === 'ADD_EDIT' && isProposalEnded;
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
@@ -230,9 +234,17 @@ async function PendingContentProposal({
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home', governanceHomeReturnSearch)}>
-        <div className="text-smallTitle">{proposalName}</div>
-      </Link>
+      <div className="flex items-start justify-between gap-3">
+        <Link
+          href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home', governanceHomeReturnSearch)}
+          className="min-w-0 flex-1"
+        >
+          <div className="text-smallTitle">{proposalName}</div>
+        </Link>
+        {showReopenMenu ? (
+          <GovernanceRejectedProposalMenu proposalId={proposal.id} spaceId={proposal.space.id} />
+        ) : null}
+      </div>
       <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">
         <Link
           href={NavUtils.toSpace(proposal.space.id)}

@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
 
+import cn from 'classnames';
 import Image, { ImageProps } from 'next/image';
 
 import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
@@ -56,22 +57,32 @@ type ThumbGeoImageProps = {
   /** Parent must be `relative` with explicit width/height, e.g. `relative h-5 w-5 overflow-hidden rounded-md` */
   loading?: ImgHTMLAttributes<HTMLImageElement>['loading'];
   fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
+  className?: string;
+  onLoad?: ImgHTMLAttributes<HTMLImageElement>['onLoad'];
 };
 
 /**
  * Tiny space-style image: native &lt;img&gt; so remote IPFS URLs skip the Next optimizer
  * (avoids soft/downscaled output and occasional failed optimized requests for small slots).
  */
-export function ThumbGeoImage({ value, alt = '', loading = 'lazy', fetchPriority }: ThumbGeoImageProps) {
+export function ThumbGeoImage({
+  value,
+  alt = '',
+  loading = 'lazy',
+  fetchPriority,
+  className,
+  onLoad,
+}: ThumbGeoImageProps) {
   return (
     <NativeGeoImage
       value={value}
       alt={alt}
-      className="absolute inset-0 h-full w-full object-cover"
+      className={cn('absolute inset-0 h-full w-full object-cover', className)}
       loading={loading}
       fetchPriority={fetchPriority}
       decoding="async"
       draggable={false}
+      onLoad={onLoad}
     />
   );
 }
