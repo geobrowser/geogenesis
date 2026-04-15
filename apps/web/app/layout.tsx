@@ -8,7 +8,6 @@ import 'react-medium-image-zoom/dist/styles.css';
 
 import { Providers } from '~/core/providers';
 
-import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
 import { App } from './entry';

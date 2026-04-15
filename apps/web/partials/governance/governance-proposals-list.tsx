@@ -28,6 +28,7 @@ import { Profile } from '~/core/types';
 import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
+  getIsProposalEnded,
   getProposalName,
 } from '~/core/utils/utils';
 
@@ -116,15 +117,14 @@ export async function GovernanceProposalsList({
                 },
               });
 
-          const nowSec = Math.floor(Date.now() / 1000);
           const showReopenMenu =
-            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && nowSec >= p.endTime;
+            p.status === 'REJECTED' && p.type === 'ADD_EDIT' && getIsProposalEnded(p.status, p.endTime);
 
           return (
             <Link
               key={p.id}
               href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-              className="flex w-full flex-col gap-4 py-6"
+              className="flex w-full flex-col gap-3 py-4"
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-3">
@@ -158,8 +158,9 @@ export async function GovernanceProposalsList({
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div className="inline-flex flex-3 items-center gap-8">
+                <div className="inline-flex min-w-0 flex-3 items-center gap-8">
                   <GovernanceProposalVoteState
+                    variant="space"
                     yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
                     noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
                     userVote={p.userVote}

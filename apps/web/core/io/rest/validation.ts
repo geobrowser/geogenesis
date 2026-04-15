@@ -18,6 +18,16 @@ export function validateSpaceId(id: string): string | null {
 }
 
 /**
+ * Canonical 8-4-4-4-12 lowercase UUID for GraphQL `UuidFilter` / `proposedBy` / `voterId`.
+ * The subgraph expects this form; REST may return the same bytes with or without dashes.
+ */
+export function spaceIdToGraphqlUuid(id: string): string {
+  const normalized = validateSpaceId(id);
+  if (!normalized) return id;
+  return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20, 32)}`;
+}
+
+/**
  * Validates a proposal ID format.
  * Returns the normalized ID or null if invalid.
  */

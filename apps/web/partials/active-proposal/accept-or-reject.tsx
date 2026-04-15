@@ -59,14 +59,6 @@ export function AcceptOrReject({
     vote('REJECT');
   };
 
-  if (userVote || hasVoted) {
-    if (userVote?.vote === 'ACCEPT' || hasApproved) {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
-    }
-
-    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
-  }
-
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
@@ -96,6 +88,14 @@ export function AcceptOrReject({
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+  }
+
+  if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || hasApproved) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
+    }
+
+    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
   }
 
   if (!isProposalEnded && smartAccount && isEditor) {
