@@ -82,26 +82,28 @@ export default function ReorderableRelationChipsDnd({
     return (
       <>
         {sortedRelations.map(relation => (
-          <LinkableRelationChip
-            key={`relation-${relation.id}`}
-            isEditing
-            small
-            onDelete={() => storage.relations.delete(relation)}
-            onDone={result => {
-              storage.relations.update(relation, draft => {
-                draft.toSpaceId = result.space;
-                draft.verified = result.verified;
-              });
-            }}
-            currentSpaceId={spaceId}
-            entityId={relation.toEntity.id}
-            relationId={relation.id}
-            relationEntityId={relation.entityId}
-            spaceId={relation.toSpaceId}
-            verified={relation.verified}
-          >
-            {relation.toEntity.name}
-          </LinkableRelationChip>
+          <div key={`relation-${relation.id}`} className="min-w-0 max-w-full">
+            <LinkableRelationChip
+              isEditing
+              small
+              truncateLabel
+              onDelete={() => storage.relations.delete(relation)}
+              onDone={result => {
+                storage.relations.update(relation, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
+              currentSpaceId={spaceId}
+              entityId={relation.toEntity.id}
+              relationId={relation.id}
+              relationEntityId={relation.entityId}
+              spaceId={relation.toSpaceId}
+              verified={relation.verified}
+            >
+              {relation.toEntity.name}
+            </LinkableRelationChip>
+          </div>
         ))}
       </>
     );
@@ -115,7 +117,7 @@ export default function ReorderableRelationChipsDnd({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={sortedRelations.map(r => r.id)} strategy={horizontalListSortingStrategy}>
-        <div className={`flex flex-wrap gap-1`}>
+        <div className="flex min-w-0 w-full max-w-full flex-wrap gap-1">
           {sortedRelations.map(relation => (
             <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
           ))}
@@ -128,6 +130,7 @@ export default function ReorderableRelationChipsDnd({
             <LinkableRelationChip
               isEditing
               small
+              truncateLabel
               onDelete={() => {}}
               currentSpaceId={spaceId}
               entityId={activeRelation.toEntity?.id}
@@ -188,14 +191,15 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
     <div
       ref={setNodeRef}
       style={style}
-      className="relative inline-block"
+      className="relative inline-block min-w-0 max-w-full"
       onClick={handleClick}
       onClickCapture={handleClick}
     >
-      <div {...attributes} {...listeners} className="inline-flex items-center">
+      <div {...attributes} {...listeners} className="inline-flex min-w-0 max-w-full items-center">
         <LinkableRelationChip
           isEditing
           small
+          truncateLabel
           onDelete={() => storage.relations.delete(relation)}
           currentSpaceId={spaceId}
           entityId={relation.toEntity.id}

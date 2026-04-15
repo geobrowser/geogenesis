@@ -46,9 +46,40 @@ type TableStringFieldProps = {
   value?: string;
   variant?: 'tableCell' | 'tableProperty';
   autoFocus?: boolean;
+  truncateOverflow?: boolean;
 };
 
-export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
+const tableCellTruncateInputStyles = cva(
+  'm-0 w-full min-w-0 max-w-full truncate border-0 bg-transparent p-0 placeholder:text-grey-03 focus:outline-hidden',
+  {
+    variants: {
+      variant: {
+        tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
+        tableProperty: 'text-tableProperty! text-grey-04!',
+      },
+    },
+    defaultVariants: { variant: 'tableCell' },
+  }
+);
+
+export function TableStringField({
+  variant = 'tableCell',
+  truncateOverflow = false,
+  ...props
+}: TableStringFieldProps) {
+  if (truncateOverflow) {
+    return (
+      <input
+        type="text"
+        className={tableCellTruncateInputStyles({ variant })}
+        placeholder={props.placeholder}
+        value={props.value || ''}
+        onChange={e => props.onChange(e.currentTarget.value)}
+        autoFocus={props.autoFocus}
+      />
+    );
+  }
+
   return (
     <Textarea
       {...props}
