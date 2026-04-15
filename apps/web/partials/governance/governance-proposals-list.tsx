@@ -157,8 +157,8 @@ export async function GovernanceProposalsList({
                   )}
                 </div>
               </div>
-              <div className="flex w-full flex-row flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                <div className="min-w-0 flex-1 basis-[min(100%,280px)]">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex min-w-0 flex-3 items-center gap-8">
                   <GovernanceProposalVoteState
                     variant="space"
                     yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
@@ -175,9 +175,7 @@ export async function GovernanceProposalsList({
                   />
                 </div>
 
-                <div className="ml-auto flex shrink-0">
-                  <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
-                </div>
+                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
             </Link>
           );

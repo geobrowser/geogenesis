@@ -22,9 +22,17 @@ function YesRow({
   yesPercentage,
   userVote,
   user,
-}: Pick<Props, 'yesPercentage' | 'userVote' | 'user'>) {
+  compactTrack,
+}: Pick<Props, 'yesPercentage' | 'userVote' | 'user'> & { compactTrack?: boolean }) {
+  const trackClass = compactTrack
+    ? 'relative h-1 w-[180px] shrink-0 overflow-clip rounded-full bg-grey-02'
+    : 'relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02';
+  const rowClass = compactTrack
+    ? 'flex items-center gap-2 text-metadataMedium'
+    : 'flex min-w-0 flex-1 items-center gap-2 text-metadataMedium';
+
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 text-metadataMedium">
+    <div className={rowClass}>
       {userVote === 'ACCEPT' ? (
         <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
           <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
@@ -34,10 +42,10 @@ function YesRow({
           <TickSmall />
         </div>
       )}
-      <div className="relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02">
+      <div className={trackClass}>
         <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesPercentage}%` }} />
       </div>
-      <p className="shrink-0 tabular-nums">{yesPercentage}%</p>
+      <div className="shrink-0 tabular-nums">{yesPercentage}%</div>
     </div>
   );
 }
@@ -46,9 +54,17 @@ function NoRow({
   noPercentage,
   userVote,
   user,
-}: Pick<Props, 'noPercentage' | 'userVote' | 'user'>) {
+  compactTrack,
+}: Pick<Props, 'noPercentage' | 'userVote' | 'user'> & { compactTrack?: boolean }) {
+  const trackClass = compactTrack
+    ? 'relative h-1 w-[180px] shrink-0 overflow-clip rounded-full bg-grey-02'
+    : 'relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02';
+  const rowClass = compactTrack
+    ? 'flex items-center gap-2 text-metadataMedium'
+    : 'flex min-w-0 flex-1 items-center gap-2 text-metadataMedium';
+
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 text-metadataMedium">
+    <div className={rowClass}>
       {userVote === 'REJECT' ? (
         <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
           <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
@@ -58,10 +74,10 @@ function NoRow({
           <CloseSmall />
         </div>
       )}
-      <div className="relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02">
+      <div className={trackClass}>
         <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noPercentage}%` }} />
       </div>
-      <p className="shrink-0 tabular-nums">{noPercentage}%</p>
+      <div className="shrink-0 tabular-nums">{noPercentage}%</div>
     </div>
   );
 }
@@ -75,11 +91,11 @@ export function GovernanceProposalVoteState({
   variant = 'home',
 }: Props) {
   if (variant === 'space') {
-    // Always side-by-side (matches prod space governance); never stack like governance home.
+    // Matches prod Geo: two rows, w-[180px] tracks, gap-8 between them (parent adds flex-3 wrapper).
     return (
-      <div className="flex w-full min-w-0 flex-row flex-wrap items-center gap-4 min-[480px]:gap-6">
-        <YesRow yesPercentage={yesPercentage} userVote={userVote} user={user} />
-        <NoRow noPercentage={noPercentage} userVote={userVote} user={user} />
+      <div className="inline-flex items-center gap-8">
+        <YesRow compactTrack yesPercentage={yesPercentage} userVote={userVote} user={user} />
+        <NoRow compactTrack noPercentage={noPercentage} userVote={userVote} user={user} />
       </div>
     );
   }

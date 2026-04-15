@@ -318,6 +318,11 @@
   background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
 }
 
+/** Space governance proposal row: grow vote cluster vs status chip (matches prod Geo). */
+@utility flex-3 {
+  flex: 3;
+}
+
 /* v4 border-color compat: v3 defaulted to gray-200, v4 defaults to currentcolor */
 @layer base {
   *,
