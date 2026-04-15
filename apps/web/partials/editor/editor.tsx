@@ -343,14 +343,6 @@ function useInterceptEditorLinks(spaceId: string) {
         const originalUrl = link.href;
 
         if (originalUrl.startsWith('graph://')) {
-          // Check if we're in edit mode - if so, don't redirect, allow text editing
-          const isInEditMode = link.closest('.editable') !== null;
-
-          if (isInEditMode) {
-            // In edit mode, don't prevent default - allow normal text selection/editing
-            return;
-          }
-
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();

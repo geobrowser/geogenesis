@@ -1,5 +1,6 @@
-import { Editor, Range, ReactRenderer } from '@tiptap/react';
 import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
+import { Editor, Range } from '@tiptap/core';
+import { ReactRenderer } from '@tiptap/react';
 
 import * as React from 'react';
 
@@ -15,8 +16,8 @@ import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
 import { Link } from '~/design-system/icons/link';
 
-import { MentionList } from './mention-list';
 import { insertGraphLink } from './insert-graph-link';
+import { MentionList } from './mention-list';
 
 // ============================================================================
 // Constants
@@ -253,7 +254,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
           type: 'image',
         })
         .createParagraphNear()
-        .blur()
+        .blur() 
         .focus()
         .run();
     },
@@ -287,15 +288,19 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
       const currentSpaceId = spaceId;
 
       // Show MentionList for link selection
-      showLinkMentionList(editor, (entityId: string, entityName: string) => {
-        // Insert entity link using shared function with data attributes
-        insertGraphLink({
-          editor,
-          entityId,
-          linkText: entityName,
-          spaceId: currentSpaceId,
-        });
-      }, currentSpaceId);
+      showLinkMentionList(
+        editor,
+        (entityId: string, entityName: string) => {
+          // Insert entity link using shared function with data attributes
+          insertGraphLink({
+            editor,
+            entityId,
+            linkText: entityName,
+            spaceId: currentSpaceId,
+          });
+        },
+        currentSpaceId
+      );
     },
   },
   tableCommandItem,
