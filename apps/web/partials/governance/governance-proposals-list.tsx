@@ -124,7 +124,7 @@ export async function GovernanceProposalsList({
             <Link
               key={p.id}
               href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-              className="flex w-full flex-col gap-4 py-6"
+              className="flex w-full flex-col gap-3 py-4"
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-3">
@@ -157,9 +157,10 @@ export async function GovernanceProposalsList({
                   )}
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="inline-flex flex-3 items-center gap-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                <div className="min-w-0 flex-1">
                   <GovernanceProposalVoteState
+                    variant="space"
                     yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
                     noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
                     userVote={p.userVote}
@@ -174,7 +175,9 @@ export async function GovernanceProposalsList({
                   />
                 </div>
 
-                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
+                <div className="flex shrink-0 justify-end sm:justify-start">
+                  <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
+                </div>
               </div>
             </Link>
           );

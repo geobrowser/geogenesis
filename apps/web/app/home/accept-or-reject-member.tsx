@@ -1,11 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import cx from 'classnames';
 
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
-import { NavUtils } from '~/core/utils/utils';
+import { Proposal } from '~/core/io/dto/proposals';
+import type { SubstreamVote } from '~/core/io/substream-schema';
+
+import {
+  NavUtils,
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeTime,
+  getProposalTimeRemaining,
+} from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -13,12 +22,18 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { Execute } from '~/partials/active-proposal/execute';
+
 interface Props {
   spaceId: string;
   proposalId: string;
   proposalName: string;
-  /** Opens the space governance proposal (slide-up), not the member's personal space. */
   governanceHomeReturnSearch?: string;
+  endTime: number;
+  isProposalEnded: boolean;
+  canExecute: boolean;
+  status: Proposal['status'];
+  userVote: SubstreamVote | undefined;
   proposedMember: {
     id: string;
     avatarUrl: string | null;
@@ -31,16 +46,23 @@ interface Props {
   };
 }
 
+/**
+ * Membership proposal card for governance home. Matches {@link AcceptOrRejectEditor} so completed
+ * proposals show Accepted / Rejected (or execution) instead of vote buttons.
+ */
 export function AcceptOrRejectMember({
   spaceId,
   proposalId,
   proposalName,
   governanceHomeReturnSearch,
+  endTime,
+  isProposalEnded,
+  canExecute,
+  status,
+  userVote,
   proposedMember,
   space,
 }: Props) {
-  const [dismissed, setDismissed] = useState<boolean>(false);
-
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
   const { vote, status: voteStatus } = useVote({
@@ -53,6 +75,8 @@ export function AcceptOrRejectMember({
   const isPendingApproval = selectedVote === 'ACCEPT' && voteStatus === 'pending';
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
+  const { smartAccount } = useSmartAccount();
+
   const onApprove = () => {
     setSelectedVote('ACCEPT');
     vote('ACCEPT');
@@ -63,14 +87,22 @@ export function AcceptOrRejectMember({
     vote('REJECT');
   };
 
-  useEffect(() => {
-    if (hasVoted) {
-      const timer = setTimeout(() => setDismissed(true), 1_500);
-      return () => clearTimeout(timer);
-    }
-  }, [hasVoted]);
+  const { hours, minutes } = getProposalTimeRemaining(endTime);
 
-  if (dismissed) return null;
+  const footerLeft =
+    status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
+        <span aria-hidden className="shrink-0 select-none text-grey-03">
+          ·
+        </span>
+        <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
+          {formatGovernanceOutcomeTime(endTime)}
+        </time>
+      </div>
+    ) : (
+      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+    );
 
   const proposalHref = NavUtils.toProposal(spaceId, proposalId, 'home', governanceHomeReturnSearch);
 
@@ -82,6 +114,64 @@ export function AcceptOrRejectMember({
       </div>
     </div>
   );
+
+  let actions: ReactNode;
+
+  if (isProposalEnded) {
+    if (status === 'ACCEPTED') {
+      actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    } else if (status === 'REJECTED') {
+      actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    } else if (canExecute && smartAccount) {
+      actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+    } else if (canExecute) {
+      actions = (
+        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>
+      );
+    } else {
+      actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    }
+  } else if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || selectedVote === 'ACCEPT') {
+      actions = (
+        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>
+      );
+    } else {
+      actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
+    }
+  } else if (!isProposalEnded && smartAccount) {
+    actions = hasError ? (
+      <div className="flex items-center gap-2">
+        <p className="text-smallButton text-red-01">Vote failed</p>
+        <SmallButton
+          variant="secondary"
+          onClick={() => {
+            if (selectedVote) vote(selectedVote);
+          }}
+        >
+          Retry
+        </SmallButton>
+      </div>
+    ) : (
+      <div className="relative">
+        <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
+          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingRejection}>Reject</Pending>
+          </SmallButton>
+          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingApproval}>Approve</Pending>
+          </SmallButton>
+        </div>
+        {hasVoted && (
+          <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+            <div className="text-smallButton">{selectedVote === 'ACCEPT' ? 'Approved' : 'Rejected'}</div>
+          </div>
+        )}
+      </div>
+    );
+  } else {
+    actions = null;
+  }
 
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
@@ -108,38 +198,9 @@ export function AcceptOrRejectMember({
         </Link>
       </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-metadataMedium">1 vote required</p>
-
-        {hasError ? (
-          <div className="flex items-center gap-2">
-            <p className="text-smallButton text-red-01">Vote failed</p>
-            <SmallButton
-              variant="secondary"
-              onClick={() => {
-                if (selectedVote) vote(selectedVote);
-              }}
-            >
-              Retry
-            </SmallButton>
-          </div>
-        ) : (
-          <div className="relative">
-            <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
-              <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
-                <Pending isPending={isPendingRejection}>Reject</Pending>
-              </SmallButton>
-              <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
-                <Pending isPending={isPendingApproval}>Approve</Pending>
-              </SmallButton>
-            </div>
-            {hasVoted && (
-              <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-                <div className="text-smallButton">{selectedVote === 'ACCEPT' ? 'Approved' : 'Rejected'}</div>
-              </div>
-            )}
-          </div>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        {footerLeft}
+        {actions}
       </div>
     </div>
   );

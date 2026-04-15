@@ -2,6 +2,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { Environment } from '../environment';
+import { spaceIdToGraphqlUuid } from './rest/validation';
 import { graphql } from './subgraph/graphql';
 
 export type SidebarCounts = {
@@ -16,19 +17,21 @@ const EMPTY_COUNTS: SidebarCounts = {
   iHaveAccepted: { members: 0, editors: 0 },
 };
 
-type NetworkResult = {
+type MyProposalStatsResult = {
   myInProgress: { totalCount: number };
   myAccepted: { totalCount: number };
   myRejected: { totalCount: number };
+};
+
+type VoteBasedStatsResult = {
   votedOnAccepted: { totalCount: number };
   votedOnRejected: { totalCount: number };
   acceptedMembers: { totalCount: number };
   acceptedEditors: { totalCount: number };
 };
 
-function buildQuery(spaceId: string): string {
-  const nowSeconds = Math.floor(Date.now() / 1000).toString();
-
+/** Proposals you created — only uses ProposalFilter fields the API exposes. */
+function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string {
   return `query {
     myInProgress: proposalsConnection(
       filter: {
@@ -58,40 +61,46 @@ function buildQuery(spaceId: string): string {
     ) {
       totalCount
     }
+  }`;
+}
 
-    votedOnAccepted: proposalsConnection(
+/**
+ * Vote-based counts use root `proposalVotesConnection` + `proposal: { ... }` filters.
+ * Nested `proposalVotesConnection` on `ProposalFilter` is not available on the API schema.
+ */
+function buildVoteBasedStatsQuery(spaceId: string, nowSeconds: string): string {
+  return `query {
+    votedOnAccepted: proposalVotesConnection(
       filter: {
-        executedAt: { isNull: false }
-        proposalVotesConnection: {
-          some: { voterId: { is: "${spaceId}" } }
+        voterId: { is: "${spaceId}" }
+        proposal: {
+          executedAt: { isNull: false }
         }
       }
     ) {
       totalCount
     }
 
-    votedOnRejected: proposalsConnection(
+    votedOnRejected: proposalVotesConnection(
       filter: {
-        executedAt: { isNull: true }
-        endTime: { lessThan: "${nowSeconds}" }
-        proposalVotesConnection: {
-          some: { voterId: { is: "${spaceId}" } }
+        voterId: { is: "${spaceId}" }
+        proposal: {
+          executedAt: { isNull: true }
+          endTime: { lessThan: "${nowSeconds}" }
         }
       }
     ) {
       totalCount
     }
 
-    acceptedMembers: proposalsConnection(
+    acceptedMembers: proposalVotesConnection(
       filter: {
-        executedAt: { isNull: false }
-        proposalActionsConnection: {
-          some: { actionType: { in: [ADD_MEMBER] } }
-        }
-        proposalVotesConnection: {
-          some: {
-            voterId: { is: "${spaceId}" }
-            vote: { is: YES }
+        voterId: { is: "${spaceId}" }
+        vote: { is: YES }
+        proposal: {
+          executedAt: { isNull: false }
+          proposalActionsConnection: {
+            some: { actionType: { is: ADD_MEMBER } }
           }
         }
       }
@@ -99,16 +108,14 @@ function buildQuery(spaceId: string): string {
       totalCount
     }
 
-    acceptedEditors: proposalsConnection(
+    acceptedEditors: proposalVotesConnection(
       filter: {
-        executedAt: { isNull: false }
-        proposalActionsConnection: {
-          some: { actionType: { in: [ADD_EDITOR] } }
-        }
-        proposalVotesConnection: {
-          some: {
-            voterId: { is: "${spaceId}" }
-            vote: { is: YES }
+        voterId: { is: "${spaceId}" }
+        vote: { is: YES }
+        proposal: {
+          executedAt: { isNull: false }
+          proposalActionsConnection: {
+            some: { actionType: { is: ADD_EDITOR } }
           }
         }
       }
@@ -119,45 +126,71 @@ function buildQuery(spaceId: string): string {
 }
 
 export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts> {
-  const query = buildQuery(spaceId);
+  const gqlSpaceId = spaceIdToGraphqlUuid(spaceId);
+  const nowSeconds = Math.floor(Date.now() / 1000).toString();
 
-  const fetchEffect = graphql<NetworkResult>({
+  const myProposalsEffect = graphql<MyProposalStatsResult>({
     endpoint: Environment.getConfig().api,
-    query,
+    query: buildMyProposalStatsQuery(gqlSpaceId, nowSeconds),
   });
 
-  const result = await Effect.runPromise(Effect.either(fetchEffect));
+  const voteStatsEffect = graphql<VoteBasedStatsResult>({
+    endpoint: Environment.getConfig().api,
+    query: buildVoteBasedStatsQuery(gqlSpaceId, nowSeconds),
+  });
 
-  if (Either.isLeft(result)) {
-    const error = result.left;
+  const [myResult, voteResult] = await Promise.all([
+    Effect.runPromise(Effect.either(myProposalsEffect)),
+    Effect.runPromise(Effect.either(voteStatsEffect)),
+  ]);
 
-    switch (error._tag) {
-      case 'GraphqlRuntimeError':
-        console.error('Encountered runtime graphql error in fetchSidebarCounts.', error.message);
-        break;
-      default:
-        console.error(`${error._tag}: Unable to fetch sidebar counts`);
-        break;
-    }
-
+  if (Either.isLeft(myResult)) {
+    logBatchError('my proposals', myResult.left);
+    if (Either.isLeft(voteResult)) logBatchError('vote-based', voteResult.left);
     return EMPTY_COUNTS;
   }
 
-  const data = result.right;
+  const my = myResult.right;
+
+  if (Either.isLeft(voteResult)) {
+    logBatchError('vote-based', voteResult.left);
+    return {
+      myProposals: {
+        inProgress: my.myInProgress.totalCount,
+        accepted: my.myAccepted.totalCount,
+        rejected: my.myRejected.totalCount,
+      },
+      votedOn: { accepted: 0, rejected: 0 },
+      iHaveAccepted: { members: 0, editors: 0 },
+    };
+  }
+
+  const v = voteResult.right;
 
   return {
     myProposals: {
-      inProgress: data.myInProgress.totalCount,
-      accepted: data.myAccepted.totalCount,
-      rejected: data.myRejected.totalCount,
+      inProgress: my.myInProgress.totalCount,
+      accepted: my.myAccepted.totalCount,
+      rejected: my.myRejected.totalCount,
     },
     votedOn: {
-      accepted: data.votedOnAccepted.totalCount,
-      rejected: data.votedOnRejected.totalCount,
+      accepted: v.votedOnAccepted.totalCount,
+      rejected: v.votedOnRejected.totalCount,
     },
     iHaveAccepted: {
-      members: data.acceptedMembers.totalCount,
-      editors: data.acceptedEditors.totalCount,
+      members: v.acceptedMembers.totalCount,
+      editors: v.acceptedEditors.totalCount,
     },
   };
+}
+
+function logBatchError(label: string, error: { _tag: string; message?: string }) {
+  switch (error._tag) {
+    case 'GraphqlRuntimeError':
+      console.error(`fetchSidebarCounts ${label} GraphQL error:`, error.message);
+      break;
+    default:
+      console.error(`${error._tag}: Unable to fetch sidebar counts (${label})`);
+      break;
+  }
 }

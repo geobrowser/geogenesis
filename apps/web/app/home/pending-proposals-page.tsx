@@ -93,6 +93,7 @@ export async function PendingProposalsPage({
                   key={proposal.id}
                   proposal={proposal}
                   user={user}
+                  connectedSpaceId={connectedSpaceId}
                   governanceHomeReturnSearch={governanceHomeReturnSearch}
                 />
               );
@@ -127,8 +128,12 @@ type PendingMembershipProposalProps = {
 async function PendingMembershipProposal({
   proposal,
   user: _user,
+  connectedSpaceId,
   governanceHomeReturnSearch,
-}: PendingMembershipProposalProps & { governanceHomeReturnSearch?: string }) {
+}: PendingMembershipProposalProps & {
+  connectedSpaceId?: string;
+  governanceHomeReturnSearch?: string;
+}) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
     cachedFetchSpace(proposal.space.id),
@@ -142,12 +147,23 @@ async function PendingMembershipProposal({
     proposedMember.name ?? proposedMember.address ?? proposedMember.id
   } as member`;
 
+  const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
+  const userVote =
+    proposal.userVote && connectedSpaceId
+      ? { vote: proposal.userVote, accountId: Address(connectedSpaceId) }
+      : undefined;
+
   return (
     <AcceptOrRejectMember
       spaceId={proposal.space.id}
       proposalId={proposal.id}
       proposalName={proposalName}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
+      endTime={proposal.endTime}
+      isProposalEnded={isProposalEnded}
+      canExecute={proposal.canExecute}
+      status={proposal.status}
+      userVote={userVote}
       proposedMember={{
         id: proposedMember.id,
         avatarUrl: proposedMember.avatarUrl,

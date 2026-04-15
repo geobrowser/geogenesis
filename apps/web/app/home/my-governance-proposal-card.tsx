@@ -156,14 +156,9 @@ export function MyGovernanceProposalCard({
             status={status}
             userVote={userVoteSubstream}
           />
-        ) : (
-          <GovernanceStatusChip
-            endTime={endTime}
-            status={status}
-            canExecute={canExecute}
-            viewerVote={userVote}
-          />
-        )}
+        ) : votingEnded || status !== 'PROPOSED' ? (
+          <GovernanceStatusChip endTime={endTime} status={status} canExecute={canExecute} viewerVote={userVote} />
+        ) : null}
       </div>
     </div>
   );
