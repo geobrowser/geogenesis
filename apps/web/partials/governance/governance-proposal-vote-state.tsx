@@ -75,8 +75,9 @@ export function GovernanceProposalVoteState({
   variant = 'home',
 }: Props) {
   if (variant === 'space') {
+    // Always side-by-side (matches prod space governance); never stack like governance home.
     return (
-      <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
+      <div className="flex w-full min-w-0 flex-row flex-wrap items-center gap-4 min-[480px]:gap-6">
         <YesRow yesPercentage={yesPercentage} userVote={userVote} user={user} />
         <NoRow noPercentage={noPercentage} userVote={userVote} user={user} />
       </div>
