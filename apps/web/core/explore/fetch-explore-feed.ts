@@ -237,7 +237,6 @@ async function enrichItems(
       downvotes: v!.downvotes,
       commentCount: cc,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
-      hasPendingMembershipRequest: false,
       isNewPost: isExploreNewPost(updatedAtSec),
     });
   }
