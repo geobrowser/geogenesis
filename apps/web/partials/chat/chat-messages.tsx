@@ -94,7 +94,7 @@ export function ChatMessages({ messages, status, error, onRetry, onSuggestion, d
               <div className="flex justify-start">
                 <div
                   className="prose-chat max-w-[90%] text-chat text-text"
-                  // markdown-it sanitizes input and we set html: false in createMarkdownIt
+                  // Safe because createMarkdownIt sets html: false (raw HTML disabled) and link URLs are sanitized above.
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
                 />
               </div>

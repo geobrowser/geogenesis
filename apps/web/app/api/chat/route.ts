@@ -13,7 +13,6 @@ import {
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { CLAUDE_API_KEY } from '~/core/environment/config';
 
 import { GUEST_SYSTEM_PROMPT, MEMBER_SYSTEM_PROMPT } from './chat-system-prompt';
 import {
@@ -26,7 +25,7 @@ import {
 } from './rate-limit';
 
 const anthropic = createAnthropic({
-  apiKey: CLAUDE_API_KEY,
+  apiKey: process.env.CLAUDE_API_KEY,
 });
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
@@ -42,6 +41,14 @@ function getClientIp(req: Request): string {
     return forwarded.split(',')[0].trim();
   }
   return req.headers.get('x-real-ip') ?? 'unknown';
+}
+
+// The WALLET_ADDRESS cookie is client-set and unsigned, so a forged value could
+// otherwise promote an anon caller to the member prompt and higher quotas.
+function parseWalletCookie(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function isSameOrigin(req: Request): boolean {
@@ -105,9 +112,9 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
-  const wallet = cookieStore.get(WALLET_ADDRESS)?.value?.toLowerCase();
+  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
 
-  const isLoggedIn = Boolean(wallet);
+  const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
   const identityKey = wallet ?? ip;
   const identityBurst = isLoggedIn ? loggedInBurstLimit : anonBurstLimit;
