@@ -51,6 +51,100 @@ export type Scalars = {
   UUID: { input: any; output: any; }
 };
 
+export type AppWebhook = Node & {
+  __typename?: 'AppWebhook';
+  appName: Scalars['String']['output'];
+  createdAt: Scalars['Datetime']['output'];
+  id: Scalars['UUID']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  secret: Scalars['String']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+  url: Scalars['String']['output'];
+};
+
+/**
+ * A condition to be used against `AppWebhook` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type AppWebhookCondition = {
+  /** Checks for equality with the object’s `appName` field. */
+  appName?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `secret` field. */
+  secret?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `url` field. */
+  url?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** A filter to be used against `AppWebhook` object types. All fields are combined with a logical ‘and.’ */
+export type AppWebhookFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<AppWebhookFilter>>;
+  /** Filter by the object’s `appName` field. */
+  appName?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<AppWebhookFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<AppWebhookFilter>>;
+  /** Filter by the object’s `secret` field. */
+  secret?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `url` field. */
+  url?: InputMaybe<StringFilter>;
+};
+
+/** A connection to a list of `AppWebhook` values. */
+export type AppWebhooksConnection = {
+  __typename?: 'AppWebhooksConnection';
+  /** A list of edges which contains the `AppWebhook` and cursor to aid in pagination. */
+  edges: Array<AppWebhooksEdge>;
+  /** A list of `AppWebhook` objects. */
+  nodes: Array<AppWebhook>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `AppWebhook` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `AppWebhook` edge in the connection. */
+export type AppWebhooksEdge = {
+  __typename?: 'AppWebhooksEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `AppWebhook` at the end of the edge. */
+  node: AppWebhook;
+};
+
+/** Methods to use when ordering `AppWebhook`. */
+export enum AppWebhooksOrderBy {
+  AppNameAsc = 'APP_NAME_ASC',
+  AppNameDesc = 'APP_NAME_DESC',
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  SecretAsc = 'SECRET_ASC',
+  SecretDesc = 'SECRET_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC',
+  UrlAsc = 'URL_ASC',
+  UrlDesc = 'URL_DESC'
+}
+
 export type AtlasCheckpoint = Node & {
   __typename?: 'AtlasCheckpoint';
   blockNumber: Scalars['BigInt']['output'];
@@ -1180,6 +1274,222 @@ export type Node = {
   nodeId: Scalars['ID']['output'];
 };
 
+/** A connection to a list of `NotificationDelivery` values. */
+export type NotificationDeliveriesConnection = {
+  __typename?: 'NotificationDeliveriesConnection';
+  /** A list of edges which contains the `NotificationDelivery` and cursor to aid in pagination. */
+  edges: Array<NotificationDeliveriesEdge>;
+  /** A list of `NotificationDelivery` objects. */
+  nodes: Array<NotificationDelivery>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `NotificationDelivery` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `NotificationDelivery` edge in the connection. */
+export type NotificationDeliveriesEdge = {
+  __typename?: 'NotificationDeliveriesEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `NotificationDelivery` at the end of the edge. */
+  node: NotificationDelivery;
+};
+
+/** Methods to use when ordering `NotificationDelivery`. */
+export enum NotificationDeliveriesOrderBy {
+  AttemptsAsc = 'ATTEMPTS_ASC',
+  AttemptsDesc = 'ATTEMPTS_DESC',
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  DeliveredAtAsc = 'DELIVERED_AT_ASC',
+  DeliveredAtDesc = 'DELIVERED_AT_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  LastErrorAsc = 'LAST_ERROR_ASC',
+  LastErrorDesc = 'LAST_ERROR_DESC',
+  Natural = 'NATURAL',
+  NextRetryAtAsc = 'NEXT_RETRY_AT_ASC',
+  NextRetryAtDesc = 'NEXT_RETRY_AT_DESC',
+  OutboxIdAsc = 'OUTBOX_ID_ASC',
+  OutboxIdDesc = 'OUTBOX_ID_DESC',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  StatusAsc = 'STATUS_ASC',
+  StatusDesc = 'STATUS_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC',
+  WebhookIdAsc = 'WEBHOOK_ID_ASC',
+  WebhookIdDesc = 'WEBHOOK_ID_DESC'
+}
+
+export type NotificationDelivery = Node & {
+  __typename?: 'NotificationDelivery';
+  attempts: Scalars['Int']['output'];
+  createdAt: Scalars['Datetime']['output'];
+  deliveredAt?: Maybe<Scalars['Datetime']['output']>;
+  id: Scalars['UUID']['output'];
+  lastError?: Maybe<Scalars['String']['output']>;
+  nextRetryAt: Scalars['Datetime']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  outboxId: Scalars['UUID']['output'];
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+  webhookId: Scalars['UUID']['output'];
+};
+
+/**
+ * A condition to be used against `NotificationDelivery` object types. All fields
+ * are tested for equality and combined with a logical ‘and.’
+ */
+export type NotificationDeliveryCondition = {
+  /** Checks for equality with the object’s `attempts` field. */
+  attempts?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `deliveredAt` field. */
+  deliveredAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `lastError` field. */
+  lastError?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `nextRetryAt` field. */
+  nextRetryAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `outboxId` field. */
+  outboxId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `status` field. */
+  status?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `webhookId` field. */
+  webhookId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+/** A filter to be used against `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
+export type NotificationDeliveryFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<NotificationDeliveryFilter>>;
+  /** Filter by the object’s `attempts` field. */
+  attempts?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `deliveredAt` field. */
+  deliveredAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `lastError` field. */
+  lastError?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `nextRetryAt` field. */
+  nextRetryAt?: InputMaybe<DatetimeFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<NotificationDeliveryFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<NotificationDeliveryFilter>>;
+  /** Filter by the object’s `outboxId` field. */
+  outboxId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `status` field. */
+  status?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `webhookId` field. */
+  webhookId?: InputMaybe<UuidFilter>;
+};
+
+export type NotificationOutbox = Node & {
+  __typename?: 'NotificationOutbox';
+  createdAt: Scalars['Datetime']['output'];
+  eventType: Scalars['String']['output'];
+  id: Scalars['UUID']['output'];
+  idempotencyKey: Scalars['String']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  payload: Scalars['JSON']['output'];
+  updatedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `NotificationOutbox` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type NotificationOutboxCondition = {
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `eventType` field. */
+  eventType?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `idempotencyKey` field. */
+  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `payload` field. */
+  payload?: InputMaybe<Scalars['JSON']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `NotificationOutbox` object types. All fields are combined with a logical ‘and.’ */
+export type NotificationOutboxFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<NotificationOutboxFilter>>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `eventType` field. */
+  eventType?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `idempotencyKey` field. */
+  idempotencyKey?: InputMaybe<StringFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<NotificationOutboxFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<NotificationOutboxFilter>>;
+  /** Filter by the object’s `payload` field. */
+  payload?: InputMaybe<JsonFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `NotificationOutbox` values. */
+export type NotificationOutboxesConnection = {
+  __typename?: 'NotificationOutboxesConnection';
+  /** A list of edges which contains the `NotificationOutbox` and cursor to aid in pagination. */
+  edges: Array<NotificationOutboxesEdge>;
+  /** A list of `NotificationOutbox` objects. */
+  nodes: Array<NotificationOutbox>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `NotificationOutbox` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `NotificationOutbox` edge in the connection. */
+export type NotificationOutboxesEdge = {
+  __typename?: 'NotificationOutboxesEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `NotificationOutbox` at the end of the edge. */
+  node: NotificationOutbox;
+};
+
+/** Methods to use when ordering `NotificationOutbox`. */
+export enum NotificationOutboxesOrderBy {
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  EventTypeAsc = 'EVENT_TYPE_ASC',
+  EventTypeDesc = 'EVENT_TYPE_DESC',
+  IdempotencyKeyAsc = 'IDEMPOTENCY_KEY_ASC',
+  IdempotencyKeyDesc = 'IDEMPOTENCY_KEY_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  Natural = 'NATURAL',
+  PayloadAsc = 'PAYLOAD_ASC',
+  PayloadDesc = 'PAYLOAD_DESC',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
+
 /** Information about pagination in a connection. */
 export type PageInfo = {
   __typename?: 'PageInfo';
@@ -1268,84 +1578,13 @@ export type Proposal = Node & {
   noCount: Scalars['BigInt']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
-  /** Reads and enables pagination through a set of `ProposalAction`. */
-  proposalActions: Array<ProposalAction>;
-  /** Reads and enables pagination through a set of `ProposalAction`. */
-  proposalActionsConnection: ProposalActionsConnection;
-  /** Reads a single `ProposalTallyQueue` that is related to this `Proposal`. */
-  proposalTallyQueue?: Maybe<ProposalTallyQueue>;
-  /**
-   * Reads and enables pagination through a set of `ProposalTallyQueue`.
-   * @deprecated Please use proposalTallyQueue instead
-   */
-  proposalTallyQueuesConnection: ProposalTallyQueuesConnection;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotes: Array<ProposalVote>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesConnection: ProposalVotesConnection;
   proposedBy: Scalars['UUID']['output'];
   quorum: Scalars['BigInt']['output'];
-  /** Reads a single `Space` that is related to this `Proposal`. */
-  space?: Maybe<Space>;
   spaceId: Scalars['UUID']['output'];
   startTime: Scalars['BigInt']['output'];
   threshold: Scalars['BigInt']['output'];
   votingMode: VotingMode;
   yesCount: Scalars['BigInt']['output'];
-};
-
-
-export type ProposalProposalActionsArgs = {
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-export type ProposalProposalActionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-export type ProposalProposalTallyQueuesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalTallyQueueCondition>;
-  filter?: InputMaybe<ProposalTallyQueueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalTallyQueuesOrderBy>>;
-};
-
-
-export type ProposalProposalVotesArgs = {
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type ProposalProposalVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
 };
 
 export type ProposalAction = Node & {
@@ -1359,8 +1598,6 @@ export type ProposalAction = Node & {
   metadata?: Maybe<Scalars['String']['output']>;
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
-  /** Reads a single `Proposal` that is related to this `ProposalAction`. */
-  proposal?: Maybe<Proposal>;
   proposalId: Scalars['UUID']['output'];
   quorum?: Maybe<Scalars['BigInt']['output']>;
   slowThreshold?: Maybe<Scalars['BigInt']['output']>;
@@ -1414,8 +1651,6 @@ export type ProposalActionFilter = {
   not?: InputMaybe<ProposalActionFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalActionFilter>>;
-  /** Filter by the object’s `proposal` relation. */
-  proposal?: InputMaybe<ProposalFilter>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `quorum` field. */
@@ -1585,24 +1820,10 @@ export type ProposalFilter = {
   not?: InputMaybe<ProposalFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalFilter>>;
-  /** Filter by the object’s `proposalActionsConnection` relation. */
-  proposalActionsConnection?: InputMaybe<ProposalToManyProposalActionFilter>;
-  /** Some related `proposalActionsConnection` exist. */
-  proposalActionsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `proposalTallyQueue` relation. */
-  proposalTallyQueue?: InputMaybe<ProposalTallyQueueFilter>;
-  /** A related `proposalTallyQueue` exists. */
-  proposalTallyQueueExists?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `proposalVotesConnection` relation. */
-  proposalVotesConnection?: InputMaybe<ProposalToManyProposalVoteFilter>;
-  /** Some related `proposalVotesConnection` exist. */
-  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `proposedBy` field. */
   proposedBy?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `quorum` field. */
   quorum?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `spaceId` field. */
   spaceId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `startTime` field. */
@@ -1619,8 +1840,6 @@ export type ProposalTallyQueue = Node & {
   __typename?: 'ProposalTallyQueue';
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
-  /** Reads a single `Proposal` that is related to this `ProposalTallyQueue`. */
-  proposal?: Maybe<Proposal>;
   proposalId: Scalars['UUID']['output'];
   queuedAt: Scalars['Datetime']['output'];
 };
@@ -1644,8 +1863,6 @@ export type ProposalTallyQueueFilter = {
   not?: InputMaybe<ProposalTallyQueueFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalTallyQueueFilter>>;
-  /** Filter by the object’s `proposal` relation. */
-  proposal?: InputMaybe<ProposalFilter>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `queuedAt` field. */
@@ -1685,37 +1902,13 @@ export enum ProposalTallyQueuesOrderBy {
   QueuedAtDesc = 'QUEUED_AT_DESC'
 }
 
-/** A filter to be used against many `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
-export type ProposalToManyProposalActionFilter = {
-  /** Every related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalActionFilter>;
-  /** No related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalActionFilter>;
-  /** Some related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalActionFilter>;
-};
-
-/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
-export type ProposalToManyProposalVoteFilter = {
-  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalVoteFilter>;
-  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalVoteFilter>;
-  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalVoteFilter>;
-};
-
 export type ProposalVote = Node & {
   __typename?: 'ProposalVote';
   createdAt: Scalars['String']['output'];
   createdAtBlock: Scalars['String']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
-  /** Reads a single `Proposal` that is related to this `ProposalVote`. */
-  proposal?: Maybe<Proposal>;
   proposalId: Scalars['UUID']['output'];
-  /** Reads a single `Space` that is related to this `ProposalVote`. */
-  space?: Maybe<Space>;
   spaceId: Scalars['UUID']['output'];
   vote: VoteOption;
   voterId: Scalars['UUID']['output'];
@@ -1752,12 +1945,8 @@ export type ProposalVoteFilter = {
   not?: InputMaybe<ProposalVoteFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalVoteFilter>>;
-  /** Filter by the object’s `proposal` relation. */
-  proposal?: InputMaybe<ProposalFilter>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `spaceId` field. */
   spaceId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `vote` field. */
@@ -1869,6 +2058,14 @@ export enum ProposalsOrderBy {
 /** The root query type which gives access points into the data universe. */
 export type Query = Node & {
   __typename?: 'Query';
+  appWebhook?: Maybe<AppWebhook>;
+  appWebhookByAppName?: Maybe<AppWebhook>;
+  /** Reads a single `AppWebhook` using its globally unique `ID`. */
+  appWebhookByNodeId?: Maybe<AppWebhook>;
+  /** Reads a set of `AppWebhook`. */
+  appWebhooks?: Maybe<Array<AppWebhook>>;
+  /** Reads and enables pagination through a set of `AppWebhook`. */
+  appWebhooksConnection?: Maybe<AppWebhooksConnection>;
   atlasCheckpoint?: Maybe<AtlasCheckpoint>;
   /** Reads a single `AtlasCheckpoint` using its globally unique `ID`. */
   atlasCheckpointByNodeId?: Maybe<AtlasCheckpoint>;
@@ -1935,6 +2132,22 @@ export type Query = Node & {
   node?: Maybe<Node>;
   /** The root query type must be a `Node` to work well with Relay 1 mutations. This just resolves to `query`. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a set of `NotificationDelivery`. */
+  notificationDeliveries?: Maybe<Array<NotificationDelivery>>;
+  /** Reads and enables pagination through a set of `NotificationDelivery`. */
+  notificationDeliveriesConnection?: Maybe<NotificationDeliveriesConnection>;
+  notificationDelivery?: Maybe<NotificationDelivery>;
+  /** Reads a single `NotificationDelivery` using its globally unique `ID`. */
+  notificationDeliveryByNodeId?: Maybe<NotificationDelivery>;
+  notificationDeliveryByOutboxIdAndWebhookId?: Maybe<NotificationDelivery>;
+  notificationOutbox?: Maybe<NotificationOutbox>;
+  notificationOutboxByIdempotencyKey?: Maybe<NotificationOutbox>;
+  /** Reads a single `NotificationOutbox` using its globally unique `ID`. */
+  notificationOutboxByNodeId?: Maybe<NotificationOutbox>;
+  /** Reads a set of `NotificationOutbox`. */
+  notificationOutboxes?: Maybe<Array<NotificationOutbox>>;
+  /** Reads and enables pagination through a set of `NotificationOutbox`. */
+  notificationOutboxesConnection?: Maybe<NotificationOutboxesConnection>;
   /** Reads and enables pagination through a set of `PropertyInfo`. */
   properties?: Maybe<Array<PropertyInfo>>;
   /** Reads and enables pagination through a set of `PropertyInfo`. */
@@ -2065,6 +2278,47 @@ export type Query = Node & {
   votesCounts?: Maybe<Array<VotesCount>>;
   /** Reads and enables pagination through a set of `VotesCount`. */
   votesCountsConnection?: Maybe<VotesCountsConnection>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAppWebhookArgs = {
+  id: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAppWebhookByAppNameArgs = {
+  appName: Scalars['String']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAppWebhookByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAppWebhooksArgs = {
+  condition?: InputMaybe<AppWebhookCondition>;
+  filter?: InputMaybe<AppWebhookFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<AppWebhooksOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryAppWebhooksConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<AppWebhookCondition>;
+  filter?: InputMaybe<AppWebhookFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<AppWebhooksOrderBy>>;
 };
 
 
@@ -2402,6 +2656,89 @@ export type QueryMetasConnectionArgs = {
 /** The root query type which gives access points into the data universe. */
 export type QueryNodeArgs = {
   nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationDeliveriesArgs = {
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationDeliveriesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationDeliveryArgs = {
+  id: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationDeliveryByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationDeliveryByOutboxIdAndWebhookIdArgs = {
+  outboxId: Scalars['UUID']['input'];
+  webhookId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationOutboxArgs = {
+  id: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationOutboxByIdempotencyKeyArgs = {
+  idempotencyKey: Scalars['String']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationOutboxByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationOutboxesArgs = {
+  condition?: InputMaybe<NotificationOutboxCondition>;
+  filter?: InputMaybe<NotificationOutboxFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationOutboxesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryNotificationOutboxesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<NotificationOutboxCondition>;
+  filter?: InputMaybe<NotificationOutboxFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationOutboxesOrderBy>>;
 };
 
 
@@ -3478,14 +3815,6 @@ export type Space = Node & {
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
   page?: Maybe<Entity>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotes: Array<ProposalVote>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesConnection: ProposalVotesConnection;
-  /** Reads and enables pagination through a set of `Proposal`. */
-  proposals: Array<Proposal>;
-  /** Reads and enables pagination through a set of `Proposal`. */
-  proposalsConnection: ProposalsConnection;
   /** Reads and enables pagination through a set of `Relation`. */
   relations: Array<Relation>;
   /** Reads and enables pagination through a set of `Relation`. */
@@ -3502,14 +3831,6 @@ export type Space = Node & {
   subspaceTopics: Array<SubspaceTopic>;
   /** Reads and enables pagination through a set of `SubspaceTopic`. */
   subspaceTopicsConnection: SubspaceTopicsConnection;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByChildSpaceId: Array<Subspace>;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByChildSpaceIdConnection: SubspacesConnection;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByParentSpaceId: Array<Subspace>;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByParentSpaceIdConnection: SubspacesConnection;
   /** Reads a single `Entity` that is related to this `Space`. */
   topic?: Maybe<Entity>;
   topicId?: Maybe<Scalars['UUID']['output']>;
@@ -3560,48 +3881,6 @@ export type SpaceMembersListArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
-};
-
-
-export type SpaceProposalVotesArgs = {
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type SpaceProposalVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type SpaceProposalsArgs = {
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
-};
-
-
-export type SpaceProposalsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
 };
 
 
@@ -3689,48 +3968,6 @@ export type SpaceSubspaceTopicsConnectionArgs = {
 };
 
 
-export type SpaceSubspacesByChildSpaceIdArgs = {
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByParentSpaceIdArgs = {
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
 export type SpaceValuesArgs = {
   condition?: InputMaybe<ValueCondition>;
   filter?: InputMaybe<ValueFilter>;
@@ -3783,14 +4020,6 @@ export type SpaceFilter = {
   not?: InputMaybe<SpaceFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<SpaceFilter>>;
-  /** Filter by the object’s `proposalVotesConnection` relation. */
-  proposalVotesConnection?: InputMaybe<SpaceToManyProposalVoteFilter>;
-  /** Some related `proposalVotesConnection` exist. */
-  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `proposalsConnection` relation. */
-  proposalsConnection?: InputMaybe<SpaceToManyProposalFilter>;
-  /** Some related `proposalsConnection` exist. */
-  proposalsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `relationsByFromSpaceIdConnection` relation. */
   relationsByFromSpaceIdConnection?: InputMaybe<SpaceToManyRelationFilter>;
   /** Some related `relationsByFromSpaceIdConnection` exist. */
@@ -3807,14 +4036,6 @@ export type SpaceFilter = {
   subspaceTopicsConnection?: InputMaybe<SpaceToManySubspaceTopicFilter>;
   /** Some related `subspaceTopicsConnection` exist. */
   subspaceTopicsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `subspacesByChildSpaceIdConnection` relation. */
-  subspacesByChildSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
-  /** Some related `subspacesByChildSpaceIdConnection` exist. */
-  subspacesByChildSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `subspacesByParentSpaceIdConnection` relation. */
-  subspacesByParentSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
-  /** Some related `subspacesByParentSpaceIdConnection` exist. */
-  subspacesByParentSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `topic` relation. */
   topic?: InputMaybe<EntityFilter>;
   /** A related `topic` exists. */
@@ -3922,26 +4143,6 @@ export type SpaceToManyMemberFilter = {
   some?: InputMaybe<MemberFilter>;
 };
 
-/** A filter to be used against many `Proposal` object types. All fields are combined with a logical ‘and.’ */
-export type SpaceToManyProposalFilter = {
-  /** Every related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalFilter>;
-  /** No related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalFilter>;
-  /** Some related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalFilter>;
-};
-
-/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
-export type SpaceToManyProposalVoteFilter = {
-  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalVoteFilter>;
-  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalVoteFilter>;
-  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalVoteFilter>;
-};
-
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyRelationFilter = {
   /** Every related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
@@ -3950,16 +4151,6 @@ export type SpaceToManyRelationFilter = {
   none?: InputMaybe<RelationFilter>;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<RelationFilter>;
-};
-
-/** A filter to be used against many `Subspace` object types. All fields are combined with a logical ‘and.’ */
-export type SpaceToManySubspaceFilter = {
-  /** Every related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<SubspaceFilter>;
-  /** No related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<SubspaceFilter>;
-  /** Some related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<SubspaceFilter>;
 };
 
 /** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
@@ -4130,13 +4321,9 @@ export type StringFilter = {
 
 export type Subspace = Node & {
   __typename?: 'Subspace';
-  /** Reads a single `Space` that is related to this `Subspace`. */
-  childSpace?: Maybe<Space>;
   childSpaceId: Scalars['UUID']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
-  /** Reads a single `Space` that is related to this `Subspace`. */
-  parentSpace?: Maybe<Space>;
   parentSpaceId: Scalars['UUID']['output'];
   type: SubspaceType;
 };
@@ -4158,16 +4345,12 @@ export type SubspaceCondition = {
 export type SubspaceFilter = {
   /** Checks for all expressions in this list. */
   and?: InputMaybe<Array<SubspaceFilter>>;
-  /** Filter by the object’s `childSpace` relation. */
-  childSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `childSpaceId` field. */
   childSpaceId?: InputMaybe<UuidFilter>;
   /** Negates the expression. */
   not?: InputMaybe<SubspaceFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<SubspaceFilter>>;
-  /** Filter by the object’s `parentSpace` relation. */
-  parentSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `parentSpaceId` field. */
   parentSpaceId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `type` field. */
@@ -4899,12 +5082,16 @@ export enum ValuesOrderBy {
   EntityIdDesc = 'ENTITY_ID_DESC',
   FloatAsc = 'FLOAT_ASC',
   FloatDesc = 'FLOAT_DESC',
+  GlobalScoreAsc = 'GLOBAL_SCORE_ASC',
+  GlobalScoreDesc = 'GLOBAL_SCORE_DESC',
   IdAsc = 'ID_ASC',
   IdDesc = 'ID_DESC',
   IntegerAsc = 'INTEGER_ASC',
   IntegerDesc = 'INTEGER_DESC',
   LanguageAsc = 'LANGUAGE_ASC',
   LanguageDesc = 'LANGUAGE_DESC',
+  LocalScoreAsc = 'LOCAL_SCORE_ASC',
+  LocalScoreDesc = 'LOCAL_SCORE_DESC',
   Natural = 'NATURAL',
   PointAsc = 'POINT_ASC',
   PointDesc = 'POINT_DESC',
@@ -4912,6 +5099,8 @@ export enum ValuesOrderBy {
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   PropertyIdAsc = 'PROPERTY_ID_ASC',
   PropertyIdDesc = 'PROPERTY_ID_DESC',
+  RawScoreAsc = 'RAW_SCORE_ASC',
+  RawScoreDesc = 'RAW_SCORE_DESC',
   RectAsc = 'RECT_ASC',
   RectDesc = 'RECT_DESC',
   ScheduleAsc = 'SCHEDULE_ASC',
@@ -5252,7 +5441,7 @@ export type EntityQueryVariables = Exact<{
 }>;
 
 
-export type EntityQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, text?: string | null, integer?: any | null, float?: number | null, point?: any | null, boolean?: boolean | null, time?: any | null, language?: any | null, unit?: string | null, datetime?: any | null, date?: any | null, decimal?: any | null, bytes?: any | null, schedule?: any | null, property?: (
+export type EntityQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, text?: string | null, integer?: any | null, float?: number | null, point?: any | null, boolean?: boolean | null, time?: any | null, language?: any | null, unit?: string | null, datetime?: any | null, date?: any | null, decimal?: any | null, bytes?: any | null, schedule?: any | null, property?: (
         { __typename?: 'PropertyInfo' }
         & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
       ) | null }>, relationsList: Array<{ __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any, text?: string | null, integer?: any | null, float?: number | null, point?: any | null, boolean?: boolean | null, time?: any | null, datetime?: any | null, date?: any | null, decimal?: any | null, bytes?: any | null, schedule?: any | null }> } | null, type?: { __typename?: 'PropertyInfo', id?: any | null, name?: string | null } | null }> } | null };
@@ -5455,7 +5644,7 @@ export const FullSpaceFragmentDoc = {"kind":"Document","definitions":[{"kind":"F
 export const AllEntitiesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AllEntities"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceIds"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUIDFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"typeIds"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUIDFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"EntitiesOrderBy"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceIds"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceIds"}}},{"kind":"Argument","name":{"kind":"Name","value":"typeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}}},{"kind":"Argument","name":{"kind":"Name","value":"typeIds"},"value":{"kind":"Variable","name":{"kind":"Name","value":"typeIds"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<AllEntitiesQuery, AllEntitiesQueryVariables>;
 export const EntitiesOrderedByPropertyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitiesOrderedByProperty"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"propertyId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sortDirection"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"SortOrder"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"dataType"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entitiesOrderedByProperty"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"propertyId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"propertyId"}}},{"kind":"Argument","name":{"kind":"Name","value":"sortDirection"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sortDirection"}}},{"kind":"Argument","name":{"kind":"Name","value":"dataType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"dataType"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<EntitiesOrderedByPropertyQuery, EntitiesOrderedByPropertyQueryVariables>;
 export const EntitiesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitiesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<EntitiesBatchQuery, EntitiesBatchQueryVariables>;
-export const EntityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Entity"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<EntityQuery, EntityQueryVariables>;
+export const EntityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Entity"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<EntityQuery, EntityQueryVariables>;
 export const RelationEntityRelationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RelationEntityRelations"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"relations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entityId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullRelation"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullRelation"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<RelationEntityRelationsQuery, RelationEntityRelationsQueryVariables>;
 export const RelationsByToEntityIdsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RelationsByToEntityIds"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"toEntityIds"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"relations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"toEntityId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"in"},"value":{"kind":"Variable","name":{"kind":"Name","value":"toEntityIds"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"typeId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"toEntityId"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntityId"}}]}}]}}]} as unknown as DocumentNode<RelationsByToEntityIdsQuery, RelationsByToEntityIdsQueryVariables>;
 export const EntityPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"relations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entityId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullRelation"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullRelation"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"bytes"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<EntityPageQuery, EntityPageQueryVariables>;

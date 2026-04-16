@@ -53,7 +53,10 @@ function transformVariables<T extends Record<string, unknown>>(variables: T | un
 }
 
 function getOperationName(document: TypedDocumentNode<any, any>): string | undefined {
-  const op = document.definitions.find(def => def.kind === 'OperationDefinition');
+  /** `~/core/gql` returns `{}` when the query string is missing from the codegen map (e.g. after editing query-fragments without `bun run gql:codegen`). */
+  const defs = document?.definitions;
+  if (!Array.isArray(defs)) return undefined;
+  const op = defs.find(def => def.kind === 'OperationDefinition');
   if (!op || op.kind !== 'OperationDefinition') {
     return undefined;
   }

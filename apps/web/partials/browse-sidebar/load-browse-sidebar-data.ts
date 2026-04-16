@@ -1,26 +1,10 @@
 'use server';
 
-import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { resolveMemberSpaceFromWallet } from '~/core/browse/resolve-member-space-from-wallet';
 import { fetchBrowseSidebarData, type BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { getSpaceByAddress } from '~/core/io/queries';
-import { fetchProfile } from '~/core/io/subgraph';
-import { validateSpaceId } from '~/core/utils/utils';
-
-/**
- * REST profile sometimes falls back to `spaceId === wallet` when the request fails.
- * Subgraph membership/editor filters need the real personal space id (bytes16 / UUID).
- */
-async function resolveMemberSpaceId(walletAddress: string): Promise<string | null> {
-  const profile = await Effect.runPromise(fetchProfile(walletAddress));
-  if (validateSpaceId(profile.spaceId)) {
-    return profile.spaceId;
-  }
-  const space = await Effect.runPromise(getSpaceByAddress(walletAddress));
-  return space && validateSpaceId(space.id) ? space.id : null;
-}
 
 /**
  * @param walletAddressHint — Smart account address from the client when the session cookie
@@ -32,6 +16,6 @@ export async function loadBrowseSidebarData(walletAddressHint?: string | null): 
   if (!wallet) {
     return fetchBrowseSidebarData(null);
   }
-  const memberSpaceId = await resolveMemberSpaceId(wallet);
+  const memberSpaceId = await resolveMemberSpaceFromWallet(wallet);
   return fetchBrowseSidebarData(memberSpaceId);
 }
