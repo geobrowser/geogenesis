@@ -303,6 +303,19 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
   return mapSpaceTopicActionToDetails(topicActions[0]);
 }
 
+/**
+ * Map REST `actions` to a single {@link ProposalType}. Any `PUBLISH` action means a content edit
+ * proposal (`ADD_EDIT`) — action order from the API is not guaranteed, so the first action alone
+ * can mis-classify multi-action proposals.
+ */
+export function mapApiActionsToProposalType(actions: readonly { actionType: string }[]): ProposalType {
+  if (actions.some(a => a.actionType === 'PUBLISH')) {
+    return 'ADD_EDIT';
+  }
+  const first = actions[0]?.actionType ?? 'UNKNOWN';
+  return mapActionTypeToProposalType(first);
+}
+
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
   switch (actionType) {
     case 'PUBLISH':

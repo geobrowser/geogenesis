@@ -24,7 +24,7 @@ export function ActiveProposalSlideUp({ proposalId, spaceId, children }: ActiveP
         }
       }}
     >
-      <div className="h-full overflow-y-auto overscroll-contain">{children}</div>
+      {children}
     </SlideUp>
   );
 }

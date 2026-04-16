@@ -9,9 +9,11 @@ interface Props {
   status: ProposalStatus;
   endTime: number; // UNIX timestamp
   canExecute: boolean;
+  /** When set while voting is still open, do not repeat the same countdown as the card footer. */
+  viewerVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
 }
 
-export function GovernanceStatusChip({ status, endTime, canExecute }: Props) {
+export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }: Props) {
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -44,6 +46,14 @@ export function GovernanceStatusChip({ status, endTime, canExecute }: Props) {
       if (isVotingEnded) {
         return (
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>
+        );
+      }
+
+      if (viewerVote) {
+        return (
+          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium text-grey-04">
+            Voting period open
+          </div>
         );
       }
 

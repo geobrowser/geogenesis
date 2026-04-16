@@ -4,6 +4,10 @@ import * as React from 'react';
 
 import { SmallButton } from '~/design-system/button';
 
+import {
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
+} from './fetch-active-proposals-in-editor-spaces';
 import { loadMoreHomeProposalsAction } from './load-more-home-proposals-action';
 
 interface Props {
@@ -12,6 +16,11 @@ interface Props {
   connectedAddress: string | undefined;
   proposalType: 'membership' | 'content' | undefined;
   initialHasMore?: boolean;
+  governanceFilters?: {
+    spaceId: string;
+    category: GovernanceHomeReviewCategory;
+    status: GovernanceHomeStatusFilter;
+  };
 }
 
 export function HomeProposalsInfiniteScroll({
@@ -20,6 +29,7 @@ export function HomeProposalsInfiniteScroll({
   proposalType,
   page = 0,
   initialHasMore = true,
+  governanceFilters,
 }: Props) {
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.ReactNode[]>([]);
@@ -42,7 +52,8 @@ export function HomeProposalsInfiniteScroll({
           connectedSpaceId,
           connectedAddress,
           proposalType,
-          currentPageRef.current
+          currentPageRef.current,
+          governanceFilters
         );
         if (abortController?.signal.aborted) return;
         setLoadMoreNodes(prev => [...prev, node]);
@@ -56,7 +67,7 @@ export function HomeProposalsInfiniteScroll({
         }
       }
     },
-    [connectedSpaceId, connectedAddress, proposalType]
+    [connectedSpaceId, connectedAddress, proposalType, governanceFilters]
   );
 
   React.useEffect(() => {

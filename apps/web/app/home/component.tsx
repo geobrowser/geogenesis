@@ -3,13 +3,21 @@ import * as React from 'react';
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { TabGroup } from '~/design-system/tab-group';
 
+import {
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
+} from './fetch-active-proposals-in-editor-spaces';
 import { HomeProposalsInfiniteScroll } from './home-proposals-infinite-scroll';
+import { MyGovernanceProposalsList } from './my-governance-proposals-list';
 import { PendingProposalsPage } from './pending-proposals-page';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 
-const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
+type GovernanceFilters = {
+  spaceId: string;
+  category: GovernanceHomeReviewCategory;
+  status: GovernanceHomeStatusFilter;
+};
 
 type Props = {
   header: React.ReactNode;
@@ -17,32 +25,79 @@ type Props = {
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
+  governanceTab: 'review' | 'my';
+  governanceFilters: GovernanceFilters;
+  editorSpaceOptions: { id: string; name: string; image: string | null }[];
+  myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
+  myProposalSpaceIds: string[];
 };
 
-export async function Component({ header, sidebarCounts, proposalType, connectedAddress, connectedSpaceId }: Props) {
+export async function Component({
+  header,
+  sidebarCounts,
+  proposalType,
+  connectedAddress,
+  connectedSpaceId,
+  governanceTab,
+  governanceFilters,
+  editorSpaceOptions,
+  myProposalSpaceOptions,
+  myProposalSpaceIds,
+}: Props) {
+  const listKey = `${governanceTab}-${governanceFilters.spaceId}-${governanceFilters.category}-${governanceFilters.status}-${proposalType}-${connectedAddress}`;
+
   return (
     <>
       <div className="mx-auto max-w-[880px]">
         {header}
-        <PersonalHomeNavigation />
         <PersonalHomeDashboard
+          governanceTab={governanceTab}
+          governanceFilters={governanceFilters}
+          editorSpaceOptions={editorSpaceOptions}
+          myProposalSpaceOptions={myProposalSpaceOptions}
           proposalsList={
-            <React.Suspense
-              key={`${proposalType}-${connectedAddress}`}
-              fallback={
-                <div className="space-y-2">
-                  <LoadingSkeleton />
-                  <LoadingSkeleton />
-                  <LoadingSkeleton />
-                </div>
-              }
-            >
-              <PendingProposals
-                connectedAddress={connectedAddress}
-                connectedSpaceId={connectedSpaceId}
-                proposalType={proposalType}
-              />
-            </React.Suspense>
+            governanceTab === 'my' && !connectedSpaceId ? (
+              <p className="text-body text-grey-04">Sign in to see your proposals.</p>
+            ) : governanceTab === 'my' && connectedSpaceId ? (
+              <React.Suspense
+                key={listKey}
+                fallback={
+                  <div className="space-y-2">
+                    <LoadingSkeleton />
+                    <LoadingSkeleton />
+                  </div>
+                }
+              >
+                <MyGovernanceProposalsList
+                  memberSpaceId={connectedSpaceId}
+                  viewerWalletAddress={connectedAddress}
+                  spaceIds={myProposalSpaceIds}
+                  spaceFilter={governanceFilters.spaceId}
+                  category={governanceFilters.category}
+                  status={governanceFilters.status}
+                  governanceTab={governanceTab}
+                  proposalType={proposalType}
+                />
+              </React.Suspense>
+            ) : (
+              <React.Suspense
+                key={listKey}
+                fallback={
+                  <div className="space-y-2">
+                    <LoadingSkeleton />
+                    <LoadingSkeleton />
+                    <LoadingSkeleton />
+                  </div>
+                }
+              >
+                <PendingProposals
+                  connectedAddress={connectedAddress}
+                  connectedSpaceId={connectedSpaceId}
+                  proposalType={proposalType}
+                  governanceFilters={governanceFilters}
+                />
+              </React.Suspense>
+            )
           }
           sidebarCounts={sidebarCounts}
         />
@@ -67,38 +122,25 @@ function NoActivity() {
   return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
 }
 
-function PersonalHomeNavigation() {
-  return (
-    <React.Suspense fallback={null}>
-      <TabGroup
-        tabs={TABS.map(label => {
-          const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
-          const disabled = label === 'For You' ? false : true;
-
-          return {
-            href,
-            label,
-            disabled,
-          };
-        })}
-        className="mt-8"
-      />
-    </React.Suspense>
-  );
-}
-
 type PendingProposalsProps = {
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
+  governanceFilters: GovernanceFilters;
 };
 
-async function PendingProposals({ proposalType, connectedAddress, connectedSpaceId }: PendingProposalsProps) {
+async function PendingProposals({
+  proposalType,
+  connectedAddress,
+  connectedSpaceId,
+  governanceFilters,
+}: PendingProposalsProps) {
   const { node, hasMore } = await PendingProposalsPage({
     connectedSpaceId,
     connectedAddress,
     proposalType,
     page: 0,
+    governanceFilters,
   });
 
   if (!node) {
@@ -113,6 +155,7 @@ async function PendingProposals({ proposalType, connectedAddress, connectedSpace
           connectedSpaceId={connectedSpaceId}
           connectedAddress={connectedAddress}
           proposalType={proposalType}
+          governanceFilters={governanceFilters}
           page={0}
           initialHasMore={hasMore}
         />

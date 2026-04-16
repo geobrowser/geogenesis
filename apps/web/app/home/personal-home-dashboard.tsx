@@ -3,97 +3,206 @@
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
+import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { useSearchParams } from 'next/navigation';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpacesByAddresses } from '~/core/hooks/use-spaces-by-addresses';
-import { Space } from '~/core/io/dto/spaces';
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
-import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
-// import { InfoSmall } from '~/design-system/icons/info-small';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Member } from '~/design-system/icons/member';
-// import { VideoSmall } from '~/design-system/icons/video-small';
 import { Menu } from '~/design-system/menu';
+import { useSearchParams } from 'next/navigation';
+
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-type PersonalHomeView = 'all' | 'membership' | 'content';
+import {
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
+} from './fetch-active-proposals-in-editor-spaces';
 
-const viewLabel: Record<PersonalHomeView, string> = {
-  all: 'All',
-  content: 'Active Proposals',
-  membership: 'Membership Requests',
+type GovernanceFilters = {
+  spaceId: string;
+  category: GovernanceHomeReviewCategory;
+  status: GovernanceHomeStatusFilter;
+};
+
+function buildHomeHref(parts: {
+  tab: 'review' | 'my';
+  space: string;
+  category: GovernanceHomeReviewCategory;
+  status: GovernanceHomeStatusFilter;
+}) {
+  const params = new URLSearchParams();
+  if (parts.tab === 'my') params.set('tab', 'my');
+  if (parts.space !== 'all') params.set('space', parts.space);
+  if (parts.category !== 'all') params.set('proposalCategory', parts.category);
+  if (parts.status !== 'pending') params.set('proposalStatus', parts.status);
+  const q = params.toString();
+  return q ? `/home?${q}` : '/home';
+}
+
+const categoryLabels: Record<GovernanceHomeReviewCategory, string> = {
+  all: 'All proposals',
+  knowledge: 'Knowledge',
+  membership: 'Membership',
+  settings: 'Settings',
+};
+
+const statusLabels: Record<GovernanceHomeStatusFilter, string> = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
 };
 
 type PersonalHomeDashboardProps = {
   sidebarCounts?: SidebarCounts;
   proposalsList: React.ReactNode;
+  governanceTab: 'review' | 'my';
+  governanceFilters: GovernanceFilters;
+  editorSpaceOptions: { id: string; name: string; image: string | null }[];
+  myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
 };
 
-export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: PersonalHomeDashboardProps) {
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const params = useSearchParams();
-  const proposalType = params?.get('proposalType');
+function GovernanceTabsRow({
+  governanceTab,
+  filterState,
+}: {
+  governanceTab: 'review' | 'my';
+  filterState: { space: string; category: GovernanceHomeReviewCategory; status: GovernanceHomeStatusFilter };
+}) {
+  const searchParams = useSearchParams();
+  const hrefForTab = (target: 'review' | 'my') => {
+    const next = new URLSearchParams(searchParams?.toString() ?? '');
+    if (target === 'review') next.delete('tab');
+    else next.set('tab', 'my');
+    next.delete('proposalType');
+    next.delete('space');
+    next.delete('proposalCategory');
+    next.delete('proposalStatus');
+    if (filterState.space !== 'all') next.set('space', filterState.space);
+    if (filterState.category !== 'all') next.set('proposalCategory', filterState.category);
+    if (filterState.status !== 'pending') next.set('proposalStatus', filterState.status);
+    const q = next.toString();
+    return q ? `/home?${q}` : '/home';
+  };
 
-  const label = proposalType ? viewLabel[proposalType as 'membership' | 'content'] : viewLabel['all'];
+  return (
+    <div className="relative mt-8 w-full">
+      <div className="relative z-0">
+        <div className="relative flex w-max items-center gap-6 pb-2">
+          <Link
+            href={hrefForTab('review')}
+            prefetch
+            className={tabGroupTabLinkStyles({ active: governanceTab === 'review' })}
+          >
+            Review proposals
+            {governanceTab === 'review' ? (
+              <motion.div
+                layoutId="governance-home-tab-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+              />
+            ) : null}
+          </Link>
+          <Link
+            href={hrefForTab('my')}
+            prefetch
+            className={tabGroupTabLinkStyles({ active: governanceTab === 'my' })}
+          >
+            My proposals
+            {governanceTab === 'my' ? (
+              <motion.div
+                layoutId="governance-home-tab-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+              />
+            ) : null}
+          </Link>
+        </div>
+        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+      </div>
+    </div>
+  );
+}
+
+export function PersonalHomeDashboard({
+  sidebarCounts,
+  proposalsList,
+  governanceTab,
+  governanceFilters,
+  editorSpaceOptions,
+  myProposalSpaceOptions,
+}: PersonalHomeDashboardProps) {
+  const spaceOptions = governanceTab === 'review' ? editorSpaceOptions : myProposalSpaceOptions;
+
+  const spaceLabel =
+    governanceFilters.spaceId === 'all'
+      ? 'All spaces'
+      : spaceOptions.find(s => s.id === governanceFilters.spaceId)?.name ?? 'All spaces';
+
+  const categoryLabel = categoryLabels[governanceFilters.category];
+  const statusLabel = statusLabels[governanceFilters.status];
+
+  const filterState = {
+    space: governanceFilters.spaceId,
+    category: governanceFilters.category,
+    status: governanceFilters.status,
+  };
 
   return (
     <>
-      <div className="mt-4 flex justify-between">
-        <Menu
-          open={isMenuOpen}
-          onOpenChange={setIsMenuOpen}
-          asChild
-          trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
-          align="start"
-        >
-          <Link
-            href="/home"
-            onClick={() => {
-              setIsMenuOpen(false);
-            }}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-          >
-            <Text variant="button" className="hover:text-text!">
-              All
-            </Text>
-          </Link>
-          <Link
-            href="/home?proposalType=content"
-            onClick={() => {
-              setIsMenuOpen(false);
-            }}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-          >
-            <Text variant="button" className="hover:text-text!">
-              Active proposals
-            </Text>
-          </Link>
-          <Link
-            href="/home?proposalType=membership"
-            onClick={() => {
-              setIsMenuOpen(false);
-            }}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-          >
-            <Text variant="button" className="hover:text-text!">
-              Membership requests
-            </Text>
-          </Link>
-        </Menu>
+      <React.Suspense fallback={<div className="mt-8 h-8" />}>
+        <GovernanceTabsRow governanceTab={governanceTab} filterState={filterState} />
+      </React.Suspense>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <GovernanceFilterMenu
+          label={spaceLabel}
+          showImages
+          maxHeightClass="max-h-[25rem] overflow-y-auto"
+          items={[
+            {
+              label: 'All spaces',
+              href: buildHomeHref({ tab: governanceTab, ...filterState, space: 'all' }),
+              showImage: false,
+            },
+            ...spaceOptions.map(s => ({
+              label: s.name,
+              image: s.image,
+              showImage: true,
+              href: buildHomeHref({ tab: governanceTab, ...filterState, space: s.id }),
+            })),
+          ]}
+        />
+        <GovernanceFilterMenu
+          label={categoryLabel}
+          items={(Object.keys(categoryLabels) as GovernanceHomeReviewCategory[]).map(key => ({
+            label: categoryLabels[key],
+            href: buildHomeHref({ tab: governanceTab, ...filterState, category: key }),
+          }))}
+        />
+        <GovernanceFilterMenu
+          label={statusLabel}
+          items={(Object.keys(statusLabels) as GovernanceHomeStatusFilter[]).map(key => ({
+            label: statusLabels[key],
+            href: buildHomeHref({ tab: governanceTab, ...filterState, status: key }),
+          }))}
+        />
       </div>
-      <div className="mt-8 flex gap-8">
+      <div className="mt-4 flex gap-8">
         <div className="w-2/3">
           <Notices />
           {proposalsList}
@@ -106,39 +215,73 @@ export function PersonalHomeDashboard({ sidebarCounts, proposalsList }: Personal
   );
 }
 
+function GovernanceFilterMenu({
+  label,
+  items,
+  showImages,
+  maxHeightClass,
+}: {
+  label: string;
+  items: { label: string; href: string; image?: string | null; showImage?: boolean }[];
+  showImages?: boolean;
+  maxHeightClass?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Menu
+      open={open}
+      onOpenChange={setOpen}
+      asChild
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
+      align="start"
+    >
+      <div className={maxHeightClass}>
+        {items.map(item => (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setOpen(false)}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+          >
+            {showImages && item.showImage !== false ? (
+              item.image ? (
+                <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
+                  <ThumbGeoImage value={item.image} alt="" />
+                </span>
+              ) : (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-grey-01 text-[10px] font-medium text-grey-04">
+                  {(item.label.trim().slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?')}
+                </span>
+              )
+            ) : null}
+            <Text variant="button" className="hover:text-text!">
+              {item.label}
+            </Text>
+          </Link>
+        ))}
+      </div>
+    </Menu>
+  );
+}
+
 const Notices = () => {
   return (
     <div className="mb-2 space-y-2">
       <Notice
-        id="welcomeToYourHome"
+        id="welcomeToGovernanceHome"
         color="grey"
-        title="Welcome to your home"
-        description="Your area to see any proposals, member requests, editor requests and all general activity across the spaces you are involved in."
-        media={<img src="/home.png" alt="" className="-mb-12" />}
+        title="Welcome to your governance home"
+        description="Your area to see any proposals, member requests, and editor requests across the spaces you are involved in."
+        media={
+          <div className="relative h-[102px] w-[128px] shrink-0 overflow-hidden sm:h-[108px] sm:w-[136px]" aria-hidden>
+            <img
+              src="/home.png"
+              alt=""
+              className="pointer-events-none block h-[calc(100%+21px)] w-full min-h-0 min-w-0 -translate-y-[21px] select-none object-cover object-left object-top sm:h-[calc(100%+24px)] sm:-translate-y-6"
+            />
+          </div>
+        }
       />
-      {/* <Notice
-          id="findOrCreateCompanySpace"
-          color="green"
-          title="Find / create your company space"
-          description="Join your company space as a member or editor, or create it if it doesn’t exist."
-          element={<FindOrCreateCompanySpace />}
-          media={<img src="/company.png" alt="" className="-mb-12" />}
-        /> */}
-      <Notice
-        id="findSpacesToJoin"
-        color="orange"
-        title="Find spaces to join"
-        description="Discover and join spaces where you can actively engage with the topics and issues that captivate your interest."
-        element={<JoinSpaces />}
-      />
-      {/* <Notice
-          id="learnMore"
-          color="purple"
-          title="Want to learn more?"
-          description="Watch videos and read our guides to help you get to grips with the fundamentals of using and contributing to Geo."
-          element={<LearnMore />}
-          media={<img src="/videos.png" alt="" />}
-        /> */}
     </div>
   );
 };
@@ -157,7 +300,7 @@ const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', 
 const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const classNames = cva('relative flex gap-4 overflow-clip rounded-lg p-4', {
+  const classNames = cva('relative flex items-start gap-4 overflow-clip rounded-lg px-4 pt-4', {
     variants: {
       color: {
         grey: 'bg-gradient-grey',
@@ -170,21 +313,31 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
   });
 
   const handleDismissNotice = React.useCallback(() => {
-    const newDismissedNotices = [...dismissedNotices, id];
-    setDismissedNotices(newDismissedNotices);
+    setDismissedNotices([...dismissedNotices, id]);
   }, [id, dismissedNotices, setDismissedNotices]);
 
   if (dismissedNotices.includes(id)) return null;
 
   return (
-    <div id={id} className={classNames({ color })}>
-      <div>
-        <div className="text-smallTitle">{title}</div>
-        <div className="mt-2">{description}</div>
+    <div id={id} className={`${classNames({ color })} ${media ? 'pb-6' : 'pb-4'}`}>
+      <div className="min-w-0 flex-1">
+        {media ? (
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-smallTitle">{title}</div>
+              <div className="mt-2">{description}</div>
+            </div>
+            <div className="shrink-0 leading-none">{media}</div>
+          </div>
+        ) : (
+          <>
+            <div className="text-smallTitle">{title}</div>
+            <div className="mt-2">{description}</div>
+          </>
+        )}
         {element && <div className="mt-2">{element}</div>}
       </div>
-      {media && <div className="-mx-4 -mb-4">{media}</div>}
-      <div>
+      <div className="shrink-0">
         <button type="button" onClick={handleDismissNotice} className="rounded border p-1">
           <Close />
         </button>
@@ -203,7 +356,7 @@ const Sidebar = ({ counts }: SidebarProps) => {
       <Activity
         label="My proposals"
         activities={[
-          { icon: <InProgressSmall />, label: 'In progress', count: counts?.myProposals.inProgress ?? 0 },
+          { icon: <InProgressSmall />, label: 'Pending', count: counts?.myProposals.inProgress ?? 0 },
           { icon: <CheckCircleSmall />, label: 'Accepted', count: counts?.myProposals.accepted ?? 0 },
           { icon: <CheckCloseSmall />, label: 'Rejected', count: counts?.myProposals.rejected ?? 0 },
         ]}
@@ -235,11 +388,11 @@ function Activity({ label = '', activities = [] }: ActivityProps) {
   return (
     <div className="rounded-lg border border-grey-02 p-4">
       <div className="text-breadcrumb text-grey-04">{label}</div>
-      {activities.map(({ icon, label, count }) => (
-        <div key={label} className="mt-2 flex items-center justify-between text-metadataMedium">
+      {activities.map(({ icon, label: rowLabel, count }) => (
+        <div key={rowLabel} className="mt-2 flex items-center justify-between text-metadataMedium">
           <div className="inline-flex items-center gap-2">
             {icon && <div>{icon}</div>}
-            <div>{label}</div>
+            <div>{rowLabel}</div>
           </div>
           <div>{count}</div>
         </div>
@@ -247,80 +400,3 @@ function Activity({ label = '', activities = [] }: ActivityProps) {
     </div>
   );
 }
-
-// const FindOrCreateCompanySpace = () => {
-//   return (
-//     <div className="w-full rounded bg-white p-2 focus-within:ring-2 focus-within:ring-black">
-//       <input type="text" placeholder="Find or create..." className="w-full focus:outline-hidden" />
-//     </div>
-//   );
-// };
-
-const recommendedSpaces: Array<`0x${string}`> = [
-  '0x6144659cc8FCcBb7Bb41c94Fc8429Aec201A3ff5', // AI
-  '0xC3819cbe5e3A2afe1884F0Ef97949bC989387061', // News
-  '0xe3d08763498e3247EC00A481F199B018f2148723', // Health
-  '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
-  '0x41155BC2156119e71d283237D299FC1a648602C2', // US Politics
-  '0x44a6e58B483d4c569bAaB9DD1FC7fA445C1f1Ea9', // History
-  '0xD8Ad7433f795fC19899f6b62a9b9831090495CAF', // Music
-  '0xB4B3d95e9c82cb26A5bd4BC73ffBa46F1e979f16', // Philosophy
-  '0x35D15c85AF6A00aBdc3AbFa4178C719e0220838e', // Sustainability
-  '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458', // Energy
-  '0xC46a79dD4Cf9635011ba3A68Fb3CE6b6f8008cC0', // Social Work
-  '0xD5445416E19Cc19451b3eBF3C31c434664Ad4310', // Software
-];
-
-const JoinSpaces = () => {
-  const { spaces } = useSpacesByAddresses(recommendedSpaces);
-
-  return (
-    <div className="flex flex-wrap gap-2 pr-16">
-      {recommendedSpaces.map(spaceId => {
-        const space = spaces.find(space => space.address === spaceId);
-
-        if (!space) return null;
-
-        return <JoinSpaceItem key={space.id} space={space} />;
-      })}
-    </div>
-  );
-};
-
-const JoinSpaceItem = ({ space }: { space: Space }) => {
-  const imageValue = space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE;
-
-  return (
-    <Link
-      href={NavUtils.toSpace(space.id)}
-      className="inline-flex items-center gap-1.5 rounded bg-white p-1 text-breadcrumb"
-    >
-      <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-        <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />
-      </span>
-      <span>{space.entity?.name ?? space.id}</span>
-    </Link>
-  );
-};
-
-// const topics: { icon?: React.ReactNode; label: string; href: string }[] = [
-//   { icon: <VideoSmall />, label: 'Videos', href: '/' },
-//   { icon: <InfoSmall />, label: 'Guides and posts', href: '/' },
-// ];
-
-// const LearnMore = () => {
-//   return (
-//     <div className="flex flex-wrap gap-2">
-//       {topics.map(topic => (
-//         <Link
-//           href={topic.href}
-//           key={topic.label}
-//           className="inline-flex items-center gap-1 rounded bg-white p-1 text-breadcrumb"
-//         >
-//           {topic.icon && <span className="inline-block scale-[0.75]">{topic.icon}</span>}
-//           <span>{topic.label}</span>
-//         </Link>
-//       ))}
-//     </div>
-//   );
-// };
