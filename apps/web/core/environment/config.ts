@@ -67,6 +67,8 @@ if (!ONBOARD_CODE) {
   throw new Error('NEXT_PUBLIC_ONBOARD_CODE is not set');
 }
 
+const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 if (SENTRY_DSN) {
@@ -94,5 +96,6 @@ export {
   ACCOUNT_ABSTRACTION_API_KEY,
   ONBOARD_FLAG,
   ONBOARD_CODE,
+  CLAUDE_API_KEY,
   SENTRY_DSN,
 };

@@ -163,6 +163,16 @@
   --text-metadataMedium--letter-spacing: -0.25px;
   --text-metadataMedium--font-weight: 500;
 
+  --text-chat: 0.875rem;
+  --text-chat--line-height: 1.125rem;
+  --text-chat--letter-spacing: -0.1px;
+  --text-chat--font-weight: 400;
+
+  --text-chatMedium: 0.875rem;
+  --text-chatMedium--line-height: 1.125rem;
+  --text-chatMedium--letter-spacing: -0.1px;
+  --text-chatMedium--font-weight: 500;
+
   --text-breadcrumb: 0.875rem;
   --text-breadcrumb--line-height: 0.9375rem;
   --text-breadcrumb--font-weight: 500;

@@ -30,6 +30,10 @@ const ReviewChanges = dynamic(
   { ssr: false }
 );
 
+const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m => ({ default: m.ChatWidget })), {
+  ssr: false,
+});
+
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
 
@@ -68,6 +72,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <GovernanceReopenEditLoadingBar />
         <FlowBar />
         <ReviewChanges />
+        <ChatWidget />
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}
