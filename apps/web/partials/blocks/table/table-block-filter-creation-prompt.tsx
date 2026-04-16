@@ -78,6 +78,8 @@ const MAX_SCOPED_SUGGESTIONS = 100;
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
 
+const ENTITIES_CONNECTION_MAX_OFFSET = 1000;
+
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
   const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1535,13 +1537,16 @@ function TableBlockEntityFilterInput({
   }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes, store, suggestionSpaceId]);
 
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
-  const browseEnabled =
-    focused &&
-    filteredScopedByTargetType.length === 0 &&
-    !autocomplete.query.trim() &&
-    canBrowseByType;
+  const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
 
-  const { data: browsePages, isFetching: isBrowseFetching, isFetchingNextPage: isBrowseFetchingNextPage, fetchNextPage: fetchNextBrowsePage, hasNextPage: hasNextBrowsePage } = useInfiniteQuery({
+  const {
+    data: browsePages,
+    isPending: isBrowsePending,
+    isFetching: isBrowseFetching,
+    isFetchingNextPage: isBrowseFetchingNextPage,
+    fetchNextPage: fetchNextBrowsePage,
+    hasNextPage: hasNextBrowsePage,
+  } = useInfiniteQuery({
     queryKey: [
       'table-block-filter-entity-browse',
       filterByTypes?.slice().sort().join(',') ?? '',
@@ -1553,7 +1558,7 @@ function TableBlockEntityFilterInput({
       const where = {
         types: filterByTypes!.map(id => ({ id: { equals: id } })),
       };
-      const entities = await E.findMany({
+      const { merged, remote } = await E.syncMany({
         store,
         cache,
         where,
@@ -1561,10 +1566,10 @@ function TableBlockEntityFilterInput({
         skip: pageParam,
         spaceId: suggestionSpaceId,
       });
-      const nonNull = entities.filter((e): e is Entity => e != null);
+      const pageEntities = merged.slice(0, remote.length).filter((e): e is Entity => e != null);
 
       const spaceIdSet = new Set<string>();
-      for (const e of nonNull) {
+      for (const e of pageEntities) {
         for (const sid of e.spaces) {
           if (sid) spaceIdSet.add(sid);
         }
@@ -1584,27 +1589,41 @@ function TableBlockEntityFilterInput({
         }
       }
 
-      return nonNull
+      const rows = pageEntities
         .map(e => searchResultFromBrowseEntityWithSpaces(e, spaceEntityById, suggestionSpaceId))
         .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
+      return { rows, remoteCount: remote.length };
     },
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < FILTER_DROPDOWN_PAGE_SIZE ? undefined : allPages.length * FILTER_DROPDOWN_PAGE_SIZE,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.remoteCount < FILTER_DROPDOWN_PAGE_SIZE) return undefined;
+      const nextSkip = allPages.length * FILTER_DROPDOWN_PAGE_SIZE;
+
+      if (nextSkip > ENTITIES_CONNECTION_MAX_OFFSET) return undefined;
+      return nextSkip;
+    },
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 
-  const browseResults = browsePages?.pages.flat() ?? [];
+  const browseResults = browsePages?.pages.flatMap(p => p.rows) ?? [];
 
   const rowsToRender = React.useMemo(() => {
     const q = autocomplete.query.trim();
     if (!q) {
-      if (filteredScopedByTargetType.length > 0) {
-        return filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      if (
+        browseEnabled &&
+        filteredScopedByTargetType.length > 0 &&
+        isBrowsePending
+      ) {
+        return [];
       }
-      if (browseResults.length > 0) {
-        return browseResults
-          .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
-          .map(r => ({ kind: 'search' as const, result: r }));
+      const scopedRows = filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      const scopedIds = new Set(filteredScopedByTargetType.map(s => s.id));
+      const browseRows = browseResults
+        .filter(r => !scopedIds.has(r.id))
+        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
+        .map(r => ({ kind: 'search' as const, result: r }));
+      if (scopedRows.length > 0 || browseRows.length > 0) {
+        return [...scopedRows, ...browseRows];
       }
       return [];
     }
@@ -1626,6 +1645,8 @@ function TableBlockEntityFilterInput({
     browseResults,
     filterByTypes,
     restrictSearchToTypes,
+    browseEnabled,
+    isBrowsePending,
   ]);
 
   const entityListResetKey = [
@@ -1706,7 +1727,9 @@ function TableBlockEntityFilterInput({
 
   const showDropdown =
     focused &&
-    (rowsToRender.length > 0 || (browseEnabled && isBrowseFetching) || showEmptyBrowseHint);
+    (rowsToRender.length > 0 ||
+      (browseEnabled && (isBrowseFetching || isBrowsePending)) ||
+      showEmptyBrowseHint);
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
@@ -1747,7 +1770,7 @@ function TableBlockEntityFilterInput({
         >
           <ResizableContainer duration={0.125}>
             <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
-              {rowsToRender.length === 0 && isBrowseFetching ? (
+              {rowsToRender.length === 0 && browseEnabled && (isBrowsePending || isBrowseFetching) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading…
