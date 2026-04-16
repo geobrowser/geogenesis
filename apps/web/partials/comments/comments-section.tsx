@@ -501,8 +501,8 @@ function CommentItem({
 
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
   const hasReplies = replies.length > 0;
-  const avatarCenterLeftPx = hasReplies ? 48 : 16;
-  const bodyMarginLeftClass = hasReplies ? 'ml-[76px]' : 'ml-[44px]';
+  const avatarCenterLeftPx = 48;
+  const bodyMarginLeftClass = 'ml-[76px]';
   const commentRef = React.useRef<HTMLDivElement>(null);
   const repliesRef = React.useRef<HTMLDivElement>(null);
   const [parentLineHeight, setParentLineHeight] = React.useState<number | null>(null);
@@ -536,19 +536,25 @@ function CommentItem({
       {/* One row like the original layout so nested thread lines (-28px) still line up with the avatar. */}
       <div className="flex items-center gap-3">
         <div className="flex shrink-0 items-center gap-2">
-          {hasReplies ? (
-            <button
-              type="button"
-              aria-expanded={!threadCollapsed}
-              aria-label={threadCollapsed ? 'Expand comment thread' : 'Collapse comment thread'}
-              onClick={() => toggleThreadCollapsed(comment.id)}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 text-grey-04 hover:bg-grey-01"
-            >
-              <span className="inline-flex scale-[0.55] leading-none">
-                {threadCollapsed ? <Plus color="grey-04" /> : <Minus color="grey-04" />}
-              </span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            aria-expanded={!threadCollapsed}
+            aria-label={
+              threadCollapsed
+                ? hasReplies
+                  ? 'Expand comment thread'
+                  : 'Expand comment'
+                : hasReplies
+                  ? 'Collapse comment thread'
+                  : 'Collapse comment'
+            }
+            onClick={() => toggleThreadCollapsed(comment.id)}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 text-grey-04 hover:bg-grey-01"
+          >
+            <span className="inline-flex scale-[0.55] leading-none">
+              {threadCollapsed ? <Plus color="grey-04" /> : <Minus color="grey-04" />}
+            </span>
+          </button>
           <a
             href={NavUtils.toSpace(comment.author.spaceId)}
             className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full"
