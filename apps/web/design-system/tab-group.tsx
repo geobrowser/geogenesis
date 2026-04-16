@@ -116,13 +116,13 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
           {tabs.map(t => (
             <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
           ))}
+          <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
         </div>
-        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
-      {scrollPosition !== 'end' && (
+      {scrollPosition !== 'end' && isScrollable.current && (
         <div className="pointer-events-none absolute top-0 right-0 bottom-0 z-50 h-6 w-[50px] bg-linear-to-l from-white" />
       )}
-      {scrollPosition !== 'start' && (
+      {scrollPosition !== 'start' && isScrollable.current && (
         <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 h-6 w-[50px] bg-linear-to-r from-white" />
       )}
     </div>
