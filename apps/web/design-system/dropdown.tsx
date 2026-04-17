@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
@@ -14,20 +15,32 @@ import { Text } from './text';
 interface Props {
   trigger: React.ReactNode;
   align?: 'end' | 'center' | 'start';
+  /** When true, the menu scrolls vertically after ~22rem / 65vh so long option lists stay usable. */
+  scrollableList?: boolean;
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
 
-const contentStyles = cva('z-10 w-[273px] overflow-hidden rounded border border-grey-02 bg-white shadow-lg', {
-  variants: {
-    align: {
-      start: 'origin-top-left',
-      center: 'origin-top',
-      end: 'origin-top-right',
+const contentStyles = cva(
+  'z-10 w-[273px] rounded border border-grey-02 bg-white shadow-lg',
+  {
+    variants: {
+      align: {
+        start: 'origin-top-left',
+        center: 'origin-top',
+        end: 'origin-top-right',
+      },
+      scroll: {
+        true: 'max-h-[min(22rem,65vh)] overflow-y-auto overflow-x-hidden',
+        false: 'overflow-hidden',
+      },
     },
-  },
-});
+    defaultVariants: {
+      scroll: false,
+    },
+  }
+);
 
-export const Dropdown = ({ trigger, align = 'end', options }: Props) => {
+export const Dropdown = ({ trigger, align = 'end', scrollableList = false, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
@@ -40,8 +53,12 @@ export const Dropdown = ({ trigger, align = 'end', options }: Props) => {
           <ChevronDownSmall color="ctaPrimary" />
         </DropdownPrimitive.Trigger>
       </span>
-      <DropdownPrimitive.Content align={align} sideOffset={2} className={contentStyles({ align })}>
-        <DropdownPrimitive.Group className="overflow-hidden">
+      <DropdownPrimitive.Content
+        align={align}
+        sideOffset={2}
+        className={contentStyles({ align, scroll: scrollableList })}
+      >
+        <DropdownPrimitive.Group className={cx(!scrollableList && 'overflow-hidden')}>
           {options.map((option, index) => (
             <DropdownPrimitive.Item
               key={`dropdown-item-${index}`}

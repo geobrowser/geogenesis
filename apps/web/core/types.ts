@@ -275,6 +275,10 @@ export type Entity = {
   /**
    * UNIX timestamp in seconds
    */
+  createdAt?: string;
+  /**
+   * UNIX timestamp in seconds
+   */
   updatedAt?: string;
 };
 
