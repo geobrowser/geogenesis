@@ -41,11 +41,11 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
 
-  const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
+  const handleCreateComment = (text: string, replyTo?: { entityId: string; spaceId: string }) => {
     createComment({
       text,
       targetSpaceId: spaceId,
-      ancestorComments,
+      replyTo,
     });
   };
 
@@ -295,18 +295,16 @@ function CommentList({
   personalSpaceId,
   editorSpaceIds,
   depth = 0,
-  ancestors = [],
 }: {
   comments: CommentWithReplies[];
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
+  onReply: (text: string, replyTo?: { entityId: string; spaceId: string }) => void;
   onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   depth?: number;
-  ancestors?: Array<{ id: string; spaceId: string }>;
 }) {
   if (depth === 0) {
     return (
@@ -324,7 +322,6 @@ function CommentList({
             editorSpaceIds={editorSpaceIds}
             isLast={index === comments.length - 1}
             depth={depth}
-            ancestors={ancestors}
           />
         ))}
       </div>
@@ -397,7 +394,6 @@ function CommentList({
               editorSpaceIds={editorSpaceIds}
               isLast={index === comments.length - 1}
               depth={depth}
-              ancestors={ancestors}
             />
           </div>
         );
@@ -417,19 +413,17 @@ function CommentItem({
   editorSpaceIds,
   isLast,
   depth,
-  ancestors,
 }: {
   comment: CommentWithReplies;
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
+  onReply: (text: string, replyTo?: { entityId: string; spaceId: string }) => void;
   onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   isLast: boolean;
   depth: number;
-  ancestors: Array<{ id: string; spaceId: string }>;
 }) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -438,9 +432,7 @@ function CommentItem({
   const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
 
   const handleReply = (text: string) => {
-    // Build full ancestor chain: this comment + all its ancestors
-    const fullAncestors = [{ id: comment.id, spaceId: comment.spaceId }, ...ancestors];
-    onReply(text, fullAncestors);
+    onReply(text, { entityId: comment.id, spaceId: comment.spaceId });
     setIsReplying(false);
   };
 
@@ -589,7 +581,6 @@ function CommentItem({
               personalSpaceId={personalSpaceId}
               editorSpaceIds={editorSpaceIds}
               depth={depth + 1}
-              ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
             />
           </div>
         )}
