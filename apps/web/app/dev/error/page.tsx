@@ -1,15 +1,11 @@
-'use client';
-
 import { notFound } from 'next/navigation';
 
-import { AutoRetryError } from '~/core/telemetry/auto-retry-error';
+import { DevErrorPreview } from './preview';
 
-export default function DevErrorPreview() {
+export default function Page() {
   if (process.env.NEXT_PUBLIC_ENABLE_DEV_PREVIEWS !== '1') {
     notFound();
   }
 
-  const error = Object.assign(new Error('Preview error'), { digest: 'preview' });
-
-  return <AutoRetryError error={error} reset={() => {}} preview />;
+  return <DevErrorPreview />;
 }
