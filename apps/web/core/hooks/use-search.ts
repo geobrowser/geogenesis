@@ -61,6 +61,12 @@ export function useSearch({
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
+
+  React.useEffect(() => {
+    const next = initialQuery ?? '';
+    setQuery(prev => (prev === next ? prev : next));
+  }, [initialQuery]);
+
   const debouncedQuery = useDebouncedValue(query);
 
   const maybeEntityId = debouncedQuery.trim();

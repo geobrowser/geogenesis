@@ -76,6 +76,9 @@ type SelectEntityProps = {
   initialQuery?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
+  /** The results popover stays open for back-to-back picks.*/
+  clearQueryAfterPick?: boolean;
+  onSearchQueryChange?: (query: string) => void;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -99,6 +102,8 @@ export const SelectEntity = ({
   showIDs = true,
   initialQuery,
   selectedEntityId,
+  clearQueryAfterPick = true,
+  onSearchQueryChange,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -130,7 +135,7 @@ export const SelectEntity = ({
       ? allowedTypes.map(r => r.id)
       : undefined;
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const { query, onQueryChange: setSearchQuery, isLoading, isEmpty, results } = useSearch({
     filterByTypes,
     filterBySpace,
     initialQuery,
@@ -149,6 +154,14 @@ export const SelectEntity = ({
       return () => clearTimeout(timer);
     }
   }, [autoFocus]);
+
+  const onQueryChange = React.useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      onSearchQueryChange?.(value);
+    },
+    [setSearchQuery, onSearchQueryChange]
+  );
 
   if (query === '' && result !== null) {
     startTransition(() => {
@@ -191,8 +204,10 @@ export const SelectEntity = ({
     // Create new entity with name and types using internal id
     storage.entities.name.set(newEntityId, spaceId, query);
     onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
-    onQueryChange('');
-    setSelectedIndex(0);
+    if (clearQueryAfterPick) {
+      onQueryChange('');
+      setSelectedIndex(0);
+    }
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
@@ -212,7 +227,9 @@ export const SelectEntity = ({
         name: result.name,
         primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
       });
-      onQueryChange('');
+      if (clearQueryAfterPick) {
+        onQueryChange('');
+      }
     }
   });
 
@@ -314,6 +331,7 @@ export const SelectEntity = ({
           <Popover.Portal>
             <Popover.Content
               ref={popoverRef}
+              data-select-entity-dropdown
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -495,8 +513,10 @@ export const SelectEntity = ({
                                           ? result.spaces[0].spaceId
                                           : undefined,
                                       });
-                                      onQueryChange('');
-                                      setSelectedIndex(0);
+                                      if (clearQueryAfterPick) {
+                                        onQueryChange('');
+                                        setSelectedIndex(0);
+                                      }
                                     }}
                                     id={`select-entity-result-${index}`}
                                     className={cx(
