@@ -43,6 +43,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
+const ONBOARDING_DESTINATION = NavUtils.toExplore();
+
 const MotionContent = motion.create(Content);
 const MotionOverlay = motion.create(Overlay);
 
@@ -380,15 +382,13 @@ const retryMessage: Record<Step, string> = {
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const router = useRouter();
 
-  const spaceId = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
 
   if (hasCompleted) {
     setTimeout(() => {
-      const destination = NavUtils.toSpace(spaceId);
-      router.push(destination);
+      router.push(ONBOARDING_DESTINATION);
     }, 3_600);
   }
 
