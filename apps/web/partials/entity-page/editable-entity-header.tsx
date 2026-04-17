@@ -21,6 +21,7 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
 import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
+import { Truncate } from '~/design-system/truncate';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
 import { HistoryEmpty } from '../history/history-empty';
@@ -65,11 +66,11 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
 
   return (
     <>
-      <div className="relative flex items-center justify-between">
+      <div className="relative flex items-center justify-between gap-4">
         {!isRelationPage ? (
           <>
             {isEditing ? (
-              <div className="grow text-text">
+              <div className="min-w-0 flex-1 text-text">
                 <PageStringField
                   variant="mainPage"
                   placeholder="Entity name..."
@@ -80,11 +81,13 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
                 <Spacer height={3.5} />
               </div>
             ) : (
-              <div>
-                <div className="flex items-center justify-between">
-                  <Text as="h1" variant="mainPage">
-                    {name ?? ZERO_WIDTH_SPACE}
-                  </Text>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center justify-between">
+                  <Truncate maxLines={3} shouldTruncate>
+                    <Text as="h1" variant="mainPage">
+                      {name ?? ZERO_WIDTH_SPACE}
+                    </Text>
+                  </Truncate>
                 </div>
                 <Spacer height={12} />
               </div>
@@ -94,7 +97,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
           <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
         )}
 
-        <div className="flex items-center gap-5">
+        <div className="flex shrink-0 items-center gap-5">
           {isEditing && (
             <Link
               href={NavUtils.toEntity(spaceId, ID.createEntityId())}

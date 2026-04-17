@@ -43,7 +43,7 @@ export const FlowBar = () => {
   // Filter to only count net changes (exclude no-ops like created-then-deleted
   // relations and values/relations that match the remote state).
   const values = React.useMemo(() => getNetValues(allValues), [allValues]);
-  const relations = React.useMemo(() => getNetRelations(allRelations), [allRelations]);
+  const relations = React.useMemo(() => collapseSlotReplacements(getNetRelations(allRelations)), [allRelations]);
 
   const opsCount = values.length + relations.length;
 
@@ -58,24 +58,23 @@ export const FlowBar = () => {
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
-    <AnimatePresence>
-      <>
+    <>
+      <AnimatePresence>
         {!hideFlowbar && (
-          <div
+          <motion.div
+            key="flowbar"
+            variants={flowVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={transition}
+            custom={!isReviewOpen}
             className={cx(
               'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
               RemoveScroll.classNames.fullWidth
             )}
           >
-            <motion.div
-              variants={flowVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              transition={transition}
-              custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
-            >
+            <div className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg">
               <div className="inline-flex h-full items-center justify-center">
                 <p className="inline-flex items-center px-3">
                   <span>{pluralize('edit', opsCount, true)}</span>
@@ -98,13 +97,13 @@ export const FlowBar = () => {
               >
                 Review edits
               </button>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
-      </>
-    </AnimatePresence>
+      {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
+    </>
   );
 };
 
@@ -252,7 +251,9 @@ function getNetValues(localValues: Value[]): Value[] {
     // If the value is unchanged from the remote version, skip it
     if (remoteEntity) {
       const remoteValue = remoteEntity.values.find(
-        remote => !remote.isLocal && (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
+        remote =>
+          !remote.isLocal &&
+          (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
       );
       if (remoteValue && remoteValue.value === v.value) return false;
     }
@@ -271,9 +272,7 @@ function getNetValues(localValues: Value[]): Value[] {
 function getNetRelations(localRelations: Relation[]): Relation[] {
   // Build a set of semantic keys for active local relations
   const activeKeys = new Set(
-    localRelations
-      .filter(r => !r.isDeleted)
-      .map(r => `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`)
+    localRelations.filter(r => !r.isDeleted).map(r => `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`)
   );
 
   return localRelations.filter(r => {
@@ -294,17 +293,58 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
       return true;
     }
 
-    // Active relation — skip if semantically identical to a remote relation
+    // Active relation — skip if semantically identical to a remote relation.
+    // Position is part of identity here: a pure reorder keeps the same
+    // (from, type, to, space) but must still count as a change.
     if (remoteEntity) {
       const key = `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`;
       const matchesRemote = remoteEntity.relations.some(
-        remote => !remote.isLocal && `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key
+        remote =>
+          !remote.isLocal &&
+          `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key &&
+          (remote.position ?? null) === (r.position ?? null)
       );
       if (matchesRemote) return false;
     }
 
     return true;
   });
+}
+
+/**
+ * Collapse a delete+add pair on the same (fromEntity, type, spaceId) slot into
+ * a single edit. Changing a relation (e.g. a data block's view) is represented
+ * on the wire as a delete of the old relation plus an add of a new one, but it
+ * should be counted — and displayed — as one conceptual edit, matching how the
+ * review UI renders it.
+ *
+ * Only collapses the unambiguous 1-delete + 1-add case. Multi-valued relations
+ * (e.g. types) may produce several deletes and/or adds in the same group; those
+ * can't be cleanly paired and are left alone so each op still counts.
+ */
+function collapseSlotReplacements(relations: Relation[]): Relation[] {
+  const groups = new Map<string, { deleted: Relation[]; added: Relation[] }>();
+  for (const r of relations) {
+    const key = `${r.fromEntity.id}:${r.type.id}:${r.spaceId}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { deleted: [], added: [] };
+      groups.set(key, group);
+    }
+    if (r.isDeleted) group.deleted.push(r);
+    else group.added.push(r);
+  }
+
+  const result: Relation[] = [];
+  for (const { deleted, added } of groups.values()) {
+    if (deleted.length === 1 && added.length === 1) {
+      // Pure slot replacement — count as a single edit (the add represents the new state).
+      result.push(added[0]);
+      continue;
+    }
+    result.push(...added, ...deleted);
+  }
+  return result;
 }
 
 const flowVariants = {

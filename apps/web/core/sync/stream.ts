@@ -40,6 +40,13 @@ export type GeoEvent =
   | {
       type: typeof ENTITIES_SYNCED;
       entities: Entity[];
+      /**
+       * Raw remote entities (pre-merge) corresponding to `entities`. Used to
+       * populate the clean remote baseline in `syncedEntities` without losing
+       * remote values/relations that were stripped during local+remote merge
+       * when they shared ids with local overrides.
+       */
+      remoteEntities?: Entity[];
     }
   // Not sure if this revalidation event should be part of the stream or not.
   // We need a way to trigger re-syncs of data in some instances in order to

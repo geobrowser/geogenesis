@@ -1,6 +1,6 @@
 import BoringAvatar from 'boring-avatars';
 
-import { GeoImage } from './geo-image';
+import { NativeGeoImage } from './geo-image';
 import { colors } from './theme/colors';
 
 interface Props {
@@ -14,7 +14,14 @@ interface Props {
 
 export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12, square = false }: Props) => {
   return avatarUrl ? (
-    <GeoImage fill style={{ objectFit: 'cover' }} priority={priority} value={avatarUrl} alt={alt} />
+    <NativeGeoImage
+      value={avatarUrl}
+      alt={alt}
+      className="h-full w-full object-cover"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : undefined}
+      decoding="async"
+    />
   ) : (
     <BoringAvatar
       size={size}

@@ -6,20 +6,40 @@ import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSelector } from '@xstate/store/react';
+import { Duration, Effect } from 'effect';
+import equal from 'fast-deep-equal';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { mergeSearchResult } from '~/core/database/result';
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { useSearch } from '~/core/hooks/use-search';
+import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { E } from '~/core/sync/orm';
+import { reactiveRelations } from '~/core/sync/store';
+import { useRelations, useValues } from '~/core/sync/use-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import {
+  fetchRelationTargetTypeIdsForProperty,
+  mergeRelationValueTypesFromStore,
+} from '~/core/utils/property/properties';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import type { Entity, Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { Divider } from '~/design-system/divider';
 import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -36,16 +56,435 @@ export interface TableBlockFilterPromptHandle {
   openWithColumn: (columnId: string) => void;
 }
 
+export type TableBlockNewFilterRow = {
+  columnId: string;
+  value: string;
+  valueType: FilterableValueType;
+  valueName: string | null;
+  columnName: string;
+};
+
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
-  onCreate: (filter: {
-    columnId: string;
-    value: string;
-    valueType: FilterableValueType;
-    valueName: string | null;
-    columnName: string;
-  }) => void;
+  filterSuggestionRows?: Row[];
+  filterSuggestionEntityIds?: string[];
+  filterSuggestionSpaceId?: string;
+  onCreate: (filters: TableBlockNewFilterRow[]) => void;
+  onFilterPromptOpenChange?: (open: boolean) => void;
+}
+
+const MAX_SCOPED_SUGGESTIONS = 100;
+
+const FILTER_DROPDOWN_PAGE_SIZE = 25;
+
+function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
+  const [focused, setFocused] = React.useState(false);
+  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearBlurTimeout = React.useCallback(() => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const onFocus = React.useCallback(() => {
+    clearBlurTimeout();
+    setFocused(true);
+  }, [clearBlurTimeout]);
+
+  const onBlur = React.useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      const next = e.relatedTarget;
+      if (next instanceof Node && filterInteractionRootRef?.current?.contains(next)) {
+        return;
+      }
+      clearBlurTimeout();
+      blurTimeoutRef.current = setTimeout(() => {
+        blurTimeoutRef.current = null;
+        const ae = document.activeElement;
+        if (ae instanceof Node && filterInteractionRootRef?.current?.contains(ae)) {
+          return;
+        }
+        if (ae?.closest?.('[data-radix-select-content]')) {
+          return;
+        }
+        setFocused(false);
+      }, 120);
+    },
+    [clearBlurTimeout, filterInteractionRootRef]
+  );
+
+  return { focused, setFocused, onFocus, onBlur, clearBlurTimeout };
+}
+
+function useRelationColumnTargetTypeIds(
+  propertyId: string | undefined,
+  blockSpaceId: string | undefined,
+  relationValueTypesFromOptions: { id: string; name: string | null }[] | undefined
+): { typeIds: string[] | undefined; waitForFilterTypes: boolean } {
+  const { store } = useSyncEngine();
+  const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
+
+  const fromStore = React.useMemo(() => {
+    void relationsSnapshot;
+    if (!propertyId) return undefined;
+    const merged = mergeRelationValueTypesFromStore(
+      { id: propertyId, name: null, dataType: 'RELATION' },
+      store
+    );
+    return merged.relationValueTypes?.length
+      ? merged.relationValueTypes.map(t => t.id)
+      : undefined;
+  }, [propertyId, relationsSnapshot, store]);
+
+  const {
+    data: fromNetwork,
+    isFetching: isFetchingNetworkTypes,
+    isPending: isPendingNetworkTypes,
+  } = useQuery({
+    enabled: Boolean(propertyId) && !fromStore?.length,
+    queryKey: ['table-block-filter-relation-target-type-ids', propertyId, blockSpaceId],
+    queryFn: () => fetchRelationTargetTypeIdsForProperty(propertyId!, blockSpaceId),
+    staleTime: 60_000,
+  });
+
+  const typeIds = React.useMemo(() => {
+    const fromOptions = relationValueTypesFromOptions?.length
+      ? relationValueTypesFromOptions.map(t => t.id)
+      : undefined;
+    if (fromStore?.length) return fromStore;
+    if (fromNetwork?.length) return fromNetwork;
+    return fromOptions;
+  }, [fromStore, fromNetwork, relationValueTypesFromOptions]);
+
+  /** Until we have target type ids, do not show unfiltered relation suggestions or run unscoped search. */
+  const waitForFilterTypes =
+    Boolean(propertyId) &&
+    !typeIds?.length &&
+    (isFetchingNetworkTypes || isPendingNetworkTypes);
+
+  return { typeIds, waitForFilterTypes };
+}
+
+function stubSearchResultForFilter(id: string, displayName: string | null): SearchResult {
+  const placeholderSpace: SpaceEntity = {
+    id: 'space-placeholder',
+    name: null,
+    description: null,
+    spaces: [],
+    types: [],
+    relations: [],
+    values: [],
+    spaceId: '',
+    image: PLACEHOLDER_SPACE_IMAGE,
+  };
+  return {
+    id,
+    name: displayName,
+    description: null,
+    spaces: [placeholderSpace],
+    types: [],
+  };
+}
+
+function searchResultFromBrowseEntityWithSpaces(
+  entity: Entity,
+  spaceEntityById: Map<string, SpaceEntity>,
+  preferredSpaceId?: string
+): SearchResult {
+  let candidateSpaceIds = entity.spaces.filter(id => spaceEntityById.has(id));
+  if (
+    candidateSpaceIds.length === 0 &&
+    preferredSpaceId &&
+    spaceEntityById.has(preferredSpaceId)
+  ) {
+    candidateSpaceIds = [preferredSpaceId];
+  }
+  const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
+  const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
+  if (spaces.length === 0) {
+    return { ...stubSearchResultForFilter(entity.id, entity.name), types: entity.types };
+  }
+  return {
+    id: entity.id,
+    name: entity.name,
+    description: entity.description,
+    spaces,
+    types: entity.types,
+  };
+}
+
+function searchResultForFilterDisplay(
+  merged: SearchResult | null | undefined,
+  id: string,
+  displayName: string | null
+): SearchResult {
+  if (merged?.spaces?.length) return merged;
+  return stubSearchResultForFilter(id, displayName);
+}
+
+type ScopedFilterSuggestions = {
+  entitySuggestions: { id: string; name: string | null }[];
+  stringSuggestions: string[];
+  spaceSuggestions: { id: string; name: string | null; image: string | null }[];
+};
+
+function useScopedFilterSuggestions(
+  dataRows: Row[] | undefined,
+  selectedColumnId: string,
+  valueType: FilterableValueType | undefined,
+  blockSpaceId: string | undefined,
+  relationTargetTypeIds?: string[],
+  activeFilters?: Filter[],
+  filterSuggestionEntityIds?: string[],
+  waitForRelationTargetTypes?: boolean
+): ScopedFilterSuggestions {
+  const { store } = useSyncEngine();
+
+  const entityIdsKey = React.useMemo(
+    () =>
+      (dataRows ?? [])
+        .filter(r => !r.placeholder)
+        .map(r => r.entityId)
+        .sort()
+        .join(','),
+    [dataRows]
+  );
+
+  const entityIdSet = React.useMemo(() => {
+    const s = new Set<string>();
+    if (entityIdsKey) {
+      for (const id of entityIdsKey.split(',')) {
+        if (id) s.add(id);
+      }
+    }
+    return s;
+  }, [entityIdsKey]);
+
+  const effectiveEntityIdSet = React.useMemo(() => {
+    if (filterSuggestionEntityIds?.length) {
+      return new Set(filterSuggestionEntityIds);
+    }
+    return entityIdSet;
+  }, [filterSuggestionEntityIds, entityIdSet]);
+
+  const relationsSubset = useRelations({
+    selector: React.useCallback(
+      (r: Relation) =>
+        valueType === 'RELATION' &&
+        effectiveEntityIdSet.size > 0 &&
+        effectiveEntityIdSet.has(r.fromEntity.id) &&
+        r.type.id === selectedColumnId,
+      [effectiveEntityIdSet, selectedColumnId, valueType]
+    ),
+  });
+  const relationsByType = useRelations({
+    selector: React.useCallback(
+      (r: Relation) => valueType === 'RELATION' && r.type.id === selectedColumnId,
+      [selectedColumnId, valueType]
+    ),
+  });
+  const valuesSubset = useValues({
+    selector: React.useCallback(
+      (v: Value) =>
+        valueType === 'TEXT' &&
+        effectiveEntityIdSet.size > 0 &&
+        effectiveEntityIdSet.has(v.entity.id) &&
+        v.property.id === selectedColumnId,
+      [effectiveEntityIdSet, selectedColumnId, valueType]
+    ),
+  });
+
+  const spaceStats = React.useMemo(() => {
+    if (
+      selectedColumnId !== SystemIds.SPACE_FILTER ||
+      effectiveEntityIdSet.size === 0 ||
+      !blockSpaceId
+    ) {
+      return { ids: [] as string[], counts: new Map<string, number>() };
+    }
+    const counts = new Map<string, number>();
+    for (const id of effectiveEntityIdSet) {
+      const e = store.getEntity(id, { spaceId: blockSpaceId });
+      for (const sp of e?.spaces ?? []) {
+        counts.set(sp, (counts.get(sp) ?? 0) + 1);
+      }
+    }
+    return { ids: [...counts.keys()], counts };
+  }, [selectedColumnId, effectiveEntityIdSet, store, blockSpaceId]);
+
+  const { spacesById } = useSpacesByIds(spaceStats.ids);
+  const activeTypeFilterIds = React.useMemo(
+    () =>
+      (activeFilters ?? [])
+        .filter(f => f.columnId === SystemIds.TYPES_PROPERTY)
+        .map(f => f.value),
+    [activeFilters]
+  );
+
+  return React.useMemo((): ScopedFilterSuggestions => {
+    if (valueType === 'RELATION') {
+      if (waitForRelationTargetTypes) {
+        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
+      }
+      const noMembersInBlock =
+        !filterSuggestionEntityIds?.length &&
+        (!(dataRows?.length) || (dataRows?.every(r => r.placeholder) ?? true));
+      if (noMembersInBlock) {
+        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
+      }
+
+      const globalCounts = new Map<string, number>();
+      const globalMeta = new Map<string, { id: string; name: string | null }>();
+      for (const r of relationsByType) {
+        if (filterSuggestionEntityIds?.length && !effectiveEntityIdSet.has(r.fromEntity.id)) {
+          continue;
+        }
+        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+
+        if (activeTypeFilterIds.length > 0) {
+          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
+          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
+        }
+        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
+          continue;
+        }
+
+        const id = r.toEntity.id;
+        globalCounts.set(id, (globalCounts.get(id) ?? 0) + 1);
+        if (!globalMeta.has(id)) globalMeta.set(id, { id, name: r.toEntity.name });
+      }
+      if (globalMeta.size > 0) {
+        const entitySuggestions = [...globalMeta.values()]
+          .sort((a, b) => {
+            const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
+            if (diff !== 0) return diff;
+            return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+          })
+          .slice(0, MAX_SCOPED_SUGGESTIONS);
+        return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
+      }
+
+      const counts = new Map<string, number>();
+      const meta = new Map<string, { id: string; name: string | null }>();
+      for (const r of relationsSubset) {
+        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+
+        if (activeTypeFilterIds.length > 0) {
+          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
+          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
+        }
+        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
+          continue;
+        }
+
+        const id = r.toEntity.id;
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+        if (!meta.has(id)) meta.set(id, { id, name: r.toEntity.name });
+      }
+      const entitySuggestions = [...meta.values()]
+        .sort((a, b) => {
+          const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
+          if (diff !== 0) return diff;
+          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+        })
+        .slice(0, MAX_SCOPED_SUGGESTIONS);
+      return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
+    }
+
+    if (selectedColumnId === SystemIds.SPACE_FILTER) {
+      const spaceSuggestions = spaceStats.ids
+        .map(id => {
+          const entity = spacesById.get(id)?.entity;
+          return {
+            id,
+            name: entity?.name ?? null,
+            image: entity?.image ?? null,
+            _count: spaceStats.counts.get(id) ?? 0,
+          };
+        })
+        .sort((a, b) => {
+          const diff = b._count - a._count;
+          if (diff !== 0) return diff;
+          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+        })
+        .map(({ _count: _c, ...rest }) => rest)
+        .slice(0, MAX_SCOPED_SUGGESTIONS);
+      return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions };
+    }
+
+    if (valueType === 'TEXT') {
+      if (selectedColumnId === SystemIds.NAME_PROPERTY) {
+        const nameCounts = new Map<string, number>();
+        const rowNameByEntityId = new Map<string, string>();
+        for (const row of dataRows ?? []) {
+          if (row.placeholder) continue;
+          const n = row.columns[SystemIds.NAME_PROPERTY]?.name?.trim();
+          if (n) rowNameByEntityId.set(row.entityId, n);
+        }
+
+        for (const id of effectiveEntityIdSet) {
+          const entity = store.getEntity(id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+          const n = entity?.name?.trim() || rowNameByEntityId.get(id)?.trim();
+          if (n) nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
+        }
+        const stringSuggestions = [...nameCounts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .map(([s]) => s)
+          .slice(0, MAX_SCOPED_SUGGESTIONS);
+        return {
+          entitySuggestions: [],
+          stringSuggestions,
+          spaceSuggestions: [],
+        };
+      }
+      const valueCounts = new Map<string, number>();
+      for (const v of valuesSubset) {
+        const t = v.value?.trim();
+        if (t) valueCounts.set(t, (valueCounts.get(t) ?? 0) + 1);
+      }
+      const stringSuggestions = [...valueCounts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([s]) => s)
+        .slice(0, MAX_SCOPED_SUGGESTIONS);
+      return {
+        entitySuggestions: [],
+        stringSuggestions,
+        spaceSuggestions: [],
+      };
+    }
+
+    return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
+  }, [
+    dataRows,
+    valueType,
+    selectedColumnId,
+    relationTargetTypeIds,
+    activeTypeFilterIds,
+    relationsSubset,
+    relationsByType,
+    valuesSubset,
+    spaceStats,
+    spacesById,
+    store,
+    blockSpaceId,
+    filterSuggestionEntityIds,
+    effectiveEntityIdSet,
+    waitForRelationTargetTypes,
+  ]);
 }
 
 /**
@@ -85,9 +524,63 @@ function getFilterValueName(interfaceFilterValue: InterfaceFilterValue) {
   }
 }
 
+type FilterColumnDraft = {
+  multiEntitySelections: { id: string; name: string | null }[];
+  multiSpaceSelections: { id: string; name: string | null }[];
+  multiStringSelections: string[];
+  textInput: string;
+};
+
+function emptyColumnDraft(): FilterColumnDraft {
+  return {
+    multiEntitySelections: [],
+    multiSpaceSelections: [],
+    multiStringSelections: [],
+    textInput: '',
+  };
+}
+
+function snapshotColumnDraft(state: PromptState): FilterColumnDraft {
+  return {
+    multiEntitySelections: state.multiEntitySelections.map(e => ({ ...e })),
+    multiSpaceSelections: state.multiSpaceSelections.map(s => ({ ...s })),
+    multiStringSelections: [...state.multiStringSelections],
+    textInput: state.value.type === 'string' ? state.value.value : '',
+  };
+}
+
+function applyColumnDraft(draft: FilterColumnDraft): Pick<
+  PromptState,
+  'multiEntitySelections' | 'multiSpaceSelections' | 'multiStringSelections' | 'value'
+> {
+  return {
+    multiEntitySelections: draft.multiEntitySelections.map(e => ({ ...e })),
+    multiSpaceSelections: draft.multiSpaceSelections.map(s => ({ ...s })),
+    multiStringSelections: [...draft.multiStringSelections],
+    value: { type: 'string', value: draft.textInput },
+  };
+}
+
+function removeStringFromDraft(draft: FilterColumnDraft, value: string): FilterColumnDraft {
+  const typed = draft.textInput.trim();
+  const inMulti = draft.multiStringSelections.includes(value);
+  let multiStringSelections = draft.multiStringSelections;
+  let textInput = draft.textInput;
+  if (inMulti) {
+    multiStringSelections = draft.multiStringSelections.filter(s => s !== value);
+  } else if (typed === value) {
+    textInput = '';
+  }
+  return { ...draft, multiStringSelections, textInput };
+}
+
 type PromptState = {
   selectedColumn: string;
   value: InterfaceFilterValue;
+  multiEntitySelections: { id: string; name: string | null }[];
+  multiSpaceSelections: { id: string; name: string | null }[];
+  multiStringSelections: string[];
+  columnDrafts: Record<string, FilterColumnDraft>;
   open: boolean;
 };
 
@@ -104,9 +597,23 @@ type PromptAction =
       payload: { id: string; name: string | null };
     }
   | {
+      type: 'toggleEntitySelection' | 'toggleSpaceSelection';
+      payload: { id: string; name: string | null };
+    }
+  | { type: 'toggleStringSelection'; payload: { value: string } }
+  | {
       type: 'selectStringValue';
       payload: { value: string };
     }
+  | {
+      type: 'toggleEntitySelectionForColumn';
+      payload: { columnId: string; id: string; name: string | null };
+    }
+  | {
+      type: 'toggleSpaceSelectionForColumn';
+      payload: { columnId: string; id: string; name: string | null };
+    }
+  | { type: 'removeStringFromColumnDraft'; payload: { columnId: string; value: string } }
   | {
       type: 'done';
     }
@@ -114,7 +621,26 @@ type PromptAction =
       type: 'reset';
     };
 
-const reducer = (state: PromptState, action: PromptAction): PromptState => {
+const emptyMulti = {
+  multiEntitySelections: [] as { id: string; name: string | null }[],
+  multiSpaceSelections: [] as { id: string; name: string | null }[],
+  multiStringSelections: [] as string[],
+};
+
+const emptyDrafts = () => ({}) as Record<string, FilterColumnDraft>;
+
+function normalizePromptState(s: PromptState): PromptState {
+  return {
+    ...s,
+    columnDrafts: s.columnDrafts ?? emptyDrafts(),
+    multiEntitySelections: s.multiEntitySelections ?? [],
+    multiSpaceSelections: s.multiSpaceSelections ?? [],
+    multiStringSelections: s.multiStringSelections ?? [],
+  };
+}
+
+const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
+  const state = normalizePromptState(rawState);
   switch (action.type) {
     case 'open':
       return {
@@ -131,19 +657,39 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
         ...state,
         open: action.payload.open,
       };
-    case 'selectColumn':
-      // @TODO: The value should be based on the selected column value type
+    case 'selectColumn': {
+      const prevCol = state.selectedColumn;
+      const nextCol = action.payload.columnId;
+      if (prevCol === nextCol) return state;
+
+      const savedPrev = snapshotColumnDraft(state);
+      const loaded = state.columnDrafts[nextCol] ?? emptyColumnDraft();
       return {
         ...state,
-        selectedColumn: action.payload.columnId,
+        selectedColumn: nextCol,
+        ...applyColumnDraft(loaded),
+        columnDrafts: {
+          ...state.columnDrafts,
+          [prevCol]: savedPrev,
+        },
       };
-    case 'openWithColumn':
+    }
+    case 'openWithColumn': {
+      const prevCol = state.selectedColumn;
+      const nextCol = action.payload.columnId;
+      const savedPrev = snapshotColumnDraft(state);
+      const loaded = state.columnDrafts[nextCol] ?? emptyColumnDraft();
       return {
         ...state,
         open: true,
-        selectedColumn: action.payload.columnId,
-        value: { type: 'string', value: '' },
+        selectedColumn: nextCol,
+        ...applyColumnDraft(loaded),
+        columnDrafts: {
+          ...state.columnDrafts,
+          [prevCol]: savedPrev,
+        },
       };
+    }
     case 'selectEntityValue':
       return {
         ...state,
@@ -162,6 +708,36 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           spaceName: action.payload.name,
         },
       };
+    case 'toggleEntitySelection': {
+      const { id, name } = action.payload;
+      const exists = state.multiEntitySelections.some(e => e.id === id);
+      return {
+        ...state,
+        multiEntitySelections: exists
+          ? state.multiEntitySelections.filter(e => e.id !== id)
+          : [...state.multiEntitySelections, { id, name }],
+      };
+    }
+    case 'toggleSpaceSelection': {
+      const { id, name } = action.payload;
+      const exists = state.multiSpaceSelections.some(s => s.id === id);
+      return {
+        ...state,
+        multiSpaceSelections: exists
+          ? state.multiSpaceSelections.filter(s => s.id !== id)
+          : [...state.multiSpaceSelections, { id, name }],
+      };
+    }
+    case 'toggleStringSelection': {
+      const v = action.payload.value;
+      const exists = state.multiStringSelections.includes(v);
+      return {
+        ...state,
+        multiStringSelections: exists
+          ? state.multiStringSelections.filter(s => s !== v)
+          : [...state.multiStringSelections, v],
+      };
+    }
     case 'selectStringValue':
       return {
         ...state,
@@ -170,6 +746,76 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           value: action.payload.value,
         },
       };
+    case 'toggleEntitySelectionForColumn': {
+      const { columnId, id, name } = action.payload;
+      if (columnId === state.selectedColumn) {
+        const exists = state.multiEntitySelections.some(e => e.id === id);
+        return {
+          ...state,
+          multiEntitySelections: exists
+            ? state.multiEntitySelections.filter(e => e.id !== id)
+            : [...state.multiEntitySelections, { id, name }],
+        };
+      }
+      const prev = state.columnDrafts[columnId] ?? emptyColumnDraft();
+      const exists = prev.multiEntitySelections.some(e => e.id === id);
+      return {
+        ...state,
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: {
+            ...prev,
+            multiEntitySelections: exists
+              ? prev.multiEntitySelections.filter(e => e.id !== id)
+              : [...prev.multiEntitySelections, { id, name }],
+          },
+        },
+      };
+    }
+    case 'toggleSpaceSelectionForColumn': {
+      const { columnId, id, name } = action.payload;
+      if (columnId === state.selectedColumn) {
+        const exists = state.multiSpaceSelections.some(s => s.id === id);
+        return {
+          ...state,
+          multiSpaceSelections: exists
+            ? state.multiSpaceSelections.filter(s => s.id !== id)
+            : [...state.multiSpaceSelections, { id, name }],
+        };
+      }
+      const prev = state.columnDrafts[columnId] ?? emptyColumnDraft();
+      const exists = prev.multiSpaceSelections.some(s => s.id === id);
+      return {
+        ...state,
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: {
+            ...prev,
+            multiSpaceSelections: exists
+              ? prev.multiSpaceSelections.filter(s => s.id !== id)
+              : [...prev.multiSpaceSelections, { id, name }],
+          },
+        },
+      };
+    }
+    case 'removeStringFromColumnDraft': {
+      const { columnId, value } = action.payload;
+      if (columnId === state.selectedColumn) {
+        const next = removeStringFromDraft(snapshotColumnDraft(state), value);
+        return {
+          ...state,
+          ...applyColumnDraft(next),
+        };
+      }
+      const prev = state.columnDrafts[columnId] ?? emptyColumnDraft();
+      return {
+        ...state,
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: removeStringFromDraft(prev, value),
+        },
+      };
+    }
     case 'done':
       return {
         open: false,
@@ -178,6 +824,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           type: 'string',
           value: '',
         },
+        ...emptyMulti,
+        columnDrafts: emptyDrafts(),
       };
     case 'reset':
       return {
@@ -187,6 +835,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           type: 'string',
           value: '',
         },
+        ...emptyMulti,
+        columnDrafts: emptyDrafts(),
       };
   }
 };
@@ -200,6 +850,8 @@ function getInitialState(source: Source): PromptState {
         entityId: source.value,
         entityName: null,
       },
+      ...emptyMulti,
+      columnDrafts: emptyDrafts(),
       open: false,
     };
   }
@@ -210,8 +862,186 @@ function getInitialState(source: Source): PromptState {
       type: 'string',
       value: '',
     },
+    ...emptyMulti,
+    columnDrafts: emptyDrafts(),
     open: false,
   };
+}
+
+function mergeAllColumnDrafts(state: PromptState): Record<string, FilterColumnDraft> {
+  return {
+    ...state.columnDrafts,
+    [state.selectedColumn]: snapshotColumnDraft(state),
+  };
+}
+
+function draftHasPending(
+  draft: FilterColumnDraft,
+  columnId: string,
+  options: (Filter & { columnName: string })[]
+): boolean {
+  const selectedOption = options.find(o => o.columnId === columnId);
+  if (selectedOption?.valueType === 'RELATION') {
+    return draft.multiEntitySelections.length > 0;
+  }
+  if (columnId === SystemIds.SPACE_FILTER) {
+    return draft.multiSpaceSelections.length > 0;
+  }
+  if (selectedOption?.valueType === 'TEXT') {
+    return draft.multiStringSelections.length > 0 || draft.textInput.trim() !== '';
+  }
+  return false;
+}
+
+function hasPendingFilterSelections(state: PromptState, options: (Filter & { columnName: string })[]): boolean {
+  const merged = mergeAllColumnDrafts(normalizePromptState(state));
+  return Object.keys(merged).some(columnId => {
+    const d = merged[columnId];
+    return d != null && draftHasPending(d, columnId, options);
+  });
+}
+
+function collectAllPendingFilters(
+  state: PromptState,
+  options: (Filter & { columnName: string })[]
+): TableBlockNewFilterRow[] {
+  const merged = mergeAllColumnDrafts(normalizePromptState(state));
+  const rows: TableBlockNewFilterRow[] = [];
+
+  for (const [columnId, draft] of Object.entries(merged)) {
+    if (!draftHasPending(draft, columnId, options)) continue;
+
+    const selectedOption = options.find(o => o.columnId === columnId);
+    const columnName = selectedOption?.columnName ?? '';
+
+    if (selectedOption?.valueType === 'RELATION') {
+      for (const e of draft.multiEntitySelections) {
+        rows.push({
+          columnId,
+          value: e.id,
+          valueName: e.name,
+          valueType: 'RELATION',
+          columnName,
+        });
+      }
+    } else if (columnId === SystemIds.SPACE_FILTER) {
+      for (const s of draft.multiSpaceSelections) {
+        rows.push({
+          columnId,
+          value: s.id,
+          valueName: s.name,
+          valueType: 'RELATION',
+          columnName: columnName || 'Space',
+        });
+      }
+    } else if (selectedOption?.valueType === 'TEXT') {
+      const typed = draft.textInput.trim();
+      const mergedVals = new Set(draft.multiStringSelections);
+      if (typed) mergedVals.add(typed);
+      for (const v of mergedVals) {
+        rows.push({
+          columnId,
+          value: v,
+          valueName: v,
+          valueType: 'TEXT',
+          columnName,
+        });
+      }
+    }
+  }
+
+  return rows;
+}
+
+type PendingFilterChipItem =
+  | {
+      key: string;
+      columnId: string;
+      columnName: string;
+      kind: 'entity';
+      id: string;
+      name: string | null;
+    }
+  | {
+      key: string;
+      columnId: string;
+      columnName: string;
+      kind: 'space';
+      id: string;
+      name: string | null;
+    }
+  | {
+      key: string;
+      columnId: string;
+      columnName: string;
+      kind: 'string';
+      value: string;
+    };
+
+function enumeratePendingFilterChips(
+  state: PromptState,
+  options: (Filter & { columnName: string })[]
+): PendingFilterChipItem[] {
+  const merged = mergeAllColumnDrafts(normalizePromptState(state));
+  const columnIds = Object.keys(merged).filter(columnId => {
+    const d = merged[columnId];
+    return d != null && draftHasPending(d, columnId, options);
+  });
+  columnIds.sort((a, b) => {
+    const nameA = options.find(o => o.columnId === a)?.columnName ?? (a === SystemIds.SPACE_FILTER ? 'Space' : a);
+    const nameB = options.find(o => o.columnId === b)?.columnName ?? (b === SystemIds.SPACE_FILTER ? 'Space' : b);
+    return nameA.localeCompare(nameB);
+  });
+
+  const items: PendingFilterChipItem[] = [];
+
+  for (const columnId of columnIds) {
+    const draft = merged[columnId];
+    if (!draft) continue;
+
+    const opt = options.find(o => o.columnId === columnId);
+    const columnName =
+      opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
+
+    if (opt?.valueType === 'RELATION') {
+      for (const e of draft.multiEntitySelections) {
+        items.push({
+          key: `${columnId}:e:${e.id}`,
+          columnId,
+          columnName,
+          kind: 'entity',
+          id: e.id,
+          name: e.name,
+        });
+      }
+    } else if (columnId === SystemIds.SPACE_FILTER) {
+      for (const s of draft.multiSpaceSelections) {
+        items.push({
+          key: `${columnId}:s:${s.id}`,
+          columnId,
+          columnName,
+          kind: 'space',
+          id: s.id,
+          name: s.name,
+        });
+      }
+    } else if (opt?.valueType === 'TEXT') {
+      const typed = draft.textInput.trim();
+      const mergedVals = new Set(draft.multiStringSelections);
+      if (typed) mergedVals.add(typed);
+      for (const v of [...mergedVals].sort()) {
+        items.push({
+          key: `${columnId}:t:${v}`,
+          columnId,
+          columnName,
+          kind: 'string',
+          value: v,
+        });
+      }
+    }
+  }
+
+  return items;
 }
 
 interface ToggleQueryModeProps {
@@ -254,7 +1084,18 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
-  function TableBlockFilterPrompt({ trigger, onCreate, options }, ref) {
+  function TableBlockFilterPrompt(
+    {
+      trigger,
+      onCreate,
+      options,
+      filterSuggestionRows,
+      filterSuggestionEntityIds,
+      filterSuggestionSpaceId,
+      onFilterPromptOpenChange,
+    },
+    ref
+  ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
@@ -281,6 +1122,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
 
+    React.useEffect(() => {
+      onFilterPromptOpenChange?.(state.open);
+    }, [state.open, onFilterPromptOpenChange]);
+
     const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
       if (queryMode === 'RELATIONS') {
         setFrom(null);
@@ -293,14 +1138,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     };
 
     const onEntitiesDone = () => {
-      const selectedOption = options.find(o => o.columnId === state.selectedColumn);
-      onCreate({
-        columnId: state.selectedColumn,
-        value: getFilterValue(state.value),
-        valueType: selectedOption?.valueType ?? 'TEXT',
-        valueName: getFilterValueName(state.value),
-        columnName: selectedOption?.columnName ?? '',
-      });
+      const filters = collectAllPendingFilters(state, options);
+      if (filters.length === 0) return;
+      onCreate(filters);
       dispatch({ type: 'done' });
     };
 
@@ -313,13 +1153,20 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           setRelationType={setRelationType}
         />
       ) : (
-        <DynamicFilters options={options} state={state} dispatch={dispatch} />
+        <DynamicFilters
+          options={options}
+          state={state}
+          dispatch={dispatch}
+          filterSuggestionRows={filterSuggestionRows}
+          filterSuggestionEntityIds={filterSuggestionEntityIds}
+          filterSuggestionSpaceId={filterSuggestionSpaceId}
+        />
       );
 
     const done =
       queryMode !== 'RELATIONS' ? (
         <AnimatePresence>
-          {getFilterValue(state.value) !== '' && (
+          {hasPendingFilterSelections(state, options) && (
             <motion.span
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -381,22 +1228,130 @@ interface DynamicFiltersProps {
   options: TableBlockFilterPromptProps['options'];
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
+  filterSuggestionRows?: Row[];
+  filterSuggestionEntityIds?: string[];
+  filterSuggestionSpaceId?: string;
 }
 
-function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
+function MultiSelectChip({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-0.5 rounded-sm border border-grey-02 bg-grey-01 py-0.5 pr-0.5 pl-1.5 text-[0.8125rem] text-text">
+      <span className="min-w-0 truncate">{label}</span>
+      <button
+        type="button"
+        className="flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
+        onClick={e => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        aria-label={`Remove ${label}`}
+      >
+        <CloseSmall color="grey-04" />
+      </button>
+    </span>
+  );
+}
+
+function DynamicFilters({
+  options,
+  dispatch,
+  state,
+  filterSuggestionRows,
+  filterSuggestionEntityIds,
+  filterSuggestionSpaceId,
+}: DynamicFiltersProps) {
+  const { filterState } = useFilters();
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
-  const onSelectEntityValue = (entity: { id: string; name: string | null }) =>
-    dispatch({ type: 'selectEntityValue', payload: { id: entity.id, name: entity.name } });
-
-  const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
-    dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
+  const selectedEntityIds = React.useMemo(
+    () => new Set(state.multiEntitySelections.map(e => e.id)),
+    [state.multiEntitySelections]
+  );
+  const selectedSpaceIds = React.useMemo(
+    () => new Set(state.multiSpaceSelections.map(s => s.id)),
+    [state.multiSpaceSelections]
+  );
+  const selectedStringsSet = React.useMemo(
+    () => new Set(state.multiStringSelections),
+    [state.multiStringSelections]
+  );
 
   const selectedOption = options.find(o => o.columnId === state.selectedColumn);
 
+  const isRelationPropertyColumn =
+    Boolean(state.selectedColumn) &&
+    state.selectedColumn !== SystemIds.SPACE_FILTER &&
+    selectedOption?.valueType === 'RELATION';
+
+  const { typeIds: relationTargetTypeIds, waitForFilterTypes: waitForRelationTargetTypes } =
+    useRelationColumnTargetTypeIds(
+      isRelationPropertyColumn ? state.selectedColumn : undefined,
+      filterSuggestionSpaceId,
+      selectedOption?.relationValueTypes
+    );
+
+  const scoped = useScopedFilterSuggestions(
+    filterSuggestionRows,
+    state.selectedColumn,
+    selectedOption?.valueType,
+    filterSuggestionSpaceId,
+    relationTargetTypeIds,
+    filterState,
+    filterSuggestionEntityIds,
+    waitForRelationTargetTypes
+  );
+
+  const pendingFilterChips = React.useMemo(
+    () => enumeratePendingFilterChips(state, options),
+    [state, options]
+  );
+
+  const filterInteractionRootRef = React.useRef<HTMLDivElement>(null);
+
   return (
-    <div className="flex items-center justify-center gap-3 px-2">
-      <>
+    <div className="flex w-full flex-col gap-3 px-2">
+      {pendingFilterChips.length > 0 && (
+        <div className="w-full rounded-md border border-grey-02 bg-grey-01 px-3 py-2">
+          <p className="mb-1.5 text-[0.75rem] text-grey-04">Filters to apply</p>
+          <div className="flex flex-wrap gap-1.5">
+            {pendingFilterChips.map(item => {
+              const valueLabel =
+                item.kind === 'string' ? item.value : (item.name ?? item.id);
+              return (
+                <MultiSelectChip
+                  key={item.key}
+                  label={`${item.columnName} · ${valueLabel}`}
+                  onRemove={() => {
+                    if (item.kind === 'entity') {
+                      dispatch({
+                        type: 'toggleEntitySelectionForColumn',
+                        payload: { columnId: item.columnId, id: item.id, name: item.name },
+                      });
+                    } else if (item.kind === 'space') {
+                      dispatch({
+                        type: 'toggleSpaceSelectionForColumn',
+                        payload: { columnId: item.columnId, id: item.id, name: item.name },
+                      });
+                    } else {
+                      dispatch({
+                        type: 'removeStringFromColumnDraft',
+                        payload: { columnId: item.columnId, value: item.value },
+                      });
+                    }
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div ref={filterInteractionRootRef} className="flex items-start gap-3">
         <div className="flex flex-1">
           <Select
             options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
@@ -408,25 +1363,39 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
         <div className="relative flex flex-1">
           {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
-              selectedValue={getFilterValueName(state.value) ?? ''}
-              onSelect={onSelectSpaceValue}
+              filterInteractionRootRef={filterInteractionRootRef}
+              selectedValue=""
+              scopedSuggestions={scoped.spaceSuggestions}
+              selectedSpaceIds={selectedSpaceIds}
+              memberSpaceId={filterSuggestionSpaceId}
+              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              filterByTypes={
-                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.id) : undefined
+              filterInteractionRootRef={filterInteractionRootRef}
+              filterByTypes={relationTargetTypeIds}
+              waitForFilterTypes={waitForRelationTargetTypes}
+              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
+              suggestionSpaceId={filterSuggestionSpaceId}
+              selectedValue=""
+              scopedSuggestions={scoped.entitySuggestions}
+              selectedEntityIds={selectedEntityIds}
+              onToggleEntity={e =>
+                dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
               }
-              selectedValue={getFilterValueName(state.value) ?? ''}
-              onSelect={onSelectEntityValue}
             />
           ) : (
-            <Input
+            <TableBlockTextFilterInput
+              filterInteractionRootRef={filterInteractionRootRef}
               value={getFilterValue(state.value)}
-              onChange={e => dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })}
+              onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
+              stringSuggestions={scoped.stringSuggestions}
+              selectedStrings={selectedStringsSet}
+              onToggleString={s => dispatch({ type: 'toggleStringSelection', payload: { value: s } })}
             />
           )}
         </div>
-      </>
+      </div>
     </div>
   );
 }
@@ -501,42 +1470,354 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 }
 
 interface TableBlockEntityFilterInputProps {
-  onSelect: (result: { id: string; name: string | null }) => void;
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
+  onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
+  waitForFilterTypes?: boolean;
+  restrictSearchToTypes?: boolean;
+  /** Space used when listing entities by type for an empty table (relation target browse). */
+  suggestionSpaceId?: string;
+  scopedSuggestions?: { id: string; name: string | null }[];
+  selectedEntityIds?: Set<string>;
+  onToggleEntity?: (result: { id: string; name: string | null }) => void;
+  multiSelectPlaceholder?: string;
 }
 
-function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }: TableBlockEntityFilterInputProps) {
-  const autocomplete = useSearch(filterByTypes ? { filterByTypes } : undefined);
+function TableBlockEntityFilterInput({
+  filterInteractionRootRef,
+  onSelect,
+  selectedValue,
+  filterByTypes,
+  waitForFilterTypes = false,
+  restrictSearchToTypes = false,
+  suggestionSpaceId,
+  scopedSuggestions,
+  selectedEntityIds,
+  onToggleEntity,
+  multiSelectPlaceholder,
+}: TableBlockEntityFilterInputProps) {
+  const { store } = useSyncEngine();
+  const cache = useQueryClient();
+  const autocomplete = useSearch(
+    filterByTypes?.length || waitForFilterTypes || restrictSearchToTypes
+      ? {
+          filterByTypes: filterByTypes?.length ? filterByTypes : undefined,
+          waitForFilterTypes: waitForFilterTypes || undefined,
+          restrictToFilterTypes: restrictSearchToTypes || undefined,
+        }
+      : undefined
+  );
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
+
+  const filteredScoped = React.useMemo(() => {
+    if (!scopedSuggestions?.length) return [];
+    const q = autocomplete.query.trim().toLowerCase();
+    const list = !q
+      ? scopedSuggestions
+      : scopedSuggestions.filter(
+          s =>
+            (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
+        );
+    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
+  }, [scopedSuggestions, autocomplete.query]);
+
+  const filteredScopedByTargetType = React.useMemo(() => {
+    if (!filterByTypes?.length && (waitForFilterTypes || restrictSearchToTypes)) {
+      return [];
+    }
+    if (!filterByTypes?.length) return filteredScoped;
+    return filteredScoped.filter(s => {
+      const e = store.getEntity(s.id, suggestionSpaceId ? { spaceId: suggestionSpaceId } : undefined);
+      return entityTypesMatchFilter(e?.types, filterByTypes);
+    });
+  }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes, store, suggestionSpaceId]);
+
+  const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
+  const browseEnabled =
+    focused &&
+    filteredScopedByTargetType.length === 0 &&
+    !autocomplete.query.trim() &&
+    canBrowseByType;
+
+  const { data: browsePages, isFetching: isBrowseFetching, isFetchingNextPage: isBrowseFetchingNextPage, fetchNextPage: fetchNextBrowsePage, hasNextPage: hasNextBrowsePage } = useInfiniteQuery({
+    queryKey: [
+      'table-block-filter-entity-browse',
+      filterByTypes?.slice().sort().join(',') ?? '',
+      suggestionSpaceId ?? '',
+    ],
+    enabled: browseEnabled,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
+      const where = {
+        types: filterByTypes!.map(id => ({ id: { equals: id } })),
+      };
+      const entities = await E.findMany({
+        store,
+        cache,
+        where,
+        first: FILTER_DROPDOWN_PAGE_SIZE,
+        skip: pageParam,
+        spaceId: suggestionSpaceId,
+      });
+      const nonNull = entities.filter((e): e is Entity => e != null);
+
+      const spaceIdSet = new Set<string>();
+      for (const e of nonNull) {
+        for (const sid of e.spaces) {
+          if (sid) spaceIdSet.add(sid);
+        }
+      }
+      if (suggestionSpaceId) spaceIdSet.add(suggestionSpaceId);
+      const uniqueSpaceIds = [...spaceIdSet];
+
+      const spaceEntityById = new Map<string, SpaceEntity>();
+      if (uniqueSpaceIds.length > 0) {
+        const fetchedSpaces = await cache.fetchQuery({
+          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
+          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
+          staleTime: Duration.toMillis(Duration.seconds(60)),
+        });
+        for (const s of fetchedSpaces) {
+          spaceEntityById.set(s.id, s.entity);
+        }
+      }
+
+      return nonNull
+        .map(e => searchResultFromBrowseEntityWithSpaces(e, spaceEntityById, suggestionSpaceId))
+        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < FILTER_DROPDOWN_PAGE_SIZE ? undefined : allPages.length * FILTER_DROPDOWN_PAGE_SIZE,
+    staleTime: Duration.toMillis(Duration.seconds(60)),
+  });
+
+  const browseResults = browsePages?.pages.flat() ?? [];
+
+  const rowsToRender = React.useMemo(() => {
+    const q = autocomplete.query.trim();
+    if (!q) {
+      if (filteredScopedByTargetType.length > 0) {
+        return filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
+      }
+      if (browseResults.length > 0) {
+        return browseResults
+          .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
+          .map(r => ({ kind: 'search' as const, result: r }));
+      }
+      return [];
+    }
+    const seen = new Set(filteredScopedByTargetType.map(s => s.id));
+    const fuzzyRows = autocomplete.results
+      .filter(r => !seen.has(r.id))
+      .filter(r => {
+        if (restrictSearchToTypes && !filterByTypes?.length) return false;
+        return searchResultMatchesAllowedTypes(r, filterByTypes);
+      });
+    return [
+      ...filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s })),
+      ...fuzzyRows.map(r => ({ kind: 'search' as const, result: r })),
+    ];
+  }, [
+    filteredScopedByTargetType,
+    autocomplete.query,
+    autocomplete.results,
+    browseResults,
+    filterByTypes,
+    restrictSearchToTypes,
+  ]);
+
+  const entityListResetKey = [
+    autocomplete.query,
+    filteredScopedByTargetType.map(s => s.id).join('\0'),
+    browseEnabled ? 'browse' : '',
+    autocomplete.query.trim() ? autocomplete.results.map(r => r.id).join('\0') : '',
+  ].join('|');
+
+  const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setEntityVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [entityListResetKey]);
+
+  const visibleEntityRows = React.useMemo(
+    () => rowsToRender.slice(0, entityVisibleCount),
+    [rowsToRender, entityVisibleCount]
+  );
+
+  const visibleScopedIds = React.useMemo(
+    () => visibleEntityRows.flatMap(r => (r.kind === 'scoped' ? [r.scoped.id] : [])),
+    [visibleEntityRows]
+  );
+
+  const scopedResultQueries = useQueries({
+    queries: visibleScopedIds.map(id => ({
+      queryKey: ['table-block-filter-scoped-entity', id] as const,
+      queryFn: () => mergeSearchResult({ id, store }),
+      enabled: focused && visibleScopedIds.length > 0,
+      staleTime: Duration.toMillis(Duration.seconds(60)),
+    })),
+  });
+
+  const scopedResultById = React.useMemo(() => {
+    const m = new Map<string, SearchResult>();
+    visibleScopedIds.forEach((id, idx) => {
+      const data = scopedResultQueries[idx]?.data;
+      if (data != null) m.set(id, data);
+    });
+    return m;
+  }, [visibleScopedIds, scopedResultQueries]);
+
+  const entityResultsListRef = React.useRef<HTMLUListElement>(null);
+
+  const expandVisibleEntityRowsIfListHasNoScrollbar = React.useCallback(() => {
+    const el = entityResultsListRef.current;
+    if (!el) return;
+    const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+    if (!noOverflow) return;
+    if (entityVisibleCount < rowsToRender.length) {
+      setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
+    }
+  }, [entityVisibleCount, rowsToRender.length]);
+
+  const handleEntityResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (entityVisibleCount < rowsToRender.length) {
+        setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
+        return;
+      }
+      if (browseEnabled && hasNextBrowsePage && !isBrowseFetchingNextPage) {
+        void fetchNextBrowsePage();
+      }
+    }, [ entityVisibleCount, rowsToRender.length, browseEnabled, hasNextBrowsePage, isBrowseFetchingNextPage, fetchNextBrowsePage ]);
+
+  const showEmptyBrowseHint =
+    canBrowseByType &&
+    filteredScopedByTargetType.length === 0 &&
+    !autocomplete.query.trim() &&
+    !isBrowseFetching &&
+    browseResults.length === 0;
+
+  const showDropdown =
+    focused &&
+    (rowsToRender.length > 0 || (browseEnabled && isBrowseFetching) || showEmptyBrowseHint);
+
+  React.useLayoutEffect(() => {
+    if (!showDropdown) return;
+    expandVisibleEntityRowsIfListHasNoScrollbar();
+  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
+
+  const multi = Boolean(onToggleEntity);
+  const inputValue = multi
+    ? autocomplete.query
+    : autocomplete.query === ''
+      ? selectedValue
+      : autocomplete.query;
+
+  const handleEntityPick = (result: { id: string; name: string | null }) => {
+    clearBlurTimeout();
+    if (multi) {
+      onToggleEntity?.(result);
+    } else {
+      autocomplete.onQueryChange('');
+      onSelect?.(result);
+      setFocused(false);
+    }
+  };
 
   return (
     <div className="relative w-full">
       <Input
-        value={autocomplete.query === '' ? selectedValue : autocomplete.query}
+        placeholder={multi ? multiSelectPlaceholder : undefined}
+        value={inputValue}
         onChange={e => autocomplete.onQueryChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
-      {autocomplete.query && (
-        <div className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+      {showDropdown && (
+        <div
+          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          onPointerDown={e => e.preventDefault()}
+        >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {autocomplete.results.map((result, i) => (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.02 * i }}
-                  key={result.id}
+            <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
+              {rowsToRender.length === 0 && isBrowseFetching ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Loading…
+                  </Text>
+                </ResultItem>
+              ) : null}
+              {rowsToRender.length === 0 && showEmptyBrowseHint ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Type to search, or pick from the list when the table has rows.
+                  </Text>
+                </ResultItem>
+              ) : null}
+              {visibleEntityRows.map((row, i) =>
+                row.kind === 'scoped' ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
+                    key={`scoped-${row.scoped.id}`}
+                  >
+                    <ResultContent
+                      result={searchResultForFilterDisplay(
+                        scopedResultById.get(row.scoped.id),
+                        row.scoped.id,
+                        row.scoped.name
+                      )}
+                      onClick={() => handleEntityPick(row.scoped)}
+                      active={Boolean(multi && selectedEntityIds?.has(row.scoped.id))}
+                      alreadySelected={false}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
+                    key={`search-${row.result.id}`}
+                  >
+                    <ResultContent
+                      onClick={() => handleEntityPick(row.result)}
+                      active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
+                      alreadySelected={false}
+                      result={row.result}
+                    />
+                  </motion.div>
+                )
+              )}
+              {browseEnabled &&
+              hasNextBrowsePage &&
+              !isBrowseFetchingNextPage &&
+              entityVisibleCount >= rowsToRender.length &&
+              rowsToRender.length > 0 ? (
+                <ResultItem
+                  onPointerDown={e => e.preventDefault()}
+                  onClick={() => {
+                    clearBlurTimeout();
+                    void fetchNextBrowsePage();
+                  }}
                 >
-                  <ResultContent
-                    key={result.id}
-                    onClick={() => {
-                      autocomplete.onQueryChange('');
-                      onSelect(result);
-                    }}
-                    alreadySelected={false}
-                    result={result}
-                  />
-                </motion.div>
-              ))}
+                  <Text variant="metadataMedium">Load more</Text>
+                </ResultItem>
+              ) : null}
+              {isBrowseFetchingNextPage ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Loading more…
+                  </Text>
+                </ResultItem>
+              ) : null}
             </ResultsList>
             {autocomplete.isLoading && (
               <div className="flex items-center justify-center py-3">
@@ -551,63 +1832,396 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }:
 }
 
 interface TableBlockSpaceFilterInputProps {
-  onSelect: (result: { id: string; name: string | null }) => void;
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
+  onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
+  scopedSuggestions?: { id: string; name: string | null; image: string | null }[];
+  selectedSpaceIds?: Set<string>;
+  memberSpaceId?: string;
+  onToggleSpace?: (result: { id: string; name: string | null }) => void;
 }
 
-function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpaceFilterInputProps) {
-  const { query, setQuery, spaces: results, isLoading } = useSpacesQuery();
+function TableBlockSpaceFilterInput({
+  filterInteractionRootRef,
+  onSelect,
+  selectedValue,
+  scopedSuggestions,
+  selectedSpaceIds,
+  memberSpaceId,
+  onToggleSpace,
+}: TableBlockSpaceFilterInputProps) {
+  const { query, setQuery, spaces: results } = useSpacesQuery();
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
 
-  const onSelectSpace = (space: (typeof results)[number]) => {
-    setQuery('');
+  const scopedWhenEmpty = React.useMemo(() => {
+    if (!scopedSuggestions?.length) return [];
+    return scopedSuggestions.slice(0, MAX_SCOPED_SUGGESTIONS);
+  }, [scopedSuggestions]);
+  const { data: memberSpaces = [] } = useQuery({
+    queryKey: ['filter-member-spaces', memberSpaceId],
+    enabled: Boolean(memberSpaceId),
+    staleTime: Duration.toMillis(Duration.seconds(60)),
+    queryFn: ({ signal }) => Effect.runPromise(getSpacesWhereMember(memberSpaceId!, signal)),
+  });
+  const defaultSpaceSuggestions = React.useMemo(() => {
+    const out: { id: string; name: string | null; image: string | null }[] = [];
+    const seen = new Set<string>();
+    for (const s of scopedWhenEmpty) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+    }
+    for (const s of memberSpaces) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push({ id: s.id, name: s.entity.name ?? null, image: s.entity.image ?? null });
+    }
+    return out.slice(0, MAX_SCOPED_SUGGESTIONS);
+  }, [scopedWhenEmpty, memberSpaces]);
 
-    onSelect({
-      id: space.id,
-      name: space.name,
-    });
-  };
+  const mergedWhenQuery = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const scopedMatches = (scopedSuggestions ?? []).filter(
+      s => (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
+    );
+    const seen = new Set(scopedMatches.map(s => s.id));
+    const remote = results.filter(r => !seen.has(r.id));
+    return [
+      ...scopedMatches.map(s => ({ kind: 'scoped' as const, scoped: s })),
+      ...remote.map(r => ({ kind: 'remote' as const, result: r })),
+    ].slice(0, MAX_SCOPED_SUGGESTIONS);
+  }, [query, scopedSuggestions, results]);
+
+  const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
+  const showQueryPanel = Boolean(query.trim());
+  const multi = Boolean(onToggleSpace);
+
+  const spaceQueryRows = React.useMemo(() => {
+    if (!showQueryPanel) return [] as Array<
+      | { kind: 'scoped'; scoped: { id: string; name: string | null; image: string | null } }
+      | { kind: 'remote'; result: (typeof results)[number] }
+    >;
+    if (mergedWhenQuery.length > 0) return mergedWhenQuery;
+    return results.map(r => ({ kind: 'remote' as const, result: r }));
+  }, [showQueryPanel, mergedWhenQuery, results]);
+
+  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : spaceQueryRows.length;
+
+  const [spaceVisibleCount, setSpaceVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setSpaceVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [
+    query,
+    showScopedOnlyPanel,
+    showQueryPanel,
+    defaultSpaceSuggestions.length,
+    mergedWhenQuery.length,
+    results.length,
+  ]);
+
+  const visibleScopedSpaceSuggestions = React.useMemo(
+    () => defaultSpaceSuggestions.slice(0, spaceVisibleCount),
+    [defaultSpaceSuggestions, spaceVisibleCount]
+  );
+
+  const visibleSpaceQueryRows = React.useMemo(
+    () => spaceQueryRows.slice(0, spaceVisibleCount),
+    [spaceQueryRows, spaceVisibleCount]
+  );
+
+  const applySpaceListPagination = React.useCallback(
+    (el: HTMLUListElement) => {
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (spaceVisibleCount < spaceFullRowCount) {
+        setSpaceVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, spaceFullRowCount));
+      }
+    },
+    [spaceVisibleCount, spaceFullRowCount]
+  );
+
+  const spaceScopedListRef = React.useRef<HTMLUListElement>(null);
+  const spaceQueryListRef = React.useRef<HTMLUListElement>(null);
+  const handleSpaceResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      applySpaceListPagination(e.currentTarget);
+    },
+    [applySpaceListPagination]
+  );
+
+  React.useLayoutEffect(() => {
+    if (showScopedOnlyPanel) {
+      const el = spaceScopedListRef.current;
+      if (el) applySpaceListPagination(el);
+    } else if (showQueryPanel) {
+      const el = spaceQueryListRef.current;
+      if (el) applySpaceListPagination(el);
+    }
+  }, [
+    showScopedOnlyPanel,
+    showQueryPanel,
+    applySpaceListPagination,
+    spaceFullRowCount,
+    spaceVisibleCount,
+    defaultSpaceSuggestions.length,
+    spaceQueryRows.length,
+  ]);
+
+  const renderSpaceRow = (
+    id: string,
+    name: string | null,
+    image: string | null | undefined,
+    onPick: () => void,
+    i: number,
+    isSelected = false
+  ) => (
+    <motion.div
+      initial={{ opacity: 0, y: -5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.02 * i }}
+      key={id}
+    >
+      <ResultItem
+        className={isSelected ? 'bg-grey-02' : undefined}
+        onClick={() => {
+          clearBlurTimeout();
+          if (!multi) setQuery('');
+          onPick();
+          if (!multi) setFocused(false);
+        }}
+      >
+        <div className="flex w-full items-center justify-between leading-4">
+          <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
+            {name ?? id}
+          </Text>
+          {isSelected && <CheckCircleSmall color="grey-04" />}
+        </div>
+        <Spacer height={4} />
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          {(name ?? id) && <Breadcrumb img={image ?? null}>{(name ?? id) as string}</Breadcrumb>}
+          <span style={{ rotate: '270deg' }}>
+            <ChevronDownSmall color="grey-04" />
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Tag>Space</Tag>
+          </div>
+        </div>
+      </ResultItem>
+    </motion.div>
+  );
+
+  const inputDisplay = multi ? query : query === '' ? selectedValue : query;
 
   return (
     <div className="relative w-full">
-      <Input value={query === '' ? selectedValue : query} onChange={e => setQuery(e.target.value)} />
-      {query && (
-        <div className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+      <Input
+        placeholder={multi ? 'Search…' : undefined}
+        value={inputDisplay}
+        onChange={e => setQuery(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      {showScopedOnlyPanel && (
+        <div
+          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          onPointerDown={e => e.preventDefault()}
+        >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {results.map((result, i) => (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.02 * i }}
-                  key={result.id}
-                >
-                  <ResultItem onClick={() => onSelectSpace(result)}>
-                    <div className="flex w-full items-center justify-between leading-4">
-                      <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
-                        {result.name ?? result.id}
-                      </Text>
-                    </div>
-                    <Spacer height={4} />
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(result.name ?? result.id) && (
-                        <Breadcrumb img={result.image}>{result.name ?? result.id}</Breadcrumb>
-                      )}
-                      <span style={{ rotate: '270deg' }}>
-                        <ChevronDownSmall color="grey-04" />
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <Tag>Space</Tag>
-                      </div>
-                    </div>
-                  </ResultItem>
-                </motion.div>
-              ))}
+            <ResultsList ref={spaceScopedListRef} onScroll={handleSpaceResultsScroll}>
+              {visibleScopedSpaceSuggestions.map((s, i) =>
+                renderSpaceRow(
+                  s.id,
+                  s.name,
+                  s.image ?? PLACEHOLDER_SPACE_IMAGE,
+                  () =>
+                    multi
+                      ? onToggleSpace?.(s)
+                      : onSelect?.(s),
+                  i,
+                  Boolean(selectedSpaceIds?.has(s.id))
+                )
+              )}
             </ResultsList>
-            {isLoading && (
-              <div className="flex items-center justify-center py-3">
-                <Dots />
-              </div>
-            )}
+          </ResizableContainer>
+        </div>
+      )}
+      {showQueryPanel && (
+        <div
+          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          onPointerDown={e => e.preventDefault()}
+        >
+          <ResizableContainer duration={0.125}>
+            <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
+              {visibleSpaceQueryRows.map((row, i) =>
+                row.kind === 'scoped'
+                  ? renderSpaceRow(
+                      row.scoped.id,
+                      row.scoped.name,
+                      row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
+                      () =>
+                        multi
+                          ? onToggleSpace?.(row.scoped)
+                          : onSelect?.(row.scoped),
+                      i,
+                      Boolean(selectedSpaceIds?.has(row.scoped.id))
+                    )
+                  : renderSpaceRow(
+                      row.result.id,
+                      row.result.name,
+                      row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
+                      () =>
+                        multi
+                          ? onToggleSpace?.({
+                              id: row.result.id,
+                              name: row.result.name,
+                            })
+                          : onSelect?.({
+                              id: row.result.id,
+                              name: row.result.name,
+                            }),
+                      i,
+                      Boolean(selectedSpaceIds?.has(row.result.id))
+                    )
+              )}
+            </ResultsList>
+          </ResizableContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface TableBlockTextFilterInputProps {
+  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
+  value: string;
+  onChange: (value: string) => void;
+  stringSuggestions: string[];
+  selectedStrings?: Set<string>;
+  onToggleString?: (s: string) => void;
+}
+
+function TableBlockTextFilterInput({
+  filterInteractionRootRef,
+  value,
+  onChange,
+  stringSuggestions,
+  selectedStrings,
+  onToggleString,
+}: TableBlockTextFilterInputProps) {
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
+    useFilterValueInputFocus(filterInteractionRootRef);
+
+  const filtered = React.useMemo(() => {
+    if (!stringSuggestions.length) return [];
+    const q = value.trim().toLowerCase();
+    const list = !q
+      ? stringSuggestions
+      : stringSuggestions.filter(s => s.toLowerCase().includes(q));
+    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
+  }, [stringSuggestions, value]);
+
+  const [textVisibleCount, setTextVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
+  React.useEffect(() => {
+    setTextVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
+  }, [value, filtered.length, stringSuggestions.length]);
+
+  const visibleTextSuggestions = React.useMemo(
+    () => filtered.slice(0, textVisibleCount),
+    [filtered, textVisibleCount]
+  );
+
+  const applyTextListPagination = React.useCallback(
+    (el: HTMLUListElement) => {
+      const threshold = 48;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
+      const nearBottom = distanceFromBottom <= threshold;
+      if (!nearBottom && !noOverflow) return;
+      if (textVisibleCount < filtered.length) {
+        setTextVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, filtered.length));
+      }
+    },
+    [textVisibleCount, filtered.length]
+  );
+
+  const textResultsListRef = React.useRef<HTMLUListElement>(null);
+  const handleTextResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      applyTextListPagination(e.currentTarget);
+    },
+    [applyTextListPagination]
+  );
+
+  const showEmptyTextHint = focused && stringSuggestions.length === 0;
+  const showDropdown = focused && (showEmptyTextHint || filtered.length > 0);
+
+  React.useLayoutEffect(() => {
+    if (!showDropdown) return;
+    const el = textResultsListRef.current;
+    if (el) applyTextListPagination(el);
+  }, [showDropdown, applyTextListPagination, filtered.length, textVisibleCount]);
+
+  const multi = Boolean(onToggleString);
+
+  return (
+    <div className="relative w-full">
+      <Input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      {showDropdown && (
+        <div
+          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          onPointerDown={e => e.preventDefault()}
+        >
+          <ResizableContainer duration={0.125}>
+            <ResultsList ref={textResultsListRef} onScroll={handleTextResultsScroll}>
+              {showEmptyTextHint ? (
+                <ResultItem className="pointer-events-none">
+                  <Text color="grey-03" variant="metadataMedium">
+                    Type a value to filter. Suggestions appear when the table has matching rows.
+                  </Text>
+                </ResultItem>
+              ) : null}
+              {visibleTextSuggestions.map((s, i) => {
+                const isSel = Boolean(selectedStrings?.has(s));
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
+                    key={s}
+                  >
+                    <ResultItem
+                      className={isSel ? 'bg-grey-02' : undefined}
+                      onClick={() => {
+                        clearBlurTimeout();
+                        if (multi) {
+                          onToggleString?.(s);
+                        } else {
+                          onChange(s);
+                          setFocused(false);
+                        }
+                      }}
+                    >
+                      <div className="flex w-full items-center justify-between leading-4">
+                        <Text variant="metadataMedium" ellipsize className="leading-4.5">
+                          {s}
+                        </Text>
+                        {multi && isSel && <CheckCircleSmall color="grey-04" />}
+                      </div>
+                    </ResultItem>
+                  </motion.div>
+                );
+              })}
+            </ResultsList>
           </ResizableContainer>
         </div>
       )}
