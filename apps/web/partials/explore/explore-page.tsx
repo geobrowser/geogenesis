@@ -77,7 +77,7 @@ export function ExplorePage({
           void fetchNextPage();
         }
       },
-      { rootMargin: '8000px' }
+      { rootMargin: '6000px' }
     );
     io.observe(el);
     return () => io.disconnect();

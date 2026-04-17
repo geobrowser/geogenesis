@@ -44,10 +44,56 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.location.hash !== '#entity-comments') return;
+
+    // Re-scroll to the comments anchor while the page is still settling. Async queries
+    // (values, relations, etc.) load after initial mount and push the anchor down, so
+    // a single scrollIntoView on mount leaves the user in the wrong spot. We re-anchor
+    // on every body resize until the layout is stable OR the user scrolls.
     const el = document.getElementById('entity-comments');
-    if (el) {
-      requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    if (!el) return;
+
+    let stopped = false;
+    let lastResizeAt = performance.now();
+    let programmaticScrollAt = 0;
+
+    const scrollToAnchor = () => {
+      if (stopped) return;
+      programmaticScrollAt = performance.now();
+      el.scrollIntoView({ behavior: 'auto', block: 'start' });
+    };
+
+    scrollToAnchor();
+
+    const observer = new ResizeObserver(() => {
+      lastResizeAt = performance.now();
+      scrollToAnchor();
+    });
+    observer.observe(document.body);
+
+    // Bail out if the user initiates a scroll themselves — don't fight them.
+    const onScroll = () => {
+      // Ignore scrolls within 150ms of our own programmatic scroll.
+      if (performance.now() - programmaticScrollAt < 150) return;
+      stop();
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // Stop once the layout has been stable for 800ms, or hard cap at 8s.
+    const stabilityInterval = window.setInterval(() => {
+      if (performance.now() - lastResizeAt > 800) stop();
+    }, 100);
+    const hardCap = window.setTimeout(stop, 8000);
+
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.clearInterval(stabilityInterval);
+      window.clearTimeout(hardCap);
     }
+
+    return stop;
   }, [entityId, spaceId]);
 
   const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
