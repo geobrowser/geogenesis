@@ -73,6 +73,10 @@ function BrowseNavPrimaryLinks({
         <BrowseNavIcon src={BROWSE_NAV_ICON.root} />
         <span>Root</span>
       </Link>
+      <Link href={NavUtils.toExplore()} className={navLinkClass}>
+        <BrowseNavIcon src={BROWSE_NAV_ICON.explore} />
+        <span>Explore</span>
+      </Link>
       {personalSpaceId ? (
         <Link href={NavUtils.toSpace(personalSpaceId)} className={navLinkClass}>
           <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">

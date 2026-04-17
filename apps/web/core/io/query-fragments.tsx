@@ -346,6 +346,7 @@ export const entityQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      updatedAt
 
       types {
         id
