@@ -19,6 +19,9 @@ export const BOUNTY_DIFFICULTY_PROPERTY_ID = '8c8405abc6bc4d46a5806e4fc80d8187';
 export const BOUNTY_STATUS_PROPERTY_ID = 'f54a81632f4c44a8a6a5d7b97ec0370e';
 export const BOUNTY_DEADLINE_PROPERTY_ID = '7566286ca054405a83e185ffd60492fb';
 export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
+/** Bounty "Task status" relation property; linking is disabled when it points at Done. */
+export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
+export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
 
 // Video file types and upload constraints

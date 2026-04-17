@@ -10,7 +10,12 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
+import {
+  BOUNTIES_RELATION_TYPE,
+  BOUNTY_TYPE_ID,
+  PLACEHOLDER_SPACE_IMAGE,
+  PROPOSAL_TYPE_ID,
+} from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -45,6 +50,7 @@ import {
   buildBounties,
   buildBounty,
   buildBountyAllocationTargets,
+  hasBountyTaskStatusDoneRelation,
   isAllocatedToUser,
   isBountyTypeRelation,
 } from './bounty-linking';
@@ -305,7 +311,11 @@ export const ReviewChanges = () => {
       personalSpaceId
     );
     const remoteBounties = remoteBountyEntities
-      .filter(entity => isAllocatedToUser(entity.relations ?? [], allocationTargets))
+      .filter(
+        entity =>
+          isAllocatedToUser(entity.relations ?? [], allocationTargets) &&
+          !hasBountyTaskStatusDoneRelation(entity.relations ?? [])
+      )
       .map(entity => {
         const bountySpaceId = entity.spaces?.[0] ?? activeSpace;
         return buildBounty(
@@ -351,25 +361,30 @@ export const ReviewChanges = () => {
     },
   });
 
-  const spaceLabelById = React.useMemo(() => {
-    const m = new Map<string, string>();
+  const bountySpaceRowById = React.useMemo(() => {
+    const m = new Map<string, { label: string; image: string }>();
     for (const id of bountySpaceIdsForLabels) {
       const space = bountyLabelSpaces.find(s => s.id === id);
       const name = space?.entity?.name?.trim();
-      m.set(id, name && name.length > 0 ? name : bountySpaceFallbackLabel(id));
+      const label = name && name.length > 0 ? name : bountySpaceFallbackLabel(id);
+      const image =
+        space?.entity?.image && space.entity.image.length > 0 ? space.entity.image : PLACEHOLDER_SPACE_IMAGE;
+      m.set(id, { label, image });
     }
     return m;
   }, [bountyLabelSpaces, bountySpaceIdsForLabels]);
 
   const bountiesWithSpaceLabels = React.useMemo(
     (): Bounty[] =>
-      bounties.map(b => ({
-        ...b,
-        spaceLabel: b.spaceId
-          ? (spaceLabelById.get(b.spaceId) ?? bountySpaceFallbackLabel(b.spaceId))
-          : null,
-      })),
-    [bounties, spaceLabelById]
+      bounties.map(b => {
+        const row = b.spaceId ? bountySpaceRowById.get(b.spaceId) : undefined;
+        return {
+          ...b,
+          spaceLabel: b.spaceId ? (row?.label ?? bountySpaceFallbackLabel(b.spaceId)) : null,
+          spaceImage: b.spaceId ? (row?.image ?? PLACEHOLDER_SPACE_IMAGE) : null,
+        };
+      }),
+    [bounties, bountySpaceRowById]
   );
 
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);

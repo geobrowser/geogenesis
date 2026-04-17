@@ -4,8 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils } from '~/core/utils/utils';
 
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Gem } from '~/design-system/icons/gem';
 
 import type { Bounty, BountyDifficulty, BountyStatus } from './types';
@@ -62,10 +64,16 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       </label>
 
       {(bounty.spaceLabel ?? bounty.spaceId) && (
-        <p className="mt-2 text-metadata leading-snug text-grey-04">
-          <span className="font-medium text-grey-04">Space</span>{' '}
-          <span className="text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
-        </p>
+        <div className="mt-2 flex min-w-0 items-center gap-1.5">
+          <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-03 bg-grey-01">
+            <ThumbGeoImage
+              value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </span>
+          <span className="min-w-0 truncate text-[14px] leading-snug text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
+        </div>
       )}
 
       {/* Title */}
