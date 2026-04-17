@@ -61,11 +61,18 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
         {isSelected && <span className="text-metadata font-medium text-text">Linked</span>}
       </label>
 
+      {(bounty.spaceLabel ?? bounty.spaceId) && (
+        <p className="mt-2 text-metadata leading-snug text-grey-04">
+          <span className="font-medium text-grey-04">Space</span>{' '}
+          <span className="text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
+        </p>
+      )}
+
       {/* Title */}
       <button
         type="button"
         onClick={handleOpenBounty}
-        className="mt-3 text-left text-[15px] leading-tight font-semibold text-text hover:underline"
+        className="mt-2 text-left text-[15px] leading-tight font-semibold text-text hover:underline"
       >
         {bounty.name}
       </button>
