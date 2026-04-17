@@ -68,7 +68,7 @@ function SpaceThumb({ image, name }: { image: string | null; name: string }) {
   }
   return (
     <span className="relative h-3 w-3 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-      <FallbackImage value={image} sizes="12px" className="object-cover" />
+      <FallbackImage value={image} sizes="24px" className="object-cover" />
     </span>
   );
 }
@@ -126,7 +126,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
             href={NavUtils.toEntity(item.spaceId, item.entityId)}
             className="relative h-[40px] w-[93px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
           >
-            <FallbackImage value={item.imageUrl} sizes="93px" className="object-cover" />
+            <FallbackImage value={item.imageUrl} sizes="186px" className="object-cover" />
           </Link>
         ) : null}
       </div>
