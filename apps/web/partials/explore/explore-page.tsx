@@ -3,7 +3,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
-import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 
 import { Dropdown } from '~/design-system/dropdown';
 import { Skeleton } from '~/design-system/skeleton';
@@ -22,8 +22,6 @@ function LoadingSkeleton() {
   );
 }
 
-const SORT: ExploreSort = 'new';
-
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
   { value: 'week', label: 'This week' },
@@ -35,13 +33,11 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type SpaceOption = { value: string; label: string };
 
 async function fetchExplorePage(params: {
-  sort: ExploreSort;
   time: ExploreTime;
   spaceId: string;
   cursor: string | undefined;
 }): Promise<ExploreFeedResult> {
   const sp = new URLSearchParams();
-  sp.set('sort', params.sort);
   sp.set('time', params.time);
   sp.set('spaceId', params.spaceId);
   if (params.cursor) sp.set('cursor', params.cursor);
@@ -61,9 +57,9 @@ export function ExplorePage({
   const [spaceId, setSpaceId] = React.useState<string>('all');
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: ['explore-feed', SORT, time, spaceId],
+    queryKey: ['explore-feed', time, spaceId],
     queryFn: ({ pageParam }) =>
-      fetchExplorePage({ sort: SORT, time, spaceId, cursor: pageParam as string | undefined }),
+      fetchExplorePage({ time, spaceId, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -81,7 +77,7 @@ export function ExplorePage({
           void fetchNextPage();
         }
       },
-      { rootMargin: '8000px' }
+      { rootMargin: '6000px' }
     );
     io.observe(el);
     return () => io.disconnect();

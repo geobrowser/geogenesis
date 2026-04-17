@@ -2,14 +2,13 @@
 
 import * as React from 'react';
 
-import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
-import { NavUtils } from '~/core/utils/utils';
-
 import Image from 'next/image';
 
+import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
+import { NavUtils, getImagePath, getImagePathFallback } from '~/core/utils/utils';
+
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -78,7 +77,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
     .filter(t => t.name)
     .map(t => t.name)
     .join(' · ');
-  const edited = formatExploreRelativeTime(item.updatedAtSec);
+  const timeAgo = formatExploreRelativeTime(item.updatedAtSec);
 
   const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
@@ -98,7 +97,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
               {typeLabel}
             </span>
           ) : null}
-          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{edited}</span>
+          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{timeAgo}</span>
         </div>
         {!item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton

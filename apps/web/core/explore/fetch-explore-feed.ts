@@ -7,7 +7,6 @@ import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
-import { fetchProfile } from '~/core/io/subgraph';
 import type { Entity } from '~/core/types';
 
 import {
@@ -21,7 +20,6 @@ import {
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
-export type ExploreSort = 'new';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export type ExploreFeedItem = {
@@ -223,11 +221,11 @@ function browseSpaceRowsToMap(data: BrowseSidebarData): Map<string, { name: stri
 
 export async function fetchExploreFeed(args: {
   browse: BrowseSidebarData;
-  sort: ExploreSort;
   time: ExploreTime;
   spaceFilterId: string | null;
   cursor: string | null;
-  walletAddress?: string | null;
+  /** The caller's personal-space entity id, already resolved by the route. */
+  personalMemberSpaceId?: string | null;
   memberOrEditorSpaceIds: string[];
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
@@ -254,17 +252,13 @@ export async function fetchExploreFeed(args: {
       hasPendingMembershipRequest: false,
     }));
 
-    const wallet = args.walletAddress;
-    if (!wallet) return out;
+    const memberSpaceId = args.personalMemberSpaceId;
+    if (!memberSpaceId) return out;
 
     const pendingTargets = [...new Set(out.filter(o => !o.isMemberOrEditor).map(o => o.spaceId))];
     if (pendingTargets.length === 0) return out;
 
     try {
-      const profile = await Effect.runPromise(fetchProfile(wallet));
-      const memberSpaceId = profile?.spaceId;
-      if (!memberSpaceId) return out;
-
       const pendingMap = new Map<string, boolean>();
       await Promise.all(
         pendingTargets.map(async sid => {
