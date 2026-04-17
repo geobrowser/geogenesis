@@ -22,7 +22,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
-const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', false);
+/** Open on first visit; after the user toggles, `browseSidebarOpen` in localStorage wins. */
+const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', true);
 
 /** Warm the HTTP cache for sidebar thumbs before the panel is opened (thumbs mount only when expanded). */
 function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
