@@ -17,7 +17,6 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     types: [...remoteEntity.types],
     relations: relationsOut,
     values: values,
-    createdAt: remoteEntity.createdAt,
     updatedAt: remoteEntity.updatedAt,
   };
 }

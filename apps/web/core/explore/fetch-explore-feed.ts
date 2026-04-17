@@ -3,11 +3,9 @@ import * as Effect from 'effect/Effect';
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
-import { getAllEntities } from '~/core/io/queries';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import { fetchProfile } from '~/core/io/subgraph';
 import type { Entity } from '~/core/types';
@@ -119,26 +117,10 @@ function entityMatchesExploreTypes(entity: Entity): boolean {
   return entity.types.some(t => TYPE_SET.has(normId(t.id)));
 }
 
-async function countCommentsForEntity(entityId: string): Promise<number> {
-  const list = await Effect.runPromise(
-    getAllEntities({
-      typeIds: { in: [COMMENT_TYPE_ID] },
-      filter: {
-        relations: {
-          some: {
-            toEntityId: { is: entityId },
-            typeId: { is: COMMENT_REPLY_TO_ID },
-          },
-        },
-      },
-      limit: 1000,
-    })
-  );
-  return list.length;
-}
+type ExploreEntity = Entity & { commentCount: number };
 
 type ExploreEntitiesPageResponse = {
-  entities: Entity[];
+  entities: ExploreEntity[];
   endCursor: string | null;
   hasNextPage: boolean;
 };
@@ -149,10 +131,14 @@ function decodeExploreEntities(data: {
     pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
   } | null;
 }): ExploreEntitiesPageResponse {
-  const entities =
-    data.entitiesConnection?.nodes
-      ?.map((n: unknown) => EntityDecoder.decode(n))
-      .filter((e): e is Entity => e !== null) ?? [];
+  const entities: ExploreEntity[] = [];
+  for (const n of (data.entitiesConnection?.nodes ?? []) as Array<
+    Record<string, unknown> & { backlinks?: { totalCount?: number } | null }
+  >) {
+    const decoded = EntityDecoder.decode(n);
+    if (!decoded) continue;
+    entities.push({ ...decoded, commentCount: n.backlinks?.totalCount ?? 0 });
+  }
   return {
     entities,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
@@ -170,7 +156,7 @@ async function fetchExploreEntitiesPage(args: {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
     typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
+    ...(t != null ? { updatedAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
   return Effect.runPromise(
@@ -189,29 +175,17 @@ async function fetchExploreEntitiesPage(args: {
   );
 }
 
-async function enrichItems(
-  entities: Entity[],
+function buildItems(
+  entities: ExploreEntity[],
   allowedSpaceIds: Set<string>,
   memberOrEditorSpaceIds: Set<string>
-): Promise<Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[]> {
-  const commentCounts = await Promise.all(
-    entities.map(async e => {
-      try {
-        const c = await countCommentsForEntity(e.id);
-        return { e, c };
-      } catch {
-        return { e, c: 0 };
-      }
-    })
-  );
-
+): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
   const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
 
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!spaceId || !entityMatchesExploreTypes(e)) continue;
 
-    const cc = commentCounts.find(x => normId(x.e.id) === normId(e.id))?.c ?? 0;
     const title =
       textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
     const description =
@@ -221,11 +195,11 @@ async function enrichItems(
       entityId: e.id,
       spaceId,
       types: e.types.filter(t => TYPE_SET.has(normId(t.id))).map(t => ({ id: t.id, name: t.name })),
-      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
+      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.updatedAt),
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
-      commentCount: cc,
+      commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });
   }
@@ -265,7 +239,7 @@ export async function fetchExploreFeed(args: {
   const memberOrEditorSet = new Set(args.memberOrEditorSpaceIds.map(normId));
 
   const pageSize = EXPLORE_PAGE_SIZE;
-  const scanChunk = 55;
+  const scanChunk = 30;
 
   const attachMeta = async (
     rows: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[]
@@ -316,10 +290,10 @@ export async function fetchExploreFeed(args: {
     time: args.time,
     limit: scanChunk,
     after: args.cursor,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
   });
 
-  const enriched = await enrichItems(page.entities, allowed, memberOrEditorSet);
+  const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
   const items = await attachMeta(enriched.slice(0, pageSize));
 
   const nextCursor = page.hasNextPage ? page.endCursor : null;

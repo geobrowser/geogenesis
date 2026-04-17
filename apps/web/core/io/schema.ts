@@ -113,7 +113,7 @@ export const Entity = Schema.Struct({
   // blocks: Schema.
   valuesList: Schema.Array(Value),
   relationsList: Schema.Array(Relation),
-  createdAt: Schema.optional(Schema.String),
+  // createdAt
   updatedAt: Schema.optional(Schema.String),
 });
 
