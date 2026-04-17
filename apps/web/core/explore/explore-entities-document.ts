@@ -1,6 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
 
+import { EXPLORE_COMMENT_REPLY_TO_TYPE_ID } from './explore-constants';
+
 /**
  * Like `allEntitiesConnectionDocument`, but scopes `valuesList` / `relationsList` to any of
  * the given spaces so multi-space explore feeds still decode cover/avatar/description.
@@ -43,7 +45,7 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
         spaceIds
         updatedAt
 
-        backlinks(filter: { typeId: { is: "310d4a240e5b451cb2151bfce40d0fe6" } }) {
+        backlinks(filter: { typeId: { is: "${EXPLORE_COMMENT_REPLY_TO_TYPE_ID}" } }) {
           totalCount
         }
 

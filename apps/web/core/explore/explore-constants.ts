@@ -15,4 +15,7 @@ export const EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID = '9b1f76ff9711404c861e59dc3
 export const EXPLORE_COVER_PROPERTY_ID = '34f535072e6b42c5a84443981a77cfa2';
 export const EXPLORE_AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
+/** Relation type for a comment's "Reply to" edge. Used to count comments per entity via backlinks.totalCount. */
+export const EXPLORE_COMMENT_REPLY_TO_TYPE_ID = '310d4a240e5b451cb2151bfce40d0fe6';
+
 export const EXPLORE_PAGE_SIZE = 22;

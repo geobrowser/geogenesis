@@ -8,23 +8,13 @@ import {
   resolveMemberSpaceFromWalletSafe,
 } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import {
-  type ExploreSort,
-  type ExploreTime,
-  fetchExploreFeed,
-} from '~/core/explore/fetch-explore-feed';
+import { type ExploreTime, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 
 function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-const SORTS: ExploreSort[] = ['new'];
 const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
-
-function parseSort(raw: string | null): ExploreSort {
-  if (raw && (SORTS as string[]).includes(raw)) return raw as ExploreSort;
-  return 'new';
-}
 
 function parseTime(raw: string | null): ExploreTime {
   if (raw && (TIMES as string[]).includes(raw)) return raw as ExploreTime;
@@ -33,7 +23,6 @@ function parseTime(raw: string | null): ExploreTime {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const sort = parseSort(searchParams.get('sort'));
   const time = parseTime(searchParams.get('time'));
   const spaceId = searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
@@ -82,11 +71,10 @@ export async function GET(request: Request) {
   try {
     const result = await fetchExploreFeed({
       browse,
-      sort,
       time,
       spaceFilterId: spaceFilter,
       cursor,
-      walletAddress: cookieWallet ?? null,
+      personalMemberSpaceId,
       memberOrEditorSpaceIds,
     });
     return NextResponse.json(result);
