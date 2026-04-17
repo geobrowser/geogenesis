@@ -1,7 +1,7 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
 
-import { EXPLORE_COMMENT_REPLY_TO_TYPE_ID } from './explore-constants';
+import { COMMENT_REPLY_TO_ID } from '~/core/comment-ids';
 
 /**
  * Like `allEntitiesConnectionDocument`, but scopes `valuesList` / `relationsList` to any of
@@ -45,7 +45,7 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
         spaceIds
         updatedAt
 
-        backlinks(filter: { typeId: { is: "${EXPLORE_COMMENT_REPLY_TO_TYPE_ID}" } }) {
+        backlinks(filter: { typeId: { is: "${COMMENT_REPLY_TO_ID}" } }) {
           totalCount
         }
 
