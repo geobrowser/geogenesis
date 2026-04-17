@@ -30,6 +30,10 @@ type SelectEntityAsPopoverProps = {
   showIDs?: boolean;
   initialQuery?: string;
   selectedEntityId?: string;
+  clearQueryAfterPick?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSearchQueryChange?: (query: string) => void;
 };
 
 export function SelectEntityAsPopover({
@@ -43,8 +47,25 @@ export function SelectEntityAsPopover({
   showIDs = true,
   initialQuery,
   selectedEntityId,
+  clearQueryAfterPick = true,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+  onSearchQueryChange,
 }: SelectEntityAsPopoverProps) {
-  const [open, setOpen] = useState<boolean>(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : uncontrolledOpen;
+
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (isControlled) {
+        onOpenChangeProp?.(next);
+      } else {
+        setUncontrolledOpen(next);
+      }
+    },
+    [isControlled, onOpenChangeProp]
+  );
 
   useKey('Escape', () => {
     if (!open) return;
@@ -57,7 +78,23 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-1001" collisionPadding={10} avoidCollisions={true}>
+        <Popover.Content
+          sideOffset={4}
+          align="start"
+          className="z-1001"
+          collisionPadding={10}
+          avoidCollisions={true}
+          onPointerDownOutside={event => {
+            if ((event.target as Element | null)?.closest?.('[data-select-entity-dropdown]')) {
+              event.preventDefault();
+            }
+          }}
+          onInteractOutside={event => {
+            if ((event.target as Element | null)?.closest?.('[data-select-entity-dropdown]')) {
+              event.preventDefault();
+            }
+          }}
+        >
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}
@@ -71,6 +108,8 @@ export function SelectEntityAsPopover({
             showIDs={showIDs}
             initialQuery={initialQuery}
             selectedEntityId={selectedEntityId}
+            clearQueryAfterPick={clearQueryAfterPick}
+            onSearchQueryChange={onSearchQueryChange}
           />
         </Popover.Content>
       </Popover.Portal>

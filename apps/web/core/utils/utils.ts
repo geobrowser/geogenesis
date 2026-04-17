@@ -75,6 +75,13 @@ export class GeoNumber {
   static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
     const safeFormatPattern = typeof formatPattern === 'string' ? formatPattern.trim() : undefined;
 
+    if (value === undefined || value === null) {
+      return '';
+    }
+    if (typeof value === 'string' && value.trim() === '') {
+      return '';
+    }
+
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 

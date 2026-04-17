@@ -2,6 +2,7 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import * as React from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 
 import { useRouter } from 'next/navigation';
@@ -201,6 +202,22 @@ function RelationsGroup({
   const firstRelationValueType = property?.relationValueTypes?.[0];
   const hasRelationToEntity = (targetEntityId: string) => dedupedRelations.some(r => r.toEntity.id === targetEntityId);
 
+  const [relationSearchMirror, setRelationSearchMirror] = React.useState('');
+  const [relationPickerOpen, setRelationPickerOpen] = React.useState(false);
+  const prevRelationCountRef = React.useRef(dedupedRelations.length);
+
+  React.useEffect(() => {
+    const prev = prevRelationCountRef.current;
+    if (prev === 0 && dedupedRelations.length > 0) {
+      setRelationPickerOpen(true);
+    }
+    if (dedupedRelations.length === 0) {
+      setRelationPickerOpen(false);
+      setRelationSearchMirror('');
+    }
+    prevRelationCountRef.current = dedupedRelations.length;
+  }, [dedupedRelations.length]);
+
   if (dedupedRelations.length === 0) {
     // For IMAGE type properties, show an image upload field instead of SelectEntity
     if (property.renderableTypeStrict === 'IMAGE') {
@@ -223,10 +240,13 @@ function RelationsGroup({
           spaceId={spaceId}
           relationValueTypes={filterSearchByTypes}
           width="full"
+          clearQueryAfterPick={false}
+          onSearchQueryChange={setRelationSearchMirror}
           onCreateEntity={result => {
             if (firstRelationValueType) {
               createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
+            setRelationPickerOpen(true);
           }}
           onDone={result => {
             if (hasRelationToEntity(result.id)) {
@@ -234,6 +254,7 @@ function RelationsGroup({
             }
 
             createPropertyRelation(storage, spaceId, entityId, property, result);
+            setRelationPickerOpen(true);
           }}
           variant="tableCell"
         />
@@ -293,14 +314,20 @@ function RelationsGroup({
         );
       })}
 
-      <div>
+      <div className="inline-flex shrink-0">
         <SelectEntityAsPopover
+          open={relationPickerOpen}
+          onOpenChange={setRelationPickerOpen}
+          clearQueryAfterPick={false}
+          initialQuery={relationSearchMirror}
+          onSearchQueryChange={setRelationSearchMirror}
           trigger={<SquareButton icon={<Create />} />}
           relationValueTypes={filterSearchByTypes}
           onCreateEntity={result => {
             if (firstRelationValueType) {
               createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
             }
+            setRelationPickerOpen(true);
           }}
           onDone={result => {
             if (hasRelationToEntity(result.id)) {
@@ -308,6 +335,7 @@ function RelationsGroup({
             }
 
             createPropertyRelation(storage, spaceId, entityId, property, result);
+            setRelationPickerOpen(true);
           }}
           spaceId={spaceId}
         />
