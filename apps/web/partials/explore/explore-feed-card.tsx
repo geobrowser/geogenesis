@@ -108,7 +108,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
         ) : null}
       </div>
 
-      <div className="flex items-start gap-10">
+      <div className={`flex gap-10 ${item.description ? 'items-start' : 'items-center'}`}>
         <div className="min-w-0 flex-1">
           <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
             <h2 className="text-[19px] font-semibold leading-[23px] tracking-[-0.02em] text-text hover:underline">

@@ -117,7 +117,7 @@ function entityMatchesExploreTypes(entity: Entity): boolean {
   return entity.types.some(t => TYPE_SET.has(normId(t.id)));
 }
 
-type ExploreEntity = Entity & { commentCount: number; createdAt?: string };
+type ExploreEntity = Entity & { commentCount: number };
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreEntity[];
@@ -133,14 +133,13 @@ function decodeExploreEntities(data: {
 }): ExploreEntitiesPageResponse {
   const entities: ExploreEntity[] = [];
   for (const n of (data.entitiesConnection?.nodes ?? []) as Array<
-    Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string }
+    Record<string, unknown> & { backlinks?: { totalCount?: number } | null }
   >) {
     const decoded = EntityDecoder.decode(n);
     if (!decoded) continue;
     entities.push({
       ...decoded,
       commentCount: n.backlinks?.totalCount ?? 0,
-      createdAt: n.createdAt,
     });
   }
   return {
@@ -160,7 +159,7 @@ async function fetchExploreEntitiesPage(args: {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
     typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
+    ...(t != null ? { updatedAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
   return Effect.runPromise(
@@ -199,7 +198,7 @@ function buildItems(
       entityId: e.id,
       spaceId,
       types: e.types.filter(t => TYPE_SET.has(normId(t.id))).map(t => ({ id: t.id, name: t.name })),
-      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
+      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.updatedAt),
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
@@ -294,7 +293,7 @@ export async function fetchExploreFeed(args: {
     time: args.time,
     limit: scanChunk,
     after: args.cursor,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
   });
 
   const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
