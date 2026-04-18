@@ -643,13 +643,13 @@ export function PowerToolsScreen() {
     () =>
       isEditing && selectableCount > 0
         ? {
-            selectedEntityIds,
-            onToggleRowSelection: toggleRowSelection,
-            onSetRowSelection: setRowSelection,
-            onMasterToggle,
-            selectableCount,
-            isAllSelected,
-          }
+          selectedEntityIds,
+          onToggleRowSelection: toggleRowSelection,
+          onSetRowSelection: setRowSelection,
+          onMasterToggle,
+          selectableCount,
+          isAllSelected,
+        }
         : undefined,
     [isEditing, selectableCount, selectedEntityIds, toggleRowSelection, setRowSelection, onMasterToggle, isAllSelected]
   );
@@ -851,17 +851,9 @@ export function PowerToolsScreen() {
     >
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
         <div className="flex items-center gap-3">
-          <Text variant="largeTitle">Power Tools</Text>
-          {blockName && (
-            <>
-              <Text variant="largeTitle" color="grey-03">
-                •
-              </Text>
-              <Text variant="largeTitle" color="grey-04">
-                {blockName}
-              </Text>
-            </>
-          )}
+          <Text variant="largeTitle" aria-label={blockName || 'Power Tools'}>
+            {blockName || 'Power Tools'}
+          </Text>
         </div>
         <div className="flex items-center gap-2">
           {isEditing && selectedCount > 0 && (

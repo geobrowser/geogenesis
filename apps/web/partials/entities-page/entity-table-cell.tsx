@@ -35,6 +35,7 @@ type Props = {
   verified?: boolean;
   onLinkEntry: onLinkEntryFn;
   source: Source;
+  relationChipTruncateLabel?: boolean;
 };
 
 export const EntityTableCell = ({
@@ -50,6 +51,7 @@ export const EntityTableCell = ({
   verified,
   onLinkEntry,
   source,
+  relationChipTruncateLabel = false,
 }: Props) => {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
   const isRelation = property.dataType === 'RELATION';
@@ -61,7 +63,7 @@ export const EntityTableCell = ({
           <Link
             entityId={entityId}
             href={href}
-            className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+            className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
           >
             {name || entityId}
           </Link>
@@ -82,7 +84,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="text-tableCell wrap-break-word text-ctaHover hover:underline"
+              className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -93,9 +95,9 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       {isRelation ? (
-        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
+        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} truncateLabel={relationChipTruncateLabel} />
       ) : (
         <ValueGroup entityId={entityId} property={property} spaceId={spaceId} isExpanded={isExpanded} />
       )}
@@ -107,9 +109,10 @@ type RelationGroupProps = {
   entityId: string;
   property: Property;
   spaceId: string;
+  truncateLabel?: boolean;
 };
 
-function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
+function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: RelationGroupProps) {
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
   });
@@ -142,6 +145,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
         relationEntityId={relation.entityId}
         spaceId={relation.spaceId}
         relationId={relationId}
+        truncateLabel={truncateLabel}
       >
         {name ?? value}
       </LinkableRelationChip>

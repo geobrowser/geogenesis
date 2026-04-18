@@ -20,7 +20,7 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className="mx-auto max-w-[1200px] pt-8 pb-16 xl:px-[2ch]"
+      className="mx-auto min-w-0 max-w-[1200px] flex-1 pt-8 pb-16"
     >
       {children}
     </motion.main>

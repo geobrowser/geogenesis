@@ -5,13 +5,21 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Address } from '~/core/io/substream-schema';
-import { NavUtils, getIsProposalEnded, getProposalTimeRemaining } from '~/core/utils/utils';
+import {
+  NavUtils,
+  formatGovernanceOutcomeDate,
+  formatGovernanceOutcomeTime,
+  getIsProposalEnded,
+  getProposalTimeRemaining,
+} from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
 import { AcceptOrRejectEditor } from './accept-or-reject-editor';
@@ -19,15 +27,23 @@ import { AcceptOrRejectMember } from './accept-or-reject-member';
 import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
+import { serializeGovernanceHomeReturnSearch } from './governance-home-return-search';
 
 interface Props {
   connectedSpaceId?: string;
   connectedAddress?: string;
   proposalType?: 'membership' | 'content';
   page?: number;
+  governanceFilters?: {
+    spaceId: string;
+    category: GovernanceHomeReviewCategory;
+    status: GovernanceHomeStatusFilter;
+  };
 }
 
 export async function PendingProposalsPage({
@@ -35,9 +51,10 @@ export async function PendingProposalsPage({
   connectedAddress,
   proposalType,
   page = 0,
+  governanceFilters,
 }: Props): Promise<{ node: React.ReactNode; hasMore: boolean }> {
   const [activeProposals, profile] = await Promise.all([
-    getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType, page),
+    getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType, page, governanceFilters),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 
@@ -53,6 +70,17 @@ export async function PendingProposalsPage({
         }
       : null;
 
+  const governanceHomeReturnSearch =
+    governanceFilters != null
+      ? serializeGovernanceHomeReturnSearch({
+          tab: 'review',
+          spaceId: governanceFilters.spaceId,
+          category: governanceFilters.category,
+          status: governanceFilters.status,
+          proposalType,
+        })
+      : undefined;
+
   return {
     node: (
       <div className="space-y-2">
@@ -60,7 +88,15 @@ export async function PendingProposalsPage({
           switch (proposal.type) {
             case 'ADD_MEMBER':
             case 'REMOVE_MEMBER':
-              return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
+              return (
+                <PendingMembershipProposal
+                  key={proposal.id}
+                  proposal={proposal}
+                  user={user}
+                  connectedSpaceId={connectedSpaceId}
+                  governanceHomeReturnSearch={governanceHomeReturnSearch}
+                />
+              );
             default:
               return (
                 <PendingContentProposal
@@ -68,6 +104,7 @@ export async function PendingProposalsPage({
                   proposal={proposal}
                   user={user}
                   connectedSpaceId={connectedSpaceId}
+                  governanceHomeReturnSearch={governanceHomeReturnSearch}
                 />
               );
           }
@@ -88,7 +125,15 @@ type PendingMembershipProposalProps = {
   user: ProposalUser;
 };
 
-async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
+async function PendingMembershipProposal({
+  proposal,
+  user: _user,
+  connectedSpaceId,
+  governanceHomeReturnSearch,
+}: PendingMembershipProposalProps & {
+  connectedSpaceId?: string;
+  governanceHomeReturnSearch?: string;
+}) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
     cachedFetchSpace(proposal.space.id),
@@ -102,11 +147,23 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     proposedMember.name ?? proposedMember.address ?? proposedMember.id
   } as member`;
 
+  const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
+  const userVote =
+    proposal.userVote && connectedSpaceId
+      ? { vote: proposal.userVote, accountId: Address(connectedSpaceId) }
+      : undefined;
+
   return (
     <AcceptOrRejectMember
       spaceId={proposal.space.id}
       proposalId={proposal.id}
       proposalName={proposalName}
+      governanceHomeReturnSearch={governanceHomeReturnSearch}
+      endTime={proposal.endTime}
+      isProposalEnded={isProposalEnded}
+      canExecute={proposal.canExecute}
+      status={proposal.status}
+      userVote={userVote}
       proposedMember={{
         id: proposedMember.id,
         avatarUrl: proposedMember.avatarUrl,
@@ -147,7 +204,11 @@ async function PendingContentProposal({
   proposal,
   user,
   connectedSpaceId,
-}: PendingMembershipProposalProps & { connectedSpaceId?: string }) {
+  governanceHomeReturnSearch,
+}: PendingMembershipProposalProps & {
+  connectedSpaceId?: string;
+  governanceHomeReturnSearch?: string;
+}) {
   const [space, proposalName] = await Promise.all([
     cachedFetchSpace(proposal.space.id),
     (async () => {
@@ -179,23 +240,48 @@ async function PendingContentProposal({
     ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
     : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+  const showReopenMenu =
+    proposal.status === 'REJECTED' && proposal.type === 'ADD_EDIT' && isProposalEnded;
+  const footerLeft =
+    proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
+        <span aria-hidden className="shrink-0 select-none text-grey-03">
+          ·
+        </span>
+        <time
+          className="shrink-0 tabular-nums"
+          dateTime={new Date(proposal.endTime * 1000).toISOString()}
+        >
+          {formatGovernanceOutcomeTime(proposal.endTime)}
+        </time>
+      </div>
+    ) : (
+      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+    );
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home')}>
-        <div className="text-smallTitle">{proposalName}</div>
-      </Link>
+      <div className="flex items-start justify-between gap-3">
+        <Link
+          href={NavUtils.toProposal(proposal.space.id, proposal.id, 'home', governanceHomeReturnSearch)}
+          className="min-w-0 flex-1"
+        >
+          <div className="text-smallTitle">{proposalName}</div>
+        </Link>
+        {showReopenMenu ? (
+          <GovernanceRejectedProposalMenu proposalId={proposal.id} spaceId={proposal.space.id} />
+        ) : null}
+      </div>
       <div className="flex w-full items-center gap-3 text-breadcrumb text-grey-04">
         <Link
           href={NavUtils.toSpace(proposal.space.id)}
           className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
         >
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
-            <GeoImage
+            <ThumbGeoImage
               value={space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
               alt={`Cover image for space ${space.entity?.name ?? space.id}`}
-              fill
-              style={{ objectFit: 'cover' }}
             />
           </div>
           <p>{space.entity?.name ?? proposal.space.id}</p>
@@ -203,7 +289,7 @@ async function PendingContentProposal({
         <span className="text-grey-03">&middot;</span>
         <div className="inline-flex items-center gap-1.5">
           <span className="relative h-3 w-3 overflow-hidden rounded-full">
-            <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
+            <Avatar size={12} avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
           </span>
           <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
         </div>
@@ -241,7 +327,7 @@ async function PendingContentProposal({
         </div>
       </div>
       <div className="flex w-full items-center justify-between">
-        <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+        {footerLeft}
 
         <AcceptOrRejectEditor
           spaceId={proposal.space.id}

@@ -12,22 +12,17 @@ import { useSetAtom } from 'jotai';
 import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
@@ -62,9 +57,6 @@ export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
-  const { personalSpaceId } = usePersonalSpaceId();
-
-  const { shouldShowElement } = useOnboardGuard();
   const resetOnboarding = useResetOnboarding();
 
   const { logout } = useLogout({
@@ -102,28 +94,6 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {personalSpaceId && (
-          <>
-            <AvatarMenuItem>
-              <div className="flex items-center gap-2">
-                <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
-                </div>
-                <Link prefetch={false} href={NavUtils.toSpace(personalSpaceId)} className="text-button">
-                  Personal space
-                </Link>
-              </div>
-            </AvatarMenuItem>
-          </>
-        )}
-        {shouldShowElement && (
-          <AvatarMenuItem>
-            <Link href="/home" className="flex items-center gap-2 grayscale">
-              <Home />
-              <p className="text-button">Personal home</p>
-            </Link>
-          </AvatarMenuItem>
-        )}
         <AvatarMenuItem onClick={logout}>
           <p className="text-button">Sign out</p>
           <DisconnectWallet />

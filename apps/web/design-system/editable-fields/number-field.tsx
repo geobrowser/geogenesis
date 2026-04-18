@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { cva } from 'class-variance-authority';
+import { cva, cx } from 'class-variance-authority';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { DataType } from '~/core/types';
@@ -71,10 +71,14 @@ export function NumberField({
   }
 
   return (
-    <div>
+    <div className={variant === 'tableCell' ? 'min-w-0 w-full max-w-full' : undefined}>
       <input
         type="text"
-        className="m-0 -mb-px w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-hidden"
+        className={cx(
+          'm-0 -mb-px w-full min-w-0 resize-none bg-transparent p-0 placeholder:text-grey-02 focus:outline-hidden',
+          numberFieldStyles({ variant }),
+          variant === 'tableCell' && 'truncate'
+        )}
         onBlur={e => onChangeWithValidation(e.currentTarget.value, onChange!, dataType)}
         onChange={e => onChangeWithValidation(e.currentTarget.value, setLocalValue, dataType)}
         value={localValue}

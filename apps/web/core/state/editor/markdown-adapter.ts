@@ -4,10 +4,39 @@ import { generateJSON } from '@tiptap/html';
 import katex from 'katex';
 import type Token from 'markdown-it/lib/token.mjs';
 
-import { createMarkdownIt, sanitizeRenderedLinkUrl } from './markdown-core';
+import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
+
+// Regex to identify web2 URLs (http, https, or www prefixed)
+const WEB2_URL_RE = /^(https?:\/\/|www\.)/i;
 
 // Singleton for markdownToEditorJson — renders math as tiptap-compatible span
 const editorMd = createMarkdownIt();
+
+// Convert web2 URL links to <span data-web2-url> so the web2URL mark's parseHTML
+// can pick them up.  The GraphLinkExtension only accepts graph:// URLs, so plain
+// <a> tags with http/www hrefs are stripped by generateJSON, losing the URL info.
+editorMd.renderer.rules['link_open'] = (tokens: Token[], idx: number) => {
+  const href = tokens[idx].attrGet('href') ?? '';
+  if (WEB2_URL_RE.test(href)) {
+    return `<span data-web2-url="true" data-url="${escapeHtml(href)}">`;
+  }
+  // Non-web2 links (e.g. graph://) — emit a normal <a>
+  const attrs = (tokens[idx].attrs ?? [])
+    .map(([k, v]) => `${k}="${escapeHtml(v)}"`)
+    .join(' ');
+  return `<a ${attrs}>`;
+};
+
+editorMd.renderer.rules['link_close'] = (tokens: Token[], idx: number) => {
+  // Walk backwards to find the matching link_open to decide which tag to close.
+  let openIdx = idx - 1;
+  while (openIdx >= 0 && tokens[openIdx].type !== 'link_open') {
+    openIdx--;
+  }
+  const href = openIdx >= 0 ? (tokens[openIdx].attrGet('href') ?? '') : '';
+  return WEB2_URL_RE.test(href) ? '</span>' : '</a>';
+};
+
 editorMd.renderer.rules['inline_math'] = (tokens: Token[], idx: number) => {
   const latex = tokens[idx].content;
   const escaped = latex
@@ -23,19 +52,16 @@ const renderMd = createMarkdownIt();
 renderMd.renderer.rules['paragraph_open'] = () =>
   '<div class="react-renderer node-paragraph"><div class="whitespace-normal"><p>';
 renderMd.renderer.rules['paragraph_close'] = () => '</p></div></div>';
-renderMd.renderer.rules['link_open'] = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  const href = token.attrGet('href');
-  const safeHref = sanitizeRenderedLinkUrl(href);
-
-  if (safeHref) {
-    token.attrSet('href', safeHref);
-    return self.renderToken(tokens, idx, options);
+renderMd.renderer.rules['link_open'] = (tokens, idx) => renderLinkTagOpen(tokens[idx]);
+renderMd.renderer.rules['link_close'] = (tokens, idx) => {
+  // Walk backwards to find the matching link_open to decide which tag to close.
+  let openIdx = idx - 1;
+  while (openIdx >= 0 && tokens[openIdx].type !== 'link_open') {
+    openIdx--;
   }
-
-  token.attrs = (token.attrs ?? []).filter(([name]) => name !== 'href');
-  token.attrSet('data-invalid-link', 'true');
-  return self.renderToken(tokens, idx, options);
+  const href = openIdx >= 0 ? (tokens[openIdx].attrGet('href') ?? '') : '';
+  const { isValid } = getRenderedLinkState(href);
+  return isValid ? '</a>' : '</span>';
 };
 renderMd.renderer.rules['heading_open'] = (tokens: Token[], idx: number) => {
   const tag = tokens[idx].tag;
@@ -197,7 +223,28 @@ function serializeInlineNode(node: JSONContent): string {
           text = `*${text}*`;
           break;
         case 'link': {
+          // Handle graph:// links (entity mentions) and other standard links
           const href = mark.attrs?.href ?? '';
+          if (href) {
+            text = `[${text}](${href})`;
+          }
+          break;
+        }
+        case 'web2URL': {
+          const href = mark.attrs?.url ?? '';
+
+          if (!href) {
+            break;
+          }
+
+          if (/^\[[^\]]+\]\([^)]+\)$/.test(text)) {
+            return text;
+          }
+
+          if (isStandaloneUrlText(text, href)) {
+            return text;
+          }
+
           text = `[${text}](${href})`;
           break;
         }
@@ -235,9 +282,59 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function appendClassName(existingClassName: string | null, className: string): string {
+  return existingClassName ? `${existingClassName} ${className}` : className;
+}
+
+function renderLinkTagOpen(token: Token): string {
+  const { className, isValid, safeHref } = getRenderedLinkState(token.attrGet('href'));
+
+  if (isValid && safeHref) {
+    // Valid link → <a> tag
+    const attrs = new Map(
+      (token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel')
+    );
+    attrs.set('class', appendClassName(attrs.get('class') ?? null, className));
+    attrs.set('href', safeHref);
+
+    const serializedAttributes = Array.from(attrs.entries())
+      .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
+      .join(' ');
+
+    return `<a ${serializedAttributes}>`;
+  }
+
+  // Invalid link → <span> tag
+  const attrs = new Map(
+    (token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel')
+  );
+  attrs.set('class', appendClassName(attrs.get('class') ?? null, className));
+  attrs.set('data-invalid-link', 'true');
+
+  const serializedAttributes = Array.from(attrs.entries())
+    .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
+    .join(' ');
+
+  return `<span ${serializedAttributes}>`;
+}
+
 function serializeInlineCode(text: string): string {
   const backtickRuns = text.match(/`+/g);
   const delimiterLength = backtickRuns ? Math.max(...backtickRuns.map(run => run.length)) + 1 : 1;
   const delimiter = '`'.repeat(delimiterLength);
   return `${delimiter}${text}${delimiter}`;
+}
+
+function isStandaloneUrlText(text: string, href: string): boolean {
+  const trimmedText = text.trim();
+  const trimmedHref = href.trim();
+
+  if (!trimmedText || !trimmedHref) return false;
+  if (trimmedText === trimmedHref) return true;
+
+  return normalizeComparableUrl(trimmedText) === normalizeComparableUrl(trimmedHref);
+}
+
+function normalizeComparableUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
