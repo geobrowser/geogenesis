@@ -97,7 +97,6 @@ export const SelectEntity = ({
   withSearchIcon = false,
   autoFocus = false,
   advanced = true,
-  showUrlWarning = false,
   showIDs = true,
   initialQuery,
   selectedEntityId,

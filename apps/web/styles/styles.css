@@ -165,9 +165,25 @@
   --text-metadataMedium--letter-spacing: -0.25px;
   --text-metadataMedium--font-weight: 500;
 
+  --text-chat: 0.875rem;
+  --text-chat--line-height: 1.125rem;
+  --text-chat--letter-spacing: -0.1px;
+  --text-chat--font-weight: 400;
+
+  --text-chatMedium: 0.875rem;
+  --text-chatMedium--line-height: 1.125rem;
+  --text-chatMedium--letter-spacing: -0.1px;
+  --text-chatMedium--font-weight: 500;
+
   --text-breadcrumb: 0.875rem;
   --text-breadcrumb--line-height: 0.9375rem;
   --text-breadcrumb--font-weight: 500;
+
+  /* Browse sidebar menu (Figma: Calibre Regular 16 / 13 cap, -0.35 tracking) */
+  --text-browseMenu: 1rem;
+  --text-browseMenu--line-height: 0.8125rem;
+  --text-browseMenu--letter-spacing: -0.35px;
+  --text-browseMenu--font-weight: 400;
 
   --text-footnote: 0.6875rem;
   --text-footnote--line-height: 0.8125rem;
@@ -312,6 +328,11 @@
 
 @utility bg-gradient-geo {
   background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
+}
+
+/** Space governance proposal row: grow vote cluster vs status chip (matches prod Geo). */
+@utility flex-3 {
+  flex: 3;
 }
 
 /* v4 border-color compat: v3 defaulted to gray-200, v4 defaults to currentcolor */
@@ -477,4 +498,36 @@
   /* Ensure popovers appear above fixed overlays (e.g. power tools z-50) */
   z-index: 60 !important;
   width: var(--radix-popper-anchor-width);
+}
+
+/*
+ * Calibre @font-face (must live in this file so @tailwindcss/postcss runs on a full Tailwind entry).
+ * A standalone fonts-only CSS import can throw: TypeError: Cannot read properties of undefined (reading 'map').
+ */
+@font-face {
+  font-family: 'Calibre';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/calibre-regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Calibre';
+  font-style: normal;
+  font-weight: 500;
+  src: url('/fonts/calibre-medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Calibre';
+  font-style: normal;
+  font-weight: 600;
+  src: url('/fonts/calibre-semibold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Calibre';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/calibre-bold.woff2') format('woff2');
 }

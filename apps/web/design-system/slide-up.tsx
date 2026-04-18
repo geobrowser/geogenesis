@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
 
@@ -26,17 +25,27 @@ export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          variants={variants}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
-          transition={transition}
-          className={cx(
-            'fixed inset-0 z-10000 h-full w-full overflow-hidden bg-white',
-            !isOpen && 'pointer-events-none'
-          )}
+          key="slide-up-root"
+          className="fixed inset-0 z-[10000]"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
         >
-          <RemoveScroll className="h-full w-full">{children}</RemoveScroll>
+          {/* Opaque layer so underlying route (e.g. space governance) never flashes before the sheet animates */}
+          <div className="absolute inset-0 bg-white" aria-hidden />
+          <motion.div
+            variants={variants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={transition}
+            className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
+          >
+            <RemoveScroll className="h-full w-full">
+              <div className="h-full overflow-y-auto overscroll-contain bg-white">{children}</div>
+            </RemoveScroll>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -51,7 +60,6 @@ const variants = {
       type: 'spring' as const,
       duration: 0.5,
       bounce: 0,
-      delay: 0.5,
     },
   },
 };

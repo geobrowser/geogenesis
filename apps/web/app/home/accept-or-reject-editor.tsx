@@ -54,14 +54,8 @@ export function AcceptOrRejectEditor({
     vote('REJECT');
   };
 
-  if (userVote || hasVoted) {
-    if (userVote?.vote === 'ACCEPT' || hasApproved) {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
-    }
-
-    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
-  }
-
+  // Terminal / post-vote states on the proposal must win over "You accepted" so we match space
+  // governance (e.g. passed vote awaiting on-chain execution → "Pending execution").
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
@@ -80,6 +74,14 @@ export function AcceptOrRejectEditor({
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+  }
+
+  if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || hasApproved) {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
+    }
+
+    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
   }
 
   if (!isProposalEnded && smartAccount) {

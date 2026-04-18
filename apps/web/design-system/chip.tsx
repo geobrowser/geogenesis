@@ -71,13 +71,19 @@ type LinkableRelationChipProps = {
   small?: boolean;
   className?: string;
   disableLink?: boolean;
+
+  truncateLabel?: boolean;
   children: React.ReactNode;
 };
 
 const linkableRelationChipStyles = cva(
-  'group inline-flex items-center rounded border border-grey-02 bg-white pl-1.5 text-metadata wrap-break-word tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'group inline-flex items-center rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
+      truncateLabel: {
+        true: 'max-w-full min-w-0',
+        false: 'wrap-break-word',
+      },
       shouldClamp: {
         false: 'items-center',
         true: 'line-clamp-4 items-center',
@@ -100,6 +106,7 @@ const linkableRelationChipStyles = cva(
       },
     },
     defaultVariants: {
+      truncateLabel: false,
       shouldClamp: false,
       isDotsHovered: false,
       isSpaceHovered: false,
@@ -141,7 +148,7 @@ const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
 });
 
 const relationChipPopoverTriggerStyles = cva(
-  'relative flex items-center px-1.5 py-1 text-grey-03 group-hover:text-text focus-within:text-text',
+  'relative flex shrink-0 items-center px-1.5 py-1 text-grey-03 group-hover:text-text focus-within:text-text',
   {
     variants: {
       isSpaceHovered: {
@@ -175,6 +182,7 @@ export function LinkableRelationChip({
   small = false,
   className = '',
   disableLink = false,
+  truncateLabel = false,
   children,
 }: LinkableRelationChipProps) {
   const [isDotsHovered, setIsDotsHovered] = useState<boolean>(false);
@@ -187,35 +195,44 @@ export function LinkableRelationChip({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
-  const shouldClamp = typeof children === 'string' && children.length >= 42;
+  const shouldClamp =
+    !truncateLabel && typeof children === 'string' && children.length >= 42;
+
+  const labelInner =
+    truncateLabel ? <span className="block truncate">{children}</span> : children;
 
   const { space } = useSpace(spaceId);
 
   return (
     <div
-      className={linkableRelationChipStyles({
+      className={`${linkableRelationChipStyles({
+        truncateLabel,
         shouldClamp,
         isDotsHovered,
         isSpaceHovered,
         isRelationHovered,
         isDeleteHovered,
         small,
-        className,
-      })}
+      })} ${className}`.trim()}
     >
       {disableLink ? (
-        <span>{children}</span>
+        truncateLabel ? (
+          <span className="min-w-0 flex-1 overflow-hidden">{labelInner}</span>
+        ) : (
+          <span>{children}</span>
+        )
       ) : (
         <Link
           entityId={entityId}
           spaceId={spaceId ?? currentSpaceId}
           href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+          className={truncateLabel ? 'min-w-0 min-h-0 flex-1 overflow-hidden pr-0' : undefined}
         >
-          {children}
+          {labelInner}
         </Link>
       )}
       {verified && (
-        <span className="inline-block pl-1.5">
+        <span className={`inline-block shrink-0 pl-1.5${truncateLabel ? ' py-1' : ''}`}>
           <CheckCircle color="current" />
         </span>
       )}

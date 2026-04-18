@@ -44,6 +44,15 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash !== '#entity-comments') return;
+    const el = document.getElementById('entity-comments');
+    if (el) {
+      requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }, [entityId, spaceId]);
+
   const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
     createComment({
       text,
@@ -74,7 +83,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   }, [comments, sortOrder, filter, editorSpaceIds]);
 
   return (
-    <div className="flex w-full flex-col pt-10">
+    <div id="entity-comments" className="flex w-full scroll-mt-24 flex-col pt-10">
       <div className="text-mediumTitle">
         Comments ({totalCount})
       </div>

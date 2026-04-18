@@ -1,10 +1,12 @@
+import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension, Mark } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { Plugin, PluginKey, Transaction } from '@tiptap/pm/state';
+import { ReplaceStep, ReplaceAroundStep } from '@tiptap/pm/transform';
 import { ReactRenderer } from '@tiptap/react';
-import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import { detectWeb2URLsInMarkdown } from '~/core/utils/url-detection';
+
 import { Web2LinkHoverCard } from './web2-link-tooltip';
 
 // ============================================================================
@@ -17,6 +19,26 @@ const UPDATE_DEBOUNCE_MS = 150;
 const TOOLTIP_OFFSET = 8;
 const TOOLTIP_Z_INDEX = 9999;
 const WEB2_URL_PREFIX_REGEX = /^(https?:\/\/|www\.)/i;
+
+function getChangedRanges(tr: Transaction): {from: number, to: number}[] {
+  const ranges: {from: number, to: number}[] = [];
+  tr.steps.forEach((step) => {
+    if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
+      ranges.push({from: step.from, to: step.to});
+    }
+  });
+  // Merge overlapping ranges
+  ranges.sort((a, b) => a.from - b.from);
+  const merged = [];
+  for (const range of ranges) {
+    if (merged.length === 0 || merged[merged.length - 1].to < range.from) {
+      merged.push(range);
+    } else {
+      merged[merged.length - 1].to = Math.max(merged[merged.length - 1].to, range.to);
+    }
+  }
+  return merged;
+}
 
 export function isWeb2Url(url: string | null | undefined): url is string {
   return !!url?.trim() && WEB2_URL_PREFIX_REGEX.test(url.trim());
@@ -56,12 +78,7 @@ export function getWeb2Replacement(text: string, url: string, isInEditMode: bool
 }
 
 export function stripInternalWeb2HTMLAttributes(HTMLAttributes: Record<string, unknown>) {
-  const {
-    url: _url,
-    editMode: _editMode,
-    editmode: _legacyEditMode,
-    ...rest
-  } = HTMLAttributes;
+  const { url: _url, editMode: _editMode, editmode: _legacyEditMode, ...rest } = HTMLAttributes;
 
   return rest;
 }
@@ -77,8 +94,8 @@ export const Web2URLMark = Mark.create({
   // Prevent mark from extending to new content (e.g., when pressing Enter)
   inclusive: false,
 
-  // Exclude all other marks to prevent propagation
-  excludes: '_',
+  // Only exclude conflicting link-style marks so other formatting can coexist
+  excludes: 'link web2URL',
 
   addOptions() {
     return {
@@ -412,7 +429,7 @@ export const Web2URLExtension = Extension.create({
             endPos: number;
           }
 
-          const updateLinkClasses = () => {
+          const updateLinkClasses = (changedRanges: {from: number, to: number}[] = []) => {
             if (isDestroyed) return;
 
             // Clear any pending timeout to debounce rapid updates
@@ -446,54 +463,78 @@ export const Web2URLExtension = Extension.create({
                   // Create a new transaction to avoid conflicts
                   const newTr = state.tr;
 
-                  // Convert parsed external link marks from imported markdown/html into our
-                  // custom web2URL mark so they render consistently with detected web2 links.
-                  state.doc.descendants((node, pos) => {
-                    if (node.isText && schema.marks.web2URL && schema.marks.link) {
-                      const text = node.text ?? '';
-                      const externalLinkMark = node.marks.find(
-                        mark => mark.type.name === 'link' && isWeb2Url(mark.attrs?.href) && !mark.attrs?.href?.startsWith('graph://')
-                      );
+                   // Convert parsed external link marks from imported markdown/html into our
+                   // custom web2URL mark so they render consistently with detected web2 links.
+                   state.doc.descendants((node, pos) => {
+                     if (node.isText && schema.marks.web2URL && schema.marks.link) {
+                       let shouldProcessText = changedRanges.length === 0;
+                       if (!shouldProcessText) {
+                         for (const range of changedRanges) {
+                           if (pos < range.to && pos + node.nodeSize > range.from) {
+                             shouldProcessText = true;
+                             break;
+                           }
+                         }
+                       }
+                       if (shouldProcessText) {
+                         const text = node.text ?? '';
+                         const externalLinkMark = node.marks.find(
+                           mark =>
+                             mark.type.name === 'link' &&
+                             isWeb2Url(mark.attrs?.href) &&
+                             !mark.attrs?.href?.startsWith('graph://')
+                         );
 
-                      if (externalLinkMark && text) {
-                        const originalStart = pos;
-                        const originalEnd = originalStart + node.nodeSize;
-                        const from = newTr.mapping.map(originalStart);
-                        const to = newTr.mapping.map(originalEnd);
+                         if (externalLinkMark && text) {
+                           const originalStart = pos;
+                           const originalEnd = originalStart + node.nodeSize;
+                           const from = newTr.mapping.map(originalStart);
+                           const to = newTr.mapping.map(originalEnd);
 
-                        if (from >= 0 && to <= newTr.doc.content.size && from < to) {
-                          const replacement = getWeb2Replacement(text, externalLinkMark.attrs.href, isInEditMode);
-                          const web2Mark = schema.marks.web2URL.create({
-                            url: replacement.url,
-                            editMode: replacement.editMode,
-                          });
+                           if (from >= 0 && to <= newTr.doc.content.size && from < to) {
+                             const replacement = getWeb2Replacement(text, externalLinkMark.attrs.href, isInEditMode);
+                             const web2Mark = schema.marks.web2URL.create({
+                               url: replacement.url,
+                               editMode: replacement.editMode,
+                             });
 
-                          newTr.removeMark(from, to, schema.marks.link);
-                          newTr.removeMark(from, to, schema.marks.web2URL);
+                             newTr.removeMark(from, to, schema.marks.link);
+                             newTr.removeMark(from, to, schema.marks.web2URL);
 
-                          if (replacement.text === text) {
-                            newTr.addMark(from, to, web2Mark);
-                          } else {
-                            newTr.replaceWith(from, to, schema.text(replacement.text, [web2Mark]));
-                          }
+                             if (replacement.text === text) {
+                               newTr.addMark(from, to, web2Mark);
+                             } else {
+                               newTr.replaceWith(from, to, schema.text(replacement.text, [web2Mark]));
+                             }
 
-                          hasChanges = true;
-                        }
-                      }
-                    }
+                             hasChanges = true;
+                           }
+                         }
+                       }
+                     }
 
-                    // Process text blocks to handle text that may be split across multiple text nodes.
-                    // Paragraphs and headings need this when switching between edit and browse modes.
-                    if (node.isTextblock && node.type.name !== 'codeBlock') {
-                      // Early exit if block has no content
-                      if (!node.content.size) {
-                        return;
-                      }
+                     // Process text blocks to handle text that may be split across multiple text nodes.
+                     // Paragraphs and headings need this when switching between edit and browse modes.
+                     if (node.isTextblock && node.type.name !== 'codeBlock') {
+                       let shouldProcessBlock = changedRanges.length === 0;
+                       if (!shouldProcessBlock) {
+                         for (const range of changedRanges) {
+                           if (pos < range.to && pos + node.nodeSize > range.from) {
+                             shouldProcessBlock = true;
+                             break;
+                           }
+                         }
+                       }
+                       if (shouldProcessBlock) {
+                         // Early exit if block has no content
+                         if (!node.content.size) {
+                           return;
+                         }
 
                       // Check for web2URL marks that need reversion to Markdown in Edit Mode
                       if (isInEditMode) {
                         let relativePosTracker = 0;
-                        node.content.forEach((child) => {
+                        node.content.forEach(child => {
                           const childSize = child.nodeSize;
                           if (child.isText && child.marks) {
                             const web2Mark = child.marks.find(m => m.type.name === 'web2URL');
@@ -540,14 +581,17 @@ export const Web2URLExtension = Extension.create({
                           textNodePositions.push({
                             node: textNode,
                             startPos: absolutePos,
-                            endPos: absolutePos + textNode.nodeSize
+                            endPos: absolutePos + textNode.nodeSize,
                           });
                           blockText += textNode.text;
                         }
                       });
 
                       // Early exit if no text content or no potential markdown/URL syntax
-                      if (!blockText || (!blockText.includes('[') && !blockText.includes('http') && !blockText.includes('www.'))) {
+                      if (
+                        !blockText ||
+                        (!blockText.includes('[') && !blockText.includes('http') && !blockText.includes('www.'))
+                      ) {
                         return;
                       }
 
@@ -569,7 +613,7 @@ export const Web2URLExtension = Extension.create({
                             for (const textNodeInfo of textNodePositions) {
                               const nodeText = textNodeInfo.node.text;
                               if (!nodeText) continue;
-                              
+
                               const nodeEndPos = currentTextPos + nodeText.length;
 
                               // Check if URL starts within this text node
@@ -629,7 +673,8 @@ export const Web2URLExtension = Extension.create({
                                   const existingUrl = existingMark.attrs?.url || '';
 
                                   // Need to update if mode doesn't match OR URL has changed
-                                  needsProcessing = isCurrentlyEditMode !== shouldBeEditMode ||
+                                  needsProcessing =
+                                    isCurrentlyEditMode !== shouldBeEditMode ||
                                     normalizeWeb2Url(existingUrl) !== normalizeWeb2Url(currentUrl);
                                 }
                               }
@@ -690,10 +735,11 @@ export const Web2URLExtension = Extension.create({
                               }
                             }
                           }
-                        }
-                      }
-                    }
-                  });
+                         }
+                       }
+                       }
+                     }
+                   });
 
                   // Apply changes if any were made and editor is still valid
                   if (hasChanges && !editorView.isDestroyed) {
@@ -714,17 +760,21 @@ export const Web2URLExtension = Extension.create({
 
           return {
             update: (view, prevState) => {
-              // Check if editable state changed
-              const editableStateChanged = view.editable !== previousEditableState;
-              if (editableStateChanged) {
-                previousEditableState = view.editable;
-              }
+               // Check if editable state changed
+               const editableStateChanged = view.editable !== previousEditableState;
+               if (editableStateChanged) {
+                 previousEditableState = view.editable;
+               }
 
-              // Update if document changed OR if editable state changed (mode switching)
-              if (!isDestroyed && (view.state.doc !== prevState.doc || editableStateChanged)) {
-                updateLinkClasses();
-              }
-            },
+               // Update if document changed OR if editable state changed (mode switching)
+               if (!isDestroyed && (view.state.doc !== prevState.doc || editableStateChanged)) {
+                 let changedRanges: {from: number, to: number}[] = [];
+                 if (view.state.doc !== prevState.doc) {
+                   changedRanges = getChangedRanges(view.state.tr);
+                 }
+                 updateLinkClasses(changedRanges);
+               }
+             },
             // Handle paste events to process markdown links immediately
             handleDOMEvents: {
               paste: () => {

@@ -7,8 +7,11 @@ import {
   BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID,
   BOUNTY_STATUS_PROPERTY_ID,
   BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID,
+  BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
+  BOUNTY_TASK_STATUS_PROPERTY_ID,
   BOUNTY_TYPE_ID,
 } from '~/core/constants';
+import { uuidToHex } from '~/core/id/normalize';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
@@ -16,6 +19,21 @@ import type { Bounty, BountyDifficulty, BountyStatus } from './types';
 
 export function isBountyTypeRelation(relation: StoreRelation): boolean {
   return relation.toEntity.id === BOUNTY_TYPE_ID;
+}
+
+/**
+ * Entity IDs treated as "allocated to this user" for bounty linking:
+ * - Personal space home page (person entity)
+ * - Personal space system entity (entity id === personal space id, i.e. space/space in the URL)
+ */
+export function buildBountyAllocationTargets(
+  personalSpaceId: string | null | undefined,
+  personalPageEntityId: string | null | undefined
+): string[] {
+  const out: string[] = [];
+  if (personalPageEntityId) out.push(personalPageEntityId);
+  if (personalSpaceId) out.push(personalSpaceId);
+  return [...new Set(out)];
 }
 
 export function buildBounties(
@@ -44,7 +62,10 @@ export function buildBounties(
   }
 
   const bounties = entityIds
-    .filter(entityId => isAllocatedToUser(relationsByEntity.get(entityId) ?? [], allocationTargets))
+    .filter(entityId => {
+      const rels = relationsByEntity.get(entityId) ?? [];
+      return isAllocatedToUser(rels, allocationTargets) && !hasBountyTaskStatusDoneRelation(rels);
+    })
     .map(entityId => {
       const entityValues = valuesByEntity.get(entityId) ?? [];
       const entityRelations = relationsByEntity.get(entityId) ?? [];
@@ -130,14 +151,25 @@ export function buildBounty(
 
 export function isAllocatedToUser(relations: StoreRelation[], allocationTargets: string[]): boolean {
   if (allocationTargets.length === 0) return false;
-  const targetIds = new Set(allocationTargets);
+  const targetHex = new Set(allocationTargets.map(id => uuidToHex(id)));
   return relations.some(relation => {
     if (relation.type.id !== BOUNTY_ALLOCATED_PROPERTY_ID) return false;
     // Some relation variants only carry a top-level toEntityId without a
     // nested toEntity object, so fall back to that field when present.
     const toEntityId =
       relation.toEntity?.id ?? (relation as StoreRelation & { toEntityId?: string }).toEntityId ?? null;
-    return toEntityId ? targetIds.has(toEntityId) : false;
+    return targetHex.has(uuidToHex(toEntityId));
+  });
+}
+
+/** True when Task status points at the Done option (bounty should not appear in link-to-bounty). */
+export function hasBountyTaskStatusDoneRelation(relations: StoreRelation[]): boolean {
+  const doneHex = uuidToHex(BOUNTY_TASK_STATUS_DONE_ENTITY_ID);
+  return relations.some(relation => {
+    if (relation.type.id !== BOUNTY_TASK_STATUS_PROPERTY_ID) return false;
+    const toEntityId =
+      relation.toEntity?.id ?? (relation as StoreRelation & { toEntityId?: string }).toEntityId ?? null;
+    return toEntityId ? uuidToHex(toEntityId) === doneHex : false;
   });
 }
 

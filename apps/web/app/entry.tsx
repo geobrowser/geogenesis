@@ -13,6 +13,7 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
+import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
@@ -28,6 +29,10 @@ const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
 );
+
+const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m => ({ default: m.ChatWidget })), {
+  ssr: false,
+});
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -51,10 +56,15 @@ export function App({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <>
+    <div className="flex min-h-[100dvh] flex-col">
       <Navbar onSearchClick={() => setOpen(true)} />
       <SearchDialog open={open} onDone={() => setOpen(false)} />
-      <Main>{children}</Main>
+      <div className="flex w-full flex-1 items-stretch overflow-visible">
+        <BrowseSidebar />
+        <div className="min-w-0 flex-1 xl:px-[2ch]">
+          <Main>{children}</Main>
+        </div>
+      </div>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <OnboardingDialog />
@@ -62,9 +72,10 @@ export function App({ children }: { children: React.ReactNode }) {
         <GovernanceReopenEditLoadingBar />
         <FlowBar />
         <ReviewChanges />
+        <ChatWidget />
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}
-    </>
+    </div>
   );
 }

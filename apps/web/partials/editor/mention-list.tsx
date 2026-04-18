@@ -60,7 +60,6 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(({ space
       width="full"
       advanced={true}
       autoFocus={true}
-      showUrlWarning={true}
     />
   );
 });

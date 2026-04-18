@@ -2,13 +2,13 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import localFont from 'next/font/local';
 import 'katex/dist/katex.min.css';
+import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import { Providers } from '~/core/providers';
 
-import '../styles/fonts.css';
+import '../styles/chat.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
 import { App } from './entry';
