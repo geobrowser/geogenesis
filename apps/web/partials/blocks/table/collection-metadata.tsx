@@ -136,6 +136,7 @@ export const CollectionMetadata = ({
                     onMouseLeave={() => {
                       closeTimeoutRef.current = setTimeout(() => {
                         setIsPopoverOpen(false);
+                        setIsHovered(false);
                       }, 300);
                     }}
                     onMouseDown={e => e.preventDefault()}
