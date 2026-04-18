@@ -52,10 +52,10 @@ type UseEntityOptions = {
   id: string;
 };
 
-export function useEntity(options: UseEntityOptions): EntityWithSchema {
+export function useEntity(options: UseEntityOptions): EntityWithSchema & { isLoading: boolean } {
   const { spaceId, id } = options;
 
-  const { entity } = useQueryEntity({
+  const { entity, isLoading } = useQueryEntity({
     id: id,
     spaceId: spaceId,
   });
@@ -113,6 +113,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     values: values,
     relations: relations,
     types,
+    isLoading,
   };
 }
 

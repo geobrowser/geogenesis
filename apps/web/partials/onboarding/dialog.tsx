@@ -17,6 +17,7 @@ import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
+import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -42,6 +43,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
+const ONBOARDING_DESTINATION = NavUtils.toExplore();
+
 const MotionContent = motion.create(Content);
 const MotionOverlay = motion.create(Overlay);
 
@@ -54,6 +57,8 @@ export const OnboardingDialog = () => {
   const topicId = useAtomValue(topicIdAtom);
   const { createPersonalSpace } = useCreatePersonalSpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
+  const setChatOpen = useSetAtom(isChatOpenAtom);
+  const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
 
   const [step, setStep] = useAtom(stepAtom);
 
@@ -85,6 +90,11 @@ export const OnboardingDialog = () => {
       // it's done deploying.
       setSpaceId(spaceId);
       setStep('completed');
+
+      if (!hasSeenAssistant) {
+        setChatOpen(true);
+        setHasSeenAssistant(true);
+      }
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -372,15 +382,13 @@ const retryMessage: Record<Step, string> = {
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const router = useRouter();
 
-  const spaceId = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
 
   if (hasCompleted) {
     setTimeout(() => {
-      const destination = NavUtils.toSpace(spaceId);
-      router.push(destination);
+      router.push(ONBOARDING_DESTINATION);
     }, 3_600);
   }
 

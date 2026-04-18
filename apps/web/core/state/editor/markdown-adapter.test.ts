@@ -12,7 +12,13 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { describe, expect, it } from 'vitest';
 
-import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';
+import { Web2URLMark } from '~/partials/editor/web2-url-extension';
+
+import {
+  editorNodeToMarkdown,
+  markdownToEditorJson,
+  markdownToRenderedHtml,
+} from './markdown-adapter';
 
 // Minimal extensions for test — no React node views, no browser-only code
 const testExtensions = [
@@ -29,6 +35,7 @@ const testExtensions = [
   BulletList,
   ListItem,
   MathExtension.configure({ evaluation: false, delimiters: 'bracket', katexOptions: { throwOnError: false } }),
+  Web2URLMark,
 ];
 
 describe('markdown-adapter', () => {
@@ -63,8 +70,12 @@ describe('markdown-adapter', () => {
       expect(roundTrip('Use `console.log` here')).toBe('Use `console.log` here');
     });
 
-    it('links', () => {
+    it('web2 links', () => {
       expect(roundTrip('[Example](https://example.com)')).toBe('[Example](https://example.com)');
+    });
+
+    it('web2 links with www prefix', () => {
+      expect(roundTrip('[See all albums](www.rhcp.com/albums)')).toBe('[See all albums](www.rhcp.com/albums)');
     });
 
     it('bullet lists', () => {
@@ -158,14 +169,20 @@ describe('markdown-adapter', () => {
       expect(html).toContain('katex');
     });
 
-    it('preserves safe https links', () => {
+    it('renders safe https links as anchor tags', () => {
       const html = markdownToRenderedHtml('[safe](https://example.com)');
+      expect(html).toContain('<a ');
+      expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="https://example.com"');
+      expect(html).toContain('</a>');
     });
 
-    it('preserves safe graph links', () => {
+    it('renders safe graph links as anchor tags', () => {
       const html = markdownToRenderedHtml('[entity](graph://foo)');
+      expect(html).toContain('<a ');
+      expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="graph://foo"');
+      expect(html).toContain('</a>');
     });
 
     it('strips unsafe javascript links', () => {
@@ -177,7 +194,8 @@ describe('markdown-adapter', () => {
     it('strips parsed but disallowed link schemes', () => {
       const html = markdownToRenderedHtml('[ftp](ftp://example.com)');
       expect(html).not.toContain('href="ftp://example.com"');
-      expect(html).toContain('data-invalid-link="true"');
+      expect(html).toContain('<span class="entity-link-invalid" data-invalid-link="true">');
+      expect(html).not.toContain('<a ');
     });
   });
 
@@ -236,6 +254,36 @@ describe('markdown-adapter', () => {
         content: [{ type: 'text', text: 'const value = `x`', marks: [{ type: 'code' }] }],
       };
       expect(editorNodeToMarkdown(node)).toBe('``const value = `x```');
+    });
+
+    it('serializes web2URL label text as markdown links', () => {
+      const node = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'See all albums', marks: [{ type: 'web2URL', attrs: { url: 'www.rhcp.com/albums' } }] }],
+      };
+      expect(editorNodeToMarkdown(node)).toBe('[See all albums](www.rhcp.com/albums)');
+    });
+
+    it('preserves standalone web2URL text', () => {
+      const node = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'www.rhcp.com/albums', marks: [{ type: 'web2URL', attrs: { url: 'https://www.rhcp.com/albums' } }] }],
+      };
+      expect(editorNodeToMarkdown(node)).toBe('www.rhcp.com/albums');
+    });
+
+    it('does not double-wrap markdown text already emitted by web2URL edit mode', () => {
+      const node = {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: '[See all albums](www.rhcp.com/albums)',
+            marks: [{ type: 'web2URL', attrs: { url: 'www.rhcp.com/albums' } }],
+          },
+        ],
+      };
+      expect(editorNodeToMarkdown(node)).toBe('[See all albums](www.rhcp.com/albums)');
     });
   });
 });

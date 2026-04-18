@@ -22,7 +22,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
-const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', false);
+/** Open on first visit; after the user toggles, `browseSidebarOpen` in localStorage wins. */
+const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', true);
 
 /** Warm the HTTP cache for sidebar thumbs before the panel is opened (thumbs mount only when expanded). */
 function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
@@ -71,6 +72,10 @@ function BrowseNavPrimaryLinks({
       <Link href={NavUtils.toRoot()} className={navLinkClass}>
         <BrowseNavIcon src={BROWSE_NAV_ICON.root} />
         <span>Root</span>
+      </Link>
+      <Link href={NavUtils.toExplore()} className={navLinkClass}>
+        <BrowseNavIcon src={BROWSE_NAV_ICON.explore} />
+        <span>Explore</span>
       </Link>
       {personalSpaceId ? (
         <Link href={NavUtils.toSpace(personalSpaceId)} className={navLinkClass}>

@@ -4,6 +4,18 @@ import type { NextConfig } from 'next';
 
 import { ServerEnvironment } from './app/api/environment';
 
+const turbopackOptimizations =
+  process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
+    ? {
+        turbopackInferModuleSideEffects: false,
+        turbopackInputSourceMaps: false,
+        turbopackSourceMaps: false,
+        turbopackMinify: false,
+        turbopackPluginRuntimeStrategy: 'workerThreads' as const,
+        turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
+      }
+    : {};
+
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
@@ -16,12 +28,7 @@ const nextConfig: NextConfig = {
     },
   },
   experimental: {
-    turbopackInferModuleSideEffects: false,
-    turbopackInputSourceMaps: false,
-    turbopackSourceMaps: false,
-    turbopackMinify: false,
-    turbopackPluginRuntimeStrategy: 'workerThreads',
-    turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
+    ...turbopackOptimizations,
     optimizePackageImports: [
       // Core heavy deps
       'effect',
@@ -176,14 +183,17 @@ const nextConfig: NextConfig = {
         },
       ],
       afterFiles: [],
-      fallback: [
-        // Fallback for any assets that don't exist in the Next.js app
-        // This will catch marketing site assets without conflicting with /api or /public
-        {
-          source: '/:path*',
-          destination: 'https://geobrowser-v2.vercel.app/:path*',
-        },
-      ],
+      fallback:
+        process.env.ENABLE_NOT_FOUND_PREVIEW === '1'
+          ? []
+          : [
+              // Fallback for any assets that don't exist in the Next.js app
+              // This will catch marketing site assets without conflicting with /api or /public
+              {
+                source: '/:path*',
+                destination: 'https://geobrowser-v2.vercel.app/:path*',
+              },
+            ],
     };
   },
 };
