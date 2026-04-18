@@ -1,5 +1,6 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -7,6 +8,8 @@ import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
+
+import { SelectEntity } from '~/design-system/select-entity';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -88,6 +91,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
       <TopLevelCommentInput
         onSubmit={text => handleCreateComment(text)}
         isCreating={isCreating}
+        spaceId={spaceId}
       />
       {totalCount > 0 && (
         <>
@@ -180,9 +184,11 @@ function CommentFilters({
 function TopLevelCommentInput({
   onSubmit,
   isCreating,
+  spaceId,
 }: {
   onSubmit: (text: string) => void;
   isCreating: boolean;
+  spaceId: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -207,6 +213,7 @@ function TopLevelCommentInput({
       placeholder=""
       autoFocus
       onCancel={() => setIsExpanded(false)}
+      spaceId={spaceId}
     />
   );
 }
@@ -218,6 +225,7 @@ function CommentInput({
   autoFocus = false,
   onCancel,
   initialValue = '',
+  spaceId,
 }: {
   onSubmit: (text: string) => void;
   isCreating: boolean;
@@ -225,8 +233,11 @@ function CommentInput({
   autoFocus?: boolean;
   onCancel?: () => void;
   initialValue?: string;
+  spaceId: string;
 }) {
   const [text, setText] = useState(initialValue);
+  const [isMentioning, setIsMentioning] = useState(false);
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
@@ -240,10 +251,64 @@ function CommentInput({
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
+      return;
     }
-    if (e.key === 'Escape' && onCancel) {
-      onCancel();
+    if (e.key === 'Escape') {
+      if (isMentioning) {
+        setIsMentioning(false);
+        e.preventDefault();
+        return;
+      }
+      if (onCancel) {
+        onCancel();
+      }
+      return;
     }
+
+    if (e.key === '@') {
+      const { selectionStart } = e.currentTarget as HTMLTextAreaElement;
+      // Trigger mention only if @ is at start or preceded by whitespace
+      const beforeChar = text[selectionStart - 1];
+      if (!beforeChar || /\s/.test(beforeChar)) {
+        const textarea = e.currentTarget as HTMLTextAreaElement;
+        // Small timeout to ensure the '@' is inserted into the textarea first
+        // and doesn't leak into the SelectEntity search input which auto-focuses.
+        setTimeout(() => {
+          const coords = getCaretCoordinates(textarea, selectionStart + 1);
+          setMentionCoords(coords);
+          setMentionStartIndex(selectionStart);
+          setIsMentioning(true);
+        }, 0);
+      }
+    }
+  };
+
+  const onMentionSelect = (result: { id: string; name: string | null }) => {
+    if (mentionStartIndex === null) return;
+
+    const before = text.slice(0, mentionStartIndex);
+    const after = text.slice(mentionStartIndex);
+
+    // We only replace the '@' and any characters that might have been typed since
+    // However, SelectEntity has its own input, so we just replace from mentionStartIndex
+    // But we need to find how many characters were typed after @ in the textarea if we were tracking query there
+    // For now, let's assume we replace just the '@' and any non-whitespace chars immediately after it at that position
+    const match = after.match(/^@\S*/);
+    const lengthToReplace = match ? match[0].length : 1;
+
+    const newText = before + `[${result.name || result.id}](graph://${result.id})` + after.slice(lengthToReplace);
+    setText(newText);
+    setIsMentioning(false);
+    setMentionStartIndex(null);
+
+    // Focus back and set cursor
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = before.length + `[${result.name || result.id}](graph://${result.id})`.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
   };
 
   // Auto-resize textarea
@@ -257,18 +322,56 @@ function CommentInput({
 
   const hasText = text.trim().length > 0;
 
+  const [mentionCoords, setMentionCoords] = useState({ x: 0, y: 0 });
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
-      <textarea
-        ref={textareaRef}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        rows={3}
-        className="w-full resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-04"
-      />
+      <Popover.Root open={isMentioning} onOpenChange={setIsMentioning}>
+        {/* Invisible fixed anchor positioned at the caret */}
+        <div
+          style={{
+            position: 'fixed',
+            left: mentionCoords.x,
+            top: mentionCoords.y,
+            width: 0,
+            height: 0,
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+        >
+          <Popover.Anchor />
+        </div>
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          rows={3}
+          className="relative w-full resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-04"
+        />
+        <Popover.Portal>
+          <Popover.Content
+            side="bottom"
+            align="start"
+            sideOffset={0}
+            className="z-9999 ml-2 -mt-2"
+            onOpenAutoFocus={e => {
+              // We want SelectEntity to focus, but we don't want Radix to do its own focus management
+              // because it might conflict with our timing. However, SelectEntity already auto-focuses.
+            }}
+          >
+            <SelectEntity
+              spaceId={spaceId}
+              onDone={onMentionSelect}
+              variant="floating"
+              width="clamped"
+              autoFocus
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
       <div className="flex items-center justify-end gap-2">
         {onCancel && (
           <button
@@ -538,6 +641,7 @@ function CommentItem({
             autoFocus
             onCancel={() => setIsEditing(false)}
             initialValue={comment.markdownContent}
+            spaceId={comment.spaceId}
           />
         ) : (
           <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
@@ -581,6 +685,7 @@ function CommentItem({
               placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
               autoFocus
               onCancel={() => setIsReplying(false)}
+              spaceId={spaceId}
             />
           </div>
         )}
@@ -607,6 +712,7 @@ function CommentItem({
   );
 }
 
+
 function getRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -622,4 +728,78 @@ function getRelativeTime(dateString: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
   return date.toLocaleDateString();
+}
+
+/**
+ * Calculates the (x, y) coordinates of the caret in a textarea.
+ * Based on the shadow-element technique.
+ */
+function getCaretCoordinates(element: HTMLTextAreaElement, position: number) {
+  const div = document.createElement('div');
+  const style = window.getComputedStyle(element);
+
+  // Copy essential styles
+  const properties = [
+    'direction',
+    'boxSizing',
+    'width',
+    'height',
+    'overflowX',
+    'overflowY',
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'borderStyle',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'fontStyle',
+    'fontVariant',
+    'fontWeight',
+    'fontStretch',
+    'fontSize',
+    'fontSizeAdjust',
+    'lineHeight',
+    'fontFamily',
+    'textAlign',
+    'textTransform',
+    'textIndent',
+    'textDecoration',
+    'letterSpacing',
+    'wordSpacing',
+    'tabSize',
+    'MozTabSize',
+  ];
+
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordBreak = 'break-word';
+
+  properties.forEach(prop => {
+    // @ts-expect-error - indexable style
+    div.style[prop] = style[prop];
+  });
+
+  // Text up to the caret
+  div.textContent = element.value.substring(0, position);
+
+  const span = document.createElement('span');
+  span.textContent = element.value.substring(position) || '.';
+  div.appendChild(span);
+
+  document.body.appendChild(div);
+
+  const { offsetLeft: spanLeft, offsetTop: spanTop } = span;
+  const rect = element.getBoundingClientRect();
+
+  document.body.removeChild(div);
+
+  // Return coordinates relative to the viewport
+  return {
+    x: rect.left + spanLeft - element.scrollLeft,
+    y: rect.top + spanTop - element.scrollTop,
+  };
 }

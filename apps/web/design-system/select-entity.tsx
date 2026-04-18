@@ -72,6 +72,7 @@ type SelectEntityProps = {
   withSearchIcon?: boolean;
   advanced?: boolean;
   autoFocus?: boolean;
+  showUrlWarning?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
