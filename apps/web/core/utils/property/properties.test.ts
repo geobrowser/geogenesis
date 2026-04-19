@@ -129,6 +129,14 @@ describe('Properties', () => {
       });
     });
 
+    it('should map PDF property type correctly', () => {
+      const result = mapPropertyType('PDF');
+      expect(result).toEqual({
+        baseDataType: 'RELATION',
+        renderableTypeId: 'PDF_TYPE_ID',
+      });
+    });
+
     it('should handle unknown property type with exhaustive check', () => {
       // This test ensures our switch statement handles unknown types
       const unknownType = 'UNKNOWN_TYPE' as SwitchableRenderableType;

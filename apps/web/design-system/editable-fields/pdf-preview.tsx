@@ -10,7 +10,7 @@ import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 
 import { PdfFile } from '../icons/file-pdf';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export default function PdfZoom({
   pdfSrc,

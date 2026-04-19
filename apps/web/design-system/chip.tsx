@@ -448,7 +448,7 @@ export function LinkableMediaChip({
           {mediaType === 'PDF' ? (
             pdfSrc ? (
               <div className="h-full w-full overflow-hidden rounded-lg">
-                <embed src={pdfSrc} type="application/pdf" width="173" height="200" />
+                <embed src={pdfSrc} type="application/pdf" width="173" height="200" className="pointer-events-none" />
               </div>
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-grey-01">

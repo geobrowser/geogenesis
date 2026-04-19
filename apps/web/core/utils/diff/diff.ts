@@ -730,7 +730,7 @@ export function entityDiffToBlockChange(entity: EntityDiff): BlockChange | null 
   }
 
   if (blockType === 'pdfBlock') {
-    const contentValue = entity.values.find(v => v.propertyId === PDF_URL) ?? entity.values[0];
+    const contentValue = entity.values.find(v => v.propertyId === PDF_URL);
 
     return {
       id: entity.entityId,
