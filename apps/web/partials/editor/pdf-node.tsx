@@ -192,6 +192,9 @@ function PdfNodeChildren({
         network: 'TESTNET',
       });
 
+      // Bail out if the user cancelled while the upload was in flight
+      if (abortControllerRef.current?.signal.aborted) return;
+
       setUploadProgress(100);
 
       // Extract the IPFS URL from the ops

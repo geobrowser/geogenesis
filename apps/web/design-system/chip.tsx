@@ -443,6 +443,7 @@ export function LinkableMediaChip({
         spaceId={spaceId ?? currentSpaceId}
         href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
         className="block"
+        aria-label={`View ${mediaType === 'PDF' ? 'PDF' : mediaType === 'VIDEO' ? 'video' : 'image'} entity`}
       >
         <div className={`relative ${containerSize}`}>
           {mediaType === 'PDF' ? (

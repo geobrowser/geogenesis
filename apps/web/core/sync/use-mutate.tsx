@@ -7,10 +7,12 @@ import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   GEO_LOCATION,
+  MAX_PDF_SIZE_BYTES,
   PDF_TYPE,
   PDF_URL,
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
+  VALID_PDF_TYPES,
   VIDEO_RENDERABLE_TYPE,
 } from '../constants';
 import { ID } from '../id';
@@ -589,6 +591,14 @@ function createMutator(store: GeoStore): Mutator {
         relationPropertyName,
         spaceId,
       }) => {
+        if (!VALID_PDF_TYPES.includes(file.type)) {
+          throw new Error(`Invalid file type "${file.type}". Expected a PDF file.`);
+        }
+
+        if (file.size > MAX_PDF_SIZE_BYTES) {
+          throw new Error(`File size ${file.size} exceeds the 50MB limit.`);
+        }
+
         // Upload the PDF file using the same mechanism as images/videos
         const { id: pdfId, ops: createPdfOps } = await Graph.createImage({
           blob: file,

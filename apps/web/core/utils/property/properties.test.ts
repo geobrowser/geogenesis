@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
-import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
+import {
+  constructDataType,
+  getCurrentRenderableType,
+  mapPropertyType,
+  reconstructFromStore,
+  typeToBaseDataType,
+} from './properties';
 
 // Mock the DTO module — use real SDK IDs so tests match actual usage
 vi.mock('~/core/io/dto/properties', () => ({
@@ -135,6 +141,7 @@ describe('Properties', () => {
         baseDataType: 'RELATION',
         renderableTypeId: 'PDF_TYPE_ID',
       });
+      expect(typeToBaseDataType.PDF).toBe('RELATION');
     });
 
     it('should handle unknown property type with exhaustive check', () => {
