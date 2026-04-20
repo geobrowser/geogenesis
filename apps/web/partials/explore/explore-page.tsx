@@ -1,5 +1,6 @@
 'use client';
 
+import { usePrivy } from '@geogenesis/auth';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
@@ -60,8 +61,13 @@ export function ExplorePage({
   const [time, setTime] = React.useState<ExploreTime>('week');
   const [spaceId, setSpaceId] = React.useState<string>('all');
 
+  // Include the Privy user id in the queryKey so the feed refetches when the user signs
+  // in/out. Otherwise `isMemberOrEditor` / pending-membership state is stale until refresh.
+  const { user } = usePrivy();
+  const userId = user?.id ?? null;
+
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: ['explore-feed', SORT, time, spaceId],
+    queryKey: ['explore-feed', SORT, time, spaceId, userId],
     queryFn: ({ pageParam }) =>
       fetchExplorePage({ sort: SORT, time, spaceId, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,

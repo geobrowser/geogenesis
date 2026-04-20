@@ -187,19 +187,26 @@ function buildItems(
 ): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
   const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
 
+  const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
+
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!spaceId || !entityMatchesExploreTypes(e)) continue;
 
-    const title =
-      textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
-    const description =
-      textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
+    // Space-scoped title/description/types only — no cross-space fallbacks. A card
+    // rendered for space A shouldn't leak a name from space C.
+    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? 'Untitled';
+    const description = textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? null;
+
+    const displaySpaceIdNorm = normId(spaceId);
+    const types = e.relations
+      .filter(r => normId(r.type.id) === typesRelationIdNorm && normId(r.spaceId) === displaySpaceIdNorm)
+      .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
 
     items.push({
       entityId: e.id,
       spaceId,
-      types: e.types.map(t => ({ id: t.id, name: t.name })),
+      types,
       updatedAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
       title,
       description,
