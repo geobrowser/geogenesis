@@ -3,41 +3,31 @@ import { cookies } from 'next/headers';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import {
-  resolveMemberSpaceFromWalletSafe,
-} from '~/core/browse/resolve-member-space-from-wallet';
+import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
-import {
-  type ExploreSort,
-  type ExploreTime,
-  fetchExploreFeed,
-} from '~/core/explore/fetch-explore-feed';
+import { type ExploreTime, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
-
-const SORTS: ExploreSort[] = ['new'];
 const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
-
-function parseSort(raw: string | null): ExploreSort {
-  if (raw && (SORTS as string[]).includes(raw)) return raw as ExploreSort;
-  return 'new';
-}
 
 function parseTime(raw: string | null): ExploreTime {
   if (raw && (TIMES as string[]).includes(raw)) return raw as ExploreTime;
   return 'week';
 }
 
+/**
+ * Activity feed for a single space. Reuses the explore fetcher but drops the type
+ * whitelist and name filter — activity should surface any recently-edited entity in
+ * the space, including Properties, Types, unnamed entities, etc.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const sort = parseSort(searchParams.get('sort'));
   const time = parseTime(searchParams.get('time'));
   const spaceId = searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
+
+  if (!spaceId) {
+    return NextResponse.json({ items: [], nextCursor: null });
+  }
 
   const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
 
@@ -56,46 +46,32 @@ export async function GET(request: Request) {
     }
   }
 
-  let browse: BrowseSidebarData;
-  try {
-    browse = await fetchBrowseSidebarData(personalMemberSpaceId);
-  } catch {
-    try {
-      browse = await fetchBrowseSidebarData(null);
-    } catch {
-      browse = {
-        featured: [],
-        editorOf: [],
-        memberOf: [],
-        documentationImage: null,
-        personalSpaceId: null,
-      };
-    }
-  }
-
-  let spaceFilter: string | null = null;
-  if (spaceId && spaceId !== 'all') {
-    const want = normId(spaceId);
-    const match = [...browse.featured, ...browse.editorOf, ...browse.memberOf].find(r => normId(r.id) === want);
-    if (match) spaceFilter = match.id;
-  }
+  // Activity is pinned to a single space passed in from the URL, so we don't need the
+  // real browse sidebar data to build the allowed-space set — synthesize a minimal one.
+  const browse: BrowseSidebarData = {
+    featured: [{ id: spaceId, name: '', image: null }],
+    editorOf: [],
+    memberOf: [],
+    documentationImage: null,
+    personalSpaceId: null,
+  };
 
   try {
     const result = await fetchExploreFeed({
       browse,
-      sort,
+      sort: 'new',
       time,
-      spaceFilterId: spaceFilter,
+      spaceFilterId: spaceId,
       cursor,
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,
-      typeIds: EXPLORE_ENTITY_TYPE_IDS,
-      requireName: true,
+      // Activity: no type whitelist, no name requirement.
+      typeIds: undefined,
+      requireName: false,
     });
     return NextResponse.json(result);
   } catch (e) {
-    console.error('explore feed', e);
-    /** Degraded response so the Explore UI still mounts when GraphQL is down; client shows empty feed. */
+    console.error('activity feed', e);
     return NextResponse.json({ items: [], nextCursor: null });
   }
 }

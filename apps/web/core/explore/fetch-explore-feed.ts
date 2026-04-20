@@ -156,11 +156,13 @@ async function fetchExploreEntitiesPage(args: {
   limit: number;
   after: string | null;
   orderBy: EntitiesOrderBy[];
+  typeIds?: readonly string[];
+  requireName?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
-    typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
-    name: { isNull: false, isNot: '' },
+    ...(args.typeIds ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
@@ -183,7 +185,8 @@ async function fetchExploreEntitiesPage(args: {
 function buildItems(
   entities: ExploreEntity[],
   allowedSpaceIds: Set<string>,
-  memberOrEditorSpaceIds: Set<string>
+  memberOrEditorSpaceIds: Set<string>,
+  options: { enforceTypeWhitelist: boolean }
 ): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
   const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
 
@@ -191,7 +194,8 @@ function buildItems(
 
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
-    if (!spaceId || !entityMatchesExploreTypes(e)) continue;
+    if (!spaceId) continue;
+    if (options.enforceTypeWhitelist && !entityMatchesExploreTypes(e)) continue;
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
     // from space C. Fall back to the top-level aggregated name/description when the
@@ -242,6 +246,10 @@ export async function fetchExploreFeed(args: {
   cursor: string | null;
   walletAddress?: string | null;
   memberOrEditorSpaceIds: string[];
+  /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
+  typeIds?: readonly string[];
+  /** If true (default), filter out entities with null or empty `name`. */
+  requireName?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = [...new Set([...spaceMeta.keys()].map(normId))].filter(id =>
@@ -307,9 +315,13 @@ export async function fetchExploreFeed(args: {
     limit: scanChunk,
     after: args.cursor,
     orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    typeIds: args.typeIds,
+    requireName: args.requireName,
   });
 
-  const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
+  const enriched = buildItems(page.entities, allowed, memberOrEditorSet, {
+    enforceTypeWhitelist: args.typeIds !== undefined,
+  });
   const items = await attachMeta(enriched.slice(0, pageSize));
 
   const nextCursor = page.hasNextPage ? page.endCursor : null;
