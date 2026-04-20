@@ -19,10 +19,10 @@ export function parseEntityUpdatedAtToUnixSec(raw: string | undefined): number {
 /**
  * Compact relative labels for the feed metadata row (e.g. `3m ago`, `2d ago`).
  */
-export function formatExploreRelativeTime(updatedAtSec: number): string {
-  if (updatedAtSec <= 0) return '—';
-  const date = new Date(updatedAtSec * 1000);
-  const diffSec = Math.max(0, (Date.now() - updatedAtSec * 1000) / 1000);
+export function formatExploreRelativeTime(timestampSec: number): string {
+  if (timestampSec <= 0) return '—';
+  const date = new Date(timestampSec * 1000);
+  const diffSec = Math.max(0, (Date.now() - timestampSec * 1000) / 1000);
   if (diffSec < 45) return 'just now';
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;

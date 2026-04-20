@@ -30,7 +30,7 @@ export type ExploreFeedItem = {
   spaceName: string;
   spaceImage: string | null;
   types: { id: string; name: string | null }[];
-  updatedAtSec: number;
+  createdAtSec: number;
   title: string;
   description: string | null;
   imageUrl: string | null;
@@ -117,7 +117,7 @@ function entityMatchesExploreTypes(entity: Entity): boolean {
   return entity.types.some(t => TYPE_SET.has(normId(t.id)));
 }
 
-type ExploreEntity = Entity & { commentCount: number };
+type ExploreEntity = Entity & { commentCount: number; createdAt?: string };
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreEntity[];
@@ -133,13 +133,14 @@ function decodeExploreEntities(data: {
 }): ExploreEntitiesPageResponse {
   const entities: ExploreEntity[] = [];
   for (const n of (data.entitiesConnection?.nodes ?? []) as Array<
-    Record<string, unknown> & { backlinks?: { totalCount?: number } | null }
+    Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string }
   >) {
     const decoded = EntityDecoder.decode(n);
     if (!decoded) continue;
     entities.push({
       ...decoded,
       commentCount: n.backlinks?.totalCount ?? 0,
+      createdAt: n.createdAt,
     });
   }
   return {
@@ -159,7 +160,8 @@ async function fetchExploreEntitiesPage(args: {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
     typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
-    ...(t != null ? { updatedAt: { greaterThanOrEqualTo: String(t) } } : {}),
+    name: { isNull: false, isNot: '' },
+    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
   return Effect.runPromise(
@@ -185,20 +187,31 @@ function buildItems(
 ): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
   const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
 
+  const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
+
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!spaceId || !entityMatchesExploreTypes(e)) continue;
 
+    // Prefer space-scoped values so a card rendered for space A doesn't leak values
+    // from space C. Fall back to the top-level aggregated name/description when the
+    // entity has no value in the display space — avoids "Untitled" cards purely
+    // because of the space boundary.
     const title =
       textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
     const description =
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
+    const displaySpaceIdNorm = normId(spaceId);
+    const types = e.relations
+      .filter(r => normId(r.type.id) === typesRelationIdNorm && normId(r.spaceId) === displaySpaceIdNorm)
+      .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
+
     items.push({
       entityId: e.id,
       spaceId,
-      types: e.types.filter(t => TYPE_SET.has(normId(t.id))).map(t => ({ id: t.id, name: t.name })),
-      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.updatedAt),
+      types,
+      createdAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
@@ -293,7 +306,7 @@ export async function fetchExploreFeed(args: {
     time: args.time,
     limit: scanChunk,
     after: args.cursor,
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+    orderBy: [EntitiesOrderBy.CreatedAtDesc],
   });
 
   const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
