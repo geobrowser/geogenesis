@@ -87,12 +87,12 @@ function BrowseNavPrimaryLinks({
           <span>Personal space</span>
         </Link>
       ) : null}
-      <Link href={NavUtils.toHome()} className={navLinkClass}>
+      <Link href={NavUtils.toHome()} className={`${navLinkClass} w-full min-w-0`}>
         <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
-        <span className="flex items-center gap-2">
-          <span>Governance</span>
-          {hasPendingVotes ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-01" aria-hidden="true" /> : null}
-        </span>
+        <span className="min-w-0 flex-1 text-left">Governance</span>
+        {hasPendingVotes ? (
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-01" aria-hidden="true" />
+        ) : null}
       </Link>
       <Link
         href={NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID)}
