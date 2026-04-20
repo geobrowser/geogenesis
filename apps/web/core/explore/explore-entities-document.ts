@@ -41,7 +41,7 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
         name
         description
         spaceIds
-        updatedAt
+        createdAt
 
         backlinks(filter: { typeId: { is: "310d4a240e5b451cb2151bfce40d0fe6" } }) {
           totalCount
