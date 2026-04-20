@@ -100,7 +100,10 @@ function replySubtreeContainsCommentId(node: CommentWithReplies, targetId: strin
   return false;
 }
 
-/** * When focus targets a nested thread under `row`, this row's connector strip in the parent list */
+/**
+ * Whether this row's connector strip in the parent reply list should skip highlight
+ * because focus targets a nested thread strictly under `row` (not `row` itself).
+ */
 function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: BranchFocus | null): boolean {
   if (!focus) return false;
   if (focus.kind === 'parent-thread') {
@@ -114,7 +117,7 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
   return false;
 }
 
-function branchPointerBlurProps( clearFocus: () => void ): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
+function branchPointerBlurProps(clearFocus: () => void): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
   return {
     onPointerLeave: e => {
       const next = e.relatedTarget as Node | null;
@@ -203,7 +206,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
 
   return (
     <CommentBranchHighlightProvider>
-      <div className="flex w-full flex-col pt-10">
+      <div id="entity-comments" className="flex w-full flex-col pt-10">
       <div className="text-mediumTitle">
         Comments ({totalCount})
       </div>
@@ -485,13 +488,38 @@ function CommentList({
   const lastReplyRef = React.useRef<HTMLDivElement>(null);
   const [lastReplyTop, setLastReplyTop] = React.useState<number | null>(null);
 
-  React.useEffect(() => {
-    if (containerRef.current && lastReplyRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const lastRect = lastReplyRef.current.getBoundingClientRect();
-      setLastReplyTop(lastRect.top - containerRect.top);
+  const listLayoutKey = React.useMemo(
+    () =>
+      `${comments.length}:${comments.map(c => `${c.id}:${isThreadCollapsed(c.id) ? 1 : 0}`).join(',')}`,
+    [comments, isThreadCollapsed]
+  );
+
+  const updateLastReplyTop = React.useCallback(() => {
+    const container = containerRef.current;
+    const lastRow = lastReplyRef.current;
+    if (!container || !lastRow) {
+      setLastReplyTop(null);
+      return;
     }
-  });
+    const containerRect = container.getBoundingClientRect();
+    const lastRect = lastRow.getBoundingClientRect();
+    setLastReplyTop(lastRect.top - containerRect.top);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    updateLastReplyTop();
+    const container = containerRef.current;
+    if (container == null || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      updateLastReplyTop();
+    });
+    ro.observe(container);
+    return () => {
+      ro.disconnect();
+    };
+  }, [listLayoutKey, updateLastReplyTop]);
 
   const parentBundle =
     parentCommentId != null &&
@@ -507,7 +535,10 @@ function CommentList({
       {lastReplyTop != null && parentCommentId != null && (
         <button
           type="button"
-          aria-label="Collapse comment thread"
+          aria-expanded={!isThreadCollapsed(parentCommentId)}
+          aria-label={
+            isThreadCollapsed(parentCommentId) ? 'Expand comment thread' : 'Collapse comment thread'
+          }
           onClick={() => toggleThreadCollapsed(parentCommentId)}
           onPointerEnter={() => hi.setParentThreadFocus(parentCommentId)}
           onFocus={() => hi.setParentThreadFocus(parentCommentId)}
@@ -547,7 +578,12 @@ function CommentList({
                 childHasReplies ? (
                   <button
                     type="button"
-                    aria-label="Collapse comment thread"
+                    aria-expanded={!isThreadCollapsed(comment.id)}
+                    aria-label={
+                      isThreadCollapsed(comment.id)
+                        ? 'Expand comment thread'
+                        : 'Collapse comment thread'
+                    }
                     onClick={() => toggleThreadCollapsed(comment.id)}
                     onPointerEnter={() => hi.setParentThreadFocus(parentCommentId!)}
                     onFocus={() => hi.setParentThreadFocus(parentCommentId!)}
@@ -588,7 +624,12 @@ function CommentList({
               ) : childHasReplies ? (
                 <button
                   type="button"
-                  aria-label="Collapse comment thread"
+                  aria-expanded={!isThreadCollapsed(comment.id)}
+                  aria-label={
+                    isThreadCollapsed(comment.id)
+                      ? 'Expand comment thread'
+                      : 'Collapse comment thread'
+                  }
                   onClick={() => toggleThreadCollapsed(comment.id)}
                   onPointerEnter={() => hi.setParentThreadFocus(parentCommentId!)}
                   onFocus={() => hi.setParentThreadFocus(parentCommentId!)}
@@ -694,7 +735,6 @@ function CommentItem({
   const threadLineCenterXFromRootPx =
     depth === 0 || hasReplies ? COMMENT_AVATAR_COLUMN_CENTER_PX : nestedSpineLeftPx;
   const threadLineStrokeCenterNudgePx = 0.5;
-  const bodyMarginLeftClass = `ml-[${COMMENT_BODY_INSET_PX}px]`;
   /** X of thread line relative to body inner left (vote row). */
   const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - COMMENT_BODY_INSET_PX;
   const commentRef = React.useRef<HTMLDivElement>(null);
@@ -954,12 +994,19 @@ function CommentItem({
             </button>
           )}
           {expandedHeaderRow}
-          <div className={`comment-body-slot mt-1 ${bodyMarginLeftClass}`}>{expandedBodyMain}</div>
+          <div
+            className="comment-body-slot mt-1"
+            style={{ marginLeft: COMMENT_BODY_INSET_PX }}
+          >
+            {expandedBodyMain}
+          </div>
         </div>
       ) : (
         <>
           {expandedHeaderRow}
-          <div className={`mt-1 ${bodyMarginLeftClass}`}>{expandedBodyMain}</div>
+          <div className="mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
+            {expandedBodyMain}
+          </div>
         </>
       )}
 
