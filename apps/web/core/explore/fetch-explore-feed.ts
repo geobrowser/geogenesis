@@ -15,7 +15,6 @@ import {
   EXPLORE_COVER_PROPERTY_ID,
   EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
-  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
@@ -47,8 +46,6 @@ export type ExploreFeedResult = {
 function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
-
-const TYPE_SET = new Set(EXPLORE_ENTITY_TYPE_IDS.map(id => normId(id)));
 
 function timeThresholdSec(filter: ExploreTime): number | null {
   const now = Math.floor(Date.now() / 1000);
@@ -113,10 +110,6 @@ function imageFromEntity(entity: Entity, spaceId: string): string | null {
   return imageFromRelationMedia(entity.relations, spaceId);
 }
 
-function entityMatchesExploreTypes(entity: Entity): boolean {
-  return entity.types.some(t => TYPE_SET.has(normId(t.id)));
-}
-
 type ExploreEntity = Entity & { commentCount: number; createdAt?: string };
 
 type ExploreEntitiesPageResponse = {
@@ -161,7 +154,7 @@ async function fetchExploreEntitiesPage(args: {
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
-    ...(args.typeIds ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+    ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
     ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
@@ -185,8 +178,7 @@ async function fetchExploreEntitiesPage(args: {
 function buildItems(
   entities: ExploreEntity[],
   allowedSpaceIds: Set<string>,
-  memberOrEditorSpaceIds: Set<string>,
-  options: { enforceTypeWhitelist: boolean }
+  memberOrEditorSpaceIds: Set<string>
 ): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
   const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
 
@@ -195,7 +187,6 @@ function buildItems(
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!spaceId) continue;
-    if (options.enforceTypeWhitelist && !entityMatchesExploreTypes(e)) continue;
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
     // from space C. Fall back to the top-level aggregated name/description when the
@@ -319,9 +310,7 @@ export async function fetchExploreFeed(args: {
     requireName: args.requireName,
   });
 
-  const enriched = buildItems(page.entities, allowed, memberOrEditorSet, {
-    enforceTypeWhitelist: args.typeIds !== undefined,
-  });
+  const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
   const items = await attachMeta(enriched.slice(0, pageSize));
 
   const nextCursor = page.hasNextPage ? page.endCursor : null;

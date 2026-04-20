@@ -42,6 +42,8 @@ type EntityFeedProps = {
   initialSpaceOptions?: SpaceOption[];
   /** When set, the feed is pinned to this space. No space dropdown is rendered. */
   lockedSpaceId?: string;
+  /** Initial value for the time dropdown. Defaults to "week". */
+  initialTime?: ExploreTime;
 };
 
 async function fetchFeedPage(
@@ -69,8 +71,13 @@ async function fetchFeedPage(
  * Generic entity-feed surface: time + (optional) space dropdowns, auth-aware infinite
  * scroll, skeleton loaders. Explore and activity are both thin wrappers around this.
  */
-export function EntityFeed({ apiEndpoint, initialSpaceOptions = [], lockedSpaceId }: EntityFeedProps) {
-  const [time, setTime] = React.useState<ExploreTime>('week');
+export function EntityFeed({
+  apiEndpoint,
+  initialSpaceOptions = [],
+  lockedSpaceId,
+  initialTime = 'week',
+}: EntityFeedProps) {
+  const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
   const spaceId = lockedSpaceId ?? selectedSpaceId;
 

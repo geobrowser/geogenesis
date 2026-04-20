@@ -65,9 +65,10 @@ export async function GET(request: Request) {
       cursor,
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,
-      // Activity: no type whitelist, no name requirement.
+      // Activity: no type whitelist, but keep the name requirement so unnamed
+      // entities (e.g. property system rows) don't clutter the feed.
       typeIds: undefined,
-      requireName: false,
+      requireName: true,
     });
     return NextResponse.json(result);
   } catch (e) {
