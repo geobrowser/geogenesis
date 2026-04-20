@@ -74,11 +74,19 @@ function SpaceThumb({ image, name }: { image: string | null; name: string }) {
 }
 
 export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
-  const typeLabel = item.types
-    .filter(t => t.name)
-    .map(t => t.name)
-    .join(' · ');
-  const edited = formatExploreRelativeTime(item.updatedAtSec);
+  const uniqueTypes = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: { id: string; name: string }[] = [];
+    for (const t of item.types) {
+      if (!t.name) continue;
+      const key = t.id.replace(/-/g, '').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: t.id, name: t.name });
+    }
+    return out;
+  }, [item.types]);
+  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
   const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
@@ -93,12 +101,19 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
             <SpaceThumb image={item.spaceImage} name={item.spaceName} />
             <span className="min-w-0 truncate">{item.spaceName}</span>
           </Link>
-          {typeLabel ? (
-            <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">
-              {typeLabel}
-            </span>
+          {uniqueTypes.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+              {uniqueTypes.map(t => (
+                <span
+                  key={t.id}
+                  className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04"
+                >
+                  {t.name}
+                </span>
+              ))}
+            </div>
           ) : null}
-          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{edited}</span>
+          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{timeAgo}</span>
         </div>
         {!item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton
