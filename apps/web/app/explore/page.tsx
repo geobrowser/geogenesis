@@ -27,6 +27,7 @@ export default async function ExploreRoutePage() {
         editorOf: [],
         memberOf: [],
         documentationImage: null,
+        hasPendingVotes: false,
         personalSpaceId: null,
       };
     }

@@ -59,9 +59,11 @@ function BrowseNavIcon({ src }: { src: string }) {
 function BrowseNavPrimaryLinks({
   personalSpaceId,
   documentationImage,
+  hasPendingVotes,
 }: {
   personalSpaceId: string | null;
   documentationImage: string | null;
+  hasPendingVotes: boolean;
 }) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -87,7 +89,10 @@ function BrowseNavPrimaryLinks({
       ) : null}
       <Link href={NavUtils.toHome()} className={navLinkClass}>
         <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
-        <span>Governance</span>
+        <span className="flex items-center gap-2">
+          <span>Governance</span>
+          {hasPendingVotes ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-01" aria-hidden="true" /> : null}
+        </span>
       </Link>
       <Link
         href={NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID)}
@@ -242,6 +247,7 @@ export function BrowseSidebar() {
           <BrowseNavPrimaryLinks
             personalSpaceId={personalSpaceId}
             documentationImage={data?.documentationImage ?? null}
+            hasPendingVotes={data?.hasPendingVotes ?? false}
           />
         </nav>
 

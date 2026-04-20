@@ -1,8 +1,10 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
+import { Schema } from 'effect';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
+import { ApiProposalListResponseSchema, encodePathSegment, restFetch } from '~/core/io/rest';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { graphql } from '~/core/io/subgraph/graphql';
 
@@ -25,9 +27,66 @@ export type BrowseSidebarData = {
   editorOf: BrowseSpaceRow[];
   memberOf: BrowseSpaceRow[];
   documentationImage: string | null;
+  hasPendingVotes: boolean;
   /** Personal space id used for membership/editor GraphQL (same as browse “member space”). */
   personalSpaceId: string | null;
 };
+
+const GOVERNANCE_PROPOSAL_PAGE_SIZE = 100;
+const GOVERNANCE_PROPOSAL_MAX_PAGES = 40;
+
+async function hasPendingVotesInEditorSpaces(memberSpaceId: string, editorSpaceIds: string[]): Promise<boolean> {
+  if (editorSpaceIds.length === 0) return false;
+
+  const config = Environment.getConfig();
+
+  for (const spaceId of editorSpaceIds) {
+    let cursor: string | null = null;
+
+    for (let page = 0; page < GOVERNANCE_PROPOSAL_MAX_PAGES; page++) {
+      const params = new URLSearchParams();
+      params.set('limit', String(GOVERNANCE_PROPOSAL_PAGE_SIZE));
+      params.set('status', 'PROPOSED');
+      params.set('orderBy', 'end_time');
+      params.set('orderDirection', 'desc');
+      params.set('voterId', memberSpaceId);
+      if (cursor) {
+        params.set('cursor', cursor);
+      }
+
+      const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
+
+      const result = await Effect.runPromise(
+        Effect.either(
+          restFetch<unknown>({
+            endpoint: config.api,
+            path,
+          })
+        )
+      );
+
+      if (Either.isLeft(result)) {
+        console.error(`Failed to fetch governance proposals for space ${spaceId}:`, result.left);
+        break;
+      }
+
+      const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+      if (Either.isLeft(decoded)) {
+        console.error(`Failed to decode governance proposals for space ${spaceId}:`, decoded.left);
+        break;
+      }
+
+      if (decoded.right.proposals.some(proposal => proposal.userVote == null)) {
+        return true;
+      }
+
+      cursor = decoded.right.nextCursor;
+      if (!cursor) break;
+    }
+  }
+
+  return false;
+}
 
 async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow>> {
   const unique = [...new Set(ids.filter(Boolean))];
@@ -139,6 +198,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
       editorOf: [],
       memberOf: [],
       documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+      hasPendingVotes: false,
       personalSpaceId: null,
     };
   }
@@ -227,11 +287,14 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     })
   );
 
+  const hasPendingVotes = await hasPendingVotesInEditorSpaces(memberSpaceId, editorIds);
+
   return {
     featured,
     editorOf,
     memberOf,
     documentationImage: rows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+    hasPendingVotes,
     personalSpaceId: memberSpaceId,
   };
 }
