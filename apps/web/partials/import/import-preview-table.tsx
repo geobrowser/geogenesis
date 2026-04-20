@@ -16,6 +16,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
@@ -239,6 +240,8 @@ type Props = {
   checkboxOverrides?: Record<string, string>;
   /** When true, disable all interactive cells (e.g. while resolving relations) */
   disabled?: boolean;
+  onDeleteColumn?: (csvColumnIndex: number) => void;
+  onSkipAndDeleteUnmapped?: () => void;
 };
 
 export function ImportPreviewTable({
@@ -262,9 +265,16 @@ export function ImportPreviewTable({
   resolvedTypes: resolvedTypesProp,
   checkboxOverrides = {},
   disabled = false,
+  onDeleteColumn,
+  onSkipAndDeleteUnmapped,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
+
+  const columnSignature = React.useMemo(() => columns.map(c => c.csvColumnIndex).join(','), [columns]);
+  React.useEffect(() => {
+    setColumnWidths({});
+  }, [columnSignature]);
 
   const columnLayout = React.useMemo(() => {
     const widths = columns.map(col => columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH);
@@ -291,6 +301,7 @@ export function ImportPreviewTable({
   }
 
   const showEmptyState = hasUnmappedColumns && dataRows.length > 0;
+  const hasUnmappedColumnsForSkip = columns.some(c => c.propertyName === null && !c.mappingLocked);
 
   return (
     <div
@@ -310,8 +321,22 @@ export function ImportPreviewTable({
           {columns.map(col => (
             <div
               key={col.csvColumnIndex}
-              className="relative flex min-h-[56px] flex-col justify-center border-r border-grey-02 bg-grey-01 px-3 py-2"
+              className="group relative flex min-h-[56px] flex-col justify-center border-r border-grey-02 bg-grey-01 px-3 py-2"
             >
+              {onDeleteColumn && !disabled && (
+                <button
+                  type="button"
+                  className="absolute top-1 right-6 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-transparent bg-white/90 text-grey-04 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:border-grey-02 hover:text-text"
+                  aria-label={`Remove column ${col.headerLabel}`}
+                  onClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDeleteColumn(col.csvColumnIndex);
+                  }}
+                >
+                  <CloseSmall />
+                </button>
+              )}
               <Text variant="metadata" className="truncate font-semibold text-text">
                 {col.headerLabel}
               </Text>
@@ -379,10 +404,19 @@ export function ImportPreviewTable({
       </div>
 
       {showEmptyState ? (
-        <div className="sticky left-0 flex items-center justify-center py-20">
-          <Text variant="metadata" className="text-grey-04">
+        <div className="sticky left-0 flex flex-col items-center justify-center gap-4 px-4 py-20">
+          <Text variant="metadata" className="max-w-md text-center text-grey-04">
             Your data will appear once you have mapped all of your column properties
           </Text>
+          {onSkipAndDeleteUnmapped && hasUnmappedColumnsForSkip && (
+            <button
+              type="button"
+              className="rounded-md border border-grey-02 bg-white px-4 py-2 text-smallButton text-text hover:bg-grey-01"
+              onClick={onSkipAndDeleteUnmapped}
+            >
+              Skip and delete unmapped columns
+            </button>
+          )}
         </div>
       ) : (
         <div
