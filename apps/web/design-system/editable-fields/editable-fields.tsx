@@ -158,8 +158,8 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
 
   return (
     <Zoom>
-      <div className="relative" style={imageStyles[variant]}>
-        <img src={src} onError={onError} loading="lazy" decoding="async" className="h-full rounded-lg object-cover" />
+      <div className="relative overflow-hidden rounded-lg" style={imageStyles[variant]}>
+        <img src={src} onError={onError} loading="lazy" decoding="async" className="h-full object-cover" />
       </div>
     </Zoom>
   );
