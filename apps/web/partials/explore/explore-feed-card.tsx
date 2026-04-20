@@ -101,14 +101,18 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
             <SpaceThumb image={item.spaceImage} name={item.spaceName} />
             <span className="min-w-0 truncate">{item.spaceName}</span>
           </Link>
-          {uniqueTypes.map(t => (
-            <span
-              key={t.id}
-              className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04"
-            >
-              {t.name}
-            </span>
-          ))}
+          {uniqueTypes.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+              {uniqueTypes.map(t => (
+                <span
+                  key={t.id}
+                  className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04"
+                >
+                  {t.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{edited}</span>
         </div>
         {!item.isMemberOrEditor ? (

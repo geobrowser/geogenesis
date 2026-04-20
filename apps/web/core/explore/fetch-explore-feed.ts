@@ -160,6 +160,7 @@ async function fetchExploreEntitiesPage(args: {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
     typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
+    name: { isNull: false, isNot: '' },
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
