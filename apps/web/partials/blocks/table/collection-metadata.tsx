@@ -133,6 +133,12 @@ export const CollectionMetadata = ({
                 <Popover.Trigger asChild>
                   <button
                     onMouseEnter={() => setIsPopoverOpen(true)}
+                    onMouseLeave={() => {
+                      closeTimeoutRef.current = setTimeout(() => {
+                        setIsPopoverOpen(false);
+                        setIsHovered(false);
+                      }, 300);
+                    }}
                     onMouseDown={e => e.preventDefault()}
                     className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
                   >
@@ -155,10 +161,7 @@ export const CollectionMetadata = ({
                       }
                     }}
                     onMouseLeave={() => {
-                      closeTimeoutRef.current = setTimeout(() => {
-                        setIsPopoverOpen(false);
-                        setIsHovered(false);
-                      }, 300);
+                      setIsPopoverOpen(false);
                     }}
                   >
                     {isEditing && (

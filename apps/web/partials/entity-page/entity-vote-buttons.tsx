@@ -137,17 +137,16 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
-        onClick={handleDownvote}
+        onClick={handleUpvote}
         disabled={!isConnected}
-        title={isConnected ? (downvoteActive ? 'Remove downvote' : 'Downvote') : 'Connect wallet to vote'}
+        title={isConnected ? (upvoteActive ? 'Remove upvote' : 'Upvote') : 'Connect wallet to vote'}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isConnected && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
+        <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
       </button>
-
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
           <button
@@ -169,17 +168,16 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-
       <button
-        onClick={handleUpvote}
+        onClick={handleDownvote}
         disabled={!isConnected}
-        title={isConnected ? (upvoteActive ? 'Remove upvote' : 'Upvote') : 'Connect wallet to vote'}
+        title={isConnected ? (downvoteActive ? 'Remove downvote' : 'Downvote') : 'Connect wallet to vote'}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isConnected && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
+        <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
       </button>
     </div>
   );

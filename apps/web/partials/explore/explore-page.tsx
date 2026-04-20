@@ -4,6 +4,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { Dropdown } from '~/design-system/dropdown';
 import { Skeleton } from '~/design-system/skeleton';
@@ -60,8 +61,15 @@ export function ExplorePage({
   const [time, setTime] = React.useState<ExploreTime>('week');
   const [spaceId, setSpaceId] = React.useState<string>('all');
 
+  // Key the query on the smart-account address because that hook is what writes the
+  // WALLET_ADDRESS cookie the server route reads. `usePrivy().user.id` updates earlier
+  // (before the cookie is set), which caused refetches to return anonymous data on
+  // sign-in and leave "Join space" buttons stuck for a few seconds.
+  const { smartAccount } = useSmartAccount();
+  const smartAccountAddress = smartAccount?.account.address ?? null;
+
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: ['explore-feed', SORT, time, spaceId],
+    queryKey: ['explore-feed', SORT, time, spaceId, smartAccountAddress],
     queryFn: ({ pageParam }) =>
       fetchExplorePage({ sort: SORT, time, spaceId, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
