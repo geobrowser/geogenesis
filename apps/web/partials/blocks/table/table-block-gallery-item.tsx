@@ -115,7 +115,7 @@ export function TableBlockGalleryItem({
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
-      <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
+      <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2">
         <div className="relative flex aspect-2/1 w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <GeoImage
@@ -224,7 +224,7 @@ export function TableBlockGalleryItem({
   }
 
   return (
-    <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider">
+    <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2 transition duration-200 hover:bg-grey-01">
       <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
         <div className="relative aspect-2/1 w-full overflow-clip rounded-lg bg-grey-01">
           {image ? (
