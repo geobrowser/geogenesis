@@ -47,6 +47,29 @@ function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
+// Entities we never want to surface in any feed.
+// - `System type` relation to the `System` entity: marks system-managed rows.
+// - `types` relation to `Data block` / `Text block`: these are block entities that
+//   exist as internal structure of parent entities and aren't meaningful on their own.
+const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
+const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
+const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
+const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
+
+const FEED_EXCLUDED_RELATIONS_FILTER = {
+  relations: {
+    none: {
+      or: [
+        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
+        {
+          typeId: { is: SystemIds.TYPES_PROPERTY },
+          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
+        },
+      ],
+    },
+  },
+} satisfies EntityFilter;
+
 function timeThresholdSec(filter: ExploreTime): number | null {
   const now = Math.floor(Date.now() / 1000);
   switch (filter) {
@@ -154,6 +177,7 @@ async function fetchExploreEntitiesPage(args: {
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
+    ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
     ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
