@@ -1,5 +1,6 @@
 'use client';
 
+import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
@@ -12,20 +13,40 @@ type ExploreJoinSpaceButtonProps = {
   hasRequestedSpaceMembership: boolean;
 };
 
+function normId(id: string): string {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
+/**
+ * Space IDs the user has requested membership for in this session. Shared across all
+ * explore cards so every card for the same space flips to "Membership pending" after
+ * one click — no need to refetch the feed.
+ */
+const locallyRequestedSpaceIdsAtom = atom<Set<string>>(new Set<string>());
+
 export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { shouldShowElement } = useOnboardGuard();
-  const [localSuccess, setLocalSuccess] = React.useState(false);
+  const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
+
+  const normalizedId = normId(spaceId);
+  const locallyRequestedThisSpace = locallyRequested.has(normalizedId);
 
   React.useEffect(() => {
-    if (status === 'success') setLocalSuccess(true);
-  }, [status]);
+    if (status === 'success' && !locallyRequestedThisSpace) {
+      setLocallyRequested(prev => {
+        const next = new Set(prev);
+        next.add(normalizedId);
+        return next;
+      });
+    }
+  }, [status, normalizedId, locallyRequestedThisSpace, setLocallyRequested]);
 
   if (!shouldShowElement) {
     return null;
   }
 
-  const showPendingLabel = hasRequestedSpaceMembership || localSuccess;
+  const showPendingLabel = hasRequestedSpaceMembership || locallyRequestedThisSpace;
 
   return (
     <Pending isPending={status === 'pending'} position="end">
