@@ -86,7 +86,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
     }
     return out;
   }, [item.types]);
-  const edited = formatExploreRelativeTime(item.updatedAtSec);
+  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
   const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
@@ -113,7 +113,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
               ))}
             </div>
           ) : null}
-          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{edited}</span>
+          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{timeAgo}</span>
         </div>
         {!item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton

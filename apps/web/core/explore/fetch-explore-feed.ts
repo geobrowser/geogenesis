@@ -30,7 +30,7 @@ export type ExploreFeedItem = {
   spaceName: string;
   spaceImage: string | null;
   types: { id: string; name: string | null }[];
-  updatedAtSec: number;
+  createdAtSec: number;
   title: string;
   description: string | null;
   imageUrl: string | null;
@@ -193,10 +193,14 @@ function buildItems(
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!spaceId || !entityMatchesExploreTypes(e)) continue;
 
-    // Space-scoped title/description/types only — no cross-space fallbacks. A card
-    // rendered for space A shouldn't leak a name from space C.
-    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? 'Untitled';
-    const description = textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? null;
+    // Prefer space-scoped values so a card rendered for space A doesn't leak values
+    // from space C. Fall back to the top-level aggregated name/description when the
+    // entity has no value in the display space — avoids "Untitled" cards purely
+    // because of the space boundary.
+    const title =
+      textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
+    const description =
+      textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
     const displaySpaceIdNorm = normId(spaceId);
     const types = e.relations
@@ -207,7 +211,7 @@ function buildItems(
       entityId: e.id,
       spaceId,
       types,
-      updatedAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
+      createdAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),

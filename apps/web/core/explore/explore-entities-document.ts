@@ -9,7 +9,7 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 
-// Only the four property IDs and the two relation-type IDs we actually read per entity.
+// Only the four property IDs and the three relation-type IDs we actually read per entity.
 // Narrowing these on the server slashes payload size — most entities have dozens of
 // unrelated values/relations we'd otherwise serialize, ship, and decode for nothing.
 const CARD_VALUE_PROPERTY_IDS = [
