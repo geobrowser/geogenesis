@@ -475,14 +475,32 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                     gridTemplateColumns: columnLayout.template,
                   }}
                 >
-                  {columns.map(col => (
-                    <div
-                      key={`preview-${rowIndex}-${col.csvColumnIndex}`}
-                      className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
-                    >
-                      <div className="truncate text-metadata text-text">{row[col.csvColumnIndex] ?? ''}</div>
-                    </div>
-                  ))}
+                  {columns.map(col => {
+                    const rawValue = row[col.csvColumnIndex] ?? '';
+                    const isRelationCol = col.dataType === 'RELATION';
+                    return (
+                      <div
+                        key={`preview-${rowIndex}-${col.csvColumnIndex}`}
+                        className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                      >
+                        {isRelationCol && rawValue ? (
+                          <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                            {splitRelationCell(rawValue).map((part, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text"
+                              >
+                                <span>{part}</span>
+                                <ChipSeparator />
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="truncate text-metadata text-text">{rawValue}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

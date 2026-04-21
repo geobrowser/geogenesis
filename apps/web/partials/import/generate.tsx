@@ -350,7 +350,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             </div>
             <SmallButton
               type="button"
-              variant="secondary"
+              variant="primary"
               className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
@@ -362,7 +362,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             <p className="text-metadata text-grey-04">All columns are mapped. Review your data before importing.</p>
             <SmallButton
               type="button"
-              variant="secondary"
+              variant="primary"
               className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
@@ -466,25 +466,34 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             <p className="text-metadata text-grey-04">Upload a file to continue</p>
           </div>
         ) : (
-          <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
-            <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
-            <div className="flex flex-wrap items-center gap-3">
+          selectedType || typesColumnIndex !== undefined ? (
+            <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
-                {selectedType ? (
-                  <>
-                    <span className="text-smallButton font-medium text-text">{selectedType.name}</span>
-                    <SmallButton
-                      variant="ghost"
-                      onClick={() => {
-                        clearGeneratedChanges();
-                        setSelectedType(null);
-                      }}
-                      className="text-grey-04"
-                    >
-                      Change type
-                    </SmallButton>
-                  </>
-                ) : (
+                <span className="shrink-0 truncate font-bold text-text">{fileName}</span>
+                <span className="truncate text-metadata text-grey-04">
+                  {typesColumnIndex !== undefined
+                    ? `Type defined by ${headers[typesColumnIndex] ?? ''} in ${fileName}`
+                    : `Type defined as ${selectedType?.name ?? ''}`}
+                </span>
+              </div>
+              <SmallButton
+                type="button"
+                variant="secondary"
+                className="shrink-0 rounded-md"
+                onClick={() => {
+                  clearGeneratedChanges();
+                  setSelectedType(null);
+                  setTypesColumnIndex(undefined);
+                }}
+              >
+                Change type
+              </SmallButton>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
+              <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-0 items-center gap-2">
                   <div className="relative w-[192px]">
                     <EntitySearchAutocomplete
                       placeholder="Search for a type..."
@@ -499,46 +508,46 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                       itemIds={[]}
                     />
                   </div>
-                )}
+                </div>
+                <span className="shrink-0 text-button text-grey-04">or</span>
+                <div className="shrink-0">
+                  <Dropdown
+                    align="start"
+                    trigger={
+                      <span>
+                        {typesColumnIndex !== undefined
+                          ? `Column: ${headers[typesColumnIndex] ?? ''}`
+                          : 'Select column from CSV'}
+                      </span>
+                    }
+                    options={headers.map((header, index) => ({
+                      label: header ?? `Column ${index + 1}`,
+                      value: String(index),
+                      disabled: false,
+                      onClick: () => {
+                        clearGeneratedChanges();
+                        setTypesColumnIndex(index);
+                        setSelectedType(null);
+                        setColumnMapping(prev => {
+                          if (prev[index] === undefined) return prev;
+                          const next = { ...prev };
+                          delete next[index];
+                          return next;
+                        });
+                        setStep('step3');
+                      },
+                    }))}
+                  />
+                </div>
               </div>
-              <span className="shrink-0 text-button text-grey-04">or</span>
-              <div className="shrink-0">
-                <Dropdown
-                  align="start"
-                  trigger={
-                    <span>
-                      {typesColumnIndex !== undefined
-                        ? `Column: ${headers[typesColumnIndex] ?? ''}`
-                        : 'Select column from CSV'}
-                    </span>
-                  }
-                  options={headers.map((header, index) => ({
-                    label: header ?? `Column ${index + 1}`,
-                    value: String(index),
-                    disabled: false,
-                    onClick: () => {
-                      clearGeneratedChanges();
-                      setTypesColumnIndex(index);
-                      setSelectedType(null);
-                      setColumnMapping(prev => {
-                        if (prev[index] === undefined) return prev;
-                        const next = { ...prev };
-                        delete next[index];
-                        return next;
-                      });
-                      setStep('step3');
-                    },
-                  }))}
-                />
-              </div>
+              {hasTypesColumn !== undefined && (
+                <p className="mt-2 text-metadata text-grey-04">
+                  This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
+                  above.
+                </p>
+              )}
             </div>
-            {hasTypesColumn !== undefined && (
-              <p className="mt-2 text-metadata text-grey-04">
-                This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
-                above.
-              </p>
-            )}
-          </div>
+          )
         )}
       </div>
 
