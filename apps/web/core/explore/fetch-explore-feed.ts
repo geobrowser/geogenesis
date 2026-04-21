@@ -234,10 +234,11 @@ async function fetchTopEntitiesPage(args: {
       decoder: decodeExploreEntitiesByScore,
       endpointOverride: SCORE_API_STAGING_URL_TEMP,
       variables: {
-        spaceIds: { in: args.spaceIds } as UuidFilter,
         limit: args.limit,
         after: args.after,
-        filter: buildFeedFilter(args),
+        // `entitiesOrderedByScoreConnection` has no top-level `spaceIds` arg — it
+        // must be nested inside `filter` (unlike the regular `entitiesConnection`).
+        filter: { ...buildFeedFilter(args), spaceIds: { in: args.spaceIds } as UuidFilter },
         scoreType: 'RAW',
         sortDirection: 'DESC',
         spaceIdsForLists: args.spaceIds,

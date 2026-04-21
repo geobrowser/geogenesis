@@ -37,7 +37,6 @@ const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
   }
 
   query ExploreEntitiesByScoreConnection(
-    $spaceIds: UUIDFilter
     $limit: Int
     $after: Cursor
     $filter: EntityFilter
@@ -49,7 +48,6 @@ const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
       first: $limit
       after: $after
       filter: $filter
-      spaceIds: $spaceIds
       scoreType: $scoreType
       sortDirection: $sortDirection
     ) {
