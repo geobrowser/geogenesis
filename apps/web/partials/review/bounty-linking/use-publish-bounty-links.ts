@@ -57,6 +57,14 @@ export function usePublishBountyLinks({ personalSpaceId }: UsePublishBountyLinks
       }
 
       setIsPublishing(true);
+      let settled = false;
+      const settle = (success: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (success) onSuccess?.();
+        else onError?.();
+      };
+
       try {
         const bountyLinkValues: StoreValue[] = [
           {
@@ -137,14 +145,24 @@ export function usePublishBountyLinks({ personalSpaceId }: UsePublishBountyLinks
           }),
         ];
 
-        await makeProposal({
-          values: bountyLinkValues,
-          relations: bountyLinkRelations,
-          spaceId: personalSpaceId,
-          name: `Bounty links for: ${proposalName}`,
-          onSuccess,
-          onError,
-        });
+        // `makeProposal` has several early-return paths (no smart account, no space, empty
+        // ops) where it resolves without invoking either callback. Capture the promise
+        // resolution and, if neither callback has fired by then, surface a failure through
+        // `onError` so consumers can react deterministically.
+        try {
+          await makeProposal({
+            values: bountyLinkValues,
+            relations: bountyLinkRelations,
+            spaceId: personalSpaceId,
+            name: `Bounty links for: ${proposalName}`,
+            onSuccess: () => settle(true),
+            onError: () => settle(false),
+          });
+        } catch {
+          settle(false);
+          return;
+        }
+        settle(false);
       } finally {
         setIsPublishing(false);
       }

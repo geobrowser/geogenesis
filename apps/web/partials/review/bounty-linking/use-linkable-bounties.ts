@@ -112,7 +112,7 @@ export function useLinkableBounties({
     return [...new Set([...bountyEntityIds, ...remoteIds])].sort();
   }, [bountyEntityIds, remoteBountyEntities]);
 
-  const { data: bountySubmissionRelations = [] } = useQuery({
+  const { data: bountySubmissionRelations = [], isLoading: isLoadingSubmissions } = useQuery({
     queryKey: ['bounty-submission-relations', allBountyIds],
     enabled: allBountyIds.length > 0 && enabled,
     staleTime: 60_000,
@@ -121,7 +121,7 @@ export function useLinkableBounties({
     },
   });
 
-  const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
+  const { data: bountyPersonalSubmissionRelations = [], isLoading: isLoadingPersonalSubmissions } = useQuery({
     queryKey: ['bounty-submission-relations-personal', allBountyIds, personalSpaceId],
     enabled: allBountyIds.length > 0 && enabled && Boolean(personalSpaceId),
     staleTime: 60_000,
@@ -208,7 +208,7 @@ export function useLinkableBounties({
     [bounties]
   );
 
-  const { data: bountyLabelSpaces = [] } = useQuery({
+  const { data: bountyLabelSpaces = [], isLoading: isLoadingLabels } = useQuery({
     queryKey: ['bounty-space-labels', bountySpaceIdsForLabels.join(',')],
     enabled: bountySpaceIdsForLabels.length > 0 && enabled,
     staleTime: 60_000,
@@ -219,9 +219,10 @@ export function useLinkableBounties({
   });
 
   const bountiesWithSpaceLabels = React.useMemo((): Bounty[] => {
+    const spacesById = new Map(bountyLabelSpaces.map(s => [s.id, s]));
     const row = new Map<string, { label: string; image: string }>();
     for (const id of bountySpaceIdsForLabels) {
-      const space = bountyLabelSpaces.find(s => s.id === id);
+      const space = spacesById.get(id);
       const name = space?.entity?.name?.trim();
       const label = name && name.length > 0 ? name : bountySpaceFallbackLabel(id);
       const image =
@@ -248,6 +249,11 @@ export function useLinkableBounties({
   return {
     bounties: bountiesWithSpaceLabels,
     bountiesById: bountiesByIdWithLabels,
-    isLoading: isLoadingAncestors || isLoadingRemote,
+    isLoading:
+      isLoadingAncestors ||
+      isLoadingRemote ||
+      isLoadingSubmissions ||
+      isLoadingPersonalSubmissions ||
+      isLoadingLabels,
   };
 }
