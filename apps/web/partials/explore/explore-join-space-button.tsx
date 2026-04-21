@@ -1,9 +1,9 @@
 'use client';
 
-import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+import { atom, useAtom } from 'jotai';
+
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
 import { Pending } from '~/design-system/pending';
@@ -26,7 +26,6 @@ const locallyRequestedSpaceIdsAtom = atom<Set<string>>(new Set<string>());
 
 export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
-  const { shouldShowElement } = useOnboardGuard();
   const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
 
   const normalizedId = normId(spaceId);
@@ -41,10 +40,6 @@ export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }:
       });
     }
   }, [status, normalizedId, locallyRequestedThisSpace, setLocallyRequested]);
-
-  if (!shouldShowElement) {
-    return null;
-  }
 
   const showPendingLabel = hasRequestedSpaceMembership || locallyRequestedThisSpace;
 
