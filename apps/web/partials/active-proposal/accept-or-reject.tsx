@@ -12,7 +12,7 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
-import { useAddOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
 
 import { Execute } from './execute';
@@ -53,20 +53,26 @@ export function AcceptOrReject({
 
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
 
   const onVoteSuccess = () => {
-    addOptimisticVote(proposalId);
     router.refresh();
+  };
+
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
   };
 
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT', { onSuccess: onVoteSuccess });
+    addOptimisticVote(proposalId);
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT', { onSuccess: onVoteSuccess });
+    addOptimisticVote(proposalId);
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   if (isProposalEnded) {
