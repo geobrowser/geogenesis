@@ -12,6 +12,7 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
+import { useAddOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
 
 import { Execute } from './execute';
@@ -51,8 +52,10 @@ export function AcceptOrReject({
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
 
   const onVoteSuccess = () => {
+    addOptimisticVote(proposalId);
     router.refresh();
   };
 
