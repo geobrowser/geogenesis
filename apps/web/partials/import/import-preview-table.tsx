@@ -109,6 +109,48 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   );
 }
 
+function getDataTypeLabel(col: ColumnConfig): string | null {
+  if (col.mappingLocked) return 'Relation';
+  switch (col.renderableTypeStrict) {
+    case 'IMAGE':
+      return 'Image';
+    case 'VIDEO':
+      return 'Video';
+    case 'URL':
+      return 'URL';
+    case 'GEO_LOCATION':
+      return 'Geo location';
+    case 'PLACE':
+      return 'Place';
+    case 'ADDRESS':
+      return 'Address';
+  }
+  switch (col.dataType) {
+    case 'TEXT':
+      return 'Text';
+    case 'RELATION':
+      return 'Relation';
+    case 'INTEGER':
+      return 'Integer';
+    case 'FLOAT':
+      return 'Float';
+    case 'DECIMAL':
+      return 'Decimal';
+    case 'BOOLEAN':
+      return 'Checkbox';
+    case 'DATE':
+      return 'Date';
+    case 'DATETIME':
+      return 'Date & time';
+    case 'TIME':
+      return 'Time';
+    case 'POINT':
+      return 'Point';
+    default:
+      return null;
+  }
+}
+
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
   /** CSV column index (0-based) — cell value is always row[csvColumnIndex] */
@@ -406,29 +448,43 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
               </Text>
               {col.propertyName !== null ? (
                 onSelectProperty && !col.mappingLocked ? (
-                  <PropertyMappingPopover
-                    spaceId={spaceId}
-                    csvColumnIndex={col.csvColumnIndex}
-                    onSelectProperty={onSelectProperty}
-                    onCreateProperty={onCreateProperty}
-                    initialQuery={col.headerLabel}
-                    selectedEntityId={col.propertyId ?? undefined}
-                    trigger={
-                      <span className="flex items-center gap-1.5">
-                        <PropertySpaceIcon propertyId={col.propertyId} />
-                        <Text variant="metadata" className="truncate text-purple">
-                          {col.propertyName}
-                        </Text>
-                      </span>
-                    }
-                  />
+                  <>
+                    <PropertyMappingPopover
+                      spaceId={spaceId}
+                      csvColumnIndex={col.csvColumnIndex}
+                      onSelectProperty={onSelectProperty}
+                      onCreateProperty={onCreateProperty}
+                      initialQuery={col.headerLabel}
+                      selectedEntityId={col.propertyId ?? undefined}
+                      trigger={
+                        <span className="flex items-center gap-1.5">
+                          <PropertySpaceIcon propertyId={col.propertyId} />
+                          <Text variant="metadata" className="truncate text-purple">
+                            {col.propertyName}
+                          </Text>
+                        </span>
+                      }
+                    />
+                    {getDataTypeLabel(col) && (
+                      <Text variant="metadata" className="truncate text-grey-04">
+                        {getDataTypeLabel(col)}
+                      </Text>
+                    )}
+                  </>
                 ) : (
-                  <span className="mt-0.5 flex items-center gap-1.5">
-                    <PropertySpaceIcon propertyId={col.propertyId} />
-                    <Text variant="metadata" className="truncate text-purple">
-                      {col.propertyName}
-                    </Text>
-                  </span>
+                  <>
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                      <PropertySpaceIcon propertyId={col.propertyId} />
+                      <Text variant="metadata" className="truncate text-purple">
+                        {col.propertyName}
+                      </Text>
+                    </span>
+                    {getDataTypeLabel(col) && (
+                      <Text variant="metadata" className="truncate text-grey-04">
+                        {getDataTypeLabel(col)}
+                      </Text>
+                    )}
+                  </>
                 )
               ) : onSelectProperty ? (
                 <PropertyMappingPopover
