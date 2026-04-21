@@ -313,21 +313,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const step3Content = useMemo(() => {
     if (!hasFile) {
       return (
-        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="rounded-2xl bg-grey-01 p-3">
           <p className="text-metadata text-grey-04">Upload a file to continue</p>
         </div>
       );
     }
     if (!selectedType && typesColumnIndex === undefined) {
       return (
-        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="rounded-2xl bg-grey-01 p-3">
           <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
         </div>
       );
     }
     if (isAutoMapping) {
       return (
-        <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-2xl bg-grey-01 p-3">
           <Spinner />
           <Text variant="smallButton" className="text-text">
             Mapping columns to properties...
@@ -338,7 +338,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     const unmappedCount = headers.filter((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined).length;
     const hasUnmapped = unmappedCount > 0;
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-grey-01 p-3">
         {hasUnmapped ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -418,7 +418,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           </div>
         ) : fileName ? (
           <div
-            className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3"
+            className="flex w-full items-center justify-between gap-3 rounded-2xl bg-grey-01 p-3"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
@@ -463,12 +463,12 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <span className="text-button font-medium text-text">Map types</span>
         </div>
         {!fileName || !hasFile ? (
-          <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <div className="rounded-2xl bg-grey-01 p-3">
             <p className="text-metadata text-grey-04">Upload a file to continue</p>
           </div>
         ) : (
           selectedType || typesColumnIndex !== undefined ? (
-            <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3">
+            <div className="flex w-full items-center justify-between gap-3 rounded-2xl bg-grey-01 p-3">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-metadata text-grey-04">
                   {typesColumnIndex !== undefined
@@ -490,7 +490,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               </SmallButton>
             </div>
           ) : (
-            <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
+            <div className="rounded-2xl bg-grey-01 p-3">
               <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex min-w-0 items-center gap-2">
