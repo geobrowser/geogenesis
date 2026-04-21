@@ -173,7 +173,7 @@ export function EntityFeed({
         </div>
       ) : null}
 
-      <div className="mt-8">
+      <div className={showTimeFilter || lockedSpaceId == null ? 'mt-8' : undefined}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
         ) : isLoading ? (
