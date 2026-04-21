@@ -135,7 +135,7 @@ async function PendingProposals({
   connectedSpaceId,
   governanceFilters,
 }: PendingProposalsProps) {
-  const { node, hasMore } = await PendingProposalsPage({
+  const { node, hasMore, page0OrderKey } = await PendingProposalsPage({
     connectedSpaceId,
     connectedAddress,
     proposalType,
@@ -152,6 +152,7 @@ async function PendingProposals({
       {node}
       {hasMore && connectedSpaceId && (
         <HomeProposalsInfiniteScroll
+          key={page0OrderKey}
           connectedSpaceId={connectedSpaceId}
           connectedAddress={connectedAddress}
           proposalType={proposalType}

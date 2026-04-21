@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
@@ -30,6 +31,8 @@ export function AcceptOrRejectEditor({
   userVote,
   proposalId,
 }: Props) {
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -44,14 +47,18 @@ export function AcceptOrRejectEditor({
 
   const { smartAccount } = useSmartAccount();
 
+  const onVoteSuccess = () => {
+    router.refresh();
+  };
+
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT');
+    vote('ACCEPT', { onSuccess: onVoteSuccess });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT');
+    vote('REJECT', { onSuccess: onVoteSuccess });
   };
 
   // Terminal / post-vote states on the proposal must win over "You accepted" so we match space

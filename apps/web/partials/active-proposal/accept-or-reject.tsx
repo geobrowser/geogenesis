@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -35,6 +36,7 @@ export function AcceptOrReject({
   userVote,
   proposalId,
 }: Props) {
+  const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     spaceId,
@@ -49,14 +51,19 @@ export function AcceptOrReject({
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+
+  const onVoteSuccess = () => {
+    router.refresh();
+  };
+
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT');
+    vote('ACCEPT', { onSuccess: onVoteSuccess });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT');
+    vote('REJECT', { onSuccess: onVoteSuccess });
   };
 
   if (isProposalEnded) {

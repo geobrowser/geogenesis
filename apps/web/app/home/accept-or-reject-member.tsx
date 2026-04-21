@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 
 import cx from 'classnames';
 
@@ -65,6 +66,8 @@ export function AcceptOrRejectMember({
 }: Props) {
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -77,14 +80,18 @@ export function AcceptOrRejectMember({
 
   const { smartAccount } = useSmartAccount();
 
+  const onVoteSuccess = () => {
+    router.refresh();
+  };
+
   const onApprove = () => {
     setSelectedVote('ACCEPT');
-    vote('ACCEPT');
+    vote('ACCEPT', { onSuccess: onVoteSuccess });
   };
 
   const onReject = () => {
     setSelectedVote('REJECT');
-    vote('REJECT');
+    vote('REJECT', { onSuccess: onVoteSuccess });
   };
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);

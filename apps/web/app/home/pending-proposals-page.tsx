@@ -52,14 +52,16 @@ export async function PendingProposalsPage({
   proposalType,
   page = 0,
   governanceFilters,
-}: Props): Promise<{ node: React.ReactNode; hasMore: boolean }> {
+}: Props): Promise<{ node: React.ReactNode; hasMore: boolean; page0OrderKey: string }> {
   const [activeProposals, profile] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedSpaceId, proposalType, page, governanceFilters),
     connectedAddress ? Effect.runPromise(fetchProfile(connectedAddress)) : null,
   ]);
 
+  const page0OrderKey = activeProposals.proposals.map(p => p.id).join('|');
+
   if (activeProposals.proposals.length === 0) {
-    return { node: null, hasMore: false };
+    return { node: null, hasMore: false, page0OrderKey: '' };
   }
 
   const user =
@@ -82,6 +84,7 @@ export async function PendingProposalsPage({
       : undefined;
 
   return {
+    page0OrderKey,
     node: (
       <div className="space-y-2">
         {activeProposals.proposals.map(proposal => {

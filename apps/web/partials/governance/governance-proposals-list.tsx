@@ -45,6 +45,16 @@ const PAGE_SIZE = 100;
 
 const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
 
+/** Unvoted proposals first; voted ones sink to the bottom (same as governance home review). */
+function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalListItem[]): ApiProposalListItem[] {
+  return [...items].sort((a, b) => {
+    const aVoted = a.userVote != null;
+    const bVoted = b.userVote != null;
+    if (aVoted !== bVoted) return aVoted ? 1 : -1;
+    return a.timing.endTime - b.timing.endTime;
+  });
+}
+
 function percentageFromCounts(count: number, total: number): number {
   if (total === 0) return 0;
   return Math.floor((count / total) * 100);
@@ -352,8 +362,12 @@ async function fetchGovernanceProposals({
     }),
   ]);
 
-  // Combine in priority order: executable > active > completed
-  let combinedProposals = [...executableProposals, ...activeProposals, ...completedProposals];
+  // Combine in priority order: executable > active > completed; within open phases, unvoted first.
+  let combinedProposals = [
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(executableProposals),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(activeProposals),
+    ...completedProposals,
+  ];
 
   // Filter by proposal type
   if (effectiveType === 'proposals') {
