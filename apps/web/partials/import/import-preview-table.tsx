@@ -14,6 +14,7 @@ import { getProperty } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
+import { mapPropertyType } from '~/core/utils/property/properties';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -178,23 +179,30 @@ function PropertyMappingPopover({
 
         onSelectProperty(csvColumnIndex, result.id, property);
       }}
-      onCreateEntity={result => {
+      onCreateEntity={async result => {
+        const propertyType = result.renderableType || 'TEXT';
         const propertyId = createProperty({
           name: result.name || '',
-          propertyType: result.renderableType || 'TEXT',
+          propertyType,
         });
 
-        // Resolve the full property from the store after creation
-        const property = store.getProperty(propertyId);
-        if (property) {
-          onCreateProperty?.(csvColumnIndex, propertyId, property);
-        } else {
-          onCreateProperty?.(csvColumnIndex, propertyId, {
-            id: propertyId,
-            name: result.name,
-            dataType: 'TEXT',
-          });
+        const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
+        let property: Property = store.getProperty(propertyId) ?? {
+          id: propertyId,
+          name: result.name,
+          dataType: baseDataType,
+          renderableType: renderableTypeId,
+        };
+
+        // Ensure dataType reflects the just-created property even if the store
+        // hasn't synced yet (fixes relation columns not rendering as relations).
+        if (property.dataType !== baseDataType) {
+          property = { ...property, dataType: baseDataType, renderableType: renderableTypeId };
         }
+
+        property = await hydrateRelationValueTypes(property);
+
+        onCreateProperty?.(csvColumnIndex, propertyId, property);
       }}
     />
   );
@@ -477,7 +485,8 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                 >
                   {columns.map(col => {
                     const rawValue = row[col.csvColumnIndex] ?? '';
-                    const isRelationCol = col.dataType === 'RELATION';
+                    const isTypesSourceCol = typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex;
+                    const isRelationCol = col.dataType === 'RELATION' || isTypesSourceCol;
                     return (
                       <div
                         key={`preview-${rowIndex}-${col.csvColumnIndex}`}

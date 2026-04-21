@@ -469,7 +469,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           selectedType || typesColumnIndex !== undefined ? (
             <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 truncate font-bold text-text">{fileName}</span>
+                <span className="shrink-0 truncate text-text">{fileName}</span>
                 <span className="truncate text-metadata text-grey-04">
                   {typesColumnIndex !== undefined
                     ? `Type defined by ${headers[typesColumnIndex] ?? ''} in ${fileName}`
