@@ -25,6 +25,7 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
+import { ProposalBountyLinksLauncher, ProposalLinkedBountiesList } from './proposal-bounty-links';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
@@ -69,6 +70,10 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const proposalTitle =
     proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
+  const isAuthor = Boolean(
+    connectedAddress && proposal.createdBy.address.toLowerCase() === connectedAddress.toLowerCase()
+  );
+
   return (
     <>
       <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
@@ -77,15 +82,23 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           <p>Review proposal</p>
         </div>
 
-        <AcceptOrReject
-          spaceId={spaceId}
-          proposalId={proposal.id}
-          isProposalEnded={isProposalEnded}
-          status={proposal.status}
-          canExecute={proposal.canExecute}
-          proposalType={proposal.type}
-          userVote={userVote}
-        />
+        <div className="inline-flex items-center gap-2">
+          <ProposalBountyLinksLauncher
+            proposalId={proposal.id}
+            proposalName={proposalTitle}
+            spaceId={spaceId}
+            isAuthor={isAuthor}
+          />
+          <AcceptOrReject
+            spaceId={spaceId}
+            proposalId={proposal.id}
+            isProposalEnded={isProposalEnded}
+            status={proposal.status}
+            canExecute={proposal.canExecute}
+            proposalType={proposal.type}
+            userVote={userVote}
+          />
+        </div>
       </div>
       <div className="relative overflow-x-clip">
         <MetadataMotionContainer>
@@ -174,6 +187,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
         </MetadataMotionContainer>
         <div className="h-full overflow-x-clip border-t border-divider">
           <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+            <ProposalLinkedBountiesList proposalId={proposal.id} />
             {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
             {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
             {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
