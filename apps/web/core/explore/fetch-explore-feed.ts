@@ -16,11 +16,13 @@ import {
   EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
+  SCORE_API_STAGING_URL_TEMP,
 } from './explore-constants';
+import { exploreEntitiesByScoreConnectionDocument } from './explore-entities-by-score-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
-export type ExploreSort = 'new';
+export type ExploreSort = 'new' | 'top';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export type ExploreFeedItem = {
@@ -141,14 +143,14 @@ type ExploreEntitiesPageResponse = {
   hasNextPage: boolean;
 };
 
-function decodeExploreEntities(data: {
-  entitiesConnection?: {
-    nodes?: unknown[];
-    pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-  } | null;
-}): ExploreEntitiesPageResponse {
+type EntitiesConnectionShape = {
+  nodes?: unknown[];
+  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
+} | null;
+
+function decodeConnection(connection: EntitiesConnectionShape): ExploreEntitiesPageResponse {
   const entities: ExploreEntity[] = [];
-  for (const n of (data.entitiesConnection?.nodes ?? []) as Array<
+  for (const n of (connection?.nodes ?? []) as Array<
     Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string }
   >) {
     const decoded = EntityDecoder.decode(n);
@@ -161,8 +163,32 @@ function decodeExploreEntities(data: {
   }
   return {
     entities,
-    endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
-    hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
+  };
+}
+
+function decodeExploreEntities(data: { entitiesConnection?: EntitiesConnectionShape }): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesConnection ?? null);
+}
+
+function decodeExploreEntitiesByScore(data: {
+  entitiesOrderedByScoreConnection?: EntitiesConnectionShape;
+}): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesOrderedByScoreConnection ?? null);
+}
+
+function buildFeedFilter(args: {
+  time: ExploreTime;
+  typeIds?: readonly string[];
+  requireName?: boolean;
+}): EntityFilter {
+  const t = timeThresholdSec(args.time);
+  return {
+    ...FEED_EXCLUDED_RELATIONS_FILTER,
+    ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
+    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 }
 
@@ -175,14 +201,6 @@ async function fetchExploreEntitiesPage(args: {
   typeIds?: readonly string[];
   requireName?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
-  const t = timeThresholdSec(args.time);
-  const filter: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
-    ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
-  };
-
   return Effect.runPromise(
     graphql({
       query: exploreEntitiesConnectionDocument,
@@ -191,8 +209,37 @@ async function fetchExploreEntitiesPage(args: {
         spaceIds: { in: args.spaceIds } as UuidFilter,
         limit: args.limit,
         after: args.after,
-        filter,
+        filter: buildFeedFilter(args),
         orderBy: args.orderBy,
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
+// TEMP(explore-top-sort): hits the staging API via endpointOverride. When the
+// field lands on the production testnet endpoint, drop the override and this
+// function can be folded back into the main fetcher with a different document.
+async function fetchTopEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  after: string | null;
+  typeIds?: readonly string[];
+  requireName?: boolean;
+}): Promise<ExploreEntitiesPageResponse> {
+  return Effect.runPromise(
+    graphql({
+      query: exploreEntitiesByScoreConnectionDocument,
+      decoder: decodeExploreEntitiesByScore,
+      endpointOverride: SCORE_API_STAGING_URL_TEMP,
+      variables: {
+        spaceIds: { in: args.spaceIds } as UuidFilter,
+        limit: args.limit,
+        after: args.after,
+        filter: buildFeedFilter(args),
+        scoreType: 'RAW',
+        sortDirection: 'DESC',
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -324,15 +371,25 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
-  const page = await fetchExploreEntitiesPage({
-    spaceIds: baseIds,
-    time: args.time,
-    limit: scanChunk,
-    after: args.cursor,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
-    typeIds: args.typeIds,
-    requireName: args.requireName,
-  });
+  const page =
+    args.sort === 'top'
+      ? await fetchTopEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          typeIds: args.typeIds,
+          requireName: args.requireName,
+        })
+      : await fetchExploreEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          orderBy: [EntitiesOrderBy.CreatedAtDesc],
+          typeIds: args.typeIds,
+          requireName: args.requireName,
+        });
 
   const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
   const items = await attachMeta(enriched.slice(0, pageSize));

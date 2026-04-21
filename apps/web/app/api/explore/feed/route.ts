@@ -19,7 +19,7 @@ function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-const SORTS: ExploreSort[] = ['new'];
+const SORTS: ExploreSort[] = ['new', 'top'];
 const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
 
 function parseSort(raw: string | null): ExploreSort {

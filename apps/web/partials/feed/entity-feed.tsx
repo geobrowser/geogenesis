@@ -23,7 +23,10 @@ function LoadingSkeleton() {
   );
 }
 
-const SORT: ExploreSort = 'new';
+const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
+  { value: 'new', label: 'New' },
+  { value: 'top', label: 'Top' },
+];
 
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -46,6 +49,8 @@ type EntityFeedProps = {
   initialTime?: ExploreTime;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
+  /** Whether to render the sort dropdown (New / Top). Defaults to false. */
+  showSortFilter?: boolean;
 };
 
 async function fetchFeedPage(
@@ -79,8 +84,10 @@ export function EntityFeed({
   lockedSpaceId,
   initialTime = 'week',
   showTimeFilter = true,
+  showSortFilter = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
+  const [sort, setSort] = React.useState<ExploreSort>('new');
   const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
   const spaceId = lockedSpaceId ?? selectedSpaceId;
 
@@ -92,9 +99,9 @@ export function EntityFeed({
   const smartAccountAddress = smartAccount?.account.address ?? null;
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: [apiEndpoint, SORT, time, spaceId, smartAccountAddress],
+    queryKey: [apiEndpoint, sort, time, spaceId, smartAccountAddress],
     queryFn: ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, { sort: SORT, time, spaceId, cursor: pageParam as string | undefined }),
+      fetchFeedPage(apiEndpoint, { sort, time, spaceId, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -126,6 +133,7 @@ export function EntityFeed({
   }, [data?.pages]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
+  const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
   const spaceLabel =
     selectedSpaceId === 'all'
       ? 'Any space'
@@ -133,8 +141,20 @@ export function EntityFeed({
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
-      {showTimeFilter || lockedSpaceId == null ? (
+      {showSortFilter || showTimeFilter || lockedSpaceId == null ? (
         <div className="flex flex-wrap items-center gap-3">
+          {showSortFilter ? (
+            <Dropdown
+              align="start"
+              trigger={<span>{sortLabel}</span>}
+              options={SORT_OPTIONS.map(o => ({
+                label: o.label,
+                value: o.value,
+                disabled: false,
+                onClick: () => setSort(o.value),
+              }))}
+            />
+          ) : null}
           {showTimeFilter ? (
             <Dropdown
               align="start"
@@ -173,7 +193,7 @@ export function EntityFeed({
         </div>
       ) : null}
 
-      <div className={showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1'}>
+      <div className={showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1'}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
         ) : isLoading ? (

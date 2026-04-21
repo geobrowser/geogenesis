@@ -16,3 +16,9 @@ export const EXPLORE_COVER_PROPERTY_ID = '34f535072e6b42c5a84443981a77cfa2';
 export const EXPLORE_AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 export const EXPLORE_PAGE_SIZE = 22;
+
+// TEMP(explore-top-sort): `entitiesOrderedByScoreConnection` is only deployed to
+// the staging API for now. When the API team promotes it to the production
+// testnet endpoint (`getConfig().api`), delete this constant and drop the
+// `endpointOverride` argument from the score-query call in fetch-explore-feed.ts.
+export const SCORE_API_STAGING_URL_TEMP = 'https://testnet-api-staging.geobrowser.io/graphql';
