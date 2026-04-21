@@ -12,7 +12,7 @@ import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
 import { Execute } from '~/partials/active-proposal/execute';
-import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
+import { useAddOptimisticVote, useConfirmVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -49,8 +49,10 @@ export function AcceptOrRejectEditor({
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
+  const confirmVote = useConfirmVote();
 
   const onVoteSuccess = () => {
+    confirmVote(proposalId);
     router.refresh();
   };
 

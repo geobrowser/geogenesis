@@ -20,7 +20,7 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { useOptimisticallyVotedIds } from '~/partials/governance/optimistic-voted-atom';
+import { useConfirmedVotedIds } from '~/partials/governance/optimistic-voted-atom';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
@@ -70,8 +70,8 @@ function BrowseNavPrimaryLinks({
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
-  const optimisticVotedIds = useOptimisticallyVotedIds();
-  const hasPendingVotes = pendingVoteProposalIds.some(id => !optimisticVotedIds.has(id));
+  const confirmedVotedIds = useConfirmedVotedIds();
+  const hasPendingVotes = pendingVoteProposalIds.some(id => !confirmedVotedIds.has(id));
 
   return (
     <>
@@ -196,11 +196,19 @@ export function BrowseSidebar() {
 
   React.useEffect(() => {
     let cancelled = false;
-    void loadBrowseSidebarData(walletAddress).then(d => {
-      if (!cancelled) setData(d);
-    });
+    const load = () => {
+      void loadBrowseSidebarData(walletAddress).then(d => {
+        if (!cancelled) setData(d);
+      });
+    };
+    load();
+    const interval = setInterval(load, 30_000);
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
     };
   }, [walletAddress]);
 
