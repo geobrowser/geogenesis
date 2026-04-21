@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -50,6 +50,7 @@ const MotionOverlay = motion.create(Overlay);
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
+  const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
   const name = useAtomValue(nameAtom);
@@ -64,6 +65,16 @@ export const OnboardingDialog = () => {
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+
+  // Redirect after onboarding completes. Lives here (not in StepComplete)
+  // because the dialog can unmount StepComplete before it renders with
+  // step='completed' — isOnboardingVisible flips to false once the personal
+  // space query refetches as registered.
+  useEffect(() => {
+    if (step !== 'completed') return;
+    const timer = setTimeout(() => router.push(ONBOARDING_DESTINATION), 3_600);
+    return () => clearTimeout(timer);
+  }, [step, router]);
 
   const address = smartAccount?.account.address;
 
@@ -380,17 +391,9 @@ const retryMessage: Record<Step, string> = {
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
-  const router = useRouter();
-
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
-
-  if (hasCompleted) {
-    setTimeout(() => {
-      router.push(ONBOARDING_DESTINATION);
-    }, 3_600);
-  }
 
   return (
     <>
