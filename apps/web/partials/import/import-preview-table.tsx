@@ -15,6 +15,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
+import { GeoDate, GeoNumber, GeoPoint } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -109,6 +110,56 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   );
 }
 
+/** Mirrors browse-mode date formats in design-system/editable-fields/date-field.tsx */
+const DATE_ONLY_FORMAT = 'MMM d, yyyy';
+const TIME_ONLY_FORMAT = 'h:mm aaa';
+const DATETIME_FORMAT = 'MMM d, yyyy - h:mm aaa';
+
+function isUrlColumn(col: ColumnConfig): boolean {
+  return col.dataType === 'TEXT' && col.renderableTypeStrict === 'URL';
+}
+
+function normalizeUrl(raw: string): string {
+  return raw.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? raw : `https://${raw}`;
+}
+
+function renderFormattedPreviewValue(col: ColumnConfig, value: string): React.ReactNode {
+  if (!value) return '—';
+
+  if (isUrlColumn(col)) {
+    return (
+      <a
+        href={normalizeUrl(value)}
+        target="_blank"
+        rel="noreferrer"
+        className="truncate text-tableCell text-ctaPrimary hover:underline"
+      >
+        {value}
+      </a>
+    );
+  }
+
+  switch (col.dataType) {
+    case 'DATE':
+      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, DATE_ONLY_FORMAT)}</span>;
+    case 'TIME':
+      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, TIME_ONLY_FORMAT)}</span>;
+    case 'DATETIME':
+      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, DATETIME_FORMAT)}</span>;
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL':
+      return <span className="truncate text-tableCell text-text">{GeoNumber.format(value, col.format ?? undefined)}</span>;
+    case 'POINT': {
+      const coords = GeoPoint.parseCoordinates(value);
+      const display = coords ? `(${coords.latitude}, ${coords.longitude})` : value;
+      return <span className="truncate text-tableCell text-text">{display}</span>;
+    }
+    default:
+      return <span className="truncate text-tableCell text-text">{value}</span>;
+  }
+}
+
 function getDataTypeLabel(col: ColumnConfig): string | null {
   if (col.mappingLocked) return 'Relation';
   switch (col.renderableTypeStrict) {
@@ -169,6 +220,8 @@ export type ColumnConfig = {
   mappingLocked?: boolean;
   /** Renderable type strict — used to detect IMAGE columns for thumbnail rendering */
   renderableTypeStrict?: string | null;
+  /** ICU-style number format pattern, for INTEGER/FLOAT/DECIMAL formatting */
+  format?: string | null;
 };
 
 function PropertyMappingPopover({
@@ -448,43 +501,35 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
               </Text>
               {col.propertyName !== null ? (
                 onSelectProperty && !col.mappingLocked ? (
-                  <>
-                    <PropertyMappingPopover
-                      spaceId={spaceId}
-                      csvColumnIndex={col.csvColumnIndex}
-                      onSelectProperty={onSelectProperty}
-                      onCreateProperty={onCreateProperty}
-                      initialQuery={col.headerLabel}
-                      selectedEntityId={col.propertyId ?? undefined}
-                      trigger={
-                        <span className="flex items-center gap-1.5">
-                          <PropertySpaceIcon propertyId={col.propertyId} />
-                          <Text variant="metadata" className="truncate text-purple">
-                            {col.propertyName}
-                          </Text>
-                        </span>
-                      }
-                    />
-                    {getDataTypeLabel(col) && (
-                      <Text variant="metadata" className="truncate text-grey-04">
-                        {getDataTypeLabel(col)}
-                      </Text>
-                    )}
-                  </>
+                  <PropertyMappingPopover
+                    spaceId={spaceId}
+                    csvColumnIndex={col.csvColumnIndex}
+                    onSelectProperty={onSelectProperty}
+                    onCreateProperty={onCreateProperty}
+                    initialQuery={col.headerLabel}
+                    selectedEntityId={col.propertyId ?? undefined}
+                    trigger={
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <PropertySpaceIcon propertyId={col.propertyId} />
+                        <Text variant="metadata" className="truncate text-purple">
+                          {col.propertyName}
+                          {getDataTypeLabel(col) && (
+                            <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>
+                          )}
+                        </Text>
+                      </span>
+                    }
+                  />
                 ) : (
-                  <>
-                    <span className="mt-0.5 flex items-center gap-1.5">
-                      <PropertySpaceIcon propertyId={col.propertyId} />
-                      <Text variant="metadata" className="truncate text-purple">
-                        {col.propertyName}
-                      </Text>
-                    </span>
-                    {getDataTypeLabel(col) && (
-                      <Text variant="metadata" className="truncate text-grey-04">
-                        {getDataTypeLabel(col)}
-                      </Text>
-                    )}
-                  </>
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                    <PropertySpaceIcon propertyId={col.propertyId} />
+                    <Text variant="metadata" className="truncate text-purple">
+                      {col.propertyName}
+                      {getDataTypeLabel(col) && (
+                        <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>
+                      )}
+                    </Text>
+                  </span>
                 )
               ) : onSelectProperty ? (
                 <PropertyMappingPopover
@@ -561,7 +606,9 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                             ))}
                           </div>
                         ) : (
-                          <div className="truncate text-metadata text-text">{rawValue}</div>
+                          <div className="truncate text-metadata text-text">
+                            {renderFormattedPreviewValue(col, rawValue)}
+                          </div>
                         )}
                       </div>
                     );
@@ -886,9 +933,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                                 }
                               />
                             ) : (
-                              <Text variant="tableCell" className="truncate">
-                                {value || '—'}
-                              </Text>
+                              renderFormattedPreviewValue(col, value)
                             )}
                           </div>
                         )}

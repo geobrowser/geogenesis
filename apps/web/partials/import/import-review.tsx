@@ -228,6 +228,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         relationValueTypes: prop?.relationValueTypes,
         mappingLocked: isTypesSourceColumn,
         renderableTypeStrict: prop?.renderableTypeStrict,
+        format: prop?.format,
       };
     });
   }, [headers, columnMapping, schema, extraProperties, store, typesColumnIndex]);
@@ -325,7 +326,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
               {hasUnmappedColumns && unmappedCount > 0 && (
                 <SmallButton
                   type="button"
-                  variant="secondary"
+                  variant="primary"
                   className="ml-auto shrink-0 rounded-md"
                   onClick={handleSkipAndDeleteUnmapped}
                 >
