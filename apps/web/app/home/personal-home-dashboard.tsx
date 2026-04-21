@@ -156,28 +156,14 @@ function useDelayedPending(isPending: boolean): boolean {
 
 function ProposalsListSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col divide-y divide-grey-01">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex flex-col gap-3 py-4">
-          <div className="h-5 w-2/3 rounded bg-grey-01" />
-          <div className="flex items-center justify-between gap-4">
-            <div className="h-4 w-1/3 rounded bg-grey-01" />
-            <div className="h-6 w-20 rounded bg-grey-01" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SidebarSkeleton() {
-  return (
-    <div className="animate-pulse space-y-2">
+    <div className="space-y-2">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="space-y-2 rounded border border-grey-02 p-3">
-          <div className="h-4 w-1/2 rounded bg-grey-01" />
-          <div className="h-4 w-3/4 rounded bg-grey-01" />
-          <div className="h-4 w-2/3 rounded bg-grey-01" />
+        <div key={i} className="space-y-4 rounded-lg border border-grey-02 p-4">
+          <div className="space-y-2">
+            <div className="h-5 w-36 animate-pulse rounded bg-grey-01" />
+            <div className="h-4 w-20 animate-pulse rounded bg-grey-01" />
+          </div>
+          <div className="h-5 w-48 animate-pulse rounded bg-grey-01" />
         </div>
       ))}
     </div>
@@ -267,7 +253,7 @@ export function PersonalHomeDashboard({
           {showSkeleton ? <ProposalsListSkeleton /> : proposalsList}
         </div>
         <div className="w-1/3">
-          {showSkeleton ? <SidebarSkeleton /> : <Sidebar counts={sidebarCounts} />}
+          <Sidebar counts={sidebarCounts} />
         </div>
       </div>
     </>

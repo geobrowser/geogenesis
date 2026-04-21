@@ -24,6 +24,7 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -79,19 +80,27 @@ export function AcceptOrRejectMember({
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
 
   const onVoteSuccess = () => {
     router.refresh();
   };
 
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
+  };
+
   const onApprove = () => {
     setSelectedVote('ACCEPT');
-    vote('ACCEPT', { onSuccess: onVoteSuccess });
+    addOptimisticVote(proposalId);
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const onReject = () => {
     setSelectedVote('REJECT');
-    vote('REJECT', { onSuccess: onVoteSuccess });
+    addOptimisticVote(proposalId);
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
