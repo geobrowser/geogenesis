@@ -326,7 +326,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                 <SmallButton
                   type="button"
                   variant="secondary"
-                  className="ml-auto shrink-0 rounded-full"
+                  className="ml-auto shrink-0 rounded-md"
                   onClick={handleSkipAndDeleteUnmapped}
                 >
                   Skip

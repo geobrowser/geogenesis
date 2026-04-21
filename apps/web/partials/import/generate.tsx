@@ -348,7 +348,12 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
               </Text>
             </div>
-            <SmallButton type="button" variant="secondary" onClick={handleNavigateToReview}>
+            <SmallButton
+              type="button"
+              variant="secondary"
+              className="shrink-0 rounded-md"
+              onClick={handleNavigateToReview}
+            >
               Review
             </SmallButton>
           </>
@@ -358,7 +363,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             <SmallButton
               type="button"
               variant="secondary"
-              className="shrink-0 rounded-full"
+              className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
               Review
@@ -421,7 +426,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 <span className="shrink-0 text-metadata text-grey-04">{formatFileSize(fileSizeBytes)}</span>
               )}
             </div>
-            <SmallButton type="button" variant="secondary" onClick={handleDeleteFile} className="shrink-0 rounded-full">
+            <SmallButton type="button" variant="secondary" onClick={handleDeleteFile} className="shrink-0 rounded-md">
               Delete
             </SmallButton>
           </div>
