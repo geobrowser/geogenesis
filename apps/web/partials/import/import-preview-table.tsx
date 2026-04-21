@@ -326,7 +326,7 @@ export function ImportPreviewTable({
               {onDeleteColumn && !disabled && (
                 <button
                   type="button"
-                  className="absolute top-1 right-6 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-transparent bg-white/90 text-grey-04 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:border-grey-02 hover:text-text"
+                  className="absolute top-1 right-6 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-transparent bg-white/90 text-grey-04 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:border-grey-02 hover:text-text"
                   aria-label={`Remove column ${col.headerLabel}`}
                   onClick={e => {
                     e.preventDefault();
