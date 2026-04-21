@@ -18,6 +18,10 @@ import { ExploreJoinSpaceButton } from './explore-join-space-button';
 
 type ExploreFeedCardProps = {
   item: ExploreFeedItem;
+  /** Hide the space thumbnail + space-name link in the meta row. Useful when the card is rendered inside the space it references (e.g. the activity tab). */
+  hideSpaceLink?: boolean;
+  /** Hide the Join-space button on the right side of the meta row. */
+  hideJoinButton?: boolean;
 };
 
 /**
@@ -73,7 +77,7 @@ function SpaceThumb({ image, name }: { image: string | null; name: string }) {
   );
 }
 
-export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
+export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
     const out: { id: string; name: string }[] = [];
@@ -94,13 +98,15 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={NavUtils.toSpace(item.spaceId)}
-            className="flex min-w-0 items-center gap-1.5 text-[14px] font-normal leading-[13px] tracking-[-0.35px] text-text hover:underline"
-          >
-            <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-            <span className="min-w-0 truncate">{item.spaceName}</span>
-          </Link>
+          {!hideSpaceLink ? (
+            <Link
+              href={NavUtils.toSpace(item.spaceId)}
+              className="flex min-w-0 items-center gap-1.5 text-[14px] font-normal leading-[13px] tracking-[-0.35px] text-text hover:underline"
+            >
+              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
+              <span className="min-w-0 truncate">{item.spaceName}</span>
+            </Link>
+          ) : null}
           {uniqueTypes.length > 0 ? (
             <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
               {uniqueTypes.map(t => (
@@ -115,7 +121,7 @@ export function ExploreFeedCard({ item }: ExploreFeedCardProps) {
           ) : null}
           <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{timeAgo}</span>
         </div>
-        {!item.isMemberOrEditor ? (
+        {!hideJoinButton && !item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton
             spaceId={item.spaceId}
             hasRequestedSpaceMembership={item.hasPendingMembershipRequest}

@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
-import { startTransition, useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -121,6 +121,10 @@ export const SelectEntity = ({
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
+
+  const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
+
+  const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -248,6 +252,22 @@ export const SelectEntity = ({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hasFocusedRef = useRef(false);
 
+  useLayoutEffect(() => {
+    if (!popoverElement) return;
+
+    const updateClipPath = () => {
+      const side = popoverElement.getAttribute('data-side');
+      setClipPath(side === 'top' ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+    };
+
+    updateClipPath(); // initial check
+
+    const observer = new MutationObserver(updateClipPath);
+    observer.observe(popoverElement, { attributes: true, attributeFilter: ['data-side'] });
+
+    return () => observer.disconnect();
+  }, [popoverElement]);
+
   const inputCallbackRef = React.useCallback(
     (node: HTMLInputElement | null) => {
       inputRef.current = node;
@@ -313,7 +333,10 @@ export const SelectEntity = ({
         {query && (
           <Popover.Portal>
             <Popover.Content
-              ref={popoverRef}
+              ref={(node) => {
+                setPopoverElement(node);
+                popoverRef.current = node;
+              }}
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -330,6 +353,7 @@ export const SelectEntity = ({
                     width === 'clamped' ? 'w-[400px]' : '-mr-px',
                     withSearchIcon && 'rounded-t-none'
                   )}
+                  style={{ clipPath }}
                 >
                   {advanced && (
                     <div className="w-full">
@@ -607,7 +631,7 @@ export const SelectEntity = ({
                     </ResizableContainer>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between border-b border-divider bg-white">
+                      <div className="flex items-center justify-between border-b border-grey-02 bg-white">
                         <div className="w-1/3">
                           <button onClick={() => setResult(null)} className="p-2">
                             <ArrowLeft color="grey-04" />
@@ -730,7 +754,7 @@ const containerStyles = cva('relative', {
       full: 'w-full',
     },
     floating: {
-      true: 'rounded-md border border-divider bg-white shadow-lg',
+      true: 'rounded-md border border-grey-02 bg-white shadow-lg',
     },
     isQueried: {
       true: 'rounded-b-none',
