@@ -27,7 +27,7 @@ export default async function ExploreRoutePage() {
         editorOf: [],
         memberOf: [],
         documentationImage: null,
-        hasPendingVotes: false,
+        pendingVoteProposalIds: [],
         personalSpaceId: null,
       };
     }
