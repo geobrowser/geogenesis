@@ -11,13 +11,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Space } from '~/core/io/dto/spaces';
 
-import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { Search } from '~/design-system/icons/search';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
@@ -494,17 +495,27 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="relative w-[192px]">
-                    <EntitySearchAutocomplete
+                    <SelectEntityAsPopover
+                      spaceId={spaceId}
+                      relationValueTypes={[{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }]}
                       placeholder="Search for a type..."
-                      dropdownClassName="!w-[384px] min-w-[320px]"
-                      filterByTypes={[SystemIds.SCHEMA_TYPE]}
+                      advanced={false}
+                      showIDs={false}
+                      trigger={
+                        <button
+                          type="button"
+                          className="inline-flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-left text-button whitespace-nowrap shadow-inner-grey-02 hover:shadow-inner-text focus:outline-hidden"
+                        >
+                          <Search />
+                          <span className="truncate text-text">Search for a type...</span>
+                        </button>
+                      }
                       onDone={result => {
                         clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });
                         setTypesColumnIndex(undefined);
                         setStep('step3');
                       }}
-                      itemIds={[]}
                     />
                   </div>
                 </div>

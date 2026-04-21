@@ -76,6 +76,12 @@ type SelectEntityProps = {
   initialQuery?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
+  /**
+   * Optional renderer for an extra tag placed after the result's type tags.
+   * Only used by specific callers (e.g. the CSV import property search) —
+   * leave unset to preserve default behavior elsewhere.
+   */
+  renderResultTag?: (result: SearchResult) => React.ReactNode;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -99,6 +105,7 @@ export const SelectEntity = ({
   showIDs = true,
   initialQuery,
   selectedEntityId,
+  renderResultTag,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -581,6 +588,7 @@ export const SelectEntity = ({
                                           </div>
                                         </>
                                       )}
+                                      {renderResultTag?.(result)}
                                     </div>
                                     {result.description && (
                                       <>

@@ -23,6 +23,7 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 import type { UnresolvedImportCell } from './atoms';
@@ -149,9 +150,11 @@ function renderFormattedPreviewValue(col: ColumnConfig, value: string, spaceId: 
   }
 }
 
-function getDataTypeLabel(col: ColumnConfig): string | null {
-  if (col.mappingLocked) return 'Relation';
-  switch (col.renderableTypeStrict) {
+function formatDataTypeLabel(input: {
+  dataType?: string | null;
+  renderableTypeStrict?: string | null;
+}): string | null {
+  switch (input.renderableTypeStrict) {
     case 'IMAGE':
       return 'Image';
     case 'VIDEO':
@@ -165,7 +168,7 @@ function getDataTypeLabel(col: ColumnConfig): string | null {
     case 'ADDRESS':
       return 'Address';
   }
-  switch (col.dataType) {
+  switch (input.dataType) {
     case 'TEXT':
       return 'Text';
     case 'RELATION':
@@ -189,6 +192,11 @@ function getDataTypeLabel(col: ColumnConfig): string | null {
     default:
       return null;
   }
+}
+
+function getDataTypeLabel(col: ColumnConfig): string | null {
+  if (col.mappingLocked) return 'Relation';
+  return formatDataTypeLabel(col);
 }
 
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
@@ -250,6 +258,16 @@ function PropertyMappingPopover({
       showIDs={false}
       initialQuery={initialQuery}
       selectedEntityId={selectedEntityId}
+      renderResultTag={result => {
+        const property = store.getProperty(result.id);
+        if (!property) return null;
+        const label = formatDataTypeLabel({
+          dataType: property.dataType,
+          renderableTypeStrict: property.renderableTypeStrict,
+        });
+        if (!label) return null;
+        return <Tag>{label}</Tag>;
+      }}
       onDone={async result => {
         let property: Property | null = store.getProperty(result.id);
         if (!property) {
