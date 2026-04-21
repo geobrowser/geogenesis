@@ -13,11 +13,13 @@ import { useSpace } from '~/core/hooks/use-space';
 import { getProperty } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Property } from '~/core/types';
+import { DataType, Property } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
-import { GeoDate, GeoNumber, GeoPoint } from '~/core/utils/utils';
+import { GeoNumber } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -110,51 +112,38 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   );
 }
 
-/** Mirrors browse-mode date formats in design-system/editable-fields/date-field.tsx */
-const DATE_ONLY_FORMAT = 'MMM d, yyyy';
-const TIME_ONLY_FORMAT = 'h:mm aaa';
-const DATETIME_FORMAT = 'MMM d, yyyy - h:mm aaa';
-
 function isUrlColumn(col: ColumnConfig): boolean {
   return col.dataType === 'TEXT' && col.renderableTypeStrict === 'URL';
 }
 
-function normalizeUrl(raw: string): string {
-  return raw.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? raw : `https://${raw}`;
-}
-
-function renderFormattedPreviewValue(col: ColumnConfig, value: string): React.ReactNode {
-  if (!value) return '—';
+function renderFormattedPreviewValue(col: ColumnConfig, value: string, spaceId: string): React.ReactNode {
+  if (!value) return <span className="truncate text-tableCell text-text">—</span>;
 
   if (isUrlColumn(col)) {
-    return (
-      <a
-        href={normalizeUrl(value)}
-        target="_blank"
-        rel="noreferrer"
-        className="truncate text-tableCell text-ctaPrimary hover:underline"
-      >
-        {value}
-      </a>
-    );
+    return <WebUrlField variant="tableCell" spaceId={spaceId} value={value} format={col.format ?? undefined} />;
   }
 
   switch (col.dataType) {
     case 'DATE':
-      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, DATE_ONLY_FORMAT)}</span>;
     case 'TIME':
-      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, TIME_ONLY_FORMAT)}</span>;
     case 'DATETIME':
-      return <span className="truncate text-tableCell text-text">{GeoDate.format(value, DATETIME_FORMAT)}</span>;
+      return (
+        <DateField
+          value={value}
+          isEditing={false}
+          variant="tableCell"
+          propertyId={col.propertyId ?? ''}
+          dataType={col.dataType as DataType}
+        />
+      );
     case 'INTEGER':
     case 'FLOAT':
     case 'DECIMAL':
-      return <span className="truncate text-tableCell text-text">{GeoNumber.format(value, col.format ?? undefined)}</span>;
-    case 'POINT': {
-      const coords = GeoPoint.parseCoordinates(value);
-      const display = coords ? `(${coords.latitude}, ${coords.longitude})` : value;
-      return <span className="truncate text-tableCell text-text">{display}</span>;
-    }
+      return (
+        <span className="truncate text-tableCell text-text">{GeoNumber.format(value, col.format ?? undefined)}</span>
+      );
+    case 'POINT':
+      return <span className="truncate text-tableCell text-text">({value})</span>;
     default:
       return <span className="truncate text-tableCell text-text">{value}</span>;
   }
@@ -607,7 +596,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                           </div>
                         ) : (
                           <div className="truncate text-metadata text-text">
-                            {renderFormattedPreviewValue(col, rawValue)}
+                            {renderFormattedPreviewValue(col, rawValue, spaceId)}
                           </div>
                         )}
                       </div>
@@ -933,7 +922,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                                 }
                               />
                             ) : (
-                              renderFormattedPreviewValue(col, value)
+                              renderFormattedPreviewValue(col, value, spaceId)
                             )}
                           </div>
                         )}
