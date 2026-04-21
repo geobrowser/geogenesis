@@ -578,7 +578,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
       {showEmptyState ? (
         <>
           <div style={{ minWidth: columnLayout.totalWidth }}>
-            {dataRows.slice(0, 10).map((row, rowIndex) => (
+            {dataRows.slice(0, 7).map((row, rowIndex) => (
               <div
                 key={rowIndex}
                 className="border-b border-grey-02 bg-grey-01/50"
@@ -955,7 +955,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
       )}
     </div>
       {showEmptyState && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-40">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-8">
           <Text variant="metadata" className="text-center text-grey-04">
             Map your remaining properties or skip to continue
           </Text>
