@@ -44,6 +44,8 @@ type EntityFeedProps = {
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
   initialTime?: ExploreTime;
+  /** Whether to render the time-range dropdown. Defaults to true. */
+  showTimeFilter?: boolean;
 };
 
 async function fetchFeedPage(
@@ -76,6 +78,7 @@ export function EntityFeed({
   initialSpaceOptions = [],
   lockedSpaceId,
   initialTime = 'week',
+  showTimeFilter = true,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
@@ -130,43 +133,47 @@ export function EntityFeed({
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
-      <div className="flex flex-wrap items-center gap-3">
-        <Dropdown
-          align="start"
-          trigger={<span>{timeLabel}</span>}
-          options={TIME_OPTIONS.map(o => ({
-            label: o.label,
-            value: o.value,
-            disabled: false,
-            onClick: () => setTime(o.value),
-          }))}
-        />
-        {lockedSpaceId == null ? (
-          <div className="ml-auto">
+      {showTimeFilter || lockedSpaceId == null ? (
+        <div className="flex flex-wrap items-center gap-3">
+          {showTimeFilter ? (
             <Dropdown
-              align="end"
-              scrollableList
-              trigger={<span>{spaceLabel}</span>}
-              options={[
-                {
-                  label: 'Any space',
-                  value: 'all',
-                  disabled: false,
-                  onClick: () => setSelectedSpaceId('all'),
-                },
-                ...initialSpaceOptions.map(o => ({
-                  label: o.label,
-                  value: o.value,
-                  disabled: false,
-                  onClick: () => setSelectedSpaceId(o.value),
-                })),
-              ]}
+              align="start"
+              trigger={<span>{timeLabel}</span>}
+              options={TIME_OPTIONS.map(o => ({
+                label: o.label,
+                value: o.value,
+                disabled: false,
+                onClick: () => setTime(o.value),
+              }))}
             />
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+          {lockedSpaceId == null ? (
+            <div className="ml-auto">
+              <Dropdown
+                align="end"
+                scrollableList
+                trigger={<span>{spaceLabel}</span>}
+                options={[
+                  {
+                    label: 'Any space',
+                    value: 'all',
+                    disabled: false,
+                    onClick: () => setSelectedSpaceId('all'),
+                  },
+                  ...initialSpaceOptions.map(o => ({
+                    label: o.label,
+                    value: o.value,
+                    disabled: false,
+                    onClick: () => setSelectedSpaceId(o.value),
+                  })),
+                ]}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="mt-8">
+      <div className={showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1'}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
         ) : isLoading ? (
