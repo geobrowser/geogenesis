@@ -15,6 +15,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
+import { Button } from '~/design-system/button';
 import { Checkbox } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
@@ -406,16 +407,12 @@ export function ImportPreviewTable({
       {showEmptyState ? (
         <div className="sticky left-0 flex flex-col items-center justify-center gap-4 px-4 py-20">
           <Text variant="metadata" className="max-w-md text-center text-grey-04">
-            Your data will appear once you have mapped all of your column properties
+            Map your remaining columns, or continue without them.
           </Text>
           {onSkipAndDeleteUnmapped && hasUnmappedColumnsForSkip && (
-            <button
-              type="button"
-              className="rounded-md border border-grey-02 bg-white px-4 py-2 text-smallButton text-text hover:bg-grey-01"
-              onClick={onSkipAndDeleteUnmapped}
-            >
-              Skip and delete unmapped columns
-            </button>
+            <Button type="button" variant="primary" onClick={onSkipAndDeleteUnmapped}>
+              Next
+            </Button>
           )}
         </div>
       ) : (
