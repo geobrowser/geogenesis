@@ -4,7 +4,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 
+import cx from 'classnames';
+import { RemoveScroll } from 'react-remove-scroll';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
@@ -44,7 +47,6 @@ import { Divider } from '~/design-system/divider';
 import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
-import { ResizableContainer } from '~/design-system/resizable-container';
 import { Select } from '~/design-system/select';
 import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
@@ -78,6 +80,97 @@ const MAX_SCOPED_SUGGESTIONS = 100;
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
 
+/** Portaled suggestion lists: popover ignores outside-pointer for this root; blur logic skips it. */
+const TABLE_BLOCK_FILTER_DROPDOWN_CLASS = 'table-block-filter-dropdown';
+
+type TableBlockFilterDropdownLayerProps = {
+  open: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onScroll?: React.UIEventHandler<HTMLDivElement>;
+  onPointerDown?: React.PointerEventHandler<HTMLDivElement>;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+};
+
+/**
+ * Renders filter value suggestions in a fixed layer on `document.body` so they are not clipped by
+ * the Radix popover’s collision max-height / overflow, while staying aligned to the input.
+ */
+function TableBlockFilterDropdownLayer({
+  open,
+  anchorRef,
+  scrollRef,
+  onScroll,
+  onPointerDown,
+  footer,
+  children,
+}: TableBlockFilterDropdownLayerProps) {
+  const [box, setBox] = React.useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+
+  const measure = React.useCallback(() => {
+    if (!open || !anchorRef.current) {
+      setBox(null);
+      return;
+    }
+    const r = anchorRef.current.getBoundingClientRect();
+    const width = Math.min(472, Math.max(254, Math.ceil(r.width)));
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+    const top = r.bottom + 4;
+    const maxFromViewport = Math.min(window.innerHeight * 0.65, 22 * 16);
+    const maxFromBottom = Math.max(160, window.innerHeight - top - 8);
+    const maxHeight = Math.min(maxFromViewport, maxFromBottom);
+    setBox({ top, left, width, maxHeight });
+  }, [open, anchorRef]);
+
+  React.useLayoutEffect(() => {
+    measure();
+  }, [measure, open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, measure]);
+
+  if (!open || !box) return null;
+
+  return createPortal(
+    <RemoveScroll allowPinchZoom>
+      <div
+        className={cx(
+          TABLE_BLOCK_FILTER_DROPDOWN_CLASS,
+          'flex flex-col overflow-hidden rounded border border-grey-02 bg-white shadow-lg'
+        )}
+        style={{
+          position: 'fixed',
+          top: box.top,
+          left: box.left,
+          width: box.width,
+          maxHeight: box.maxHeight,
+          zIndex: 2600,
+        }}
+        onPointerDown={onPointerDown}
+      >
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
+        >
+          {children}
+        </div>
+        {footer}
+      </div>
+    </RemoveScroll>,
+    document.body
+  );
+}
+
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
   const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,11 +202,17 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
       if (next instanceof Node && filterInteractionRootRef?.current?.contains(next)) {
         return;
       }
+      if (next instanceof Element && next.closest(`.${TABLE_BLOCK_FILTER_DROPDOWN_CLASS}`)) {
+        return;
+      }
       clearBlurTimeout();
       blurTimeoutRef.current = setTimeout(() => {
         blurTimeoutRef.current = null;
         const ae = document.activeElement;
         if (ae instanceof Node && filterInteractionRootRef?.current?.contains(ae)) {
+          return;
+        }
+        if (ae instanceof Element && ae.closest(`.${TABLE_BLOCK_FILTER_DROPDOWN_CLASS}`)) {
           return;
         }
         if (ae?.closest?.('[data-radix-select-content]')) {
@@ -228,10 +327,35 @@ function searchResultFromBrowseEntityWithSpaces(
 function searchResultForFilterDisplay(
   merged: SearchResult | null | undefined,
   id: string,
-  displayName: string | null
+  displayName: string | null,
+  /** Fuzzy row from `useSearch` (often missing `spaces` until merge completes). */
+  fuzzyRow?: SearchResult | null
 ): SearchResult {
   if (merged?.spaces?.length) return merged;
-  return stubSearchResultForFilter(id, displayName);
+
+  const stub = stubSearchResultForFilter(id, displayName ?? fuzzyRow?.name ?? null);
+  const fromFuzzy = fuzzyRow
+    ? {
+        ...stub,
+        name: fuzzyRow.name ?? stub.name,
+        description: fuzzyRow.description ?? stub.description,
+        types: fuzzyRow.types?.length ? fuzzyRow.types : stub.types,
+        typesBySpace: fuzzyRow.typesBySpace,
+        spaces: fuzzyRow.spaces?.length ? fuzzyRow.spaces : stub.spaces,
+      }
+    : stub;
+
+  if (!merged) return fromFuzzy;
+
+  return {
+    ...fromFuzzy,
+    ...merged,
+    spaces: merged.spaces?.length ? merged.spaces : fromFuzzy.spaces,
+    types: merged.types?.length ? merged.types : fromFuzzy.types,
+    description: merged.description ?? fromFuzzy.description,
+    name: merged.name ?? fromFuzzy.name,
+    typesBySpace: merged.typesBySpace ?? fromFuzzy.typesBySpace,
+  };
 }
 
 type ScopedFilterSuggestions = {
@@ -1199,7 +1323,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
                 onInteractOutside={e => {
                   // Prevent portals from closing
                   const target = e.target as HTMLElement | null;
-                  if (target?.closest('[data-radix-select-content]') || target?.closest('[role="listbox"]')) {
+                  if (
+                    target?.closest('[data-radix-select-content]') ||
+                    target?.closest('[role="listbox"]') ||
+                    target?.closest(`.${TABLE_BLOCK_FILTER_DROPDOWN_CLASS}`)
+                  ) {
                     e.preventDefault();
                   }
                 }}
@@ -1645,30 +1773,39 @@ function TableBlockEntityFilterInput({
     [rowsToRender, entityVisibleCount]
   );
 
-  const visibleScopedIds = React.useMemo(
-    () => visibleEntityRows.flatMap(r => (r.kind === 'scoped' ? [r.scoped.id] : [])),
-    [visibleEntityRows]
-  );
+  const visibleEntityIdsForMerge = React.useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const row of visibleEntityRows) {
+      const id = row.kind === 'scoped' ? row.scoped.id : row.result.id;
+      if (!seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+    return ids;
+  }, [visibleEntityRows]);
 
-  const scopedResultQueries = useQueries({
-    queries: visibleScopedIds.map(id => ({
-      queryKey: ['table-block-filter-scoped-entity', id] as const,
+  const mergedEntityQueries = useQueries({
+    queries: visibleEntityIdsForMerge.map(id => ({
+      queryKey: ['table-block-filter-merged-entity', id] as const,
       queryFn: () => mergeSearchResult({ id, store }),
-      enabled: focused && visibleScopedIds.length > 0,
+      enabled: focused && visibleEntityIdsForMerge.length > 0,
       staleTime: Duration.toMillis(Duration.seconds(60)),
     })),
   });
 
-  const scopedResultById = React.useMemo(() => {
+  const mergedEntityById = React.useMemo(() => {
     const m = new Map<string, SearchResult>();
-    visibleScopedIds.forEach((id, idx) => {
-      const data = scopedResultQueries[idx]?.data;
+    visibleEntityIdsForMerge.forEach((id, idx) => {
+      const data = mergedEntityQueries[idx]?.data;
       if (data != null) m.set(id, data);
     });
     return m;
-  }, [visibleScopedIds, scopedResultQueries]);
+  }, [visibleEntityIdsForMerge, mergedEntityQueries]);
 
-  const entityResultsListRef = React.useRef<HTMLUListElement>(null);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
+  const entityResultsListRef = React.useRef<HTMLDivElement>(null);
 
   const expandVisibleEntityRowsIfListHasNoScrollbar = React.useCallback(() => {
     const el = entityResultsListRef.current;
@@ -1681,7 +1818,7 @@ function TableBlockEntityFilterInput({
   }, [entityVisibleCount, rowsToRender.length]);
 
   const handleEntityResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
+    (e: React.UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget;
       const threshold = 48;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -1695,7 +1832,7 @@ function TableBlockEntityFilterInput({
       if (browseEnabled && hasNextBrowsePage && !isBrowseFetchingNextPage) {
         void fetchNextBrowsePage();
       }
-    }, [ entityVisibleCount, rowsToRender.length, browseEnabled, hasNextBrowsePage, isBrowseFetchingNextPage, fetchNextBrowsePage ]);
+    }, [entityVisibleCount, rowsToRender.length, browseEnabled, hasNextBrowsePage, isBrowseFetchingNextPage, fetchNextBrowsePage]);
 
   const showEmptyBrowseHint =
     canBrowseByType &&
@@ -1732,7 +1869,7 @@ function TableBlockEntityFilterInput({
   };
 
   return (
-    <div className="relative w-full">
+    <div ref={anchorRef} className="relative w-full">
       <Input
         placeholder={multi ? multiSelectPlaceholder : undefined}
         value={inputValue}
@@ -1740,13 +1877,21 @@ function TableBlockEntityFilterInput({
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      {showDropdown && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
+      <TableBlockFilterDropdownLayer
+        open={showDropdown}
+        anchorRef={anchorRef}
+        scrollRef={entityResultsListRef}
+        onPointerDown={e => e.preventDefault()}
+        onScroll={handleEntityResultsScroll}
+        footer={
+          autocomplete.isLoading ? (
+            <div className="flex shrink-0 items-center justify-center border-t border-grey-02 py-2">
+              <Dots />
+            </div>
+          ) : null
+        }
+      >
+        <ResultsList className="m-0 flex max-h-none list-none flex-col justify-start overflow-visible">
               {rowsToRender.length === 0 && isBrowseFetching ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
@@ -1764,14 +1909,14 @@ function TableBlockEntityFilterInput({
               {visibleEntityRows.map((row, i) =>
                 row.kind === 'scoped' ? (
                   <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.12, delay: Math.min(0.02 * i, 0.2) }}
                     key={`scoped-${row.scoped.id}`}
                   >
                     <ResultContent
                       result={searchResultForFilterDisplay(
-                        scopedResultById.get(row.scoped.id),
+                        mergedEntityById.get(row.scoped.id),
                         row.scoped.id,
                         row.scoped.name
                       )}
@@ -1782,16 +1927,21 @@ function TableBlockEntityFilterInput({
                   </motion.div>
                 ) : (
                   <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.12, delay: Math.min(0.02 * i, 0.2) }}
                     key={`search-${row.result.id}`}
                   >
                     <ResultContent
+                      result={searchResultForFilterDisplay(
+                        mergedEntityById.get(row.result.id),
+                        row.result.id,
+                        row.result.name,
+                        row.result
+                      )}
                       onClick={() => handleEntityPick(row.result)}
                       active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
                       alreadySelected={false}
-                      result={row.result}
                     />
                   </motion.div>
                 )
@@ -1818,15 +1968,8 @@ function TableBlockEntityFilterInput({
                   </Text>
                 </ResultItem>
               ) : null}
-            </ResultsList>
-            {autocomplete.isLoading && (
-              <div className="flex items-center justify-center py-3">
-                <Dots />
-              </div>
-            )}
-          </ResizableContainer>
-        </div>
-      )}
+        </ResultsList>
+      </TableBlockFilterDropdownLayer>
     </div>
   );
 }
@@ -1932,7 +2075,7 @@ function TableBlockSpaceFilterInput({
   );
 
   const applySpaceListPagination = React.useCallback(
-    (el: HTMLUListElement) => {
+    (el: HTMLDivElement) => {
       const threshold = 48;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
@@ -1945,10 +2088,11 @@ function TableBlockSpaceFilterInput({
     [spaceVisibleCount, spaceFullRowCount]
   );
 
-  const spaceScopedListRef = React.useRef<HTMLUListElement>(null);
-  const spaceQueryListRef = React.useRef<HTMLUListElement>(null);
+  const spaceAnchorRef = React.useRef<HTMLDivElement>(null);
+  const spaceScopedListRef = React.useRef<HTMLDivElement>(null);
+  const spaceQueryListRef = React.useRef<HTMLDivElement>(null);
   const handleSpaceResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
+    (e: React.UIEvent<HTMLDivElement>) => {
       applySpaceListPagination(e.currentTarget);
     },
     [applySpaceListPagination]
@@ -2018,7 +2162,7 @@ function TableBlockSpaceFilterInput({
   const inputDisplay = multi ? query : query === '' ? selectedValue : query;
 
   return (
-    <div className="relative w-full">
+    <div ref={spaceAnchorRef} className="relative w-full">
       <Input
         placeholder={multi ? 'Search…' : undefined}
         value={inputDisplay}
@@ -2026,72 +2170,64 @@ function TableBlockSpaceFilterInput({
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      {showScopedOnlyPanel && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceScopedListRef} onScroll={handleSpaceResultsScroll}>
-              {visibleScopedSpaceSuggestions.map((s, i) =>
-                renderSpaceRow(
-                  s.id,
-                  s.name,
-                  s.image ?? PLACEHOLDER_SPACE_IMAGE,
+      <TableBlockFilterDropdownLayer
+        open={showScopedOnlyPanel}
+        anchorRef={spaceAnchorRef}
+        scrollRef={spaceScopedListRef}
+        onPointerDown={e => e.preventDefault()}
+        onScroll={handleSpaceResultsScroll}
+      >
+        <ResultsList className="m-0 flex max-h-none list-none flex-col justify-start overflow-visible">
+          {visibleScopedSpaceSuggestions.map((s, i) =>
+            renderSpaceRow(
+              s.id,
+              s.name,
+              s.image ?? PLACEHOLDER_SPACE_IMAGE,
+              () => (multi ? onToggleSpace?.(s) : onSelect?.(s)),
+              i,
+              Boolean(selectedSpaceIds?.has(s.id))
+            )
+          )}
+        </ResultsList>
+      </TableBlockFilterDropdownLayer>
+      <TableBlockFilterDropdownLayer
+        open={showQueryPanel}
+        anchorRef={spaceAnchorRef}
+        scrollRef={spaceQueryListRef}
+        onPointerDown={e => e.preventDefault()}
+        onScroll={handleSpaceResultsScroll}
+      >
+        <ResultsList className="m-0 flex max-h-none list-none flex-col justify-start overflow-visible">
+          {visibleSpaceQueryRows.map((row, i) =>
+            row.kind === 'scoped'
+              ? renderSpaceRow(
+                  row.scoped.id,
+                  row.scoped.name,
+                  row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
+                  () => (multi ? onToggleSpace?.(row.scoped) : onSelect?.(row.scoped)),
+                  i,
+                  Boolean(selectedSpaceIds?.has(row.scoped.id))
+                )
+              : renderSpaceRow(
+                  row.result.id,
+                  row.result.name,
+                  row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
                   () =>
                     multi
-                      ? onToggleSpace?.(s)
-                      : onSelect?.(s),
+                      ? onToggleSpace?.({
+                          id: row.result.id,
+                          name: row.result.name,
+                        })
+                      : onSelect?.({
+                          id: row.result.id,
+                          name: row.result.name,
+                        }),
                   i,
-                  Boolean(selectedSpaceIds?.has(s.id))
+                  Boolean(selectedSpaceIds?.has(row.result.id))
                 )
-              )}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
-      {showQueryPanel && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
-              {visibleSpaceQueryRows.map((row, i) =>
-                row.kind === 'scoped'
-                  ? renderSpaceRow(
-                      row.scoped.id,
-                      row.scoped.name,
-                      row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.(row.scoped)
-                          : onSelect?.(row.scoped),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.scoped.id))
-                    )
-                  : renderSpaceRow(
-                      row.result.id,
-                      row.result.name,
-                      row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            })
-                          : onSelect?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            }),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.result.id))
-                    )
-              )}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
+          )}
+        </ResultsList>
+      </TableBlockFilterDropdownLayer>
     </div>
   );
 }
@@ -2136,7 +2272,7 @@ function TableBlockTextFilterInput({
   );
 
   const applyTextListPagination = React.useCallback(
-    (el: HTMLUListElement) => {
+    (el: HTMLDivElement) => {
       const threshold = 48;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
@@ -2149,9 +2285,10 @@ function TableBlockTextFilterInput({
     [textVisibleCount, filtered.length]
   );
 
-  const textResultsListRef = React.useRef<HTMLUListElement>(null);
+  const textAnchorRef = React.useRef<HTMLDivElement>(null);
+  const textResultsListRef = React.useRef<HTMLDivElement>(null);
   const handleTextResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
+    (e: React.UIEvent<HTMLDivElement>) => {
       applyTextListPagination(e.currentTarget);
     },
     [applyTextListPagination]
@@ -2169,62 +2306,61 @@ function TableBlockTextFilterInput({
   const multi = Boolean(onToggleString);
 
   return (
-    <div className="relative w-full">
+    <div ref={textAnchorRef} className="relative w-full">
       <Input
         value={value}
         onChange={e => onChange(e.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      {showDropdown && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={textResultsListRef} onScroll={handleTextResultsScroll}>
-              {showEmptyTextHint ? (
-                <ResultItem className="pointer-events-none">
-                  <Text color="grey-03" variant="metadataMedium">
-                    Type a value to filter. Suggestions appear when the table has matching rows.
-                  </Text>
+      <TableBlockFilterDropdownLayer
+        open={showDropdown}
+        anchorRef={textAnchorRef}
+        scrollRef={textResultsListRef}
+        onPointerDown={e => e.preventDefault()}
+        onScroll={handleTextResultsScroll}
+      >
+        <ResultsList className="m-0 flex max-h-none list-none flex-col justify-start overflow-visible">
+          {showEmptyTextHint ? (
+            <ResultItem className="pointer-events-none">
+              <Text color="grey-03" variant="metadataMedium">
+                Type a value to filter. Suggestions appear when the table has matching rows.
+              </Text>
+            </ResultItem>
+          ) : null}
+          {visibleTextSuggestions.map((s, i) => {
+            const isSel = Boolean(selectedStrings?.has(s));
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.02 * i }}
+                key={s}
+              >
+                <ResultItem
+                  className={isSel ? 'bg-grey-02' : undefined}
+                  onClick={() => {
+                    clearBlurTimeout();
+                    if (multi) {
+                      onToggleString?.(s);
+                    } else {
+                      onChange(s);
+                      setFocused(false);
+                    }
+                  }}
+                >
+                  <div className="flex w-full items-center justify-between leading-4">
+                    <Text variant="metadataMedium" ellipsize className="leading-4.5">
+                      {s}
+                    </Text>
+                    {multi && isSel && <CheckCircleSmall color="grey-04" />}
+                  </div>
                 </ResultItem>
-              ) : null}
-              {visibleTextSuggestions.map((s, i) => {
-                const isSel = Boolean(selectedStrings?.has(s));
-                return (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={s}
-                  >
-                    <ResultItem
-                      className={isSel ? 'bg-grey-02' : undefined}
-                      onClick={() => {
-                        clearBlurTimeout();
-                        if (multi) {
-                          onToggleString?.(s);
-                        } else {
-                          onChange(s);
-                          setFocused(false);
-                        }
-                      }}
-                    >
-                      <div className="flex w-full items-center justify-between leading-4">
-                        <Text variant="metadataMedium" ellipsize className="leading-4.5">
-                          {s}
-                        </Text>
-                        {multi && isSel && <CheckCircleSmall color="grey-04" />}
-                      </div>
-                    </ResultItem>
-                  </motion.div>
-                );
-              })}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
+              </motion.div>
+            );
+          })}
+        </ResultsList>
+      </TableBlockFilterDropdownLayer>
     </div>
   );
 }

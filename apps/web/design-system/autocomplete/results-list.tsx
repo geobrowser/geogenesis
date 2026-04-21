@@ -22,14 +22,14 @@ import { RightArrowLong } from '../icons/right-arrow-long';
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
-  props,
+  { className, ...rest },
   ref
 ) {
   return (
     <ul
       ref={ref}
-      className={cx('m-0 flex list-none flex-col justify-start', DROPDOWN_LIST_SCROLL_CLASSES)}
-      {...props}
+      className={cx('m-0 flex list-none flex-col justify-start', DROPDOWN_LIST_SCROLL_CLASSES, className)}
+      {...rest}
     />
   );
 });
@@ -65,9 +65,57 @@ export const ResultContent = ({
   onChooseSpace,
   ...rest
 }: ResultContentProps) => {
-  const [space, ...otherSpaces] = result.spaces;
+  const spaces = result.spaces ?? [];
+  const [space, ...otherSpaces] = spaces;
 
-  if (!space) return null;
+  if (!space) {
+    const types = result.types ?? [];
+    const onSelectNoSpace = () => {
+      if (alreadySelected) return;
+      onClick();
+    };
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={onSelectNoSpace}
+          className={cx(
+            active && 'bg-grey-01',
+            alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
+            'flex w-full flex-col p-2 text-left transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'
+          )}
+          {...rest}
+        >
+          <div className="flex w-full items-center justify-between leading-4">
+            <Text variant="metadataMedium" ellipsize className="leading-4.5">
+              {result.name ?? result.id}
+            </Text>
+            {alreadySelected && <CheckCircleSmall color="grey-04" />}
+          </div>
+          {types.length > 0 ? (
+            <>
+              <Spacer height={4} />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {types
+                  .filter((type, index, self) => self.findIndex(t => t.id === type.id) === index)
+                  .map(type => (
+                    <Tag key={type.id}>{type.name}</Tag>
+                  ))}
+              </div>
+            </>
+          ) : null}
+          {withDescription && result.description ? (
+            <>
+              <Spacer height={4} />
+              <Truncate maxLines={3} shouldTruncate variant="footnote">
+                <Text variant="footnote">{result.description}</Text>
+              </Truncate>
+            </>
+          ) : null}
+        </button>
+      </div>
+    );
+  }
 
   const spaceName = space.name;
   const spaceImg = space.image;

@@ -25,7 +25,8 @@ export const Select = ({
   variant = 'secondary',
   placeholder = '',
   className = '',
-  position = 'item-aligned',
+  /** `popper` is the default so lists stay anchored inside nested popovers and modals (stable vs item-aligned). */
+  position = 'popper',
   disabled = false,
 }: Props) => {
   return (
@@ -53,9 +54,16 @@ export const Select = ({
         <SelectPrimitive.Content
           className={cx(
             'z-[2000] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
-            position === 'item-aligned' ? 'mt-10 max-w-[241px]' : 'mt-1 w-(--radix-select-trigger-width)'
+            position === 'item-aligned'
+              ? 'mt-10 max-w-[241px]'
+              : 'w-(--radix-select-trigger-width) max-w-[min(100vw-2rem,var(--radix-select-trigger-width))]'
           )}
           position={position}
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={16}
+          avoidCollisions
         >
           <SelectPrimitive.Viewport
             className={cx(GEO_SELECT_VIEWPORT_CLASS, DROPDOWN_LIST_SCROLL_CLASSES, 'p-0')}
