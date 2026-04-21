@@ -27,7 +27,8 @@ export type BrowseSidebarData = {
   editorOf: BrowseSpaceRow[];
   memberOf: BrowseSpaceRow[];
   documentationImage: string | null;
-  hasPendingVotes: boolean;
+  /** Proposal ids the user can still vote on across their editor spaces. Empty when nothing is pending. */
+  pendingVoteProposalIds: string[];
   /** Personal space id used for membership/editor GraphQL (same as browse “member space”). */
   personalSpaceId: string | null;
 };
@@ -36,17 +37,15 @@ const GOVERNANCE_PROPOSAL_PAGE_SIZE = 100;
 const GOVERNANCE_PROPOSAL_MAX_PAGES = 40;
 const GOVERNANCE_PROPOSAL_SPACE_CONCURRENCY = 4;
 
-async function hasPendingVoteInSpace(
+async function collectPendingVoteIdsInSpace(
   memberSpaceId: string,
   spaceId: string,
-  apiEndpoint: string,
-  shouldStop: () => boolean
-): Promise<boolean> {
+  apiEndpoint: string
+): Promise<string[]> {
+  const ids: string[] = [];
   let cursor: string | null = null;
 
   for (let page = 0; page < GOVERNANCE_PROPOSAL_MAX_PAGES; page++) {
-    if (shouldStop()) return false;
-
     const params = new URLSearchParams();
     params.set('limit', String(GOVERNANCE_PROPOSAL_PAGE_SIZE));
     params.set('status', 'PROPOSED');
@@ -70,55 +69,52 @@ async function hasPendingVoteInSpace(
 
     if (Either.isLeft(result)) {
       console.error(`Failed to fetch governance proposals for space ${spaceId}:`, result.left);
-      return false;
+      return ids;
     }
 
     const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
     if (Either.isLeft(decoded)) {
       console.error(`Failed to decode governance proposals for space ${spaceId}:`, decoded.left);
-      return false;
+      return ids;
     }
 
-    if (decoded.right.proposals.some(proposal => proposal.userVote == null)) {
-      return true;
+    for (const proposal of decoded.right.proposals) {
+      if (proposal.userVote == null) {
+        ids.push(proposal.proposalId);
+      }
     }
 
     cursor = decoded.right.nextCursor;
     if (!cursor) break;
   }
 
-  return false;
+  return ids;
 }
 
-async function hasPendingVotesInEditorSpaces(memberSpaceId: string, editorSpaceIds: string[]): Promise<boolean> {
-  if (editorSpaceIds.length === 0) return false;
+async function collectPendingVoteIdsInEditorSpaces(
+  memberSpaceId: string,
+  editorSpaceIds: string[]
+): Promise<string[]> {
+  if (editorSpaceIds.length === 0) return [];
 
   const apiEndpoint = Environment.getConfig().api;
   const concurrency = Math.min(GOVERNANCE_PROPOSAL_SPACE_CONCURRENCY, editorSpaceIds.length);
   let nextIndex = 0;
-  let foundPendingVote = false;
+  const collected: string[] = [];
 
   const worker = async () => {
-    while (!foundPendingVote) {
+    while (true) {
       const currentIndex = nextIndex++;
       if (currentIndex >= editorSpaceIds.length) return;
 
-      const result = await hasPendingVoteInSpace(
-        memberSpaceId,
-        editorSpaceIds[currentIndex],
-        apiEndpoint,
-        () => foundPendingVote
-      );
-      if (result) {
-        foundPendingVote = true;
-        return;
-      }
+      const ids = await collectPendingVoteIdsInSpace(memberSpaceId, editorSpaceIds[currentIndex], apiEndpoint);
+      if (ids.length > 0) collected.push(...ids);
     }
   };
 
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
-  return foundPendingVote;
+  return collected;
 }
 
 async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow>> {
@@ -231,7 +227,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
       editorOf: [],
       memberOf: [],
       documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
-      hasPendingVotes: false,
+      pendingVoteProposalIds: [],
       personalSpaceId: null,
     };
   }
@@ -251,7 +247,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     ),
   ]);
 
-  const pendingVotesPromise = hasPendingVotesInEditorSpaces(memberSpaceId, editorIds);
+  const pendingVoteIdsPromise = collectPendingVoteIdsInEditorSpaces(memberSpaceId, editorIds);
 
   const editorIdSet = new Set(editorIds);
   const pendingMemberIds = new Set<string>();
@@ -322,14 +318,14 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     })
   );
 
-  const hasPendingVotes = await pendingVotesPromise;
+  const pendingVoteProposalIds = await pendingVoteIdsPromise;
 
   return {
     featured,
     editorOf,
     memberOf,
     documentationImage: rows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
-    hasPendingVotes,
+    pendingVoteProposalIds,
     personalSpaceId: memberSpaceId,
   };
 }

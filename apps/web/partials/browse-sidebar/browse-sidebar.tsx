@@ -20,6 +20,8 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { useOptimisticallyVotedIds } from '~/partials/governance/optimistic-voted-atom';
+
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
 /** Open on first visit; after the user toggles, `browseSidebarOpen` in localStorage wins. */
@@ -59,15 +61,17 @@ function BrowseNavIcon({ src }: { src: string }) {
 function BrowseNavPrimaryLinks({
   personalSpaceId,
   documentationImage,
-  hasPendingVotes,
+  pendingVoteProposalIds,
 }: {
   personalSpaceId: string | null;
   documentationImage: string | null;
-  hasPendingVotes: boolean;
+  pendingVoteProposalIds: string[];
 }) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
+  const optimisticVotedIds = useOptimisticallyVotedIds();
+  const hasPendingVotes = pendingVoteProposalIds.some(id => !optimisticVotedIds.has(id));
 
   return (
     <>
@@ -252,7 +256,7 @@ export function BrowseSidebar() {
           <BrowseNavPrimaryLinks
             personalSpaceId={personalSpaceId}
             documentationImage={data?.documentationImage ?? null}
-            hasPendingVotes={data?.hasPendingVotes ?? false}
+            pendingVoteProposalIds={data?.pendingVoteProposalIds ?? []}
           />
         </nav>
 
