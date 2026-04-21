@@ -19,7 +19,7 @@ import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Member } from '~/design-system/icons/member';
 import { Menu } from '~/design-system/menu';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -139,6 +139,51 @@ function GovernanceTabsRow({
   );
 }
 
+const SKELETON_DELAY_MS = 150;
+
+function useDelayedPending(isPending: boolean): boolean {
+  const [delayed, setDelayed] = React.useState(false);
+  React.useEffect(() => {
+    if (!isPending) {
+      setDelayed(false);
+      return;
+    }
+    const t = setTimeout(() => setDelayed(true), SKELETON_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [isPending]);
+  return delayed;
+}
+
+function ProposalsListSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col divide-y divide-grey-01">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-3 py-4">
+          <div className="h-5 w-2/3 rounded bg-grey-01" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="h-4 w-1/3 rounded bg-grey-01" />
+            <div className="h-6 w-20 rounded bg-grey-01" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SidebarSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="space-y-2 rounded border border-grey-02 p-3">
+          <div className="h-4 w-1/2 rounded bg-grey-01" />
+          <div className="h-4 w-3/4 rounded bg-grey-01" />
+          <div className="h-4 w-2/3 rounded bg-grey-01" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PersonalHomeDashboard({
   sidebarCounts,
   proposalsList,
@@ -147,6 +192,17 @@ export function PersonalHomeDashboard({
   editorSpaceOptions,
   myProposalSpaceOptions,
 }: PersonalHomeDashboardProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = React.useTransition();
+  const showSkeleton = useDelayedPending(isPending);
+
+  const navigate = React.useCallback(
+    (href: string) => {
+      startTransition(() => router.push(href));
+    },
+    [router]
+  );
+
   const spaceOptions = governanceTab === 'review' ? editorSpaceOptions : myProposalSpaceOptions;
 
   const spaceLabel =
@@ -173,6 +229,7 @@ export function PersonalHomeDashboard({
           label={spaceLabel}
           showImages
           maxHeightClass="max-h-[25rem] overflow-y-auto"
+          onNavigate={navigate}
           items={[
             {
               label: 'All spaces',
@@ -189,6 +246,7 @@ export function PersonalHomeDashboard({
         />
         <GovernanceFilterMenu
           label={categoryLabel}
+          onNavigate={navigate}
           items={(Object.keys(categoryLabels) as GovernanceHomeReviewCategory[]).map(key => ({
             label: categoryLabels[key],
             href: buildHomeHref({ tab: governanceTab, ...filterState, category: key }),
@@ -196,6 +254,7 @@ export function PersonalHomeDashboard({
         />
         <GovernanceFilterMenu
           label={statusLabel}
+          onNavigate={navigate}
           items={(Object.keys(statusLabels) as GovernanceHomeStatusFilter[]).map(key => ({
             label: statusLabels[key],
             href: buildHomeHref({ tab: governanceTab, ...filterState, status: key }),
@@ -205,10 +264,10 @@ export function PersonalHomeDashboard({
       <div className="mt-4 flex gap-8">
         <div className="w-2/3">
           <Notices />
-          {proposalsList}
+          {showSkeleton ? <ProposalsListSkeleton /> : proposalsList}
         </div>
         <div className="w-1/3">
-          <Sidebar counts={sidebarCounts} />
+          {showSkeleton ? <SidebarSkeleton /> : <Sidebar counts={sidebarCounts} />}
         </div>
       </div>
     </>
@@ -220,11 +279,13 @@ function GovernanceFilterMenu({
   items,
   showImages,
   maxHeightClass,
+  onNavigate,
 }: {
   label: string;
   items: { label: string; href: string; image?: string | null; showImage?: boolean }[];
   showImages?: boolean;
   maxHeightClass?: string;
+  onNavigate?: (href: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [pendingLabel, setPendingLabel] = React.useState<string | null>(null);
@@ -252,9 +313,13 @@ function GovernanceFilterMenu({
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => {
+            onClick={e => {
               if (item.label !== label) setPendingLabel(item.label);
               setOpen(false);
+              if (onNavigate) {
+                e.preventDefault();
+                onNavigate(item.href);
+              }
             }}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
