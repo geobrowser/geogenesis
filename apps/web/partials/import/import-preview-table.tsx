@@ -151,7 +151,12 @@ function PropertyMappingPopover({
   return (
     <SelectEntityAsPopover
       trigger={
-        <span className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50">{trigger}</span>
+        <span
+          data-jump-property={csvColumnIndex}
+          className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50"
+        >
+          {trigger}
+        </span>
       }
       spaceId={spaceId}
       relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
@@ -241,33 +246,40 @@ type Props = {
   /** When true, disable all interactive cells (e.g. while resolving relations) */
   disabled?: boolean;
   onDeleteColumn?: (csvColumnIndex: number) => void;
-  onSkipAndDeleteUnmapped?: () => void;
 };
 
-export function ImportPreviewTable({
-  dataRows,
-  columns,
-  minHeight = 400,
-  spaceId,
-  onSelectProperty,
-  onCreateProperty,
-  unresolvedLinks = {},
-  onResolveRelationToken,
-  onResolveTypeValue,
-  onResolveEntityRow,
-  onResolveCheckboxValue,
-  hasUnmappedColumns = false,
-  resolvedRows,
-  resolvedEntities,
-  columnMapping: columnMappingProp,
-  typesColumnIndex,
-  selectedType: selectedTypeProp,
-  resolvedTypes: resolvedTypesProp,
-  checkboxOverrides = {},
-  disabled = false,
-  onDeleteColumn,
-  onSkipAndDeleteUnmapped,
-}: Props) {
+/** Imperative handle exposed via ref for cycling focus through unmapped/unresolved targets. */
+export type ImportPreviewTableHandle = {
+  jumpToNextUnmappedProperty(): void;
+  jumpToNextUnresolvedCell(): void;
+};
+
+export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Props>(function ImportPreviewTable(
+  {
+    dataRows,
+    columns,
+    minHeight = 400,
+    spaceId,
+    onSelectProperty,
+    onCreateProperty,
+    unresolvedLinks = {},
+    onResolveRelationToken,
+    onResolveTypeValue,
+    onResolveEntityRow,
+    onResolveCheckboxValue,
+    hasUnmappedColumns = false,
+    resolvedRows,
+    resolvedEntities,
+    columnMapping: columnMappingProp,
+    typesColumnIndex,
+    selectedType: selectedTypeProp,
+    resolvedTypes: resolvedTypesProp,
+    checkboxOverrides = {},
+    disabled = false,
+    onDeleteColumn,
+  },
+  forwardedRef
+) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
 
@@ -296,14 +308,58 @@ export function ImportPreviewTable({
 
   const virtualRows = rowVirtualizer.getVirtualItems();
 
+  const propertyCursorRef = React.useRef(-1);
+  const cellCursorRef = React.useRef(-1);
+
+  React.useImperativeHandle(
+    forwardedRef,
+    () => ({
+      jumpToNextUnmappedProperty: () => {
+        const unmapped = columns.filter(c => c.propertyName === null && !c.mappingLocked).map(c => c.csvColumnIndex);
+        if (unmapped.length === 0) return;
+        propertyCursorRef.current = (propertyCursorRef.current + 1) % unmapped.length;
+        const targetIndex = unmapped[propertyCursorRef.current];
+        const root = tableRef.current;
+        if (!root) return;
+        const el = root.querySelector<HTMLElement>(`[data-jump-property="${targetIndex}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        el.click();
+      },
+      jumpToNextUnresolvedCell: () => {
+        const keys = Object.keys(unresolvedLinks).sort((a, b) => {
+          const [ra, ca] = a.split(':').map(Number);
+          const [rb, cb] = b.split(':').map(Number);
+          return ra - rb || ca - cb;
+        });
+        if (keys.length === 0) return;
+        cellCursorRef.current = (cellCursorRef.current + 1) % keys.length;
+        const key = keys[cellCursorRef.current];
+        const [rowIndex] = key.split(':').map(Number);
+        const root = tableRef.current;
+        if (!root) return;
+        rowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
+        // Defer until the virtualizer renders the row.
+        requestAnimationFrame(() => {
+          const el = root.querySelector<HTMLElement>(`[data-jump-cell="${key}"]`);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          const trigger = el.querySelector<HTMLElement>('button');
+          trigger?.click();
+        });
+      },
+    }),
+    [columns, unresolvedLinks, rowVirtualizer]
+  );
+
   if (columns.length === 0) {
     return null;
   }
 
   const showEmptyState = hasUnmappedColumns && dataRows.length > 0;
-  const hasUnmappedColumnsForSkip = columns.some(c => c.propertyName === null && !c.mappingLocked);
 
   return (
+    <div className="relative">
     <div
       ref={tableRef}
       className="w-full overflow-auto rounded-lg border border-grey-02 bg-white"
@@ -404,20 +460,34 @@ export function ImportPreviewTable({
       </div>
 
       {showEmptyState ? (
-        <div className="sticky left-0 flex flex-col items-center justify-center gap-4 px-4 py-20">
-          <Text variant="metadata" className="max-w-md text-center text-grey-04">
-            Your data will appear once you have mapped all of your column properties
-          </Text>
-          {onSkipAndDeleteUnmapped && hasUnmappedColumnsForSkip && (
-            <button
-              type="button"
-              className="rounded-md border border-grey-02 bg-white px-4 py-2 text-smallButton text-text hover:bg-grey-01"
-              onClick={onSkipAndDeleteUnmapped}
-            >
-              Skip and delete unmapped columns
-            </button>
-          )}
-        </div>
+        <>
+          <div style={{ minWidth: columnLayout.totalWidth }}>
+            {dataRows.slice(0, 10).map((row, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="border-b border-grey-02 bg-grey-01/50"
+                style={{ minWidth: columnLayout.totalWidth }}
+              >
+                <div
+                  className="grid"
+                  style={{
+                    minWidth: columnLayout.totalWidth,
+                    gridTemplateColumns: columnLayout.template,
+                  }}
+                >
+                  {columns.map(col => (
+                    <div
+                      key={`preview-${rowIndex}-${col.csvColumnIndex}`}
+                      className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                    >
+                      <div className="truncate text-metadata text-text">{row[col.csvColumnIndex] ?? ''}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
         <div
           style={{
@@ -467,9 +537,11 @@ export function ImportPreviewTable({
                       return selectedTypeProp ? [{ id: selectedTypeProp.id, name: selectedTypeProp.name }] : undefined;
                     })();
 
+                    const cellKey = `${virtualRow.index}:${col.csvColumnIndex}`;
                     return (
                       <div
                         key={`${virtualRow.index}-${col.csvColumnIndex}`}
+                        data-jump-cell={cellFlag ? cellKey : undefined}
                         className="overflow-hidden border-r border-grey-02 px-4 py-2"
                       >
                         {col.dataType === 'BOOLEAN' && value ? (
@@ -747,5 +819,13 @@ export function ImportPreviewTable({
         </div>
       )}
     </div>
+      {showEmptyState && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-8">
+          <Text variant="metadata" className="text-center text-grey-04">
+            Map your remaining properties or skip to continue
+          </Text>
+        </div>
+      )}
+    </div>
   );
-}
+});
