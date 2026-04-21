@@ -12,6 +12,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
+import { GEO_APPS_SIDEBAR_EXTERNAL_ICON, GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 
 import { Avatar } from '~/design-system/avatar';
@@ -53,6 +54,35 @@ function BrowseNavIcon({ src }: { src: string }) {
         draggable={false}
       />
     </span>
+  );
+}
+
+function GeoAppsSidebarLinks() {
+  return (
+    <>
+      {GEO_APPS_SIDEBAR_LINKS.map(item => (
+        <a
+          key={item.href}
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${navLinkClass} pr-1.5`}
+        >
+          <BrowseNavIcon src={item.icon} />
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-grey-04">
+            <img
+              src={GEO_APPS_SIDEBAR_EXTERNAL_ICON}
+              alt=""
+              width={16}
+              height={16}
+              className="h-4 w-4 max-h-none max-w-none object-contain"
+              draggable={false}
+            />
+          </span>
+        </a>
+      ))}
+    </>
   );
 }
 
@@ -244,6 +274,10 @@ export function BrowseSidebar() {
             documentationImage={data?.documentationImage ?? null}
           />
         </nav>
+
+        <CollapsibleSection title="Geo Apps">
+          <GeoAppsSidebarLinks />
+        </CollapsibleSection>
 
         {!data ? (
           <p className="mt-4 px-2 text-browseMenu font-normal not-italic text-grey-04">Loading spaces…</p>
