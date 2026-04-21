@@ -55,18 +55,6 @@ if (!ACCOUNT_ABSTRACTION_API_KEY) {
   throw new Error('NEXT_PUBLIC_PIMLICO_API_KEY is not set');
 }
 
-const ONBOARD_FLAG = process.env.NEXT_PUBLIC_ONBOARD_FLAG;
-
-if (!ONBOARD_FLAG) {
-  throw new Error('NEXT_PUBLIC_ONBOARD_FLAG is not set');
-}
-
-const ONBOARD_CODE = process.env.NEXT_PUBLIC_ONBOARD_CODE;
-
-if (!ONBOARD_CODE) {
-  throw new Error('NEXT_PUBLIC_ONBOARD_CODE is not set');
-}
-
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 if (SENTRY_DSN) {
@@ -92,7 +80,5 @@ export {
   BUNDLER_RPC_ENDPOINT_TESTNET,
   WALLETCONNECT_PROJECT_ID,
   ACCOUNT_ABSTRACTION_API_KEY,
-  ONBOARD_FLAG,
-  ONBOARD_CODE,
   SENTRY_DSN,
 };

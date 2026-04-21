@@ -4,8 +4,6 @@ import {
   API_ENDPOINT_TESTNET,
   BUNDLER_RPC_ENDPOINT,
   BUNDLER_RPC_ENDPOINT_TESTNET,
-  ONBOARD_CODE,
-  ONBOARD_FLAG,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   RPC_ENDPOINT_TESTNET,
@@ -35,8 +33,6 @@ type IVars = Readonly<{
   bundlerRpcEndpointTestnet: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
-  onboardFlag: string;
-  onboardCode: string;
   sentryDsn?: string;
 }>;
 
@@ -52,8 +48,6 @@ export const variables: IVars = {
   bundlerRpcEndpointTestnet: BUNDLER_RPC_ENDPOINT_TESTNET!,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
-  onboardFlag: ONBOARD_FLAG!,
-  onboardCode: ONBOARD_CODE!,
   sentryDsn: SENTRY_DSN,
 };
 
