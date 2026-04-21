@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
+import { Property, SwitchableRenderableType } from '~/core/types';
 
 import { SelectEntity } from './select-entity';
 
@@ -30,7 +30,6 @@ type SelectEntityAsPopoverProps = {
   showIDs?: boolean;
   initialQuery?: string;
   selectedEntityId?: string;
-  renderResultTag?: (result: SearchResult) => React.ReactNode;
 };
 
 export function SelectEntityAsPopover({
@@ -44,7 +43,6 @@ export function SelectEntityAsPopover({
   showIDs = true,
   initialQuery,
   selectedEntityId,
-  renderResultTag,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -73,7 +71,6 @@ export function SelectEntityAsPopover({
             showIDs={showIDs}
             initialQuery={initialQuery}
             selectedEntityId={selectedEntityId}
-            renderResultTag={renderResultTag}
           />
         </Popover.Content>
       </Popover.Portal>

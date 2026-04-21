@@ -215,7 +215,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         ? (schema.find(p => p.id === propertyId) ?? extraProperties[propertyId] ?? store.getProperty(propertyId))
         : null;
       const propertyName = isTypesSourceColumn
-        ? 'Types (from CSV)'
+        ? 'Types'
         : propertyId
           ? (propIdToName.get(propertyId) ?? extraProperties[propertyId]?.name ?? prop?.name ?? propertyId)
           : null;

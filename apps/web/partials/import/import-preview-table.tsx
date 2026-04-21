@@ -23,7 +23,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
-import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 import type { UnresolvedImportCell } from './atoms';
@@ -258,16 +257,6 @@ function PropertyMappingPopover({
       showIDs={false}
       initialQuery={initialQuery}
       selectedEntityId={selectedEntityId}
-      renderResultTag={result => {
-        const property = store.getProperty(result.id);
-        if (!property) return null;
-        const label = formatDataTypeLabel({
-          dataType: property.dataType,
-          renderableTypeStrict: property.renderableTypeStrict,
-        });
-        if (!label) return null;
-        return <Tag>{label}</Tag>;
-      }}
       onDone={async result => {
         let property: Property | null = store.getProperty(result.id);
         if (!property) {
