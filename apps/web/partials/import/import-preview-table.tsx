@@ -405,16 +405,44 @@ export function ImportPreviewTable({
       </div>
 
       {showEmptyState ? (
-        <div className="sticky left-0 flex flex-col items-center justify-center gap-4 px-4 py-20">
-          <Text variant="metadata" className="max-w-md text-center text-grey-04">
-            Map your remaining columns, or continue without them.
-          </Text>
-          {onSkipAndDeleteUnmapped && hasUnmappedColumnsForSkip && (
-            <Button type="button" variant="primary" onClick={onSkipAndDeleteUnmapped}>
-              Next
-            </Button>
-          )}
-        </div>
+        <>
+          <div style={{ minWidth: columnLayout.totalWidth }}>
+            {dataRows.slice(0, 5).map((row, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="border-b border-grey-02 bg-grey-01/50"
+                style={{ minWidth: columnLayout.totalWidth }}
+              >
+                <div
+                  className="grid"
+                  style={{
+                    minWidth: columnLayout.totalWidth,
+                    gridTemplateColumns: columnLayout.template,
+                  }}
+                >
+                  {columns.map(col => (
+                    <div
+                      key={`preview-${rowIndex}-${col.csvColumnIndex}`}
+                      className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                    >
+                      <div className="truncate text-metadata text-text">{row[col.csvColumnIndex] ?? ''}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="sticky left-0 flex flex-col items-center justify-center gap-4 px-4 py-10">
+            <Text variant="metadata" className="max-w-md text-center text-grey-04">
+              Map your remaining columns, or continue without them.
+            </Text>
+            {onSkipAndDeleteUnmapped && hasUnmappedColumnsForSkip && (
+              <Button type="button" variant="primary" onClick={onSkipAndDeleteUnmapped}>
+                Next
+              </Button>
+            )}
+          </div>
+        </>
       ) : (
         <div
           style={{

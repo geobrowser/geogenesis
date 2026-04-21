@@ -34,7 +34,6 @@ import {
 } from './atoms';
 import type { ParseResult } from './csv-parse.worker';
 import { normalizeHeader, normalizeHeaderForMatch } from './header-normalization';
-import { ImportDataPreview } from './import-data-preview';
 import { ImportSessionStore } from './import-session-store';
 import { useAutoMapColumns } from './use-auto-map-columns';
 import { useImportSchema } from './use-import-schema';
@@ -551,7 +550,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <span className="font-semibold text-purple">Step 3</span>
           <span className="text-button font-medium text-text">Map properties and data</span>
         </div>
-        {hasFile && (selectedType || typesColumnIndex !== undefined) && <ImportDataPreview spaceId={spaceId} />}
         {step3Content}
       </div>
     </div>
