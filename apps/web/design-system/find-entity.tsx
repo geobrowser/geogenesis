@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { startTransition, useEffect, useState } from 'react';
 
+import cx from 'classnames';
 import pluralize from 'pluralize';
 
 import { ROOT_SPACE } from '~/core/constants';
@@ -12,6 +13,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { SearchResult } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Tag } from '~/design-system/tag';
@@ -105,7 +107,12 @@ export const FindEntity = ({
                   </div>
                 </div>
                 <ResizableContainer>
-                  <div className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto border-t border-grey-02 bg-white">
+                  <div
+                    className={cx(
+                      'flex flex-col overflow-x-clip border-t border-grey-02 bg-white',
+                      DROPDOWN_LIST_SCROLL_CLASSES
+                    )}
+                  >
                     {!results?.length && isLoading && (
                       <div className="w-full border-b border-divider bg-white px-3 py-2">
                         <div className="truncate text-button text-text">Loading...</div>

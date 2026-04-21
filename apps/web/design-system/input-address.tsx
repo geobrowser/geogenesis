@@ -29,6 +29,8 @@ import {
 import { Relation } from '~/core/types';
 import { GeoPoint } from '~/core/utils/utils';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
+
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
@@ -363,7 +365,7 @@ export const InputPlace = ({
                 >
                   {!result ? (
                     <ResizableContainer>
-                      <div className="no-scrollbar flex max-h-[219px] flex-col overflow-x-clip overflow-y-auto bg-white">
+                      <div className={cx('flex flex-col overflow-x-clip bg-white', DROPDOWN_LIST_SCROLL_CLASSES)}>
                         {isEntitiesLoading && (
                           <div className="w-full bg-white px-3 py-2">
                             <div className="truncate text-resultTitle text-text">Loading...</div>

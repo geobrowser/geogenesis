@@ -10,6 +10,7 @@ import cx from 'classnames';
 import { Property } from '~/core/types';
 import { ColumnSortState, SORTABLE_DATA_TYPES, nextSortDirection } from '~/core/utils/column-sort';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { SortTable } from '~/design-system/icons/sort-table';
@@ -45,7 +46,10 @@ export function DataBlockSortMenu({ properties, sortState, onSort }: DataBlockSo
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-100 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
+          className={cx(
+            'z-100 block w-[200px]! rounded-lg border border-grey-02 bg-white shadow-lg',
+            DROPDOWN_LIST_SCROLL_CLASSES
+          )}
           align="end"
         >
           {properties

@@ -7,6 +7,8 @@ import { useState } from 'react';
 
 import cx from 'classnames';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
+
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';
 
@@ -75,7 +77,10 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
         sideOffset={4}
         collisionPadding={10}
         avoidCollisions={true}
-        className="z-50 max-h-[50vh] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
+        className={cx(
+          'z-50 w-[200px] rounded-lg border border-grey-02 bg-white shadow-lg',
+          DROPDOWN_LIST_SCROLL_CLASSES
+        )}
       >
         <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
           {options.map((option, index) => {

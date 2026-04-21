@@ -7,6 +7,8 @@ import { Dispatch, SetStateAction, useState } from 'react';
 
 import cx from 'classnames';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
+
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -106,7 +108,10 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       <DropdownPrimitive.Content
         align="end"
         sideOffset={4}
-        className="absolute left-0 z-10 max-h-[280px] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
+        className={cx(
+          'absolute left-0 z-10 w-[200px] rounded-lg border border-grey-02 bg-white shadow-lg',
+          DROPDOWN_LIST_SCROLL_CLASSES
+        )}
       >
         <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
           {options.map((option, index) => {

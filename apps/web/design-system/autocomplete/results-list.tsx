@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -27,7 +28,7 @@ export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(
   return (
     <ul
       ref={ref}
-      className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
+      className={cx('m-0 flex list-none flex-col justify-start', DROPDOWN_LIST_SCROLL_CLASSES)}
       {...props}
     />
   );

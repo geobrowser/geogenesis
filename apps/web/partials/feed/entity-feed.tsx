@@ -151,7 +151,6 @@ export function EntityFeed({
             <div className="ml-auto">
               <Dropdown
                 align="end"
-                scrollableList
                 trigger={<span>{spaceLabel}</span>}
                 options={[
                   {

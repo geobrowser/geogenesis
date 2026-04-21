@@ -12,6 +12,7 @@ import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -413,9 +414,12 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
       <DropdownPrimitive.Content
         align="end"
         sideOffset={2}
-        className="z-10 w-[250px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
+        className={cx(
+          'z-10 w-[250px] origin-top-right self-end rounded-lg border border-grey-02 bg-white',
+          DROPDOWN_LIST_SCROLL_CLASSES
+        )}
       >
-        <DropdownPrimitive.Group className="overflow-hidden rounded-lg">{renderContent()}</DropdownPrimitive.Group>
+        <DropdownPrimitive.Group className="rounded-lg">{renderContent()}</DropdownPrimitive.Group>
       </DropdownPrimitive.Content>
     </DropdownPrimitive.Root>
   );

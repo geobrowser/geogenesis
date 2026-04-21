@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from './dropdown-list-viewport';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
@@ -15,7 +16,7 @@ import { Text } from './text';
 interface Props {
   trigger: React.ReactNode;
   align?: 'end' | 'center' | 'start';
-  /** When true, the menu scrolls vertically after ~22rem / 65vh so long option lists stay usable. */
+  /** When false, the menu does not scroll (short fixed lists only). Defaults to true. */
   scrollableList?: boolean;
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
@@ -30,17 +31,17 @@ const contentStyles = cva(
         end: 'origin-top-right',
       },
       scroll: {
-        true: 'max-h-[min(22rem,65vh)] overflow-y-auto overflow-x-hidden',
+        true: DROPDOWN_LIST_SCROLL_CLASSES,
         false: 'overflow-hidden',
       },
     },
     defaultVariants: {
-      scroll: false,
+      scroll: true,
     },
   }
 );
 
-export const Dropdown = ({ trigger, align = 'end', scrollableList = false, options }: Props) => {
+export const Dropdown = ({ trigger, align = 'end', scrollableList = true, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 

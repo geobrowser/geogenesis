@@ -495,6 +495,20 @@
 }
 
 /* Radix UI */
+/* Select.Viewport: Radix injects hidden scrollbars; restore a visible bar (governance-style menus). */
+.geo-select-viewport[data-radix-select-viewport] {
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+.geo-select-viewport[data-radix-select-viewport]::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+.geo-select-viewport[data-radix-select-viewport]::-webkit-scrollbar-thumb {
+  background-color: var(--color-grey-03);
+  border-radius: var(--radius-full);
+}
+
 .elevated-popover > [data-radix-popper-content-wrapper] {
   z-index: 1001 !important;
 }

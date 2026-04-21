@@ -17,6 +17,7 @@ import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from './dropdown-list-viewport';
 import { InfoSmall } from './icons/info-small';
 import { ResizableContainer } from './resizable-container';
 import { Truncate } from './truncate';
@@ -90,7 +91,7 @@ export const SelectSpace = ({
           )}
         >
           <ResizableContainer>
-            <div className="no-scrollbar flex max-h-[270px] flex-col overflow-x-clip overflow-y-auto bg-white">
+            <div className={cx('flex flex-col overflow-x-clip bg-white', DROPDOWN_LIST_SCROLL_CLASSES)}>
               {isLoading && (
                 <div className="w-full bg-white px-3 py-2">
                   <div className="truncate text-resultTitle text-text">Loading...</div>

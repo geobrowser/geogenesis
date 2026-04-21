@@ -484,7 +484,7 @@ export const SelectEntity = ({
                   {!result ? (
                     <ResizableContainer>
                       <div
-                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto bg-white"
+                        className="flex flex-col overflow-x-clip overflow-y-auto bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
@@ -654,7 +654,7 @@ export const SelectEntity = ({
                         </div>
                       </div>
                       <div
-                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto bg-white"
+                        className="flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',

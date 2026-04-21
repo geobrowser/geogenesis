@@ -11,6 +11,7 @@ import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { SwitchableRenderableType } from '~/core/types';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 import { NativeGeoImage } from './geo-image';
 import { Search } from './icons/search';
@@ -199,7 +200,7 @@ export function SelectEntityCompact({
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
         >
-          <div className="max-h-[min(50vh,300px)] overflow-y-auto">
+          <div className={DROPDOWN_LIST_SCROLL_CLASSES}>
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
             {!isLoading && isEmpty && <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>}
             {!isLoading && !isEmpty && (

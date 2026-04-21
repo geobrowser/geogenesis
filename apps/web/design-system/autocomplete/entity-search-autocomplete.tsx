@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import { useSearch } from '~/core/hooks/use-search';
 
+import { DROPDOWN_LIST_MAX_HEIGHT_CLASS } from '~/design-system/dropdown-list-viewport';
 import { Dots } from '~/design-system/dots';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
@@ -62,7 +63,8 @@ export function EntitySearchAutocomplete({
         <div
           ref={containerRef}
           className={cx(
-            'absolute top-full left-0 z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
+            'absolute top-full left-0 z-10 mt-2 w-[384px] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
+            DROPDOWN_LIST_MAX_HEIGHT_CLASS,
             dropdownClassName
           )}
         >

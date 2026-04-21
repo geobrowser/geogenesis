@@ -4,12 +4,14 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
 
+import { DROPDOWN_LIST_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
@@ -67,7 +69,10 @@ export function TableBlockContextMenu() {
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-1001 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
+          className={cx(
+            'z-1001 block w-[200px]! rounded-lg border border-grey-02 bg-white shadow-lg',
+            DROPDOWN_LIST_SCROLL_CLASSES
+          )}
           align="start"
         >
           {isInitialState && (

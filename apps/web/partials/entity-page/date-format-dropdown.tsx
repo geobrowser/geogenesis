@@ -10,6 +10,7 @@ import cx from 'classnames';
 import { GeoDate } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
+import { DROPDOWN_LIST_BODY_SCROLL_CLASSES } from '~/design-system/dropdown-list-viewport';
 import { DateFormat } from '~/design-system/icons/date-format';
 import { Toggle } from '~/design-system/toggle';
 
@@ -64,10 +65,10 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
       <DropdownPrimitive.Content
         align="end"
         sideOffset={2}
-        className="z-10 w-[250px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
+        className="z-10 flex max-h-[min(22rem,65vh)] w-[250px] origin-top-right flex-col self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
       >
         <DropdownPrimitive.Item
-          className="flex h-[28px] w-full gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 select-none hover:bg-bg! focus:outline-hidden"
+          className="flex h-[28px] w-full shrink-0 gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 select-none hover:bg-bg! focus:outline-hidden"
           // Suppress default to prevent the dropdown from closing when clicking the percentage toggle
           onClick={suppressDefault}
         >
@@ -78,7 +79,7 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
             </div>
           </div>
         </DropdownPrimitive.Item>
-        <DropdownPrimitive.Group className="overflow-hidden rounded-lg">
+        <DropdownPrimitive.Group className={cx('rounded-lg', DROPDOWN_LIST_BODY_SCROLL_CLASSES)}>
           {formatOptions.map((option, index) => (
             <DropdownPrimitive.Item
               key={`triple-type-dropdown-${index}`}
