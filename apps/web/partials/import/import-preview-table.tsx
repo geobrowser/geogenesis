@@ -937,7 +937,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
       )}
     </div>
       {showEmptyState && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-8">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-40">
           <Text variant="metadata" className="text-center text-grey-04">
             Map your remaining properties or skip to continue
           </Text>
