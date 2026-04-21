@@ -37,7 +37,7 @@ export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'start' | 'enter-profile' | 'create-space' | 'completed' | 'done';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
@@ -66,15 +66,16 @@ export const OnboardingDialog = () => {
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
-  // Redirect after onboarding completes. Lives here (not in StepComplete)
-  // because the dialog can unmount StepComplete before it renders with
-  // step='completed' — isOnboardingVisible flips to false once the personal
-  // space query refetches as registered.
+  // Scheduled here so the timer survives StepComplete unmounting once the
+  // personal space refetches as registered and closes the dialog.
   useEffect(() => {
     if (step !== 'completed') return;
-    const timer = setTimeout(() => router.push(ONBOARDING_DESTINATION), 3_600);
+    const timer = setTimeout(() => {
+      router.push(ONBOARDING_DESTINATION);
+      setStep('done');
+    }, 3_600);
     return () => clearTimeout(timer);
-  }, [step, router]);
+  }, [step, router, setStep]);
 
   const address = smartAccount?.account.address;
 
@@ -388,6 +389,7 @@ const retryMessage: Record<Step, string> = {
   'enter-profile': '',
   'create-space': 'Space creation failed',
   completed: '',
+  done: '',
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
