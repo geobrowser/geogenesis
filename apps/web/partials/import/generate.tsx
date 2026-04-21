@@ -335,7 +335,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       );
     }
     const unmappedCount = headers.filter((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined).length;
-    const dataPointsNeedLinking = unmappedCount * rowCount;
     const hasUnmapped = unmappedCount > 0;
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
@@ -348,15 +347,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               <Text variant="smallButton" className="text-text">
                 {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
               </Text>
-              <span className="flex shrink-0 items-center" aria-hidden>
-                <Warning color="red-01" />
-              </span>
-              <Text variant="smallButton" className="text-text">
-                {dataPointsNeedLinking.toLocaleString('en-US')} data points need linking
-              </Text>
             </div>
             <SmallButton type="button" variant="secondary" onClick={handleNavigateToReview}>
-              Fix data
+              Review
             </SmallButton>
           </>
         ) : (
@@ -381,7 +374,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     isAutoMapping,
     headers,
     columnMapping,
-    rowCount,
     handleNavigateToReview,
   ]);
 
