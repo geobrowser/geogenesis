@@ -9,7 +9,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
 import { Warning } from '~/design-system/icons/warning';
@@ -259,11 +259,6 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-metadata text-text">
           {entityCount}
         </span>
-        {hasUnmappedColumns && unmappedCount > 0 && hasData && (
-          <Button type="button" variant="primary" className="ml-auto" onClick={handleSkipAndDeleteUnmapped}>
-            Next
-          </Button>
-        )}
       </div>
 
       {hasNoRecords ? (
@@ -326,6 +321,16 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                     {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
                   </Text>
                 </button>
+              )}
+              {hasUnmappedColumns && unmappedCount > 0 && (
+                <SmallButton
+                  type="button"
+                  variant="secondary"
+                  className="ml-auto shrink-0 rounded-full"
+                  onClick={handleSkipAndDeleteUnmapped}
+                >
+                  Skip
+                </SmallButton>
               )}
             </div>
           ) : values.length > 0 ? (

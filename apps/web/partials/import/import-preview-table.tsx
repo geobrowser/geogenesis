@@ -359,6 +359,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
   const showEmptyState = hasUnmappedColumns && dataRows.length > 0;
 
   return (
+    <div className="relative">
     <div
       ref={tableRef}
       className="w-full overflow-auto rounded-lg border border-grey-02 bg-white"
@@ -485,16 +486,6 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                 </div>
               </div>
             ))}
-          </div>
-          <div
-            className="pointer-events-none sticky bottom-0 z-10 -mt-48 flex h-48 items-end bg-linear-to-b from-white/0 via-white/80 to-white pb-8"
-            style={{ minWidth: columnLayout.totalWidth }}
-          >
-            <div className="sticky left-0 w-full px-4 text-center">
-              <Text variant="metadata" className="text-grey-04">
-                Map your remaining columns or continue
-              </Text>
-            </div>
           </div>
         </>
       ) : (
@@ -825,6 +816,14 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+      {showEmptyState && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-8">
+          <Text variant="metadata" className="text-center text-grey-04">
+            Map your remaining properties or skip to continue
+          </Text>
         </div>
       )}
     </div>
