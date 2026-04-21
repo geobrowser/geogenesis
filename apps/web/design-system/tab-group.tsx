@@ -20,7 +20,7 @@ interface TabGroupProps {
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = useState<'start' | 'middle' | 'end'>('start');
-  const isScrollable = useRef(false);
+  const [isScrollable, setIsScrollable] = useState(false);
   const isDragging = useRef(false);
   const dragStartX = useRef<number>(0);
   const scrollStartLeft = useRef<number>(0);
@@ -34,7 +34,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       const maxScrollLeft = element.scrollWidth - element.clientWidth;
 
       // Check if content is scrollable (overflows container)
-      isScrollable.current = maxScrollLeft > 0;
+      setIsScrollable(maxScrollLeft > 0);
 
       if (element.scrollLeft <= 2) setScrollPosition('start');
       else if (element.scrollLeft >= maxScrollLeft - 2) setScrollPosition('end');
@@ -59,7 +59,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
-    if (!isScrollable.current) return;
+    if (!isScrollable) return;
 
     isDragging.current = true;
     dragStartX.current = e.clientX;
@@ -79,7 +79,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
-    if (!isScrollable.current) return;
+    if (!isScrollable) return;
 
     if (!isDragging.current || !scrollRef.current) return;
     e.preventDefault();
@@ -105,7 +105,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         ref={scrollRef}
         className={cx(
           'relative z-0 overflow-x-auto overflow-y-clip select-none',
-          isScrollable.current && 'cursor-grab active:cursor-grabbing',
+          isScrollable && 'cursor-grab active:cursor-grabbing',
           '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           className
         )}
@@ -117,12 +117,12 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
             <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
           ))}
         </div>
-        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+        <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
-      {scrollPosition !== 'end' && (
+      {scrollPosition !== 'end' && isScrollable && (
         <div className="pointer-events-none absolute top-0 right-0 bottom-0 z-50 h-6 w-[50px] bg-linear-to-l from-white" />
       )}
-      {scrollPosition !== 'start' && (
+      {scrollPosition !== 'start' && isScrollable && (
         <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 h-6 w-[50px] bg-linear-to-r from-white" />
       )}
     </div>

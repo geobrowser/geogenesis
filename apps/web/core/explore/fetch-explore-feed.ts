@@ -15,7 +15,6 @@ import {
   EXPLORE_COVER_PROPERTY_ID,
   EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
-  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
@@ -48,7 +47,28 @@ function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-const TYPE_SET = new Set(EXPLORE_ENTITY_TYPE_IDS.map(id => normId(id)));
+// Entities we never want to surface in any feed.
+// - `System type` relation to the `System` entity: marks system-managed rows.
+// - `types` relation to `Data block` / `Text block`: these are block entities that
+//   exist as internal structure of parent entities and aren't meaningful on their own.
+const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
+const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
+const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
+const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
+
+const FEED_EXCLUDED_RELATIONS_FILTER = {
+  relations: {
+    none: {
+      or: [
+        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
+        {
+          typeId: { is: SystemIds.TYPES_PROPERTY },
+          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
+        },
+      ],
+    },
+  },
+} satisfies EntityFilter;
 
 function timeThresholdSec(filter: ExploreTime): number | null {
   const now = Math.floor(Date.now() / 1000);
@@ -113,10 +133,6 @@ function imageFromEntity(entity: Entity, spaceId: string): string | null {
   return imageFromRelationMedia(entity.relations, spaceId);
 }
 
-function entityMatchesExploreTypes(entity: Entity): boolean {
-  return entity.types.some(t => TYPE_SET.has(normId(t.id)));
-}
-
 type ExploreEntity = Entity & { commentCount: number; createdAt?: string };
 
 type ExploreEntitiesPageResponse = {
@@ -156,11 +172,14 @@ async function fetchExploreEntitiesPage(args: {
   limit: number;
   after: string | null;
   orderBy: EntitiesOrderBy[];
+  typeIds?: readonly string[];
+  requireName?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   const filter: EntityFilter = {
-    typeIds: { overlaps: [...EXPLORE_ENTITY_TYPE_IDS] },
-    name: { isNull: false, isNot: '' },
+    ...FEED_EXCLUDED_RELATIONS_FILTER,
+    ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 
@@ -191,7 +210,7 @@ function buildItems(
 
   for (const e of entities) {
     const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
-    if (!spaceId || !entityMatchesExploreTypes(e)) continue;
+    if (!spaceId) continue;
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
     // from space C. Fall back to the top-level aggregated name/description when the
@@ -242,6 +261,10 @@ export async function fetchExploreFeed(args: {
   cursor: string | null;
   walletAddress?: string | null;
   memberOrEditorSpaceIds: string[];
+  /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
+  typeIds?: readonly string[];
+  /** If true (default), filter out entities with null or empty `name`. */
+  requireName?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = [...new Set([...spaceMeta.keys()].map(normId))].filter(id =>
@@ -307,6 +330,8 @@ export async function fetchExploreFeed(args: {
     limit: scanChunk,
     after: args.cursor,
     orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    typeIds: args.typeIds,
+    requireName: args.requireName,
   });
 
   const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
