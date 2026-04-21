@@ -16,13 +16,17 @@ import {
   COMMENT_TYPES_PROPERTY_ID,
   COMMENT_TYPE_ID,
 } from '~/core/comment-ids';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { getSpace } from '~/core/io/queries';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import type { Relation, Value } from '~/core/types';
 import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
+
+import { fetchCommentEntitiesForTarget } from './use-comments';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
@@ -178,13 +182,21 @@ export function useCreateComment(targetEntityId: string) {
           }
         }
 
-        // Fetch author info for optimistic update
-        const space = await Effect.runPromise(getSpace(personalSpaceId));
+        // Fetch author info for optimistic update (match useComments profile + avatar rules)
+        const [space, profile] = await Promise.all([
+          Effect.runPromise(getSpace(personalSpaceId)),
+          Effect.runPromise(
+            fetchProfileBySpaceId(personalSpaceId, smartAccount.account.address as `0x${string}`)
+          ),
+        ]);
         if (!space) {
           setToast(<span>Failed to resolve personal space</span>);
           setIsCreating(false);
           return;
         }
+
+        const avatarUrl =
+          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
 
         // Optimistically add comment to the query cache
         const optimisticComment: CommentEntity = {
@@ -197,13 +209,14 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
-            address: smartAccount.account.address,
-            name: space.entity.name,
-            avatarUrl: null, // Will resolve on next fetch
+            address: profile.address,
+            name: profile.name ?? space.entity.name ?? null,
+            avatarUrl,
           },
           createdAt: new Date().toISOString(),
           spaceId: personalSpaceId,
           resolved: false,
+          isPendingPublish: true,
         };
 
         queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
@@ -271,10 +284,39 @@ export function useCreateComment(targetEntityId: string) {
 
         setToast(<span>Comment published!</span>);
 
-        // Refetch from server after a delay to let the indexer catch up
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['comments', targetEntityId] });
-        }, 5000);
+        // Indexer may lag behind the chain; poll instead of invalidate so the optimistic row is not dropped.
+        const FIRST_POLL_MS = 1500;
+        const POLL_INTERVAL_MS = 2000;
+        const MAX_POLL_ATTEMPTS = 45;
+
+        void (async () => {
+          await new Promise(r => setTimeout(r, FIRST_POLL_MS));
+          for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+            try {
+              const list = await fetchCommentEntitiesForTarget(targetEntityId);
+              if (list.some(c => c.id === commentEntityId)) {
+                queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], list);
+                return;
+              }
+            } catch (e) {
+              console.error('[useCreateComment] Poll for indexed comment failed:', e);
+            }
+            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+          }
+          try {
+            const list = await fetchCommentEntitiesForTarget(targetEntityId);
+            if (list.some(c => c.id === commentEntityId)) {
+              queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], list);
+              return;
+            }
+            queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], [
+              ...list,
+              { ...optimisticComment, isPendingPublish: true },
+            ]);
+          } catch (e) {
+            console.error('[useCreateComment] Final comment sync failed:', e);
+          }
+        })();
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
         setToast(<span>Failed to create comment</span>);

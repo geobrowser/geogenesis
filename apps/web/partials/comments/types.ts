@@ -23,6 +23,8 @@ export interface CommentEntity {
   spaceId: string;
   /** Whether this comment has been resolved */
   resolved: boolean;
+  /** True while the comment exists only locally or the indexer has not returned it yet */
+  isPendingPublish?: boolean;
 }
 
 export interface CommentWithReplies extends CommentEntity {

@@ -120,13 +120,14 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
 function branchPointerBlurProps(clearFocus: () => void): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
   return {
     onPointerLeave: e => {
-      const next = e.relatedTarget as Node | null;
-      if (next && e.currentTarget.contains(next)) return;
+      const next = e.relatedTarget;
+      // relatedTarget is EventTarget | null; only Node is valid for Element.contains().
+      if (next instanceof Node && e.currentTarget.contains(next)) return;
       clearFocus();
     },
     onBlur: e => {
-      const next = e.relatedTarget as Node | null;
-      if (next && e.currentTarget.contains(next)) return;
+      const next = e.relatedTarget;
+      if (next instanceof Node && e.currentTarget.contains(next)) return;
       clearFocus();
     },
   };
@@ -787,6 +788,11 @@ function CommentItem({
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
           {relativeTime}
         </Text>
+        {comment.isPendingPublish && (
+          <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+            Publishing…
+          </Text>
+        )}
         {comment.resolved && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -958,6 +964,11 @@ function CommentItem({
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
               {relativeTime}
             </Text>
+            {comment.isPendingPublish && (
+              <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+                Publishing…
+              </Text>
+            )}
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"

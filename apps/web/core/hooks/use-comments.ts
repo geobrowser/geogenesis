@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import * as React from 'react';
@@ -120,7 +120,123 @@ interface UseCommentsOptions {
   spaceId: string;
 }
 
+export async function fetchCommentEntitiesForTarget(entityId: string): Promise<CommentEntity[]> {
+  // Fetch all Comment-type entities that have a Reply To relation pointing to this entity
+  const entities = await Effect.runPromise(
+    getAllEntities({
+      typeIds: { in: [COMMENT_TYPE_ID] },
+      filter: {
+        relations: {
+          some: {
+            toEntityId: { is: entityId },
+            typeId: { is: COMMENT_REPLY_TO_ID },
+          },
+        },
+      },
+      limit: 1000,
+    })
+  );
+
+  // Also fetch replies to those comments (comments whose Reply To points to a fetched comment)
+  const commentIds = entities.map(e => e.id);
+  const allEntities = [...entities];
+
+  if (commentIds.length > 0) {
+    const replies = await Effect.runPromise(
+      getAllEntities({
+        typeIds: { in: [COMMENT_TYPE_ID] },
+        filter: {
+          relations: {
+            some: {
+              toEntityId: { in: commentIds },
+              typeId: { is: COMMENT_REPLY_TO_ID },
+            },
+          },
+        },
+        limit: 1000,
+      })
+    );
+
+    // Dedupe
+    const existingIds = new Set(commentIds);
+    for (const reply of replies) {
+      if (!existingIds.has(reply.id)) {
+        allEntities.push(reply);
+        existingIds.add(reply.id);
+      }
+    }
+  }
+
+  // Resolve author info via profile API (returns wallet address for avatar seed)
+  const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
+  const profileMap = new Map<string, { address: string; name: string | null; avatarUrl: string | null }>();
+
+  if (uniqueSpaceIds.length > 0) {
+    const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
+    for (const profile of profiles) {
+      const avatarUrl =
+        profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+      profileMap.set(profile.spaceId, {
+        address: profile.address,
+        name: profile.name,
+        avatarUrl,
+      });
+    }
+  }
+
+  // Parse into CommentEntity
+  const allCommentIds = new Set(allEntities.map(e => e.id));
+
+  // Build adjacency map: for each comment, its Reply To comment targets
+  const adjacency = new Map<string, string[]>();
+  for (const entity of allEntities) {
+    const targets = entity.relations
+      .filter(r => r.type.id === COMMENT_REPLY_TO_ID && allCommentIds.has(r.toEntity.id))
+      .map(r => r.toEntity.id);
+    adjacency.set(entity.id, targets);
+  }
+
+  // Compute true nesting depth by traversing the parent chain.
+  // Old comments only have Reply To to their immediate parent, so counting
+  // local relations gives all non-root comments depth 1 regardless of actual
+  // nesting. Traversing the chain gives the correct depth.
+  const depthMap = new Map<string, number>();
+  function computeDepth(commentId: string): number {
+    if (depthMap.has(commentId)) return depthMap.get(commentId)!;
+    const targets = adjacency.get(commentId) ?? [];
+    if (targets.length === 0) {
+      depthMap.set(commentId, 0);
+      return 0;
+    }
+    const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
+    const depth = maxParentDepth + 1;
+    depthMap.set(commentId, depth);
+    return depth;
+  }
+  for (const id of allCommentIds) {
+    computeDepth(id);
+  }
+
+  const comments = allEntities.map(entity => {
+    const comment = parseCommentEntity(entity, allCommentIds, entityId, depthMap);
+    const profileInfo = profileMap.get(comment.spaceId);
+    if (profileInfo) {
+      comment.author = {
+        spaceId: comment.spaceId,
+        address: profileInfo.address,
+        name: profileInfo.name,
+        avatarUrl: profileInfo.avatarUrl,
+      };
+    }
+    return comment;
+  });
+
+  return comments;
+}
+
 export function useComments({ entityId }: UseCommentsOptions) {
+  const queryClient = useQueryClient();
+
   const {
     data: rawComments,
     isLoading,
@@ -129,117 +245,11 @@ export function useComments({ entityId }: UseCommentsOptions) {
   } = useQuery({
     queryKey: ['comments', entityId],
     queryFn: async () => {
-      // Fetch all Comment-type entities that have a Reply To relation pointing to this entity
-      const entities = await Effect.runPromise(
-        getAllEntities({
-          typeIds: { in: [COMMENT_TYPE_ID] },
-          filter: {
-            relations: {
-              some: {
-                toEntityId: { is: entityId },
-                typeId: { is: COMMENT_REPLY_TO_ID },
-              },
-            },
-          },
-          limit: 1000,
-        })
-      );
-
-      // Also fetch replies to those comments (comments whose Reply To points to a fetched comment)
-      const commentIds = entities.map(e => e.id);
-      const allEntities = [...entities];
-
-      if (commentIds.length > 0) {
-        const replies = await Effect.runPromise(
-          getAllEntities({
-            typeIds: { in: [COMMENT_TYPE_ID] },
-            filter: {
-              relations: {
-                some: {
-                  toEntityId: { in: commentIds },
-                  typeId: { is: COMMENT_REPLY_TO_ID },
-                },
-              },
-            },
-            limit: 1000,
-          })
-        );
-
-        // Dedupe
-        const existingIds = new Set(commentIds);
-        for (const reply of replies) {
-          if (!existingIds.has(reply.id)) {
-            allEntities.push(reply);
-            existingIds.add(reply.id);
-          }
-        }
-      }
-
-      // Resolve author info via profile API (returns wallet address for avatar seed)
-      const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
-      const profileMap = new Map<string, { address: string; name: string | null; avatarUrl: string | null }>();
-
-      if (uniqueSpaceIds.length > 0) {
-        const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
-        for (const profile of profiles) {
-          const avatarUrl =
-            profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-          profileMap.set(profile.spaceId, {
-            address: profile.address,
-            name: profile.name,
-            avatarUrl,
-          });
-        }
-      }
-
-      // Parse into CommentEntity
-      const allCommentIds = new Set(allEntities.map(e => e.id));
-
-      // Build adjacency map: for each comment, its Reply To comment targets
-      const adjacency = new Map<string, string[]>();
-      for (const entity of allEntities) {
-        const targets = entity.relations
-          .filter(r => r.type.id === COMMENT_REPLY_TO_ID && allCommentIds.has(r.toEntity.id))
-          .map(r => r.toEntity.id);
-        adjacency.set(entity.id, targets);
-      }
-
-      // Compute true nesting depth by traversing the parent chain.
-      // Old comments only have Reply To to their immediate parent, so counting
-      // local relations gives all non-root comments depth 1 regardless of actual
-      // nesting. Traversing the chain gives the correct depth.
-      const depthMap = new Map<string, number>();
-      function computeDepth(commentId: string): number {
-        if (depthMap.has(commentId)) return depthMap.get(commentId)!;
-        const targets = adjacency.get(commentId) ?? [];
-        if (targets.length === 0) {
-          depthMap.set(commentId, 0);
-          return 0;
-        }
-        const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
-        const depth = maxParentDepth + 1;
-        depthMap.set(commentId, depth);
-        return depth;
-      }
-      for (const id of allCommentIds) {
-        computeDepth(id);
-      }
-
-      const comments = allEntities.map(entity => {
-        const comment = parseCommentEntity(entity, allCommentIds, entityId, depthMap);
-        const profileInfo = profileMap.get(comment.spaceId);
-        if (profileInfo) {
-          comment.author = {
-            spaceId: comment.spaceId,
-            address: profileInfo.address,
-            name: profileInfo.name,
-            avatarUrl: profileInfo.avatarUrl,
-          };
-        }
-        return comment;
-      });
-
-      return comments;
+      const server = await fetchCommentEntitiesForTarget(entityId);
+      const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]) ?? [];
+      const serverIds = new Set(server.map(c => c.id));
+      const pendingOnly = prev.filter(c => c.isPendingPublish === true && !serverIds.has(c.id));
+      return pendingOnly.length > 0 ? [...server, ...pendingOnly] : server;
     },
     enabled: !!entityId,
   });
