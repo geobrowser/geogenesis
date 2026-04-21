@@ -6,16 +6,16 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { Button, SquareButton } from '~/design-system/button';
-import { Close } from '~/design-system/icons/close';
+import { Button } from '~/design-system/button';
 import { Gem } from '~/design-system/icons/gem';
 import { Pending } from '~/design-system/pending';
 
-import { BountyCard } from '~/partials/review/bounty-linking/bounty-card';
 import {
+  BountyLinkingPanel,
   useLinkableBounties,
   useLinkedBountiesForProposal,
   usePublishBountyLinks,
@@ -135,6 +135,9 @@ function ProposalBountyLinksPanelInternal({ proposalId, proposalName, spaceId, i
   const { isOpen, close } = useBountyLinksContext();
   const queryClient = useQueryClient();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const personalPageEntityId = profile?.id ?? null;
 
   const { linkedBounties, relationsByBountyId } = useLinkedBountiesForProposal({
     proposalId,
@@ -156,12 +159,13 @@ function ProposalBountyLinksPanelInternal({ proposalId, proposalName, spaceId, i
     }
   }, [isOpen, linkedBounties]);
 
-  // For authors, also offer bounties that aren't yet linked so they can add more in the same
-  // panel. For viewers the picker is collapsed to just the currently-linked set.
+  // Same query shape as the review-your-edits screen: allocation must match the user's
+  // personal page entity OR their personal space, otherwise bounties allocated to the page
+  // entity (the common case) disappear after an unlink and can't be re-linked.
   const { bounties: linkableBounties, bountiesById: linkableBountiesById } = useLinkableBounties({
     activeSpace: spaceId,
     personalSpaceId: personalSpaceId ?? null,
-    personalPageEntityId: null,
+    personalPageEntityId,
     enabled: isOpen && isAuthor,
   });
 
@@ -240,57 +244,24 @@ function ProposalBountyLinksPanelInternal({ proposalId, proposalName, spaceId, i
     });
   };
 
-  const toggleBounty = (bountyId: string) => {
-    setSelectedBountyIds(prev => {
-      const next = new Set(prev);
-      if (next.has(bountyId)) next.delete(bountyId);
-      else next.add(bountyId);
-      return next;
-    });
-  };
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-[10001] flex w-[416px] max-w-full flex-col bg-white shadow-xl">
-      <div className="flex items-center justify-between border-b border-grey-02 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-purple">
-            <Gem color="purple" />
-          </span>
-          <span className="text-body text-text">
-            {linkedBounties.length} linked {linkedBounties.length === 1 ? 'bounty' : 'bounties'}
-          </span>
-        </div>
-        <SquareButton onClick={close} icon={<Close />} />
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {displayBounties.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-body text-grey-04">
-              {isAuthor
-                ? 'No allocated bounties available to link in this space.'
-                : 'No bounties are linked to this proposal.'}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col divide-y divide-grey-02">
-            {displayBounties.map(bounty => (
-              <BountyCard
-                key={bounty.id}
-                bounty={bounty}
-                isSelected={selectedBountyIds.has(bounty.id)}
-                onToggle={toggleBounty}
-                readOnly={!isAuthor}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isAuthor && (
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-grey-02 bg-white p-3">
+    <div className="fixed inset-y-0 right-0 z-[10001] flex flex-col items-stretch">
+      {/* Reuse the exact review-your-edits panel so the card chrome, header label, and
+          selection UX stay in lockstep with the review screen. */}
+      <BountyLinkingPanel
+        isOpen={isOpen}
+        setIsOpen={value => {
+          if (!value) close();
+        }}
+        selectedBountyIds={selectedBountyIds}
+        setSelectedBountyIds={isAuthor ? setSelectedBountyIds : () => {}}
+        bounties={displayBounties}
+        readOnly={!isAuthor}
+      />
+      {isAuthor && hasPendingChanges && (
+        <div className="mr-2 -mt-2 mb-2 flex w-[400px] shrink-0 items-center justify-end gap-2 rounded-lg bg-white px-4 py-3">
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
