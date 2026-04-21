@@ -20,10 +20,14 @@ type PublishBountyLinksArgs = {
   /** The DAO space the bounties live in when it differs from the author's personal space. Left
    *  undefined when the two are the same. */
   toSpaceId?: string;
-  /** Bounty ids to create relations for. */
+  /** Bounty ids to create new relations for. */
   bountyIds: Set<string>;
   /** Lookup to resolve each id → its display name for the relation payload. */
   bountiesById: Map<string, Bounty>;
+  /** Existing Bounties relations to remove. Each Relation's `id` identifies the on-chain
+   *  relation to tombstone; the rest of the fields are copied through to satisfy the
+   *  `StoreRelation` shape the publish pipeline expects. */
+  relationsToRemove?: StoreRelation[];
   onSuccess?: () => void;
   onError?: () => void;
 };
@@ -46,12 +50,21 @@ export function usePublishBountyLinks({ personalSpaceId }: UsePublishBountyLinks
   const [isPublishing, setIsPublishing] = React.useState(false);
 
   const publish = React.useCallback(
-    async ({ proposalId, proposalName, toSpaceId, bountyIds, bountiesById, onSuccess, onError }: PublishBountyLinksArgs) => {
+    async ({
+      proposalId,
+      proposalName,
+      toSpaceId,
+      bountyIds,
+      bountiesById,
+      relationsToRemove = [],
+      onSuccess,
+      onError,
+    }: PublishBountyLinksArgs) => {
       if (!personalSpaceId) {
         onError?.();
         return;
       }
-      if (bountyIds.size === 0) {
+      if (bountyIds.size === 0 && relationsToRemove.length === 0) {
         onSuccess?.();
         return;
       }
@@ -66,30 +79,35 @@ export function usePublishBountyLinks({ personalSpaceId }: UsePublishBountyLinks
       };
 
       try {
-        const bountyLinkValues: StoreValue[] = [
-          {
-            id: ID.createValueId({
-              entityId: proposalId,
-              propertyId: SystemIds.NAME_PROPERTY,
-              spaceId: personalSpaceId,
-            }),
-            entity: {
-              id: proposalId,
-              name: proposalName,
-            },
-            property: {
-              id: SystemIds.NAME_PROPERTY,
-              name: 'Name',
-              dataType: 'TEXT',
-            },
-            spaceId: personalSpaceId,
-            value: proposalName,
-            isLocal: true,
-            isDeleted: false,
-            hasBeenPublished: false,
-            timestamp: new Date().toISOString(),
-          },
-        ];
+        // Only write the name value when there's at least one new link. Delete-only updates
+        // don't need to re-assert it — the entity already exists in the personal space graph.
+        const bountyLinkValues: StoreValue[] =
+          bountyIds.size > 0
+            ? [
+                {
+                  id: ID.createValueId({
+                    entityId: proposalId,
+                    propertyId: SystemIds.NAME_PROPERTY,
+                    spaceId: personalSpaceId,
+                  }),
+                  entity: {
+                    id: proposalId,
+                    name: proposalName,
+                  },
+                  property: {
+                    id: SystemIds.NAME_PROPERTY,
+                    name: 'Name',
+                    dataType: 'TEXT',
+                  },
+                  spaceId: personalSpaceId,
+                  value: proposalName,
+                  isLocal: true,
+                  isDeleted: false,
+                  hasBeenPublished: false,
+                  timestamp: new Date().toISOString(),
+                },
+              ]
+            : [];
 
         const proposalTypeRelation: StoreRelation = {
           id: ID.createEntityId(),
@@ -113,36 +131,50 @@ export function usePublishBountyLinks({ personalSpaceId }: UsePublishBountyLinks
           },
         };
 
-        const bountyLinkRelations: StoreRelation[] = [
-          proposalTypeRelation,
-          ...Array.from(bountyIds).flatMap<StoreRelation>(bountyId => {
-            const bounty = bountiesById.get(bountyId);
-            if (!bounty) return [];
-            return [
-              {
-                id: ID.createEntityId(),
-                entityId: ID.createEntityId(),
-                spaceId: personalSpaceId,
-                toSpaceId,
-                renderableType: 'RELATION',
-                verified: false,
-                position: Position.generate(),
-                type: {
-                  id: BOUNTIES_RELATION_TYPE,
-                  name: 'Bounties',
-                },
-                fromEntity: {
-                  id: proposalId,
-                  name: proposalName,
-                },
-                toEntity: {
-                  id: bounty.id,
-                  name: bounty.name,
-                  value: bounty.id,
-                },
+        const addedRelations = Array.from(bountyIds).flatMap<StoreRelation>(bountyId => {
+          const bounty = bountiesById.get(bountyId);
+          if (!bounty) return [];
+          return [
+            {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId: personalSpaceId,
+              toSpaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: BOUNTIES_RELATION_TYPE,
+                name: 'Bounties',
               },
-            ];
-          }),
+              fromEntity: {
+                id: proposalId,
+                name: proposalName,
+              },
+              toEntity: {
+                id: bounty.id,
+                name: bounty.name,
+                value: bounty.id,
+              },
+            },
+          ];
+        });
+
+        // Tombstone existing relations. Only `id` is consulted by Graph.deleteRelation, so we
+        // mirror the original relation payload and flip `isDeleted` to true.
+        const deletedRelations = relationsToRemove.map<StoreRelation>(relation => ({
+          ...relation,
+          isDeleted: true,
+          isLocal: true,
+          hasBeenPublished: false,
+        }));
+
+        const bountyLinkRelations: StoreRelation[] = [
+          // Only re-assert the Proposal entity's type when there are adds — for delete-only
+          // updates the entity already exists in the personal space graph.
+          ...(addedRelations.length > 0 ? [proposalTypeRelation] : []),
+          ...addedRelations,
+          ...deletedRelations,
         ];
 
         // `makeProposal` has several early-return paths (no smart account, no space, empty

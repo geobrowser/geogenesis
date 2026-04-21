@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 
 import { BOUNTIES_RELATION_TYPE, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import type { Relation } from '~/core/types';
 
 import { buildBounty } from './build-bounties';
 import type { Bounty } from './types';
@@ -34,7 +35,13 @@ function bountySpaceFallbackLabel(spaceId: string): string {
 export function useLinkedBountiesForProposal({
   proposalId,
   enabled = true,
-}: UseLinkedBountiesForProposalArgs): { linkedBounties: Bounty[]; isLoading: boolean } {
+}: UseLinkedBountiesForProposalArgs): {
+  linkedBounties: Bounty[];
+  /** For each linked bounty id, the Relation object that created the link. Needed to issue a
+   *  deletion op when an author unlinks a previously-linked bounty. */
+  relationsByBountyId: Map<string, Relation>;
+  isLoading: boolean;
+} {
   const gated = Boolean(enabled && proposalId);
 
   const { data: proposalEntities = [], isLoading: isLoadingProposal } = useQuery({
@@ -47,14 +54,20 @@ export function useLinkedBountiesForProposal({
     },
   });
 
-  const linkedBountyIds = React.useMemo(() => {
+  const { linkedBountyIds, relationsByBountyId } = React.useMemo(() => {
     const proposalEntity = proposalEntities[0];
-    if (!proposalEntity) return [] as string[];
-    const ids = (proposalEntity.relations ?? [])
-      .filter(r => r.type.id === BOUNTIES_RELATION_TYPE && r.isDeleted !== true)
-      .map(r => r.toEntity?.id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
-    return [...new Set(ids)].sort();
+    const map = new Map<string, Relation>();
+    if (!proposalEntity) return { linkedBountyIds: [] as string[], relationsByBountyId: map };
+    for (const r of proposalEntity.relations ?? []) {
+      if (r.type.id !== BOUNTIES_RELATION_TYPE) continue;
+      if (r.isDeleted) continue;
+      const toId = r.toEntity?.id;
+      if (typeof toId !== 'string' || toId.length === 0) continue;
+      // If the same bounty somehow has two link relations, keep the first — either works for
+      // the subsequent delete op.
+      if (!map.has(toId)) map.set(toId, r);
+    }
+    return { linkedBountyIds: [...map.keys()].sort(), relationsByBountyId: map };
   }, [proposalEntities]);
 
   const { data: bountyEntities = [], isLoading: isLoadingBounties } = useQuery({
@@ -144,5 +157,5 @@ export function useLinkedBountiesForProposal({
     });
   }, [bountyEntities, bountySpaceIds, spaceRows, submissionCounts]);
 
-  return { linkedBounties, isLoading: isLoadingProposal || isLoadingBounties };
+  return { linkedBounties, relationsByBountyId, isLoading: isLoadingProposal || isLoadingBounties };
 }
