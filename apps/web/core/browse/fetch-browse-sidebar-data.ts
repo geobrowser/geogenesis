@@ -34,58 +34,91 @@ export type BrowseSidebarData = {
 
 const GOVERNANCE_PROPOSAL_PAGE_SIZE = 100;
 const GOVERNANCE_PROPOSAL_MAX_PAGES = 40;
+const GOVERNANCE_PROPOSAL_SPACE_CONCURRENCY = 4;
+
+async function hasPendingVoteInSpace(
+  memberSpaceId: string,
+  spaceId: string,
+  apiEndpoint: string,
+  shouldStop: () => boolean
+): Promise<boolean> {
+  let cursor: string | null = null;
+
+  for (let page = 0; page < GOVERNANCE_PROPOSAL_MAX_PAGES; page++) {
+    if (shouldStop()) return false;
+
+    const params = new URLSearchParams();
+    params.set('limit', String(GOVERNANCE_PROPOSAL_PAGE_SIZE));
+    params.set('status', 'PROPOSED');
+    params.set('orderBy', 'end_time');
+    params.set('orderDirection', 'desc');
+    params.set('voterId', memberSpaceId);
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+
+    const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
+
+    const result = await Effect.runPromise(
+      Effect.either(
+        restFetch<unknown>({
+          endpoint: apiEndpoint,
+          path,
+        })
+      )
+    );
+
+    if (Either.isLeft(result)) {
+      console.error(`Failed to fetch governance proposals for space ${spaceId}:`, result.left);
+      return false;
+    }
+
+    const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
+    if (Either.isLeft(decoded)) {
+      console.error(`Failed to decode governance proposals for space ${spaceId}:`, decoded.left);
+      return false;
+    }
+
+    if (decoded.right.proposals.some(proposal => proposal.userVote == null)) {
+      return true;
+    }
+
+    cursor = decoded.right.nextCursor;
+    if (!cursor) break;
+  }
+
+  return false;
+}
 
 async function hasPendingVotesInEditorSpaces(memberSpaceId: string, editorSpaceIds: string[]): Promise<boolean> {
   if (editorSpaceIds.length === 0) return false;
 
-  const config = Environment.getConfig();
+  const apiEndpoint = Environment.getConfig().api;
+  const concurrency = Math.min(GOVERNANCE_PROPOSAL_SPACE_CONCURRENCY, editorSpaceIds.length);
+  let nextIndex = 0;
+  let foundPendingVote = false;
 
-  for (const spaceId of editorSpaceIds) {
-    let cursor: string | null = null;
+  const worker = async () => {
+    while (!foundPendingVote) {
+      const currentIndex = nextIndex++;
+      if (currentIndex >= editorSpaceIds.length) return;
 
-    for (let page = 0; page < GOVERNANCE_PROPOSAL_MAX_PAGES; page++) {
-      const params = new URLSearchParams();
-      params.set('limit', String(GOVERNANCE_PROPOSAL_PAGE_SIZE));
-      params.set('status', 'PROPOSED');
-      params.set('orderBy', 'end_time');
-      params.set('orderDirection', 'desc');
-      params.set('voterId', memberSpaceId);
-      if (cursor) {
-        params.set('cursor', cursor);
-      }
-
-      const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
-
-      const result = await Effect.runPromise(
-        Effect.either(
-          restFetch<unknown>({
-            endpoint: config.api,
-            path,
-          })
-        )
+      const result = await hasPendingVoteInSpace(
+        memberSpaceId,
+        editorSpaceIds[currentIndex],
+        apiEndpoint,
+        () => foundPendingVote
       );
-
-      if (Either.isLeft(result)) {
-        console.error(`Failed to fetch governance proposals for space ${spaceId}:`, result.left);
-        break;
+      if (result) {
+        foundPendingVote = true;
+        return;
       }
-
-      const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
-      if (Either.isLeft(decoded)) {
-        console.error(`Failed to decode governance proposals for space ${spaceId}:`, decoded.left);
-        break;
-      }
-
-      if (decoded.right.proposals.some(proposal => proposal.userVote == null)) {
-        return true;
-      }
-
-      cursor = decoded.right.nextCursor;
-      if (!cursor) break;
     }
-  }
+  };
 
-  return false;
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  return foundPendingVote;
 }
 
 async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow>> {
@@ -218,6 +251,8 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     ),
   ]);
 
+  const pendingVotesPromise = hasPendingVotesInEditorSpaces(memberSpaceId, editorIds);
+
   const editorIdSet = new Set(editorIds);
   const pendingMemberIds = new Set<string>();
   const pendingEditorIds = new Set<string>();
@@ -287,7 +322,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     })
   );
 
-  const hasPendingVotes = await hasPendingVotesInEditorSpaces(memberSpaceId, editorIds);
+  const hasPendingVotes = await pendingVotesPromise;
 
   return {
     featured,

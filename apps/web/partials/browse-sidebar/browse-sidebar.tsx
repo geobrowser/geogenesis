@@ -92,7 +92,10 @@ function BrowseNavPrimaryLinks({
           <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
           <span className="min-w-0 flex-1 text-left">Governance</span>
           {hasPendingVotes ? (
-            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-01" aria-hidden="true" />
+            <>
+              <span className="sr-only">Pending votes</span>
+              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-01" aria-hidden="true" />
+            </>
           ) : null}
         </Link>
       ) : null}
