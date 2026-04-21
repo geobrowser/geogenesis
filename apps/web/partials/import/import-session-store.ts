@@ -50,4 +50,29 @@ export const ImportSessionStore = {
   clear(sessionId: string): void {
     sessions.delete(sessionId);
   },
+
+  removeColumns(sessionId: string, columnIndices: number[]): boolean {
+    const data = sessions.get(sessionId);
+    if (!data || columnIndices.length === 0) return false;
+    const remove = new Set(
+      columnIndices.filter(i => Number.isInteger(i) && i >= 0 && i < data.headers.length)
+    );
+    if (remove.size === 0) return false;
+
+    const headerLen = data.headers.length;
+    const headers = data.headers.filter((_, i) => !remove.has(i));
+    const rows = data.rows.map(row => {
+      const padded: string[] = [];
+      for (let i = 0; i < headerLen; i++) {
+        padded.push(row[i] ?? '');
+      }
+      return padded.filter((_, i) => !remove.has(i));
+    });
+    sessions.set(sessionId, {
+      headers,
+      rows,
+      rowCount: rows.length,
+    });
+    return true;
+  },
 };
