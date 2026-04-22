@@ -491,7 +491,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             </div>
           ) : (
             <div className="rounded-2xl bg-grey-01 p-3">
-              <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="relative w-[192px]">
@@ -552,8 +551,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               </div>
               {hasTypesColumn !== undefined && (
                 <p className="mt-2 text-metadata text-grey-04">
-                  This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
-                  above.
+                  Find or create a constant type for all rows or choose a types column from the CSV.
                 </p>
               )}
             </div>
