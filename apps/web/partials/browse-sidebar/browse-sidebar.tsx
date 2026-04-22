@@ -288,7 +288,7 @@ export function BrowseSidebar() {
         className="right-0 top-[calc(2.75rem+0.75rem)] translate-x-1/2"
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
         <nav className="space-y-0.5">
           <BrowseNavPrimaryLinks personalSpaceId={personalSpaceId} />
         </nav>
