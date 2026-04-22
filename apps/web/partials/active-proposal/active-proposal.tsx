@@ -25,6 +25,7 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
+import { ProposalBountyLinksButton, ProposalBountyLinksProvider } from './proposal-bounty-links';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
@@ -70,22 +71,30 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
     proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
   return (
-    <>
+    <ProposalBountyLinksProvider
+      proposalId={proposal.id}
+      proposalName={proposalTitle}
+      spaceId={spaceId}
+      authorAddress={proposal.createdBy.address}
+    >
       <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
         </div>
 
-        <AcceptOrReject
-          spaceId={spaceId}
-          proposalId={proposal.id}
-          isProposalEnded={isProposalEnded}
-          status={proposal.status}
-          canExecute={proposal.canExecute}
-          proposalType={proposal.type}
-          userVote={userVote}
-        />
+        <div className="inline-flex items-center gap-2">
+          <ProposalBountyLinksButton />
+          <AcceptOrReject
+            spaceId={spaceId}
+            proposalId={proposal.id}
+            isProposalEnded={isProposalEnded}
+            status={proposal.status}
+            canExecute={proposal.canExecute}
+            proposalType={proposal.type}
+            userVote={userVote}
+          />
+        </div>
       </div>
       <div className="relative overflow-x-clip">
         <MetadataMotionContainer>
@@ -180,6 +189,6 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           </div>
         </div>
       </div>
-    </>
+    </ProposalBountyLinksProvider>
   );
 }

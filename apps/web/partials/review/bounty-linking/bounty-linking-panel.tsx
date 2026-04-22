@@ -15,6 +15,9 @@ interface BountyLinkingPanelProps {
   selectedBountyIds: Set<string>;
   setSelectedBountyIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   bounties: Bounty[];
+  /** Hides the per-card checkbox and disables toggling. Used on the proposal voting screen
+   *  when a non-author is viewing the linked bounties. */
+  readOnly?: boolean;
 }
 
 export function BountyLinkingPanel({
@@ -23,6 +26,7 @@ export function BountyLinkingPanel({
   selectedBountyIds,
   setSelectedBountyIds,
   bounties,
+  readOnly = false,
 }: BountyLinkingPanelProps) {
   const handleToggleBounty = (bountyId: string) => {
     setSelectedBountyIds(prev => {
@@ -64,6 +68,7 @@ export function BountyLinkingPanel({
               bounty={bounty}
               isSelected={selectedBountyIds.has(bounty.id)}
               onToggle={handleToggleBounty}
+              readOnly={readOnly}
             />
           ))}
         </div>
