@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
@@ -11,6 +12,7 @@ import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { useAddOptimisticVote, useConfirmVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -30,6 +32,8 @@ export function AcceptOrRejectEditor({
   userVote,
   proposalId,
 }: Props) {
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -43,15 +47,29 @@ export function AcceptOrRejectEditor({
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
+  const confirmVote = useConfirmVote();
+
+  const onVoteSuccess = () => {
+    confirmVote(proposalId);
+    router.refresh();
+  };
+
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
+  };
 
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT');
+    addOptimisticVote(proposalId);
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT');
+    addOptimisticVote(proposalId);
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   // Terminal / post-vote states on the proposal must win over "You accepted" so we match space

@@ -68,6 +68,7 @@ export async function GET(request: Request) {
         editorOf: [],
         memberOf: [],
         documentationImage: null,
+        pendingVoteProposalIds: [],
         personalSpaceId: null,
       };
     }

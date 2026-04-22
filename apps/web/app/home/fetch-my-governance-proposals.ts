@@ -92,8 +92,17 @@ export async function getMyGovernanceProposals(opts: {
 
   const votingRows =
     status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
-  votingRows.sort((a, b) => b.timing.endTime - a.timing.endTime);
   const unique = dedupeByProposalId(votingRows);
+  if (status === 'pending') {
+    unique.sort((a, b) => {
+      const aVoted = a.userVote != null;
+      const bVoted = b.userVote != null;
+      if (aVoted !== bVoted) return aVoted ? 1 : -1;
+      return b.timing.endTime - a.timing.endTime;
+    });
+  } else {
+    unique.sort((a, b) => b.timing.endTime - a.timing.endTime);
+  }
   const offset = page * PAGE_SIZE;
   const pageSlice = unique.slice(offset, offset + PAGE_SIZE);
 

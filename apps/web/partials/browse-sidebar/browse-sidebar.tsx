@@ -20,6 +20,8 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { useConfirmedVotedIds } from '~/partials/governance/optimistic-voted-atom';
+
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
 /** Open on first visit; after the user toggles, `browseSidebarOpen` in localStorage wins. */
@@ -59,13 +61,17 @@ function BrowseNavIcon({ src }: { src: string }) {
 function BrowseNavPrimaryLinks({
   personalSpaceId,
   documentationImage,
+  pendingVoteProposalIds,
 }: {
   personalSpaceId: string | null;
   documentationImage: string | null;
+  pendingVoteProposalIds: string[];
 }) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
+  const confirmedVotedIds = useConfirmedVotedIds();
+  const hasPendingVotes = pendingVoteProposalIds.some(id => !confirmedVotedIds.has(id));
 
   return (
     <>
@@ -85,10 +91,18 @@ function BrowseNavPrimaryLinks({
           <span>Personal space</span>
         </Link>
       ) : null}
-      <Link href={NavUtils.toHome()} className={navLinkClass}>
-        <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
-        <span>Governance</span>
-      </Link>
+      {address ? (
+        <Link href={NavUtils.toHome()} className={`${navLinkClass} w-full min-w-0`}>
+          <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
+          <span className="min-w-0 flex-1 text-left">Governance</span>
+          {hasPendingVotes ? (
+            <>
+              <span className="sr-only">Pending votes</span>
+              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-01" aria-hidden="true" />
+            </>
+          ) : null}
+        </Link>
+      ) : null}
       <Link
         href={NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID)}
         className={navLinkClass}
@@ -190,6 +204,55 @@ export function BrowseSidebar() {
     };
   }, [walletAddress]);
 
+  // Pending-vote polling. Uses /api/pending-votes (backed by Redis + webhooks from
+  // gaia's notification-service) when the feature flag is on — one Redis SMEMBERS
+  // per poll instead of a multi-space REST scan. Falls back to refetching the full
+  // sidebar data when the flag is off, which is the legacy behavior.
+  React.useEffect(() => {
+    if (!data) return;
+    const editorCount = data.editorOf.filter(row => !row.pendingLabel).length;
+    if (editorCount === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const useWebhookBackedPoll = process.env.NEXT_PUBLIC_USE_NOTIFICATION_SERVICE === 'true';
+    let cancelled = false;
+
+    const refreshPendingVotes = async () => {
+      if (document.visibilityState === 'hidden') return;
+      if (useWebhookBackedPoll) {
+        try {
+          const res = await fetch('/api/pending-votes', { cache: 'no-store' });
+          if (!res.ok || cancelled) return;
+          const { proposalIds } = (await res.json()) as { proposalIds: string[] };
+          if (cancelled) return;
+          setData(prev => (prev ? { ...prev, pendingVoteProposalIds: proposalIds } : prev));
+        } catch {
+          // Network hiccup — next tick will retry.
+        }
+        return;
+      }
+      // Legacy path: rerun the full sidebar loader.
+      try {
+        const next = await loadBrowseSidebarData(walletAddress);
+        if (!cancelled) setData(next);
+      } catch {
+        // Silently ignore — next tick will retry.
+      }
+    };
+
+    const interval = setInterval(refreshPendingVotes, 60_000);
+    const onFocus = () => {
+      void refreshPendingVotes();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.editorOf.length, walletAddress]);
+
   React.useEffect(() => {
     if (!data) return;
     for (const href of collectBrowseSidebarImageHrefs(data)) {
@@ -242,6 +305,7 @@ export function BrowseSidebar() {
           <BrowseNavPrimaryLinks
             personalSpaceId={personalSpaceId}
             documentationImage={data?.documentationImage ?? null}
+            pendingVoteProposalIds={data?.pendingVoteProposalIds ?? []}
           />
         </nav>
 
