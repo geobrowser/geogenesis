@@ -259,10 +259,12 @@ export function BrowseSidebar() {
         className="pointer-events-none sticky top-0 z-50 h-dvh w-0 shrink-0 overflow-visible"
         aria-label="Browse menu (collapsed)"
       >
+        {/* Vertical rail aligned to the centre of the navbar logo (navbar px-4 = 16px + 8px half-logo ≈ 24px). */}
+        <div className="pointer-events-none absolute bottom-0 left-6 top-11 w-px bg-divider" />
         <SidebarToggle
           open={false}
           onToggle={() => setOpen(true)}
-          className="pointer-events-auto left-3 top-[3.25rem]"
+          className="pointer-events-auto left-3.5 top-[3.25rem]"
         />
       </aside>
     );
@@ -274,7 +276,7 @@ export function BrowseSidebar() {
       style={{ width: SIDEBAR_WIDTH_PX, minWidth: SIDEBAR_WIDTH_PX }}
       aria-label="Browse menu"
     >
-      <div className="flex h-11 shrink-0 items-center border-b border-divider px-4">
+      <div className="flex h-11 shrink-0 items-center px-4">
         <Link href={NavUtils.toRoot()} aria-label="Geo">
           <GeoLogoLarge />
         </Link>
