@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { usePathname } from 'next/navigation';
 import { atomWithStorage } from 'jotai/utils';
 import { useAtom } from 'jotai';
 
@@ -9,6 +10,7 @@ import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/co
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
@@ -18,7 +20,7 @@ import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-brow
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { ThumbGeoImage } from '~/design-system/geo-image';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
@@ -35,12 +37,13 @@ function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
   for (const row of data.featured) add(row.image);
   for (const row of data.editorOf) add(row.image);
   for (const row of data.memberOf) add(row.image);
-  add(data.documentationImage);
   return [...seen];
 }
 
-const navLinkClass =
-  'flex items-center gap-2 rounded-md px-2 py-1.5 text-browseMenu font-normal not-italic text-text hover:bg-grey-01';
+const navLinkBase =
+  'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
+const navLinkIdle = `${navLinkBase} text-text hover:bg-grey-01`;
+const navLinkActive = `${navLinkBase} bg-grey-01 text-text`;
 
 function BrowseNavIcon({ src }: { src: string }) {
   return (
@@ -66,7 +69,7 @@ function GeoAppsSidebarLinks() {
           href={item.href}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${navLinkClass} pr-1.5`}
+          className={`${navLinkIdle} pr-1.5`}
         >
           <BrowseNavIcon src={item.icon} />
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -86,50 +89,48 @@ function GeoAppsSidebarLinks() {
   );
 }
 
-function BrowseNavPrimaryLinks({
-  personalSpaceId,
-  documentationImage,
-}: {
-  personalSpaceId: string | null;
-  documentationImage: string | null;
-}) {
+function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | null }) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
+  const pathname = usePathname() ?? '';
+
+  const isExplore = pathname === '/explore' || pathname.startsWith('/explore/');
+  const isRoot = pathname === '/root';
+  const isGovernance = pathname === '/home' || pathname.startsWith('/home/');
+  const personalHref = personalSpaceId ? NavUtils.toSpace(personalSpaceId) : null;
+  const isPersonal = !!personalHref && pathname === personalHref;
+  const docHref = NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID);
+  const isDoc = pathname.startsWith(`/space/${DOCUMENTATION_SPACE_ID}`);
 
   return (
     <>
-      <Link href={NavUtils.toRoot()} className={navLinkClass}>
-        <BrowseNavIcon src={BROWSE_NAV_ICON.root} />
-        <span>Root</span>
-      </Link>
-      <Link href={NavUtils.toExplore()} className={navLinkClass}>
-        <BrowseNavIcon src={BROWSE_NAV_ICON.explore} />
+      <Link href={NavUtils.toExplore()} className={isExplore ? navLinkActive : navLinkIdle}>
+        <BrowseNavIcon src={isExplore ? BROWSE_NAV_ICON.explore : BROWSE_NAV_ICON.exploreOutline} />
         <span>Explore</span>
       </Link>
-      {personalSpaceId ? (
-        <Link href={NavUtils.toSpace(personalSpaceId)} className={navLinkClass}>
-          <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
-            <Avatar size={20} avatarUrl={profile?.avatarUrl} value={address ?? personalSpaceId} />
+      {personalSpaceId && personalHref ? (
+        <Link href={personalHref} className={isPersonal ? navLinkActive : navLinkIdle}>
+          <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md bg-grey-01">
+            {profile?.avatarUrl ? (
+              <FallbackImage value={profile.avatarUrl} sizes="40px" className="object-cover" />
+            ) : (
+              <Avatar size={20} avatarUrl={null} value={address ?? personalSpaceId} square />
+            )}
           </span>
           <span>Personal space</span>
         </Link>
       ) : null}
-      <Link href={NavUtils.toHome()} className={navLinkClass}>
+      <Link href={NavUtils.toHome()} className={isGovernance ? navLinkActive : navLinkIdle}>
         <BrowseNavIcon src={BROWSE_NAV_ICON.governance} />
         <span>Governance</span>
       </Link>
-      <Link
-        href={NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID)}
-        className={navLinkClass}
-      >
-        <SpaceRowThumb
-          row={{
-            id: DOCUMENTATION_SPACE_ID,
-            name: 'Documentation',
-            image: documentationImage,
-          }}
-        />
+      <Link href={NavUtils.toRoot()} className={isRoot ? navLinkActive : navLinkIdle}>
+        <BrowseNavIcon src={BROWSE_NAV_ICON.root} />
+        <span>Root</span>
+      </Link>
+      <Link href={docHref} className={isDoc ? navLinkActive : navLinkIdle}>
+        <BrowseNavIcon src={isDoc ? BROWSE_NAV_ICON.docsFilled : BROWSE_NAV_ICON.docs} />
         <span>Documentation</span>
       </Link>
     </>
@@ -137,8 +138,6 @@ function BrowseNavPrimaryLinks({
 }
 
 function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
-  const [imageReady, setImageReady] = React.useState(false);
-
   if (!row.image) {
     const initial = row.name.trim().slice(0, 1).toUpperCase() || '?';
     return (
@@ -149,22 +148,20 @@ function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
   }
   return (
     <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md bg-grey-01">
-      <ThumbGeoImage
-        value={row.image}
-        alt=""
-        loading="eager"
-        className={`transition-opacity duration-150 ${imageReady ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={() => setImageReady(true)}
-      />
+      <FallbackImage value={row.image} sizes="40px" className="object-cover" />
     </span>
   );
 }
 
 function SpaceRowLink({ row }: { row: BrowseSpaceRow }) {
+  const activeSpaceId = useSpaceId();
+  const isActive = activeSpaceId === row.id;
   return (
     <Link
       href={NavUtils.toSpace(row.id)}
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-browseMenu font-normal not-italic text-grey-04 hover:bg-grey-01 hover:text-text"
+      className={`flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic ${
+        isActive ? 'bg-grey-01 text-text' : 'text-grey-04 hover:bg-grey-01 hover:text-text'
+      }`}
     >
       <SpaceRowThumb row={row} />
       <span className="min-w-0 flex-1 truncate">{row.name}</span>
@@ -190,7 +187,7 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-browseMenu font-normal not-italic text-grey-04 hover:text-text"
+        className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-browseMenu not-italic text-grey-04 hover:text-text"
       >
         <span>{title}</span>
         <span className={`transition-transform ${open ? '' : '-rotate-90'}`}>
@@ -199,6 +196,22 @@ function CollapsibleSection({
       </button>
       {open ? <div className="mt-1 space-y-0.5">{children}</div> : null}
     </div>
+  );
+}
+
+function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={open ? 'Close browse menu' : 'Open browse menu'}
+      aria-expanded={open}
+      onClick={onToggle}
+      className="absolute right-0 top-3 z-[60] flex h-5 w-3 items-center justify-center text-grey-03 transition-colors hover:text-text"
+    >
+      <span className={`inline-flex scale-[0.7] ${open ? 'rotate-180' : ''}`}>
+        <ChevronRight />
+      </span>
+    </button>
   );
 }
 
@@ -235,17 +248,7 @@ export function BrowseSidebar() {
         className="relative sticky top-11 z-50 h-[calc(100dvh-2.75rem)] w-3 min-w-3 shrink-0 overflow-visible border-r border-divider bg-white"
         aria-label="Browse menu (collapsed)"
       >
-        <button
-          type="button"
-          aria-label="Open browse menu"
-          aria-expanded={false}
-          onClick={() => setOpen(true)}
-          className="absolute left-full top-2 z-50 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text active:scale-[0.98]"
-        >
-          <span className="inline-flex scale-[0.75]">
-            <ChevronRight />
-          </span>
-        </button>
+        <SidebarToggle open={false} onToggle={() => setOpen(true)} />
       </aside>
     );
   }
@@ -255,24 +258,11 @@ export function BrowseSidebar() {
       className="relative sticky top-11 z-50 flex h-[calc(100dvh-2.75rem)] w-[248px] min-w-[248px] shrink-0 flex-col overflow-visible border-r border-divider bg-white"
       aria-label="Browse menu"
     >
-      <button
-        type="button"
-        aria-label="Close browse menu"
-        aria-expanded
-        onClick={() => setOpen(false)}
-        className="absolute left-full top-2 z-[60] flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text active:scale-[0.98]"
-      >
-        <span className="inline-flex scale-[0.75] rotate-180">
-          <ChevronRight />
-        </span>
-      </button>
+      <SidebarToggle open onToggle={() => setOpen(false)} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3 pl-3 pr-2 [text-edge:cap] [leading-trim:cap-height]">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3 pl-3 pr-2">
         <nav className="space-y-0.5 pr-1">
-          <BrowseNavPrimaryLinks
-            personalSpaceId={personalSpaceId}
-            documentationImage={data?.documentationImage ?? null}
-          />
+          <BrowseNavPrimaryLinks personalSpaceId={personalSpaceId} />
         </nav>
 
         <CollapsibleSection title="Geo Apps">
@@ -280,7 +270,7 @@ export function BrowseSidebar() {
         </CollapsibleSection>
 
         {!data ? (
-          <p className="mt-4 px-2 text-browseMenu font-normal not-italic text-grey-04">Loading spaces…</p>
+          <p className="mt-4 px-2 text-browseMenu not-italic text-grey-04">Loading spaces…</p>
         ) : (
           <>
             <CollapsibleSection title="Featured spaces" hidden={data.featured.length === 0}>
@@ -293,7 +283,7 @@ export function BrowseSidebar() {
                 <div key={row.id}>
                   <SpaceRowLink row={row} />
                   {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseMenu font-normal not-italic text-grey-04">{row.pendingLabel}</p>
+                    <p className="px-2 pb-1 pl-9 text-browseMenu not-italic text-grey-04">{row.pendingLabel}</p>
                   ) : null}
                 </div>
               ))}
@@ -303,7 +293,7 @@ export function BrowseSidebar() {
                 <div key={row.id}>
                   <SpaceRowLink row={row} />
                   {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseMenu font-normal not-italic text-grey-04">{row.pendingLabel}</p>
+                    <p className="px-2 pb-1 pl-9 text-browseMenu not-italic text-grey-04">{row.pendingLabel}</p>
                   ) : null}
                 </div>
               ))}
