@@ -422,7 +422,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-text">
+              <span className="truncate text-[1rem] font-medium leading-5 tracking-[-0.35px] text-text">
                 {fileName}
               </span>
               {fileSizeBytes != null && (
