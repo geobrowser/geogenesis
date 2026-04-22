@@ -138,10 +138,12 @@ function renderFormattedPreviewValue(col: ColumnConfig, value: string, spaceId: 
       );
     case 'INTEGER':
     case 'FLOAT':
-    case 'DECIMAL':
-      return (
-        <span className="truncate text-tableCell text-text">{GeoNumber.format(value, col.format ?? undefined)}</span>
-      );
+    case 'DECIMAL': {
+      // GeoNumber.format logs console.error on parse failure; only call it for
+      // values that actually parse as numbers to avoid noisy logs during preview.
+      const display = Number.isFinite(Number(value)) ? GeoNumber.format(value, col.format ?? undefined) : value;
+      return <span className="truncate text-tableCell text-text">{display}</span>;
+    }
     case 'POINT':
       return <span className="truncate text-tableCell text-text">({value})</span>;
     default:
@@ -645,7 +647,11 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                 >
                   {columns.map(col => {
                     const value = row[col.csvColumnIndex] ?? '';
-                    const isRelation = col.dataType === 'RELATION';
+                    const isTypesSourceCol = typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex;
+                    // The types source column is marked dataType=RELATION so labels/preview pills work
+                    // in the pre-mapping state, but here we want the dedicated type-resolution UI to
+                    // handle it, not the generic relation-chip branch.
+                    const isRelation = col.dataType === 'RELATION' && !isTypesSourceCol;
                     const isImageColumn = col.renderableTypeStrict === 'IMAGE';
                     const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
                     const unresolvedSet = cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
