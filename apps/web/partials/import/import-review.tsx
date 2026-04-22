@@ -223,7 +223,8 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         csvColumnIndex,
         headerLabel: headerLabel?.trim() || `Column ${csvColumnIndex + 1}`,
         propertyName,
-        dataType: prop?.dataType,
+        // The CSV types source column resolves each value to a Type entity, so treat it as a relation.
+        dataType: isTypesSourceColumn ? 'RELATION' : prop?.dataType,
         propertyId: propertyId ?? null,
         relationValueTypes: prop?.relationValueTypes,
         mappingLocked: isTypesSourceColumn,

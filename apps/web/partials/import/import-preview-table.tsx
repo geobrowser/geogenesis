@@ -194,7 +194,6 @@ function formatDataTypeLabel(input: {
 }
 
 function getDataTypeLabel(col: ColumnConfig): string | null {
-  if (col.mappingLocked) return 'Relation';
   return formatDataTypeLabel(col);
 }
 
@@ -270,7 +269,7 @@ function PropertyMappingPopover({
 
         onSelectProperty(csvColumnIndex, result.id, property);
       }}
-      onCreateEntity={async result => {
+      onCreateEntity={result => {
         const propertyType = result.renderableType || 'TEXT';
         const propertyId = createProperty({
           name: result.name || '',
@@ -278,22 +277,22 @@ function PropertyMappingPopover({
         });
 
         const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
-        let property: Property = store.getProperty(propertyId) ?? {
+        const initial: Property = store.getProperty(propertyId) ?? {
           id: propertyId,
           name: result.name,
           dataType: baseDataType,
           renderableType: renderableTypeId,
         };
-
         // Ensure dataType reflects the just-created property even if the store
         // hasn't synced yet (fixes relation columns not rendering as relations).
-        if (property.dataType !== baseDataType) {
-          property = { ...property, dataType: baseDataType, renderableType: renderableTypeId };
-        }
+        const seeded: Property =
+          initial.dataType === baseDataType
+            ? initial
+            : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
 
-        property = await hydrateRelationValueTypes(property);
-
-        onCreateProperty?.(csvColumnIndex, propertyId, property);
+        void hydrateRelationValueTypes(seeded).then(hydrated => {
+          onCreateProperty?.(csvColumnIndex, propertyId, hydrated);
+        });
       }}
     />
   );
@@ -582,8 +581,8 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                 >
                   {columns.map(col => {
                     const rawValue = row[col.csvColumnIndex] ?? '';
-                    const isTypesSourceCol = typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex;
-                    const isRelationCol = col.dataType === 'RELATION' || isTypesSourceCol;
+                    const isImageRenderableCol = col.renderableTypeStrict === 'IMAGE';
+                    const isRelationCol = col.dataType === 'RELATION' && !isImageRenderableCol;
                     return (
                       <div
                         key={`preview-${rowIndex}-${col.csvColumnIndex}`}
