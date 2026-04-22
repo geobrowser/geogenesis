@@ -55,26 +55,33 @@ export function buildNavigateTool(context: NavigateToolContext) {
         return { ok: false, error: 'invalid_input', target: input.target };
       }
 
+      const spaceId = normalizeId(input.spaceId);
+      const entityId = normalizeId(input.entityId);
+
       if (input.target === 'personalSpace') {
         if (!context.personalSpaceId) {
           return { ok: false, error: 'no_personal_space', target: 'personalSpace' };
         }
         // Echo the resolved id so the client doesn't have to re-read context.
-        return { ok: true, target: 'personalSpace', spaceId: context.personalSpaceId };
+        return { ok: true, target: 'personalSpace', spaceId: normalizeId(context.personalSpaceId) };
       }
 
-      if (input.target === 'space' && input.spaceId) {
-        const result = await Effect.runPromise(Effect.either(getSpace(input.spaceId)));
+      if (input.target === 'space' && spaceId) {
+        const result = await Effect.runPromise(Effect.either(getSpace(spaceId)));
         if (Either.isLeft(result) || result.right === null) {
-          return { ok: false, error: 'space_not_found', target: 'space', attemptedSpaceId: input.spaceId };
+          return { ok: false, error: 'space_not_found', target: 'space', attemptedSpaceId: spaceId };
         }
       }
 
-      return { ok: true, target: input.target, spaceId: input.spaceId, entityId: input.entityId };
+      return { ok: true, target: input.target, spaceId, entityId };
     },
   });
 }
 
 function isValidId(value: string | undefined): value is string {
   return typeof value === 'string' && ENTITY_ID_REGEX.test(value);
+}
+
+function normalizeId(value: string | null | undefined): string | undefined {
+  return value == null ? undefined : value.replace(/-/g, '').toLowerCase();
 }

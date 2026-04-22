@@ -25,7 +25,8 @@ export type EntityCache = Map<string, CachedEntity>;
 
 function normalizeId(id: unknown): string | null {
   if (typeof id !== 'string') return null;
-  return id.replace(/-/g, '').toLowerCase();
+  const normalized = id.replace(/-/g, '').toLowerCase();
+  return normalized === '' ? null : normalized;
 }
 
 function addEntry(cache: EntityCache, entry: CachedEntity) {
@@ -92,5 +93,5 @@ export function parseGeoEntityHref(href: string | null | undefined): { id: strin
   if (!match) return null;
   const id = normalizeId(match[1]);
   if (!id) return null;
-  return { id, spaceId: normalizeId(match[2] ?? '') ?? null };
+  return { id, spaceId: normalizeId(match[2]) };
 }

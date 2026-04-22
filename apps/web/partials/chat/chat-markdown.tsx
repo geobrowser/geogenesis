@@ -67,7 +67,6 @@ function renderInlineTokens(inlineTokens: Token[], cache: EntityCache, keyPrefix
   while (state.index < state.tokens.length) {
     const node = consumeInline(state);
     if (node !== null) out.push(<React.Fragment key={`${keyPrefix}-${nextKey(state)}`}>{node}</React.Fragment>);
-    else state.index += 1;
   }
   return out;
 }
@@ -82,7 +81,6 @@ function collectInlineUntil(state: WalkerState, closeType: string): React.ReactN
     }
     const node = consumeInline(state);
     if (node !== null) children.push(<React.Fragment key={nextKey(state)}>{node}</React.Fragment>);
-    else state.index += 1;
   }
   return children;
 }
