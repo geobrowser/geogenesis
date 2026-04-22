@@ -60,7 +60,9 @@ export function App({ children }: { children: React.ReactNode }) {
       <Navbar onSearchClick={() => setOpen(true)} />
       <SearchDialog open={open} onDone={() => setOpen(false)} />
       <div className="flex w-full flex-1 items-stretch overflow-visible">
-        <BrowseSidebar />
+        <div className="sm:hidden">
+          <BrowseSidebar />
+        </div>
         <div className="min-w-0 flex-1 xl:px-[2ch]">
           <Main>{children}</Main>
         </div>
