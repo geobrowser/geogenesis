@@ -6,11 +6,13 @@ import * as React from 'react';
 // text flows in instead of popping in chunks.
 export function useSmoothStream(target: string, isStreaming: boolean): string {
   const [displayed, setDisplayed] = React.useState(target);
+  const displayedRef = React.useRef(target);
   const targetRef = React.useRef(target);
   targetRef.current = target;
 
   React.useEffect(() => {
     if (!isStreaming) {
+      displayedRef.current = target;
       setDisplayed(target);
     }
   }, [isStreaming, target]);
@@ -20,18 +22,20 @@ export function useSmoothStream(target: string, isStreaming: boolean): string {
 
     let raf = 0;
     const tick = () => {
-      let shouldContinue = false;
-      setDisplayed(prev => {
-        const t = targetRef.current;
-        const backlog = t.length - prev.length;
-        if (backlog < 0) return t;
-        if (backlog === 0) return prev;
-        const chars = Math.max(1, Math.min(12, Math.ceil(backlog * 0.15)));
-        const next = t.slice(0, prev.length + Math.min(chars, backlog));
-        shouldContinue = next.length < t.length;
-        return next;
-      });
-      if (shouldContinue) raf = requestAnimationFrame(tick);
+      const t = targetRef.current;
+      const prev = displayedRef.current;
+      const backlog = t.length - prev.length;
+      if (backlog < 0) {
+        displayedRef.current = t;
+        setDisplayed(t);
+        return;
+      }
+      if (backlog === 0) return;
+      const chars = Math.max(1, Math.min(12, Math.ceil(backlog * 0.15)));
+      const next = t.slice(0, prev.length + Math.min(chars, backlog));
+      displayedRef.current = next;
+      setDisplayed(next);
+      if (next.length < t.length) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
