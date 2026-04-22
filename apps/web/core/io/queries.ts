@@ -348,10 +348,10 @@ export function getCommentEntitiesViaParentEntityReplyBacklinks(
 
       for (const row of page) {
         const rawId = row?.fromEntity?.id;
-        const id = typeof rawId === 'string' ? rawId : String(rawId ?? '');
-        if (id && !seen.has(id)) {
-          seen.add(id);
-          ids.push(id);
+        if (typeof rawId !== 'string' || !rawId) continue;
+        if (!seen.has(rawId)) {
+          seen.add(rawId);
+          ids.push(rawId);
         }
       }
 

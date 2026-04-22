@@ -11,15 +11,12 @@ import {
   COMMENT_RESOLVED_ID,
 } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { uuidToHex } from '~/core/id/normalize';
 import { getCommentEntitiesViaParentEntityReplyBacklinks } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
 import type { CommentEntity, CommentWithReplies } from '~/partials/comments/types';
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 /**
  * Parse a fetched Entity into a CommentEntity.
@@ -29,11 +26,11 @@ function normId(id: string): string {
  *
  * A reply may have "Reply To" relations to ALL ancestor comments (cascading).
  * We identify the immediate parent as the ancestor whose target comment has the highest true nesting
- * depth (computed by traversing the parent chain), using the provided depth map.
+ * depth (computed by traversing the parent chain), using the provided depth map (keyed by canonical id).
  */
 function parseCommentEntity(
   entity: Entity,
-  commentIds: Set<string>,
+  commentIdKeySet: Set<string>,
   targetEntityId: string,
   depthMap: Map<string, number>
 ): CommentEntity {
@@ -43,24 +40,23 @@ function parseCommentEntity(
   const resolvedValue = entity.values.find(v => v.property.id === COMMENT_RESOLVED_ID)?.value;
   const resolved = resolvedValue === '1' || resolvedValue === 'true' || resolvedValue === 'True';
 
-  const replyToType = normId(COMMENT_REPLY_TO_ID);
-  const replyToRelations = entity.relations.filter(r => normId(r.type.id) === replyToType);
+  const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
+  const replyToRelations = entity.relations.filter(r => uuidToHex(r.type.id) === replyToType);
 
-  const targetKey = normId(targetEntityId);
-  const commentIdKeySet = new Set([...commentIds].map(normId));
+  const targetKey = uuidToHex(targetEntityId);
 
-  const replyToCommentRelations = replyToRelations.filter(r => commentIdKeySet.has(normId(r.toEntity.id)));
+  const replyToCommentRelations = replyToRelations.filter(r => commentIdKeySet.has(uuidToHex(r.toEntity.id)));
 
   let replyToCommentRelation = replyToCommentRelations[0] ?? null;
   if (replyToCommentRelations.length > 1) {
     replyToCommentRelation = replyToCommentRelations.reduce((best, r) => {
-      const depth = depthMap.get(r.toEntity.id) ?? 0;
-      const bestDepth = depthMap.get(best.toEntity.id) ?? 0;
+      const depth = depthMap.get(uuidToHex(r.toEntity.id)) ?? 0;
+      const bestDepth = depthMap.get(uuidToHex(best.toEntity.id)) ?? 0;
       return depth > bestDepth ? r : best;
     });
   }
 
-  const replyToEntityRelation = replyToRelations.find(r => normId(r.toEntity.id) === targetKey);
+  const replyToEntityRelation = replyToRelations.find(r => uuidToHex(r.toEntity.id) === targetKey);
 
   const spaceId = entity.spaces[0] ?? '';
 
@@ -91,14 +87,15 @@ function buildCommentTree(comments: CommentEntity[]): CommentWithReplies[] {
   const rootComments: CommentWithReplies[] = [];
 
   for (const comment of comments) {
-    commentMap.set(comment.id, { ...comment, replies: [] });
+    commentMap.set(uuidToHex(comment.id), { ...comment, replies: [] });
   }
 
   for (const comment of comments) {
-    const wrapped = commentMap.get(comment.id)!;
+    const wrapped = commentMap.get(uuidToHex(comment.id))!;
+    const parentKey = comment.replyToCommentId ? uuidToHex(comment.replyToCommentId) : null;
 
-    if (comment.replyToCommentId && commentMap.has(comment.replyToCommentId)) {
-      commentMap.get(comment.replyToCommentId)!.replies.push(wrapped);
+    if (parentKey && commentMap.has(parentKey)) {
+      commentMap.get(parentKey)!.replies.push(wrapped);
     } else {
       rootComments.push(wrapped);
     }
@@ -130,12 +127,12 @@ export function useComments({ entityId }: UseCommentsOptions) {
     queryKey: ['comments', entityId],
     queryFn: async () => {
       const loaded = await Effect.runPromise(getCommentEntitiesViaParentEntityReplyBacklinks(entityId));
-      const targetKey = normId(entityId);
-      const replyToType = normId(COMMENT_REPLY_TO_ID);
+      const targetKey = uuidToHex(entityId);
+      const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
 
       const allEntities = loaded.filter(entity =>
         entity.relations.some(
-          r => normId(r.type.id) === replyToType && normId(r.toEntity.id) === targetKey
+          r => uuidToHex(r.type.id) === replyToType && uuidToHex(r.toEntity.id) === targetKey
         )
       );
 
@@ -155,36 +152,35 @@ export function useComments({ entityId }: UseCommentsOptions) {
         }
       }
 
-      const allCommentIds = new Set(allEntities.map(e => e.id));
-      const allCommentIdKeys = new Set([...allCommentIds].map(normId));
+      const allCommentIdKeys = new Set(allEntities.map(e => uuidToHex(e.id)));
 
       const adjacency = new Map<string, string[]>();
       for (const entity of allEntities) {
         const targets = entity.relations
-          .filter(r => normId(r.type.id) === replyToType && allCommentIdKeys.has(normId(r.toEntity.id)))
-          .map(r => r.toEntity.id);
-        adjacency.set(entity.id, targets);
+          .filter(r => uuidToHex(r.type.id) === replyToType && allCommentIdKeys.has(uuidToHex(r.toEntity.id)))
+          .map(r => uuidToHex(r.toEntity.id));
+        adjacency.set(uuidToHex(entity.id), targets);
       }
 
       const depthMap = new Map<string, number>();
-      function computeDepth(commentId: string): number {
-        if (depthMap.has(commentId)) return depthMap.get(commentId)!;
-        const targets = adjacency.get(commentId) ?? [];
+      function computeDepth(commentKey: string): number {
+        if (depthMap.has(commentKey)) return depthMap.get(commentKey)!;
+        const targets = adjacency.get(commentKey) ?? [];
         if (targets.length === 0) {
-          depthMap.set(commentId, 0);
+          depthMap.set(commentKey, 0);
           return 0;
         }
         const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
         const depth = maxParentDepth + 1;
-        depthMap.set(commentId, depth);
+        depthMap.set(commentKey, depth);
         return depth;
       }
-      for (const id of allCommentIds) {
-        computeDepth(id);
+      for (const key of allCommentIdKeys) {
+        computeDepth(key);
       }
 
       const comments = allEntities.map(entity => {
-        const comment = parseCommentEntity(entity, allCommentIds, entityId, depthMap);
+        const comment = parseCommentEntity(entity, allCommentIdKeys, entityId, depthMap);
         const profileInfo = profileMap.get(comment.spaceId);
         if (profileInfo) {
           comment.author = {
