@@ -11,13 +11,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Space } from '~/core/io/dto/spaces';
 
-import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { Search } from '~/design-system/icons/search';
 import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
@@ -312,21 +313,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const step3Content = useMemo(() => {
     if (!hasFile) {
       return (
-        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="rounded-xl bg-grey-01 p-3">
           <p className="text-metadata text-grey-04">Upload a file to continue</p>
         </div>
       );
     }
     if (!selectedType && typesColumnIndex === undefined) {
       return (
-        <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="rounded-xl bg-grey-01 p-3">
           <p className="text-metadata text-grey-04">Choose a type in Step 2 to continue.</p>
         </div>
       );
     }
     if (isAutoMapping) {
       return (
-        <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-xl bg-grey-01 p-3">
           <Spinner />
           <Text variant="smallButton" className="text-text">
             Mapping columns to properties...
@@ -337,20 +338,20 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     const unmappedCount = headers.filter((_, i) => i !== typesColumnIndex && columnMapping[i] === undefined).length;
     const hasUnmapped = unmappedCount > 0;
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-grey-01 p-3">
         {hasUnmapped ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex shrink-0 items-center" aria-hidden>
                 <Warning color="red-01" />
               </span>
-              <Text variant="smallButton" className="text-text">
+              <span className="text-[1rem] leading-5 tracking-[-0.35px] text-text">
                 {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
-              </Text>
+              </span>
             </div>
             <SmallButton
               type="button"
-              variant="secondary"
+              variant="primary"
               className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
@@ -362,7 +363,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             <p className="text-metadata text-grey-04">All columns are mapped. Review your data before importing.</p>
             <SmallButton
               type="button"
-              variant="secondary"
+              variant="primary"
               className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
@@ -396,8 +397,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 1</span>
-          <span className="text-button font-medium text-text">Upload your file</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 1</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Upload your file</Text>
         </div>
         <input
           ref={fileInputRef}
@@ -417,13 +418,17 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           </div>
         ) : fileName ? (
           <div
-            className="flex w-full items-center justify-between gap-3 rounded-xl border border-grey-02 bg-grey-01 px-4 py-3"
+            className="flex w-full items-center justify-between gap-3 rounded-xl bg-grey-01 p-3"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-bold text-text">{fileName}</span>
+              <span className="truncate text-[1rem] font-medium leading-5 tracking-[-0.35px] text-text">
+                {fileName}
+              </span>
               {fileSizeBytes != null && (
-                <span className="shrink-0 text-metadata text-grey-04">{formatFileSize(fileSizeBytes)}</span>
+                <span className="shrink-0 text-[1rem] leading-5 tracking-[-0.35px] text-grey-04">
+                  {formatFileSize(fileSizeBytes)}
+                </span>
               )}
             </div>
             <SmallButton type="button" variant="secondary" onClick={handleDeleteFile} className="shrink-0 rounded-md">
@@ -458,94 +463,117 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 2</span>
-          <span className="text-button font-medium text-text">Map types</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 2</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Map types</Text>
         </div>
         {!fileName || !hasFile ? (
-          <div className="rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
+          <div className="rounded-xl bg-grey-01 p-3">
             <p className="text-metadata text-grey-04">Upload a file to continue</p>
           </div>
         ) : (
-          <div className="rounded-lg border border-grey-02 bg-white px-4 py-3">
-            <p className="mb-2 text-metadata text-grey-04">{fileName} · Type - Find or create a type to use</p>
-            <div className="flex flex-wrap items-center gap-3">
+          selectedType || typesColumnIndex !== undefined ? (
+            <div className="flex w-full items-center justify-between gap-3 rounded-xl bg-grey-01 p-3">
               <div className="flex min-w-0 items-center gap-2">
-                {selectedType ? (
-                  <>
-                    <span className="text-smallButton font-medium text-text">{selectedType.name}</span>
-                    <SmallButton
-                      variant="ghost"
-                      onClick={() => {
-                        clearGeneratedChanges();
-                        setSelectedType(null);
-                      }}
-                      className="text-grey-04"
-                    >
-                      Change type
-                    </SmallButton>
-                  </>
-                ) : (
+                <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-text">
+                  {typesColumnIndex !== undefined ? (
+                    <>
+                      Type defined by{' '}
+                      <span className="font-semibold">{headers[typesColumnIndex] ?? ''}</span> in {fileName}
+                    </>
+                  ) : (
+                    <>
+                      Type defined as <span className="font-semibold">{selectedType?.name ?? ''}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+              <SmallButton
+                type="button"
+                variant="secondary"
+                className="shrink-0 rounded-md"
+                onClick={() => {
+                  clearGeneratedChanges();
+                  setSelectedType(null);
+                  setTypesColumnIndex(undefined);
+                }}
+              >
+                Change type
+              </SmallButton>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-grey-01 p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-0 items-center gap-2">
                   <div className="relative w-[192px]">
-                    <EntitySearchAutocomplete
+                    <SelectEntityAsPopover
+                      spaceId={spaceId}
+                      relationValueTypes={[{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }]}
                       placeholder="Search for a type..."
-                      dropdownClassName="!w-[384px] min-w-[320px]"
-                      filterByTypes={[SystemIds.SCHEMA_TYPE]}
+                      advanced={false}
+                      showIDs={false}
+                      trigger={
+                        <button
+                          type="button"
+                          className="inline-flex w-full cursor-pointer items-center gap-2 rounded bg-white px-3 py-2 text-left text-button whitespace-nowrap shadow-inner-grey-02 hover:shadow-inner-text focus:outline-hidden"
+                        >
+                          <Search />
+                          <span className="truncate text-text">Search for a type...</span>
+                        </button>
+                      }
                       onDone={result => {
                         clearGeneratedChanges();
                         setSelectedType({ id: result.id, name: result.name });
                         setTypesColumnIndex(undefined);
                         setStep('step3');
                       }}
-                      itemIds={[]}
                     />
                   </div>
-                )}
+                </div>
+                <span className="shrink-0 text-button text-grey-04">or</span>
+                <div className="shrink-0">
+                  <Dropdown
+                    align="start"
+                    trigger={
+                      <span>
+                        {typesColumnIndex !== undefined
+                          ? `Column: ${headers[typesColumnIndex] ?? ''}`
+                          : 'Select column from CSV'}
+                      </span>
+                    }
+                    options={headers.map((header, index) => ({
+                      label: header ?? `Column ${index + 1}`,
+                      value: String(index),
+                      disabled: false,
+                      onClick: () => {
+                        clearGeneratedChanges();
+                        setTypesColumnIndex(index);
+                        setSelectedType(null);
+                        setColumnMapping(prev => {
+                          if (prev[index] === undefined) return prev;
+                          const next = { ...prev };
+                          delete next[index];
+                          return next;
+                        });
+                        setStep('step3');
+                      },
+                    }))}
+                  />
+                </div>
               </div>
-              <span className="shrink-0 text-button text-grey-04">or</span>
-              <div className="shrink-0">
-                <Dropdown
-                  align="start"
-                  trigger={
-                    <span>
-                      {typesColumnIndex !== undefined
-                        ? `Column: ${headers[typesColumnIndex] ?? ''}`
-                        : 'Select column from CSV'}
-                    </span>
-                  }
-                  options={headers.map((header, index) => ({
-                    label: header ?? `Column ${index + 1}`,
-                    value: String(index),
-                    disabled: false,
-                    onClick: () => {
-                      clearGeneratedChanges();
-                      setTypesColumnIndex(index);
-                      setSelectedType(null);
-                      setColumnMapping(prev => {
-                        if (prev[index] === undefined) return prev;
-                        const next = { ...prev };
-                        delete next[index];
-                        return next;
-                      });
-                      setStep('step3');
-                    },
-                  }))}
-                />
-              </div>
+              {hasTypesColumn !== undefined && (
+                <p className="mt-2 text-metadata text-grey-04">
+                  Find or create a constant type for all rows or choose a types column from the CSV.
+                </p>
+              )}
             </div>
-            {hasTypesColumn !== undefined && (
-              <p className="mt-2 text-metadata text-grey-04">
-                This CSV has a &quot;Types&quot; column. You can use it as the types column or choose a constant type
-                above.
-              </p>
-            )}
-          </div>
+          )
         )}
       </div>
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 3</span>
-          <span className="text-button font-medium text-text">Map properties and data</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 3</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Map properties and data</Text>
         </div>
         {step3Content}
       </div>
