@@ -13,9 +13,13 @@ import { useSpace } from '~/core/hooks/use-space';
 import { getProperty } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Property } from '~/core/types';
+import { DataType, Property } from '~/core/types';
+import { mapPropertyType } from '~/core/utils/property/properties';
+import { GeoNumber } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -108,6 +112,93 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   );
 }
 
+function isUrlColumn(col: ColumnConfig): boolean {
+  return col.dataType === 'TEXT' && col.renderableTypeStrict === 'URL';
+}
+
+function renderFormattedPreviewValue(col: ColumnConfig, value: string, spaceId: string): React.ReactNode {
+  if (!value) return <span className="truncate text-tableCell text-text">—</span>;
+
+  if (isUrlColumn(col)) {
+    return <WebUrlField variant="tableCell" spaceId={spaceId} value={value} format={col.format ?? undefined} />;
+  }
+
+  switch (col.dataType) {
+    case 'DATE':
+    case 'TIME':
+    case 'DATETIME':
+      return (
+        <DateField
+          value={value}
+          isEditing={false}
+          variant="tableCell"
+          propertyId={col.propertyId ?? ''}
+          dataType={col.dataType as DataType}
+        />
+      );
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL': {
+      // GeoNumber.format logs console.error on parse failure; only call it for
+      // values that actually parse as numbers to avoid noisy logs during preview.
+      const display = Number.isFinite(Number(value)) ? GeoNumber.format(value, col.format ?? undefined) : value;
+      return <span className="truncate text-tableCell text-text">{display}</span>;
+    }
+    case 'POINT':
+      return <span className="truncate text-tableCell text-text">({value})</span>;
+    default:
+      return <span className="truncate text-tableCell text-text">{value}</span>;
+  }
+}
+
+function formatDataTypeLabel(input: {
+  dataType?: string | null;
+  renderableTypeStrict?: string | null;
+}): string | null {
+  switch (input.renderableTypeStrict) {
+    case 'IMAGE':
+      return 'Image';
+    case 'VIDEO':
+      return 'Video';
+    case 'URL':
+      return 'URL';
+    case 'GEO_LOCATION':
+      return 'Geo location';
+    case 'PLACE':
+      return 'Place';
+    case 'ADDRESS':
+      return 'Address';
+  }
+  switch (input.dataType) {
+    case 'TEXT':
+      return 'Text';
+    case 'RELATION':
+      return 'Relation';
+    case 'INTEGER':
+      return 'Integer';
+    case 'FLOAT':
+      return 'Float';
+    case 'DECIMAL':
+      return 'Decimal';
+    case 'BOOLEAN':
+      return 'Checkbox';
+    case 'DATE':
+      return 'Date';
+    case 'DATETIME':
+      return 'Date & time';
+    case 'TIME':
+      return 'Time';
+    case 'POINT':
+      return 'Point';
+    default:
+      return null;
+  }
+}
+
+function getDataTypeLabel(col: ColumnConfig): string | null {
+  return formatDataTypeLabel(col);
+}
+
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
   /** CSV column index (0-based) — cell value is always row[csvColumnIndex] */
@@ -126,6 +217,8 @@ export type ColumnConfig = {
   mappingLocked?: boolean;
   /** Renderable type strict — used to detect IMAGE columns for thumbnail rendering */
   renderableTypeStrict?: string | null;
+  /** ICU-style number format pattern, for INTEGER/FLOAT/DECIMAL formatting */
+  format?: string | null;
 };
 
 function PropertyMappingPopover({
@@ -179,22 +272,29 @@ function PropertyMappingPopover({
         onSelectProperty(csvColumnIndex, result.id, property);
       }}
       onCreateEntity={result => {
+        const propertyType = result.renderableType || 'TEXT';
         const propertyId = createProperty({
           name: result.name || '',
-          propertyType: result.renderableType || 'TEXT',
+          propertyType,
         });
 
-        // Resolve the full property from the store after creation
-        const property = store.getProperty(propertyId);
-        if (property) {
-          onCreateProperty?.(csvColumnIndex, propertyId, property);
-        } else {
-          onCreateProperty?.(csvColumnIndex, propertyId, {
-            id: propertyId,
-            name: result.name,
-            dataType: 'TEXT',
-          });
-        }
+        const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
+        const initial: Property = store.getProperty(propertyId) ?? {
+          id: propertyId,
+          name: result.name,
+          dataType: baseDataType,
+          renderableType: renderableTypeId,
+        };
+        // Ensure dataType reflects the just-created property even if the store
+        // hasn't synced yet (fixes relation columns not rendering as relations).
+        const seeded: Property =
+          initial.dataType === baseDataType
+            ? initial
+            : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
+
+        void hydrateRelationValueTypes(seeded).then(hydrated => {
+          onCreateProperty?.(csvColumnIndex, propertyId, hydrated);
+        });
       }}
     />
   );
@@ -393,9 +493,9 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                   <CloseSmall />
                 </button>
               )}
-              <Text variant="metadata" className="truncate font-semibold text-text">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-text">
                 {col.headerLabel}
-              </Text>
+              </span>
               {col.propertyName !== null ? (
                 onSelectProperty && !col.mappingLocked ? (
                   <PropertyMappingPopover
@@ -406,19 +506,25 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                     initialQuery={col.headerLabel}
                     selectedEntityId={col.propertyId ?? undefined}
                     trigger={
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <PropertySpaceIcon propertyId={col.propertyId} />
                         <Text variant="metadata" className="truncate text-purple">
                           {col.propertyName}
+                          {getDataTypeLabel(col) && (
+                            <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>
+                          )}
                         </Text>
                       </span>
                     }
                   />
                 ) : (
-                  <span className="mt-0.5 flex items-center gap-1.5">
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
                     <PropertySpaceIcon propertyId={col.propertyId} />
                     <Text variant="metadata" className="truncate text-purple">
                       {col.propertyName}
+                      {getDataTypeLabel(col) && (
+                        <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>
+                      )}
                     </Text>
                   </span>
                 )
@@ -462,7 +568,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
       {showEmptyState ? (
         <>
           <div style={{ minWidth: columnLayout.totalWidth }}>
-            {dataRows.slice(0, 10).map((row, rowIndex) => (
+            {dataRows.slice(0, 7).map((row, rowIndex) => (
               <div
                 key={rowIndex}
                 className="border-b border-grey-02 bg-grey-01/50"
@@ -475,14 +581,35 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                     gridTemplateColumns: columnLayout.template,
                   }}
                 >
-                  {columns.map(col => (
-                    <div
-                      key={`preview-${rowIndex}-${col.csvColumnIndex}`}
-                      className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
-                    >
-                      <div className="truncate text-metadata text-text">{row[col.csvColumnIndex] ?? ''}</div>
-                    </div>
-                  ))}
+                  {columns.map(col => {
+                    const rawValue = row[col.csvColumnIndex] ?? '';
+                    const isImageRenderableCol = col.renderableTypeStrict === 'IMAGE';
+                    const isRelationCol = col.dataType === 'RELATION' && !isImageRenderableCol;
+                    return (
+                      <div
+                        key={`preview-${rowIndex}-${col.csvColumnIndex}`}
+                        className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                      >
+                        {isRelationCol && rawValue ? (
+                          <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                            {splitRelationCell(rawValue).map((part, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text"
+                              >
+                                <span>{part}</span>
+                                <ChipSeparator />
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="truncate text-metadata text-text">
+                            {renderFormattedPreviewValue(col, rawValue, spaceId)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -520,7 +647,11 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                 >
                   {columns.map(col => {
                     const value = row[col.csvColumnIndex] ?? '';
-                    const isRelation = col.dataType === 'RELATION';
+                    const isTypesSourceCol = typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex;
+                    // The types source column is marked dataType=RELATION so labels/preview pills work
+                    // in the pre-mapping state, but here we want the dedicated type-resolution UI to
+                    // handle it, not the generic relation-chip branch.
+                    const isRelation = col.dataType === 'RELATION' && !isTypesSourceCol;
                     const isImageColumn = col.renderableTypeStrict === 'IMAGE';
                     const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
                     const unresolvedSet = cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
@@ -803,9 +934,7 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                                 }
                               />
                             ) : (
-                              <Text variant="tableCell" className="truncate">
-                                {value || '—'}
-                              </Text>
+                              renderFormattedPreviewValue(col, value, spaceId)
                             )}
                           </div>
                         )}

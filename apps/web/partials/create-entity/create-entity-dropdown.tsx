@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -19,14 +18,8 @@ export function CreateEntityDropdown() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const { shouldShowElement } = useOnboardGuard();
-
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
   const { isEditor, isMember } = useAccessControl(spaceId ?? '');
-
-  if (!shouldShowElement) {
-    return null;
-  }
 
   return (
     <Menu

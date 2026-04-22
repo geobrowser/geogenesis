@@ -1,6 +1,5 @@
 'use client';
 
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 
 import { Pending } from '~/design-system/pending';
@@ -17,12 +16,6 @@ export function SpaceEditorsPopoverEditorRequestButton({
   hasRequestedSpaceEditorship,
 }: SpaceEditorsPopoverEditorRequestButtonProps) {
   const { requestToBeEditor, status } = useRequestToBeEditor({ spaceId });
-
-  const { shouldShowElement } = useOnboardGuard();
-
-  if (!shouldShowElement) {
-    return null;
-  }
 
   return (
     <Pending isPending={status === 'pending'} position="end">

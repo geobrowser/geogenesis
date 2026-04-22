@@ -5,24 +5,18 @@ import { useAccountEffect, usePrivy } from '@geogenesis/auth';
 import { useCallback, useEffect } from 'react';
 
 import { atom, useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
-import { Environment } from '../environment';
 import { usePersonalSpaceId } from './use-personal-space-id';
 
 const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
-  const params = useSearchParams();
-  const onboardFlag = params?.get(Environment.variables.onboardFlag);
-
   const { user, isModalOpen } = usePrivy();
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
 
-  const validOnboardCode = onboardFlag && onboardFlag === Environment.variables.onboardCode;
-  const shouldOnboard = isFetched && !isLoading && !isRegistered && user && validOnboardCode;
+  const shouldOnboard = isFetched && !isLoading && !isRegistered && user;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility

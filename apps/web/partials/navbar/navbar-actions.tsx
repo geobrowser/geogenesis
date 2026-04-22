@@ -12,10 +12,12 @@ import { useSetAtom } from 'jotai';
 import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
@@ -23,6 +25,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
@@ -57,6 +60,7 @@ export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
+  const { personalSpaceId } = usePersonalSpaceId();
   const resetOnboarding = useResetOnboarding();
 
   const { logout } = useLogout({
@@ -92,8 +96,14 @@ export function NavbarActions() {
         }
         open={open}
         onOpenChange={onOpenChange}
+        sideOffset={12}
         className="max-w-[165px]"
       >
+        {personalSpaceId && (
+          <AvatarMenuItem href={NavUtils.toSpace(personalSpaceId)}>
+            <p className="text-button">Personal space</p>
+          </AvatarMenuItem>
+        )}
         <AvatarMenuItem onClick={logout}>
           <p className="text-button">Sign out</p>
           <DisconnectWallet />
@@ -121,12 +131,22 @@ const avatarMenuItemStyles = cva(
 function AvatarMenuItem({
   children,
   onClick,
+  href,
   disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
+  href?: string;
   disabled?: boolean;
 }) {
+  if (href) {
+    return (
+      <Link href={href} className={avatarMenuItemStyles({ disabled })}>
+        {children}
+      </Link>
+    );
+  }
+
   return (
     <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
       {children}

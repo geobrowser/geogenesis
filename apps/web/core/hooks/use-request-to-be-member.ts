@@ -39,22 +39,19 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
   const handleRequestToBeMember = useCallback(async () => {
     if (!smartAccount) {
-      console.error('No smart account available');
-      return null;
+      throw new Error('No smart account available');
     }
 
     if (!personalSpaceId || !isRegistered) {
-      console.error('User does not have a registered personal space ID');
       dispatch({
         type: 'ERROR',
         payload: 'You need a registered personal space ID to request membership',
       });
-      return null;
+      throw new Error('User does not have a registered personal space ID');
     }
 
     if (!spaceId) {
-      console.error('No target space ID provided');
-      return null;
+      throw new Error('No target space ID provided');
     }
 
     console.log('Requesting to be member', {

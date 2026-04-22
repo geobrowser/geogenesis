@@ -43,27 +43,23 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
   const handleRequestToBeEditor = useCallback(async () => {
     if (!smartAccount) {
-      console.error('No smart account available');
-      return null;
+      throw new Error('No smart account available');
     }
 
     if (!personalSpaceId || !isRegistered) {
-      console.error('User does not have a registered personal space ID');
       dispatch({
         type: 'ERROR',
         payload: 'You need a registered personal space ID to request editorship',
       });
-      return null;
+      throw new Error('User does not have a registered personal space ID');
     }
 
     if (!spaceId) {
-      console.error('No target space ID provided');
-      return null;
+      throw new Error('No target space ID provided');
     }
 
     if (!space?.address) {
-      console.error('No space address found');
-      return null;
+      throw new Error('No space address found');
     }
 
     const spaceAddress = space.address as Hex;
