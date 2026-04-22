@@ -3,10 +3,10 @@
 import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
-import { atomWithStorage } from 'jotai/utils';
 import { useAtom } from 'jotai';
 
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
+import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -21,14 +21,12 @@ import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
 const SIDEBAR_WIDTH_PX = 200;
-
-/** Open on first visit; after the user toggles, `browseSidebarOpen` in localStorage wins. */
-const browseSidebarOpenAtom = atomWithStorage<boolean>('browseSidebarOpen', true);
 
 /** Warm the HTTP cache for sidebar thumbs before the panel is opened (thumbs mount only when expanded). */
 function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
@@ -204,14 +202,22 @@ function CollapsibleSection({
   );
 }
 
-function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+function SidebarToggle({
+  open,
+  onToggle,
+  className,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
   return (
     <button
       type="button"
       aria-label={open ? 'Close browse menu' : 'Open browse menu'}
       aria-expanded={open}
       onClick={onToggle}
-      className="absolute right-0 top-3 z-[60] flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text"
+      className={`absolute z-[60] flex h-5 w-5 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text ${className ?? ''}`}
     >
       <span className={`inline-flex scale-[0.7] ${open ? 'rotate-180' : ''}`}>
         <ChevronRight />
@@ -250,21 +256,35 @@ export function BrowseSidebar() {
   if (!open) {
     return (
       <aside
-        className="relative sticky top-0 z-50 h-dvh w-3 min-w-3 shrink-0 overflow-visible border-r border-divider bg-white"
+        className="pointer-events-none sticky top-0 z-50 h-dvh w-0 shrink-0 overflow-visible"
         aria-label="Browse menu (collapsed)"
       >
-        <SidebarToggle open={false} onToggle={() => setOpen(true)} />
+        <SidebarToggle
+          open={false}
+          onToggle={() => setOpen(true)}
+          className="pointer-events-auto left-3 top-[3.25rem]"
+        />
       </aside>
     );
   }
 
   return (
     <aside
-      className="relative sticky top-11 z-50 flex h-[calc(100dvh-2.75rem)] shrink-0 flex-col overflow-visible border-r border-divider bg-white"
+      className="relative sticky top-0 z-50 flex h-dvh shrink-0 flex-col overflow-visible border-r border-divider bg-white"
       style={{ width: SIDEBAR_WIDTH_PX, minWidth: SIDEBAR_WIDTH_PX }}
       aria-label="Browse menu"
     >
-      <SidebarToggle open onToggle={() => setOpen(false)} />
+      <div className="flex h-11 shrink-0 items-center border-b border-divider px-4">
+        <Link href={NavUtils.toRoot()} aria-label="Geo">
+          <GeoLogoLarge />
+        </Link>
+      </div>
+
+      <SidebarToggle
+        open
+        onToggle={() => setOpen(false)}
+        className="right-0 top-[calc(2.75rem+0.75rem)] translate-x-1/2"
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
         <nav className="space-y-0.5">
