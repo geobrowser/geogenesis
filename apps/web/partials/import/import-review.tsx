@@ -249,7 +249,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         </Link>
       </div>
 
-      <h1 className="mb-2 text-[1.5rem] font-semibold leading-[1.8125rem] tracking-[-0.75px] text-text">
+      <h1 className="mb-2 text-[1.5rem] leading-[1.8125rem] font-semibold tracking-[-0.75px] text-text">
         Map properties and data
       </h1>
       <p className="mb-6 text-[1rem] leading-5 tracking-[-0.35px] text-grey-04">

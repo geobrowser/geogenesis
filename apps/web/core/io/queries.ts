@@ -320,16 +320,28 @@ export function getSpace(spaceId: string, signal?: AbortController['signal']) {
 }
 
 export function getSpaces(
-  { limit, offset, spaceIds }: { limit?: number; offset?: number; spaceIds?: string[] } = {},
+  {
+    limit,
+    offset,
+    spaceIds,
+    topicIds,
+  }: { limit?: number; offset?: number; spaceIds?: string[]; topicIds?: string[] } = {},
   signal?: AbortController['signal']
 ) {
+  // Build the filter from whichever id set the caller passed. `topicIds` is
+  // how we resolve an entity-of-type-Space (returned by the search endpoint)
+  // back to the actual space container the app navigates to.
+  let filter: { id?: { in: string[] }; topicId?: { in: string[] } } | undefined;
+  if (spaceIds) filter = { ...filter, id: { in: spaceIds } };
+  if (topicIds) filter = { ...filter, topicId: { in: topicIds } };
+
   return graphql({
     query: spacesQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
     variables: {
       limit,
       offset,
-      filter: spaceIds ? { id: { in: spaceIds } } : undefined,
+      filter,
     },
     signal,
   });
