@@ -196,21 +196,62 @@ export function BrowseSidebar() {
 
   React.useEffect(() => {
     let cancelled = false;
-    const load = () => {
-      void loadBrowseSidebarData(walletAddress).then(d => {
-        if (!cancelled) setData(d);
-      });
+    void loadBrowseSidebarData(walletAddress).then(d => {
+      if (!cancelled) setData(d);
+    });
+    return () => {
+      cancelled = true;
     };
-    load();
-    const interval = setInterval(load, 30_000);
-    const onFocus = () => load();
+  }, [walletAddress]);
+
+  // Pending-vote polling. Uses /api/pending-votes (backed by Redis + webhooks from
+  // gaia's notification-service) when the feature flag is on — one Redis SMEMBERS
+  // per poll instead of a multi-space REST scan. Falls back to refetching the full
+  // sidebar data when the flag is off, which is the legacy behavior.
+  React.useEffect(() => {
+    if (!data) return;
+    const editorCount = data.editorOf.filter(row => !row.pendingLabel).length;
+    if (editorCount === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const useWebhookBackedPoll = process.env.NEXT_PUBLIC_USE_NOTIFICATION_SERVICE === 'true';
+    let cancelled = false;
+
+    const refreshPendingVotes = async () => {
+      if (document.visibilityState === 'hidden') return;
+      if (useWebhookBackedPoll) {
+        try {
+          const res = await fetch('/api/pending-votes', { cache: 'no-store' });
+          if (!res.ok || cancelled) return;
+          const { proposalIds } = (await res.json()) as { proposalIds: string[] };
+          if (cancelled) return;
+          setData(prev => (prev ? { ...prev, pendingVoteProposalIds: proposalIds } : prev));
+        } catch {
+          // Network hiccup — next tick will retry.
+        }
+        return;
+      }
+      // Legacy path: rerun the full sidebar loader.
+      try {
+        const next = await loadBrowseSidebarData(walletAddress);
+        if (!cancelled) setData(next);
+      } catch {
+        // Silently ignore — next tick will retry.
+      }
+    };
+
+    const interval = setInterval(refreshPendingVotes, 60_000);
+    const onFocus = () => {
+      void refreshPendingVotes();
+    };
     window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
-  }, [walletAddress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.editorOf.length, walletAddress]);
 
   React.useEffect(() => {
     if (!data) return;

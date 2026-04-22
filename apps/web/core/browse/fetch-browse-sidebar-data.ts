@@ -91,6 +91,13 @@ async function collectPendingVoteIdsInSpace(
   return ids;
 }
 
+export async function fetchPendingVoteProposalIds(
+  memberSpaceId: string,
+  editorSpaceIds: string[]
+): Promise<string[]> {
+  return collectPendingVoteIdsInEditorSpaces(memberSpaceId, editorSpaceIds);
+}
+
 async function collectPendingVoteIdsInEditorSpaces(
   memberSpaceId: string,
   editorSpaceIds: string[]
