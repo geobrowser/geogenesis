@@ -491,9 +491,9 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                   <CloseSmall />
                 </button>
               )}
-              <Text variant="metadata" className="truncate font-semibold text-text">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-text">
                 {col.headerLabel}
-              </Text>
+              </span>
               {col.propertyName !== null ? (
                 onSelectProperty && !col.mappingLocked ? (
                   <PropertyMappingPopover
