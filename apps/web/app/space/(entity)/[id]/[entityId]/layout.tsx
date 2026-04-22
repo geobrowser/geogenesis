@@ -166,8 +166,7 @@ async function getProfilePage(
       const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
       const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
 
-      const blocks = allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds) : [];
-      return blocks;
+      return allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds, spaceId) : [];
     })
   );
 
