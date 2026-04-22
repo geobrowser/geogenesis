@@ -345,9 +345,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               <span className="flex shrink-0 items-center" aria-hidden>
                 <Warning color="red-01" />
               </span>
-              <Text variant="smallButton" className="text-text">
+              <span className="text-[1rem] leading-5 tracking-[-0.35px] text-text">
                 {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
-              </Text>
+              </span>
             </div>
             <SmallButton
               type="button"
@@ -397,8 +397,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 1</span>
-          <span className="text-button font-medium text-text">Upload your file</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 1</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Upload your file</Text>
         </div>
         <input
           ref={fileInputRef}
@@ -422,9 +422,13 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-bold text-text">{fileName}</span>
+              <span className="truncate text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-text">
+                {fileName}
+              </span>
               {fileSizeBytes != null && (
-                <span className="shrink-0 text-metadata text-grey-04">{formatFileSize(fileSizeBytes)}</span>
+                <span className="shrink-0 text-[1rem] leading-5 tracking-[-0.35px] text-grey-04">
+                  {formatFileSize(fileSizeBytes)}
+                </span>
               )}
             </div>
             <SmallButton type="button" variant="secondary" onClick={handleDeleteFile} className="shrink-0 rounded-md">
@@ -459,8 +463,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 2</span>
-          <span className="text-button font-medium text-text">Map types</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 2</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Map types</Text>
         </div>
         {!fileName || !hasFile ? (
           <div className="rounded-xl bg-grey-01 p-3">
@@ -470,10 +474,17 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           selectedType || typesColumnIndex !== undefined ? (
             <div className="flex w-full items-center justify-between gap-3 rounded-xl bg-grey-01 p-3">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-metadata text-grey-04">
-                  {typesColumnIndex !== undefined
-                    ? `Type defined by ${headers[typesColumnIndex] ?? ''} in ${fileName}`
-                    : `Type defined as ${selectedType?.name ?? ''}`}
+                <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-text">
+                  {typesColumnIndex !== undefined ? (
+                    <>
+                      Type defined by{' '}
+                      <span className="font-semibold">{headers[typesColumnIndex] ?? ''}</span> in {fileName}
+                    </>
+                  ) : (
+                    <>
+                      Type defined as <span className="font-semibold">{selectedType?.name ?? ''}</span>
+                    </>
+                  )}
                 </span>
               </div>
               <SmallButton
@@ -561,8 +572,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       <div className="mb-8">
         <div className="mb-3 flex flex-col">
-          <span className="font-semibold text-purple">Step 3</span>
-          <span className="text-button font-medium text-text">Map properties and data</span>
+          <span className="text-[1rem] font-medium leading-[0.8125rem] tracking-[-0.35px] text-purple">Step 3</span>
+          <Text variant="smallTitle" as="span" className="tracking-[-0.5px]">Map properties and data</Text>
         </div>
         {step3Content}
       </div>
