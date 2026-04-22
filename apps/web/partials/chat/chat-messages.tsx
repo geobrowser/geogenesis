@@ -149,6 +149,9 @@ export function ChatMessages({ messages, status, error, onRetry, onSuggestion, d
 
   // Catches height growth between message updates (e.g. the smooth-reveal
   // hook drip-feeding characters) that doesn't re-run the effect above.
+  // Re-runs when messages.length changes so newly appended message nodes get
+  // observed too — a ResizeObserver only tracks the children present when it
+  // was attached.
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -158,7 +161,7 @@ export function ChatMessages({ messages, status, error, onRetry, onSuggestion, d
       observer.observe(child);
     }
     return () => observer.disconnect();
-  }, [runAutoScroll]);
+  }, [runAutoScroll, messages.length]);
 
   return (
     <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto px-3 py-3">

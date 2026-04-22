@@ -61,15 +61,21 @@ export const searchGraph = tool({
         })
       );
 
-      const results = limitEntries(raw, effectiveLimit).map(entity => {
+      // Drop entities with no resolvable space — spaceId is used downstream as
+      // a citation/navigation identifier, so an empty one would produce
+      // malformed `geo://entity/...?space=` hrefs and bad navigate calls.
+      const results = limitEntries(raw, effectiveLimit).flatMap(entity => {
         const firstSpace = entity.spaces[0];
-        return {
-          id: normalizeEntityId(entity.id),
-          name: entity.name,
-          spaceId: firstSpace ? normalizeEntityId(firstSpace.spaceId) : '',
-          spaceName: firstSpace?.name ?? null,
-          typeNames: entity.types.map(t => t.name).filter((n): n is string => typeof n === 'string' && n.length > 0),
-        };
+        if (!firstSpace) return [];
+        return [
+          {
+            id: normalizeEntityId(entity.id),
+            name: entity.name,
+            spaceId: normalizeEntityId(firstSpace.spaceId),
+            spaceName: firstSpace.name ?? null,
+            typeNames: entity.types.map(t => t.name).filter((n): n is string => typeof n === 'string' && n.length > 0),
+          },
+        ];
       });
 
       return { results };

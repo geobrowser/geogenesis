@@ -47,6 +47,12 @@ const MAX_TOOL_STEPS = 6;
 
 const UUID_OR_DASHLESS = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
+// currentPath is interpolated into the system prompt inside backticks, so
+// reject anything that could break out of the code span or smuggle newlines
+// / control chars into the prompt. Must start with '/' and contain no
+// whitespace, backticks, or control characters.
+const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
+
 function validateClientContext(input: unknown): ChatClientContext | null {
   if (input == null || typeof input !== 'object') return null;
   const raw = input as Record<string, unknown>;
@@ -63,7 +69,10 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (currentEntityId != null && (typeof currentEntityId !== 'string' || !UUID_OR_DASHLESS.test(currentEntityId))) {
     return null;
   }
-  if (currentPath != null && (typeof currentPath !== 'string' || currentPath.length > MAX_PATH_CHARS)) {
+  if (
+    currentPath != null &&
+    (typeof currentPath !== 'string' || currentPath.length > MAX_PATH_CHARS || !SAFE_PATHNAME.test(currentPath))
+  ) {
     return null;
   }
   if (isEditMode != null && typeof isEditMode !== 'boolean') {

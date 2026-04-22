@@ -125,21 +125,18 @@ export function ChatPanel({
       className="fixed right-4 bottom-4 z-100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]"
     >
       <ResizeHandle
-        axis="x"
         className="absolute inset-y-2 left-0 w-1 cursor-ew-resize"
         onStart={startResize('x')}
         onMove={onResizeMove}
         onEnd={endResize}
       />
       <ResizeHandle
-        axis="y"
         className="absolute inset-x-2 top-0 h-1 cursor-ns-resize"
         onStart={startResize('y')}
         onMove={onResizeMove}
         onEnd={endResize}
       />
       <ResizeHandle
-        axis="xy"
         className="absolute top-0 left-0 size-3 cursor-nwse-resize"
         onStart={startResize('xy')}
         onMove={onResizeMove}
@@ -247,7 +244,6 @@ function formatTranscript(messages: UIMessage[]): string {
 }
 
 type ResizeHandleProps = {
-  axis: ResizeAxis;
   className: string;
   onStart: (event: React.PointerEvent<HTMLDivElement>) => void;
   onMove: (event: React.PointerEvent<HTMLDivElement>) => void;

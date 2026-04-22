@@ -9,7 +9,6 @@ import { isToolUIPart } from 'ai';
  * Entries come from tool results on visible assistant messages:
  *   - searchGraph → { results: [{ id, name, spaceId, spaceName, typeNames }] }
  *   - getEntity   → { id, name, spaceId, spaceName, types }
- *   - listSpaces  → { spaces: [{ id, name }] } (space-scoped, not entity)
  *
  * Missing keys fall back to plain text in the renderer — this cache is
  * best-effort, never a source of truth.

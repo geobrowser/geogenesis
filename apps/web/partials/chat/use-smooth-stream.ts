@@ -35,7 +35,7 @@ export function useSmoothStream(target: string, isStreaming: boolean): string {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isStreaming, target]);
+  }, [isStreaming]);
 
   return displayed;
 }
