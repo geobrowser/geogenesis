@@ -67,8 +67,11 @@ export type ScopedFilterRelationsOptions = {
 };
 
 export type ScopedFilterRelationTarget = {
-  toEntityId: string;
+  id: string;
   name: string | null;
+  description: string | null;
+  spaceIds: string[];
+  types: { id: string; name: string | null }[];
 };
 
 export type ScopedFilterRelationsPage = {
@@ -106,10 +109,21 @@ export function getScopedFilterRelations(
     decoder: (data: any): ScopedFilterRelationsPage => {
       const conn = data?.relationsConnection;
       const nodes: ScopedFilterRelationTarget[] = (conn?.nodes ?? [])
-        .filter((n: any) => n && typeof n.toEntityId === 'string')
+        .filter((n: any) => n?.toEntity && typeof n.toEntity.id === 'string')
         .map((n: any) => ({
-          toEntityId: n.toEntityId as string,
-          name: (n.toEntity?.name as string | null) ?? null,
+          id: n.toEntity.id as string,
+          name: (n.toEntity.name as string | null) ?? null,
+          description: (n.toEntity.description as string | null) ?? null,
+          spaceIds: Array.isArray(n.toEntity.spaceIds)
+            ? (n.toEntity.spaceIds as unknown[]).filter(
+                (s): s is string => typeof s === 'string'
+              )
+            : [],
+          types: Array.isArray(n.toEntity.types)
+            ? (n.toEntity.types as any[])
+                .filter(t => t && typeof t.id === 'string')
+                .map(t => ({ id: t.id as string, name: (t.name as string | null) ?? null }))
+            : [],
         }));
       return {
         nodes,

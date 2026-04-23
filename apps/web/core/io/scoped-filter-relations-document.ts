@@ -18,6 +18,12 @@ const SCOPED_FILTER_RELATIONS_SOURCE = /* GraphQL */ `
         toEntity {
           id
           name
+          description
+          spaceIds
+          types {
+            id
+            name
+          }
         }
       }
       pageInfo {
