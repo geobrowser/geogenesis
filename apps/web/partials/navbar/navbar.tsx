@@ -18,8 +18,8 @@ export function Navbar({ onSearchClick, hideLogo = false }: Props) {
   return (
     <nav
       className={cx(
-        'flex h-11 w-full items-center justify-between gap-1 border-b border-divider px-4 py-1',
-        process.env.NODE_ENV === 'development' && 'sticky top-0 z-100 bg-white'
+        'relative z-[60] flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1',
+        process.env.NODE_ENV === 'development' && 'sticky top-0 z-100'
       )}
     >
       <div className="flex items-center gap-8 md:gap-4">
