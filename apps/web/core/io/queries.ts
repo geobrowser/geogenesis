@@ -17,6 +17,7 @@ import {
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { scopedFilterRelationsDocument } from './scoped-filter-relations-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -56,6 +57,70 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 // automatically...
 //
 // We also want to merge local data as much as possible
+
+export type ScopedFilterRelationsOptions = {
+  propertyId: string;
+  fromTypeIds?: string[];
+  toTypeIds?: string[];
+  first?: number;
+  after?: string | null;
+};
+
+export type ScopedFilterRelationTarget = {
+  toEntityId: string;
+  name: string | null;
+};
+
+export type ScopedFilterRelationsPage = {
+  nodes: ScopedFilterRelationTarget[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+function buildRelationTypeFilter(typeIds: string[] | undefined) {
+  if (!typeIds?.length) return undefined;
+  if (typeIds.length === 1) return { typeIds: { is: [typeIds[0]] } };
+  return { or: typeIds.map(id => ({ typeIds: { is: [id] } })) };
+}
+
+/**
+ * Aggregate every `toEntity` referenced by a relation of `propertyId` whose
+ * `fromEntity` matches the table's active type filters. Used to populate the
+ * table filter dropdown's "from this data set" suggestions beyond what has been
+ * hydrated into the local sync store.
+ */
+export function getScopedFilterRelations(
+  { propertyId, fromTypeIds, toTypeIds, first = 500, after = null }: ScopedFilterRelationsOptions,
+  signal?: AbortController['signal']
+) {
+  const fromFilter = buildRelationTypeFilter(fromTypeIds);
+  const toFilter = buildRelationTypeFilter(toTypeIds);
+  const filter = {
+    typeId: { is: propertyId },
+    ...(fromFilter ? { fromEntity: fromFilter } : {}),
+    ...(toFilter ? { toEntity: toFilter } : {}),
+  };
+
+  return graphql({
+    query: scopedFilterRelationsDocument,
+    decoder: (data: any): ScopedFilterRelationsPage => {
+      const conn = data?.relationsConnection;
+      const nodes: ScopedFilterRelationTarget[] = (conn?.nodes ?? [])
+        .filter((n: any) => n && typeof n.toEntityId === 'string')
+        .map((n: any) => ({
+          toEntityId: n.toEntityId as string,
+          name: (n.toEntity?.name as string | null) ?? null,
+        }));
+      return {
+        nodes,
+        endCursor: (conn?.pageInfo?.endCursor as string | null) ?? null,
+        hasNextPage: Boolean(conn?.pageInfo?.hasNextPage),
+      };
+    },
+    variables: { filter, first, after },
+    signal,
+  });
+}
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({

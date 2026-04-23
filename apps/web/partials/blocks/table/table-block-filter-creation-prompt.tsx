@@ -21,7 +21,7 @@ import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } fr
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getScopedFilterRelations, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
@@ -1306,6 +1306,60 @@ function DynamicFilters({
     waitForRelationTargetTypes
   );
 
+  const fromTypeFilterIds = React.useMemo(
+    () => (filterState ?? []).filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value),
+    [filterState]
+  );
+
+  const { data: remoteScopedPage } = useQuery({
+    enabled:
+      isRelationPropertyColumn &&
+      Boolean(state.selectedColumn) &&
+      !waitForRelationTargetTypes,
+    queryKey: [
+      'scoped-filter-relation-targets',
+      state.selectedColumn,
+      fromTypeFilterIds.slice().sort().join(','),
+      (relationTargetTypeIds ?? []).slice().sort().join(','),
+    ],
+    queryFn: ({ signal }) =>
+      Effect.runPromise(
+        getScopedFilterRelations(
+          {
+            propertyId: state.selectedColumn!,
+            fromTypeIds: fromTypeFilterIds.length ? fromTypeFilterIds : undefined,
+            toTypeIds: relationTargetTypeIds?.length ? relationTargetTypeIds : undefined,
+            first: 500,
+          },
+          signal
+        )
+      ),
+    staleTime: Duration.toMillis(Duration.seconds(60)),
+  });
+
+  const mergedScopedEntitySuggestions = React.useMemo(() => {
+    if (selectedOption?.valueType !== 'RELATION') return scoped.entitySuggestions;
+
+    const counts = new Map<string, number>();
+    const meta = new Map<string, { id: string; name: string | null }>();
+
+    for (const node of remoteScopedPage?.nodes ?? []) {
+      const id = node.toEntityId;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+      if (!meta.has(id)) meta.set(id, { id, name: node.name });
+    }
+
+    for (const s of scoped.entitySuggestions) {
+      if (!meta.has(s.id)) meta.set(s.id, s);
+    }
+
+    return [...meta.values()].sort((a, b) => {
+      const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
+      if (diff !== 0) return diff;
+      return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+    });
+  }, [remoteScopedPage, scoped.entitySuggestions, selectedOption?.valueType]);
+
   const pendingFilterChips = React.useMemo(
     () => enumeratePendingFilterChips(state, options),
     [state, options]
@@ -1377,7 +1431,7 @@ function DynamicFilters({
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
               suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
-              scopedSuggestions={scoped.entitySuggestions}
+              scopedSuggestions={mergedScopedEntitySuggestions}
               selectedEntityIds={selectedEntityIds}
               onToggleEntity={e =>
                 dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
