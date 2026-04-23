@@ -323,7 +323,7 @@ export function BrowseSidebar() {
         aria-label="Browse menu (collapsed)"
       >
         {/* Vertical rail aligned to the centre of the navbar logo (navbar px-4 = 16px + 8px half-logo ≈ 24px). */}
-        <div className="pointer-events-none absolute bottom-0 left-6 top-11 w-px bg-divider" />
+        <div className="pointer-events-none absolute bottom-0 left-6 top-0 w-px bg-divider" />
         <SidebarToggle
           open={false}
           onToggle={() => setOpen(true)}
