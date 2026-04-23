@@ -61,7 +61,12 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 
 export type ScopedReferencedEntitiesOptions = {
   propertyId: string;
-  fromTypeIds?: string[];
+  /**
+   * An EntityFilter describing the table's active filter state. Goes into
+   * `backlinks.some.fromEntity` so we match only entities that are referenced
+   * from rows matching those filters. Build via `buildEntityFilter(...)`.
+   */
+  fromEntityFilter?: Record<string, unknown>;
   toTypeIds?: string[];
   first?: number;
   after?: string | null;
@@ -92,15 +97,15 @@ export type ScopedReferencedEntitiesPage = {
  * for system properties like "Types").
  */
 export function getScopedReferencedEntities(
-  { propertyId, fromTypeIds, toTypeIds, first = 25, after = null }: ScopedReferencedEntitiesOptions,
+  { propertyId, fromEntityFilter, toTypeIds, first = 25, after = null }: ScopedReferencedEntitiesOptions,
   signal?: AbortController['signal']
 ) {
   const backlink: Record<string, unknown> = {
     // typeId on RelationFilter is UuidFilter (scalar), not UuidListFilter.
     typeId: { is: propertyId },
   };
-  if (fromTypeIds?.length) {
-    backlink.fromEntity = { typeIds: { overlaps: fromTypeIds } };
+  if (fromEntityFilter) {
+    backlink.fromEntity = fromEntityFilter;
   }
 
   const filter: Record<string, unknown> = {

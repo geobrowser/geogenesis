@@ -20,6 +20,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { buildEntityFilter } from '~/core/io/entity-filter-from-filters';
 import { getBrowseEntitiesByType, getScopedReferencedEntities, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
@@ -1275,8 +1276,8 @@ function DynamicFilters({
     waitForRelationTargetTypes
   );
 
-  const fromTypeFilterIds = React.useMemo(
-    () => (filterState ?? []).filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value),
+  const scopedFromEntityFilter = React.useMemo(
+    () => buildEntityFilter(filterState ?? []),
     [filterState]
   );
 
@@ -1353,7 +1354,7 @@ function DynamicFilters({
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
               scopedRelationPropertyId={state.selectedColumn ?? undefined}
-              scopedFromTypeIds={fromTypeFilterIds}
+              scopedFromEntityFilter={scopedFromEntityFilter}
               selectedEntityIds={selectedEntityIds}
               onToggleEntity={e =>
                 dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
@@ -1460,7 +1461,13 @@ interface TableBlockEntityFilterInputProps {
    * referenced by the table's data set (not just the locally hydrated rows).
    */
   scopedRelationPropertyId?: string;
-  scopedFromTypeIds?: string[];
+  /**
+   * EntityFilter (produced by `buildEntityFilter`) describing the table's
+   * active filter state. Used as the `backlinks.some.fromEntity` clause so
+   * the scoped aggregation returns only entities referenced from rows that
+   * match the table's filters.
+   */
+  scopedFromEntityFilter?: Record<string, unknown>;
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
   multiSelectPlaceholder?: string;
@@ -1476,7 +1483,7 @@ function TableBlockEntityFilterInput({
   suggestionSpaceId,
   scopedSuggestions,
   scopedRelationPropertyId,
-  scopedFromTypeIds,
+  scopedFromEntityFilter,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
@@ -1534,7 +1541,7 @@ function TableBlockEntityFilterInput({
     queryKey: [
       'table-block-filter-scoped-relations',
       scopedRelationPropertyId ?? '',
-      (scopedFromTypeIds ?? []).slice().sort().join(','),
+      scopedFromEntityFilter ? JSON.stringify(scopedFromEntityFilter) : '',
       filterByTypes?.slice().sort().join(',') ?? '',
     ],
     enabled: relationsEnabled,
@@ -1544,7 +1551,7 @@ function TableBlockEntityFilterInput({
       // eslint-disable-next-line no-console
       console.log('[filter-query] relations START', {
         propertyId: scopedRelationPropertyId,
-        fromTypeIds: scopedFromTypeIds,
+        fromEntityFilter: scopedFromEntityFilter,
         toTypeIds: filterByTypes,
         after: pageParam,
       });
@@ -1552,7 +1559,7 @@ function TableBlockEntityFilterInput({
         getScopedReferencedEntities(
           {
             propertyId: scopedRelationPropertyId!,
-            fromTypeIds: scopedFromTypeIds?.length ? scopedFromTypeIds : undefined,
+            fromEntityFilter: scopedFromEntityFilter,
             toTypeIds: filterByTypes?.length ? filterByTypes : undefined,
             first: FILTER_DROPDOWN_PAGE_SIZE,
             after: pageParam,
