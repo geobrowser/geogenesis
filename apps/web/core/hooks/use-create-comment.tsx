@@ -2,7 +2,7 @@
 
 import { personalSpace } from '@geoprotocol/geo-sdk';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -74,6 +74,36 @@ export function useCreateComment(targetEntityId: string) {
   // the tail of this chain before running its own Effect; the optimistic "Publishing…"
   // row appears immediately regardless, so the queued comment is still visible to the user.
   const publishQueueRef = React.useRef<Promise<unknown>>(Promise.resolve());
+
+  // Prefetch + cache the current user's author info. On the first call we pay the fetch;
+  // every subsequent comment on this page (and any other entity page in this session) reads
+  // straight from React Query's cache, so the optimistic row has the correct avatar + name
+  // the instant it's inserted. staleTime is long because profile data changes rarely.
+  const walletAddress = smartAccount?.account.address ?? null;
+  const { data: cachedAuthor } = useQuery({
+    queryKey: ['comment-author-info', personalSpaceId, walletAddress],
+    queryFn: async () => {
+      if (!personalSpaceId || !walletAddress) return null;
+      const [space, profile] = await Promise.all([
+        Effect.runPromise(getSpace(personalSpaceId)),
+        Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddress as `0x${string}`)),
+      ]);
+      if (!space) return null;
+      const avatarUrl =
+        profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+      return {
+        space,
+        profile: {
+          address: profile.address,
+          name: profile.name ?? space.entity.name ?? null,
+          avatarUrl,
+        },
+      };
+    },
+    enabled: Boolean(personalSpaceId && walletAddress),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
 
   const createComment = React.useCallback(
     async ({
@@ -207,10 +237,11 @@ export function useCreateComment(targetEntityId: string) {
         }
 
         // Insert the optimistic row SYNCHRONOUSLY — before any await — so it appears in the
-        // same render as the input box closing. The avatar seed only needs the wallet address
-        // (jazzicon hash), which we have in hand; name + avatarUrl are filled in below once
-        // the profile fetch resolves.
-        const walletAddress = smartAccount.account.address;
+        // same render as the input box closing. If we have cached author info (the common
+        // case on any comment after the first), the row renders fully resolved immediately.
+        // Otherwise we use the wallet address as the jazzicon seed and patch in name +
+        // avatar once the fetch resolves below.
+        const walletAddr = smartAccount.account.address;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
           name: commentName,
@@ -221,9 +252,9 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
-            address: walletAddress,
-            name: null,
-            avatarUrl: null,
+            address: cachedAuthor?.profile.address ?? walletAddr,
+            name: cachedAuthor?.profile.name ?? null,
+            avatarUrl: cachedAuthor?.profile.avatarUrl ?? null,
           },
           createdAt: new Date().toISOString(),
           spaceId: personalSpaceId,
@@ -238,40 +269,56 @@ export function useCreateComment(targetEntityId: string) {
 
         onOptimistic?.(commentEntityId);
 
-        // Fetch space (needed for space.id when publishing) + profile (for full author info).
-        const [space, profile] = await Promise.all([
-          Effect.runPromise(getSpace(personalSpaceId)),
-          Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddress as `0x${string}`)),
-        ]);
-        if (!space) {
-          // Roll back the placeholder row since we can't proceed without the space.
+        // Resolve author info: prefer the React Query cache so repeat comments skip the fetch.
+        let space = cachedAuthor?.space ?? null;
+        let profile = cachedAuthor?.profile ?? null;
+        if (!space || !profile) {
+          const [fetchedSpace, fetchedProfile] = await Promise.all([
+            Effect.runPromise(getSpace(personalSpaceId)),
+            Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddr as `0x${string}`)),
+          ]);
+          if (!fetchedSpace) {
+            // Roll back the placeholder row since we can't proceed without the space.
+            queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+              old.filter(c => c.id !== commentEntityId)
+            );
+            setToast(<span>Failed to resolve personal space</span>);
+            setIsCreating(false);
+            return null;
+          }
+          const resolvedAvatarUrl =
+            fetchedProfile.avatarUrl && fetchedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
+              ? fetchedProfile.avatarUrl
+              : null;
+          space = fetchedSpace;
+          profile = {
+            address: fetchedProfile.address,
+            name: fetchedProfile.name ?? fetchedSpace.entity.name ?? null,
+            avatarUrl: resolvedAvatarUrl,
+          };
+          // Seed the cache so the next comment is instant.
+          queryClient.setQueryData(['comment-author-info', personalSpaceId, walletAddr], {
+            space,
+            profile,
+          });
+          // Patch the optimistic row with the freshly resolved info. Only touch our own row
+          // so a concurrent poller update (which replaces the whole list) isn't clobbered.
           queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-            old.filter(c => c.id !== commentEntityId)
+            old.map(c =>
+              c.id === commentEntityId
+                ? {
+                    ...c,
+                    author: {
+                      spaceId: personalSpaceId,
+                      address: profile!.address,
+                      name: profile!.name,
+                      avatarUrl: profile!.avatarUrl,
+                    },
+                  }
+                : c
+            )
           );
-          setToast(<span>Failed to resolve personal space</span>);
-          setIsCreating(false);
-          return null;
         }
-
-        // Patch the row with resolved author info. Only touch our own row so a concurrent
-        // poller update (which replaces the whole list) doesn't get clobbered.
-        const resolvedAvatarUrl =
-          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-          old.map(c =>
-            c.id === commentEntityId
-              ? {
-                  ...c,
-                  author: {
-                    spaceId: personalSpaceId,
-                    address: profile.address,
-                    name: profile.name ?? space.entity.name ?? null,
-                    avatarUrl: resolvedAvatarUrl,
-                  },
-                }
-              : c
-          )
-        );
 
         // Publish to personal space
         const publish = Effect.gen(function* () {
