@@ -1525,13 +1525,8 @@ function TableBlockEntityFilterInput({
     if (!filterByTypes?.length && (waitForFilterTypes || restrictSearchToTypes)) {
       return [];
     }
-    if (!filterByTypes?.length) return filteredScoped;
-    return filteredScoped.filter(s => {
-      const e = store.getEntity(s.id, suggestionSpaceId ? { spaceId: suggestionSpaceId } : undefined);
-      if (!e?.types?.length) return true;
-      return entityTypesMatchFilter(e.types, filterByTypes);
-    });
-  }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes, store, suggestionSpaceId]);
+    return filteredScoped;
+  }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes]);
 
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
