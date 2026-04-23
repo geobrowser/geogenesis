@@ -4,7 +4,7 @@ import type Token from 'markdown-it/lib/token.mjs';
 
 import * as React from 'react';
 
-import { createMarkdownIt, sanitizeRenderedLinkUrl } from './markdown-core';
+import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 
 type MarkdownRenderOptions = {
   textClassName?: string;
@@ -243,18 +243,30 @@ function renderInlineTokenRange(
       }
 
       case 'link_open': {
-        const href = sanitizeRenderedLinkUrl(token.attrGet('href'));
+        const { className, isValid, safeHref } = getRenderedLinkState(token.attrGet('href'));
         const rendered = renderInlineTokenRange(tokens, index + 1, 'link_close', options);
-        nodes.push(
-          <a
-            key={`link-${index}`}
-            href={href ?? undefined}
-            data-invalid-link={href ? undefined : 'true'}
-            className={options?.markClassName}
-          >
-            {rendered.nodes}
-          </a>
-        );
+
+        if (isValid && safeHref) {
+          nodes.push(
+            <a
+              key={`link-${index}`}
+              href={safeHref}
+              className={cx(className, options?.markClassName)}
+            >
+              {rendered.nodes}
+            </a>
+          );
+        } else {
+          nodes.push(
+            <span
+              key={`link-${index}`}
+              data-invalid-link="true"
+              className={cx(className, options?.markClassName)}
+            >
+              {rendered.nodes}
+            </span>
+          );
+        }
         index = rendered.nextIndex;
         break;
       }

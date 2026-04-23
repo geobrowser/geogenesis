@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -17,6 +17,7 @@ import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
+import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -36,17 +37,20 @@ export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'start' | 'enter-profile' | 'create-space' | 'completed' | 'done';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
+
+const ONBOARDING_DESTINATION = NavUtils.toExplore();
 
 const MotionContent = motion.create(Content);
 const MotionOverlay = motion.create(Overlay);
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
+  const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
   const name = useAtomValue(nameAtom);
@@ -54,11 +58,24 @@ export const OnboardingDialog = () => {
   const topicId = useAtomValue(topicIdAtom);
   const { createPersonalSpace } = useCreatePersonalSpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
+  const setChatOpen = useSetAtom(isChatOpenAtom);
+  const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
 
   const [step, setStep] = useAtom(stepAtom);
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+
+  // Scheduled here so the timer survives StepComplete unmounting once the
+  // personal space refetches as registered and closes the dialog.
+  useEffect(() => {
+    if (step !== 'completed') return;
+    const timer = setTimeout(() => {
+      router.push(ONBOARDING_DESTINATION);
+      setStep('done');
+    }, 3_600);
+    return () => clearTimeout(timer);
+  }, [step, router, setStep]);
 
   const address = smartAccount?.account.address;
 
@@ -85,6 +102,11 @@ export const OnboardingDialog = () => {
       // it's done deploying.
       setSpaceId(spaceId);
       setStep('completed');
+
+      if (!hasSeenAssistant) {
+        setChatOpen(true);
+        setHasSeenAssistant(true);
+      }
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -367,22 +389,13 @@ const retryMessage: Record<Step, string> = {
   'enter-profile': '',
   'create-space': 'Space creation failed',
   completed: '',
+  done: '',
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
-  const router = useRouter();
-
-  const spaceId = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
-
-  if (hasCompleted) {
-    setTimeout(() => {
-      const destination = NavUtils.toSpace(spaceId);
-      router.push(destination);
-    }, 3_600);
-  }
 
   return (
     <>

@@ -7,6 +7,8 @@ import * as React from 'react';
 import { GEOGENESIS } from './geo-chain';
 
 const config: PrivyClientConfig = {
+  // Session refresh calls auth.privy.io; TimeoutError usually means the host cannot reach Privy
+  // (firewall/VPN/DNS). Not configurable here—fix network or use Privy dashboard allowed origins.
   defaultChain: GEOGENESIS,
   supportedChains: [GEOGENESIS],
   loginMethods: ['email'],

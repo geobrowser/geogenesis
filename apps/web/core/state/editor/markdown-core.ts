@@ -100,3 +100,21 @@ export function sanitizeRenderedLinkUrl(href: string | null): string | null {
 
   return null;
 }
+
+export function getRenderedLinkState(href: string | null) {
+  const safeHref = sanitizeRenderedLinkUrl(href);
+
+  if (safeHref) {
+    return {
+      className: 'entity-link-valid' as const,
+      isValid: true,
+      safeHref,
+    };
+  }
+
+  return {
+    className: 'entity-link-invalid' as const,
+    isValid: false,
+    safeHref: null,
+  };
+}

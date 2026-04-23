@@ -39,7 +39,7 @@ export function Providers({ children }: Props) {
                 <StatusBarContextProvider>
                   <DiffProvider>{children}</DiffProvider>
                 </StatusBarContextProvider>
-                <ReactQueryDevtools initialIsOpen={false} />
+                {process.env.NEXT_PUBLIC_DISABLE_RQ_DEVTOOLS !== '1' && <ReactQueryDevtools initialIsOpen={false} />}
               </SyncEngineProvider>
             </JotaiProvider>
           </LazyWalletProvider>

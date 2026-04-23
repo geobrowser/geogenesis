@@ -10,7 +10,12 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
+import {
+  BOUNTIES_RELATION_TYPE,
+  BOUNTY_TYPE_ID,
+  PLACEHOLDER_SPACE_IMAGE,
+  PROPOSAL_TYPE_ID,
+} from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -21,6 +26,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { fetchSpacesWithAncestors } from '~/core/io/subgraph/fetch-spaces-with-ancestors';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -43,6 +49,8 @@ import {
   BountyLinkingPanel,
   buildBounties,
   buildBounty,
+  buildBountyAllocationTargets,
+  hasBountyTaskStatusDoneRelation,
   isAllocatedToUser,
   isBountyTypeRelation,
 } from './bounty-linking';
@@ -50,6 +58,11 @@ import type { Bounty } from './bounty-linking/types';
 import { editorContentVersionAtom } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+function bountySpaceFallbackLabel(spaceId: string): string {
+  const compact = spaceId.replace(/-/g, '');
+  return compact.length > 14 ? `${compact.slice(0, 6)}…${compact.slice(-4)}` : spaceId;
+}
 
 export const ReviewChanges = () => {
   const {
@@ -201,18 +214,39 @@ export const ReviewChanges = () => {
       relation.spaceId === activeSpace && bountyEntityIdSet.has(relation.fromEntity.id) && relation.isDeleted !== true,
   });
 
-  const { data: remoteBountyEntities = [] } = useQuery({
-    queryKey: ['bounties-by-type', activeSpace, BOUNTY_TYPE_ID],
+  const { data: bountySearchSpaceIds = [] } = useQuery({
+    queryKey: ['bounty-link-spaces-with-ancestors', activeSpace],
     enabled: Boolean(activeSpace && isReviewOpen),
     staleTime: 60_000,
     queryFn: async () => {
       if (!activeSpace) return [];
-      return await Effect.runPromise(
-        getAllEntities({
-          spaceId: activeSpace,
-          typeIds: { is: BOUNTY_TYPE_ID },
-        })
+      return await fetchSpacesWithAncestors(activeSpace);
+    },
+  });
+
+  const { data: remoteBountyEntities = [] } = useQuery({
+    queryKey: ['bounties-by-type', bountySearchSpaceIds.join(','), BOUNTY_TYPE_ID],
+    enabled: bountySearchSpaceIds.length > 0 && isReviewOpen,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (bountySearchSpaceIds.length === 0) return [];
+      const pages = await Promise.all(
+        bountySearchSpaceIds.map(spaceId =>
+          Effect.runPromise(
+            getAllEntities({
+              spaceId,
+              typeIds: { is: BOUNTY_TYPE_ID },
+            })
+          )
+        )
       );
+      const merged = new Map<string, (typeof pages)[0][0]>();
+      for (const entities of pages) {
+        for (const entity of entities) {
+          merged.set(entity.id, entity);
+        }
+      }
+      return [...merged.values()];
     },
   });
 
@@ -265,7 +299,7 @@ export const ReviewChanges = () => {
       return { bounties: [], bountiesById: new Map<string, Bounty>() };
     }
 
-    const allocationTargets = [personalSpaceId, personalPageEntityId].filter((id): id is string => Boolean(id));
+    const allocationTargets = buildBountyAllocationTargets(personalSpaceId, personalPageEntityId);
     const localResult = buildBounties(
       bountyEntityIds,
       bountyValues,
@@ -277,18 +311,23 @@ export const ReviewChanges = () => {
       personalSpaceId
     );
     const remoteBounties = remoteBountyEntities
-      .filter(entity => isAllocatedToUser(entity.relations ?? [], allocationTargets))
-      .map(entity =>
-        buildBounty(
+      .filter(
+        entity =>
+          isAllocatedToUser(entity.relations ?? [], allocationTargets) &&
+          !hasBountyTaskStatusDoneRelation(entity.relations ?? [])
+      )
+      .map(entity => {
+        const bountySpaceId = entity.spaces?.[0] ?? activeSpace;
+        return buildBounty(
           entity.id,
           entity.values ?? [],
           entity.relations ?? [],
           bountySubmissionCounts,
           bountyPersonalSubmissionCounts,
-          activeSpace,
+          bountySpaceId,
           personalSpaceId
-        )
-      );
+        );
+      });
 
     const merged = new Map<string, Bounty>();
     for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
@@ -306,6 +345,47 @@ export const ReviewChanges = () => {
     personalSpaceId,
     personalPageEntityId,
   ]);
+
+  const bountySpaceIdsForLabels = React.useMemo(
+    () => [...new Set(bounties.map(b => b.spaceId).filter((id): id is string => Boolean(id)))].sort(),
+    [bounties]
+  );
+
+  const { data: bountyLabelSpaces = [] } = useQuery({
+    queryKey: ['bounty-space-labels', bountySpaceIdsForLabels.join(',')],
+    enabled: bountySpaceIdsForLabels.length > 0 && isReviewOpen,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (bountySpaceIdsForLabels.length === 0) return [];
+      return await Effect.runPromise(getSpaces({ spaceIds: bountySpaceIdsForLabels }));
+    },
+  });
+
+  const bountySpaceRowById = React.useMemo(() => {
+    const m = new Map<string, { label: string; image: string }>();
+    for (const id of bountySpaceIdsForLabels) {
+      const space = bountyLabelSpaces.find(s => s.id === id);
+      const name = space?.entity?.name?.trim();
+      const label = name && name.length > 0 ? name : bountySpaceFallbackLabel(id);
+      const image =
+        space?.entity?.image && space.entity.image.length > 0 ? space.entity.image : PLACEHOLDER_SPACE_IMAGE;
+      m.set(id, { label, image });
+    }
+    return m;
+  }, [bountyLabelSpaces, bountySpaceIdsForLabels]);
+
+  const bountiesWithSpaceLabels = React.useMemo(
+    (): Bounty[] =>
+      bounties.map(b => {
+        const row = b.spaceId ? bountySpaceRowById.get(b.spaceId) : undefined;
+        return {
+          ...b,
+          spaceLabel: b.spaceId ? (row?.label ?? bountySpaceFallbackLabel(b.spaceId)) : null,
+          spaceImage: b.spaceId ? (row?.image ?? PLACEHOLDER_SPACE_IMAGE) : null,
+        };
+      }),
+    [bounties, bountySpaceRowById]
+  );
 
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
 
@@ -694,7 +774,7 @@ export const ReviewChanges = () => {
             setIsOpen={setIsBountyLinkingOpen}
             selectedBountyIds={selectedBountyIds}
             setSelectedBountyIds={setSelectedBountyIds}
-            bounties={bounties}
+            bounties={bountiesWithSpaceLabels}
           />
         </div>
       </div>

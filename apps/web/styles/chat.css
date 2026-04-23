@@ -1,0 +1,78 @@
+@reference "./styles.css";
+
+/* Bump the chat widget's base font size. Override the Tailwind theme tokens
+   (only used inside the chat widget) so every text-chat / text-chatMedium
+   class renders at 16px instead of 14px. */
+:root {
+  --text-chat: 1rem;
+  --text-chat--line-height: 1.375rem;
+  --text-chatMedium: 1rem;
+  --text-chatMedium--line-height: 1.375rem;
+}
+
+/* Chat assistant markdown prose — every descendant uses text-chat so
+   nothing inherits a smaller size from a parent stylesheet. Weight is
+   the only thing that differentiates headings and bold from body. */
+.prose-chat,
+.prose-chat * {
+  @apply text-chat;
+}
+
+.prose-chat > * + * {
+  @apply mt-2;
+}
+
+.prose-chat strong,
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4,
+.prose-chat h5,
+.prose-chat h6 {
+  @apply font-medium;
+}
+
+.prose-chat ul {
+  @apply list-disc pl-4;
+}
+
+.prose-chat ol {
+  @apply list-decimal pl-4;
+}
+
+.prose-chat li + li {
+  @apply mt-1;
+}
+
+.prose-chat code {
+  @apply rounded bg-grey-01 px-1 py-0.5;
+  /* Monospace glyphs have a larger x-height, so rendering at the same px size
+     reads visually larger. Shrink slightly so inline code balances with body. */
+  font-size: 0.875em;
+}
+
+.prose-chat pre {
+  @apply overflow-x-auto rounded bg-grey-01 p-2;
+  font-size: 0.875em;
+}
+
+.prose-chat table {
+  @apply w-full border-collapse;
+}
+
+.prose-chat thead {
+  @apply border-b border-grey-02;
+}
+
+.prose-chat tr + tr {
+  @apply border-t border-grey-02;
+}
+
+.prose-chat th,
+.prose-chat td {
+  @apply px-2 py-1 text-left align-top;
+}
+
+.prose-chat th {
+  @apply font-medium;
+}

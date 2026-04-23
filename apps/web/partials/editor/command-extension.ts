@@ -3,7 +3,7 @@ import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 
-import { CommandSuggestionItem, commandItems } from './command-items';
+import { CommandSuggestionItem, getCommandItems } from './command-items';
 import { CommandList } from './command-list';
 
 const CommandExtension = Extension.create<{
@@ -33,11 +33,11 @@ const CommandExtension = Extension.create<{
 });
 
 // Inspired By https://github.com/wenerme/wode/blob/b66696f9ba60038e9b86b62e2624aa36e4e91524/apps/demo/src/contents/TipTap/TipTapPageContent.tsx
-export const ConfiguredCommandExtension = CommandExtension.configure({
+export const createCommandExtension = (spaceId: string) => CommandExtension.configure({
   suggestion: {
     items: ({ query }) => {
       // Allows us to filter the suggestion items by typing immediately after opening the command menu
-      return commandItems
+      return getCommandItems(spaceId)
         .filter(v => v.command)
         .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     },

@@ -13,10 +13,15 @@ import { useSpace } from '~/core/hooks/use-space';
 import { getProperty } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Property } from '~/core/types';
+import { DataType, Property } from '~/core/types';
+import { mapPropertyType } from '~/core/utils/property/properties';
+import { GeoNumber } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
@@ -107,6 +112,90 @@ function ResizeHandle({ startWidth, onWidthChange }: { startWidth: number; onWid
   );
 }
 
+function isUrlColumn(col: ColumnConfig): boolean {
+  return col.dataType === 'TEXT' && col.renderableTypeStrict === 'URL';
+}
+
+function renderFormattedPreviewValue(col: ColumnConfig, value: string, spaceId: string): React.ReactNode {
+  if (!value) return <span className="truncate text-tableCell text-text">—</span>;
+
+  if (isUrlColumn(col)) {
+    return <WebUrlField variant="tableCell" spaceId={spaceId} value={value} format={col.format ?? undefined} />;
+  }
+
+  switch (col.dataType) {
+    case 'DATE':
+    case 'TIME':
+    case 'DATETIME':
+      return (
+        <DateField
+          value={value}
+          isEditing={false}
+          variant="tableCell"
+          propertyId={col.propertyId ?? ''}
+          dataType={col.dataType as DataType}
+        />
+      );
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL': {
+      // GeoNumber.format logs console.error on parse failure; only call it for
+      // values that actually parse as numbers to avoid noisy logs during preview.
+      const display = Number.isFinite(Number(value)) ? GeoNumber.format(value, col.format ?? undefined) : value;
+      return <span className="truncate text-tableCell text-text">{display}</span>;
+    }
+    case 'POINT':
+      return <span className="truncate text-tableCell text-text">({value})</span>;
+    default:
+      return <span className="truncate text-tableCell text-text">{value}</span>;
+  }
+}
+
+function formatDataTypeLabel(input: { dataType?: string | null; renderableTypeStrict?: string | null }): string | null {
+  switch (input.renderableTypeStrict) {
+    case 'IMAGE':
+      return 'Image';
+    case 'VIDEO':
+      return 'Video';
+    case 'URL':
+      return 'URL';
+    case 'GEO_LOCATION':
+      return 'Geo location';
+    case 'PLACE':
+      return 'Place';
+    case 'ADDRESS':
+      return 'Address';
+  }
+  switch (input.dataType) {
+    case 'TEXT':
+      return 'Text';
+    case 'RELATION':
+      return 'Relation';
+    case 'INTEGER':
+      return 'Integer';
+    case 'FLOAT':
+      return 'Float';
+    case 'DECIMAL':
+      return 'Decimal';
+    case 'BOOLEAN':
+      return 'Checkbox';
+    case 'DATE':
+      return 'Date';
+    case 'DATETIME':
+      return 'Date & time';
+    case 'TIME':
+      return 'Time';
+    case 'POINT':
+      return 'Point';
+    default:
+      return null;
+  }
+}
+
+function getDataTypeLabel(col: ColumnConfig): string | null {
+  return formatDataTypeLabel(col);
+}
+
 /** CSV-centric column: one column per CSV column so data aligns with headers. */
 export type ColumnConfig = {
   /** CSV column index (0-based) — cell value is always row[csvColumnIndex] */
@@ -125,6 +214,8 @@ export type ColumnConfig = {
   mappingLocked?: boolean;
   /** Renderable type strict — used to detect IMAGE columns for thumbnail rendering */
   renderableTypeStrict?: string | null;
+  /** ICU-style number format pattern, for INTEGER/FLOAT/DECIMAL formatting */
+  format?: string | null;
 };
 
 function PropertyMappingPopover({
@@ -150,7 +241,12 @@ function PropertyMappingPopover({
   return (
     <SelectEntityAsPopover
       trigger={
-        <span className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50">{trigger}</span>
+        <span
+          data-jump-property={csvColumnIndex}
+          className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50"
+        >
+          {trigger}
+        </span>
       }
       spaceId={spaceId}
       relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
@@ -173,22 +269,29 @@ function PropertyMappingPopover({
         onSelectProperty(csvColumnIndex, result.id, property);
       }}
       onCreateEntity={result => {
+        const propertyType = result.renderableType || 'TEXT';
         const propertyId = createProperty({
           name: result.name || '',
-          propertyType: result.renderableType || 'TEXT',
+          propertyType,
         });
 
-        // Resolve the full property from the store after creation
-        const property = store.getProperty(propertyId);
-        if (property) {
-          onCreateProperty?.(csvColumnIndex, propertyId, property);
-        } else {
-          onCreateProperty?.(csvColumnIndex, propertyId, {
-            id: propertyId,
-            name: result.name,
-            dataType: 'TEXT',
-          });
-        }
+        const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
+        const initial: Property = store.getProperty(propertyId) ?? {
+          id: propertyId,
+          name: result.name,
+          dataType: baseDataType,
+          renderableType: renderableTypeId,
+        };
+        // Ensure dataType reflects the just-created property even if the store
+        // hasn't synced yet (fixes relation columns not rendering as relations).
+        const seeded: Property =
+          initial.dataType === baseDataType
+            ? initial
+            : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
+
+        void hydrateRelationValueTypes(seeded).then(hydrated => {
+          onCreateProperty?.(csvColumnIndex, propertyId, hydrated);
+        });
       }}
     />
   );
@@ -239,32 +342,48 @@ type Props = {
   checkboxOverrides?: Record<string, string>;
   /** When true, disable all interactive cells (e.g. while resolving relations) */
   disabled?: boolean;
+  onDeleteColumn?: (csvColumnIndex: number) => void;
 };
 
-export function ImportPreviewTable({
-  dataRows,
-  columns,
-  minHeight = 400,
-  spaceId,
-  onSelectProperty,
-  onCreateProperty,
-  unresolvedLinks = {},
-  onResolveRelationToken,
-  onResolveTypeValue,
-  onResolveEntityRow,
-  onResolveCheckboxValue,
-  hasUnmappedColumns = false,
-  resolvedRows,
-  resolvedEntities,
-  columnMapping: columnMappingProp,
-  typesColumnIndex,
-  selectedType: selectedTypeProp,
-  resolvedTypes: resolvedTypesProp,
-  checkboxOverrides = {},
-  disabled = false,
-}: Props) {
+/** Imperative handle exposed via ref for cycling focus through unmapped/unresolved targets. */
+export type ImportPreviewTableHandle = {
+  jumpToNextUnmappedProperty(): void;
+  jumpToNextUnresolvedCell(): void;
+};
+
+export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Props>(function ImportPreviewTable(
+  {
+    dataRows,
+    columns,
+    minHeight = 400,
+    spaceId,
+    onSelectProperty,
+    onCreateProperty,
+    unresolvedLinks = {},
+    onResolveRelationToken,
+    onResolveTypeValue,
+    onResolveEntityRow,
+    onResolveCheckboxValue,
+    hasUnmappedColumns = false,
+    resolvedRows,
+    resolvedEntities,
+    columnMapping: columnMappingProp,
+    typesColumnIndex,
+    selectedType: selectedTypeProp,
+    resolvedTypes: resolvedTypesProp,
+    checkboxOverrides = {},
+    disabled = false,
+    onDeleteColumn,
+  },
+  forwardedRef
+) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<number, number>>({});
+
+  const columnSignature = React.useMemo(() => columns.map(c => c.csvColumnIndex).join(','), [columns]);
+  React.useEffect(() => {
+    setColumnWidths({});
+  }, [columnSignature]);
 
   const columnLayout = React.useMemo(() => {
     const widths = columns.map(col => columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH);
@@ -286,6 +405,50 @@ export function ImportPreviewTable({
 
   const virtualRows = rowVirtualizer.getVirtualItems();
 
+  const propertyCursorRef = React.useRef(-1);
+  const cellCursorRef = React.useRef(-1);
+
+  React.useImperativeHandle(
+    forwardedRef,
+    () => ({
+      jumpToNextUnmappedProperty: () => {
+        const unmapped = columns.filter(c => c.propertyName === null && !c.mappingLocked).map(c => c.csvColumnIndex);
+        if (unmapped.length === 0) return;
+        propertyCursorRef.current = (propertyCursorRef.current + 1) % unmapped.length;
+        const targetIndex = unmapped[propertyCursorRef.current];
+        const root = tableRef.current;
+        if (!root) return;
+        const el = root.querySelector<HTMLElement>(`[data-jump-property="${targetIndex}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        el.click();
+      },
+      jumpToNextUnresolvedCell: () => {
+        const keys = Object.keys(unresolvedLinks).sort((a, b) => {
+          const [ra, ca] = a.split(':').map(Number);
+          const [rb, cb] = b.split(':').map(Number);
+          return ra - rb || ca - cb;
+        });
+        if (keys.length === 0) return;
+        cellCursorRef.current = (cellCursorRef.current + 1) % keys.length;
+        const key = keys[cellCursorRef.current];
+        const [rowIndex] = key.split(':').map(Number);
+        const root = tableRef.current;
+        if (!root) return;
+        rowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
+        // Defer until the virtualizer renders the row.
+        requestAnimationFrame(() => {
+          const el = root.querySelector<HTMLElement>(`[data-jump-cell="${key}"]`);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          const trigger = el.querySelector<HTMLElement>('button');
+          trigger?.click();
+        });
+      },
+    }),
+    [columns, unresolvedLinks, rowVirtualizer]
+  );
+
   if (columns.length === 0) {
     return null;
   }
@@ -293,284 +456,134 @@ export function ImportPreviewTable({
   const showEmptyState = hasUnmappedColumns && dataRows.length > 0;
 
   return (
-    <div
-      ref={tableRef}
-      className="w-full overflow-auto rounded-lg border border-grey-02 bg-white"
-      style={{ minHeight }}
-    >
-      <div className="shadow-sm sticky top-0 z-10 bg-white">
-        <div
-          className="grid border-b border-grey-02 bg-grey-01"
-          style={{
-            minHeight: HEADER_HEIGHT,
-            minWidth: columnLayout.totalWidth,
-            gridTemplateColumns: columnLayout.template,
-          }}
-        >
-          {columns.map(col => (
-            <div
-              key={col.csvColumnIndex}
-              className="relative flex min-h-[56px] flex-col justify-center border-r border-grey-02 bg-grey-01 px-3 py-2"
-            >
-              <Text variant="metadata" className="truncate font-semibold text-text">
-                {col.headerLabel}
-              </Text>
-              {col.propertyName !== null ? (
-                onSelectProperty && !col.mappingLocked ? (
+    <div className="relative">
+      <div
+        ref={tableRef}
+        className="w-full overflow-auto rounded-lg border border-grey-02 bg-white"
+        style={{ minHeight }}
+      >
+        <div className="shadow-sm sticky top-0 z-10 bg-white">
+          <div
+            className="grid border-b border-grey-02 bg-grey-01"
+            style={{
+              minHeight: HEADER_HEIGHT,
+              minWidth: columnLayout.totalWidth,
+              gridTemplateColumns: columnLayout.template,
+            }}
+          >
+            {columns.map(col => (
+              <div
+                key={col.csvColumnIndex}
+                className="group relative flex min-h-[56px] flex-col justify-center border-r border-grey-02 bg-grey-01 px-3 py-2"
+              >
+                {onDeleteColumn && !disabled && (
+                  <button
+                    type="button"
+                    className="shadow-sm absolute top-1 right-6 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-transparent bg-white/90 text-grey-04 opacity-0 transition-opacity group-hover:opacity-100 hover:border-grey-02 hover:text-text focus-visible:opacity-100"
+                    aria-label={`Remove column ${col.headerLabel}`}
+                    onClick={e => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDeleteColumn(col.csvColumnIndex);
+                    }}
+                  >
+                    <CloseSmall />
+                  </button>
+                )}
+                <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-text">{col.headerLabel}</span>
+                {col.propertyName !== null ? (
+                  onSelectProperty && !col.mappingLocked ? (
+                    <PropertyMappingPopover
+                      spaceId={spaceId}
+                      csvColumnIndex={col.csvColumnIndex}
+                      onSelectProperty={onSelectProperty}
+                      onCreateProperty={onCreateProperty}
+                      initialQuery={col.headerLabel}
+                      selectedEntityId={col.propertyId ?? undefined}
+                      trigger={
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <PropertySpaceIcon propertyId={col.propertyId} />
+                          <Text variant="metadata" className="truncate text-purple">
+                            {col.propertyName}
+                            {getDataTypeLabel(col) && <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>}
+                          </Text>
+                        </span>
+                      }
+                    />
+                  ) : (
+                    <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                      <PropertySpaceIcon propertyId={col.propertyId} />
+                      <Text variant="metadata" className="truncate text-purple">
+                        {col.propertyName}
+                        {getDataTypeLabel(col) && <span className="text-grey-04"> ({getDataTypeLabel(col)})</span>}
+                      </Text>
+                    </span>
+                  )
+                ) : onSelectProperty ? (
                   <PropertyMappingPopover
                     spaceId={spaceId}
                     csvColumnIndex={col.csvColumnIndex}
                     onSelectProperty={onSelectProperty}
                     onCreateProperty={onCreateProperty}
                     initialQuery={col.headerLabel}
-                    selectedEntityId={col.propertyId ?? undefined}
                     trigger={
                       <span className="flex items-center gap-1.5">
-                        <PropertySpaceIcon propertyId={col.propertyId} />
-                        <Text variant="metadata" className="truncate text-purple">
-                          {col.propertyName}
+                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
+                          !
+                        </span>
+                        <Text variant="metadata" className="text-text">
+                          Needs mapping
                         </Text>
                       </span>
                     }
                   />
                 ) : (
                   <span className="mt-0.5 flex items-center gap-1.5">
-                    <PropertySpaceIcon propertyId={col.propertyId} />
-                    <Text variant="metadata" className="truncate text-purple">
-                      {col.propertyName}
+                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
+                      !
+                    </span>
+                    <Text variant="metadata" className="text-text">
+                      Needs mapping
                     </Text>
                   </span>
-                )
-              ) : onSelectProperty ? (
-                <PropertyMappingPopover
-                  spaceId={spaceId}
-                  csvColumnIndex={col.csvColumnIndex}
-                  onSelectProperty={onSelectProperty}
-                  onCreateProperty={onCreateProperty}
-                  initialQuery={col.headerLabel}
-                  trigger={
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                        !
-                      </span>
-                      <Text variant="metadata" className="text-text">
-                        Needs mapping
-                      </Text>
-                    </span>
-                  }
+                )}
+                <ResizeHandle
+                  startWidth={columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH}
+                  onWidthChange={width => handleColumnWidthChange(col.csvColumnIndex, width)}
                 />
-              ) : (
-                <span className="mt-0.5 flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                    !
-                  </span>
-                  <Text variant="metadata" className="text-text">
-                    Needs mapping
-                  </Text>
-                </span>
-              )}
-              <ResizeHandle
-                startWidth={columnWidths[col.csvColumnIndex] ?? DEFAULT_COLUMN_WIDTH}
-                onWidthChange={width => handleColumnWidthChange(col.csvColumnIndex, width)}
-              />
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {showEmptyState ? (
-        <div className="sticky left-0 flex items-center justify-center py-20">
-          <Text variant="metadata" className="text-grey-04">
-            Your data will appear once you have mapped all of your column properties
-          </Text>
-        </div>
-      ) : (
-        <div
-          style={{
-            height: rowVirtualizer.getTotalSize(),
-            position: 'relative',
-            minWidth: columnLayout.totalWidth,
-            ...(disabled ? { pointerEvents: 'none', opacity: 0.6 } : {}),
-          }}
-        >
-          {virtualRows.map(virtualRow => {
-            const row = dataRows[virtualRow.index];
-            return (
-              <div
-                key={virtualRow.key}
-                data-index={virtualRow.index}
-                ref={node => rowVirtualizer.measureElement(node)}
-                className="absolute top-0 left-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
-                style={{
-                  transform: `translateY(${virtualRow.start}px)`,
-                  width: '100%',
-                  zIndex: 1,
-                }}
-              >
+        {showEmptyState ? (
+          <>
+            <div style={{ minWidth: columnLayout.totalWidth }}>
+              {dataRows.slice(0, 7).map((row, rowIndex) => (
                 <div
-                  className="grid"
-                  style={{
-                    minWidth: columnLayout.totalWidth,
-                    gridTemplateColumns: columnLayout.template,
-                  }}
+                  key={rowIndex}
+                  className="border-b border-grey-02 bg-grey-01/50"
+                  style={{ minWidth: columnLayout.totalWidth }}
                 >
-                  {columns.map(col => {
-                    const value = row[col.csvColumnIndex] ?? '';
-                    const isRelation = col.dataType === 'RELATION';
-                    const isImageColumn = col.renderableTypeStrict === 'IMAGE';
-                    const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
-                    const unresolvedSet = cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
-                    const resolvedRowEntity = resolvedRows?.get(virtualRow.index);
-                    const relationPropertyId = columnMappingProp?.[col.csvColumnIndex];
-
-                    // Derive the row's type for entity-row resolution filtering
-                    const rowTypeForFilter: { id: string; name: string | null }[] | undefined = (() => {
-                      if (typesColumnIndex !== undefined && resolvedTypesProp) {
-                        const rawType = (row[typesColumnIndex] ?? '').trim();
-                        const resolved = rawType ? resolvedTypesProp.get(rawType) : undefined;
-                        return resolved ? [{ id: resolved.id, name: resolved.name }] : undefined;
-                      }
-                      return selectedTypeProp ? [{ id: selectedTypeProp.id, name: selectedTypeProp.name }] : undefined;
-                    })();
-
-                    return (
-                      <div
-                        key={`${virtualRow.index}-${col.csvColumnIndex}`}
-                        className="overflow-hidden border-r border-grey-02 px-4 py-2"
-                      >
-                        {col.dataType === 'BOOLEAN' && value ? (
-                          (() => {
-                            const isUnparseable = cellFlag?.kind === 'checkbox';
-                            const overrideKey = `${virtualRow.index}:${col.csvColumnIndex}`;
-                            const override = checkboxOverrides[overrideKey];
-                            const checkboxResult = parseCheckboxValue(value);
-                            const checked =
-                              override !== undefined
-                                ? override === '1'
-                                : checkboxResult.parsed
-                                  ? checkboxResult.value
-                                  : null;
-                            return (
-                              <span className="inline-flex items-center gap-2">
-                                {isUnparseable && <WarningIcon />}
-                                <Checkbox
-                                  checked={checked}
-                                  onChange={() => {
-                                    if (onResolveCheckboxValue) {
-                                      onResolveCheckboxValue(
-                                        virtualRow.index,
-                                        col.csvColumnIndex,
-                                        !checked ? '1' : '0'
-                                      );
-                                    }
-                                  }}
-                                />
-                                {isUnparseable && cellFlag?.kind === 'checkbox' && (
-                                  <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
-                                )}
-                              </span>
-                            );
-                          })()
-                        ) : isImageColumn && cellFlag?.kind === 'image-invalid' ? (
-                          <span className="inline-flex items-center gap-1 text-metadata text-red-01">
-                            <WarningIcon />
-                            <span className="truncate">Invalid image URL: {cellFlag.rawValue}</span>
-                          </span>
-                        ) : isImageColumn && cellFlag?.kind === 'image-error' ? (
-                          <span className="inline-flex items-center gap-1 text-metadata text-red-01">
-                            <WarningIcon />
-                            <span className="truncate">Upload failed: {cellFlag.error}</span>
-                          </span>
-                        ) : isImageColumn && value && isImageUrl(value) ? (
-                          <div className="overflow-hidden rounded" style={{ width: 60 }}>
-                            <NativeGeoImage
-                              value={value}
-                              alt={`Image for ${col.propertyName ?? 'column'}`}
-                              className="h-auto w-[60px] object-cover"
-                            />
-                          </div>
-                        ) : isRelation && value ? (
-                          <div className="flex flex-wrap items-center gap-2 overflow-hidden">
-                            {splitRelationCell(value).map((part, i) => {
-                              if (unresolvedSet?.has(part) && onResolveRelationToken) {
-                                return (
-                                  <SelectEntityAsPopover
-                                    key={i}
-                                    trigger={
-                                      <button
-                                        type="button"
-                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
-                                      >
-                                        <WarningIcon />
-                                        <span>{part}</span>
-                                        <ChipSeparator />
-                                      </button>
-                                    }
-                                    spaceId={spaceId}
-                                    relationValueTypes={col.relationValueTypes}
-                                    placeholder="Find or create entity..."
-                                    advanced={false}
-                                    showIDs={false}
-                                    initialQuery={part}
-                                    onCreateEntity={() => undefined}
-                                    onDone={(result, fromCreateFn) =>
-                                      onResolveRelationToken(
-                                        col.csvColumnIndex,
-                                        part,
-                                        {
-                                          id: result.id,
-                                          name: result.name ?? part,
-                                        },
-                                        fromCreateFn,
-                                        col.relationValueTypes?.[0]
-                                      )
-                                    }
-                                  />
-                                );
-                              }
-
-                              if (onResolveRelationToken) {
-                                return (
-                                  <SelectEntityAsPopover
-                                    key={i}
-                                    trigger={
-                                      <button
-                                        type="button"
-                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
-                                      >
-                                        <span>{part}</span>
-                                        <ChipSeparator />
-                                      </button>
-                                    }
-                                    spaceId={spaceId}
-                                    relationValueTypes={col.relationValueTypes}
-                                    placeholder="Find or create entity..."
-                                    advanced={false}
-                                    showIDs={false}
-                                    initialQuery={part}
-                                    selectedEntityId={
-                                      relationPropertyId
-                                        ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id
-                                        : undefined
-                                    }
-                                    onCreateEntity={() => undefined}
-                                    onDone={(result, fromCreateFn) =>
-                                      onResolveRelationToken(
-                                        col.csvColumnIndex,
-                                        part,
-                                        {
-                                          id: result.id,
-                                          name: result.name ?? part,
-                                        },
-                                        fromCreateFn,
-                                        col.relationValueTypes?.[0]
-                                      )
-                                    }
-                                  />
-                                );
-                              }
-
-                              return (
+                  <div
+                    className="grid"
+                    style={{
+                      minWidth: columnLayout.totalWidth,
+                      gridTemplateColumns: columnLayout.template,
+                    }}
+                  >
+                    {columns.map(col => {
+                      const rawValue = row[col.csvColumnIndex] ?? '';
+                      const isImageRenderableCol = col.renderableTypeStrict === 'IMAGE';
+                      const isRelationCol = col.dataType === 'RELATION' && !isImageRenderableCol;
+                      return (
+                        <div
+                          key={`preview-${rowIndex}-${col.csvColumnIndex}`}
+                          className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                        >
+                          {isRelationCol && rawValue ? (
+                            <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                              {splitRelationCell(rawValue).map((part, i) => (
                                 <span
                                   key={i}
                                   className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text"
@@ -578,21 +591,321 @@ export function ImportPreviewTable({
                                   <span>{part}</span>
                                   <ChipSeparator />
                                 </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="truncate text-metadata text-text">
+                              {renderFormattedPreviewValue(col, rawValue, spaceId)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              position: 'relative',
+              minWidth: columnLayout.totalWidth,
+              ...(disabled ? { pointerEvents: 'none', opacity: 0.6 } : {}),
+            }}
+          >
+            {virtualRows.map(virtualRow => {
+              const row = dataRows[virtualRow.index];
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={node => rowVirtualizer.measureElement(node)}
+                  className="absolute top-0 left-0 border-b border-grey-02 bg-grey-01/50 hover:bg-grey-01"
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`,
+                    width: '100%',
+                    zIndex: 1,
+                  }}
+                >
+                  <div
+                    className="grid"
+                    style={{
+                      minWidth: columnLayout.totalWidth,
+                      gridTemplateColumns: columnLayout.template,
+                    }}
+                  >
+                    {columns.map(col => {
+                      const value = row[col.csvColumnIndex] ?? '';
+                      const isTypesSourceCol =
+                        typesColumnIndex !== undefined && col.csvColumnIndex === typesColumnIndex;
+                      // The types source column is marked dataType=RELATION so labels/preview pills work
+                      // in the pre-mapping state, but here we want the dedicated type-resolution UI to
+                      // handle it, not the generic relation-chip branch.
+                      const isRelation = col.dataType === 'RELATION' && !isTypesSourceCol;
+                      const isImageColumn = col.renderableTypeStrict === 'IMAGE';
+                      const cellFlag = unresolvedLinks[`${virtualRow.index}:${col.csvColumnIndex}`];
+                      const unresolvedSet = cellFlag?.kind === 'relation' ? new Set(cellFlag.unresolvedValues) : null;
+                      const resolvedRowEntity = resolvedRows?.get(virtualRow.index);
+                      const relationPropertyId = columnMappingProp?.[col.csvColumnIndex];
+
+                      // Derive the row's type for entity-row resolution filtering
+                      const rowTypeForFilter: { id: string; name: string | null }[] | undefined = (() => {
+                        if (typesColumnIndex !== undefined && resolvedTypesProp) {
+                          const rawType = (row[typesColumnIndex] ?? '').trim();
+                          const resolved = rawType ? resolvedTypesProp.get(rawType) : undefined;
+                          return resolved ? [{ id: resolved.id, name: resolved.name }] : undefined;
+                        }
+                        return selectedTypeProp
+                          ? [{ id: selectedTypeProp.id, name: selectedTypeProp.name }]
+                          : undefined;
+                      })();
+
+                      const cellKey = `${virtualRow.index}:${col.csvColumnIndex}`;
+                      return (
+                        <div
+                          key={`${virtualRow.index}-${col.csvColumnIndex}`}
+                          data-jump-cell={cellFlag ? cellKey : undefined}
+                          className="overflow-hidden border-r border-grey-02 px-4 py-2"
+                        >
+                          {col.dataType === 'BOOLEAN' && value ? (
+                            (() => {
+                              const isUnparseable = cellFlag?.kind === 'checkbox';
+                              const overrideKey = `${virtualRow.index}:${col.csvColumnIndex}`;
+                              const override = checkboxOverrides[overrideKey];
+                              const checkboxResult = parseCheckboxValue(value);
+                              const checked =
+                                override !== undefined
+                                  ? override === '1'
+                                  : checkboxResult.parsed
+                                    ? checkboxResult.value
+                                    : null;
+                              return (
+                                <span className="inline-flex items-center gap-2">
+                                  {isUnparseable && <WarningIcon />}
+                                  <Checkbox
+                                    checked={checked}
+                                    onChange={() => {
+                                      if (onResolveCheckboxValue) {
+                                        onResolveCheckboxValue(
+                                          virtualRow.index,
+                                          col.csvColumnIndex,
+                                          !checked ? '1' : '0'
+                                        );
+                                      }
+                                    }}
+                                  />
+                                  {isUnparseable && cellFlag?.kind === 'checkbox' && (
+                                    <span className="truncate text-metadata text-red-01">{cellFlag.rawValue}</span>
+                                  )}
+                                </span>
                               );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="flex w-full min-w-0 items-start gap-2">
-                            {cellFlag?.kind === 'type' && onResolveTypeValue ? (
-                              <>
+                            })()
+                          ) : isImageColumn && cellFlag?.kind === 'image-invalid' ? (
+                            <span className="inline-flex items-center gap-1 text-metadata text-red-01">
+                              <WarningIcon />
+                              <span className="truncate">Invalid image URL: {cellFlag.rawValue}</span>
+                            </span>
+                          ) : isImageColumn && cellFlag?.kind === 'image-error' ? (
+                            <span className="inline-flex items-center gap-1 text-metadata text-red-01">
+                              <WarningIcon />
+                              <span className="truncate">Upload failed: {cellFlag.error}</span>
+                            </span>
+                          ) : isImageColumn && value && isImageUrl(value) ? (
+                            <div className="overflow-hidden rounded" style={{ width: 60 }}>
+                              <NativeGeoImage
+                                value={value}
+                                alt={`Image for ${col.propertyName ?? 'column'}`}
+                                className="h-auto w-[60px] object-cover"
+                              />
+                            </div>
+                          ) : isRelation && value ? (
+                            <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                              {splitRelationCell(value).map((part, i) => {
+                                if (unresolvedSet?.has(part) && onResolveRelationToken) {
+                                  return (
+                                    <SelectEntityAsPopover
+                                      key={i}
+                                      trigger={
+                                        <button
+                                          type="button"
+                                          className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                        >
+                                          <WarningIcon />
+                                          <span>{part}</span>
+                                          <ChipSeparator />
+                                        </button>
+                                      }
+                                      spaceId={spaceId}
+                                      relationValueTypes={col.relationValueTypes}
+                                      placeholder="Find or create entity..."
+                                      advanced={false}
+                                      showIDs={false}
+                                      initialQuery={part}
+                                      onCreateEntity={() => undefined}
+                                      onDone={(result, fromCreateFn) =>
+                                        onResolveRelationToken(
+                                          col.csvColumnIndex,
+                                          part,
+                                          {
+                                            id: result.id,
+                                            name: result.name ?? part,
+                                          },
+                                          fromCreateFn,
+                                          col.relationValueTypes?.[0]
+                                        )
+                                      }
+                                    />
+                                  );
+                                }
+
+                                if (onResolveRelationToken) {
+                                  return (
+                                    <SelectEntityAsPopover
+                                      key={i}
+                                      trigger={
+                                        <button
+                                          type="button"
+                                          className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                        >
+                                          <span>{part}</span>
+                                          <ChipSeparator />
+                                        </button>
+                                      }
+                                      spaceId={spaceId}
+                                      relationValueTypes={col.relationValueTypes}
+                                      placeholder="Find or create entity..."
+                                      advanced={false}
+                                      showIDs={false}
+                                      initialQuery={part}
+                                      selectedEntityId={
+                                        relationPropertyId
+                                          ? resolvedEntities?.get(`${relationPropertyId}::${part}`)?.id
+                                          : undefined
+                                      }
+                                      onCreateEntity={() => undefined}
+                                      onDone={(result, fromCreateFn) =>
+                                        onResolveRelationToken(
+                                          col.csvColumnIndex,
+                                          part,
+                                          {
+                                            id: result.id,
+                                            name: result.name ?? part,
+                                          },
+                                          fromCreateFn,
+                                          col.relationValueTypes?.[0]
+                                        )
+                                      }
+                                    />
+                                  );
+                                }
+
+                                return (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text"
+                                  >
+                                    <span>{part}</span>
+                                    <ChipSeparator />
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex w-full min-w-0 items-start gap-2">
+                              {cellFlag?.kind === 'type' && onResolveTypeValue ? (
+                                <>
+                                  <SelectEntityAsPopover
+                                    trigger={
+                                      <button
+                                        type="button"
+                                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
+                                      >
+                                        <WarningIcon />
+                                        <span>{value || cellFlag.rawType}</span>
+                                        <ChipSeparator />
+                                      </button>
+                                    }
+                                    spaceId={spaceId}
+                                    placeholder="Find or create type..."
+                                    advanced={false}
+                                    showIDs={false}
+                                    initialQuery={value || cellFlag.rawType}
+                                    onCreateEntity={() => undefined}
+                                    onDone={(result, fromCreateFn) =>
+                                      onResolveTypeValue(
+                                        cellFlag.rawType,
+                                        {
+                                          id: result.id,
+                                          name: result.name ?? cellFlag.rawType,
+                                        },
+                                        fromCreateFn
+                                      )
+                                    }
+                                  />
+                                </>
+                              ) : cellFlag?.kind === 'entity' && onResolveEntityRow ? (
+                                <SelectEntityAsPopover
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
+                                    >
+                                      <StatusDot />
+                                      <span>{value || '—'}</span>
+                                    </button>
+                                  }
+                                  spaceId={spaceId}
+                                  placeholder="Find or create entity..."
+                                  advanced={false}
+                                  showIDs={false}
+                                  initialQuery={value}
+                                  relationValueTypes={rowTypeForFilter}
+                                  onCreateEntity={() => undefined}
+                                  onDone={result =>
+                                    onResolveEntityRow(virtualRow.index, {
+                                      id: result.id,
+                                      name: result.name ?? value,
+                                    })
+                                  }
+                                />
+                              ) : col.propertyId === SystemIds.NAME_PROPERTY && onResolveEntityRow ? (
+                                <SelectEntityAsPopover
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
+                                    >
+                                      <span>{value || '—'}</span>
+                                    </button>
+                                  }
+                                  spaceId={spaceId}
+                                  placeholder="Find or create entity..."
+                                  advanced={false}
+                                  showIDs={false}
+                                  initialQuery={value}
+                                  selectedEntityId={resolvedRowEntity?.entityId}
+                                  relationValueTypes={rowTypeForFilter}
+                                  onCreateEntity={() => undefined}
+                                  onDone={result =>
+                                    onResolveEntityRow(virtualRow.index, {
+                                      id: result.id,
+                                      name: result.name ?? value,
+                                    })
+                                  }
+                                />
+                              ) : typesColumnIndex !== undefined &&
+                                col.csvColumnIndex === typesColumnIndex &&
+                                value &&
+                                onResolveTypeValue ? (
                                 <SelectEntityAsPopover
                                   trigger={
                                     <button
                                       type="button"
                                       className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
                                     >
-                                      <WarningIcon />
-                                      <span>{value || cellFlag.rawType}</span>
+                                      <span>{value}</span>
                                       <ChipSeparator />
                                     </button>
                                   }
@@ -600,118 +913,42 @@ export function ImportPreviewTable({
                                   placeholder="Find or create type..."
                                   advanced={false}
                                   showIDs={false}
-                                  initialQuery={value || cellFlag.rawType}
+                                  initialQuery={value}
+                                  selectedEntityId={resolvedTypesProp?.get(value.trim())?.id}
                                   onCreateEntity={() => undefined}
                                   onDone={(result, fromCreateFn) =>
                                     onResolveTypeValue(
-                                      cellFlag.rawType,
+                                      value,
                                       {
                                         id: result.id,
-                                        name: result.name ?? cellFlag.rawType,
+                                        name: result.name ?? value,
                                       },
                                       fromCreateFn
                                     )
                                   }
                                 />
-                              </>
-                            ) : cellFlag?.kind === 'entity' && onResolveEntityRow ? (
-                              <SelectEntityAsPopover
-                                trigger={
-                                  <button
-                                    type="button"
-                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
-                                  >
-                                    <StatusDot />
-                                    <span>{value || '—'}</span>
-                                  </button>
-                                }
-                                spaceId={spaceId}
-                                placeholder="Find or create entity..."
-                                advanced={false}
-                                showIDs={false}
-                                initialQuery={value}
-                                relationValueTypes={rowTypeForFilter}
-                                onCreateEntity={() => undefined}
-                                onDone={result =>
-                                  onResolveEntityRow(virtualRow.index, {
-                                    id: result.id,
-                                    name: result.name ?? value,
-                                  })
-                                }
-                              />
-                            ) : col.propertyId === SystemIds.NAME_PROPERTY && onResolveEntityRow ? (
-                              <SelectEntityAsPopover
-                                trigger={
-                                  <button
-                                    type="button"
-                                    className="inline-flex cursor-pointer items-center gap-1.5 text-tableCell text-text hover:underline"
-                                  >
-                                    <span>{value || '—'}</span>
-                                  </button>
-                                }
-                                spaceId={spaceId}
-                                placeholder="Find or create entity..."
-                                advanced={false}
-                                showIDs={false}
-                                initialQuery={value}
-                                selectedEntityId={resolvedRowEntity?.entityId}
-                                relationValueTypes={rowTypeForFilter}
-                                onCreateEntity={() => undefined}
-                                onDone={result =>
-                                  onResolveEntityRow(virtualRow.index, {
-                                    id: result.id,
-                                    name: result.name ?? value,
-                                  })
-                                }
-                              />
-                            ) : typesColumnIndex !== undefined &&
-                              col.csvColumnIndex === typesColumnIndex &&
-                              value &&
-                              onResolveTypeValue ? (
-                              <SelectEntityAsPopover
-                                trigger={
-                                  <button
-                                    type="button"
-                                    className="inline-flex cursor-pointer items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata text-text hover:bg-grey-01"
-                                  >
-                                    <span>{value}</span>
-                                    <ChipSeparator />
-                                  </button>
-                                }
-                                spaceId={spaceId}
-                                placeholder="Find or create type..."
-                                advanced={false}
-                                showIDs={false}
-                                initialQuery={value}
-                                selectedEntityId={resolvedTypesProp?.get(value.trim())?.id}
-                                onCreateEntity={() => undefined}
-                                onDone={(result, fromCreateFn) =>
-                                  onResolveTypeValue(
-                                    value,
-                                    {
-                                      id: result.id,
-                                      name: result.name ?? value,
-                                    },
-                                    fromCreateFn
-                                  )
-                                }
-                              />
-                            ) : (
-                              <Text variant="tableCell" className="truncate">
-                                {value || '—'}
-                              </Text>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                              ) : (
+                                renderFormattedPreviewValue(col, value, spaceId)
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {showEmptyState && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-48 items-end justify-center rounded-b-lg bg-linear-to-b from-white/0 via-white/80 to-white px-4 pb-8">
+          <Text variant="metadata" className="text-center text-grey-04">
+            Map your remaining properties or skip to continue
+          </Text>
         </div>
       )}
     </div>
   );
-}
+});

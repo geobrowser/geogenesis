@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
-import { startTransition, useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -20,8 +20,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { ResultsList } from '~/design-system/autocomplete/results-list';
-import { ResultItem } from '~/design-system/autocomplete/results-list';
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -95,8 +94,8 @@ export const SelectEntity = ({
   inputClassName = '',
   withSelectSpace = true,
   withSearchIcon = false,
-  advanced = true,
   autoFocus = false,
+  advanced = true,
   showIDs = true,
   initialQuery,
   selectedEntityId,
@@ -123,6 +122,10 @@ export const SelectEntity = ({
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
 
+  const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
+
+  const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
+
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
   const filterByTypes = typeFilter
@@ -136,6 +139,20 @@ export const SelectEntity = ({
     filterBySpace,
     initialQuery,
   });
+
+  // Auto focus input when component mounts
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      // Add small delay to ensure the component is fully rendered and visible
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus]);
 
   if (query === '' && result !== null) {
     startTransition(() => {
@@ -170,13 +187,14 @@ export const SelectEntity = ({
         onCreateEntity({
           id: newEntityId,
           name: query,
+          space: spaceId,
           renderableType: isCreatingProperty ? renderableType : undefined,
         }) ?? newEntityId;
     }
 
-    // Always set the name – duplicate writes are idempotent upserts.
+    // Create new entity with name and types using internal id
     storage.entities.name.set(newEntityId, spaceId, query);
-    onDone?.({ id: newEntityId, name: query }, true);
+    onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
     setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
@@ -233,6 +251,22 @@ export const SelectEntity = ({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hasFocusedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!popoverElement) return;
+
+    const updateClipPath = () => {
+      const side = popoverElement.getAttribute('data-side');
+      setClipPath(side === 'top' ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+    };
+
+    updateClipPath(); // initial check
+
+    const observer = new MutationObserver(updateClipPath);
+    observer.observe(popoverElement, { attributes: true, attributeFilter: ['data-side'] });
+
+    return () => observer.disconnect();
+  }, [popoverElement]);
 
   const inputCallbackRef = React.useCallback(
     (node: HTMLInputElement | null) => {
@@ -299,7 +333,10 @@ export const SelectEntity = ({
         {query && (
           <Popover.Portal>
             <Popover.Content
-              ref={popoverRef}
+              ref={(node) => {
+                setPopoverElement(node);
+                popoverRef.current = node;
+              }}
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -316,6 +353,7 @@ export const SelectEntity = ({
                     width === 'clamped' ? 'w-[400px]' : '-mr-px',
                     withSearchIcon && 'rounded-t-none'
                   )}
+                  style={{ clipPath }}
                 >
                   {advanced && (
                     <div className="w-full">
@@ -593,7 +631,7 @@ export const SelectEntity = ({
                     </ResizableContainer>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between border-b border-divider bg-white">
+                      <div className="flex items-center justify-between border-b border-grey-02 bg-white">
                         <div className="w-1/3">
                           <button onClick={() => setResult(null)} className="p-2">
                             <ArrowLeft color="grey-04" />
@@ -716,7 +754,7 @@ const containerStyles = cva('relative', {
       full: 'w-full',
     },
     floating: {
-      true: 'rounded-md border border-divider bg-white shadow-lg',
+      true: 'rounded-md border border-grey-02 bg-white shadow-lg',
     },
     isQueried: {
       true: 'rounded-b-none',

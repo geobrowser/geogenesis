@@ -2,6 +2,7 @@ import { cache } from 'react';
 
 import { Effect } from 'effect';
 
+import { isValidUUID } from '~/core/io/rest/validation';
 import { fetchProfile } from '~/core/io/subgraph';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 
@@ -10,7 +11,7 @@ export const getHasRequestedSpaceMembership = cache(
     if (!connectedAddress) return false;
 
     const profile = await Effect.runPromise(fetchProfile(connectedAddress));
-    if (!profile?.spaceId) return false;
+    if (!profile?.spaceId || !isValidUUID(profile.spaceId)) return false;
 
     return hasActiveMemberProposal(spaceId, profile.spaceId);
   }

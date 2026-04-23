@@ -23,8 +23,8 @@
   "author": "Byron Guina",
   "license": "ISC",
   "dependencies": {
-    "@privy-io/react-auth": "^3.14.1",
-    "@privy-io/wagmi": "^4.0.2",
+    "@privy-io/react-auth": "^3.21.0",
+    "@privy-io/wagmi": "^4.0.4",
     "@rhinestone/module-sdk": "^0.4.0",
     "permissionless": "^0.3.4",
     "viem": "^2.47.10",

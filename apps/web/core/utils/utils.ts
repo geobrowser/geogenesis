@@ -15,6 +15,7 @@ import { Entities } from './entity';
 
 export const NavUtils = {
   toRoot: () => '/root',
+  toExplore: () => '/explore',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),

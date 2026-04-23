@@ -22,15 +22,27 @@ describe('markdown-render', () => {
   });
 
   describe('renderMarkdownDocument', () => {
-    it('renders safe links as anchors', () => {
+    it('renders safe links as anchor tags', () => {
       const html = renderToStaticMarkup(<>{renderMarkdownDocument('[safe](https://example.com)')}</>);
+      expect(html).toContain('<a');
+      expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="https://example.com"');
+    });
+
+    it('renders graph links as anchor tags', () => {
+      const html = renderToStaticMarkup(<>{renderMarkdownDocument('[entity](graph://foo)')}</>);
+      expect(html).toContain('<a');
+      expect(html).toContain('class="entity-link-valid"');
+      expect(html).toContain('href="graph://foo"');
     });
 
     it('marks unsafe links as invalid instead of keeping href', () => {
       const html = renderToStaticMarkup(<>{renderMarkdownDocument('[unsafe](ftp://example.com)')}</>);
+      expect(html).toContain('<span');
+      expect(html).toContain('class="entity-link-invalid"');
       expect(html).toContain('data-invalid-link="true"');
       expect(html).not.toContain('href="ftp://example.com"');
+      expect(html).not.toContain('<a');
     });
   });
 });

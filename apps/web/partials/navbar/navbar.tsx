@@ -11,9 +11,10 @@ import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
 interface Props {
   onSearchClick: () => void;
+  hideLogo?: boolean;
 }
 
-export function Navbar({ onSearchClick }: Props) {
+export function Navbar({ onSearchClick, hideLogo = false }: Props) {
   return (
     <nav
       className={cx(
@@ -22,9 +23,11 @@ export function Navbar({ onSearchClick }: Props) {
       )}
     >
       <div className="flex items-center gap-8 md:gap-4">
-        <Link href={NavUtils.toRoot()}>
-          <GeoLogoLarge />
-        </Link>
+        {hideLogo ? null : (
+          <Link href={NavUtils.toRoot()}>
+            <GeoLogoLarge />
+          </Link>
+        )}
         <NavbarSpaceMetadata />
       </div>
 

@@ -346,6 +346,7 @@ export const entityQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      updatedAt
 
       types {
         id
@@ -565,6 +566,108 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
       types(filter: { spaceIds: { anyEqualTo: $spaceId } }) {
         id
         name
+      }
+    }
+  }
+`);
+
+export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
+  query EntityCommentReplyBacklinksPage(
+    $id: UUID!
+    $replyToTypeId: UUID!
+    $commentTypeId: UUID!
+    $first: Int!
+    $offset: Int!
+  ) {
+    entity(id: $id) {
+      backlinksList(
+        first: $first
+        offset: $offset
+        filter: {
+          typeId: { is: $replyToTypeId }
+          fromEntity: { typeIds: { overlaps: [$commentTypeId] } }
+        }
+      ) {
+        fromEntity {
+          id
+        }
+      }
+    }
+  }
+`);
+
+export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForComments($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      name
+      description
+      spaceIds
+      updatedAt
+
+      types {
+        id
+        name
+      }
+
+      valuesList {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        text
+        integer
+        float
+        point
+        boolean
+        time
+        language
+        unit
+        datetime
+        date
+        decimal
+        bytes
+        schedule
+      }
+
+      relationsList {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            spaceId
+            propertyId
+            text
+            integer
+            float
+            point
+            boolean
+            time
+            datetime
+            date
+            decimal
+            bytes
+            schedule
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+        }
       }
     }
   }

@@ -48,7 +48,7 @@ export async function Component({
 
   return (
     <>
-      <div className="mx-auto max-w-[880px]">
+      <div className="mx-auto w-full max-w-[880px]">
         {header}
         <PersonalHomeDashboard
           governanceTab={governanceTab}
