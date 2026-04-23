@@ -185,22 +185,25 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
     setSessionNewIds((prev: string[]) => (prev.includes(id) ? prev : [id, ...prev]));
   }, []);
 
+  // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
+  // in the cache immediately (via useCreateComment) with a "Publishing…" tag; sessionNewIds
+  // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
-    async (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>): Promise<boolean> => {
-      const id = await createComment({
+    (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
+      void createComment({
         text,
         targetSpaceId: spaceId,
         ancestorComments,
+        onOptimistic: id => markSessionNew(id),
       });
-      if (id) markSessionNew(id);
-      return id != null;
     },
     [createComment, spaceId, markSessionNew]
   );
 
   const handleEditComment = React.useCallback(
-    (commentId: string, commentSpaceId: string, newText: string): Promise<boolean> =>
-      editComment({ commentId, commentSpaceId, newText }),
+    (commentId: string, commentSpaceId: string, newText: string) => {
+      void editComment({ commentId, commentSpaceId, newText });
+    },
     [editComment]
   );
 
@@ -339,7 +342,7 @@ function TopLevelCommentInput({
   onSubmit,
   isCreating,
 }: {
-  onSubmit: (text: string) => Promise<boolean>;
+  onSubmit: (text: string) => void;
   isCreating: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -357,10 +360,9 @@ function TopLevelCommentInput({
 
   return (
     <CommentInput
-      onSubmit={async text => {
-        const ok = await onSubmit(text);
-        if (ok) setIsExpanded(false);
-        return ok;
+      onSubmit={text => {
+        onSubmit(text);
+        setIsExpanded(false);
       }}
       isCreating={isCreating}
       placeholder=""
@@ -378,7 +380,7 @@ function CommentInput({
   onCancel,
   initialValue = '',
 }: {
-  onSubmit: (text: string) => Promise<boolean>;
+  onSubmit: (text: string) => void;
   isCreating: boolean;
   placeholder: string;
   autoFocus?: boolean;
@@ -388,13 +390,11 @@ function CommentInput({
   const [text, setText] = useState(initialValue);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  // Keep the input visible and the text intact until publish actually succeeds.
-  // On success, clear the text; on failure, leave it so the user can retry without retyping.
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const trimmed = text.trim();
-    if (!trimmed || isCreating) return;
-    const ok = await onSubmit(trimmed);
-    if (ok) setText('');
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setText('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -474,8 +474,8 @@ function CommentList({
   comments: CommentWithReplies[];
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => Promise<boolean>;
-  onEdit: (commentId: string, commentSpaceId: string, newText: string) => Promise<boolean>;
+  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
+  onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
@@ -726,8 +726,8 @@ function CommentItem({
   comment: CommentWithReplies;
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => Promise<boolean>;
-  onEdit: (commentId: string, commentSpaceId: string, newText: string) => Promise<boolean>;
+  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
+  onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
@@ -746,19 +746,15 @@ function CommentItem({
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
   const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
 
-  // Close the reply / edit boxes only when the publish actually succeeds so the user's
-  // draft is preserved on failure and the box stays visible during the "Commenting..." state.
-  const handleReply = async (text: string): Promise<boolean> => {
+  const handleReply = (text: string) => {
     const fullAncestors = [{ id: comment.id, spaceId: comment.spaceId }, ...ancestors];
-    const ok = await onReply(text, fullAncestors);
-    if (ok) setIsReplying(false);
-    return ok;
+    onReply(text, fullAncestors);
+    setIsReplying(false);
   };
 
-  const handleEdit = async (newText: string): Promise<boolean> => {
-    const ok = await onEdit(comment.id, comment.spaceId, newText);
-    if (ok) setIsEditing(false);
-    return ok;
+  const handleEdit = (newText: string) => {
+    onEdit(comment.id, comment.spaceId, newText);
+    setIsEditing(false);
   };
 
   const renderedContent = React.useMemo(() => {
@@ -829,6 +825,11 @@ function CommentItem({
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
           {relativeTime}
         </Text>
+        {comment.isPendingPublish && (
+          <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+            Publishing…
+          </Text>
+        )}
         {comment.resolved && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1001,6 +1002,11 @@ function CommentItem({
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
               {relativeTime}
             </Text>
+            {comment.isPendingPublish && (
+              <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+                Publishing…
+              </Text>
+            )}
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"

@@ -74,7 +74,9 @@ function parseCommentEntity(
       name: null,
       avatarUrl: null,
     },
-    createdAt: entity.updatedAt
+    createdAt: entity.createdAt
+      ? new Date(Number(entity.createdAt) * 1000).toISOString()
+      : entity.updatedAt
       ? new Date(Number(entity.updatedAt) * 1000).toISOString()
       : new Date().toISOString(),
     spaceId,

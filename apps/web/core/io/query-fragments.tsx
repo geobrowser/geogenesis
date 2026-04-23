@@ -603,6 +603,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      createdAt
       updatedAt
 
       types {

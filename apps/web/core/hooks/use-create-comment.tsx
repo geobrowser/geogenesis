@@ -68,12 +68,23 @@ export function useCreateComment(targetEntityId: string) {
     };
   }, []);
 
+  // Serializes the actual IPFS-upload + userOp-send portion of publishes. Rapid-fire
+  // comments would otherwise contend over the smart account's nonce (the second userOp
+  // hits the bundler before the first is mined and gets rejected). Each new publish awaits
+  // the tail of this chain before running its own Effect; the optimistic "Publishing…"
+  // row appears immediately regardless, so the queued comment is still visible to the user.
+  const publishQueueRef = React.useRef<Promise<unknown>>(Promise.resolve());
+
   const createComment = React.useCallback(
     async ({
       text,
       targetSpaceId,
       ancestorComments,
-    }: Omit<CreateCommentParams, 'targetEntityId'>): Promise<string | null> => {
+      onOptimistic,
+    }: Omit<CreateCommentParams, 'targetEntityId'> & {
+      /** Called once the optimistic row has been inserted into the cache, with its id. */
+      onOptimistic?: (commentId: string) => void;
+    }): Promise<string | null> => {
       if (!smartAccount) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
@@ -195,8 +206,8 @@ export function useCreateComment(targetEntityId: string) {
           }
         }
 
-        // Fetch space + author info. Space is required to publish (space.id); profile is used
-        // to render the optimistic comment row once publish succeeds.
+        // Fetch space + author info. Space is required to publish (space.id); profile renders
+        // the optimistic row that appears immediately with a "Publishing…" tag.
         const [space, profile] = await Promise.all([
           Effect.runPromise(getSpace(personalSpaceId)),
           Effect.runPromise(
@@ -208,6 +219,38 @@ export function useCreateComment(targetEntityId: string) {
           setIsCreating(false);
           return null;
         }
+
+        const avatarUrl =
+          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+        // Insert the optimistic row up-front so the user sees their comment immediately with a
+        // "Publishing…" tag. If the publish fails we roll it back below.
+        const optimisticComment: CommentEntity = {
+          id: commentEntityId,
+          name: commentName,
+          markdownContent: text,
+          targetEntityId,
+          targetSpaceId,
+          replyToCommentId: ancestorComments?.[0]?.id ?? null,
+          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
+          author: {
+            spaceId: personalSpaceId,
+            address: profile.address,
+            name: profile.name ?? space.entity.name ?? null,
+            avatarUrl,
+          },
+          createdAt: new Date().toISOString(),
+          spaceId: personalSpaceId,
+          resolved: false,
+          isPendingPublish: true,
+        };
+
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
+          ...old,
+          optimisticComment,
+        ]);
+
+        onOptimistic?.(commentEntityId);
 
         // Publish to personal space
         const publish = Effect.gen(function* () {
@@ -246,10 +289,23 @@ export function useCreateComment(targetEntityId: string) {
           return txHash;
         });
 
-        const result = await Effect.runPromise(Effect.either(publish));
+        // Wait for any previous publish on this hook to finish before running our own Effect so
+        // back-to-back comments don't contend for the smart account's nonce. The optimistic row
+        // above has already been inserted, so the user sees "Publishing…" the entire time.
+        const previousPublish = publishQueueRef.current;
+        const thisPublish = previousPublish
+          .catch(() => undefined)
+          .then(() => Effect.runPromise(Effect.either(publish)));
+        publishQueueRef.current = thisPublish.catch(() => undefined);
+        const result = await thisPublish;
 
         if (Either.isLeft(result)) {
           const err = result.left;
+
+          // Roll back the optimistic row since publish failed.
+          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+            old.filter(c => c.id !== commentEntityId)
+          );
 
           // Handle user rejection silently
           if (err instanceof Error && err.message.includes('User rejected')) {
@@ -261,38 +317,6 @@ export function useCreateComment(targetEntityId: string) {
           setError(err as Error);
           return null;
         }
-
-        // Publish succeeded — now add an optimistic row so the comment appears immediately
-        // without waiting for the indexer. The poller below will merge in the indexed version
-        // when it arrives. `isPendingPublish: true` is retained for mergePendingWithServer's
-        // bookkeeping but is no longer surfaced as a UI marker.
-        const avatarUrl =
-          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-
-        const optimisticComment: CommentEntity = {
-          id: commentEntityId,
-          name: commentName,
-          markdownContent: text,
-          targetEntityId,
-          targetSpaceId,
-          replyToCommentId: ancestorComments?.[0]?.id ?? null,
-          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
-          author: {
-            spaceId: personalSpaceId,
-            address: profile.address,
-            name: profile.name ?? space.entity.name ?? null,
-            avatarUrl,
-          },
-          createdAt: new Date().toISOString(),
-          spaceId: personalSpaceId,
-          resolved: false,
-          isPendingPublish: true,
-        };
-
-        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
-          ...old,
-          optimisticComment,
-        ]);
 
         setToast(<span>Comment published!</span>);
 
