@@ -1517,10 +1517,18 @@ function TableBlockEntityFilterInput({
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
 
+  // The Types system property connects nearly every entity in the graph to
+  // its types, so filtering relationsConnection by it returns millions of
+  // rows and each page takes 6-8s server-side — even with the GIN-indexed
+  // `overlaps` filter. The scoped aggregation is also low-value for Types
+  // (it just returns whichever type(s) rows already have, which is usually
+  // the same type that's already filtered). Fall straight through to the
+  // browse query (entitiesConnection by target type) for this property.
   const relationsEnabled =
     focused &&
     !autocomplete.query.trim() &&
     Boolean(scopedRelationPropertyId) &&
+    scopedRelationPropertyId !== SystemIds.TYPES_PROPERTY &&
     !waitForFilterTypes;
 
   const {
