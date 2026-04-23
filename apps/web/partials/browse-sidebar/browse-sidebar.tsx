@@ -257,6 +257,17 @@ export function BrowseSidebar() {
     }
   }, [data]);
 
+  // Preload both idle and active variants of nav icons so the swap on click
+  // is instant (otherwise the fresh SVG has to fetch and the icon updates a
+  // beat after the pill background).
+  React.useEffect(() => {
+    for (const src of Object.values(BROWSE_NAV_ICON)) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
+  }, []);
+
   if (!open) {
     return (
       <aside
