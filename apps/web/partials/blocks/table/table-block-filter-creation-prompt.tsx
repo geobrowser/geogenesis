@@ -1540,6 +1540,14 @@ function TableBlockEntityFilterInput({
     enabled: relationsEnabled,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
+      const t0 = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] relations START', {
+        propertyId: scopedRelationPropertyId,
+        fromTypeIds: scopedFromTypeIds,
+        toTypeIds: filterByTypes,
+        after: pageParam,
+      });
       const page = await Effect.runPromise(
         getScopedFilterRelations(
           {
@@ -1552,6 +1560,12 @@ function TableBlockEntityFilterInput({
           signal
         )
       );
+      const tRelations = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] relations NETWORK ms', Math.round(tRelations - t0), {
+        nodes: page.nodes.length,
+        hasNextPage: page.hasNextPage,
+      });
 
       const spaceIdSet = new Set<string>();
       for (const n of page.nodes) {
@@ -1587,6 +1601,8 @@ function TableBlockEntityFilterInput({
         };
       });
 
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] relations TOTAL ms', Math.round(performance.now() - t0));
       return {
         nodes: page.nodes,
         results,
@@ -1622,6 +1638,12 @@ function TableBlockEntityFilterInput({
     enabled: browseEnabled && (!relationsEnabled || relationsExhausted),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
+      const t0 = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] browse START', {
+        typeIds: filterByTypes,
+        after: pageParam,
+      });
       const page = await Effect.runPromise(
         getBrowseEntitiesByType(
           {
@@ -1632,6 +1654,12 @@ function TableBlockEntityFilterInput({
           signal
         )
       );
+      const tBrowse = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] browse NETWORK ms', Math.round(tBrowse - t0), {
+        nodes: page.nodes.length,
+        hasNextPage: page.hasNextPage,
+      });
 
       const spaceIdSet = new Set<string>();
       for (const n of page.nodes) {
@@ -1666,6 +1694,8 @@ function TableBlockEntityFilterInput({
         };
       });
 
+      // eslint-disable-next-line no-console
+      console.log('[filter-query] browse TOTAL ms', Math.round(performance.now() - t0));
       return { rows, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
     },
     getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
