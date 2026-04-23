@@ -185,6 +185,12 @@
   --text-browseMenu--letter-spacing: -0.35px;
   --text-browseMenu--font-weight: 400;
 
+  /* Browse sidebar section header (Figma: Calibre Regular 13 / 13, -0.35 tracking, grey-04) */
+  --text-browseSection: 0.8125rem;
+  --text-browseSection--line-height: 0.8125rem;
+  --text-browseSection--letter-spacing: -0.35px;
+  --text-browseSection--font-weight: 400;
+
   --text-footnote: 0.6875rem;
   --text-footnote--line-height: 0.8125rem;
   --text-footnote--font-weight: 400;

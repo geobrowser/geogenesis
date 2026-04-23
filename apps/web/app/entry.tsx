@@ -5,9 +5,11 @@ import { Analytics } from '@vercel/analytics/react';
 import * as React from 'react';
 
 import dynamic from 'next/dynamic';
+import { useAtomValue } from 'jotai';
 
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
+import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
 
@@ -36,6 +38,7 @@ const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m =>
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -56,13 +59,13 @@ export function App({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
-      <Navbar onSearchClick={() => setOpen(true)} />
-      <SearchDialog open={open} onDone={() => setOpen(false)} />
-      <div className="flex w-full flex-1 items-stretch overflow-visible">
-        <div className="sm:hidden">
-          <BrowseSidebar />
-        </div>
+    <div className="flex min-h-[100dvh] items-stretch">
+      <div className="sm:hidden">
+        <BrowseSidebar />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen} />
+        <SearchDialog open={open} onDone={() => setOpen(false)} />
         <div className="min-w-0 flex-1 xl:px-[2ch]">
           <Main>{children}</Main>
         </div>
