@@ -1528,6 +1528,33 @@ function TableBlockEntityFilterInput({
     return filteredScoped;
   }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes]);
 
+  // TEMP diagnostic — remove before merge
+  React.useEffect(() => {
+    if (!focused) return;
+    // eslint-disable-next-line no-console
+    console.log('[scoped-debug]', {
+      scopedSuggestionsCount: scopedSuggestions?.length ?? 0,
+      filteredScopedCount: filteredScoped.length,
+      filteredScopedByTargetTypeCount: filteredScopedByTargetType.length,
+      filterByTypes,
+      waitForFilterTypes,
+      restrictSearchToTypes,
+      suggestionSpaceId,
+      query: autocomplete.query,
+      firstFew: filteredScopedByTargetType.slice(0, 5),
+    });
+  }, [
+    focused,
+    scopedSuggestions,
+    filteredScoped,
+    filteredScopedByTargetType,
+    filterByTypes,
+    waitForFilterTypes,
+    restrictSearchToTypes,
+    suggestionSpaceId,
+    autocomplete.query,
+  ]);
+
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
 
