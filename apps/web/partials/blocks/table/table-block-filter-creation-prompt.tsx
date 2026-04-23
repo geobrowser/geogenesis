@@ -1663,7 +1663,6 @@ function TableBlockEntityFilterInput({
         where,
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
-        spaceId: suggestionSpaceId,
         orderBy: [EntitiesOrderBy.UpdatedAtDesc],
       });
       const pageEntities = merged.slice(0, remote.length).filter((e): e is Entity => e != null);
@@ -1826,7 +1825,8 @@ function TableBlockEntityFilterInput({
   const handleEntityResultsScroll = React.useCallback(
     (e: React.UIEvent<HTMLUListElement>) => {
       const el = e.currentTarget;
-      const threshold = 48;
+      // ~2 result-row heights of early prefetch on top of the baseline.
+      const threshold = 136;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -1874,6 +1874,47 @@ function TableBlockEntityFilterInput({
     if (!showDropdown) return;
     expandVisibleEntityRowsIfListHasNoScrollbar();
   }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
+
+  // Keep pulling pages (relations first, then browse) until the dropdown has
+  // at least one full page of rows or both sources are fully exhausted. This
+  // is the "relations returned 1 thing → automatically fall through to the
+  // global entity list" behavior — no Load-more click required.
+  React.useEffect(() => {
+    if (!focused) return;
+    if (autocomplete.query.trim()) return;
+    if (rowsToRender.length >= FILTER_DROPDOWN_PAGE_SIZE) return;
+    if (
+      relationsEnabled &&
+      hasNextRelationsPage &&
+      !isRelationsFetching &&
+      !isRelationsFetchingNextPage
+    ) {
+      void fetchNextRelationsPage();
+      return;
+    }
+    if (
+      browseEnabled &&
+      hasNextBrowsePage &&
+      !isBrowseFetching &&
+      !isBrowseFetchingNextPage
+    ) {
+      void fetchNextBrowsePage();
+    }
+  }, [
+    focused,
+    autocomplete.query,
+    rowsToRender.length,
+    relationsEnabled,
+    hasNextRelationsPage,
+    isRelationsFetching,
+    isRelationsFetchingNextPage,
+    fetchNextRelationsPage,
+    browseEnabled,
+    hasNextBrowsePage,
+    isBrowseFetching,
+    isBrowseFetchingNextPage,
+    fetchNextBrowsePage,
+  ]);
 
   const multi = Boolean(onToggleEntity);
   const inputValue = multi
@@ -2111,7 +2152,8 @@ function TableBlockSpaceFilterInput({
 
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
-      const threshold = 48;
+      // ~2 result-row heights of early prefetch on top of the baseline.
+      const threshold = 136;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -2315,7 +2357,8 @@ function TableBlockTextFilterInput({
 
   const applyTextListPagination = React.useCallback(
     (el: HTMLUListElement) => {
-      const threshold = 48;
+      // ~2 result-row heights of early prefetch on top of the baseline.
+      const threshold = 136;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
