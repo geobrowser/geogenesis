@@ -17,6 +17,7 @@ import {
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { browseEntitiesByTypeDocument } from './browse-entities-by-type-document';
 import { scopedFilterRelationsDocument } from './scoped-filter-relations-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -132,6 +133,69 @@ export function getScopedFilterRelations(
       };
     },
     variables: { filter, first, after },
+    signal,
+  });
+}
+
+export type BrowseEntityNode = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  spaceIds: string[];
+  types: { id: string; name: string | null }[];
+};
+
+export type BrowseEntitiesByTypePage = {
+  nodes: BrowseEntityNode[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+/**
+ * Lightweight cursor-paged entitiesConnection fetch. Used by the filter
+ * dropdown's fallback browse list — it intentionally does not fetch values
+ * or relations for each entity, so large unbounded-by-space result sets
+ * remain snappy.
+ */
+export function getBrowseEntitiesByType(
+  {
+    typeIds,
+    first = 25,
+    after = null,
+  }: { typeIds?: string[]; first?: number; after?: string | null },
+  signal?: AbortController['signal']
+) {
+  const filter: Record<string, unknown> = {};
+  if (typeIds?.length) {
+    filter.typeIds = typeIds.length === 1 ? { is: [typeIds[0]] } : { in: typeIds };
+  }
+
+  return graphql({
+    query: browseEntitiesByTypeDocument,
+    decoder: (data: any): BrowseEntitiesByTypePage => {
+      const conn = data?.entitiesConnection;
+      const nodes: BrowseEntityNode[] = (conn?.nodes ?? [])
+        .filter((n: any) => n && typeof n.id === 'string')
+        .map((n: any) => ({
+          id: n.id as string,
+          name: (n.name as string | null) ?? null,
+          description: (n.description as string | null) ?? null,
+          spaceIds: Array.isArray(n.spaceIds)
+            ? (n.spaceIds as unknown[]).filter((s): s is string => typeof s === 'string')
+            : [],
+          types: Array.isArray(n.types)
+            ? (n.types as any[])
+                .filter(t => t && typeof t.id === 'string')
+                .map(t => ({ id: t.id as string, name: (t.name as string | null) ?? null }))
+            : [],
+        }));
+      return {
+        nodes,
+        endCursor: (conn?.pageInfo?.endCursor as string | null) ?? null,
+        hasNextPage: Boolean(conn?.pageInfo?.hasNextPage),
+      };
+    },
+    variables: { filter: Object.keys(filter).length ? filter : undefined, first, after },
     signal,
   });
 }

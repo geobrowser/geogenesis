@@ -20,11 +20,9 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { getScopedFilterRelations, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getBrowseEntitiesByType, getScopedFilterRelations, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
-import { E } from '~/core/sync/orm';
 import { reactiveRelations } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -33,7 +31,7 @@ import {
   mergeRelationValueTypesFromStore,
 } from '~/core/utils/property/properties';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
-import type { Entity, Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
+import type { Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -78,8 +76,6 @@ interface TableBlockFilterPromptProps {
 const MAX_SCOPED_SUGGESTIONS = 100;
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
-
-const ENTITIES_CONNECTION_MAX_OFFSET = 1000;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -198,33 +194,6 @@ function stubSearchResultForFilter(id: string, displayName: string | null): Sear
     description: null,
     spaces: [placeholderSpace],
     types: [],
-  };
-}
-
-function searchResultFromBrowseEntityWithSpaces(
-  entity: Entity,
-  spaceEntityById: Map<string, SpaceEntity>,
-  preferredSpaceId?: string
-): SearchResult {
-  let candidateSpaceIds = entity.spaces.filter(id => spaceEntityById.has(id));
-  if (
-    candidateSpaceIds.length === 0 &&
-    preferredSpaceId &&
-    spaceEntityById.has(preferredSpaceId)
-  ) {
-    candidateSpaceIds = [preferredSpaceId];
-  }
-  const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
-  const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
-  if (spaces.length === 0) {
-    return { ...stubSearchResultForFilter(entity.id, entity.name), types: entity.types };
-  }
-  return {
-    id: entity.id,
-    name: entity.name,
-    description: entity.description,
-    spaces,
-    types: entity.types,
   };
 }
 
@@ -1648,32 +1617,28 @@ function TableBlockEntityFilterInput({
     queryKey: [
       'table-block-filter-entity-browse',
       filterByTypes?.slice().sort().join(',') ?? '',
-      suggestionSpaceId ?? '',
-      'updated-at-desc',
+      'natural',
     ],
     enabled: browseEnabled && (!relationsEnabled || relationsExhausted),
-    initialPageParam: 0,
+    initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
-      const where = {
-        types: filterByTypes!.map(id => ({ id: { equals: id } })),
-      };
-      const { merged, remote } = await E.syncMany({
-        store,
-        cache,
-        where,
-        first: FILTER_DROPDOWN_PAGE_SIZE,
-        skip: pageParam,
-        orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-      });
-      const pageEntities = merged.slice(0, remote.length).filter((e): e is Entity => e != null);
+      const page = await Effect.runPromise(
+        getBrowseEntitiesByType(
+          {
+            typeIds: filterByTypes?.length ? filterByTypes : undefined,
+            first: FILTER_DROPDOWN_PAGE_SIZE,
+            after: pageParam,
+          },
+          signal
+        )
+      );
 
       const spaceIdSet = new Set<string>();
-      for (const e of pageEntities) {
-        for (const sid of e.spaces) {
+      for (const n of page.nodes) {
+        for (const sid of n.spaceIds) {
           if (sid) spaceIdSet.add(sid);
         }
       }
-      if (suggestionSpaceId) spaceIdSet.add(suggestionSpaceId);
       const uniqueSpaceIds = [...spaceIdSet];
 
       const spaceEntityById = new Map<string, SpaceEntity>();
@@ -1688,18 +1653,22 @@ function TableBlockEntityFilterInput({
         }
       }
 
-      const rows = pageEntities
-        .map(e => searchResultFromBrowseEntityWithSpaces(e, spaceEntityById, suggestionSpaceId))
-        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
-      return { rows, remoteCount: remote.length };
-    },
-    getNextPageParam: (lastPage, allPages) => {
-      if (lastPage.remoteCount < FILTER_DROPDOWN_PAGE_SIZE) return undefined;
-      const nextSkip = allPages.length * FILTER_DROPDOWN_PAGE_SIZE;
+      const rows: SearchResult[] = page.nodes.map(n => {
+        const candidateSpaceIds = n.spaceIds.filter(id => spaceEntityById.has(id));
+        const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
+        const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
+        return {
+          id: n.id,
+          name: n.name,
+          description: n.description,
+          spaces,
+          types: n.types,
+        };
+      });
 
-      if (nextSkip > ENTITIES_CONNECTION_MAX_OFFSET) return undefined;
-      return nextSkip;
+      return { rows, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
     },
+    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 
