@@ -72,7 +72,9 @@ function GeoAppsSidebarLinks() {
           className={navLinkIdle}
         >
           <BrowseNavIcon src={item.icon} />
-          <span className="min-w-0 flex-1 truncate leading-5">{item.label}</span>
+          <span className="min-w-0 flex-1 overflow-hidden">
+            <p className="-my-0.5 truncate leading-5">{item.label}</p>
+          </span>
           <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-grey-04">
             <img
               src={GEO_APPS_SIDEBAR_EXTERNAL_ICON}
@@ -167,7 +169,9 @@ function SpaceRowLink({ row }: { row: BrowseSpaceRow }) {
       }`}
     >
       <SpaceRowThumb row={row} />
-      <span className="min-w-0 flex-1 truncate leading-5">{row.name}</span>
+      <span className="min-w-0 flex-1 overflow-hidden">
+        <p className="-my-0.5 truncate leading-5">{row.name}</p>
+      </span>
     </Link>
   );
 }
