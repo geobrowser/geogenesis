@@ -370,13 +370,11 @@ function useScopedFilterSuggestions(
         if (!globalMeta.has(id)) globalMeta.set(id, { id, name: r.toEntity.name });
       }
       if (globalMeta.size > 0) {
-        const entitySuggestions = [...globalMeta.values()]
-          .sort((a, b) => {
-            const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
-            if (diff !== 0) return diff;
-            return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-          })
-          .slice(0, MAX_SCOPED_SUGGESTIONS);
+        const entitySuggestions = [...globalMeta.values()].sort((a, b) => {
+          const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
+          if (diff !== 0) return diff;
+          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+        });
         return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
       }
 
@@ -398,13 +396,11 @@ function useScopedFilterSuggestions(
         counts.set(id, (counts.get(id) ?? 0) + 1);
         if (!meta.has(id)) meta.set(id, { id, name: r.toEntity.name });
       }
-      const entitySuggestions = [...meta.values()]
-        .sort((a, b) => {
-          const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
-          if (diff !== 0) return diff;
-          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-        })
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
+      const entitySuggestions = [...meta.values()].sort((a, b) => {
+        const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
+        if (diff !== 0) return diff;
+        return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+      });
       return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
     }
 
@@ -1517,13 +1513,12 @@ function TableBlockEntityFilterInput({
   const filteredScoped = React.useMemo(() => {
     if (!scopedSuggestions?.length) return [];
     const q = autocomplete.query.trim().toLowerCase();
-    const list = !q
+    return !q
       ? scopedSuggestions
       : scopedSuggestions.filter(
           s =>
             (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
         );
-    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
   }, [scopedSuggestions, autocomplete.query]);
 
   const filteredScopedByTargetType = React.useMemo(() => {
