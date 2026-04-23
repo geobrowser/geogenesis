@@ -19,6 +19,7 @@ import { Minus } from '~/design-system/icons/minus';
 import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
@@ -120,13 +121,13 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
 function branchPointerBlurProps(clearFocus: () => void): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
   return {
     onPointerLeave: e => {
-      const next = e.relatedTarget as Node | null;
-      if (next && e.currentTarget.contains(next)) return;
+      const next = e.relatedTarget;
+      if (next instanceof Node && e.currentTarget.contains(next)) return;
       clearFocus();
     },
     onBlur: e => {
-      const next = e.relatedTarget as Node | null;
-      if (next && e.currentTarget.contains(next)) return;
+      const next = e.relatedTarget;
+      if (next instanceof Node && e.currentTarget.contains(next)) return;
       clearFocus();
     },
   };
@@ -175,8 +176,17 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
     });
   }, []);
 
+  const [publishKind, setPublishKind] = React.useState<null | 'create' | 'edit'>(null);
+
+  React.useEffect(() => {
+    if (!isCreating && publishKind !== null) {
+      setPublishKind(null);
+    }
+  }, [isCreating, publishKind]);
+
   const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
-    createComment({
+    setPublishKind('create');
+    void createComment({
       text,
       targetSpaceId: spaceId,
       ancestorComments,
@@ -184,7 +194,8 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   };
 
   const handleEditComment = (commentId: string, commentSpaceId: string, newText: string) => {
-    editComment({ commentId, commentSpaceId, newText });
+    setPublishKind('edit');
+    void editComment({ commentId, commentSpaceId, newText });
   };
 
   const filteredComments = React.useMemo(() => {
@@ -211,10 +222,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
         Comments ({totalCount})
       </div>
       <Spacer height={16} />
-      <TopLevelCommentInput
-        onSubmit={text => handleCreateComment(text)}
-        isCreating={isCreating}
-      />
+      <TopLevelCommentInput onSubmit={text => handleCreateComment(text)} isCreating={isCreating} />
       {totalCount > 0 && (
         <>
           <Spacer height={16} />
@@ -252,6 +260,17 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
         )
       )}
       </div>
+      {publishKind != null && (
+        <div
+          className="pointer-events-none fixed bottom-8 left-1/2 z-[100] flex max-w-[min(100vw-2rem,28rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-grey-02 bg-bg px-4 py-3 shadow-lg text-body text-text"
+          role="status"
+          aria-live="polite"
+          aria-busy
+        >
+          <Spinner />
+          <span className="pointer-events-auto">{publishKind === 'edit' ? 'Saving changes…' : 'Comment publishing'}</span>
+        </div>
+      )}
     </CommentBranchHighlightProvider>
   );
 }
