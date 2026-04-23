@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
-import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
+import {
+  constructDataType,
+  getCurrentRenderableType,
+  mapPropertyType,
+  reconstructFromStore,
+  typeToBaseDataType,
+} from './properties';
 
 // Mock the DTO module — use real SDK IDs so tests match actual usage
 vi.mock('~/core/io/dto/properties', () => ({
@@ -47,6 +53,7 @@ vi.mock('~/core/constants', () => ({
     EMBEDDING: 'EMBEDDING_ENTITY_ID',
   },
   GEO_LOCATION: 'GEO_LOCATION_ID',
+  PDF_TYPE: 'PDF_TYPE_ID',
   FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
   VIDEO_RENDERABLE_TYPE: 'VIDEO_RENDERABLE_TYPE_ID',
@@ -126,6 +133,15 @@ describe('Properties', () => {
         baseDataType: 'POINT',
         renderableTypeId: 'GEO_LOCATION_ID',
       });
+    });
+
+    it('should map PDF property type correctly', () => {
+      const result = mapPropertyType('PDF');
+      expect(result).toEqual({
+        baseDataType: 'RELATION',
+        renderableTypeId: 'PDF_TYPE_ID',
+      });
+      expect(typeToBaseDataType.PDF).toBe('RELATION');
     });
 
     it('should handle unknown property type with exhaustive check', () => {

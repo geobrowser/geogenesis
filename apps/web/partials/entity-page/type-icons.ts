@@ -4,6 +4,7 @@ import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 
 import { Address } from '~/design-system/icons/address';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
@@ -34,6 +35,7 @@ export const TYPE_ICONS: Record<SwitchableRenderableType, TypeIconComponent> = {
   URL: Url,
   IMAGE: Image,
   VIDEO: VideoSmall,
+  PDF: PdfFile,
   GEO_LOCATION: GeoLocation,
   PLACE: Place,
   ADDRESS: Address,

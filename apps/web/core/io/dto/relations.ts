@@ -1,12 +1,16 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { PDF_TYPE, PDF_URL } from '~/core/constants';
 import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
-  const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  const pdfUrlPropertyHex = PDF_URL; // Already hex format
+  const imageUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  const pdfUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === pdfUrlPropertyHex)?.text ?? null;
+  const mediaEntityUrlValue = imageUrlValue ?? pdfUrlValue;
   const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   const renderableType = mediaEntityUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
@@ -33,7 +37,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
     toEntity: {
       id: toEntityId,
       name: toEntityName,
-      value: renderableType === 'IMAGE' || renderableType === 'VIDEO' ? (mediaEntityUrlValue ?? '') : toEntityId,
+      value: renderableType === 'IMAGE' || renderableType === 'VIDEO' || renderableType === 'PDF' ? (mediaEntityUrlValue ?? '') : toEntityId,
     },
   };
 }
@@ -68,6 +72,10 @@ function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): Rendera
   // Match both VIDEO_TYPE (new) and VIDEO_BLOCK (legacy) for backwards compatibility
   if (typeIds.includes(videoTypeHex) || typeIds.includes(videoBlockHex)) {
     return 'VIDEO';
+  }
+
+  if (typeIds.includes(PDF_TYPE)) {
+    return 'PDF';
   }
 
   if (typeIds.includes(dataBlockHex)) {

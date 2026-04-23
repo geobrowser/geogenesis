@@ -86,10 +86,10 @@ export type DataType =
 // Renderable Types
 // ==============================================================================
 
-export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PLACE' | 'ADDRESS'; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'VIDEO' | 'PDF' | 'URL' | 'GEO_LOCATION' | 'PLACE' | 'ADDRESS'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
-export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
+export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'PDF' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -113,6 +113,7 @@ export type FlattenedRenderType =
   | 'RELATION'
   | 'IMAGE'
   | 'VIDEO'
+  | 'PDF'
   | 'PLACE'
   | 'ADDRESS';
 
@@ -128,6 +129,7 @@ export type SwitchableRenderableType =
   | 'TIME'
   | 'IMAGE'
   | 'VIDEO'
+  | 'PDF'
   | 'BOOLEAN'
   | 'INTEGER'
   | 'FLOAT'
@@ -146,6 +148,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   RELATION: 'Relation',
   IMAGE: 'Image',
   VIDEO: 'Video',
+  PDF: 'PDF',
   BOOLEAN: 'Checkbox',
   INTEGER: 'Integer',
   FLOAT: 'Float',

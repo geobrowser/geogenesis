@@ -8,6 +8,7 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import { VIDEO_ACCEPT } from '~/core/constants';
+import { PdfFile } from '~/design-system/icons/file-pdf';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -652,6 +653,63 @@ export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoView
       <div className="relative max-h-[90vh] max-w-[90vw]" onClick={e => e.stopPropagation()}>
         <video src={videoSrc} controls autoPlay className="max-h-[90vh] max-w-[90vw] rounded-lg" />
       </div>
+    </div>
+  );
+}
+
+// PDF Field Components
+
+interface PdfFieldProps {
+  pdfSrc?: string;
+  onFileChange: (file: File) => Promise<void> | void;
+}
+
+export function PagePdfField({ pdfSrc, onFileChange }: PdfFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && onFileChange) {
+      const file = e.target.files[0];
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  return (
+    <div>
+      {!pdfSrc && (
+        <div className="flex min-h-[80px] items-center justify-center rounded-lg border border-dashed border-grey-02 p-4">
+          <div className="flex flex-col items-center gap-2">
+            <PdfFile color="grey-04" />
+            <span className="text-sm text-grey-04">No PDF</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-center gap-2 pt-2">
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        accept="application/pdf"
+        id="pdf-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
     </div>
   );
 }

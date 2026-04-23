@@ -9,6 +9,7 @@ export type ServerBlock =
   | { type: 'text'; markdown: string }
   | { type: 'image'; src: string }
   | { type: 'video'; src: string }
+  | { type: 'pdf'; src: string }
   | { type: 'data' };
 
 type ServerContentProps = {
@@ -56,6 +57,13 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
         <video src={block.src} controls className="h-auto w-full rounded-lg">
           Your browser does not support the video tag.
         </video>
+      );
+
+    case 'pdf':
+      return (
+        <div className="my-4 h-full w-[400px] overflow-hidden rounded-sm">
+          <embed src={block.src} type="application/pdf" width="400" height="500" />
+        </div>
       );
 
     case 'data':

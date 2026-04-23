@@ -56,6 +56,7 @@ export interface RelationChange {
     position?: string | null;
     imageUrl?: string | null;
     videoUrl?: string | null;
+    pdfUrl?: string | null;
   } | null;
   after?: {
     toEntityId: string;
@@ -64,6 +65,7 @@ export interface RelationChange {
     position?: string | null;
     imageUrl?: string | null;
     videoUrl?: string | null;
+    pdfUrl?: string | null;
   } | null;
 }
 
@@ -89,6 +91,13 @@ export interface VideoBlockChange {
   after: string | null;
 }
 
+export interface PdfBlockChange {
+  id: string;
+  type: 'pdfBlock';
+  before: string | null;
+  after: string | null;
+}
+
 export interface DataBlockChange {
   id: string;
   type: 'dataBlock';
@@ -99,7 +108,7 @@ export interface DataBlockChange {
   relations?: RelationChange[];
 }
 
-export type BlockChange = TextBlockChange | ImageBlockChange | VideoBlockChange | DataBlockChange;
+export type BlockChange = TextBlockChange | ImageBlockChange | VideoBlockChange | PdfBlockChange | DataBlockChange;
 
 export interface EntityDiff {
   entityId: string;
