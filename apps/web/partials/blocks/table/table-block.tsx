@@ -295,7 +295,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     setSortState,
     filterableProperties,
     filterSuggestionEntityIds,
-  } = useDataBlock({ canEdit, fetchFilterSuggestions: isFilterPromptOpen });
+  } = useDataBlock({ canEdit });
 
   React.useEffect(() => {
     if (!isFilterOpen) setIsFilterPromptOpen(false);
