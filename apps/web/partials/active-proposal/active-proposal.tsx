@@ -20,6 +20,7 @@ import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
+import { ProposalBountyLinks } from './proposal-bounty-links';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
@@ -77,15 +78,25 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           <p>Review proposal</p>
         </div>
 
-        <AcceptOrReject
-          spaceId={spaceId}
-          proposalId={proposal.id}
-          isProposalEnded={isProposalEnded}
-          status={proposal.status}
-          canExecute={proposal.canExecute}
-          proposalType={proposal.type}
-          userVote={userVote}
-        />
+        <div className="inline-flex shrink-0 items-center gap-2">
+          {proposal.type === 'ADD_EDIT' && (
+            <ProposalBountyLinks
+              daoSpaceId={spaceId}
+              proposalId={proposal.id}
+              proposalName={proposal.name ?? proposalTitle}
+              authorSpaceId={proposal.createdBy.spaceId}
+            />
+          )}
+          <AcceptOrReject
+            spaceId={spaceId}
+            proposalId={proposal.id}
+            isProposalEnded={isProposalEnded}
+            status={proposal.status}
+            canExecute={proposal.canExecute}
+            proposalType={proposal.type}
+            userVote={userVote}
+          />
+        </div>
       </div>
       <div className="relative overflow-x-clip">
         <MetadataMotionContainer>

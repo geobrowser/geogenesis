@@ -41,6 +41,7 @@ import {
   relationEntityQuery,
   relationEntityRelationsQuery,
   relationsByToEntityIdsQuery,
+  relationsByFromEntityIdQuery,
   resultQuery,
   spaceQuery,
   spacesQuery,
@@ -248,6 +249,23 @@ export function getRelationsByToEntityIds(
     query: relationsByToEntityIdsQuery,
     decoder: data => data.relations ?? [],
     variables: { toEntityIds, typeId, spaceId },
+    signal,
+  });
+}
+
+export function getRelationsByFromEntityId(
+  fromEntityId: string,
+  typeId: string,
+  spaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: relationsByFromEntityIdQuery,
+    decoder: data =>
+      data.relations
+        ? data.relations.map(r => RelationDecoder.decode(r)).filter((r): r is NonNullable<typeof r> => r !== null)
+        : [],
+    variables: { fromEntityId, typeId, spaceId },
     signal,
   });
 }
