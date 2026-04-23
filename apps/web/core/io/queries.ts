@@ -96,7 +96,8 @@ export function getScopedReferencedEntities(
   signal?: AbortController['signal']
 ) {
   const backlink: Record<string, unknown> = {
-    typeId: { is: [propertyId] },
+    // typeId on RelationFilter is UuidFilter (scalar), not UuidListFilter.
+    typeId: { is: propertyId },
   };
   if (fromTypeIds?.length) {
     backlink.fromEntity = { typeIds: { overlaps: fromTypeIds } };
