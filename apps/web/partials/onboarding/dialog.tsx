@@ -4,46 +4,63 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+import pluralize from 'pluralize';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import type { SearchResult } from '~/core/types';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { FindEntity } from '~/design-system/find-entity';
-import { CloseSmall } from '~/design-system/icons/close-small';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { NewTab } from '~/design-system/icons/new-tab';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Spacer } from '~/design-system/spacer';
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
+import { Truncate } from '~/design-system/truncate';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'enter-profile' | 'create-space' | 'completed' | 'done';
+type Step = 'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
+
+const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
+
+function filterExactNameMatches(results: SearchResult[], name: string, allowedTypes: string[]): SearchResult[] {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return [];
+  return results.filter(
+    r =>
+      (r.name ?? '').trim().toLowerCase() === normalized && searchResultMatchesAllowedTypes(r, allowedTypes)
+  );
+}
 
 const MotionContent = motion.create(Content);
 const MotionOverlay = motion.create(Overlay);
@@ -56,39 +73,42 @@ export const OnboardingDialog = () => {
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const topicId = useAtomValue(topicIdAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
+  const setName = useSetAtom(nameAtom);
   const { createPersonalSpace } = useCreatePersonalSpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
 
   const [step, setStep] = useAtom(stepAtom);
+  const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
-  // Scheduled here so the timer survives StepComplete unmounting once the
-  // personal space refetches as registered and closes the dialog.
   useEffect(() => {
-    if (step !== 'completed') return;
-    const timer = setTimeout(() => {
-      router.push(ONBOARDING_DESTINATION);
-      setStep('done');
-    }, 3_600);
-    return () => clearTimeout(timer);
-  }, [step, router, setStep]);
+    if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
+      setStep('enter-profile');
+    }
+  }, [step, entityMatchCandidates.length, setStep]);
 
   const address = smartAccount?.account.address;
 
   if (!address) return null;
 
-  async function createSpace() {
+  type CreatePersonalSpaceTopicArg = { topicIdForPublish?: string };
+
+  async function createSpace(options?: CreatePersonalSpaceTopicArg) {
     if (!address) return;
+
+    const effectiveTopicId =
+      options?.topicIdForPublish !== undefined ? options.topicIdForPublish : topicId;
 
     try {
       const spaceId = await createPersonalSpace({
         spaceName: name,
         spaceImage: avatar,
-        topicId,
+        topicId: effectiveTopicId || undefined,
       });
 
       if (!spaceId) {
@@ -98,8 +118,6 @@ export const OnboardingDialog = () => {
       // Forces the profile to be refetched
       await queryClient.invalidateQueries({ queryKey: ['profile', address] });
 
-      // We use the space id to navigate to the space once
-      // it's done deploying.
       setSpaceId(spaceId);
       setStep('completed');
 
@@ -107,9 +125,29 @@ export const OnboardingDialog = () => {
         setChatOpen(true);
         setHasSeenAssistant(true);
       }
+
+      await sleep(900);
+      router.push(ONBOARDING_DESTINATION);
+      setStep('done');
     } catch (error) {
       setShowRetry(true);
       console.error(error);
+    }
+  }
+
+  async function onProfileContinue(exactMatches: SearchResult[]) {
+    if (!address || !smartAccount) return;
+
+    setShowRetry(false);
+
+    if (exactMatches.length > 0) {
+      setEntityMatchCandidates(exactMatches);
+      setStep('existing-entity-match');
+    } else {
+      setTopicId('');
+      setStep('create-space');
+      await sleep(100);
+      createSpace({ topicIdForPublish: '' });
     }
   }
 
@@ -119,11 +157,6 @@ export const OnboardingDialog = () => {
     setShowRetry(false);
 
     switch (step) {
-      case 'enter-profile':
-        setStep('create-space');
-        await sleep(100);
-        createSpace();
-        break;
       case 'create-space':
         createSpace();
         break;
@@ -147,9 +180,27 @@ export const OnboardingDialog = () => {
             className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center"
           >
             <ModalCard childKey="card">
-              <StepHeader />
+              <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
               {step === 'start' && <StepStart />}
-              {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+              {step === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
+              {step === 'existing-entity-match' && (
+                <StepExistingEntityMatch
+                  candidates={entityMatchCandidates}
+                  onSkip={async () => {
+                    setTopicId('');
+                    setStep('create-space');
+                    await sleep(100);
+                    createSpace({ topicIdForPublish: '' });
+                  }}
+                  onSelect={async (entityId, entityName) => {
+                    setTopicId(entityId);
+                    if (entityName) setName(entityName);
+                    setStep('create-space');
+                    await sleep(100);
+                    createSpace({ topicIdForPublish: entityId });
+                  }}
+                />
+              )}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
           </MotionContent>
@@ -179,22 +230,23 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
   );
 };
 
-const StepHeader = () => {
+const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void }) => {
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
 
-  const showBack = step === 'enter-profile';
+  const showBack = step === 'enter-profile' || step === 'existing-entity-match';
 
   const handleBack = () => {
+    if (step === 'existing-entity-match') {
+      onClearEntityMatches();
+      setStep('enter-profile');
+      return;
+    }
     setName('');
     setTopicId('');
-    switch (step) {
-      case 'enter-profile':
-        setStep('start');
-        break;
-      default:
-        break;
+    if (step === 'enter-profile') {
+      setStep('start');
     }
   };
 
@@ -260,17 +312,30 @@ function StepStart() {
 }
 
 type StepOnboardingProps = {
-  onNext: () => void;
-  address: string;
+  onProfileContinue: (exactMatches: SearchResult[]) => void;
 };
 
-function StepOnboarding({ onNext }: StepOnboardingProps) {
+function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
   const [name, setName] = useAtom(nameAtom);
-  const [topicId, setTopicId] = useAtom(topicIdAtom);
+  const [, setTopicId] = useAtom(topicIdAtom);
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
-  const validName = name.length > 0;
+  const { onQueryChange, results, isLoading } = useSearch({
+    filterByTypes: ONBOARDING_PERSONAL_SEARCH_TYPES,
+  });
+
+  useEffect(() => {
+    onQueryChange(name);
+  }, [name, onQueryChange]);
+
+  const exactMatches = useMemo(
+    () => filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES),
+    [results, name]
+  );
+
+  const validName = name.trim().length > 0;
+  const searchReady = !isLoading;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -288,7 +353,10 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
     }
   };
 
-  const allowedTypes = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
+  const handleContinue = () => {
+    setTopicId('');
+    onProfileContinue(exactMatches);
+  };
 
   return (
     <div className="space-y-4">
@@ -323,36 +391,15 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
         </div>
       </StepContents>
       <div className="flex w-full flex-col items-center justify-center gap-3">
-        <div className="relative z-100 inline-block">
-          <div className={cx(topicId && 'invisible')}>
-            <FindEntity
-              allowedTypes={allowedTypes}
-              onDone={entity => {
-                setName(entity.name ?? '');
-                setTopicId(entity.id);
-              }}
-              onCreateEntity={entity => {
-                setName(entity.name ?? '');
-                setTopicId('');
-              }}
-              placeholder="Your name..."
-            />
-          </div>
-          {topicId && (
-            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
-              <div className="text-bodySemibold">Space for</div>
-              <SmallButton
-                onClick={() => {
-                  setName('');
-                  setTopicId('');
-                }}
-              >
-                <span>{name}</span>
-                <CloseSmall />
-              </SmallButton>
-            </div>
-          )}
-        </div>
+        <input
+          value={name}
+          onChange={event => {
+            setName(event.target.value);
+          }}
+          placeholder="Your name..."
+          spellCheck={false}
+          className="relative z-100 block w-full px-2 py-1 text-center text-mediumTitle text-2xl placeholder:text-grey-02 focus:outline-hidden"
+        />
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
@@ -371,8 +418,97 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName} onClick={onNext} className="w-full">
-          Create Space
+        <Button disabled={!validName || !searchReady} onClick={handleContinue} className="w-full">
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+type StepExistingEntityMatchProps = {
+  candidates: SearchResult[];
+  onSkip: () => void;
+  onSelect: (entityId: string, entityName: string | null) => void;
+};
+
+function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingEntityMatchProps) {
+  return (
+    <div className="flex h-full flex-col">
+      <StepContents childKey="entity-match">
+        <div className="flex max-h-[220px] flex-col gap-3 overflow-hidden">
+          <Text as="h3" variant="bodySemibold" className="text-center text-lg!">
+            Do any of these existing entities represent you?
+          </Text>
+          <Text as="p" variant="footnote" className="text-center text-grey-04">
+            We found entities whose name exactly matches what you entered. Choose one only if it is your profile in
+            Geo; otherwise skip to create a new one.
+          </Text>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02">
+            {candidates.map(result => (
+              <div key={result.id} className="border-b border-divider last:border-b-0">
+                <div className="p-1">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(result.id, result.name)}
+                    className="relative z-10 flex w-full cursor-pointer flex-col rounded-md px-2 py-2 text-left transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
+                  >
+                    <div className="relative w-full pr-8">
+                      <div className="relative z-0 max-w-full truncate text-button text-text">{result.name}</div>
+                      <div className="absolute top-0 right-0 bottom-0 flex items-center">
+                        <a
+                          href={NavUtils.toEntity(ROOT_SPACE, result.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="relative text-text hover:text-ctaPrimary"
+                        >
+                          <NewTab />
+                          <span className="sr-only">Open entity in new tab</span>
+                        </a>
+                      </div>
+                    </div>
+                    {result.types.length > 0 && (
+                      <>
+                        <Spacer height={4} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {result.types.map(type => (
+                            <Tag key={type.id}>{type.name}</Tag>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {result.description && (
+                      <>
+                        <Spacer height={4} />
+                        <Truncate maxLines={2} shouldTruncate variant="footnote">
+                          <p className="text-footnote text-grey-04">{result.description}</p>
+                        </Truncate>
+                      </>
+                    )}
+                    <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                      <div className="inline-flex gap-0">
+                        {(result.spaces ?? []).slice(0, 3).map(space => (
+                          <div
+                            key={space.spaceId}
+                            className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                          >
+                            <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                      {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </StepContents>
+      <div className="mt-auto flex flex-col gap-2 pt-4">
+        <Button type="button" variant="secondary" onClick={onSkip} className="w-full">
+          Skip - none of these are me
         </Button>
       </div>
     </div>
@@ -387,6 +523,7 @@ type StepCompleteProps = {
 const retryMessage: Record<Step, string> = {
   start: '',
   'enter-profile': '',
+  'existing-entity-match': '',
   'create-space': 'Space creation failed',
   completed: '',
   done: '',
