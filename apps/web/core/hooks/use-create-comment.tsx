@@ -26,7 +26,7 @@ import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
-import { fetchCommentEntitiesForTarget } from './use-comments';
+import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
@@ -58,6 +58,15 @@ export function useCreateComment(targetEntityId: string) {
 
   const [isCreating, setIsCreating] = React.useState(false);
   const [error, setError] = React.useState<Error | null>(null);
+
+  // Aborts any in-flight post-publish pollers when the hook unmounts so we don't
+  // keep issuing network requests or mutating the query cache for a stale page.
+  const pollAbortRef = React.useRef<AbortController | null>(null);
+  React.useEffect(() => {
+    return () => {
+      pollAbortRef.current?.abort();
+    };
+  }, []);
 
   const createComment = React.useCallback(
     async ({ text, targetSpaceId, ancestorComments }: Omit<CreateCommentParams, 'targetEntityId'>) => {
@@ -289,32 +298,63 @@ export function useCreateComment(targetEntityId: string) {
         const POLL_INTERVAL_MS = 2000;
         const MAX_POLL_ATTEMPTS = 45;
 
+        // Each publish gets its own AbortController. Replacing the ref aborts any previous
+        // poller still running from an earlier publish on this hook instance.
+        pollAbortRef.current?.abort();
+        const controller = new AbortController();
+        pollAbortRef.current = controller;
+        const { signal } = controller;
+
+        const sleep = (ms: number) =>
+          new Promise<void>((resolve, reject) => {
+            if (signal.aborted) return reject(signal.reason);
+            const t = setTimeout(() => {
+              signal.removeEventListener('abort', onAbort);
+              resolve();
+            }, ms);
+            const onAbort = () => {
+              clearTimeout(t);
+              reject(signal.reason);
+            };
+            signal.addEventListener('abort', onAbort, { once: true });
+          });
+
+        // Merge server results with any pending-publish rows already in the cache so concurrent
+        // optimistic comments (including this one, until the indexer sees it) survive the update.
+        const applyServerList = (list: CommentEntity[]) => {
+          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (prev?: CommentEntity[]) =>
+            mergePendingWithServer(list, prev)
+          );
+        };
+
         void (async () => {
-          await new Promise(r => setTimeout(r, FIRST_POLL_MS));
-          for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-            try {
-              const list = await fetchCommentEntitiesForTarget(targetEntityId);
-              if (list.some(c => c.id === commentEntityId)) {
-                queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], list);
-                return;
-              }
-            } catch (e) {
-              console.error('[useCreateComment] Poll for indexed comment failed:', e);
-            }
-            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-          }
           try {
-            const list = await fetchCommentEntitiesForTarget(targetEntityId);
-            if (list.some(c => c.id === commentEntityId)) {
-              queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], list);
-              return;
+            await sleep(FIRST_POLL_MS);
+            for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+              if (signal.aborted) return;
+              try {
+                const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
+                if (list.some(c => c.id === commentEntityId)) {
+                  applyServerList(list);
+                  return;
+                }
+              } catch (e) {
+                if (signal.aborted) return;
+                console.error('[useCreateComment] Poll for indexed comment failed:', e);
+              }
+              await sleep(POLL_INTERVAL_MS);
             }
-            queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], [
-              ...list,
-              { ...optimisticComment, isPendingPublish: true },
-            ]);
+            if (signal.aborted) return;
+            const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
+            applyServerList(list);
           } catch (e) {
-            console.error('[useCreateComment] Final comment sync failed:', e);
+            if (!signal.aborted) {
+              console.error('[useCreateComment] Final comment sync failed:', e);
+            }
+          } finally {
+            if (pollAbortRef.current === controller) {
+              pollAbortRef.current = null;
+            }
           }
         })();
       } catch (err) {

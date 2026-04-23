@@ -2,8 +2,18 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
+import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import { getConfig } from '~/core/environment/environment';
-import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
+import {
+  EntitiesBatchForCommentsDocument,
+  type EntitiesBatchForCommentsQuery,
+  EntityCommentReplyBacklinksPageDocument,
+  type EntityCommentReplyBacklinksPageQuery,
+  EntitiesOrderBy,
+  type EntityFilter,
+  SortOrder,
+  type UuidFilter,
+} from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
@@ -295,6 +305,65 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
   });
 }
 
+const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+
+export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: EntitiesBatchForCommentsDocument,
+    decoder: (data: EntitiesBatchForCommentsQuery) =>
+      data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    variables: { filter: { id: { in: entityIds } } },
+    signal,
+  });
+}
+
+/**
+ * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
+ * Nested replies are included when they also backlink to the parent (same index pattern).
+ */
+export function getCommentEntitiesViaParentEntityReplyBacklinks(
+  parentEntityId: string,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const page = yield* graphql({
+        query: EntityCommentReplyBacklinksPageDocument,
+        decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+        variables: {
+          id: parentEntityId,
+          replyToTypeId: COMMENT_REPLY_TO_ID,
+          commentTypeId: COMMENT_TYPE_ID,
+          first: COMMENT_REPLY_BACKLINKS_PAGE_SIZE,
+          offset,
+        },
+        signal,
+      });
+
+      if (page.length === 0) break;
+
+      for (const row of page) {
+        const rawId = row?.fromEntity?.id;
+        if (typeof rawId !== 'string' || !rawId) continue;
+        if (!seen.has(rawId)) {
+          seen.add(rawId);
+          ids.push(rawId);
+        }
+      }
+
+      if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
+      offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
+    }
+
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entityBacklinksQuery,
@@ -320,16 +389,28 @@ export function getSpace(spaceId: string, signal?: AbortController['signal']) {
 }
 
 export function getSpaces(
-  { limit, offset, spaceIds }: { limit?: number; offset?: number; spaceIds?: string[] } = {},
+  {
+    limit,
+    offset,
+    spaceIds,
+    topicIds,
+  }: { limit?: number; offset?: number; spaceIds?: string[]; topicIds?: string[] } = {},
   signal?: AbortController['signal']
 ) {
+  // Build the filter from whichever id set the caller passed. `topicIds` is
+  // how we resolve an entity-of-type-Space (returned by the search endpoint)
+  // back to the actual space container the app navigates to.
+  let filter: { id?: { in: string[] }; topicId?: { in: string[] } } | undefined;
+  if (spaceIds) filter = { ...filter, id: { in: spaceIds } };
+  if (topicIds) filter = { ...filter, topicId: { in: topicIds } };
+
   return graphql({
     query: spacesQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
     variables: {
       limit,
       offset,
-      filter: spaceIds ? { id: { in: spaceIds } } : undefined,
+      filter,
     },
     signal,
   });

@@ -215,7 +215,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         ? (schema.find(p => p.id === propertyId) ?? extraProperties[propertyId] ?? store.getProperty(propertyId))
         : null;
       const propertyName = isTypesSourceColumn
-        ? 'Types (from CSV)'
+        ? 'Types'
         : propertyId
           ? (propIdToName.get(propertyId) ?? extraProperties[propertyId]?.name ?? prop?.name ?? propertyId)
           : null;
@@ -223,11 +223,13 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         csvColumnIndex,
         headerLabel: headerLabel?.trim() || `Column ${csvColumnIndex + 1}`,
         propertyName,
-        dataType: prop?.dataType,
+        // The CSV types source column resolves each value to a Type entity, so treat it as a relation.
+        dataType: isTypesSourceColumn ? 'RELATION' : prop?.dataType,
         propertyId: propertyId ?? null,
         relationValueTypes: prop?.relationValueTypes,
         mappingLocked: isTypesSourceColumn,
         renderableTypeStrict: prop?.renderableTypeStrict,
+        format: prop?.format,
       };
     });
   }, [headers, columnMapping, schema, extraProperties, store, typesColumnIndex]);
@@ -247,16 +249,18 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         </Link>
       </div>
 
-      <h1 className="mb-2 text-mainPage font-semibold text-text">Map properties and data</h1>
-      <p className="mb-6 text-metadata text-grey-04">
+      <h1 className="mb-2 text-[1.5rem] leading-[1.8125rem] font-semibold tracking-[-0.75px] text-text">
+        Map properties and data
+      </h1>
+      <p className="mb-6 text-[1rem] leading-5 tracking-[-0.35px] text-grey-04">
         Map properties to relevant properties in the space, and map any data to entities you want the data to link to.
       </p>
 
       <div className="mb-4 flex items-center gap-2">
-        <Text variant="metadata" className="text-grey-04">
+        <Text variant="quoteMedium" as="span" className="tracking-[-0.5px] text-text">
           {selectedType?.name ?? 'Entities'}
         </Text>
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-metadata text-text">
+        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-[1rem] leading-5 tracking-[-0.35px] text-text">
           {entityCount}
         </span>
       </div>
@@ -302,7 +306,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                   <span className="flex shrink-0 items-center" aria-hidden>
                     <Warning color="red-01" />
                   </span>
-                  <Text variant="smallButton" className="text-text">
+                  <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
                     {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
                   </Text>
                 </button>
@@ -316,7 +320,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                   <span className="flex shrink-0 items-center" aria-hidden>
                     <Warning color="red-01" />
                   </span>
-                  <Text variant="smallButton" className="text-text">
+                  <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
                     {unresolvedDataCount.toLocaleString('en-US')}{' '}
                     {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
                   </Text>
@@ -325,7 +329,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
               {hasUnmappedColumns && unmappedCount > 0 && (
                 <SmallButton
                   type="button"
-                  variant="secondary"
+                  variant="primary"
                   className="ml-auto shrink-0 rounded-md"
                   onClick={handleSkipAndDeleteUnmapped}
                 >
@@ -338,7 +342,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
               <span className="flex shrink-0 items-center" aria-hidden>
                 <Check color="green" />
               </span>
-              <Text variant="smallButton" className="text-text">
+              <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
                 All properties and data points are linked
               </Text>
             </div>
