@@ -1533,7 +1533,8 @@ function TableBlockEntityFilterInput({
     if (!filterByTypes?.length) return filteredScoped;
     return filteredScoped.filter(s => {
       const e = store.getEntity(s.id, suggestionSpaceId ? { spaceId: suggestionSpaceId } : undefined);
-      return entityTypesMatchFilter(e?.types, filterByTypes);
+      if (!e?.types?.length) return true;
+      return entityTypesMatchFilter(e.types, filterByTypes);
     });
   }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes, store, suggestionSpaceId]);
 
