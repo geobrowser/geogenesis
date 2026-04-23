@@ -83,8 +83,11 @@ export type ScopedFilterRelationsPage = {
 
 function buildRelationTypeFilter(typeIds: string[] | undefined) {
   if (!typeIds?.length) return undefined;
-  if (typeIds.length === 1) return { typeIds: { is: [typeIds[0]] } };
-  return { or: typeIds.map(id => ({ typeIds: { is: [id] } })) };
+  // `overlaps` maps to array-contains-any (&&) and uses the GIN index on
+  // entities.typeIds. `is` is array-equality and forces a seq scan inside
+  // the nested entity filter — each relations page was taking 6+ seconds
+  // against real data because of this.
+  return { typeIds: { overlaps: typeIds } };
 }
 
 /**

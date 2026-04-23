@@ -1875,9 +1875,16 @@ function TableBlockEntityFilterInput({
   }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
 
   // Keep pulling pages (relations first, then browse) until the dropdown has
-  // at least one full page of rows or both sources are fully exhausted. This
-  // is the "relations returned 1 thing → automatically fall through to the
-  // global entity list" behavior — no Load-more click required.
+  // at least one full page of rows or both sources are fully exhausted. For
+  // heavy dedup scenarios (e.g. filtering by Types on a same-typed row set,
+  // where every relation points at the same one or two target entities) a
+  // naive loop would page forever. Cap the number of auto-fetches per source
+  // so we stop burning roundtrips chasing duplicates — user can still click
+  // Load more to explicitly pull more.
+  const AUTO_FILL_MAX_PAGES = 3;
+  const relationsPagesFetched = relationsPages?.pages.length ?? 0;
+  const browsePagesFetched = browsePages?.pages.length ?? 0;
+
   React.useEffect(() => {
     if (!focused) return;
     if (autocomplete.query.trim()) return;
@@ -1886,7 +1893,8 @@ function TableBlockEntityFilterInput({
       relationsEnabled &&
       hasNextRelationsPage &&
       !isRelationsFetching &&
-      !isRelationsFetchingNextPage
+      !isRelationsFetchingNextPage &&
+      relationsPagesFetched < AUTO_FILL_MAX_PAGES
     ) {
       void fetchNextRelationsPage();
       return;
@@ -1895,7 +1903,8 @@ function TableBlockEntityFilterInput({
       browseEnabled &&
       hasNextBrowsePage &&
       !isBrowseFetching &&
-      !isBrowseFetchingNextPage
+      !isBrowseFetchingNextPage &&
+      browsePagesFetched < AUTO_FILL_MAX_PAGES
     ) {
       void fetchNextBrowsePage();
     }
@@ -1908,11 +1917,13 @@ function TableBlockEntityFilterInput({
     isRelationsFetching,
     isRelationsFetchingNextPage,
     fetchNextRelationsPage,
+    relationsPagesFetched,
     browseEnabled,
     hasNextBrowsePage,
     isBrowseFetching,
     isBrowseFetchingNextPage,
     fetchNextBrowsePage,
+    browsePagesFetched,
   ]);
 
   const multi = Boolean(onToggleEntity);
