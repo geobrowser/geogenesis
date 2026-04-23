@@ -19,6 +19,31 @@ import type { Entity } from '~/core/types';
 import type { CommentEntity, CommentWithReplies } from '~/partials/comments/types';
 
 /**
+ * Normalize a timestamp from the indexer. The value may be:
+ *   - a numeric string of unix seconds (e.g. "1745600000")
+ *   - a numeric string of unix milliseconds (e.g. "1745600000000")
+ *   - a number (either unit, same heuristic)
+ *   - an ISO 8601 string ("2026-04-14T10:00:00Z")
+ * Returns an ISO string, or null if the input can't be parsed.
+ */
+function parseEntityTimestamp(raw: string | number | undefined | null): string | null {
+  if (raw == null) return null;
+  const asNum = typeof raw === 'number' ? raw : Number(raw);
+  if (Number.isFinite(asNum)) {
+    // Values under ~1e12 are unix seconds (anything larger in seconds would put us past year 33000);
+    // values at or above ~1e12 are already milliseconds.
+    const ms = asNum < 1e12 ? asNum * 1000 : asNum;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (typeof raw === 'string') {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return null;
+}
+
+/**
  * Parse a fetched Entity into a CommentEntity.
  * The "Reply To" relations determine both the target entity and any parent comment.
  * - A reply-to pointing to a non-comment entity = the target entity
@@ -74,11 +99,10 @@ function parseCommentEntity(
       name: null,
       avatarUrl: null,
     },
-    createdAt: entity.createdAt
-      ? new Date(Number(entity.createdAt) * 1000).toISOString()
-      : entity.updatedAt
-      ? new Date(Number(entity.updatedAt) * 1000).toISOString()
-      : new Date().toISOString(),
+    createdAt:
+      parseEntityTimestamp(entity.createdAt) ??
+      parseEntityTimestamp(entity.updatedAt) ??
+      new Date().toISOString(),
     spaceId,
     resolved,
   };
