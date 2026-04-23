@@ -20,7 +20,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getBrowseEntitiesByType, getScopedFilterRelations, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getBrowseEntitiesByType, getScopedReferencedEntities, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { reactiveRelations } from '~/core/sync/store';
@@ -1517,18 +1517,10 @@ function TableBlockEntityFilterInput({
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
 
-  // The Types system property connects nearly every entity in the graph to
-  // its types, so filtering relationsConnection by it returns millions of
-  // rows and each page takes 6-8s server-side — even with the GIN-indexed
-  // `overlaps` filter. The scoped aggregation is also low-value for Types
-  // (it just returns whichever type(s) rows already have, which is usually
-  // the same type that's already filtered). Fall straight through to the
-  // browse query (entitiesConnection by target type) for this property.
   const relationsEnabled =
     focused &&
     !autocomplete.query.trim() &&
     Boolean(scopedRelationPropertyId) &&
-    scopedRelationPropertyId !== SystemIds.TYPES_PROPERTY &&
     !waitForFilterTypes;
 
   const {
@@ -1557,7 +1549,7 @@ function TableBlockEntityFilterInput({
         after: pageParam,
       });
       const page = await Effect.runPromise(
-        getScopedFilterRelations(
+        getScopedReferencedEntities(
           {
             propertyId: scopedRelationPropertyId!,
             fromTypeIds: scopedFromTypeIds?.length ? scopedFromTypeIds : undefined,
@@ -1883,16 +1875,10 @@ function TableBlockEntityFilterInput({
   }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
 
   // Keep pulling pages (relations first, then browse) until the dropdown has
-  // at least one full page of rows or both sources are fully exhausted. For
-  // heavy dedup scenarios (e.g. filtering by Types on a same-typed row set,
-  // where every relation points at the same one or two target entities) a
-  // naive loop would page forever. Cap the number of auto-fetches per source
-  // so we stop burning roundtrips chasing duplicates — user can still click
-  // Load more to explicitly pull more.
-  const AUTO_FILL_MAX_PAGES = 3;
-  const relationsPagesFetched = relationsPages?.pages.length ?? 0;
-  const browsePagesFetched = browsePages?.pages.length ?? 0;
-
+  // at least one full page of rows or both sources are fully exhausted.
+  // Each relations page now returns unique target entities (the query is
+  // phrased as entitiesConnection + backlinks.some rather than a relations
+  // aggregation), so there's no duplicate-amplification runaway to cap.
   React.useEffect(() => {
     if (!focused) return;
     if (autocomplete.query.trim()) return;
@@ -1901,8 +1887,7 @@ function TableBlockEntityFilterInput({
       relationsEnabled &&
       hasNextRelationsPage &&
       !isRelationsFetching &&
-      !isRelationsFetchingNextPage &&
-      relationsPagesFetched < AUTO_FILL_MAX_PAGES
+      !isRelationsFetchingNextPage
     ) {
       void fetchNextRelationsPage();
       return;
@@ -1911,8 +1896,7 @@ function TableBlockEntityFilterInput({
       browseEnabled &&
       hasNextBrowsePage &&
       !isBrowseFetching &&
-      !isBrowseFetchingNextPage &&
-      browsePagesFetched < AUTO_FILL_MAX_PAGES
+      !isBrowseFetchingNextPage
     ) {
       void fetchNextBrowsePage();
     }
@@ -1925,13 +1909,11 @@ function TableBlockEntityFilterInput({
     isRelationsFetching,
     isRelationsFetchingNextPage,
     fetchNextRelationsPage,
-    relationsPagesFetched,
     browseEnabled,
     hasNextBrowsePage,
     isBrowseFetching,
     isBrowseFetchingNextPage,
     fetchNextBrowsePage,
-    browsePagesFetched,
   ]);
 
   const multi = Boolean(onToggleEntity);

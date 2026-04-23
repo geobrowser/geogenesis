@@ -18,7 +18,7 @@ import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { browseEntitiesByTypeDocument } from './browse-entities-by-type-document';
-import { scopedFilterRelationsDocument } from './scoped-filter-relations-document';
+import { scopedReferencedEntitiesDocument } from './scoped-referenced-entities-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -59,7 +59,7 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 //
 // We also want to merge local data as much as possible
 
-export type ScopedFilterRelationsOptions = {
+export type ScopedReferencedEntitiesOptions = {
   propertyId: string;
   fromTypeIds?: string[];
   toTypeIds?: string[];
@@ -67,7 +67,7 @@ export type ScopedFilterRelationsOptions = {
   after?: string | null;
 };
 
-export type ScopedFilterRelationTarget = {
+export type ScopedReferencedEntity = {
   id: string;
   name: string | null;
   description: string | null;
@@ -75,56 +75,56 @@ export type ScopedFilterRelationTarget = {
   types: { id: string; name: string | null }[];
 };
 
-export type ScopedFilterRelationsPage = {
-  nodes: ScopedFilterRelationTarget[];
+export type ScopedReferencedEntitiesPage = {
+  nodes: ScopedReferencedEntity[];
   endCursor: string | null;
   hasNextPage: boolean;
 };
 
-function buildRelationTypeFilter(typeIds: string[] | undefined) {
-  if (!typeIds?.length) return undefined;
-  // `overlaps` maps to array-contains-any (&&) and uses the GIN index on
-  // entities.typeIds. `is` is array-equality and forces a seq scan inside
-  // the nested entity filter — each relations page was taking 6+ seconds
-  // against real data because of this.
-  return { typeIds: { overlaps: typeIds } };
-}
-
 /**
- * Aggregate every `toEntity` referenced by a relation of `propertyId` whose
- * `fromEntity` matches the table's active type filters. Used to populate the
- * table filter dropdown's "from this data set" suggestions beyond what has been
- * hydrated into the local sync store.
+ * Aggregate every entity that is referenced (via a relation of `propertyId`)
+ * from any entity whose types match `fromTypeIds`. Phrased as an
+ * `entitiesConnection` lookup with a `backlinks: { some: ... }` filter so the
+ * result set is naturally deduplicated to unique target entities — no
+ * client-side dedup, no relation-row amplification when a single target is
+ * referenced by thousands of rows, and the filter runs against the entities
+ * table (which is dramatically smaller than the relations table, especially
+ * for system properties like "Types").
  */
-export function getScopedFilterRelations(
-  { propertyId, fromTypeIds, toTypeIds, first = 500, after = null }: ScopedFilterRelationsOptions,
+export function getScopedReferencedEntities(
+  { propertyId, fromTypeIds, toTypeIds, first = 25, after = null }: ScopedReferencedEntitiesOptions,
   signal?: AbortController['signal']
 ) {
-  const fromFilter = buildRelationTypeFilter(fromTypeIds);
-  const toFilter = buildRelationTypeFilter(toTypeIds);
-  const filter = {
-    typeId: { is: propertyId },
-    ...(fromFilter ? { fromEntity: fromFilter } : {}),
-    ...(toFilter ? { toEntity: toFilter } : {}),
+  const backlink: Record<string, unknown> = {
+    typeId: { is: [propertyId] },
   };
+  if (fromTypeIds?.length) {
+    backlink.fromEntity = { typeIds: { overlaps: fromTypeIds } };
+  }
+
+  const filter: Record<string, unknown> = {
+    backlinks: { some: backlink },
+  };
+  if (toTypeIds?.length) {
+    // Applied to the outer entity, which IS the backlink's toEntity.
+    filter.typeIds = { overlaps: toTypeIds };
+  }
 
   return graphql({
-    query: scopedFilterRelationsDocument,
-    decoder: (data: any): ScopedFilterRelationsPage => {
-      const conn = data?.relationsConnection;
-      const nodes: ScopedFilterRelationTarget[] = (conn?.nodes ?? [])
-        .filter((n: any) => n?.toEntity && typeof n.toEntity.id === 'string')
+    query: scopedReferencedEntitiesDocument,
+    decoder: (data: any): ScopedReferencedEntitiesPage => {
+      const conn = data?.entitiesConnection;
+      const nodes: ScopedReferencedEntity[] = (conn?.nodes ?? [])
+        .filter((n: any) => n && typeof n.id === 'string')
         .map((n: any) => ({
-          id: n.toEntity.id as string,
-          name: (n.toEntity.name as string | null) ?? null,
-          description: (n.toEntity.description as string | null) ?? null,
-          spaceIds: Array.isArray(n.toEntity.spaceIds)
-            ? (n.toEntity.spaceIds as unknown[]).filter(
-                (s): s is string => typeof s === 'string'
-              )
+          id: n.id as string,
+          name: (n.name as string | null) ?? null,
+          description: (n.description as string | null) ?? null,
+          spaceIds: Array.isArray(n.spaceIds)
+            ? (n.spaceIds as unknown[]).filter((s): s is string => typeof s === 'string')
             : [],
-          types: Array.isArray(n.toEntity.types)
-            ? (n.toEntity.types as any[])
+          types: Array.isArray(n.types)
+            ? (n.types as any[])
                 .filter(t => t && typeof t.id === 'string')
                 .map(t => ({ id: t.id as string, name: (t.name as string | null) ?? null }))
             : [],
