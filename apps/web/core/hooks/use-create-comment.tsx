@@ -206,25 +206,11 @@ export function useCreateComment(targetEntityId: string) {
           }
         }
 
-        // Fetch space + author info. Space is required to publish (space.id); profile renders
-        // the optimistic row that appears immediately with a "Publishing…" tag.
-        const [space, profile] = await Promise.all([
-          Effect.runPromise(getSpace(personalSpaceId)),
-          Effect.runPromise(
-            fetchProfileBySpaceId(personalSpaceId, smartAccount.account.address as `0x${string}`)
-          ),
-        ]);
-        if (!space) {
-          setToast(<span>Failed to resolve personal space</span>);
-          setIsCreating(false);
-          return null;
-        }
-
-        const avatarUrl =
-          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-
-        // Insert the optimistic row up-front so the user sees their comment immediately with a
-        // "Publishing…" tag. If the publish fails we roll it back below.
+        // Insert the optimistic row SYNCHRONOUSLY — before any await — so it appears in the
+        // same render as the input box closing. The avatar seed only needs the wallet address
+        // (jazzicon hash), which we have in hand; name + avatarUrl are filled in below once
+        // the profile fetch resolves.
+        const walletAddress = smartAccount.account.address;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
           name: commentName,
@@ -235,9 +221,9 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
-            address: profile.address,
-            name: profile.name ?? space.entity.name ?? null,
-            avatarUrl,
+            address: walletAddress,
+            name: null,
+            avatarUrl: null,
           },
           createdAt: new Date().toISOString(),
           spaceId: personalSpaceId,
@@ -251,6 +237,41 @@ export function useCreateComment(targetEntityId: string) {
         ]);
 
         onOptimistic?.(commentEntityId);
+
+        // Fetch space (needed for space.id when publishing) + profile (for full author info).
+        const [space, profile] = await Promise.all([
+          Effect.runPromise(getSpace(personalSpaceId)),
+          Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddress as `0x${string}`)),
+        ]);
+        if (!space) {
+          // Roll back the placeholder row since we can't proceed without the space.
+          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+            old.filter(c => c.id !== commentEntityId)
+          );
+          setToast(<span>Failed to resolve personal space</span>);
+          setIsCreating(false);
+          return null;
+        }
+
+        // Patch the row with resolved author info. Only touch our own row so a concurrent
+        // poller update (which replaces the whole list) doesn't get clobbered.
+        const resolvedAvatarUrl =
+          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+          old.map(c =>
+            c.id === commentEntityId
+              ? {
+                  ...c,
+                  author: {
+                    spaceId: personalSpaceId,
+                    address: profile.address,
+                    name: profile.name ?? space.entity.name ?? null,
+                    avatarUrl: resolvedAvatarUrl,
+                  },
+                }
+              : c
+          )
+        );
 
         // Publish to personal space
         const publish = Effect.gen(function* () {
