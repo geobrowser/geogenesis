@@ -348,43 +348,20 @@ function useScopedFilterSuggestions(
         return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
       }
 
-      // TEMP diagnostic — remove before merge
-      // eslint-disable-next-line no-console
-      console.log('[scoped-builder]', {
-        relationsByTypeCount: relationsByType.length,
-        relationsSubsetCount: relationsSubset.length,
-        selectedColumnId,
-        relationTargetTypeIds,
-        activeTypeFilterIds,
-        filterSuggestionEntityIdsCount: filterSuggestionEntityIds?.length ?? 0,
-        effectiveEntityIdSetSize: effectiveEntityIdSet.size,
-        dataRowsCount: dataRows?.length ?? 0,
-        blockSpaceId,
-        sampleRelation: relationsByType[0] ?? null,
-      });
-
       const globalCounts = new Map<string, number>();
       const globalMeta = new Map<string, { id: string; name: string | null }>();
-      let globalSkipFromId = 0;
-      let globalSkipFromType = 0;
-      let globalSkipToType = 0;
       for (const r of relationsByType) {
         if (filterSuggestionEntityIds?.length && !effectiveEntityIdSet.has(r.fromEntity.id)) {
-          globalSkipFromId++;
           continue;
         }
-        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+        const from = store.getEntity(r.fromEntity.id);
+        const to = store.getEntity(r.toEntity.id);
 
         if (activeTypeFilterIds.length > 0) {
           const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
-          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) {
-            globalSkipFromType++;
-            continue;
-          }
+          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
         }
         if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
-          globalSkipToType++;
           continue;
         }
 
@@ -392,14 +369,6 @@ function useScopedFilterSuggestions(
         globalCounts.set(id, (globalCounts.get(id) ?? 0) + 1);
         if (!globalMeta.has(id)) globalMeta.set(id, { id, name: r.toEntity.name });
       }
-      // TEMP diagnostic — remove before merge
-      // eslint-disable-next-line no-console
-      console.log('[scoped-builder-skip]', {
-        globalSkipFromId,
-        globalSkipFromType,
-        globalSkipToType,
-        globalMetaSize: globalMeta.size,
-      });
       if (globalMeta.size > 0) {
         const entitySuggestions = [...globalMeta.values()].sort((a, b) => {
           const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
@@ -412,8 +381,8 @@ function useScopedFilterSuggestions(
       const counts = new Map<string, number>();
       const meta = new Map<string, { id: string; name: string | null }>();
       for (const r of relationsSubset) {
-        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
+        const from = store.getEntity(r.fromEntity.id);
+        const to = store.getEntity(r.toEntity.id);
 
         if (activeTypeFilterIds.length > 0) {
           const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
@@ -1559,32 +1528,6 @@ function TableBlockEntityFilterInput({
     return filteredScoped;
   }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes]);
 
-  // TEMP diagnostic — remove before merge
-  React.useEffect(() => {
-    if (!focused) return;
-    // eslint-disable-next-line no-console
-    console.log('[scoped-debug]', {
-      scopedSuggestionsCount: scopedSuggestions?.length ?? 0,
-      filteredScopedCount: filteredScoped.length,
-      filteredScopedByTargetTypeCount: filteredScopedByTargetType.length,
-      filterByTypes,
-      waitForFilterTypes,
-      restrictSearchToTypes,
-      suggestionSpaceId,
-      query: autocomplete.query,
-      firstFew: filteredScopedByTargetType.slice(0, 5),
-    });
-  }, [
-    focused,
-    scopedSuggestions,
-    filteredScoped,
-    filteredScopedByTargetType,
-    filterByTypes,
-    waitForFilterTypes,
-    restrictSearchToTypes,
-    suggestionSpaceId,
-    autocomplete.query,
-  ]);
 
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
