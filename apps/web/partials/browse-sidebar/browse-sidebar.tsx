@@ -60,6 +60,42 @@ function BrowseNavIcon({ src }: { src: string }) {
   );
 }
 
+/**
+ * Renders both the idle and active SVGs stacked, toggling visibility via class —
+ * avoids an img `src` change so the paint happens in the same frame as the pill
+ * background class update.
+ */
+function BrowseNavIconSwap({
+  idleSrc,
+  activeSrc,
+  isActive,
+}: {
+  idleSrc: string;
+  activeSrc: string;
+  isActive: boolean;
+}) {
+  return (
+    <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+      <img
+        src={idleSrc}
+        alt=""
+        width={16}
+        height={16}
+        className={`absolute inset-0 h-4 w-4 max-h-none max-w-none object-contain ${isActive ? 'invisible' : ''}`}
+        draggable={false}
+      />
+      <img
+        src={activeSrc}
+        alt=""
+        width={16}
+        height={16}
+        className={`absolute inset-0 h-4 w-4 max-h-none max-w-none object-contain ${isActive ? '' : 'invisible'}`}
+        draggable={false}
+      />
+    </span>
+  );
+}
+
 function GeoAppsSidebarLinks() {
   return (
     <>
@@ -109,7 +145,11 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
   return (
     <>
       <Link href={NavUtils.toExplore()} className={isExplore ? navLinkActive : navLinkIdle}>
-        <BrowseNavIcon src={isExplore ? BROWSE_NAV_ICON.explore : BROWSE_NAV_ICON.exploreOutline} />
+        <BrowseNavIconSwap
+          idleSrc={BROWSE_NAV_ICON.exploreOutline}
+          activeSrc={BROWSE_NAV_ICON.explore}
+          isActive={isExplore}
+        />
         <span>Explore</span>
       </Link>
       {personalSpaceId && personalHref ? (
@@ -126,7 +166,11 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
       ) : null}
       {isSignedIn ? (
         <Link href={NavUtils.toHome()} className={isGovernance ? navLinkActive : navLinkIdle}>
-          <BrowseNavIcon src={isGovernance ? BROWSE_NAV_ICON.governanceFilled : BROWSE_NAV_ICON.governance} />
+          <BrowseNavIconSwap
+            idleSrc={BROWSE_NAV_ICON.governance}
+            activeSrc={BROWSE_NAV_ICON.governanceFilled}
+            isActive={isGovernance}
+          />
           <span>Governance</span>
         </Link>
       ) : null}
@@ -135,7 +179,11 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         <span>Root</span>
       </Link>
       <Link href={docHref} className={isDoc ? navLinkActive : navLinkIdle}>
-        <BrowseNavIcon src={isDoc ? BROWSE_NAV_ICON.docsFilled : BROWSE_NAV_ICON.docs} />
+        <BrowseNavIconSwap
+          idleSrc={BROWSE_NAV_ICON.docs}
+          activeSrc={BROWSE_NAV_ICON.docsFilled}
+          isActive={isDoc}
+        />
         <span>Documentation</span>
       </Link>
     </>
