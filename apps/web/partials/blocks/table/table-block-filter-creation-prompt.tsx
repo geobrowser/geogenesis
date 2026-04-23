@@ -41,6 +41,10 @@ import { FilterableValueType } from '~/core/value-types';
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import {
+  DROPDOWN_LIST_MAX_HEIGHT_REM,
+  DROPDOWN_LIST_VIEWPORT_MAX_HEIGHT_RATIO,
+} from '~/design-system/dropdown-list-viewport';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { Divider } from '~/design-system/divider';
@@ -106,7 +110,13 @@ function TableBlockFilterDropdownLayer({
   footer,
   children,
 }: TableBlockFilterDropdownLayerProps) {
-  const [box, setBox] = React.useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const [box, setBox] = React.useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   const measure = React.useCallback(() => {
     if (!open || !anchorRef.current) {
@@ -114,12 +124,29 @@ function TableBlockFilterDropdownLayer({
       return;
     }
     const r = anchorRef.current.getBoundingClientRect();
+    const anchorCenterX = r.left + r.width / 2;
     const width = Math.min(472, Math.max(254, Math.ceil(r.width)));
-    const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
-    const top = r.bottom + 4;
-    const maxFromViewport = Math.min(window.innerHeight * 0.65, 22 * 16);
-    const maxFromBottom = Math.max(160, window.innerHeight - top - 8);
-    const maxHeight = Math.min(maxFromViewport, maxFromBottom);
+    const alignLeft = anchorCenterX < window.innerWidth / 2;
+    const leftAnchor = alignLeft ? r.left : r.right - width;
+    const left = Math.min(Math.max(8, leftAnchor), window.innerWidth - width - 8);
+
+    const gap = 4;
+    const maxFromViewport = Math.min(window.innerHeight * DROPDOWN_LIST_VIEWPORT_MAX_HEIGHT_RATIO, DROPDOWN_LIST_MAX_HEIGHT_REM * 16);
+    const availableBottom = Math.max(0, window.innerHeight - r.bottom - gap - 8);
+    const availableTop = Math.max(0, r.top - gap - 8);
+
+    const canFitBottom = availableBottom >= maxFromViewport;
+    const shouldOpenTop = !canFitBottom && availableTop > availableBottom;
+    const available = shouldOpenTop ? availableTop : availableBottom;
+    const maxHeight = Math.min(maxFromViewport, Math.max(160, available));
+
+    if (shouldOpenTop) {
+      const bottom = window.innerHeight - r.top + gap;
+      setBox({ bottom, left, width, maxHeight });
+      return;
+    }
+
+    const top = r.bottom + gap;
     setBox({ top, left, width, maxHeight });
   }, [open, anchorRef]);
 
@@ -150,6 +177,7 @@ function TableBlockFilterDropdownLayer({
         style={{
           position: 'fixed',
           top: box.top,
+          bottom: box.bottom,
           left: box.left,
           width: box.width,
           maxHeight: box.maxHeight,

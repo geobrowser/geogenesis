@@ -3,6 +3,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { RemoveScroll } from 'react-remove-scroll';
 
 import { DROPDOWN_LIST_SCROLL_CLASSES, GEO_SELECT_VIEWPORT_CLASS } from './dropdown-list-viewport';
 import { ChevronDownSmall } from './icons/chevron-down-small';
@@ -29,9 +30,41 @@ export const Select = ({
   position = 'popper',
   disabled = false,
 }: Props) => {
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const [dynamicAlign, setDynamicAlign] = React.useState<'start' | 'end'>('start');
+
+  const updateDynamicAlign = React.useCallback(() => {
+    if (!triggerRef.current || typeof window === 'undefined') return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const triggerCenterX = rect.left + rect.width / 2;
+    setDynamicAlign(triggerCenterX < window.innerWidth / 2 ? 'start' : 'end');
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    updateDynamicAlign();
+    const onViewportChange = () => updateDynamicAlign();
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+    return () => {
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+    };
+  }, [open, updateDynamicAlign]);
+
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onChange}>
+    <SelectPrimitive.Root
+      value={value}
+      onValueChange={onChange}
+      open={open}
+      onOpenChange={nextOpen => {
+        setOpen(nextOpen);
+        if (nextOpen) updateDynamicAlign();
+      }}
+    >
       <SelectPrimitive.Trigger
+        ref={triggerRef}
         className={cx(
           variant === 'secondary' ? 'bg-white text-text' : 'bg-text text-white',
           !disabled
@@ -51,43 +84,45 @@ export const Select = ({
         </div>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content
-          className={cx(
-            'z-[2000] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
-            position === 'item-aligned'
-              ? 'mt-10 max-w-[241px]'
-              : 'w-(--radix-select-trigger-width) max-w-[min(100vw-2rem,var(--radix-select-trigger-width))]'
-          )}
-          position={position}
-          side="bottom"
-          align="start"
-          sideOffset={4}
-          collisionPadding={16}
-          avoidCollisions
-        >
-          <SelectPrimitive.Viewport
-            className={cx(GEO_SELECT_VIEWPORT_CLASS, DROPDOWN_LIST_SCROLL_CLASSES, 'p-0')}
+        <RemoveScroll allowPinchZoom enabled={open}>
+          <SelectPrimitive.Content
+            className={cx(
+              'z-[2000] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
+              position === 'item-aligned'
+                ? 'mt-10 max-w-[241px]'
+                : 'w-(--radix-select-trigger-width) max-w-[min(100vw-2rem,var(--radix-select-trigger-width))]'
+            )}
+            position={position}
+            side="bottom"
+            align={dynamicAlign}
+            sideOffset={4}
+            collisionPadding={16}
+            avoidCollisions
           >
-            <SelectPrimitive.Group className="divide-y divide-grey-02">
-              {options.map(option => (
-                <SelectPrimitive.Item
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.disabled ?? false}
-                  title={option.label}
-                  aria-label={option.label}
-                  className={cx(
-                    'flex w-full flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
-                    option.disabled && 'cursor-not-allowed! opacity-25!',
-                    option?.className
-                  )}
-                >
-                  <SelectPrimitive.ItemText>{option.render ?? option.label}</SelectPrimitive.ItemText>
-                </SelectPrimitive.Item>
-              ))}
-            </SelectPrimitive.Group>
-          </SelectPrimitive.Viewport>
-        </SelectPrimitive.Content>
+            <SelectPrimitive.Viewport
+              className={cx(GEO_SELECT_VIEWPORT_CLASS, DROPDOWN_LIST_SCROLL_CLASSES, 'p-0')}
+            >
+              <SelectPrimitive.Group className="divide-y divide-grey-02">
+                {options.map(option => (
+                  <SelectPrimitive.Item
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.disabled ?? false}
+                    title={option.label}
+                    aria-label={option.label}
+                    className={cx(
+                      'flex w-full flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
+                      option.disabled && 'cursor-not-allowed! opacity-25!',
+                      option?.className
+                    )}
+                  >
+                    <SelectPrimitive.ItemText>{option.render ?? option.label}</SelectPrimitive.ItemText>
+                  </SelectPrimitive.Item>
+                ))}
+              </SelectPrimitive.Group>
+            </SelectPrimitive.Viewport>
+          </SelectPrimitive.Content>
+        </RemoveScroll>
       </SelectPrimitive.Portal>
     </SelectPrimitive.Root>
   );
