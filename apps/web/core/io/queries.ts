@@ -2,8 +2,18 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
+import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import { getConfig } from '~/core/environment/environment';
-import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
+import {
+  EntitiesBatchForCommentsDocument,
+  type EntitiesBatchForCommentsQuery,
+  EntityCommentReplyBacklinksPageDocument,
+  type EntityCommentReplyBacklinksPageQuery,
+  EntitiesOrderBy,
+  type EntityFilter,
+  SortOrder,
+  type UuidFilter,
+} from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
@@ -292,6 +302,65 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
         .filter((e): e is { id: string; name: string | null } => e !== null) ?? [],
     variables: { id: entityId },
     signal,
+  });
+}
+
+const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+
+export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: EntitiesBatchForCommentsDocument,
+    decoder: (data: EntitiesBatchForCommentsQuery) =>
+      data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    variables: { filter: { id: { in: entityIds } } },
+    signal,
+  });
+}
+
+/**
+ * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
+ * Nested replies are included when they also backlink to the parent (same index pattern).
+ */
+export function getCommentEntitiesViaParentEntityReplyBacklinks(
+  parentEntityId: string,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const page = yield* graphql({
+        query: EntityCommentReplyBacklinksPageDocument,
+        decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+        variables: {
+          id: parentEntityId,
+          replyToTypeId: COMMENT_REPLY_TO_ID,
+          commentTypeId: COMMENT_TYPE_ID,
+          first: COMMENT_REPLY_BACKLINKS_PAGE_SIZE,
+          offset,
+        },
+        signal,
+      });
+
+      if (page.length === 0) break;
+
+      for (const row of page) {
+        const rawId = row?.fromEntity?.id;
+        if (typeof rawId !== 'string' || !rawId) continue;
+        if (!seen.has(rawId)) {
+          seen.add(rawId);
+          ids.push(rawId);
+        }
+      }
+
+      if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
+      offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
+    }
+
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
   });
 }
 
