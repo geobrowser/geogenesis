@@ -167,7 +167,10 @@ export function getBrowseEntitiesByType(
 ) {
   const filter: Record<string, unknown> = {};
   if (typeIds?.length) {
-    filter.typeIds = typeIds.length === 1 ? { is: [typeIds[0]] } : { in: typeIds };
+    // `overlaps` maps to array-contains-any (&&) and uses the GIN index on
+    // entities.typeIds. `is` would require array equality and force a seq
+    // scan — which is what made the previous browse query feel stuck.
+    filter.typeIds = { overlaps: typeIds };
   }
 
   return graphql({
