@@ -69,15 +69,19 @@ export function useCreateComment(targetEntityId: string) {
   }, []);
 
   const createComment = React.useCallback(
-    async ({ text, targetSpaceId, ancestorComments }: Omit<CreateCommentParams, 'targetEntityId'>) => {
+    async ({
+      text,
+      targetSpaceId,
+      ancestorComments,
+    }: Omit<CreateCommentParams, 'targetEntityId'>): Promise<string | null> => {
       if (!smartAccount) {
         setToast(<span>Please connect your wallet to comment</span>);
-        return;
+        return null;
       }
 
       if (!personalSpaceId) {
         setToast(<span>Personal space required to comment. Please complete onboarding.</span>);
-        return;
+        return null;
       }
 
       setIsCreating(true);
@@ -191,7 +195,8 @@ export function useCreateComment(targetEntityId: string) {
           }
         }
 
-        // Fetch author info for optimistic update (match useComments profile + avatar rules)
+        // Fetch space + author info. Space is required to publish (space.id); profile is used
+        // to render the optimistic comment row once publish succeeds.
         const [space, profile] = await Promise.all([
           Effect.runPromise(getSpace(personalSpaceId)),
           Effect.runPromise(
@@ -201,37 +206,8 @@ export function useCreateComment(targetEntityId: string) {
         if (!space) {
           setToast(<span>Failed to resolve personal space</span>);
           setIsCreating(false);
-          return;
+          return null;
         }
-
-        const avatarUrl =
-          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-
-        // Optimistically add comment to the query cache
-        const optimisticComment: CommentEntity = {
-          id: commentEntityId,
-          name: commentName,
-          markdownContent: text,
-          targetEntityId,
-          targetSpaceId,
-          replyToCommentId: ancestorComments?.[0]?.id ?? null,
-          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
-          author: {
-            spaceId: personalSpaceId,
-            address: profile.address,
-            name: profile.name ?? space.entity.name ?? null,
-            avatarUrl,
-          },
-          createdAt: new Date().toISOString(),
-          spaceId: personalSpaceId,
-          resolved: false,
-          isPendingPublish: true,
-        };
-
-        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
-          ...old,
-          optimisticComment,
-        ]);
 
         // Publish to personal space
         const publish = Effect.gen(function* () {
@@ -275,21 +251,48 @@ export function useCreateComment(targetEntityId: string) {
         if (Either.isLeft(result)) {
           const err = result.left;
 
-          // Roll back optimistic update
-          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-            old.filter(c => c.id !== commentEntityId)
-          );
-
           // Handle user rejection silently
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return;
+            return null;
           }
 
           console.error('[useCreateComment] Publish failed:', err);
           setToast(<span>Failed to publish comment</span>);
           setError(err as Error);
-          return;
+          return null;
         }
+
+        // Publish succeeded — now add an optimistic row so the comment appears immediately
+        // without waiting for the indexer. The poller below will merge in the indexed version
+        // when it arrives. `isPendingPublish: true` is retained for mergePendingWithServer's
+        // bookkeeping but is no longer surfaced as a UI marker.
+        const avatarUrl =
+          profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+        const optimisticComment: CommentEntity = {
+          id: commentEntityId,
+          name: commentName,
+          markdownContent: text,
+          targetEntityId,
+          targetSpaceId,
+          replyToCommentId: ancestorComments?.[0]?.id ?? null,
+          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
+          author: {
+            spaceId: personalSpaceId,
+            address: profile.address,
+            name: profile.name ?? space.entity.name ?? null,
+            avatarUrl,
+          },
+          createdAt: new Date().toISOString(),
+          spaceId: personalSpaceId,
+          resolved: false,
+          isPendingPublish: true,
+        };
+
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
+          ...old,
+          optimisticComment,
+        ]);
 
         setToast(<span>Comment published!</span>);
 
@@ -357,10 +360,13 @@ export function useCreateComment(targetEntityId: string) {
             }
           }
         })();
+
+        return commentEntityId;
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
         setToast(<span>Failed to create comment</span>);
         setError(err as Error);
+        return null;
       } finally {
         setIsCreating(false);
       }
@@ -369,21 +375,29 @@ export function useCreateComment(targetEntityId: string) {
   );
 
   const editComment = React.useCallback(
-    async ({ commentId, commentSpaceId, newText }: { commentId: string; commentSpaceId: string; newText: string }) => {
+    async ({
+      commentId,
+      commentSpaceId,
+      newText,
+    }: {
+      commentId: string;
+      commentSpaceId: string;
+      newText: string;
+    }): Promise<boolean> => {
       if (!smartAccount) {
         setToast(<span>Please connect your wallet to edit</span>);
-        return;
+        return false;
       }
 
       if (!personalSpaceId) {
         setToast(<span>Personal space required. Please complete onboarding.</span>);
-        return;
+        return false;
       }
 
       // Can only edit your own comments (published to your personal space)
       if (commentSpaceId !== personalSpaceId) {
         setToast(<span>You can only edit your own comments</span>);
-        return;
+        return false;
       }
 
       setIsCreating(true);
@@ -427,7 +441,7 @@ export function useCreateComment(targetEntityId: string) {
         if (!space) {
           setToast(<span>Failed to resolve personal space</span>);
           setIsCreating(false);
-          return;
+          return false;
         }
 
         const publish = Effect.gen(function* () {
@@ -475,13 +489,13 @@ export function useCreateComment(targetEntityId: string) {
           queryClient.invalidateQueries({ queryKey: ['comments', targetEntityId] });
 
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return;
+            return false;
           }
 
           console.error('[useCreateComment] Edit failed:', err);
           setToast(<span>Failed to edit comment</span>);
           setError(err as Error);
-          return;
+          return false;
         }
 
         setToast(<span>Comment updated!</span>);
@@ -489,10 +503,13 @@ export function useCreateComment(targetEntityId: string) {
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ['comments', targetEntityId] });
         }, 5000);
+
+        return true;
       } catch (err) {
         console.error('[useCreateComment] Error editing comment:', err);
         setToast(<span>Failed to edit comment</span>);
         setError(err as Error);
+        return false;
       } finally {
         setIsCreating(false);
       }

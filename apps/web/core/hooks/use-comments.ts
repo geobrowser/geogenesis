@@ -101,6 +101,8 @@ function buildCommentTree(comments: CommentEntity[]): CommentWithReplies[] {
     }
   }
 
+  // Baseline reply order is oldest-first (thread reading order). The UI applies the active
+  // sort and pins session-new comments on top of whatever order is chosen.
   const sortReplies = (items: CommentWithReplies[]) => {
     for (const item of items) {
       item.replies.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

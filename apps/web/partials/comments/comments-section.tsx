@@ -176,34 +176,64 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
     });
   }, []);
 
-  const handleCreateComment = (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
-    createComment({
-      text,
-      targetSpaceId: spaceId,
-      ancestorComments,
-    });
-  };
+  // Comments the user created in this session are pinned to the top of their thread group
+  // (root or replies) regardless of the active sort, so a just-posted comment doesn't scroll
+  // away from the user while they're reading. Cleared on unmount / page refresh.
+  // Ordered most-recent-first so back-to-back posts stack in the order they were made.
+  const [sessionNewIds, setSessionNewIds] = React.useState<string[]>([]);
+  const markSessionNew = React.useCallback((id: string) => {
+    setSessionNewIds((prev: string[]) => (prev.includes(id) ? prev : [id, ...prev]));
+  }, []);
 
-  const handleEditComment = (commentId: string, commentSpaceId: string, newText: string) => {
-    editComment({ commentId, commentSpaceId, newText });
-  };
+  const handleCreateComment = React.useCallback(
+    async (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>): Promise<boolean> => {
+      const id = await createComment({
+        text,
+        targetSpaceId: spaceId,
+        ancestorComments,
+      });
+      if (id) markSessionNew(id);
+      return id != null;
+    },
+    [createComment, spaceId, markSessionNew]
+  );
+
+  const handleEditComment = React.useCallback(
+    (commentId: string, commentSpaceId: string, newText: string): Promise<boolean> =>
+      editComment({ commentId, commentSpaceId, newText }),
+    [editComment]
+  );
+
+  /**
+   * Sort comments by the active dropdown order, then lift any session-new comments to the top
+   * in the order they were posted (most recent first). Used at every nesting level so replies
+   * and root comments follow the same rules.
+   */
+  const sortWithSessionPinned = React.useCallback(
+    <T extends { id: string; createdAt: string }>(list: T[]): T[] => {
+      const sorted = [...list].sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return sortOrder === 'oldest' ? aTime - bTime : bTime - aTime;
+      });
+      if (sessionNewIds.length === 0) return sorted;
+      const pinnedSet = new Set(sessionNewIds);
+      const rest = sorted.filter(c => !pinnedSet.has(c.id));
+      const pinned: T[] = sessionNewIds
+        .map((id: string) => sorted.find((c: T) => c.id === id))
+        .filter((c): c is T => c !== undefined);
+      return [...pinned, ...rest];
+    },
+    [sortOrder, sessionNewIds]
+  );
 
   const filteredComments = React.useMemo(() => {
-    let result = [...comments];
-
+    let result = comments;
     if (filter === 'editors') {
       result = filterEditorsOnly(result, editorSpaceIds);
     }
-
-    // Sort root comments
-    if (sortOrder === 'oldest') {
-      result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    } else {
-      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
-    return result;
-  }, [comments, sortOrder, filter, editorSpaceIds]);
+    return sortWithSessionPinned(result);
+  }, [comments, filter, editorSpaceIds, sortWithSessionPinned]);
 
   return (
     <CommentBranchHighlightProvider>
@@ -212,10 +242,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
         Comments ({totalCount})
       </div>
       <Spacer height={16} />
-      <TopLevelCommentInput
-        onSubmit={text => handleCreateComment(text)}
-        isCreating={isCreating}
-      />
+      <TopLevelCommentInput onSubmit={handleCreateComment} isCreating={isCreating} />
       {totalCount > 0 && (
         <>
           <Spacer height={16} />
@@ -248,6 +275,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
               editorSpaceIds={editorSpaceIds}
               isThreadCollapsed={isThreadCollapsed}
               toggleThreadCollapsed={toggleThreadCollapsed}
+              sortReplies={sortWithSessionPinned}
             />
           </>
         )
@@ -311,7 +339,7 @@ function TopLevelCommentInput({
   onSubmit,
   isCreating,
 }: {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => Promise<boolean>;
   isCreating: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -329,9 +357,10 @@ function TopLevelCommentInput({
 
   return (
     <CommentInput
-      onSubmit={text => {
-        onSubmit(text);
-        setIsExpanded(false);
+      onSubmit={async text => {
+        const ok = await onSubmit(text);
+        if (ok) setIsExpanded(false);
+        return ok;
       }}
       isCreating={isCreating}
       placeholder=""
@@ -349,7 +378,7 @@ function CommentInput({
   onCancel,
   initialValue = '',
 }: {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => Promise<boolean>;
   isCreating: boolean;
   placeholder: string;
   autoFocus?: boolean;
@@ -359,11 +388,13 @@ function CommentInput({
   const [text, setText] = useState(initialValue);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = () => {
+  // Keep the input visible and the text intact until publish actually succeeds.
+  // On success, clear the text; on failure, leave it so the user can retry without retyping.
+  const handleSubmit = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
-    setText('');
+    if (!trimmed || isCreating) return;
+    const ok = await onSubmit(trimmed);
+    if (ok) setText('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -435,6 +466,7 @@ function CommentList({
   editorSpaceIds,
   isThreadCollapsed,
   toggleThreadCollapsed,
+  sortReplies,
   depth = 0,
   ancestors = [],
   parentCommentId,
@@ -442,13 +474,14 @@ function CommentList({
   comments: CommentWithReplies[];
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
-  onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
+  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => Promise<boolean>;
+  onEdit: (commentId: string, commentSpaceId: string, newText: string) => Promise<boolean>;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   isThreadCollapsed: (commentId: string) => boolean;
   toggleThreadCollapsed: (commentId: string) => void;
+  sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   depth?: number;
   ancestors?: Array<{ id: string; spaceId: string }>;
   parentCommentId?: string;
@@ -471,6 +504,7 @@ function CommentList({
             editorSpaceIds={editorSpaceIds}
             isThreadCollapsed={isThreadCollapsed}
             toggleThreadCollapsed={toggleThreadCollapsed}
+            sortReplies={sortReplies}
             isLast={index === comments.length - 1}
             depth={depth}
             ancestors={ancestors}
@@ -661,6 +695,7 @@ function CommentList({
               editorSpaceIds={editorSpaceIds}
               isThreadCollapsed={isThreadCollapsed}
               toggleThreadCollapsed={toggleThreadCollapsed}
+              sortReplies={sortReplies}
               isLast={index === comments.length - 1}
               depth={depth}
               ancestors={ancestors}
@@ -683,6 +718,7 @@ function CommentItem({
   editorSpaceIds,
   isThreadCollapsed,
   toggleThreadCollapsed,
+  sortReplies,
   isLast,
   depth,
   ancestors,
@@ -690,13 +726,14 @@ function CommentItem({
   comment: CommentWithReplies;
   entityId: string;
   spaceId: string;
-  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
-  onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
+  onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => Promise<boolean>;
+  onEdit: (commentId: string, commentSpaceId: string, newText: string) => Promise<boolean>;
   isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   isThreadCollapsed: (commentId: string) => boolean;
   toggleThreadCollapsed: (commentId: string) => void;
+  sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   isLast: boolean;
   depth: number;
   ancestors: Array<{ id: string; spaceId: string }>;
@@ -709,16 +746,19 @@ function CommentItem({
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
   const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
 
-  const handleReply = (text: string) => {
-    // Build full ancestor chain: this comment + all its ancestors
+  // Close the reply / edit boxes only when the publish actually succeeds so the user's
+  // draft is preserved on failure and the box stays visible during the "Commenting..." state.
+  const handleReply = async (text: string): Promise<boolean> => {
     const fullAncestors = [{ id: comment.id, spaceId: comment.spaceId }, ...ancestors];
-    onReply(text, fullAncestors);
-    setIsReplying(false);
+    const ok = await onReply(text, fullAncestors);
+    if (ok) setIsReplying(false);
+    return ok;
   };
 
-  const handleEdit = (newText: string) => {
-    onEdit(comment.id, comment.spaceId, newText);
-    setIsEditing(false);
+  const handleEdit = async (newText: string): Promise<boolean> => {
+    const ok = await onEdit(comment.id, comment.spaceId, newText);
+    if (ok) setIsEditing(false);
+    return ok;
   };
 
   const renderedContent = React.useMemo(() => {
@@ -730,6 +770,7 @@ function CommentItem({
   }, [comment.createdAt]);
 
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -28;
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
@@ -788,11 +829,6 @@ function CommentItem({
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
           {relativeTime}
         </Text>
-        {comment.isPendingPublish && (
-          <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-            Publishing…
-          </Text>
-        )}
         {comment.resolved && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -912,7 +948,7 @@ function CommentItem({
       {replies.length > 0 && (
         <div className={`mt-4${hasReplies ? ' comment-replies-slot' : ''}`} ref={repliesRef}>
           <CommentList
-            comments={replies}
+            comments={sortedReplies}
             entityId={entityId}
             spaceId={spaceId}
             onReply={onReply}
@@ -922,6 +958,7 @@ function CommentItem({
             editorSpaceIds={editorSpaceIds}
             isThreadCollapsed={isThreadCollapsed}
             toggleThreadCollapsed={toggleThreadCollapsed}
+            sortReplies={sortReplies}
             depth={depth + 1}
             ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
             parentCommentId={comment.id}
@@ -964,11 +1001,6 @@ function CommentItem({
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
               {relativeTime}
             </Text>
-            {comment.isPendingPublish && (
-              <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-                Publishing…
-              </Text>
-            )}
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"
