@@ -1524,10 +1524,17 @@ function TableBlockEntityFilterInput({
   const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
   const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
 
+  // The Types system property is connected to essentially every entity in
+  // the graph, so the scoped aggregation — even phrased as
+  // entitiesConnection + backlinks.some — is 10+ seconds server-side. And
+  // the scoped answer is low-value: for a table filtered by Types = X it
+  // resolves to "X" itself. Fall straight through to the browse list for
+  // this property.
   const relationsEnabled =
     focused &&
     !autocomplete.query.trim() &&
     Boolean(scopedRelationPropertyId) &&
+    scopedRelationPropertyId !== SystemIds.TYPES_PROPERTY &&
     !waitForFilterTypes;
 
   const {
