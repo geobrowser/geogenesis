@@ -20,6 +20,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
@@ -1551,6 +1552,7 @@ function TableBlockEntityFilterInput({
       'table-block-filter-entity-browse',
       filterByTypes?.slice().sort().join(',') ?? '',
       suggestionSpaceId ?? '',
+      'updated-at-desc',
     ],
     enabled: browseEnabled,
     initialPageParam: 0,
@@ -1565,6 +1567,7 @@ function TableBlockEntityFilterInput({
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
         spaceId: suggestionSpaceId,
+        orderBy: [EntitiesOrderBy.UpdatedAtDesc],
       });
       const pageEntities = merged.slice(0, remote.length).filter((e): e is Entity => e != null);
 
@@ -1609,13 +1612,6 @@ function TableBlockEntityFilterInput({
   const rowsToRender = React.useMemo(() => {
     const q = autocomplete.query.trim();
     if (!q) {
-      if (
-        browseEnabled &&
-        filteredScopedByTargetType.length > 0 &&
-        isBrowsePending
-      ) {
-        return [];
-      }
       const scopedRows = filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
       const scopedIds = new Set(filteredScopedByTargetType.map(s => s.id));
       const browseRows = browseResults
@@ -1645,8 +1641,6 @@ function TableBlockEntityFilterInput({
     browseResults,
     filterByTypes,
     restrictSearchToTypes,
-    browseEnabled,
-    isBrowsePending,
   ]);
 
   const entityListResetKey = [

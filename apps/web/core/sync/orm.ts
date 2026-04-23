@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { SortOrder } from '~/core/gql/graphql';
+import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
@@ -214,6 +214,7 @@ export class E {
     skip,
     spaceId,
     sort,
+    orderBy,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -222,6 +223,7 @@ export class E {
     skip: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    orderBy?: EntitiesOrderBy[];
   }): Promise<{ merged: Entity[]; remote: Entity[] }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
@@ -295,6 +297,7 @@ export class E {
             offset,
             filter,
             typeIds,
+            orderBy,
           })
         );
 
