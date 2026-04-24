@@ -1275,25 +1275,29 @@ function TableBlockEntityFilterInput({
   }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, searchResults.length, rowsToRender.length, entityVisibleCount]);
 
   // Pull pages until either (a) the dropdown has a full page of rows, or
-  // (b) the most recent REST page contributed zero post-filter rows
-  // (findFuzzyPage drops entities whose spaces can't be resolved, so a
-  // page can be empty even when the result set isn't exhausted). Without
-  // this, stretches of sparse pages force the user to click "Load more"
-  // repeatedly to chew through them.
+  // (b) the REST endpoint returned a full raw page but every row got
+  // dropped by findFuzzyPage's space-resolution filter. Case (b)
+  // specifically signals "we're in a sparse run mid-result-set" rather
+  // than "we've hit the tail" — a partial raw page means REST itself has
+  // nothing more to give and we should stop.
   const lastSearchPage = searchPages?.pages[searchPages.pages.length - 1];
-  const lastSearchPageEmpty = Boolean(lastSearchPage && lastSearchPage.rows.length === 0);
+  const lastSearchPageFullRawButEmptyFiltered = Boolean(
+    lastSearchPage &&
+      lastSearchPage.rows.length === 0 &&
+      lastSearchPage.rawCount >= FILTER_DROPDOWN_PAGE_SIZE
+  );
   React.useEffect(() => {
     if (!focused) return;
     if (!hasNextSearchPage) return;
     if (isSearchFetching || isSearchFetchingNextPage) return;
     const initialFillIncomplete = rowsToRender.length < FILTER_DROPDOWN_PAGE_SIZE;
-    if (initialFillIncomplete || lastSearchPageEmpty) {
+    if (initialFillIncomplete || lastSearchPageFullRawButEmptyFiltered) {
       void fetchNextSearchPage();
     }
   }, [
     focused,
     rowsToRender.length,
-    lastSearchPageEmpty,
+    lastSearchPageFullRawButEmptyFiltered,
     hasNextSearchPage,
     isSearchFetching,
     isSearchFetchingNextPage,
