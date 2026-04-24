@@ -29,10 +29,12 @@ import { useMutate } from '~/core/sync/use-mutate';
 import type { Relation } from '~/core/types';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Menu } from '~/design-system/icons/menu';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { NavUtils } from '~/core/utils/utils';
 
 export type SystemTab = {
   label: string;
@@ -200,6 +202,7 @@ export function EditableTabGroup({
                   onRename={newName => handleRenameTab(tab, newName)}
                   onCancelEditing={() => setEditingTabId(null)}
                   onDelete={() => handleDeleteTab(tab)}
+                  onOpen={() => router.push(NavUtils.toEntity(tab.relation.spaceId, tab.entityId))}
                 />
               ))}
             </SortableContext>
@@ -259,6 +262,7 @@ type SortableTabProps = {
   onRename: (name: string) => void;
   onCancelEditing: () => void;
   onDelete: () => void;
+  onOpen: () => void;
 };
 
 function SortableTab({
@@ -269,6 +273,7 @@ function SortableTab({
   onRename,
   onCancelEditing,
   onDelete,
+  onOpen,
 }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.relation.id,
@@ -315,7 +320,7 @@ function SortableTab({
 
       {/* Action menu — absolute so it doesn't push neighboring tabs apart */}
       {!isEditing && !isDragging && (
-        <div className="absolute top-1/2 left-full z-20 ml-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100">
+        <div className="absolute top-1/2 left-full z-20 ml-2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100">
           <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <Popover.Trigger asChild>
               <button
@@ -344,6 +349,16 @@ function SortableTab({
                 >
                   <EditSmall />
                   Edit name
+                </button>
+                <button
+                  onClick={() => {
+                    setIsPopoverOpen(false);
+                    onOpen();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
+                >
+                  <ExpandSmall />
+                  Open tab entity
                 </button>
                 <button
                   onClick={() => {
@@ -388,9 +403,9 @@ function TabNameInput({ initialValue, onSubmit, onCancel }: TabNameInputProps) {
         }
       }}
       onFocus={e => e.currentTarget.select()}
-      className="relative z-10 min-w-[40px] border-b border-text bg-transparent text-quoteMedium text-text outline-none"
-      placeholder="Tab name..."
-      style={{ width: `${Math.max(value.length, 6)}ch` }}
+      className="relative z-10 bg-transparent text-quoteMedium text-text outline-none"
+      placeholder="Tab name"
+      style={{ width: `${Math.max(value.length, 'Tab name'.length)}ch` }}
     />
   );
 }
