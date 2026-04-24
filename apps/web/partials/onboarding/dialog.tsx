@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ROOT_SPACE } from '~/core/constants';
-import { type CreatePersonalSpaceProgress, useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
+import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
@@ -84,16 +84,17 @@ export const OnboardingDialog = () => {
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
-  const [creationProgress, setCreationProgress] = useState<CreatePersonalSpaceProgress | null>(null);
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
-  // Warm the router cache for the explore destination as soon as the user
-  // starts onboarding, so the post-creation redirect lands instantly.
+  // Warm the router cache for the explore destination once the onboarding
+  // dialog is actually visible, so the post-creation redirect lands
+  // instantly. Skipping for non-onboarding tabs avoids pointless prefetch.
   useEffect(() => {
+    if (!isOnboardingVisible) return;
     router.prefetch(ONBOARDING_DESTINATION);
-  }, [router]);
+  }, [isOnboardingVisible, router]);
 
   // Track whether this tab ever had the onboarding dialog visible. Used
   // to scope side-effects (step resets, redirects) to the tab that was
@@ -114,28 +115,20 @@ export const OnboardingDialog = () => {
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
-  // Schedule the post-creation redirect. We gate on wasOnboardingActiveRef
-  // (not the live isOnboardingVisible) because the dialog hides the moment
-  // usePersonalSpaceId refetches and reports isRegistered=true — that happens
-  // while we're still sitting on step='completed' and would otherwise clear
-  // the timer before it fires. A suppressed new tab never flips the ref,
-  // so it won't auto-navigate away.
-  //
-  // Chat open happens inside the timer (not right after space creation) so
-  // the assistant panel and the explore redirect land in the same frame
-  // instead of the assistant popping open a beat before navigation.
+  // Fire the post-creation redirect as soon as step flips to 'completed'.
+  // Gated on wasOnboardingActiveRef (not the live isOnboardingVisible)
+  // because usePersonalSpaceId flips isRegistered=true at this point and
+  // hides the dialog; a suppressed preview tab never sets the ref, so it
+  // won't auto-navigate away. Chat and redirect fire together.
   useEffect(() => {
     if (!wasOnboardingActiveRef.current) return;
     if (step !== 'completed') return;
-    const timer = setTimeout(() => {
-      if (!hasSeenAssistant) {
-        setChatOpen(true);
-        setHasSeenAssistant(true);
-      }
-      router.push(ONBOARDING_DESTINATION);
-      setStep('done');
-    }, 900);
-    return () => clearTimeout(timer);
+    if (!hasSeenAssistant) {
+      setChatOpen(true);
+      setHasSeenAssistant(true);
+    }
+    router.push(ONBOARDING_DESTINATION);
+    setStep('done');
   }, [step, router, setStep, hasSeenAssistant, setChatOpen, setHasSeenAssistant]);
 
   const address = smartAccount?.account.address;
@@ -155,7 +148,6 @@ export const OnboardingDialog = () => {
         spaceName: name,
         spaceImage: avatar,
         topicId: effectiveTopicId || undefined,
-        onProgress: setCreationProgress,
       });
 
       if (!spaceId) {
@@ -237,11 +229,7 @@ export const OnboardingDialog = () => {
                 />
               )}
               {workflowSteps.includes(effectiveStep) && (
-                <StepComplete
-                  onRetry={onRunOnboardingWorkflow}
-                  showRetry={showRetry}
-                  progress={creationProgress}
-                />
+                <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
               )}
             </ModalCard>
         </Content>
@@ -658,7 +646,6 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
 type StepCompleteProps = {
   onRetry: () => void;
   showRetry: boolean;
-  progress: CreatePersonalSpaceProgress | null;
 };
 
 const retryMessage: Record<Step, string> = {
@@ -670,31 +657,17 @@ const retryMessage: Record<Step, string> = {
   done: '',
 };
 
-const progressCopy: Record<CreatePersonalSpaceProgress, string> = {
-  creating: 'Creating space...',
-  publishing: 'Publishing profile...',
-  finalizing: 'Finalizing...',
-};
-
-function StepComplete({ onRetry, showRetry, progress }: StepCompleteProps) {
+function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
-  // `completed` is a brief 900ms state after the mutation resolves and
-  // before the redirect; show the last-phase copy during that window.
-  const headline =
-    step === 'completed'
-      ? progressCopy.finalizing
-      : progress
-        ? progressCopy[progress]
-        : progressCopy.creating;
 
   return (
     <>
       <StepContents childKey="start">
         <div className="flex w-full flex-col items-center pt-3">
           <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
-            {headline}
+            {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
