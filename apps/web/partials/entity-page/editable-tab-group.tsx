@@ -31,7 +31,6 @@ import type { Relation } from '~/core/types';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Menu } from '~/design-system/icons/menu';
-import { OrderDots } from '~/design-system/icons/order-dots';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { NavUtils } from '~/core/utils/utils';
@@ -128,6 +127,10 @@ export function EditableTabGroup({
     // Set name for the new tab entity
     storage.entities.name.set(tabEntityId, spaceId, '');
 
+    // Always append after the last existing tab — callers may have reordered,
+    // so Position.generate() alone would not guarantee end-of-list placement.
+    const lastPosition = editableTabs.length > 0 ? editableTabs[editableTabs.length - 1].relation.position : null;
+
     // Create the TABS_PROPERTY relation
     storage.relations.set({
       id: relationId,
@@ -135,7 +138,7 @@ export function EditableTabGroup({
       spaceId,
       renderableType: 'RELATION',
       verified: false,
-      position: Position.generate(),
+      position: Position.generateBetween(lastPosition ?? null, null),
       type: {
         id: SystemIds.TABS_PROPERTY,
         name: 'Tabs',
@@ -151,7 +154,8 @@ export function EditableTabGroup({
       },
     });
 
-    // Auto-enter rename mode for the new tab
+    // Navigate to the new tab so it becomes the active tab, and enter rename mode.
+    router.replace(`${overviewHref}?tabId=${tabEntityId}`);
     setEditingTabId(tabEntityId);
   };
 
@@ -213,7 +217,7 @@ export function EditableTabGroup({
 
             <button
               onClick={handleAddTab}
-              className="relative z-10 flex shrink-0 items-center gap-1 text-grey-04 transition-colors duration-100 hover:text-text"
+              className="relative z-10 ml-2 flex shrink-0 items-center gap-1 text-grey-04 transition-colors duration-100 hover:text-text"
               title="Add tab"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -292,19 +296,16 @@ function SortableTab({
 
   return (
     <div ref={setNodeRef} style={style} className="group/tab relative flex items-center">
-      {/* Drag handle — absolute so it doesn't push neighboring tabs apart */}
-      <div
-        className="hover:text-grey-05 absolute top-1/2 right-full z-20 mr-0.5 flex -translate-y-1/2 cursor-grab touch-none items-center rounded p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100 hover:bg-grey-02 active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <OrderDots color="currentColor" />
-      </div>
-
       {isEditing ? (
         <TabNameInput initialValue={displayName} onSubmit={onRename} onCancel={onCancelEditing} />
       ) : (
-        <Link className={tabStyles({ active })} href={tab.href} prefetch>
+        <Link
+          className={cx(tabStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
+          href={tab.href}
+          prefetch
+          {...attributes}
+          {...listeners}
+        >
           {displayName || 'Untitled'}
           {active && (
             <motion.div
@@ -353,22 +354,22 @@ function SortableTab({
                 <button
                   onClick={() => {
                     setIsPopoverOpen(false);
-                    onOpen();
-                  }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
-                >
-                  <ExpandSmall />
-                  Open tab entity
-                </button>
-                <button
-                  onClick={() => {
-                    setIsPopoverOpen(false);
                     onDelete();
                   }}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-red-01 transition-colors hover:bg-grey-01"
                 >
                   <Trash color="red-01" />
                   Delete tab
+                </button>
+                <button
+                  onClick={() => {
+                    setIsPopoverOpen(false);
+                    onOpen();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
+                >
+                  <ExpandSmall />
+                  Open tab entity
                 </button>
               </Popover.Content>
             </Popover.Portal>
