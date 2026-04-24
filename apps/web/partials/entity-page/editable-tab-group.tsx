@@ -5,6 +5,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  MeasuringStrategy,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -92,7 +93,7 @@ export function EditableTabGroup({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 4 },
     })
   );
 
@@ -180,6 +181,7 @@ export function EditableTabGroup({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -346,7 +348,12 @@ function SortableTab({
 
       {/* Action menu — absolute so it doesn't push neighboring tabs apart */}
       {!isEditing && !isDragging && (
-        <div className="absolute top-1/2 left-full z-20 ml-3 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100">
+        <div
+          className={cx(
+            'absolute top-1/2 left-full z-20 ml-3 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-150',
+            isPopoverOpen ? 'opacity-100' : 'opacity-0 group-hover/tab:opacity-100'
+          )}
+        >
           <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <Popover.Trigger asChild>
               <button
@@ -439,7 +446,7 @@ type TabNameInputProps = {
 
 function TabNameInput({ initialValue, onSubmit, onCancel }: TabNameInputProps) {
   const [value, setValue] = useState(initialValue);
-  const placeholder = 'Add value...';
+  const placeholder = 'Tab name';
   // The hidden sizer renders the same text the input shows, so the input's width
   // tracks the rendered glyph width rather than ch units (which over-estimate narrow text).
   const sizerText = value.length > 0 ? value : placeholder;
@@ -463,7 +470,7 @@ function TabNameInput({ initialValue, onSubmit, onCancel }: TabNameInputProps) {
           }
         }}
         onFocus={e => e.currentTarget.select()}
-        className="absolute inset-0 bg-transparent text-text outline-none"
+        className="absolute inset-0 bg-transparent text-text outline-none placeholder:text-grey-03"
         placeholder={placeholder}
       />
     </span>
