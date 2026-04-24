@@ -458,8 +458,14 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName} onClick={handleContinue} className="w-full">
-          {isSearching ? <Dots color="bg-white" /> : 'Continue'}
+        <Button disabled={!validName || isSearching} onClick={handleContinue} className="w-full">
+          {isSearching ? (
+            <span className="inline-flex h-[1.125rem] items-center">
+              <Dots />
+            </span>
+          ) : (
+            'Continue'
+          )}
         </Button>
       </div>
     </div>
