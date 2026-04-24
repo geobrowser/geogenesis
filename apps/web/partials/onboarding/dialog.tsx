@@ -18,7 +18,7 @@ import { Effect } from 'effect';
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
-import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getResults } from '~/core/io/queries';
@@ -87,21 +87,27 @@ export const OnboardingDialog = () => {
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
   useEffect(() => {
+    // Only resolve stale state on tabs where the dialog is actually
+    // being shown. Otherwise a second tab (e.g. entity preview opened
+    // from the match step) would reset `stepAtom` and, via the cross-tab
+    // atomWithStorage sync, clobber the original tab's progress.
+    if (!isOnboardingVisible) return;
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
       setStep('enter-profile');
     }
-  }, [step, entityMatchCandidates.length, setStep]);
+  }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
   // Scheduled here so the redirect always progresses even if the page is
   // reloaded while stuck on the `completed` step (stepAtom is persisted).
   useEffect(() => {
+    if (!isOnboardingVisible) return;
     if (step !== 'completed') return;
     const timer = setTimeout(() => {
       router.push(ONBOARDING_DESTINATION);
       setStep('done');
     }, 900);
     return () => clearTimeout(timer);
-  }, [step, router, setStep]);
+  }, [isOnboardingVisible, step, router, setStep]);
 
   const address = smartAccount?.account.address;
 
@@ -341,10 +347,12 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     setTopicId('');
     setIsSearching(true);
     try {
+      // Skip the server-side type filter: the REST endpoint currently
+      // drops exact matches when combined with type_ids. We fetch a broad
+      // set and filter client-side by the allowed types.
       const results = await Effect.runPromise(
         getResults({
           query: name,
-          typeIds: ONBOARDING_PERSONAL_SEARCH_TYPES,
           limit: 100,
         })
       );
@@ -435,97 +443,94 @@ type StepExistingEntityMatchProps = {
 function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingEntityMatchProps) {
   return (
     <div className="flex h-full flex-col">
-      <StepContents childKey="entity-match">
-        <div className="flex max-h-[220px] flex-col gap-3 overflow-hidden">
-          <Text as="h3" variant="bodySemibold" className="text-center text-lg!">
-            Do any of these existing entities represent you?
-          </Text>
-          <Text as="p" variant="footnote" className="text-center text-grey-04">
-            We found entities whose names exactly match what you entered. Choose one only if it is your profile in
-            Geo; otherwise skip to create a new one.
-          </Text>
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02">
-            {candidates.map(result => (
-              <div key={result.id} className="border-b border-divider last:border-b-0">
-                <div className="p-1">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(result.id, result.name)}
-                    className="relative z-10 flex w-full cursor-pointer flex-col rounded-md px-2 py-2 text-left transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
-                  >
-                    <div className="relative w-full pr-8">
-                      <div className="relative z-0 max-w-full truncate text-button text-text">{result.name}</div>
-                      <div className="absolute top-0 right-0 bottom-0 flex items-center">
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={e => {
-                            e.stopPropagation();
-                            window.open(
-                              NavUtils.toEntity(ROOT_SPACE, result.id),
-                              '_blank',
-                              'noopener,noreferrer'
-                            );
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              window.open(
-                                NavUtils.toEntity(ROOT_SPACE, result.id),
-                                '_blank',
-                                'noopener,noreferrer'
-                              );
-                            }
-                          }}
-                          className="relative cursor-pointer text-text hover:text-ctaPrimary"
-                        >
-                          <NewTab />
-                          <span className="sr-only">Open entity in new tab</span>
-                        </span>
-                      </div>
+      <div className="shrink-0 space-y-2 pb-4">
+        <Text as="h3" variant="bodySemibold" className="text-center text-2xl!">
+          Is this you?
+        </Text>
+        <Text as="p" variant="body" className="text-center text-grey-04">
+          Looks like your name already exists on Geo. If one of these is you, claim it! Otherwise, skip and we&apos;ll
+          make you a fresh profile.
+        </Text>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02 bg-white">
+        {candidates.map((result, index) => (
+          <div
+            key={result.id}
+            className={index < candidates.length - 1 ? 'border-b border-divider' : undefined}
+          >
+            <div className="p-1">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelect(result.id, result.name)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(result.id, result.name);
+                  }
+                }}
+                className="relative z-10 flex w-full cursor-pointer flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
+              >
+                <div className="relative w-full pr-6">
+                  <div className="relative z-0 max-w-full truncate text-button text-text">{result.name}</div>
+                  <div className="absolute top-0 right-0 bottom-0 flex items-center">
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        window.open(
+                          `${NavUtils.toEntity(ROOT_SPACE, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
+                          '_blank',
+                          'noopener,noreferrer'
+                        );
+                      }}
+                      className="relative text-text hover:text-ctaPrimary"
+                    >
+                      <NewTab />
+                      <div className="absolute -inset-4" />
+                      <span className="sr-only">Open entity in new tab</span>
+                    </button>
+                  </div>
+                </div>
+                {result.types.length > 0 && (
+                  <>
+                    <Spacer height={4} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {result.types.map(type => (
+                        <Tag key={type.id}>{type.name}</Tag>
+                      ))}
                     </div>
-                    {result.types.length > 0 && (
-                      <>
-                        <Spacer height={4} />
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {result.types.map(type => (
-                            <Tag key={type.id}>{type.name}</Tag>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {result.description && (
-                      <>
-                        <Spacer height={4} />
-                        <Truncate maxLines={2} shouldTruncate variant="footnote">
-                          <p className="text-footnote text-grey-04">{result.description}</p>
-                        </Truncate>
-                      </>
-                    )}
-                    <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                      <div className="inline-flex gap-0">
-                        {(result.spaces ?? []).slice(0, 3).map(space => (
-                          <div
-                            key={space.spaceId}
-                            className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                          >
-                            <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
-                          </div>
-                        ))}
+                  </>
+                )}
+                {result.description && (
+                  <>
+                    <Spacer height={4} />
+                    <Truncate maxLines={2} shouldTruncate variant="footnote">
+                      <p className="text-footnote text-grey-04">{result.description}</p>
+                    </Truncate>
+                  </>
+                )}
+                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                  <div className="inline-flex gap-0">
+                    {(result.spaces ?? []).slice(0, 3).map(space => (
+                      <div
+                        key={space.spaceId}
+                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                      >
+                        <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
                       </div>
-                      {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                    </div>
-                  </button>
+                    ))}
+                  </div>
+                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      </StepContents>
-      <div className="mt-auto flex flex-col gap-2 pt-4">
+        ))}
+      </div>
+      <div className="shrink-0 pt-4">
         <Button type="button" variant="secondary" onClick={onSkip} className="w-full">
-          Skip - none of these are me
+          None of these are me
         </Button>
       </div>
     </div>
