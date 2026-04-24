@@ -7,7 +7,7 @@ import * as React from 'react';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -61,9 +61,6 @@ function filterExactNameMatches(results: SearchResult[], name: string, allowedTy
       (r.name ?? '').trim().toLowerCase() === normalized && searchResultMatchesAllowedTypes(r, allowedTypes)
   );
 }
-
-const MotionContent = motion.create(Content);
-const MotionOverlay = motion.create(Overlay);
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
@@ -172,20 +169,9 @@ export const OnboardingDialog = () => {
 
   return (
     <Root open={isOnboardingVisible}>
-      <AnimatePresence mode="wait">
-        <Portal key="onboarding-portal">
-          <MotionOverlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.2 }}
-            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.1 } }}
-            className="fixed inset-0 z-100 bg-text"
-          />
-          <MotionContent
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
-            className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center"
-          >
+      <Portal>
+        <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
+        <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
             <ModalCard childKey="card">
               <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
               {step === 'start' && <StepStart />}
@@ -210,9 +196,8 @@ export const OnboardingDialog = () => {
               )}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
-          </MotionContent>
-        </Portal>
-      </AnimatePresence>
+        </Content>
+      </Portal>
     </Root>
   );
 };
