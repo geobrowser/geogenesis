@@ -2115,12 +2115,11 @@ function TableBlockTextFilterInput({
     [applyTextListPagination]
   );
 
-  // Only surface the suggestions dropdown once the user starts typing.
-  // Non-relation filters don't have a meaningful "show me everything" list,
-  // so an empty-input dropdown just adds visual noise on focus.
-  const hasQuery = value.trim().length > 0;
-  const showEmptyTextHint = focused && hasQuery && stringSuggestions.length === 0 && filtered.length === 0;
-  const showDropdown = focused && hasQuery && (showEmptyTextHint || filtered.length > 0);
+  // Non-relation filters (Name, Description, etc.) don't surface a
+  // suggestions dropdown at all right now — user types the exact value
+  // they want to filter by.
+  const showEmptyTextHint = false;
+  const showDropdown = false;
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
