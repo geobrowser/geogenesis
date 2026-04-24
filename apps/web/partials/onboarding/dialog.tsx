@@ -92,6 +92,17 @@ export const OnboardingDialog = () => {
     }
   }, [step, entityMatchCandidates.length, setStep]);
 
+  // Scheduled here so the redirect always progresses even if the page is
+  // reloaded while stuck on the `completed` step (stepAtom is persisted).
+  useEffect(() => {
+    if (step !== 'completed') return;
+    const timer = setTimeout(() => {
+      router.push(ONBOARDING_DESTINATION);
+      setStep('done');
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [step, router, setStep]);
+
   const address = smartAccount?.account.address;
 
   if (!address) return null;
@@ -125,10 +136,6 @@ export const OnboardingDialog = () => {
         setChatOpen(true);
         setHasSeenAssistant(true);
       }
-
-      await sleep(900);
-      router.push(ONBOARDING_DESTINATION);
-      setStep('done');
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -441,7 +448,7 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
             Do any of these existing entities represent you?
           </Text>
           <Text as="p" variant="footnote" className="text-center text-grey-04">
-            We found entities whose name exactly matches what you entered. Choose one only if it is your profile in
+            We found entities whose names exactly match what you entered. Choose one only if it is your profile in
             Geo; otherwise skip to create a new one.
           </Text>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02">
@@ -456,16 +463,33 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
                     <div className="relative w-full pr-8">
                       <div className="relative z-0 max-w-full truncate text-button text-text">{result.name}</div>
                       <div className="absolute top-0 right-0 bottom-0 flex items-center">
-                        <a
-                          href={NavUtils.toEntity(ROOT_SPACE, result.id)}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="relative text-text hover:text-ctaPrimary"
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={e => {
+                            e.stopPropagation();
+                            window.open(
+                              NavUtils.toEntity(ROOT_SPACE, result.id),
+                              '_blank',
+                              'noopener,noreferrer'
+                            );
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              window.open(
+                                NavUtils.toEntity(ROOT_SPACE, result.id),
+                                '_blank',
+                                'noopener,noreferrer'
+                              );
+                            }
+                          }}
+                          className="relative cursor-pointer text-text hover:text-ctaPrimary"
                         >
                           <NewTab />
                           <span className="sr-only">Open entity in new tab</span>
-                        </a>
+                        </span>
                       </div>
                     </div>
                     {result.types.length > 0 && (
