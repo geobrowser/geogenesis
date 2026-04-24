@@ -331,12 +331,11 @@ export class E {
     first: number;
     skip: number;
   }): Promise<SearchResult[]> {
-    const nameFilter = where.name?.fuzzy;
-
-    if (!nameFilter) {
-      console.error('findFuzzy requires a query. Received: ', nameFilter);
-      return [];
-    }
+    // Empty string is intentional here: the REST /search endpoint accepts
+    // an empty query and returns top-N globally ranked entities (optionally
+    // constrained by typeIds / spaceId). Callers that want paginated "every
+    // entity of this type" results pass '' on purpose.
+    const nameFilter = where.name?.fuzzy ?? '';
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];

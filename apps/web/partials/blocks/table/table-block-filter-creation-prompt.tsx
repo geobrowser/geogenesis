@@ -21,9 +21,10 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getResults, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { E } from '~/core/sync/orm';
 import { reactiveRelations } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -1509,45 +1510,24 @@ function TableBlockEntityFilterInput({
     ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
-    queryFn: async ({ pageParam, signal }) => {
-      const rows = await Effect.runPromise(
-        getResults(
-          {
-            query,
-            typeIds: filterByTypes?.length ? filterByTypes : undefined,
-            limit: FILTER_DROPDOWN_PAGE_SIZE,
-            offset: pageParam,
-          },
-          signal
-        )
-      );
-
-      // REST /search returns incomplete SpaceEntity payloads (just id + optional
-      // avatar), so space names and icons don't render in the dropdown. Hydrate
-      // the full SpaceEntity for every unique space id seen on this page and
-      // overlay it on the results.
-      const spaceIdSet = new Set<string>();
-      for (const r of rows) {
-        for (const s of r.spaces) {
-          if (s.id) spaceIdSet.add(s.id);
-        }
-      }
-      const uniqueSpaceIds = [...spaceIdSet];
-      if (uniqueSpaceIds.length > 0) {
-        const fetchedSpaces = await cache.fetchQuery({
-          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
-          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
-          staleTime: Duration.toMillis(Duration.seconds(60)),
-        });
-        const spaceEntityById = new Map<string, SpaceEntity>();
-        for (const s of fetchedSpaces) {
-          spaceEntityById.set(s.id, s.entity);
-        }
-        for (const r of rows) {
-          r.spaces = r.spaces.map(s => spaceEntityById.get(s.id) ?? s);
-        }
-      }
-
+    queryFn: async ({ pageParam }) => {
+      // Use the same fuzzy-search path the global search bar uses so the
+      // row display (space icon + breadcrumb + type tags + description)
+      // matches everywhere. E.findFuzzy post-processes REST /search
+      // results with getSpaces + resolveSearchSpaces + hasName filtering,
+      // so space names/icons render consistently.
+      const rows = await E.findFuzzy({
+        store,
+        cache,
+        where: {
+          name: { fuzzy: query },
+          ...(filterByTypes?.length
+            ? { types: filterByTypes.map(id => ({ id: { equals: id } })) }
+            : {}),
+        },
+        first: FILTER_DROPDOWN_PAGE_SIZE,
+        skip: pageParam,
+      });
       return { rows, offset: pageParam };
     },
     getNextPageParam: lastPage =>
