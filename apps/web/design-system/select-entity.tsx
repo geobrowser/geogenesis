@@ -542,7 +542,7 @@ export const SelectEntity = ({
                                     <div className="mt-1.5 flex items-center gap-1.5">
                                       {withSelectSpace && (result.spaces ?? []).length > 0 && (
                                         <div className="flex shrink-0 items-center gap-1">
-                                          <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
+                                          <span className="inline-flex size-[12px] items-center justify-center overflow-hidden rounded-sm">
                                             <NativeGeoImage
                                               value={result.spaces[0].image}
                                               alt=""
