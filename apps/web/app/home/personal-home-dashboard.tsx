@@ -227,12 +227,24 @@ function GovernanceFilterMenu({
   maxHeightClass?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [pendingLabel, setPendingLabel] = React.useState<string | null>(null);
+  const prevLabelRef = React.useRef(label);
+
+  React.useEffect(() => {
+    if (prevLabelRef.current !== label) {
+      prevLabelRef.current = label;
+      setPendingLabel(null);
+    }
+  }, [label]);
+
+  const displayLabel = pendingLabel ?? label;
+
   return (
     <Menu
       open={open}
       onOpenChange={setOpen}
       asChild
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{displayLabel}</SmallButton>}
       align="start"
     >
       <div className={maxHeightClass}>
@@ -240,7 +252,10 @@ function GovernanceFilterMenu({
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              if (item.label !== label) setPendingLabel(item.label);
+              setOpen(false);
+            }}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
             {showImages && item.showImage !== false ? (

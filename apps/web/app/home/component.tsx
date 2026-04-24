@@ -44,8 +44,6 @@ export async function Component({
   myProposalSpaceOptions,
   myProposalSpaceIds,
 }: Props) {
-  const listKey = `${governanceTab}-${governanceFilters.spaceId}-${governanceFilters.category}-${governanceFilters.status}-${proposalType}-${connectedAddress}`;
-
   return (
     <>
       <div className="mx-auto w-full max-w-[880px]">
@@ -60,7 +58,6 @@ export async function Component({
               <p className="text-body text-grey-04">Sign in to see your proposals.</p>
             ) : governanceTab === 'my' && connectedSpaceId ? (
               <React.Suspense
-                key={listKey}
                 fallback={
                   <div className="space-y-2">
                     <LoadingSkeleton />
@@ -81,7 +78,6 @@ export async function Component({
               </React.Suspense>
             ) : (
               <React.Suspense
-                key={listKey}
                 fallback={
                   <div className="space-y-2">
                     <LoadingSkeleton />
