@@ -277,7 +277,7 @@ export function EditableTabGroup({
             className
           )}
         >
-          <div className="relative flex w-max items-center gap-6 pb-2">
+          <div className="relative z-10 flex w-max items-center gap-6 pb-2">
             {systemTabsBefore.map(tab => (
               <StaticTab key={tab.href} href={tab.href} label={tab.label} active={tab.href === fullPath} />
             ))}
