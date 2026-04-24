@@ -13,6 +13,7 @@ import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
 import { Effect } from 'effect';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
@@ -20,8 +21,9 @@ import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { getResults } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
+import { E } from '~/core/sync/orm';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import type { SearchResult } from '~/core/types';
 import { NavUtils, sleep } from '~/core/utils/utils';
@@ -319,6 +321,9 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
+  const { store } = useSyncEngine();
+  const cache = useQueryClient();
+
   const [isSearching, setIsSearching] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -351,13 +356,20 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     setTopicId('');
     setIsSearching(true);
     try {
-      // Skip the server-side type filter: the REST endpoint currently
-      // drops exact matches when combined with type_ids. We fetch a broad
-      // set and filter client-side by the allowed types.
+      // Use the same GraphQL fuzzy search the global search uses, so
+      // results include space name/image for consistent display. Bump
+      // first to 100 so exact matches aren't truncated out when there
+      // are many fuzzy hits ranked above them.
       const results = await Effect.runPromise(
-        getResults({
-          query: name,
-          limit: 100,
+        E.findFuzzy({
+          store,
+          cache,
+          where: {
+            name: { fuzzy: name },
+            types: ONBOARDING_PERSONAL_SEARCH_TYPES.map(t => ({ id: { equals: t } })),
+          },
+          first: 100,
+          skip: 0,
         })
       );
       const exactMatches = filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES);
@@ -457,8 +469,8 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
           Is this you?
         </Text>
         <Text as="p" variant="body" className="text-center text-grey-04">
-          Looks like your name already exists on Geo. If one of these is you, claim it! Otherwise, skip and we&apos;ll
-          make you a fresh profile.
+          Looks like your name exists on Geo. If one of these is you, claim it! Otherwise, let&apos;s make you a fresh
+          profile.
         </Text>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02 bg-white">
