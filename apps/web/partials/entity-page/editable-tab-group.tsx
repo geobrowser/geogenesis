@@ -26,7 +26,11 @@ import { ID } from '~/core/id';
 import { useTabId } from '~/core/state/editor/use-editor';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
+
+// Page entity type — new tabs are created as entities of this type.
+const PAGE_TYPE_ID = '480e3fc267f3499385fbacdf4ddeaa6b';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
@@ -121,8 +125,10 @@ export function EditableTabGroup({
 
   const handleAddTab = () => {
     const tabEntityId = ID.createEntityId();
-    const relationId = ID.createEntityId();
-    const relationEntityId = ID.createEntityId();
+    const tabsRelationId = ID.createEntityId();
+    const tabsRelationEntityId = ID.createEntityId();
+    const typesRelationId = ID.createEntityId();
+    const typesRelationEntityId = ID.createEntityId();
 
     // Set name for the new tab entity
     storage.entities.name.set(tabEntityId, spaceId, '');
@@ -133,8 +139,8 @@ export function EditableTabGroup({
 
     // Create the TABS_PROPERTY relation
     storage.relations.set({
-      id: relationId,
-      entityId: relationEntityId,
+      id: tabsRelationId,
+      entityId: tabsRelationEntityId,
       spaceId,
       renderableType: 'RELATION',
       verified: false,
@@ -154,6 +160,29 @@ export function EditableTabGroup({
       },
     });
 
+    // Type the new tab entity as a Page so it renders with the correct schema.
+    storage.relations.set({
+      id: typesRelationId,
+      entityId: typesRelationEntityId,
+      spaceId,
+      renderableType: 'RELATION',
+      verified: false,
+      position: Position.generate(),
+      type: {
+        id: SystemIds.TYPES_PROPERTY,
+        name: 'Types',
+      },
+      fromEntity: {
+        id: tabEntityId,
+        name: null,
+      },
+      toEntity: {
+        id: PAGE_TYPE_ID,
+        name: 'Page',
+        value: PAGE_TYPE_ID,
+      },
+    });
+
     // Navigate to the new tab so it becomes the active tab, and enter rename mode.
     // `scroll: false` keeps the user's current scroll position.
     router.replace(`${overviewHref}?tabId=${tabEntityId}`, { scroll: false });
@@ -161,11 +190,60 @@ export function EditableTabGroup({
   };
 
   const handleDeleteTab = (tab: EditableTab) => {
-    storage.relations.delete(tab.relation);
+    const tabEntityId = tab.entityId;
+
+    // 1. Gather every value and relation attached to the tab entity (both directions).
+    const tabValues = getValues({ selector: v => v.entity.id === tabEntityId });
+    const tabRelations = getRelations({
+      selector: r => r.fromEntity.id === tabEntityId || r.toEntity.id === tabEntityId,
+    });
+
+    // 2. Find block entities the tab owns via BLOCKS relations.
+    const blockIds = [
+      ...new Set(
+        tabRelations.filter(r => r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS).map(r => r.toEntity.id)
+      ),
+    ];
+
+    // A block is orphaned once the tab's BLOCKS relations are removed and nothing else points to it.
+    const orphanedBlockIds = blockIds.filter(blockId => {
+      const remainingRefs = getRelations({
+        selector: r =>
+          r.toEntity.id === blockId && !(r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS),
+      });
+      return remainingRefs.length === 0;
+    });
+
+    // 3. Collect relation/value objects for orphan blocks so they get cleaned up too.
+    const relationIds = new Set<string>();
+    const allRelationsToDelete: typeof tabRelations = [];
+    for (const r of [...tabRelations, tab.relation]) {
+      if (!relationIds.has(r.id)) {
+        relationIds.add(r.id);
+        allRelationsToDelete.push(r);
+      }
+    }
+    const allValuesToDelete = [...tabValues];
+
+    for (const blockId of orphanedBlockIds) {
+      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
+      for (const r of getRelations({
+        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
+      })) {
+        if (!relationIds.has(r.id)) {
+          relationIds.add(r.id);
+          allRelationsToDelete.push(r);
+        }
+      }
+    }
+
+    // 4. Batch the deletes so the UI only flashes once.
+    storage.values.deleteMany(allValuesToDelete);
+    storage.relations.deleteMany(allRelationsToDelete);
 
     // If the deleted tab is currently active, navigate to overview
     if (tabId === tab.entityId) {
-      router.replace(overviewHref);
+      router.replace(overviewHref, { scroll: false });
     }
   };
 
@@ -175,9 +253,15 @@ export function EditableTabGroup({
   };
 
   const activeTab = activeId ? editableTabs.find(t => t.relation.id === activeId) : null;
+  const isAnyDragging = activeId !== null;
 
   // Stable array identity for SortableContext so drag doesn't re-register items on every render.
-  const sortableIds = React.useMemo(() => editableTabs.map(t => t.relation.id), [editableTabs]);
+  // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
+  const sortableIdsKey = editableTabs.map(t => t.relation.id).join(',');
+  const sortableIds = React.useMemo(
+    () => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')),
+    [sortableIdsKey]
+  );
 
   return (
     <div className="relative">
@@ -205,6 +289,7 @@ export function EditableTabGroup({
                   key={tab.relation.id}
                   tab={tab}
                   active={tab.href === fullPath}
+                  isAnyDragging={isAnyDragging}
                   isEditing={editingTabId === tab.entityId}
                   onStartEditing={() => setEditingTabId(tab.entityId)}
                   onRename={newName => handleRenameTab(tab, newName)}
@@ -265,6 +350,7 @@ function StaticTab({ href, label, active }: { href: string; label: string; activ
 type SortableTabProps = {
   tab: EditableTab;
   active: boolean;
+  isAnyDragging: boolean;
   isEditing: boolean;
   onStartEditing: () => void;
   onRename: (name: string) => void;
@@ -276,6 +362,7 @@ type SortableTabProps = {
 function SortableTab({
   tab,
   active,
+  isAnyDragging,
   isEditing,
   onStartEditing,
   onRename,
@@ -291,6 +378,7 @@ function SortableTab({
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0 : 1,
+    willChange: 'transform',
   };
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -336,15 +424,18 @@ function SortableTab({
           {...listeners}
         >
           {displayName || 'Untitled'}
-          {active && (
-            <motion.div
-              layoutId="tab-group-active-border"
-              layout
-              initial={false}
-              transition={{ duration: 0.2 }}
-              className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-            />
-          )}
+          {active &&
+            (isAnyDragging ? (
+              <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />
+            ) : (
+              <motion.div
+                layoutId="tab-group-active-border"
+                layout
+                initial={false}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+              />
+            ))}
         </Link>
       )}
 
