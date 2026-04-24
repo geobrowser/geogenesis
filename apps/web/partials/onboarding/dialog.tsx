@@ -12,7 +12,6 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
-import { Effect } from 'effect';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ROOT_SPACE } from '~/core/constants';
@@ -360,18 +359,16 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
       // results include space name/image for consistent display. Bump
       // first to 100 so exact matches aren't truncated out when there
       // are many fuzzy hits ranked above them.
-      const results = await Effect.runPromise(
-        E.findFuzzy({
-          store,
-          cache,
-          where: {
-            name: { fuzzy: name },
-            types: ONBOARDING_PERSONAL_SEARCH_TYPES.map(t => ({ id: { equals: t } })),
-          },
-          first: 100,
-          skip: 0,
-        })
-      );
+      const results = await E.findFuzzy({
+        store,
+        cache,
+        where: {
+          name: { fuzzy: name },
+          types: ONBOARDING_PERSONAL_SEARCH_TYPES.map(t => ({ id: { equals: t } })),
+        },
+        first: 100,
+        skip: 0,
+      });
       const exactMatches = filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES);
       onProfileContinue(exactMatches);
     } catch (error) {
