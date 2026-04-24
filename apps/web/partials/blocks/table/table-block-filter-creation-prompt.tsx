@@ -1513,10 +1513,12 @@ function TableBlockEntityFilterInput({
     queryFn: async ({ pageParam }) => {
       // Use the same fuzzy-search path the global search bar uses so the
       // row display (space icon + breadcrumb + type tags + description)
-      // matches everywhere. E.findFuzzy post-processes REST /search
-      // results with getSpaces + resolveSearchSpaces + hasName filtering,
-      // so space names/icons render consistently.
-      const rows = await E.findFuzzy({
+      // matches everywhere. findFuzzyPage returns both the filtered
+      // SearchResult rows and the raw REST /search count — we need the
+      // raw count for pagination because the post-processing step
+      // discards entities whose spaces can't be resolved, which would
+      // otherwise shrink a full 25-row page and fool `hasNextPage`.
+      const { results, rawRemoteCount } = await E.findFuzzyPage({
         store,
         cache,
         where: {
@@ -1528,10 +1530,10 @@ function TableBlockEntityFilterInput({
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
       });
-      return { rows, offset: pageParam };
+      return { rows: results, offset: pageParam, rawRemoteCount };
     },
     getNextPageParam: lastPage =>
-      lastPage.rows.length < FILTER_DROPDOWN_PAGE_SIZE
+      lastPage.rawRemoteCount < FILTER_DROPDOWN_PAGE_SIZE
         ? undefined
         : lastPage.offset + FILTER_DROPDOWN_PAGE_SIZE,
     staleTime: Duration.toMillis(Duration.seconds(60)),

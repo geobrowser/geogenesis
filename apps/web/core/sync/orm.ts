@@ -318,7 +318,25 @@ export class E {
     return { merged, remote: remoteEntities };
   }
 
-  static async findFuzzy({
+  static async findFuzzy(args: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+  }): Promise<SearchResult[]> {
+    const page = await this.findFuzzyPage(args);
+    return page.results;
+  }
+
+  /**
+   * Same as findFuzzy but exposes the raw REST /search count alongside the
+   * post-processed results. Paginated callers need this because the post-
+   * processing step filters out entities whose spaces cannot be resolved —
+   * a full 25-row REST page can shrink to <25 results, which would otherwise
+   * be mistaken for "end of the result set".
+   */
+  static async findFuzzyPage({
     store,
     cache,
     where,
@@ -330,7 +348,7 @@ export class E {
     where: WhereCondition;
     first: number;
     skip: number;
-  }): Promise<SearchResult[]> {
+  }): Promise<{ results: SearchResult[]; rawRemoteCount: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -399,7 +417,7 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities
+    const results = entities
       .map(e => {
         const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
           .filter(s => hasName(s.name))
@@ -425,6 +443,8 @@ export class E {
         };
       })
       .filter(e => e.spaces.length > 0);
+
+    return { results, rawRemoteCount: remoteEntities.length };
   }
 }
 
