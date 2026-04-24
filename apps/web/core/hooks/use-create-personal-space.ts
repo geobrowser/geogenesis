@@ -14,10 +14,13 @@ import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/utils/contracts/space-registr
 import { buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 
+export type CreatePersonalSpaceProgress = 'creating' | 'publishing' | 'finalizing';
+
 type CreatePersonalSpaceArgs = {
   spaceName: string;
   spaceImage?: string;
   topicId?: string;
+  onProgress?: (progress: CreatePersonalSpaceProgress) => void;
 };
 
 export function useCreatePersonalSpace() {
@@ -25,7 +28,12 @@ export function useCreatePersonalSpace() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async ({ spaceName, spaceImage, topicId }: CreatePersonalSpaceArgs): Promise<string | null> => {
+    mutationFn: async ({
+      spaceName,
+      spaceImage,
+      topicId,
+      onProgress,
+    }: CreatePersonalSpaceArgs): Promise<string | null> => {
       if (!smartAccount) return null;
 
       const walletAddress = smartAccount.account.address;
@@ -33,6 +41,8 @@ export function useCreatePersonalSpace() {
       // Check if user already has a personal space
       const existingSpaceId = await getPersonalSpaceId(walletAddress);
       if (existingSpaceId) return existingSpaceId;
+
+      onProgress?.('creating');
 
       // 1. Register space ID using SDK
       const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
@@ -62,6 +72,8 @@ export function useCreatePersonalSpace() {
       if (!spaceId) {
         throw new Error('Timed out waiting for space ID after registration.');
       }
+
+      onProgress?.('publishing');
 
       // 3. Graph ops for the personal space; resolvedTopicId is the home entity and on-chain topic (same as Set topic).
       const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
@@ -137,6 +149,8 @@ export function useCreatePersonalSpace() {
       if (Either.isLeft(topicDeclarationResult)) {
         throw topicDeclarationResult.left;
       }
+
+      onProgress?.('finalizing');
 
       // 6. Wait for content and topic to be indexed
       const hasIndexedContent = await waitForSpaceContent(spaceId);

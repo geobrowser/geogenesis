@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ROOT_SPACE } from '~/core/constants';
-import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
+import { type CreatePersonalSpaceProgress, useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
@@ -84,9 +84,16 @@ export const OnboardingDialog = () => {
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
+  const [creationProgress, setCreationProgress] = useState<CreatePersonalSpaceProgress | null>(null);
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+
+  // Warm the router cache for the explore destination as soon as the user
+  // starts onboarding, so the post-creation redirect lands instantly.
+  useEffect(() => {
+    router.prefetch(ONBOARDING_DESTINATION);
+  }, [router]);
 
   // Track whether this tab ever had the onboarding dialog visible. Used
   // to scope side-effects (step resets, redirects) to the tab that was
@@ -148,6 +155,7 @@ export const OnboardingDialog = () => {
         spaceName: name,
         spaceImage: avatar,
         topicId: effectiveTopicId || undefined,
+        onProgress: setCreationProgress,
       });
 
       if (!spaceId) {
@@ -229,7 +237,11 @@ export const OnboardingDialog = () => {
                 />
               )}
               {workflowSteps.includes(effectiveStep) && (
-                <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
+                <StepComplete
+                  onRetry={onRunOnboardingWorkflow}
+                  showRetry={showRetry}
+                  progress={creationProgress}
+                />
               )}
             </ModalCard>
         </Content>
@@ -646,6 +658,7 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
 type StepCompleteProps = {
   onRetry: () => void;
   showRetry: boolean;
+  progress: CreatePersonalSpaceProgress | null;
 };
 
 const retryMessage: Record<Step, string> = {
@@ -657,17 +670,31 @@ const retryMessage: Record<Step, string> = {
   done: '',
 };
 
-function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
+const progressCopy: Record<CreatePersonalSpaceProgress, string> = {
+  creating: 'Creating space...',
+  publishing: 'Publishing profile...',
+  finalizing: 'Finalizing...',
+};
+
+function StepComplete({ onRetry, showRetry, progress }: StepCompleteProps) {
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
+  // `completed` is a brief 900ms state after the mutation resolves and
+  // before the redirect; show the last-phase copy during that window.
+  const headline =
+    step === 'completed'
+      ? progressCopy.finalizing
+      : progress
+        ? progressCopy[progress]
+        : progressCopy.creating;
 
   return (
     <>
       <StepContents childKey="start">
         <div className="flex w-full flex-col items-center pt-3">
           <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
-            {step === 'completed' ? `Finalizing details...` : `Creating space...`}
+            {headline}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
