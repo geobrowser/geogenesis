@@ -1478,7 +1478,7 @@ function TableBlockSpaceFilterInput({
     spaceFullRowCount,
     spaceVisibleCount,
     defaultSpaceSuggestions.length,
-    spaceQueryRows.length,
+    results.length,
   ]);
 
   const renderSpaceRow = (
