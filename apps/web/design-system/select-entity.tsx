@@ -349,7 +349,7 @@ export const SelectEntity = ({
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
                 <div
                   className={cx(
-                    '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+                    '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown',
                     width === 'clamped' ? 'w-[400px]' : '-mr-px',
                     withSearchIcon && 'rounded-t-none'
                   )}
@@ -754,7 +754,7 @@ const containerStyles = cva('relative', {
       full: 'w-full',
     },
     floating: {
-      true: 'rounded-md border border-grey-02 bg-white shadow-lg',
+      true: 'rounded-md border border-grey-02 bg-white shadow-dropdown',
     },
     isQueried: {
       true: 'rounded-b-none',
