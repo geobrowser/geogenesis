@@ -256,37 +256,13 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         Map properties to relevant properties in the space, and map any data to entities you want the data to link to.
       </p>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex items-center gap-2">
         <Text variant="quoteMedium" as="span" className="tracking-[-0.5px] text-text">
           {selectedType?.name ?? 'Entities'}
         </Text>
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-[1rem] leading-5 tracking-[-0.35px] text-text">
           {entityCount}
         </span>
-        {hasData && unmappedCount > 0 && (
-          <button
-            type="button"
-            onClick={() => tableHandleRef.current?.jumpToNextUnmappedProperty()}
-            className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
-          >
-            <span className="flex shrink-0 items-center" aria-hidden>
-              <Warning color="orange" />
-            </span>
-            <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
-              {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
-            </Text>
-          </button>
-        )}
-        {hasData && hasUnmappedColumns && unmappedCount > 0 && (
-          <SmallButton
-            type="button"
-            variant="primary"
-            className="ml-auto shrink-0 rounded-md"
-            onClick={handleSkipAndDeleteUnmapped}
-          >
-            Next
-          </SmallButton>
-        )}
       </div>
 
       {hasNoRecords ? (
@@ -319,23 +295,49 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         </div>
       ) : (
         <>
-          {!hasUnmappedColumns && unresolvedDataCount > 0 ? (
+          {unmappedCount > 0 || (!hasUnmappedColumns && unresolvedDataCount > 0) ? (
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => tableHandleRef.current?.jumpToNextUnresolvedCell()}
-                className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
-              >
-                <span className="flex shrink-0 items-center" aria-hidden>
-                  <Warning color="orange" />
-                </span>
-                <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
-                  {unresolvedDataCount.toLocaleString('en-US')}{' '}
-                  {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
-                </Text>
-              </button>
+              {unmappedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => tableHandleRef.current?.jumpToNextUnmappedProperty()}
+                  className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
+                >
+                  <span className="flex shrink-0 items-center" aria-hidden>
+                    <Warning color="orange" />
+                  </span>
+                  <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
+                    {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
+                  </Text>
+                </button>
+              )}
+              {!hasUnmappedColumns && unresolvedDataCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => tableHandleRef.current?.jumpToNextUnresolvedCell()}
+                  className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
+                >
+                  <span className="flex shrink-0 items-center" aria-hidden>
+                    <Warning color="orange" />
+                  </span>
+                  <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
+                    {unresolvedDataCount.toLocaleString('en-US')}{' '}
+                    {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
+                  </Text>
+                </button>
+              )}
+              {hasUnmappedColumns && unmappedCount > 0 && (
+                <SmallButton
+                  type="button"
+                  variant="primary"
+                  className="ml-auto shrink-0 rounded-md"
+                  onClick={handleSkipAndDeleteUnmapped}
+                >
+                  Next
+                </SmallButton>
+              )}
             </div>
-          ) : unmappedCount === 0 && values.length > 0 ? (
+          ) : values.length > 0 ? (
             <div className="mb-4 flex items-center gap-1.5 rounded-lg border border-grey-02 bg-grey-01 px-4 py-3">
               <span className="flex shrink-0 items-center" aria-hidden>
                 <Check color="green" />
