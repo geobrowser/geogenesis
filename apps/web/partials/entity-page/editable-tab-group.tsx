@@ -19,7 +19,6 @@ import React, { useRef, useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
-import { motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { ID } from '~/core/id';
@@ -253,7 +252,6 @@ export function EditableTabGroup({
   };
 
   const activeTab = activeId ? editableTabs.find(t => t.relation.id === activeId) : null;
-  const isAnyDragging = activeId !== null;
 
   // Stable array identity for SortableContext so drag doesn't re-register items on every render.
   // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
@@ -268,6 +266,7 @@ export function EditableTabGroup({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        autoScroll={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -289,7 +288,6 @@ export function EditableTabGroup({
                   key={tab.relation.id}
                   tab={tab}
                   active={tab.href === fullPath}
-                  isAnyDragging={isAnyDragging}
                   isEditing={editingTabId === tab.entityId}
                   onStartEditing={() => setEditingTabId(tab.entityId)}
                   onRename={newName => handleRenameTab(tab, newName)}
@@ -334,15 +332,7 @@ function StaticTab({ href, label, active }: { href: string; label: string; activ
   return (
     <Link className={tabStyles({ active })} href={href} prefetch>
       {label}
-      {active && (
-        <motion.div
-          layoutId="tab-group-active-border"
-          layout
-          initial={false}
-          transition={{ duration: 0.2 }}
-          className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-        />
-      )}
+      {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
     </Link>
   );
 }
@@ -350,7 +340,6 @@ function StaticTab({ href, label, active }: { href: string; label: string; activ
 type SortableTabProps = {
   tab: EditableTab;
   active: boolean;
-  isAnyDragging: boolean;
   isEditing: boolean;
   onStartEditing: () => void;
   onRename: (name: string) => void;
@@ -362,7 +351,6 @@ type SortableTabProps = {
 function SortableTab({
   tab,
   active,
-  isAnyDragging,
   isEditing,
   onStartEditing,
   onRename,
@@ -424,18 +412,7 @@ function SortableTab({
           {...listeners}
         >
           {displayName || 'Untitled'}
-          {active &&
-            (isAnyDragging ? (
-              <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />
-            ) : (
-              <motion.div
-                layoutId="tab-group-active-border"
-                layout
-                initial={false}
-                transition={{ duration: 0.2 }}
-                className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-              />
-            ))}
+          {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
         </Link>
       )}
 
