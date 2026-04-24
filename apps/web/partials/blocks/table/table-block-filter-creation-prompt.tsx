@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { mergeSearchResult } from '~/core/database/result';
@@ -21,7 +21,7 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getResults, getSpacesWhereMember } from '~/core/io/queries';
+import { getResults, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { reactiveRelations } from '~/core/sync/store';
@@ -1462,6 +1462,7 @@ function TableBlockEntityFilterInput({
   multiSelectPlaceholder,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
+  const cache = useQueryClient();
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
     useFilterValueInputFocus(filterInteractionRootRef);
 
@@ -1520,6 +1521,33 @@ function TableBlockEntityFilterInput({
           signal
         )
       );
+
+      // REST /search returns incomplete SpaceEntity payloads (just id + optional
+      // avatar), so space names and icons don't render in the dropdown. Hydrate
+      // the full SpaceEntity for every unique space id seen on this page and
+      // overlay it on the results.
+      const spaceIdSet = new Set<string>();
+      for (const r of rows) {
+        for (const s of r.spaces) {
+          if (s.id) spaceIdSet.add(s.id);
+        }
+      }
+      const uniqueSpaceIds = [...spaceIdSet];
+      if (uniqueSpaceIds.length > 0) {
+        const fetchedSpaces = await cache.fetchQuery({
+          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
+          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
+          staleTime: Duration.toMillis(Duration.seconds(60)),
+        });
+        const spaceEntityById = new Map<string, SpaceEntity>();
+        for (const s of fetchedSpaces) {
+          spaceEntityById.set(s.id, s.entity);
+        }
+        for (const r of rows) {
+          r.spaces = r.spaces.map(s => spaceEntityById.get(s.id) ?? s);
+        }
+      }
+
       return { rows, offset: pageParam };
     },
     getNextPageParam: lastPage =>
@@ -2087,8 +2115,12 @@ function TableBlockTextFilterInput({
     [applyTextListPagination]
   );
 
-  const showEmptyTextHint = focused && stringSuggestions.length === 0;
-  const showDropdown = focused && (showEmptyTextHint || filtered.length > 0);
+  // Only surface the suggestions dropdown once the user starts typing.
+  // Non-relation filters don't have a meaningful "show me everything" list,
+  // so an empty-input dropdown just adds visual noise on focus.
+  const hasQuery = value.trim().length > 0;
+  const showEmptyTextHint = focused && hasQuery && stringSuggestions.length === 0 && filtered.length === 0;
+  const showDropdown = focused && hasQuery && (showEmptyTextHint || filtered.length > 0);
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
