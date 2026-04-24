@@ -143,7 +143,7 @@ export const ResultContent = ({
             {otherSpaces.slice(0, 3).map(space => (
               <div
                 key={space.spaceId}
-                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white bg-white first:ml-0"
               >
                 <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
               </div>
