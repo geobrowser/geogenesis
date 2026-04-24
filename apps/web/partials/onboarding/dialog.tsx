@@ -27,17 +27,21 @@ import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import type { SearchResult } from '~/core/types';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
-import { ResultContent } from '~/design-system/autocomplete/results-list';
+import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { NativeGeoImage } from '~/design-system/geo-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { NewTab } from '~/design-system/icons/new-tab';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
-import { NewTab } from '~/design-system/icons/new-tab';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Spacer } from '~/design-system/spacer';
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
+import { Truncate } from '~/design-system/truncate';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
@@ -466,51 +470,152 @@ type StepExistingEntityMatchProps = {
 };
 
 function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingEntityMatchProps) {
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const selectedResult = candidates.find(c => c.id === selectedEntityId) ?? null;
+
+  const handlePrimary = () => {
+    if (selectedResult) {
+      onSelect(selectedResult.id, selectedResult.name);
+    } else {
+      onSkip();
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-2 pb-4">
         <Text as="h3" variant="bodySemibold" className="text-center text-2xl!">
           Is this you?
         </Text>
-        <Text as="p" variant="metadata" className="text-center text-grey-04">
+        <Text as="p" variant="body" className="text-center text-base!">
           Looks like your name exists on Geo. If one of these is you, claim it! Otherwise, let&apos;s make you a fresh
           profile.
         </Text>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-grey-02 bg-white">
         {candidates.map((result, index) => (
-          <div
+          <MatchCard
             key={result.id}
-            className={cx('relative', index < candidates.length - 1 && 'border-b border-divider')}
-          >
-            <ResultContent result={result} onClick={() => onSelect(result.id, result.name)} />
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                // Use the entity's own space so the URL doesn't redirect
-                // (which would drop our ?fromOnboarding=1 query param).
-                // Fall back to ROOT_SPACE for defensiveness only.
-                const entitySpaceId = result.spaces[0]?.spaceId ?? ROOT_SPACE;
-                window.open(
-                  `${NavUtils.toEntity(entitySpaceId, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
-                  '_blank',
-                  'noopener,noreferrer'
-                );
-              }}
-              aria-label="Open entity in new tab"
-              className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded text-grey-04 hover:bg-grey-02 hover:text-text"
-            >
-              <NewTab />
-            </button>
-          </div>
+            result={result}
+            isSelected={selectedEntityId === result.id}
+            hasDivider={index < candidates.length - 1}
+            onSelect={() => setSelectedEntityId(prev => (prev === result.id ? null : result.id))}
+          />
         ))}
       </div>
       <div className="shrink-0 pt-4">
-        <Button type="button" variant="secondary" onClick={onSkip} className="w-full">
-          None of these are me
+        <Button type="button" onClick={handlePrimary} className="w-full">
+          {selectedResult ? 'Continue' : 'None of these are me'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+type MatchCardProps = {
+  result: SearchResult;
+  isSelected: boolean;
+  hasDivider: boolean;
+  onSelect: () => void;
+};
+
+function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps) {
+  const [space, ...otherSpaces] = result.spaces;
+  const spaceName = space?.name ?? null;
+  const spaceImg = space?.image ?? null;
+  const spaceTypes = (space && result.typesBySpace?.[space.spaceId]) ?? result.types;
+  const showBreadcrumbs = Boolean(spaceName) || spaceTypes.length > 0;
+  const showBreadcrumbChevron = Boolean(spaceName) && spaceTypes.length > 0;
+
+  return (
+    <div className={cx('relative', hasDivider && 'border-b border-divider')}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
+        className={cx(
+          'flex w-full cursor-pointer flex-col p-2 pr-8 transition-colors duration-150 focus:outline-hidden',
+          isSelected ? 'bg-divider' : 'hover:bg-grey-01 focus:bg-grey-01'
+        )}
+      >
+        <div className="flex w-full items-center leading-4">
+          <Text variant="metadataMedium" ellipsize className="leading-4.5">
+            {result.name ?? result.id}
+          </Text>
+        </div>
+        {showBreadcrumbs && (
+          <>
+            <Spacer height={4} />
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              {spaceName && <Breadcrumb img={spaceImg}>{spaceName}</Breadcrumb>}
+              {showBreadcrumbChevron && (
+                <span style={{ rotate: '270deg' }}>
+                  <ChevronDownSmall color="grey-04" />
+                </span>
+              )}
+              {spaceTypes.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {spaceTypes
+                    .filter((type, i, self) => self.findIndex(t => t.id === type.id) === i)
+                    .map(type => (
+                      <Tag key={type.id}>{type.name}</Tag>
+                    ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {result.description && (
+          <>
+            <Spacer height={4} />
+            <Truncate maxLines={3} shouldTruncate variant="footnote">
+              <Text variant="footnote">{result.description}</Text>
+            </Truncate>
+          </>
+        )}
+        {otherSpaces.length > 0 && (
+          <>
+            <Spacer height={4} />
+            <div className="flex items-center text-footnoteMedium text-grey-04">
+              <div className="flex">
+                {otherSpaces.slice(0, 3).map(s => (
+                  <div
+                    key={s.spaceId}
+                    className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                  >
+                    <NativeGeoImage value={s.image} alt="" className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+              <div className="ml-1">
+                + {otherSpaces.length} {otherSpaces.length === 1 ? 'space' : 'spaces'}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={e => {
+          e.stopPropagation();
+          const entitySpaceId = result.spaces[0]?.spaceId ?? ROOT_SPACE;
+          window.open(
+            `${NavUtils.toEntity(entitySpaceId, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
+            '_blank',
+            'noopener,noreferrer'
+          );
+        }}
+        aria-label="Open entity in new tab"
+        className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded text-grey-04 hover:bg-grey-02 hover:text-text"
+      >
+        <NewTab />
+      </button>
     </div>
   );
 }
