@@ -71,6 +71,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
   const [isOpen, setIsOpen] = React.useState(false);
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
+  const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -100,7 +101,36 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
     [relationByBountyId]
   );
 
-  const n = linkedBountyIds.length;
+  const effectiveLinkedIds = React.useMemo(() => {
+    if (!optimisticLinkedIds) return linkedBountyIds;
+    return [...optimisticLinkedIds].sort();
+  }, [optimisticLinkedIds, linkedBountyIds]);
+
+  React.useEffect(() => {
+    if (!optimisticLinkedIds) return;
+    const a = [...optimisticLinkedIds].sort();
+    const b = linkedBountyIds;
+    if (a.length === b.length && a.every((id, i) => id === b[i])) {
+      setOptimisticLinkedIds(null);
+    }
+  }, [optimisticLinkedIds, linkedBountyIds]);
+
+  const n = effectiveLinkedIds.length;
+
+  const { data: proposalTypeRelations = [] } = useQuery({
+    queryKey: ['proposal-types-relations', proposalId, personalSpaceId],
+    enabled: Boolean(personalSpaceId) && showBounties && isAuthor,
+    staleTime: 30_000,
+    queryFn: () => {
+      if (!personalSpaceId) return Promise.resolve([]);
+      return Effect.runPromise(getRelationsByFromEntityId(proposalId, SystemIds.TYPES_PROPERTY, personalSpaceId));
+    },
+  });
+
+  const hasProposalTypeRelation = React.useMemo(
+    () => proposalTypeRelations.some(r => r.toEntity.id === PROPOSAL_TYPE_ID),
+    [proposalTypeRelations]
+  );
 
   const { data: bountySearchSpaceIds = [] } = useQuery({
     queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
@@ -210,10 +240,10 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
   ]);
 
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
-    queryKey: ['proposal-linked-bounty-entities', linkedBountyIds.join(','), daoSpaceId, authorSpaceId],
+    queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(','), daoSpaceId, authorSpaceId],
     enabled: n > 0,
     queryFn: async () => {
-      const entities = await Promise.all(linkedBountyIds.map(id => Effect.runPromise(getEntity(id, daoSpaceId))));
+      const entities = await Promise.all(effectiveLinkedIds.map(id => Effect.runPromise(getEntity(id, daoSpaceId))));
       return entities.filter((e): e is NonNullable<typeof e> => e !== null);
     },
   });
@@ -317,15 +347,15 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
   const wasPanelOpen = React.useRef(false);
   React.useEffect(() => {
     if (isOpen && !wasPanelOpen.current) {
-      setDraftIds(new Set(linkedBountyIds));
+      setDraftIds(new Set(effectiveLinkedIds));
     }
     wasPanelOpen.current = isOpen;
-  }, [isOpen, linkedBountyIds]);
+  }, [isOpen, effectiveLinkedIds]);
 
   const hasUnsaved = React.useMemo(() => {
-    if (draftIds.size !== linkedBountyIds.length) return true;
-    return !linkedBountyIds.every(id => draftIds.has(id));
-  }, [draftIds, linkedBountyIds]);
+    if (draftIds.size !== effectiveLinkedIds.length) return true;
+    return !effectiveLinkedIds.every(id => draftIds.has(id));
+  }, [draftIds, effectiveLinkedIds]);
 
   const toggleDraft = (id: string) => {
     setDraftIds(prev => {
@@ -340,7 +370,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
     if (!isAuthor || !personalSpaceId || !smartAccount) return;
     if (!hasUnsaved) return;
 
-    const toRemove = linkedBountyIds.filter(id => !draftIds.has(id));
+    const toRemove = effectiveLinkedIds.filter(id => !draftIds.has(id));
     const toAdd = [...draftIds].filter(id => !relationByBountyId.has(id));
     if (toRemove.length === 0 && toAdd.length === 0) return;
 
@@ -378,6 +408,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
       .filter((r): r is Relation => r !== null);
 
     const needsBootstrap = linkedRelations.length === 0 && toAdd.length > 0;
+    const needsTypeRelation = !hasProposalTypeRelation && toAdd.length > 0;
 
     const values: Value[] = [];
     if (needsBootstrap) {
@@ -413,7 +444,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
       toEntity: { id: PROPOSAL_TYPE_ID, name: 'Proposal', value: PROPOSAL_TYPE_ID },
     };
 
-    const relations: Relation[] = needsBootstrap
+    const relations: Relation[] = needsTypeRelation
       ? [proposalTypeRelation, ...newRelations, ...removeRelations]
       : [...newRelations, ...removeRelations];
 
@@ -425,8 +456,10 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
         name: needsBootstrap ? `Bounty links for: ${name}` : `Update bounty links: ${name}`,
         onError: () => {},
       });
+      setOptimisticLinkedIds([...draftIds]);
       await queryClient.invalidateQueries({ queryKey: ['proposal-bounty-relations', proposalId, authorSpaceId] });
       await queryClient.invalidateQueries({ queryKey: ['proposal-linked-bounty-entities'] });
+      await queryClient.invalidateQueries({ queryKey: ['proposal-types-relations', proposalId, personalSpaceId] });
       setIsOpen(false);
     } finally {
       setIsSaving(false);
@@ -501,60 +534,40 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
                 </ul>
               )}
 
-              {isAuthor && isLoadingLinks && n === 0 && <p className="text-body text-grey-04">Loading links…</p>}
+              {isAuthor && isLoadingLinks && <p className="text-body text-grey-04">Loading links…</p>}
 
-              {isAuthor && !isLoadingLinks && n === 0 && (
-                <div className="flex flex-col divide-y divide-grey-02">
-                  {linkableBountiesLabeled.length === 0 ? (
-                    <p className="text-body text-grey-04">No allocated bounties available to link in current space</p>
-                  ) : (
-                    linkableBountiesLabeled.map(b => (
-                      <BountyCard
-                        key={b.id}
-                        bounty={b}
-                        isSelected={draftIds.has(b.id)}
-                        onToggle={toggleDraft}
-                      />
-                    ))
-                  )}
-                </div>
-              )}
-
-              {isAuthor && n > 0 && isLoadingLinks && <p className="text-body text-grey-04">Loading links…</p>}
-
-              {isAuthor && n > 0 && !isLoadingLinks && (
+              {isAuthor && !isLoadingLinks && (
                 <div className="flex flex-col gap-8">
                   <section>
                     <h3 className="mb-2 text-metadata font-medium text-text">Linked</h3>
                     {draftBounties.length === 0 ? (
-                      <p className="text-body text-grey-04">No bounties selected</p>
+                      <p className="text-body text-grey-04">No bounties linked</p>
                     ) : (
-                      <ul className="flex flex-col divide-y divide-grey-02">
+                      <div className="flex flex-col divide-y divide-grey-02">
                         {draftBounties.map(b => (
-                          <BountyWithRemove
+                          <BountyCard
                             key={b.id}
                             bounty={b}
-                            onRemove={() => {
-                              toggleDraft(b.id);
-                            }}
+                            isSelected
+                            onToggle={toggleDraft}
+                            onRemove={toggleDraft}
                           />
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </section>
                   <section>
                     <h3 className="mb-2 text-metadata font-medium text-text">Available</h3>
                     {availableBounties.length === 0 ? (
-                      <p className="text-body text-grey-04">No other allocated bounties in this space</p>
+                      <p className="text-body text-grey-04">
+                        {linkableBountiesLabeled.length === 0
+                          ? 'No allocated bounties available to link in current space'
+                          : 'No other allocated bounties in this space'}
+                      </p>
                     ) : (
                       <div className="flex flex-col divide-y divide-grey-02">
                         {availableBounties.map(b => (
-                          <BountyCard
-                            key={b.id}
-                            bounty={b}
-                            isSelected={false}
-                            onToggle={toggleDraft}
-                          />
+                          <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
                         ))}
                       </div>
                     )}
@@ -566,24 +579,6 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
         </div>
       )}
     </>
-  );
-}
-
-function BountyWithRemove({ bounty, onRemove }: { bounty: Bounty; onRemove: () => void }) {
-  return (
-    <li className="list-none">
-      <div className="flex items-start justify-between gap-2 py-2">
-        <BountyReadOnly bounty={bounty} />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="shrink-0 rounded p-1 text-grey-04 hover:bg-grey-01 hover:text-text"
-          aria-label={`Unlink ${bounty.name}`}
-        >
-          <Close />
-        </button>
-      </div>
-    </li>
   );
 }
 

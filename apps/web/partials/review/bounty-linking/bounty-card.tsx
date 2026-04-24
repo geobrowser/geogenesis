@@ -8,6 +8,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { Close } from '~/design-system/icons/close';
 import { Gem } from '~/design-system/icons/gem';
 
 import type { Bounty, BountyDifficulty, BountyStatus } from './types';
@@ -16,9 +17,10 @@ interface BountyCardProps {
   bounty: Bounty;
   isSelected: boolean;
   onToggle: (id: string) => void;
+  onRemove?: (id: string) => void;
 }
 
-export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
+export function BountyCard({ bounty, isSelected, onToggle, onRemove }: BountyCardProps) {
   const formattedDeadline =
     bounty.deadline &&
     new Date(bounty.deadline).toLocaleDateString('en-US', {
@@ -45,23 +47,35 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
 
   return (
     <div className="py-4">
-      {/* Checkbox row */}
-      <label className="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" checked={isSelected} onChange={() => onToggle(bounty.id)} className="sr-only" />
-        <div
-          className={cx(
-            'flex h-4 w-4 items-center justify-center rounded border transition-all',
-            isSelected ? 'border-text bg-text' : 'border-grey-03 bg-white'
-          )}
-        >
-          {isSelected && (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </div>
-        {isSelected && <span className="text-metadata font-medium text-text">Linked</span>}
-      </label>
+      {/* Action row */}
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input type="checkbox" checked={isSelected} onChange={() => onToggle(bounty.id)} className="sr-only" />
+          <div
+            className={cx(
+              'flex h-4 w-4 items-center justify-center rounded border transition-all',
+              isSelected ? 'border-text bg-text' : 'border-grey-03 bg-white'
+            )}
+          >
+            {isSelected && (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+          {isSelected && <span className="text-metadata font-medium text-text">Link</span>}
+        </label>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(bounty.id)}
+            className="shrink-0 rounded p-1 text-grey-04 hover:bg-grey-01 hover:text-text"
+            aria-label={`Unlink ${bounty.name}`}
+          >
+            <Close />
+          </button>
+        )}
+      </div>
 
       {(bounty.spaceLabel ?? bounty.spaceId) && (
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
