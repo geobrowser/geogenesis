@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
@@ -359,12 +359,6 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileInputClick = useCallback(() => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  }, []);
-
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     const file = e.target.files[0];
@@ -428,7 +422,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
             <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-              <SmallButton icon={isUploadingAvatar ? <Dots /> : <Upload />} onClick={handleFileInputClick}>
+              <SmallButton icon={isUploadingAvatar ? <Dots /> : <Upload />}>
                 {isUploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
               </SmallButton>
             </label>
@@ -472,7 +466,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName || isSearching} onClick={handleContinue} className="w-full">
+        <Button disabled={!validName || isSearching || isUploadingAvatar} onClick={handleContinue} className="w-full">
           {isSearching ? (
             <span className="inline-flex h-[1.125rem] items-center">
               <Dots />
