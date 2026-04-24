@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
@@ -13,12 +13,15 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { Effect } from 'effect';
+
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
+import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { getResults } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import type { SearchResult } from '~/core/types';
@@ -313,18 +316,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
-  const { onQueryChange, results } = useSearch({
-    filterByTypes: ONBOARDING_PERSONAL_SEARCH_TYPES,
-  });
-
-  useEffect(() => {
-    onQueryChange(name);
-  }, [name, onQueryChange]);
-
-  const exactMatches = useMemo(
-    () => filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES),
-    [results, name]
-  );
+  const [isSearching, setIsSearching] = useState(false);
 
   const validName = name.trim().length > 0;
 
@@ -344,9 +336,26 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isSearching) return;
     setTopicId('');
-    onProfileContinue(exactMatches);
+    setIsSearching(true);
+    try {
+      const results = await Effect.runPromise(
+        getResults({
+          query: name,
+          typeIds: ONBOARDING_PERSONAL_SEARCH_TYPES,
+          limit: 100,
+        })
+      );
+      const exactMatches = filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES);
+      onProfileContinue(exactMatches);
+    } catch (error) {
+      console.error('Exact-match search failed, proceeding without matches:', error);
+      onProfileContinue([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -409,8 +418,8 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName} onClick={handleContinue} className="w-full">
-          Continue
+        <Button disabled={!validName || isSearching} onClick={handleContinue} className="w-full">
+          {isSearching ? 'Checking...' : 'Continue'}
         </Button>
       </div>
     </div>
