@@ -104,6 +104,17 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
       }
       clearBlurTimeout();
       setFocused(false);
+      // Also drop DOM focus from the input. Without this the caret stays
+      // visible in the input after clicking out, and re-clicking the
+      // input doesn't refire onFocus (the browser already considers it
+      // focused) so the dropdown wouldn't reopen.
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        filterInteractionRootRef?.current?.contains(active)
+      ) {
+        active.blur();
+      }
     };
     document.addEventListener('pointerdown', handlePointerDown);
     return () => {
