@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ROOT_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
 
@@ -140,14 +141,25 @@ export const ResultContent = ({
           className="-mt-2 flex w-full items-center justify-between p-2 transition-colors duration-150 hover:bg-grey-01"
         >
           <div className="flex items-center">
-            {otherSpaces.slice(0, 3).map(space => (
-              <div
-                key={space.spaceId}
-                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white bg-white first:ml-0"
-              >
-                <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
-              </div>
-            ))}
+            {otherSpaces.slice(0, 3).map(space => {
+              const isRoot = space.image === ROOT_SPACE_IMAGE;
+              return (
+                <div
+                  key={space.spaceId}
+                  className={
+                    isRoot
+                      ? '-ml-[4px] h-[14px] w-[14px] first:ml-0'
+                      : '-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white bg-white first:ml-0'
+                  }
+                >
+                  <NativeGeoImage
+                    value={space.image}
+                    alt=""
+                    className={isRoot ? 'h-full w-full object-contain' : 'h-full w-full object-cover'}
+                  />
+                </div>
+              );
+            })}
             <div className="ml-1 text-footnoteMedium text-grey-04">
               + {otherSpaces.length} {otherSpaces.length === 1 ? 'space' : 'spaces'}
             </div>
