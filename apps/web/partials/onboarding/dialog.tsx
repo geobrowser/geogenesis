@@ -193,6 +193,14 @@ export const OnboardingDialog = () => {
     }
   }
 
+  // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates
+  // is local state. On a refresh while the stored step is
+  // 'existing-entity-match' the candidates array would be empty — render
+  // StepOnboarding during that window so we don't flash an empty match
+  // step for a frame before the reset effect kicks in.
+  const effectiveStep =
+    step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'enter-profile' : step;
+
   return (
     <Root open={isOnboardingVisible}>
       <Portal>
@@ -200,9 +208,9 @@ export const OnboardingDialog = () => {
         <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
             <ModalCard childKey="card">
               <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
-              {step === 'start' && <StepStart />}
-              {step === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
-              {step === 'existing-entity-match' && (
+              {effectiveStep === 'start' && <StepStart />}
+              {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
+              {effectiveStep === 'existing-entity-match' && (
                 <StepExistingEntityMatch
                   candidates={entityMatchCandidates}
                   onSkip={async () => {
@@ -220,7 +228,9 @@ export const OnboardingDialog = () => {
                   }}
                 />
               )}
-              {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
+              {workflowSteps.includes(effectiveStep) && (
+                <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
+              )}
             </ModalCard>
         </Content>
       </Portal>
@@ -366,6 +376,8 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
       console.error('Avatar upload failed:', error);
     } finally {
       setIsUploadingAvatar(false);
+      // Clear so re-selecting the same file fires onChange again.
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -374,6 +386,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     setTopicId('');
     setIsSearching(true);
     try {
+      const trimmedName = name.trim();
       // Use the same GraphQL fuzzy search the global search uses, so
       // results include space name/image for consistent display. Bump
       // first to 100 so exact matches aren't truncated out when there
@@ -382,13 +395,13 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
         store,
         cache,
         where: {
-          name: { fuzzy: name },
+          name: { fuzzy: trimmedName },
           types: ONBOARDING_PERSONAL_SEARCH_TYPES.map(t => ({ id: { equals: t } })),
         },
         first: 100,
         skip: 0,
       });
-      const exactMatches = filterExactNameMatches(results, name, ONBOARDING_PERSONAL_SEARCH_TYPES);
+      const exactMatches = filterExactNameMatches(results, trimmedName, ONBOARDING_PERSONAL_SEARCH_TYPES);
       onProfileContinue(exactMatches);
     } catch (error) {
       console.error('Exact-match search failed, proceeding without matches:', error);
@@ -437,6 +450,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             setName(event.target.value);
           }}
           placeholder="Your name..."
+          aria-label="Your name"
           spellCheck={false}
           className="relative z-100 block w-full px-2 py-1 text-center text-mediumTitle text-2xl placeholder:text-grey-02 focus:outline-hidden"
         />
