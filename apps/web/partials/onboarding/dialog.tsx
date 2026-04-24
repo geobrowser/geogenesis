@@ -8,7 +8,6 @@ import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import pluralize from 'pluralize';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
@@ -27,19 +26,17 @@ import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import type { SearchResult } from '~/core/types';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
+import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { NativeGeoImage } from '~/design-system/geo-image';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Spacer } from '~/design-system/spacer';
-import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
-import { Truncate } from '~/design-system/truncate';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
@@ -224,7 +221,7 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-100 mt-40 h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
+      className="pointer-events-auto relative z-100 mt-40 flex h-[440px] w-full max-w-[360px] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -323,6 +320,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
   const [isSearching, setIsSearching] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const validName = name.trim().length > 0;
 
@@ -335,10 +333,16 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
   }, []);
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const file = e.target.files[0];
+    if (!e.target.files?.length) return;
+    const file = e.target.files[0];
+    setIsUploadingAvatar(true);
+    try {
       const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
       setAvatar(cid);
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -378,13 +382,18 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
                 ) : (
                   <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                 )}
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+                    <Dots />
+                  </div>
+                )}
               </div>
             </div>
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
             <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-              <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-                Upload Avatar
+              <SmallButton icon={isUploadingAvatar ? <Dots /> : <Upload />} onClick={handleFileInputClick}>
+                {isUploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
               </SmallButton>
             </label>
             <input
@@ -442,7 +451,7 @@ type StepExistingEntityMatchProps = {
 
 function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingEntityMatchProps) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-2 pb-4">
         <Text as="h3" variant="bodySemibold" className="text-center text-2xl!">
           Is this you?
@@ -456,75 +465,24 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
         {candidates.map((result, index) => (
           <div
             key={result.id}
-            className={index < candidates.length - 1 ? 'border-b border-divider' : undefined}
+            className={cx('relative', index < candidates.length - 1 && 'border-b border-divider')}
           >
-            <div className="p-1">
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelect(result.id, result.name)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelect(result.id, result.name);
-                  }
-                }}
-                className="relative z-10 flex w-full cursor-pointer flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
-              >
-                <div className="relative w-full pr-6">
-                  <div className="relative z-0 max-w-full truncate text-button text-text">{result.name}</div>
-                  <div className="absolute top-0 right-0 bottom-0 flex items-center">
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        window.open(
-                          `${NavUtils.toEntity(ROOT_SPACE, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
-                          '_blank',
-                          'noopener,noreferrer'
-                        );
-                      }}
-                      className="relative text-text hover:text-ctaPrimary"
-                    >
-                      <NewTab />
-                      <div className="absolute -inset-4" />
-                      <span className="sr-only">Open entity in new tab</span>
-                    </button>
-                  </div>
-                </div>
-                {result.types.length > 0 && (
-                  <>
-                    <Spacer height={4} />
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {result.types.map(type => (
-                        <Tag key={type.id}>{type.name}</Tag>
-                      ))}
-                    </div>
-                  </>
-                )}
-                {result.description && (
-                  <>
-                    <Spacer height={4} />
-                    <Truncate maxLines={2} shouldTruncate variant="footnote">
-                      <p className="text-footnote text-grey-04">{result.description}</p>
-                    </Truncate>
-                  </>
-                )}
-                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                  <div className="inline-flex gap-0">
-                    {(result.spaces ?? []).slice(0, 3).map(space => (
-                      <div
-                        key={space.spaceId}
-                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                      >
-                        <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                </div>
-              </div>
-            </div>
+            <ResultContent result={result} onClick={() => onSelect(result.id, result.name)} />
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                window.open(
+                  `${NavUtils.toEntity(ROOT_SPACE, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
+                  '_blank',
+                  'noopener,noreferrer'
+                );
+              }}
+              aria-label="Open entity in new tab"
+              className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded text-grey-04 hover:bg-grey-02 hover:text-text"
+            >
+              <NewTab />
+            </button>
           </div>
         ))}
       </div>

@@ -19,7 +19,11 @@ export const SUPPRESS_ONBOARDING_PARAM = 'fromOnboarding';
 export function useOnboarding() {
   const { user, isModalOpen } = usePrivy();
   const searchParams = useSearchParams();
-  const suppress = searchParams?.get(SUPPRESS_ONBOARDING_PARAM) === '1';
+  // Double-check via window.location.search as a fallback in case the
+  // router hook hasn't hydrated the value yet on first render.
+  const windowSuppress =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get(SUPPRESS_ONBOARDING_PARAM) === '1';
+  const suppress = searchParams?.get(SUPPRESS_ONBOARDING_PARAM) === '1' || windowSuppress;
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
