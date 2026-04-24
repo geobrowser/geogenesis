@@ -140,7 +140,7 @@ interface CommentSectionProps {
 
 export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
-  const { createComment, editComment, isCreating } = useCreateComment(entityId);
+  const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { space } = useSpace(spaceId);
 
@@ -254,7 +254,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
         Comments ({totalCount})
       </div>
       <Spacer height={16} />
-      <TopLevelCommentInput onSubmit={handleCreateComment} isCreating={isCreating} />
+      <TopLevelCommentInput onSubmit={handleCreateComment} />
       {totalCount > 0 && (
         <>
           <Spacer height={16} />
@@ -282,7 +282,6 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
               spaceId={spaceId}
               onReply={handleCreateComment}
               onEdit={handleEditComment}
-              isCreating={isCreating}
               personalSpaceId={personalSpaceId}
               editorSpaceIds={editorSpaceIds}
               isThreadCollapsed={isThreadCollapsed}
@@ -349,10 +348,8 @@ function CommentFilters({
 /** Top-level pill-style input matching the design ("Start the discussion...") */
 function TopLevelCommentInput({
   onSubmit,
-  isCreating,
 }: {
   onSubmit: (text: string) => void;
-  isCreating: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -373,7 +370,6 @@ function TopLevelCommentInput({
         onSubmit(text);
         setIsExpanded(false);
       }}
-      isCreating={isCreating}
       placeholder=""
       autoFocus
       onCancel={() => setIsExpanded(false)}
@@ -383,14 +379,12 @@ function TopLevelCommentInput({
 
 function CommentInput({
   onSubmit,
-  isCreating,
   placeholder,
   autoFocus = false,
   onCancel,
   initialValue = '',
 }: {
   onSubmit: (text: string) => void;
-  isCreating: boolean;
   placeholder: string;
   autoFocus?: boolean;
   onCancel?: () => void;
@@ -450,14 +444,14 @@ function CommentInput({
         )}
         <button
           onClick={handleSubmit}
-          disabled={!hasText || isCreating}
+          disabled={!hasText}
           className={
-            hasText && !isCreating
+            hasText
               ? 'rounded-md bg-text px-3 py-1 text-smallButton text-white'
               : 'rounded-md border border-grey-02 px-3 py-1 text-smallButton text-grey-04'
           }
         >
-          {isCreating ? 'Commenting...' : 'Comment'}
+          Comment
         </button>
       </div>
     </div>
@@ -470,7 +464,6 @@ function CommentList({
   spaceId,
   onReply,
   onEdit,
-  isCreating,
   personalSpaceId,
   editorSpaceIds,
   isThreadCollapsed,
@@ -485,7 +478,6 @@ function CommentList({
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
   onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
-  isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   isThreadCollapsed: (commentId: string) => boolean;
@@ -508,7 +500,6 @@ function CommentList({
             spaceId={spaceId}
             onReply={onReply}
             onEdit={onEdit}
-            isCreating={isCreating}
             personalSpaceId={personalSpaceId}
             editorSpaceIds={editorSpaceIds}
             isThreadCollapsed={isThreadCollapsed}
@@ -699,7 +690,6 @@ function CommentList({
               spaceId={spaceId}
               onReply={onReply}
               onEdit={onEdit}
-              isCreating={isCreating}
               personalSpaceId={personalSpaceId}
               editorSpaceIds={editorSpaceIds}
               isThreadCollapsed={isThreadCollapsed}
@@ -722,7 +712,6 @@ function CommentItem({
   spaceId,
   onReply,
   onEdit,
-  isCreating,
   personalSpaceId,
   editorSpaceIds,
   isThreadCollapsed,
@@ -737,7 +726,6 @@ function CommentItem({
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
   onEdit: (commentId: string, commentSpaceId: string, newText: string) => void;
-  isCreating: boolean;
   personalSpaceId: string | null;
   editorSpaceIds: Set<string>;
   isThreadCollapsed: (commentId: string) => boolean;
@@ -885,7 +873,6 @@ function CommentItem({
       {isEditing ? (
         <CommentInput
           onSubmit={handleEdit}
-          isCreating={isCreating}
           placeholder="Edit your comment..."
           autoFocus
           onCancel={() => setIsEditing(false)}
@@ -947,7 +934,6 @@ function CommentItem({
         <div className="mt-3">
           <CommentInput
             onSubmit={handleReply}
-            isCreating={isCreating}
             placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
             autoFocus
             onCancel={() => setIsReplying(false)}
@@ -963,7 +949,6 @@ function CommentItem({
             spaceId={spaceId}
             onReply={onReply}
             onEdit={onEdit}
-            isCreating={isCreating}
             personalSpaceId={personalSpaceId}
             editorSpaceIds={editorSpaceIds}
             isThreadCollapsed={isThreadCollapsed}
