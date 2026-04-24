@@ -15,7 +15,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -290,6 +290,31 @@ function SortableTab({
   };
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [align, setAlign] = useState<'start' | 'end'>('start');
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const openPopover = () => {
+    cancelClose();
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const triggerCenter = rect.left + rect.width / 2;
+      setAlign(triggerCenter < window.innerWidth / 2 ? 'start' : 'end');
+    }
+    setIsPopoverOpen(true);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimeoutRef.current = setTimeout(() => setIsPopoverOpen(false), 120);
+  };
 
   const liveName = useName(tab.entityId, tab.relation.spaceId);
   const displayName = liveName ?? tab.name;
@@ -325,6 +350,9 @@ function SortableTab({
           <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <Popover.Trigger asChild>
               <button
+                ref={triggerRef}
+                onMouseEnter={openPopover}
+                onMouseLeave={scheduleClose}
                 onMouseDown={e => e.preventDefault()}
                 className="text-grey-03 transition duration-200 hover:text-text"
               >
@@ -334,49 +362,72 @@ function SortableTab({
             <Popover.Portal>
               <Popover.Content
                 side="bottom"
+                align={align}
                 sideOffset={8}
+                onMouseEnter={cancelClose}
+                onMouseLeave={scheduleClose}
                 className="z-100 min-w-[140px] rounded-lg border border-grey-02 bg-white p-1 shadow-lg"
                 onOpenAutoFocus={e => {
                   e.preventDefault();
                   e.stopPropagation();
                 }}
               >
-                <button
+                <MenuItem
                   onClick={() => {
                     setIsPopoverOpen(false);
                     onStartEditing();
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
-                >
-                  <EditSmall />
-                  Edit name
-                </button>
-                <button
+                  icon={<EditSmall />}
+                  label="Edit name"
+                />
+                <MenuItem
                   onClick={() => {
                     setIsPopoverOpen(false);
                     onDelete();
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-red-01 transition-colors hover:bg-grey-01"
-                >
-                  <Trash color="red-01" />
-                  Delete tab
-                </button>
-                <button
+                  icon={<Trash color="red-01" />}
+                  label="Delete tab"
+                  tone="danger"
+                />
+                <MenuItem
                   onClick={() => {
                     setIsPopoverOpen(false);
                     onOpen();
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
-                >
-                  <ExpandSmall />
-                  Open tab entity
-                </button>
+                  icon={<ExpandSmall />}
+                  label="Open tab"
+                />
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
         </div>
       )}
     </div>
+  );
+}
+
+function MenuItem({
+  onClick,
+  icon,
+  label,
+  tone = 'default',
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-smallButton transition-colors hover:bg-grey-01',
+        tone === 'danger' ? 'text-red-01' : 'text-text'
+      )}
+    >
+      <span className="flex w-4 shrink-0 items-center justify-center">{icon}</span>
+      <span className="flex-1">{label}</span>
+    </button>
   );
 }
 
@@ -388,25 +439,33 @@ type TabNameInputProps = {
 
 function TabNameInput({ initialValue, onSubmit, onCancel }: TabNameInputProps) {
   const [value, setValue] = useState(initialValue);
+  const placeholder = 'Add value...';
+  // The hidden sizer renders the same text the input shows, so the input's width
+  // tracks the rendered glyph width rather than ch units (which over-estimate narrow text).
+  const sizerText = value.length > 0 ? value : placeholder;
 
   return (
-    <input
-      autoFocus
-      value={value}
-      onChange={e => setValue(e.target.value)}
-      onBlur={() => onSubmit(value.trim())}
-      onKeyDown={e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          onSubmit(value.trim());
-        } else if (e.key === 'Escape') {
-          onCancel();
-        }
-      }}
-      onFocus={e => e.currentTarget.select()}
-      className="relative z-10 bg-transparent text-quoteMedium text-text outline-none"
-      placeholder="Tab name"
-      style={{ width: `${Math.max(value.length, 'Tab name'.length)}ch` }}
-    />
+    <span className="relative z-10 inline-block text-quoteMedium">
+      <span aria-hidden="true" className="invisible whitespace-pre">
+        {sizerText}
+      </span>
+      <input
+        autoFocus
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={() => onSubmit(value.trim())}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmit(value.trim());
+          } else if (e.key === 'Escape') {
+            onCancel();
+          }
+        }}
+        onFocus={e => e.currentTarget.select()}
+        className="absolute inset-0 bg-transparent text-text outline-none"
+        placeholder={placeholder}
+      />
+    </span>
   );
 }
