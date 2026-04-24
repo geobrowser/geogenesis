@@ -388,23 +388,23 @@ export function useCreateComment(targetEntityId: string) {
 
         const sleep = (ms: number) =>
           new Promise<void>((resolve, reject) => {
-            // Register the abort listener before starting the timer, then re-check aborted
-            // state. Otherwise an abort firing in the window between the initial check and
-            // addEventListener would be missed and the sleep would run to completion.
-            let t: ReturnType<typeof setTimeout> | undefined;
-            const onAbort = () => {
-              if (t !== undefined) clearTimeout(t);
-              reject(signal.reason);
-            };
-            signal.addEventListener('abort', onAbort, { once: true });
             if (signal.aborted) {
-              onAbort();
+              reject(signal.reason);
               return;
             }
-            t = setTimeout(() => {
+            const t = setTimeout(() => {
               signal.removeEventListener('abort', onAbort);
               resolve();
             }, ms);
+            const onAbort = () => {
+              clearTimeout(t);
+              reject(signal.reason);
+            };
+            signal.addEventListener('abort', onAbort, { once: true });
+            // Close the window between the initial aborted-check and addEventListener:
+            // if an abort fired during setup, invoke the handler directly so we don't
+            // wait for the timer to run out.
+            if (signal.aborted) onAbort();
           });
 
         // Merge server results with any pending-publish rows already in the cache so concurrent
