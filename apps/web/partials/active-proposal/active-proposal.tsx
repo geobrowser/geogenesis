@@ -72,7 +72,10 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
 
   return (
     <>
-      <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
+      <div
+        className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3"
+        style={{ paddingRight: 'var(--bounty-panel-width, 1rem)' }}
+      >
         <div className="inline-flex items-center gap-4">
           <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
@@ -98,7 +101,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           />
         </div>
       </div>
-      <div className="relative overflow-x-clip">
+      <div className="relative overflow-x-clip" style={{ paddingRight: 'var(--bounty-panel-width, 0)' }}>
         <MetadataMotionContainer>
           <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
             <div className="flex flex-col items-center gap-8">

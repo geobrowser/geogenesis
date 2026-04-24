@@ -76,6 +76,14 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
   const [linkedExpanded, setLinkedExpanded] = React.useState(true);
   const [availableExpanded, setAvailableExpanded] = React.useState(true);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.setProperty('--bounty-panel-width', '400px');
+    return () => {
+      document.body.style.removeProperty('--bounty-panel-width');
+    };
+  }, [isOpen]);
+
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
     queryFn: () => Effect.runPromise(getSpace(daoSpaceId)),
@@ -478,114 +486,106 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
 
   return (
     <>
-      {showSave ? (
-        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
-          <Pending isPending={isSaving}>
-            <span className="inline-flex items-center gap-1.5">
-              <Gem color="purple" />
-              Save changes
-            </span>
-          </Pending>
-        </Button>
-      ) : (
+      <div className="inline-flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
+          onClick={() => setIsOpen(o => !o)}
           className={cx(
             'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
             'border-grey-02 bg-white text-text hover:border-text'
           )}
           title="Bounties"
+          aria-expanded={isOpen}
         >
           <Gem color="purple" />
           <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
         </button>
-      )}
+        {showSave && (
+          <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
+            <Pending isPending={isSaving}>
+              <span className="inline-flex items-center gap-1.5">
+                <Gem color="white" strokeColor="#3963FE" />
+                Save changes
+              </span>
+            </Pending>
+          </Button>
+        )}
+      </div>
 
       {isOpen && (
-        <div className="fixed inset-0 z-60" role="dialog" aria-modal="true" aria-label="Bounties">
-          <button
-            type="button"
-            className="absolute inset-0 z-0 bg-black/20"
-            aria-label="Close"
-            onClick={() => setIsOpen(false)}
-          />
-          <div
-            className={cx(
-              'absolute z-10 flex h-full w-full max-w-[400px] flex-col overflow-hidden border-l border-divider bg-white',
-              'right-0 top-0'
-            )}
-          >
-            <div className="flex min-h-[60px] items-center justify-between border-b border-grey-02 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="text-purple">
-                  <Gem color="purple" />
-                </span>
-                <span className="truncate text-body text-text">Bounties</span>
-              </div>
-              <SquareButton onClick={() => setIsOpen(false)} icon={<Close />} />
+        <aside
+          className="fixed right-0 top-0 z-60 flex h-full w-full max-w-[400px] flex-col overflow-hidden border-l border-divider bg-white"
+          aria-label="Bounties"
+        >
+          <div className="flex min-h-[60px] items-center justify-between border-b border-grey-02 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-purple">
+                <Gem color="purple" />
+              </span>
+              <span className="truncate text-body text-text">Bounties</span>
             </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {!isAuthor && n === 0 && <p className="p-4 text-body text-grey-04">No bounties linked</p>}
-
-              {!isAuthor && n > 0 && isLoadingLinkedEntities && (
-                <p className="p-4 text-body text-grey-04">Loading bounties…</p>
-              )}
-
-              {!isAuthor && n > 0 && !isLoadingLinkedEntities && (
-                <ul className="flex flex-col divide-y divide-grey-02 px-4">
-                  {linkedBountiesLabeled.map(b => (
-                    <li key={b.id} className="list-none py-2">
-                      <BountyReadOnly bounty={b} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {isAuthor && isLoadingLinks && <p className="p-4 text-body text-grey-04">Loading links…</p>}
-
-              {isAuthor && !isLoadingLinks && (
-                <div className="flex flex-col divide-y divide-grey-02">
-                  <CollapsibleSection
-                    label={`${linkedCount} ${pluralize(linkedCount)} linked`}
-                    expanded={linkedExpanded}
-                    onToggle={() => setLinkedExpanded(v => !v)}
-                  >
-                    {draftBounties.length === 0 ? (
-                      <p className="px-4 pb-4 text-body text-grey-04">No bounties linked</p>
-                    ) : (
-                      <div className="flex flex-col divide-y divide-grey-02 px-4">
-                        {draftBounties.map(b => (
-                          <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
-                        ))}
-                      </div>
-                    )}
-                  </CollapsibleSection>
-                  <CollapsibleSection
-                    label={`${availableCount} ${pluralize(availableCount)} available`}
-                    expanded={availableExpanded}
-                    onToggle={() => setAvailableExpanded(v => !v)}
-                  >
-                    {availableBounties.length === 0 ? (
-                      <p className="px-4 pb-4 text-body text-grey-04">
-                        {linkableBountiesLabeled.length === 0
-                          ? 'No allocated bounties available to link in current space'
-                          : 'No other allocated bounties in this space'}
-                      </p>
-                    ) : (
-                      <div className="flex flex-col divide-y divide-grey-02 px-4">
-                        {availableBounties.map(b => (
-                          <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
-                        ))}
-                      </div>
-                    )}
-                  </CollapsibleSection>
-                </div>
-              )}
-            </div>
+            <SquareButton onClick={() => setIsOpen(false)} icon={<Close />} />
           </div>
-        </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!isAuthor && n === 0 && <p className="p-4 text-metadataMedium text-grey-04">No bounties linked</p>}
+
+            {!isAuthor && n > 0 && isLoadingLinkedEntities && (
+              <p className="p-4 text-metadataMedium text-grey-04">Loading bounties…</p>
+            )}
+
+            {!isAuthor && n > 0 && !isLoadingLinkedEntities && (
+              <ul className="flex flex-col divide-y divide-grey-02 px-4">
+                {linkedBountiesLabeled.map(b => (
+                  <li key={b.id} className="list-none py-2">
+                    <BountyReadOnly bounty={b} />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {isAuthor && isLoadingLinks && <p className="p-4 text-metadataMedium text-grey-04">Loading links…</p>}
+
+            {isAuthor && !isLoadingLinks && (
+              <div className="flex flex-col divide-y divide-grey-02">
+                <CollapsibleSection
+                  label={`${linkedCount} ${pluralize(linkedCount)} linked`}
+                  expanded={linkedExpanded}
+                  onToggle={() => setLinkedExpanded(v => !v)}
+                >
+                  {draftBounties.length === 0 ? (
+                    <p className="px-4 pb-4 text-metadataMedium text-grey-04">No bounties linked</p>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-grey-02 px-4">
+                      {draftBounties.map(b => (
+                        <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
+                      ))}
+                    </div>
+                  )}
+                </CollapsibleSection>
+                <CollapsibleSection
+                  label={`${availableCount} ${pluralize(availableCount)} available`}
+                  expanded={availableExpanded}
+                  onToggle={() => setAvailableExpanded(v => !v)}
+                >
+                  {availableBounties.length === 0 ? (
+                    <p className="px-4 pb-4 text-metadataMedium text-grey-04">
+                      {linkableBountiesLabeled.length === 0
+                        ? 'No allocated bounties available to link in current space'
+                        : 'No other allocated bounties in this space'}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-grey-02 px-4">
+                      {availableBounties.map(b => (
+                        <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
+                      ))}
+                    </div>
+                  )}
+                </CollapsibleSection>
+              </div>
+            )}
+          </div>
+        </aside>
       )}
     </>
   );
