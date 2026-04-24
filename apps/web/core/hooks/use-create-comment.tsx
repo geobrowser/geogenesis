@@ -2,7 +2,7 @@
 
 import { personalSpace } from '@geoprotocol/geo-sdk';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -19,9 +19,7 @@ import {
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
-import { uuidToHex } from '~/core/id/normalize';
-import { getSpace } from '~/core/io/queries';
-import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
+import { checkEntityExists } from '~/core/io/queries';
 import type { Relation, Value } from '~/core/types';
 import { Publish } from '~/core/utils/publish';
 
@@ -29,6 +27,7 @@ import type { CommentEntity, CreateCommentParams } from '~/partials/comments/typ
 
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 
+import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 import { useToast } from './use-toast';
@@ -76,35 +75,11 @@ export function useCreateComment(targetEntityId: string) {
   // row appears immediately regardless, so the queued comment is still visible to the user.
   const publishQueueRef = React.useRef<Promise<unknown>>(Promise.resolve());
 
-  // Prefetch + cache the current user's author info. On the first call we pay the fetch;
-  // every subsequent comment on this page (and any other entity page in this session) reads
-  // straight from React Query's cache, so the optimistic row has the correct avatar + name
-  // the instant it's inserted. staleTime is long because profile data changes rarely.
+  // Reuse the navbar's cached profile fetch. useGeoProfile runs on every page (powers the
+  // avatar in the top-right), so by the time the user clicks Comment the profile is already
+  // in React Query's cache — no extra request.
   const walletAddress = smartAccount?.account.address ?? null;
-  const { data: cachedAuthor } = useQuery({
-    queryKey: ['comment-author-info', personalSpaceId, walletAddress],
-    queryFn: async () => {
-      if (!personalSpaceId || !walletAddress) return null;
-      const [space, profile] = await Promise.all([
-        Effect.runPromise(getSpace(personalSpaceId)),
-        Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddress as `0x${string}`)),
-      ]);
-      if (!space) return null;
-      const avatarUrl =
-        profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-      return {
-        space,
-        profile: {
-          address: profile.address,
-          name: profile.name ?? space.entity.name ?? null,
-          avatarUrl,
-        },
-      };
-    },
-    enabled: Boolean(personalSpaceId && walletAddress),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  });
+  const { profile: cachedProfile } = useGeoProfile(walletAddress ?? undefined);
 
   const createComment = React.useCallback(
     async ({
@@ -241,8 +216,13 @@ export function useCreateComment(targetEntityId: string) {
         // same render as the input box closing. If we have cached author info (the common
         // case on any comment after the first), the row renders fully resolved immediately.
         // Otherwise we use the wallet address as the jazzicon seed and patch in name +
-        // avatar once the fetch resolves below.
+        // avatar once useGeoProfile resolves (it's shared with the navbar, so on any page load
+        // after the first it's already cached).
         const walletAddr = smartAccount.account.address;
+        const profileAvatarUrl =
+          cachedProfile?.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
+            ? cachedProfile.avatarUrl
+            : null;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
           name: commentName,
@@ -253,9 +233,9 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
-            address: cachedAuthor?.profile.address ?? walletAddr,
-            name: cachedAuthor?.profile.name ?? null,
-            avatarUrl: cachedAuthor?.profile.avatarUrl ?? null,
+            address: cachedProfile?.address ?? walletAddr,
+            name: cachedProfile?.name ?? null,
+            avatarUrl: profileAvatarUrl,
           },
           createdAt: new Date().toISOString(),
           spaceId: personalSpaceId,
@@ -270,57 +250,6 @@ export function useCreateComment(targetEntityId: string) {
 
         onOptimistic?.(commentEntityId);
 
-        // Resolve author info: prefer the React Query cache so repeat comments skip the fetch.
-        let space = cachedAuthor?.space ?? null;
-        let profile = cachedAuthor?.profile ?? null;
-        if (!space || !profile) {
-          const [fetchedSpace, fetchedProfile] = await Promise.all([
-            Effect.runPromise(getSpace(personalSpaceId)),
-            Effect.runPromise(fetchProfileBySpaceId(personalSpaceId, walletAddr as `0x${string}`)),
-          ]);
-          if (!fetchedSpace) {
-            // Roll back the placeholder row since we can't proceed without the space.
-            queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-              old.filter(c => c.id !== commentEntityId)
-            );
-            setToast(<span>Failed to resolve personal space</span>);
-            setIsCreating(false);
-            return null;
-          }
-          const resolvedAvatarUrl =
-            fetchedProfile.avatarUrl && fetchedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
-              ? fetchedProfile.avatarUrl
-              : null;
-          space = fetchedSpace;
-          profile = {
-            address: fetchedProfile.address,
-            name: fetchedProfile.name ?? fetchedSpace.entity.name ?? null,
-            avatarUrl: resolvedAvatarUrl,
-          };
-          // Seed the cache so the next comment is instant.
-          queryClient.setQueryData(['comment-author-info', personalSpaceId, walletAddr], {
-            space,
-            profile,
-          });
-          // Patch the optimistic row with the freshly resolved info. Only touch our own row
-          // so a concurrent poller update (which replaces the whole list) isn't clobbered.
-          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-            old.map(c =>
-              c.id === commentEntityId
-                ? {
-                    ...c,
-                    author: {
-                      spaceId: personalSpaceId,
-                      address: profile!.address,
-                      name: profile!.name,
-                      avatarUrl: profile!.avatarUrl,
-                    },
-                  }
-                : c
-            )
-          );
-        }
-
         // Publish to personal space
         const publish = Effect.gen(function* () {
           const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
@@ -334,7 +263,7 @@ export function useCreateComment(targetEntityId: string) {
               try: () =>
                 personalSpace.publishEdit({
                   name: `Comment: ${commentName}`,
-                  spaceId: space.id,
+                  spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
                   network: 'TESTNET',
@@ -423,18 +352,21 @@ export function useCreateComment(targetEntityId: string) {
           );
         };
 
-        // `IdUtils.generate()` yields a dashed UUID; the indexer returns ids in non-dashed hex.
-        // Compare canonically so the poll actually matches once the comment is indexed.
-        const targetIdKey = uuidToHex(commentEntityId);
-
         void (async () => {
           try {
             await sleep(FIRST_POLL_MS);
+            // Probe the cheap `entity(id) { id }` endpoint each tick instead of refetching the
+            // whole comment list. Once the indexer has our comment, do a single full fetch and
+            // merge. This cuts the poll cost from ~2 GraphQL calls + profile hydration per tick
+            // to a ~1kb existence check.
             for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
               if (signal.aborted) return;
               try {
-                const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
-                if (list.some(c => uuidToHex(c.id) === targetIdKey)) {
+                const exists = await Effect.runPromise(
+                  checkEntityExists(commentEntityId, signal)
+                );
+                if (exists) {
+                  const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
                   applyServerList(list);
                   return;
                 }
@@ -445,6 +377,8 @@ export function useCreateComment(targetEntityId: string) {
               await sleep(POLL_INTERVAL_MS);
             }
             if (signal.aborted) return;
+            // Final catch-all: one full fetch even if the probe kept returning false, so a
+            // flaky indexer or edge case doesn't leave the row stuck in "Publishing…" forever.
             const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
             applyServerList(list);
           } catch (e) {
@@ -534,13 +468,6 @@ export function useCreateComment(targetEntityId: string) {
           old.map(c => (c.id === commentId ? { ...c, markdownContent: newText, name: newName } : c))
         );
 
-        const space = await Effect.runPromise(getSpace(personalSpaceId));
-        if (!space) {
-          setToast(<span>Failed to resolve personal space</span>);
-          setIsCreating(false);
-          return false;
-        }
-
         const publish = Effect.gen(function* () {
           const ops = yield* Publish.prepareLocalDataForPublishing(values, [], personalSpaceId);
 
@@ -553,7 +480,7 @@ export function useCreateComment(targetEntityId: string) {
               try: () =>
                 personalSpace.publishEdit({
                   name: `Edit comment: ${newName}`,
-                  spaceId: space.id,
+                  spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
                   network: 'TESTNET',
