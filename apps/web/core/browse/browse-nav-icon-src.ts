@@ -1,5 +1,7 @@
+import { ROOT_SPACE_IMAGE } from '~/core/constants';
+
 export const BROWSE_NAV_ICON = {
-  root: '/browse-nav/root.svg',
+  root: ROOT_SPACE_IMAGE,
   explore: '/browse-nav/explore.svg',
   exploreOutline: '/browse-nav/explore-outline.svg',
   governance: '/browse-nav/governance.svg',
