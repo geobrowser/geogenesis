@@ -5,7 +5,6 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  MeasuringStrategy,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -156,7 +155,8 @@ export function EditableTabGroup({
     });
 
     // Navigate to the new tab so it becomes the active tab, and enter rename mode.
-    router.replace(`${overviewHref}?tabId=${tabEntityId}`);
+    // `scroll: false` keeps the user's current scroll position.
+    router.replace(`${overviewHref}?tabId=${tabEntityId}`, { scroll: false });
     setEditingTabId(tabEntityId);
   };
 
@@ -176,12 +176,14 @@ export function EditableTabGroup({
 
   const activeTab = activeId ? editableTabs.find(t => t.relation.id === activeId) : null;
 
+  // Stable array identity for SortableContext so drag doesn't re-register items on every render.
+  const sortableIds = React.useMemo(() => editableTabs.map(t => t.relation.id), [editableTabs]);
+
   return (
     <div className="relative">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -197,7 +199,7 @@ export function EditableTabGroup({
               <StaticTab key={tab.href} href={tab.href} label={tab.label} active={tab.href === fullPath} />
             ))}
 
-            <SortableContext items={editableTabs.map(t => t.relation.id)} strategy={horizontalListSortingStrategy}>
+            <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
               {editableTabs.map(tab => (
                 <SortableTab
                   key={tab.relation.id}
