@@ -39,11 +39,12 @@ import {
 } from '~/partials/review/bounty-linking';
 import type { Bounty } from '~/partials/review/bounty-linking/types';
 
-type Props = {
+type ProviderProps = {
   daoSpaceId: string;
   proposalId: string;
   proposalName: string;
   authorSpaceId: string;
+  children: React.ReactNode;
 };
 
 function bountySpaceFallbackLabel(spaceId: string): string {
@@ -55,7 +56,30 @@ function spaceIdsEqual(a: string, b: string): boolean {
   return a.replace(/^0x/i, '').toLowerCase() === b.replace(/^0x/i, '').toLowerCase();
 }
 
-export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, authorSpaceId }: Props) {
+type ContextValue = {
+  showBounties: boolean;
+  isAuthor: boolean;
+  smartAccountReady: boolean;
+  hasUnsaved: boolean;
+  isSaving: boolean;
+  n: number;
+  isLoadingLinks: boolean;
+  isLoadingLinkedEntities: boolean;
+  draftBounties: Bounty[];
+  availableBounties: Bounty[];
+  linkedBountiesLabeled: Bounty[];
+  linkableBountiesLabeled: Bounty[];
+  toggleDraft: (id: string) => void;
+  onSave: () => Promise<void>;
+};
+
+const Context = React.createContext<ContextValue | null>(null);
+
+function useBounties(): ContextValue | null {
+  return React.useContext(Context);
+}
+
+export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName, authorSpaceId, children }: ProviderProps) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -68,20 +92,9 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
     personalSpaceId && personalSpaceId.length > 0 && spaceIdsEqual(personalSpaceId, authorSpaceId)
   );
 
-  const [isOpen, setIsOpen] = React.useState(false);
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
-  const [linkedExpanded, setLinkedExpanded] = React.useState(true);
-  const [availableExpanded, setAvailableExpanded] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!isOpen) return;
-    document.body.style.setProperty('--bounty-panel-width', '400px');
-    return () => {
-      document.body.style.removeProperty('--bounty-panel-width');
-    };
-  }, [isOpen]);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -144,14 +157,14 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
 
   const { data: bountySearchSpaceIds = [] } = useQuery({
     queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
-    enabled: showBounties && isOpen && isAuthor,
+    enabled: showBounties && isAuthor,
     staleTime: 60_000,
     queryFn: () => fetchSpacesWithAncestors(daoSpaceId),
   });
 
   const { data: remoteBountyEntities = [] } = useQuery({
     queryKey: ['bounties-by-type', bountySearchSpaceIds.join(','), BOUNTY_TYPE_ID, 'gov-panel'],
-    enabled: isAuthor && showBounties && bountySearchSpaceIds.length > 0 && isOpen,
+    enabled: isAuthor && showBounties && bountySearchSpaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       const pages = await Promise.all(
@@ -181,14 +194,14 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
 
   const { data: bountySubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations', allSelectableIds],
-    enabled: isAuthor && isOpen && allSelectableIds.length > 0,
+    enabled: isAuthor && allSelectableIds.length > 0,
     staleTime: 60_000,
     queryFn: () => Effect.runPromise(getRelationsByToEntityIds(allSelectableIds, BOUNTIES_RELATION_TYPE)),
   });
 
   const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations-p', allSelectableIds, personalSpaceId],
-    enabled: isAuthor && isOpen && allSelectableIds.length > 0 && Boolean(personalSpaceId),
+    enabled: isAuthor && allSelectableIds.length > 0 && Boolean(personalSpaceId),
     staleTime: 60_000,
     queryFn: () => {
       if (!personalSpaceId) return Promise.resolve([]);
@@ -265,13 +278,13 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
         e.id,
         e.values as Value[],
         e.relations,
-        new Map(),
-        new Map(),
+        submissionCounts,
+        personalSubmissionCounts,
         e.spaces[0] ?? daoSpaceId,
         authorSpaceId
       )
     );
-  }, [authorSpaceId, daoSpaceId, linkedBountyDetails]);
+  }, [authorSpaceId, daoSpaceId, linkedBountyDetails, submissionCounts, personalSubmissionCounts]);
 
   const bountySpaceIdsForLabels = React.useMemo(() => {
     const s = new Set<string>();
@@ -286,7 +299,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
 
   const { data: bountyLabelSpaces = [] } = useQuery({
     queryKey: ['bounty-space-labels', bountySpaceIdsForLabels.join(',')],
-    enabled: isOpen && bountySpaceIdsForLabels.length > 0,
+    enabled: bountySpaceIdsForLabels.length > 0,
     staleTime: 60_000,
     queryFn: () => Effect.runPromise(getSpaces({ spaceIds: bountySpaceIdsForLabels })),
   });
@@ -354,29 +367,38 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
       .filter((b): b is Bounty => b !== undefined);
   }, [bountyInfoById, draftIds]);
 
-  const wasPanelOpen = React.useRef(false);
+  // Sync drafts to effective linked ids when they change (initial mount, after save).
+  const lastSyncedKey = React.useRef<string>('');
   React.useEffect(() => {
-    if (isOpen && !wasPanelOpen.current) {
-      setDraftIds(new Set(effectiveLinkedIds));
-    }
-    wasPanelOpen.current = isOpen;
-  }, [isOpen, effectiveLinkedIds]);
+    const key = effectiveLinkedIds.join(',');
+    if (key === lastSyncedKey.current) return;
+    // Only sync when there are no in-flight (unsaved) modifications relative to the previous server state.
+    setDraftIds(prev => {
+      const prevKey = [...prev].sort().join(',');
+      if (prevKey === lastSyncedKey.current) {
+        lastSyncedKey.current = key;
+        return new Set(effectiveLinkedIds);
+      }
+      lastSyncedKey.current = key;
+      return prev;
+    });
+  }, [effectiveLinkedIds]);
 
   const hasUnsaved = React.useMemo(() => {
     if (draftIds.size !== effectiveLinkedIds.length) return true;
     return !effectiveLinkedIds.every(id => draftIds.has(id));
   }, [draftIds, effectiveLinkedIds]);
 
-  const toggleDraft = (id: string) => {
+  const toggleDraft = React.useCallback((id: string) => {
     setDraftIds(prev => {
       const nxt = new Set(prev);
       if (nxt.has(id)) nxt.delete(id);
       else nxt.add(id);
       return nxt;
     });
-  };
+  }, []);
 
-  const onSave = async () => {
+  const onSave = React.useCallback(async () => {
     if (!isAuthor || !personalSpaceId || !smartAccount) return;
     if (!hasUnsaved) return;
 
@@ -470,71 +492,137 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
       await queryClient.invalidateQueries({ queryKey: ['proposal-bounty-relations', proposalId, authorSpaceId] });
       await queryClient.invalidateQueries({ queryKey: ['proposal-linked-bounty-entities'] });
       await queryClient.invalidateQueries({ queryKey: ['proposal-types-relations', proposalId, personalSpaceId] });
-      setIsOpen(false);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [
+    isAuthor,
+    personalSpaceId,
+    smartAccount,
+    hasUnsaved,
+    effectiveLinkedIds,
+    draftIds,
+    relationByBountyId,
+    proposalName,
+    daoSpaceId,
+    bountyInfoById,
+    linkedRelations.length,
+    hasProposalTypeRelation,
+    makeProposal,
+    queryClient,
+    proposalId,
+    authorSpaceId,
+  ]);
 
-  if (!showBounties) return null;
+  const value = React.useMemo<ContextValue>(
+    () => ({
+      showBounties,
+      isAuthor,
+      smartAccountReady: Boolean(smartAccount),
+      hasUnsaved,
+      isSaving,
+      n,
+      isLoadingLinks,
+      isLoadingLinkedEntities,
+      draftBounties,
+      availableBounties,
+      linkedBountiesLabeled,
+      linkableBountiesLabeled,
+      toggleDraft,
+      onSave,
+    }),
+    [
+      showBounties,
+      isAuthor,
+      smartAccount,
+      hasUnsaved,
+      isSaving,
+      n,
+      isLoadingLinks,
+      isLoadingLinkedEntities,
+      draftBounties,
+      availableBounties,
+      linkedBountiesLabeled,
+      linkableBountiesLabeled,
+      toggleDraft,
+      onSave,
+    ]
+  );
 
+  return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+
+export function ProposalBountyHeadButton() {
+  const ctx = useBounties();
+  if (!ctx || !ctx.showBounties) return null;
+  const { isAuthor, hasUnsaved, isSaving, smartAccountReady, n, onSave } = ctx;
   const showSave = isAuthor && hasUnsaved;
-  const linkedCount = draftBounties.length;
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <div
+        className={cx(
+          'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal',
+          'border-grey-02 bg-white text-text'
+        )}
+        title="Bounties"
+      >
+        <Gem color="purple" />
+        <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
+      </div>
+      {showSave && (
+        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
+          <Pending isPending={isSaving}>
+            <span className="inline-flex items-center gap-1.5">
+              <Gem color="white" strokeColor="#3963FE" />
+              Save changes
+            </span>
+          </Pending>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function ProposalBountyPanel() {
+  const ctx = useBounties();
+  const [linkedExpanded, setLinkedExpanded] = React.useState(true);
+  const [availableExpanded, setAvailableExpanded] = React.useState(true);
+
+  if (!ctx || !ctx.showBounties) return null;
+  const {
+    isAuthor,
+    n,
+    isLoadingLinks,
+    isLoadingLinkedEntities,
+    draftBounties,
+    availableBounties,
+    linkedBountiesLabeled,
+    linkableBountiesLabeled,
+    toggleDraft,
+  } = ctx;
+
+  const linkedCount = isAuthor ? draftBounties.length : linkedBountiesLabeled.length;
   const availableCount = availableBounties.length;
   const pluralize = (count: number) => (count === 1 ? 'bounty' : 'bounties');
 
   return (
-    <>
-      <div className="inline-flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setIsOpen(o => !o)}
-          className={cx(
-            'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-            'border-grey-02 bg-white text-text hover:border-text'
-          )}
-          title="Bounties"
-          aria-expanded={isOpen}
-        >
-          <Gem color="purple" />
-          <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
-        </button>
-        {showSave && (
-          <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
-            <Pending isPending={isSaving}>
-              <span className="inline-flex items-center gap-1.5">
-                <Gem color="white" strokeColor="#3963FE" />
-                Save changes
-              </span>
-            </Pending>
-          </Button>
-        )}
-      </div>
-
-      {isOpen && (
-        <aside
-          className="fixed bottom-0 right-0 top-[60px] z-40 flex w-full max-w-[400px] flex-col overflow-y-auto border-l border-divider bg-[#EDEEF3]"
-          aria-label="Bounties"
-        >
-          {!isAuthor && n === 0 && <p className="p-4 text-metadataMedium text-grey-04">No bounties linked</p>}
-
-          {!isAuthor && n > 0 && isLoadingLinkedEntities && (
-            <p className="p-4 text-metadataMedium text-grey-04">Loading bounties…</p>
-          )}
-
-          {!isAuthor && n > 0 && !isLoadingLinkedEntities && (
-            <div className="flex flex-col gap-2 p-2">
-              <SectionCard>
-                <div className="px-5 py-4">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="text-purple">
-                      <Gem color="purple" />
-                    </span>
-                    <span className="text-metadataMedium text-text">
-                      {n} {pluralize(n)} linked
-                    </span>
-                  </span>
-                </div>
+    <aside
+      className="flex w-full max-w-[400px] shrink-0 flex-col"
+      aria-label="Bounties"
+    >
+      <div className="overflow-hidden rounded-lg border border-grey-02 bg-white">
+        {!isAuthor && (
+          <>
+            <div className="px-5 py-4">
+              <SectionHeader label={`${n} ${pluralize(n)} linked`} />
+            </div>
+            <div className="border-t border-grey-02">
+              {n === 0 ? (
+                <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
+              ) : isLoadingLinkedEntities ? (
+                <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
+              ) : (
                 <ul className="flex flex-col divide-y divide-grey-02 px-5">
                   {linkedBountiesLabeled.map(b => (
                     <li key={b.id} className="list-none py-2">
@@ -542,67 +630,72 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
                     </li>
                   ))}
                 </ul>
-              </SectionCard>
+              )}
             </div>
-          )}
+          </>
+        )}
 
-          {isAuthor && isLoadingLinks && <p className="p-4 text-metadataMedium text-grey-04">Loading links…</p>}
-
-          {isAuthor && !isLoadingLinks && (
-            <div className="flex flex-col gap-2 p-2">
-              <SectionCard>
-                <CollapsibleSectionHeader
-                  label={`${linkedCount} ${pluralize(linkedCount)} linked`}
-                  expanded={linkedExpanded}
-                  onToggle={() => setLinkedExpanded(v => !v)}
-                />
-                {linkedExpanded && (
-                  draftBounties.length === 0 ? (
-                    <p className="px-5 pb-4 text-metadataMedium text-grey-04">No bounties linked</p>
-                  ) : (
-                    <div className="flex flex-col divide-y divide-grey-02 px-5">
-                      {draftBounties.map(b => (
-                        <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
-                      ))}
-                    </div>
-                  )
+        {isAuthor && (
+          <>
+            <CollapsibleSectionHeader
+              label={`${linkedCount} ${pluralize(linkedCount)} linked`}
+              expanded={linkedExpanded}
+              onToggle={() => setLinkedExpanded(v => !v)}
+            />
+            {linkedExpanded && (
+              <div className="border-t border-grey-02">
+                {isLoadingLinks && draftBounties.length === 0 ? (
+                  <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading links…</p>
+                ) : draftBounties.length === 0 ? (
+                  <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-grey-02 px-5">
+                    {draftBounties.map(b => (
+                      <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
+                    ))}
+                  </div>
                 )}
-              </SectionCard>
-              <SectionCard>
-                <CollapsibleSectionHeader
-                  label={`${availableCount} ${pluralize(availableCount)} available`}
-                  expanded={availableExpanded}
-                  onToggle={() => setAvailableExpanded(v => !v)}
-                />
-                {availableExpanded && (
-                  availableBounties.length === 0 ? (
-                    <p className="px-5 pb-4 text-metadataMedium text-grey-04">
-                      {linkableBountiesLabeled.length === 0
-                        ? 'No allocated bounties available to link in current space'
-                        : 'No other allocated bounties in this space'}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col divide-y divide-grey-02 px-5">
-                      {availableBounties.map(b => (
-                        <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
-                      ))}
-                    </div>
-                  )
-                )}
-              </SectionCard>
+              </div>
+            )}
+            <div className="border-t border-grey-02">
+              <CollapsibleSectionHeader
+                label={`${availableCount} ${pluralize(availableCount)} available`}
+                expanded={availableExpanded}
+                onToggle={() => setAvailableExpanded(v => !v)}
+              />
             </div>
-          )}
-        </aside>
-      )}
-    </>
+            {availableExpanded && (
+              <div className="border-t border-grey-02">
+                {availableBounties.length === 0 ? (
+                  <p className="px-5 py-4 text-metadataMedium text-grey-04">
+                    {linkableBountiesLabeled.length === 0
+                      ? 'No allocated bounties available to link in current space'
+                      : 'No other allocated bounties in this space'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-grey-02 px-5">
+                    {availableBounties.map(b => (
+                      <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </aside>
   );
 }
 
-function SectionCard({ children }: { children: React.ReactNode }) {
+function SectionHeader({ label }: { label: string }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-grey-02 bg-white">
-      {children}
-    </div>
+    <span className="inline-flex items-center gap-2">
+      <span className="text-purple">
+        <Gem color="purple" />
+      </span>
+      <span className="text-metadataMedium text-text">{label}</span>
+    </span>
   );
 }
 
@@ -622,12 +715,7 @@ function CollapsibleSectionHeader({
       className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-grey-01"
       aria-expanded={expanded}
     >
-      <span className="inline-flex items-center gap-2">
-        <span className="text-purple">
-          <Gem color="purple" />
-        </span>
-        <span className="text-metadataMedium text-text">{label}</span>
-      </span>
+      <SectionHeader label={label} />
       <span className={cx('text-grey-04 transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>
         <ChevronDown />
       </span>

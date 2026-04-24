@@ -20,7 +20,11 @@ import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
-import { ProposalBountyLinks } from './proposal-bounty-links';
+import {
+  ProposalBountiesProvider,
+  ProposalBountyHeadButton,
+  ProposalBountyPanel,
+} from './proposal-bounty-links';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
@@ -70,26 +74,18 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const proposalTitle =
     proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
-  return (
+  const isAddEdit = proposal.type === 'ADD_EDIT';
+
+  const body = (
     <>
-      <div
-        className="sticky top-0 z-50 flex min-h-[60px] w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3"
-        style={{ paddingRight: 'var(--bounty-panel-width, 1rem)' }}
-      >
+      <div className="sticky top-0 z-50 flex min-h-[60px] w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
         </div>
 
         <div className="inline-flex shrink-0 items-center gap-2">
-          {proposal.type === 'ADD_EDIT' && (
-            <ProposalBountyLinks
-              daoSpaceId={spaceId}
-              proposalId={proposal.id}
-              proposalName={proposal.name ?? proposalTitle}
-              authorSpaceId={proposal.createdBy.spaceId}
-            />
-          )}
+          {isAddEdit && <ProposalBountyHeadButton />}
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
@@ -101,8 +97,9 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           />
         </div>
       </div>
-      <div className="relative overflow-x-clip" style={{ paddingRight: 'var(--bounty-panel-width, 0)' }}>
-        <MetadataMotionContainer>
+      <div className="flex w-full items-start gap-2 bg-[#EDEEF3] p-2">
+        <div className="relative min-w-0 flex-1 overflow-x-clip rounded-lg border border-grey-02 bg-white">
+          <MetadataMotionContainer>
           <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
             <div className="flex flex-col items-center gap-8">
               <div className="flex flex-col items-center gap-3">
@@ -186,14 +183,31 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
             </div>
           </div>
         </MetadataMotionContainer>
-        <div className="h-full overflow-x-clip border-t border-divider">
-          <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-            {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
-            {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
-            {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
+          <div className="h-full overflow-x-clip border-t border-divider">
+            <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+              {isAddEdit && <ContentProposal proposal={proposal} spaceId={spaceId} />}
+              {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
+              {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
+            </div>
           </div>
         </div>
+        {isAddEdit && <ProposalBountyPanel />}
       </div>
     </>
+  );
+
+  if (!isAddEdit) {
+    return body;
+  }
+
+  return (
+    <ProposalBountiesProvider
+      daoSpaceId={spaceId}
+      proposalId={proposal.id}
+      proposalName={proposal.name ?? proposalTitle}
+      authorSpaceId={proposal.createdBy.spaceId}
+    >
+      {body}
+    </ProposalBountiesProvider>
   );
 }
