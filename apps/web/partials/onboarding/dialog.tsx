@@ -113,15 +113,23 @@ export const OnboardingDialog = () => {
   // while we're still sitting on step='completed' and would otherwise clear
   // the timer before it fires. A suppressed new tab never flips the ref,
   // so it won't auto-navigate away.
+  //
+  // Chat open happens inside the timer (not right after space creation) so
+  // the assistant panel and the explore redirect land in the same frame
+  // instead of the assistant popping open a beat before navigation.
   useEffect(() => {
     if (!wasOnboardingActiveRef.current) return;
     if (step !== 'completed') return;
     const timer = setTimeout(() => {
+      if (!hasSeenAssistant) {
+        setChatOpen(true);
+        setHasSeenAssistant(true);
+      }
       router.push(ONBOARDING_DESTINATION);
       setStep('done');
     }, 900);
     return () => clearTimeout(timer);
-  }, [step, router, setStep]);
+  }, [step, router, setStep, hasSeenAssistant, setChatOpen, setHasSeenAssistant]);
 
   const address = smartAccount?.account.address;
 
@@ -151,11 +159,6 @@ export const OnboardingDialog = () => {
 
       setSpaceId(spaceId);
       setStep('completed');
-
-      if (!hasSeenAssistant) {
-        setChatOpen(true);
-        setHasSeenAssistant(true);
-      }
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -455,8 +458,8 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName || isSearching} onClick={handleContinue} className="w-full">
-          {isSearching ? 'Checking...' : 'Continue'}
+        <Button disabled={!validName} onClick={handleContinue} className="w-full">
+          {isSearching ? <Dots color="bg-white" /> : 'Continue'}
         </Button>
       </div>
     </div>
@@ -541,7 +544,7 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
         }}
         className={cx(
           'flex w-full cursor-pointer flex-col p-2 pr-8 transition-colors duration-150 focus:outline-hidden',
-          isSelected ? 'bg-divider' : 'hover:bg-grey-01 focus:bg-grey-01'
+          isSelected ? 'bg-divider' : 'hover:bg-grey-01 focus-visible:bg-grey-01'
         )}
       >
         <div className="flex w-full items-center leading-4">

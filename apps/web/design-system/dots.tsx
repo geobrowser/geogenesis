@@ -5,7 +5,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 
 interface Props {
-  color?: 'bg-grey-03' | 'bg-grey-02';
+  color?: 'bg-grey-03' | 'bg-grey-02' | 'bg-white';
 }
 
 export function Dots({ color = 'bg-grey-03' }: Props) {
