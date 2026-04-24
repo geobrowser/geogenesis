@@ -1619,7 +1619,7 @@ function TableBlockEntityFilterInput({
     (e: React.UIEvent<HTMLUListElement>) => {
       const el = e.currentTarget;
       // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 136;
+      const threshold = 275;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -1878,7 +1878,7 @@ function TableBlockSpaceFilterInput({
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
       // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 136;
+      const threshold = 275;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -2083,7 +2083,7 @@ function TableBlockTextFilterInput({
   const applyTextListPagination = React.useCallback(
     (el: HTMLUListElement) => {
       // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 136;
+      const threshold = 275;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
