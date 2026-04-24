@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Gem } from '~/design-system/icons/gem';
 
-import type { Bounty, BountyDifficulty, BountyStatus } from './types';
+import type { Bounty } from './types';
 
 interface BountyCardProps {
   bounty: Bounty;
@@ -27,14 +27,13 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       year: 'numeric',
     });
 
+  const estPayout = bounty.budget != null ? Math.round(bounty.budget * 0.2) : null;
+
   const hasDetails =
-    bounty.budget != null ||
-    bounty.maxContributors != null ||
-    bounty.submissionsPerPerson != null ||
-    bounty.submissionsCount != null ||
-    bounty.userSubmissionsCount != null ||
+    estPayout != null ||
     bounty.difficulty ||
     bounty.status ||
+    bounty.userSubmissionsCount != null ||
     formattedDeadline;
 
   const handleOpenBounty = () => {
@@ -78,7 +77,6 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
         </label>
       </div>
 
-      {/* Title */}
       <button
         type="button"
         onClick={handleOpenBounty}
@@ -87,53 +85,40 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
         {bounty.name}
       </button>
 
-      {/* Description */}
-      {bounty.description ? (
+      {bounty.description && (
         <p className="mt-2 line-clamp-3 text-[14px] leading-snug text-grey-04">{bounty.description}</p>
-      ) : (
-        <p className="mt-2 text-[14px] leading-snug text-grey-03 italic">No description</p>
       )}
 
-      {/* Details table */}
       {hasDetails && (
         <div className="mt-3 flex flex-col gap-0">
-          {bounty.budget != null && (
-            <DetailRow label="Bounty budget">
+          {estPayout != null && (
+            <DetailRow label="Est. payout">
               <span className="inline-flex items-center gap-1">
                 <span className="text-purple">
                   <Gem color="purple" />
                 </span>
-                <span className="text-[14px] text-text">{bounty.budget.toLocaleString('en-US')}</span>
-              </span>
-            </DetailRow>
-          )}
-          {bounty.maxContributors != null && (
-            <DetailRow label="Submissions">
-              <span className="text-[14px] text-text">
-                {(bounty.submissionsCount ?? 0).toLocaleString('en-US')} /{' '}
-                {bounty.maxContributors.toLocaleString('en-US')}
-              </span>
-            </DetailRow>
-          )}
-
-          {bounty.submissionsPerPerson != null && (
-            <DetailRow label="Your submissions">
-              <span className="text-[14px] text-text">
-                {(bounty.userSubmissionsCount ?? 0).toLocaleString('en-US')} /{' '}
-                {bounty.submissionsPerPerson.toLocaleString('en-US')}
+                <span className="text-[14px] text-text">{estPayout.toLocaleString('en-US')}</span>
               </span>
             </DetailRow>
           )}
 
           {bounty.difficulty && (
             <DetailRow label="Difficulty">
-              <span className="text-[14px] text-text">{formatDifficulty(bounty.difficulty)}</span>
+              <span className="text-[14px] text-text">{bounty.difficulty}</span>
             </DetailRow>
           )}
 
           {bounty.status && (
             <DetailRow label="Status">
-              <span className="text-[14px] text-text">{formatStatus(bounty.status)}</span>
+              <span className="text-[14px] text-text">{bounty.status}</span>
+            </DetailRow>
+          )}
+
+          {bounty.userSubmissionsCount != null && (
+            <DetailRow label="Your submissions">
+              <span className="text-[14px] text-text">
+                {bounty.userSubmissionsCount.toLocaleString('en-US')}
+              </span>
             </DetailRow>
           )}
 
@@ -155,26 +140,4 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
       {children}
     </div>
   );
-}
-
-function formatDifficulty(difficulty: BountyDifficulty): string {
-  const map: Record<BountyDifficulty, string> = {
-    LOW: 'Low',
-    MEDIUM: 'Medium',
-    HARD: 'Hard',
-    EXPERT: 'Expert',
-  };
-  return map[difficulty];
-}
-
-function formatStatus(status: BountyStatus): string {
-  const map: Record<BountyStatus, string> = {
-    OPEN: 'Open',
-    ALLOCATED: 'Allocated',
-    SELF_ASSIGNED: 'Self-assigned',
-    IN_PROGRESS: 'In progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-  };
-  return map[status];
 }

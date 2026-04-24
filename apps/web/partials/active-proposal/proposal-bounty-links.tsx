@@ -26,6 +26,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { Close } from '~/design-system/icons/close';
 import { Gem } from '~/design-system/icons/gem';
 import { Pending } from '~/design-system/pending';
@@ -72,6 +73,8 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
+  const [linkedExpanded, setLinkedExpanded] = React.useState(true);
+  const [availableExpanded, setAvailableExpanded] = React.useState(true);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -468,23 +471,36 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
 
   if (!showBounties) return null;
 
-  const headLabel = isAuthor && n === 0 ? 'Link to bounty' : String(n);
   const showSave = isAuthor && hasUnsaved;
+  const linkedCount = draftBounties.length;
+  const availableCount = availableBounties.length;
+  const pluralize = (count: number) => (count === 1 ? 'bounty' : 'bounties');
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={cx(
-          'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-          'border-grey-02 bg-white text-text hover:border-text'
-        )}
-        title="Bounties"
-      >
-        <Gem color="purple" />
-        <span>{headLabel}</span>
-      </button>
+      {showSave ? (
+        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
+          <Pending isPending={isSaving}>
+            <span className="inline-flex items-center gap-1.5">
+              <Gem color="purple" />
+              Save changes
+            </span>
+          </Pending>
+        </Button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className={cx(
+            'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+            'border-grey-02 bg-white text-text hover:border-text'
+          )}
+          title="Bounties"
+        >
+          <Gem color="purple" />
+          <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
+        </button>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 z-60" role="dialog" aria-modal="true" aria-label="Bounties">
@@ -507,25 +523,18 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
                 </span>
                 <span className="truncate text-body text-text">Bounties</span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isAuthor && showSave && (
-                  <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
-                    <Pending isPending={isSaving}>Save changes</Pending>
-                  </Button>
-                )}
-                <SquareButton onClick={() => setIsOpen(false)} icon={<Close />} />
-              </div>
+              <SquareButton onClick={() => setIsOpen(false)} icon={<Close />} />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {!isAuthor && n === 0 && <p className="text-body text-grey-04">No bounties linked</p>}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {!isAuthor && n === 0 && <p className="p-4 text-body text-grey-04">No bounties linked</p>}
 
               {!isAuthor && n > 0 && isLoadingLinkedEntities && (
-                <p className="text-body text-grey-04">Loading bounties…</p>
+                <p className="p-4 text-body text-grey-04">Loading bounties…</p>
               )}
 
               {!isAuthor && n > 0 && !isLoadingLinkedEntities && (
-                <ul className="flex flex-col divide-y divide-grey-02">
+                <ul className="flex flex-col divide-y divide-grey-02 px-4">
                   {linkedBountiesLabeled.map(b => (
                     <li key={b.id} className="list-none py-2">
                       <BountyReadOnly bounty={b} />
@@ -534,38 +543,44 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
                 </ul>
               )}
 
-              {isAuthor && isLoadingLinks && <p className="text-body text-grey-04">Loading links…</p>}
+              {isAuthor && isLoadingLinks && <p className="p-4 text-body text-grey-04">Loading links…</p>}
 
               {isAuthor && !isLoadingLinks && (
-                <div className="flex flex-col gap-8">
-                  <section>
-                    <h3 className="mb-2 text-metadata font-medium text-text">Linked</h3>
+                <div className="flex flex-col divide-y divide-grey-02">
+                  <CollapsibleSection
+                    label={`${linkedCount} ${pluralize(linkedCount)} linked`}
+                    expanded={linkedExpanded}
+                    onToggle={() => setLinkedExpanded(v => !v)}
+                  >
                     {draftBounties.length === 0 ? (
-                      <p className="text-body text-grey-04">No bounties linked</p>
+                      <p className="px-4 pb-4 text-body text-grey-04">No bounties linked</p>
                     ) : (
-                      <div className="flex flex-col divide-y divide-grey-02">
+                      <div className="flex flex-col divide-y divide-grey-02 px-4">
                         {draftBounties.map(b => (
                           <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
                         ))}
                       </div>
                     )}
-                  </section>
-                  <section>
-                    <h3 className="mb-2 text-metadata font-medium text-text">Available</h3>
+                  </CollapsibleSection>
+                  <CollapsibleSection
+                    label={`${availableCount} ${pluralize(availableCount)} available`}
+                    expanded={availableExpanded}
+                    onToggle={() => setAvailableExpanded(v => !v)}
+                  >
                     {availableBounties.length === 0 ? (
-                      <p className="text-body text-grey-04">
+                      <p className="px-4 pb-4 text-body text-grey-04">
                         {linkableBountiesLabeled.length === 0
                           ? 'No allocated bounties available to link in current space'
                           : 'No other allocated bounties in this space'}
                       </p>
                     ) : (
-                      <div className="flex flex-col divide-y divide-grey-02">
+                      <div className="flex flex-col divide-y divide-grey-02 px-4">
                         {availableBounties.map(b => (
                           <BountyCard key={b.id} bounty={b} isSelected={false} onToggle={toggleDraft} />
                         ))}
                       </div>
                     )}
-                  </section>
+                  </CollapsibleSection>
                 </div>
               )}
             </div>
@@ -573,6 +588,40 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
         </div>
       )}
     </>
+  );
+}
+
+function CollapsibleSection({
+  label,
+  expanded,
+  onToggle,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-grey-01"
+        aria-expanded={expanded}
+      >
+        <span className="inline-flex items-center gap-2">
+          <span className="text-purple">
+            <Gem color="purple" />
+          </span>
+          <span className="text-body text-text">{label}</span>
+        </span>
+        <span className={cx('text-grey-04 transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>
+          <ChevronDown />
+        </span>
+      </button>
+      {expanded && children}
+    </section>
   );
 }
 
