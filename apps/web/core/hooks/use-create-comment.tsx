@@ -94,6 +94,39 @@ export function useCreateComment(targetEntityId: string) {
     cachedProfileRef.current = cachedProfile;
   }, [cachedProfile]);
 
+  // Cold-load case: the user submits a comment before useGeoProfile has finished loading.
+  // The optimistic row gets inserted with the wallet address as the jazzicon seed and null
+  // name/avatar. Once the profile resolves, patch any of our still-pending rows in the cache
+  // so they render with the real name + avatar instead of staying Anonymous until the
+  // indexer takes over.
+  React.useEffect(() => {
+    if (!cachedProfile || !personalSpaceId) return;
+    const avatarUrl =
+      cachedProfile.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
+        ? cachedProfile.avatarUrl
+        : null;
+    queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], old => {
+      if (!old) return old;
+      let changed = false;
+      const next = old.map(c => {
+        if (!c.isPendingPublish) return c;
+        if (c.author.spaceId !== personalSpaceId) return c;
+        if (c.author.name === cachedProfile.name && c.author.avatarUrl === avatarUrl) return c;
+        changed = true;
+        return {
+          ...c,
+          author: {
+            spaceId: personalSpaceId,
+            address: cachedProfile.address,
+            name: cachedProfile.name,
+            avatarUrl,
+          },
+        };
+      });
+      return changed ? next : old;
+    });
+  }, [cachedProfile, personalSpaceId, queryClient, targetEntityId]);
+
   const createComment = React.useCallback(
     async ({
       text,
@@ -228,9 +261,8 @@ export function useCreateComment(targetEntityId: string) {
         // Insert the optimistic row SYNCHRONOUSLY — before any await — so it appears in the
         // same render as the input box closing. If we have cached author info (the common
         // case on any comment after the first), the row renders fully resolved immediately.
-        // Otherwise we use the wallet address as the jazzicon seed and patch in name +
-        // avatar once useGeoProfile resolves (it's shared with the navbar, so on any page load
-        // after the first it's already cached).
+        // Otherwise we fall back to the wallet address as the jazzicon seed; the cold-load
+        // effect above patches the row once useGeoProfile finishes loading.
         const walletAddr = smartAccount.account.address;
         // Read through the ref so we pick up whatever useGeoProfile has resolved by now,
         // not whatever it had at the time this callback was memoized.
@@ -356,16 +388,23 @@ export function useCreateComment(targetEntityId: string) {
 
         const sleep = (ms: number) =>
           new Promise<void>((resolve, reject) => {
-            if (signal.aborted) return reject(signal.reason);
-            const t = setTimeout(() => {
-              signal.removeEventListener('abort', onAbort);
-              resolve();
-            }, ms);
+            // Register the abort listener before starting the timer, then re-check aborted
+            // state. Otherwise an abort firing in the window between the initial check and
+            // addEventListener would be missed and the sleep would run to completion.
+            let t: ReturnType<typeof setTimeout> | undefined;
             const onAbort = () => {
-              clearTimeout(t);
+              if (t !== undefined) clearTimeout(t);
               reject(signal.reason);
             };
             signal.addEventListener('abort', onAbort, { once: true });
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            t = setTimeout(() => {
+              signal.removeEventListener('abort', onAbort);
+              resolve();
+            }, ms);
           });
 
         // Merge server results with any pending-publish rows already in the cache so concurrent
