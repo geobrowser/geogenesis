@@ -986,8 +986,6 @@ function DynamicFilters({
     [state, options]
   );
 
-  const filterInteractionRootRef = React.useRef<HTMLDivElement>(null);
-
   return (
     <div className="flex w-full flex-col gap-3 px-2">
       {pendingFilterChips.length > 0 && (
@@ -1025,7 +1023,7 @@ function DynamicFilters({
           </div>
         </div>
       )}
-      <div ref={filterInteractionRootRef} className="flex items-start gap-3">
+      <div className="flex items-start gap-3">
         <div className="flex flex-1">
           <Select
             options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
@@ -1037,7 +1035,6 @@ function DynamicFilters({
         <div className="relative flex flex-1">
           {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               selectedValue=""
               selectedSpaceIds={selectedSpaceIds}
               memberSpaceId={filterSuggestionSpaceId}
@@ -1045,7 +1042,6 @@ function DynamicFilters({
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
@@ -1137,7 +1133,6 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 }
 
 interface TableBlockEntityFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
@@ -1149,7 +1144,6 @@ interface TableBlockEntityFilterInputProps {
 }
 
 function TableBlockEntityFilterInput({
-  filterInteractionRootRef,
   onSelect,
   selectedValue,
   filterByTypes,
@@ -1161,8 +1155,12 @@ function TableBlockEntityFilterInput({
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
+  // Local ref scopes focus tracking to just this input + its dropdown, so
+  // clicking a sibling control (e.g. the column-picker Select) dismisses
+  // the dropdown instead of keeping it open.
+  const interactionRootRef = React.useRef<HTMLDivElement>(null);
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
+    useFilterValueInputFocus(interactionRootRef);
 
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery);
@@ -1343,7 +1341,7 @@ function TableBlockEntityFilterInput({
   };
 
   return (
-    <div className="relative w-full">
+    <div ref={interactionRootRef} className="relative w-full">
       <Input
         placeholder={multi ? multiSelectPlaceholder : undefined}
         value={inputValue}
@@ -1418,7 +1416,6 @@ function TableBlockEntityFilterInput({
 }
 
 interface TableBlockSpaceFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   selectedSpaceIds?: Set<string>;
@@ -1427,7 +1424,6 @@ interface TableBlockSpaceFilterInputProps {
 }
 
 function TableBlockSpaceFilterInput({
-  filterInteractionRootRef,
   onSelect,
   selectedValue,
   selectedSpaceIds,
@@ -1435,8 +1431,9 @@ function TableBlockSpaceFilterInput({
   onToggleSpace,
 }: TableBlockSpaceFilterInputProps) {
   const { query, setQuery, spaces: results } = useSpacesQuery();
+  const interactionRootRef = React.useRef<HTMLDivElement>(null);
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
+    useFilterValueInputFocus(interactionRootRef);
 
   // Default suggestions shown on focus with empty query: the spaces the
   // current block's entity is a member of.
@@ -1565,7 +1562,7 @@ function TableBlockSpaceFilterInput({
   const inputDisplay = multi ? query : query === '' ? selectedValue : query;
 
   return (
-    <div className="relative w-full">
+    <div ref={interactionRootRef} className="relative w-full">
       <Input
         placeholder={multi ? 'Search…' : undefined}
         value={inputDisplay}
