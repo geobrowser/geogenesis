@@ -84,6 +84,14 @@ export const OnboardingDialog = () => {
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
+  // Track whether this tab ever had the onboarding dialog visible. Used
+  // to scope side-effects (step resets, redirects) to the tab that was
+  // actually driving onboarding, not e.g. a suppressed entity-preview tab.
+  const wasOnboardingActiveRef = useRef(false);
+  useEffect(() => {
+    if (isOnboardingVisible) wasOnboardingActiveRef.current = true;
+  }, [isOnboardingVisible]);
+
   useEffect(() => {
     // Only resolve stale state on tabs where the dialog is actually
     // being shown. Otherwise a second tab (e.g. entity preview opened
@@ -95,17 +103,21 @@ export const OnboardingDialog = () => {
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
-  // Scheduled here so the redirect always progresses even if the page is
-  // reloaded while stuck on the `completed` step (stepAtom is persisted).
+  // Schedule the post-creation redirect. We gate on wasOnboardingActiveRef
+  // (not the live isOnboardingVisible) because the dialog hides the moment
+  // usePersonalSpaceId refetches and reports isRegistered=true — that happens
+  // while we're still sitting on step='completed' and would otherwise clear
+  // the timer before it fires. A suppressed new tab never flips the ref,
+  // so it won't auto-navigate away.
   useEffect(() => {
-    if (!isOnboardingVisible) return;
+    if (!wasOnboardingActiveRef.current) return;
     if (step !== 'completed') return;
     const timer = setTimeout(() => {
       router.push(ONBOARDING_DESTINATION);
       setStep('done');
     }, 900);
     return () => clearTimeout(timer);
-  }, [isOnboardingVisible, step, router, setStep]);
+  }, [step, router, setStep]);
 
   const address = smartAccount?.account.address;
 
@@ -391,11 +403,6 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
                 ) : (
                   <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                 )}
-                {isUploadingAvatar && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
-                    <Dots />
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -465,7 +472,7 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
         <Text as="h3" variant="bodySemibold" className="text-center text-2xl!">
           Is this you?
         </Text>
-        <Text as="p" variant="body" className="text-center text-grey-04">
+        <Text as="p" variant="metadata" className="text-center text-grey-04">
           Looks like your name exists on Geo. If one of these is you, claim it! Otherwise, let&apos;s make you a fresh
           profile.
         </Text>
@@ -481,8 +488,12 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
               type="button"
               onClick={e => {
                 e.stopPropagation();
+                // Use the entity's own space so the URL doesn't redirect
+                // (which would drop our ?fromOnboarding=1 query param).
+                // Fall back to ROOT_SPACE for defensiveness only.
+                const entitySpaceId = result.spaces[0]?.spaceId ?? ROOT_SPACE;
                 window.open(
-                  `${NavUtils.toEntity(ROOT_SPACE, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
+                  `${NavUtils.toEntity(entitySpaceId, result.id)}?${SUPPRESS_ONBOARDING_PARAM}=1`,
                   '_blank',
                   'noopener,noreferrer'
                 );
