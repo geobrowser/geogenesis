@@ -313,7 +313,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
-  const { onQueryChange, results, isLoading } = useSearch({
+  const { onQueryChange, results } = useSearch({
     filterByTypes: ONBOARDING_PERSONAL_SEARCH_TYPES,
   });
 
@@ -327,7 +327,6 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
   );
 
   const validName = name.trim().length > 0;
-  const searchReady = !isLoading;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -410,7 +409,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             position="top"
           />
         </div>
-        <Button disabled={!validName || !searchReady} onClick={handleContinue} className="w-full">
+        <Button disabled={!validName} onClick={handleContinue} className="w-full">
           Continue
         </Button>
       </div>
