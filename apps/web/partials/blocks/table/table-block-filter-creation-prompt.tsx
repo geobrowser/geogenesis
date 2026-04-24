@@ -1308,10 +1308,29 @@ function TableBlockEntityFilterInput({
       lastSearchPage.rows.length === 0 &&
       lastSearchPage.rawCount >= FILTER_DROPDOWN_PAGE_SIZE
   );
+
+  // Guard against runaway auto-fetch loops when a large stretch of the
+  // result set is made of entities whose spaces can't be resolved:
+  // count how many pages from the end contributed zero post-filter rows
+  // and stop the auto-pump once that streak hits the cap. The user can
+  // still click "Load more" manually to push past it.
+  const MAX_AUTO_PUMP_EMPTY_PAGES = 10;
+  const trailingEmptyPageStreak = React.useMemo(() => {
+    const pages = searchPages?.pages ?? [];
+    let n = 0;
+    for (let i = pages.length - 1; i >= 0; i--) {
+      if (pages[i].rows.length === 0) n++;
+      else break;
+    }
+    return n;
+  }, [searchPages]);
+  const autoPumpCapped = trailingEmptyPageStreak >= MAX_AUTO_PUMP_EMPTY_PAGES;
+
   React.useEffect(() => {
     if (!focused) return;
     if (!hasNextSearchPage) return;
     if (isSearchFetching || isSearchFetchingNextPage) return;
+    if (autoPumpCapped) return;
     const initialFillIncomplete = rowsToRender.length < FILTER_DROPDOWN_PAGE_SIZE;
     if (initialFillIncomplete || lastSearchPageFullRawButEmptyFiltered) {
       void fetchNextSearchPage();
@@ -1320,6 +1339,7 @@ function TableBlockEntityFilterInput({
     focused,
     rowsToRender.length,
     lastSearchPageFullRawButEmptyFiltered,
+    autoPumpCapped,
     hasNextSearchPage,
     isSearchFetching,
     isSearchFetchingNextPage,
@@ -1387,7 +1407,7 @@ function TableBlockEntityFilterInput({
               ))}
               {hasNextSearchPage &&
               !isSearchFetchingNextPage &&
-              !lastSearchPageFullRawButEmptyFiltered &&
+              (autoPumpCapped || !lastSearchPageFullRawButEmptyFiltered) &&
               entityVisibleCount >= rowsToRender.length &&
               rowsToRender.length > 0 ? (
                 <ResultItem
@@ -1400,7 +1420,8 @@ function TableBlockEntityFilterInput({
                   <Text variant="metadataMedium">Load more</Text>
                 </ResultItem>
               ) : null}
-              {isSearchFetchingNextPage || lastSearchPageFullRawButEmptyFiltered ? (
+              {isSearchFetchingNextPage ||
+              (lastSearchPageFullRawButEmptyFiltered && !autoPumpCapped) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading more…

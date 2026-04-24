@@ -640,7 +640,10 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
       return {
         results: groupRestResults(filtered),
         total: response.total,
-        rawCount: response.results.length,
+        // Post-exclusion count — callers paginate against rows that can
+        // actually reach the UI, not rows filtered out as block/system
+        // types at this layer.
+        rawCount: filtered.length,
       };
     }
   );
