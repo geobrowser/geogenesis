@@ -71,6 +71,8 @@ type ContextValue = {
   linkableBountiesLabeled: Bounty[];
   toggleDraft: (id: string) => void;
   onSave: () => Promise<void>;
+  isPanelOpen: boolean;
+  togglePanel: () => void;
 };
 
 const Context = React.createContext<ContextValue | null>(null);
@@ -95,6 +97,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const [draftIds, setDraftIds] = React.useState<Set<string>>(() => new Set());
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+  const togglePanel = React.useCallback(() => setIsPanelOpen(o => !o), []);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -530,6 +534,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
       linkableBountiesLabeled,
       toggleDraft,
       onSave,
+      isPanelOpen,
+      togglePanel,
     }),
     [
       showBounties,
@@ -546,6 +552,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
       linkableBountiesLabeled,
       toggleDraft,
       onSave,
+      isPanelOpen,
+      togglePanel,
     ]
   );
 
@@ -555,21 +563,24 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 export function ProposalBountyHeadButton() {
   const ctx = useBounties();
   if (!ctx || !ctx.showBounties) return null;
-  const { isAuthor, hasUnsaved, isSaving, smartAccountReady, n, onSave } = ctx;
+  const { isAuthor, hasUnsaved, isSaving, smartAccountReady, n, onSave, isPanelOpen, togglePanel } = ctx;
   const showSave = isAuthor && hasUnsaved;
 
   return (
     <div className="inline-flex items-center gap-2">
-      <div
+      <button
+        type="button"
+        onClick={togglePanel}
         className={cx(
-          'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal',
-          'border-grey-02 bg-white text-text'
+          'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+          'border-grey-02 bg-white text-text hover:border-text'
         )}
         title="Bounties"
+        aria-expanded={isPanelOpen}
       >
         <Gem color="purple" />
         <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
-      </div>
+      </button>
       {showSave && (
         <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
           <Pending isPending={isSaving}>
@@ -589,7 +600,7 @@ export function ProposalBountyPanel() {
   const [linkedExpanded, setLinkedExpanded] = React.useState(true);
   const [availableExpanded, setAvailableExpanded] = React.useState(true);
 
-  if (!ctx || !ctx.showBounties) return null;
+  if (!ctx || !ctx.showBounties || !ctx.isPanelOpen) return null;
   const {
     isAuthor,
     n,
@@ -608,10 +619,10 @@ export function ProposalBountyPanel() {
 
   return (
     <aside
-      className="flex w-full max-w-[400px] shrink-0 flex-col"
+      className="flex w-full max-w-[400px] shrink-0 flex-col self-stretch"
       aria-label="Bounties"
     >
-      <div className="overflow-hidden rounded-lg border border-grey-02 bg-white">
+      <div className="flex-1 overflow-hidden rounded-lg border border-grey-02 bg-white">
         {!isAuthor && (
           <>
             <div className="px-5 py-4">

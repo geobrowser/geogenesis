@@ -97,94 +97,96 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           />
         </div>
       </div>
-      <div className="flex w-full items-start gap-2 bg-[#EDEEF3] p-2">
-        <div className="relative min-w-0 flex-1 overflow-x-clip rounded-lg border border-grey-02 bg-white">
-          <MetadataMotionContainer>
-          <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
-            <div className="flex flex-col items-center gap-8">
-              <div className="flex flex-col items-center gap-3">
-                <div className="text-mediumTitle">{proposalTitle}</div>
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
-                    <Link
-                      href={proposal.createdBy.profileLink ?? ''}
-                      className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
-                    >
-                      <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                        <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+      <div className="flex w-full items-stretch gap-2 bg-[#EDEEF3] p-2 min-h-[calc(100vh-60px)]">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="overflow-x-clip rounded-lg border border-grey-02 bg-white">
+            <MetadataMotionContainer>
+              <div className="mx-auto max-w-[1200px] px-6 py-10">
+                <div className="flex flex-col items-center gap-8">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="text-mediumTitle">{proposalTitle}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
+                        <Link
+                          href={proposal.createdBy.profileLink ?? ''}
+                          className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
+                        >
+                          <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                            <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                          </div>
+                          <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                        </Link>
+                        {isProposalEnded &&
+                          (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
+                            <>
+                              <span aria-hidden className="shrink-0 select-none text-grey-04">
+                                ·
+                              </span>
+                              <span className="shrink-0 text-grey-04">
+                                {formatGovernanceOutcomeDate(proposal.endTime)}
+                              </span>
+                              <span aria-hidden className="shrink-0 select-none text-grey-04">
+                                ·
+                              </span>
+                              <time
+                                className="shrink-0 tabular-nums text-grey-04"
+                                dateTime={new Date(proposal.endTime * 1000).toISOString()}
+                              >
+                                {formatGovernanceOutcomeTime(proposal.endTime)}
+                              </time>
+                            </>
+                          )}
+                        <span aria-hidden className="shrink-0 select-none text-grey-04">
+                          ·
+                        </span>
+                        <span className="text-text">
+                          {isProposalEnded
+                            ? proposal.status === 'ACCEPTED'
+                              ? 'Accepted'
+                              : proposal.status === 'REJECTED'
+                                ? 'Rejected'
+                                : proposal.canExecute
+                                  ? 'Pending execution'
+                                  : 'Rejected'
+                            : `${hours}h ${minutes}m remaining`}
+                        </span>
                       </div>
-                      <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
-                    </Link>
-                    {isProposalEnded &&
-                      (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
-                        <>
-                          <span aria-hidden className="shrink-0 select-none text-grey-04">
-                            ·
-                          </span>
-                          <span className="shrink-0 text-grey-04">
-                            {formatGovernanceOutcomeDate(proposal.endTime)}
-                          </span>
-                          <span aria-hidden className="shrink-0 select-none text-grey-04">
-                            ·
-                          </span>
-                          <time
-                            className="shrink-0 tabular-nums text-grey-04"
-                            dateTime={new Date(proposal.endTime * 1000).toISOString()}
-                          >
-                            {formatGovernanceOutcomeTime(proposal.endTime)}
-                          </time>
-                        </>
-                      )}
-                    <span aria-hidden className="shrink-0 select-none text-grey-04">
-                      ·
-                    </span>
-                    <span className="text-text">
-                      {isProposalEnded
-                        ? proposal.status === 'ACCEPTED'
-                          ? 'Accepted'
-                          : proposal.status === 'REJECTED'
-                            ? 'Rejected'
-                            : proposal.canExecute
-                              ? 'Pending execution'
-                              : 'Rejected'
-                        : `${hours}h ${minutes}m remaining`}
-                    </span>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className="flex w-full gap-[60px]">
-                <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                    <Tick />
+                  <div className="flex w-full gap-[60px]">
+                    <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
+                      <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
+                        <Tick />
+                      </div>
+                      <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
+                        <div
+                          className="absolute top-0 bottom-0 left-0 bg-green"
+                          style={{ width: `${yesVotesPercentage}%` }}
+                        />
+                      </div>
+                      <div>{yesVotesPercentage}%</div>
+                    </div>
+                    <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
+                      <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
+                        <Close />
+                      </div>
+                      <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
+                        <div
+                          className="absolute top-0 bottom-0 left-0 bg-red-01"
+                          style={{ width: `${noVotesPercentage}%` }}
+                        />
+                      </div>
+                      <div>{noVotesPercentage}%</div>
+                    </div>
                   </div>
-                  <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-green"
-                      style={{ width: `${yesVotesPercentage}%` }}
-                    />
-                  </div>
-                  <div>{yesVotesPercentage}%</div>
-                </div>
-                <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                    <Close />
-                  </div>
-                  <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-red-01"
-                      style={{ width: `${noVotesPercentage}%` }}
-                    />
-                  </div>
-                  <div>{noVotesPercentage}%</div>
-                </div>
-              </div>
 
-              <ShowVoters votes={proposal.proposalVotes.nodes} votesCount={votesCount} />
-            </div>
+                  <ShowVoters votes={proposal.proposalVotes.nodes} votesCount={votesCount} />
+                </div>
+              </div>
+            </MetadataMotionContainer>
           </div>
-        </MetadataMotionContainer>
-          <div className="h-full overflow-x-clip border-t border-divider">
-            <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+          <div className="flex-1 overflow-x-clip rounded-lg border border-grey-02 bg-white">
+            <div className="mx-auto max-w-[1200px] px-6 pt-10 pb-20 xl:pt-[40px] xl:pb-[4ch]">
               {isAddEdit && <ContentProposal proposal={proposal} spaceId={spaceId} />}
               {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
               {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
