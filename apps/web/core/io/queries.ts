@@ -9,6 +9,8 @@ import {
   type EntitiesBatchForCommentsQuery,
   EntityCommentReplyBacklinksPageDocument,
   type EntityCommentReplyBacklinksPageQuery,
+  EntityExistsDocument,
+  type EntityExistsQuery,
   EntitiesOrderBy,
   type EntityFilter,
   SortOrder,
@@ -306,6 +308,20 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
 }
 
 const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+
+/**
+ * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
+ * the given id is queryable. Used by the post-publish poll so we don't have to refetch the
+ * full comment list every 2 seconds just to check for a single id.
+ */
+export function checkEntityExists(entityId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: EntityExistsDocument,
+    decoder: (data: EntityExistsQuery) => data.entity?.id != null,
+    variables: { id: entityId },
+    signal,
+  });
+}
 
 export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({

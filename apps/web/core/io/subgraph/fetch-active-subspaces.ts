@@ -119,7 +119,7 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
         id: subspace.childSpaceId,
         name: page?.name ?? 'Untitled',
         description: page?.description ?? null,
-        image: resolveSpaceImage(page?.relationsList ?? []),
+        image: resolveSpaceImage(page?.relationsList ?? [], subspace.childSpaceId),
         relationType,
       };
     })

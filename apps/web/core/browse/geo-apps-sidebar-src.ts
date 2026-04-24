@@ -1,5 +1,3 @@
-export const GEO_APPS_SIDEBAR_EXTERNAL_ICON = '/browse-nav/geo-apps-external.svg' as const;
-
 export const GEO_APPS_SIDEBAR_LINKS = [
   {
     label: 'Geo Curators',
