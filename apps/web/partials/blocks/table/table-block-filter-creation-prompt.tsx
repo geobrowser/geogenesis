@@ -88,6 +88,29 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
     };
   }, []);
 
+  // Dismiss the dropdown when the user clicks anywhere outside the
+  // filter's interaction root — including non-focusable targets like
+  // plain text, which don't fire a blur event on the input and would
+  // otherwise leave the dropdown lingering after clicking away.
+  React.useEffect(() => {
+    if (!focused) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target;
+      if (target instanceof Node && filterInteractionRootRef?.current?.contains(target)) {
+        return;
+      }
+      if (target instanceof Element && target.closest('[data-radix-select-content]')) {
+        return;
+      }
+      clearBlurTimeout();
+      setFocused(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [focused, filterInteractionRootRef, clearBlurTimeout]);
+
   const onFocus = React.useCallback(() => {
     clearBlurTimeout();
     setFocused(true);
@@ -1366,6 +1389,7 @@ function TableBlockEntityFilterInput({
               ))}
               {hasNextSearchPage &&
               !isSearchFetchingNextPage &&
+              !lastSearchPageFullRawButEmptyFiltered &&
               entityVisibleCount >= rowsToRender.length &&
               rowsToRender.length > 0 ? (
                 <ResultItem
@@ -1378,7 +1402,7 @@ function TableBlockEntityFilterInput({
                   <Text variant="metadataMedium">Load more</Text>
                 </ResultItem>
               ) : null}
-              {isSearchFetchingNextPage ? (
+              {isSearchFetchingNextPage || lastSearchPageFullRawButEmptyFiltered ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading more…
