@@ -605,9 +605,12 @@ export type SearchResultsPage = {
    */
   total: number;
   /**
-   * Raw number of per-space rows returned on this page, before grouping by
-   * entity. Useful as a "did we get a full page worth?" pagination signal
-   * when `total` is unavailable or unreliable.
+   * Per-space rows returned on this page after `shouldIncludeRestSearchResult`
+   * exclusions but before grouping by entity. Useful as a "did we get a full
+   * page worth of rows that can actually reach the UI?" pagination signal
+   * when `total` is unavailable or unreliable. Intentionally post-exclusion
+   * — a page where every raw row was excluded as a block/system type should
+   * read as empty, not as a full page.
    */
   rawCount: number;
 };

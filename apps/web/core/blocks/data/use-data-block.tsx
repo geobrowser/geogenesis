@@ -135,9 +135,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // For COLLECTION sources we already have the row ids locally (from
   // collectionRelations), so we expose them without any network work. For
   // SPACES/GEO sources we used to fire a massive entitiesConnection fetch
-  // here to seed filter-suggestion scoping; that has been replaced by the
-  // server-side relations aggregation in the filter dropdown itself, so
-  // this hook no longer needs to produce row ids for those sources.
+  // here to seed filter-suggestion scoping; the filter dropdown has since
+  // been rewritten to paginate against the REST /search endpoint directly
+  // and no longer consumes these ids, so this hook intentionally returns
+  // undefined for non-COLLECTION sources. The field is kept for
+  // COLLECTION consumers that still use it downstream.
   const filterSuggestionEntityIds =
     source.type === 'COLLECTION' ? collectionFilterSuggestionEntityIds : undefined;
 
