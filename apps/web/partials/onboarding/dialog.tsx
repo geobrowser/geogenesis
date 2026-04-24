@@ -421,15 +421,15 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             </div>
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
-            <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-              <SmallButton icon={isUploadingAvatar ? <Dots /> : <Upload />}>
-                {isUploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
-              </SmallButton>
-            </label>
+            <SmallButton
+              icon={isUploadingAvatar ? <Dots /> : <Upload />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isUploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
+            </SmallButton>
             <input
               ref={fileInputRef}
               accept="image/png, image/jpeg"
-              id="avatar-file"
               onChange={handleChange}
               type="file"
               className="hidden"
