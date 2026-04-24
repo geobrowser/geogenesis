@@ -217,7 +217,7 @@ export function EditableTabGroup({
 
             <button
               onClick={handleAddTab}
-              className="relative z-10 ml-2 flex shrink-0 items-center gap-1 text-grey-04 transition-colors duration-100 hover:text-text"
+              className="relative z-10 flex shrink-0 items-center gap-1 text-grey-04 transition-colors duration-100 hover:text-text"
               title="Add tab"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -321,7 +321,7 @@ function SortableTab({
 
       {/* Action menu — absolute so it doesn't push neighboring tabs apart */}
       {!isEditing && !isDragging && (
-        <div className="absolute top-1/2 left-full z-20 ml-2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100">
+        <div className="absolute top-1/2 left-full z-20 ml-3 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/tab:opacity-100">
           <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <Popover.Trigger asChild>
               <button
