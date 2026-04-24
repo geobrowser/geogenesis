@@ -392,12 +392,21 @@ function CommentInput({
 }) {
   const [text, setText] = useState(initialValue);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // Guards against a rapid second click (or Enter + click) firing before React re-renders
+  // with the cleared text. Set synchronously at the start of submit, released after the
+  // current tick so React has a chance to propagate setText('') into the hasText check.
+  const isSubmittingRef = React.useRef(false);
 
   const handleSubmit = () => {
+    if (isSubmittingRef.current) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+    isSubmittingRef.current = true;
     onSubmit(trimmed);
     setText('');
+    setTimeout(() => {
+      isSubmittingRef.current = false;
+    }, 0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

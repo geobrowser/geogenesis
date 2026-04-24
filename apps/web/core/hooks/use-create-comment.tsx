@@ -565,7 +565,14 @@ export function useCreateComment(targetEntityId: string) {
           return txHash;
         });
 
-        const result = await Effect.runPromise(Effect.either(publish));
+        // Route through the same queue as createComment so edit + create userOps don't
+        // contend for the smart account's nonce.
+        const previousPublish = publishQueueRef.current;
+        const thisPublish = previousPublish
+          .catch(() => undefined)
+          .then(() => Effect.runPromise(Effect.either(publish)));
+        publishQueueRef.current = thisPublish.catch(() => undefined);
+        const result = await thisPublish;
 
         if (Either.isLeft(result)) {
           const err = result.left;
