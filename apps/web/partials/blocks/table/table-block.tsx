@@ -257,7 +257,6 @@ function useEntries(
 
 export const TableBlock = ({ spaceId, blockId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
-  const [isFilterPromptOpen, setIsFilterPromptOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
@@ -294,12 +293,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     sortState,
     setSortState,
     filterableProperties,
-    filterSuggestionEntityIds,
-  } = useDataBlock({ canEdit, fetchFilterSuggestions: isFilterPromptOpen });
-
-  React.useEffect(() => {
-    if (!isFilterOpen) setIsFilterPromptOpen(false);
-  }, [isFilterOpen]);
+  } = useDataBlock({ canEdit });
 
   const setActiveFilterMode = React.useCallback(
     (mode: FilterMode) => {
@@ -543,10 +537,7 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
                 ref={filterPromptRef}
                 filterState={activeFilters}
                 setFilterState={setActiveFilters}
-                filterSuggestionRows={rows}
-                filterSuggestionEntityIds={filterSuggestionEntityIds}
                 filterSuggestionSpaceId={spaceId}
-                onFilterPromptOpenChange={setIsFilterPromptOpen}
               />
 
               {filterGroups.map(group => (

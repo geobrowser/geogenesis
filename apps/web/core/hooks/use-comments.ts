@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import * as React from 'react';
@@ -17,6 +17,31 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
 import type { CommentEntity, CommentWithReplies } from '~/partials/comments/types';
+
+/**
+ * Normalize a timestamp from the indexer. The value may be:
+ *   - a numeric string of unix seconds (e.g. "1745600000")
+ *   - a numeric string of unix milliseconds (e.g. "1745600000000")
+ *   - a number (either unit, same heuristic)
+ *   - an ISO 8601 string ("2026-04-14T10:00:00Z")
+ * Returns an ISO string, or null if the input can't be parsed.
+ */
+function parseEntityTimestamp(raw: string | number | undefined | null): string | null {
+  if (raw == null) return null;
+  const asNum = typeof raw === 'number' ? raw : Number(raw);
+  if (Number.isFinite(asNum)) {
+    // Values under ~1e12 are unix seconds (anything larger in seconds would put us past year 33000);
+    // values at or above ~1e12 are already milliseconds.
+    const ms = asNum < 1e12 ? asNum * 1000 : asNum;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (typeof raw === 'string') {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return null;
+}
 
 /**
  * Parse a fetched Entity into a CommentEntity.
@@ -74,9 +99,10 @@ function parseCommentEntity(
       name: null,
       avatarUrl: null,
     },
-    createdAt: entity.updatedAt
-      ? new Date(Number(entity.updatedAt) * 1000).toISOString()
-      : new Date().toISOString(),
+    createdAt:
+      parseEntityTimestamp(entity.createdAt) ??
+      parseEntityTimestamp(entity.updatedAt) ??
+      new Date().toISOString(),
     spaceId,
     resolved,
   };
@@ -101,6 +127,8 @@ function buildCommentTree(comments: CommentEntity[]): CommentWithReplies[] {
     }
   }
 
+  // Baseline reply order is oldest-first (thread reading order). The UI applies the active
+  // sort and pins session-new comments on top of whatever order is chosen.
   const sortReplies = (items: CommentWithReplies[]) => {
     for (const item of items) {
       item.replies.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -117,7 +145,100 @@ interface UseCommentsOptions {
   spaceId: string;
 }
 
+/**
+ * Fetch all comments targeting a given entity from the server, fully parsed into CommentEntity objects.
+ * Shared between the useComments queryFn and the post-publish poller in useCreateComment so both paths
+ * apply identical parsing/ID-normalization rules.
+ */
+export async function fetchCommentEntitiesForTarget(
+  entityId: string,
+  signal?: AbortController['signal']
+): Promise<CommentEntity[]> {
+  const loaded = await Effect.runPromise(getCommentEntitiesViaParentEntityReplyBacklinks(entityId, signal));
+  const targetKey = uuidToHex(entityId);
+  const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
+
+  const allEntities = loaded.filter(entity =>
+    entity.relations.some(
+      r => uuidToHex(r.type.id) === replyToType && uuidToHex(r.toEntity.id) === targetKey
+    )
+  );
+
+  const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
+  const profileMap = new Map<string, { address: string; name: string | null; avatarUrl: string | null }>();
+
+  if (uniqueSpaceIds.length > 0) {
+    const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
+    for (const profile of profiles) {
+      const avatarUrl =
+        profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+      profileMap.set(profile.spaceId, {
+        address: profile.address,
+        name: profile.name,
+        avatarUrl,
+      });
+    }
+  }
+
+  const allCommentIdKeys = new Set(allEntities.map(e => uuidToHex(e.id)));
+
+  const adjacency = new Map<string, string[]>();
+  for (const entity of allEntities) {
+    const targets = entity.relations
+      .filter(r => uuidToHex(r.type.id) === replyToType && allCommentIdKeys.has(uuidToHex(r.toEntity.id)))
+      .map(r => uuidToHex(r.toEntity.id));
+    adjacency.set(uuidToHex(entity.id), targets);
+  }
+
+  const depthMap = new Map<string, number>();
+  function computeDepth(commentKey: string): number {
+    if (depthMap.has(commentKey)) return depthMap.get(commentKey)!;
+    const targets = adjacency.get(commentKey) ?? [];
+    if (targets.length === 0) {
+      depthMap.set(commentKey, 0);
+      return 0;
+    }
+    const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
+    const depth = maxParentDepth + 1;
+    depthMap.set(commentKey, depth);
+    return depth;
+  }
+  for (const key of allCommentIdKeys) {
+    computeDepth(key);
+  }
+
+  return allEntities.map(entity => {
+    const comment = parseCommentEntity(entity, allCommentIdKeys, entityId, depthMap);
+    const profileInfo = profileMap.get(comment.spaceId);
+    if (profileInfo) {
+      comment.author = {
+        spaceId: comment.spaceId,
+        address: profileInfo.address,
+        name: profileInfo.name,
+        avatarUrl: profileInfo.avatarUrl,
+      };
+    }
+    return comment;
+  });
+}
+
+/**
+ * Merge server-returned comments with any locally-pending comments still in the cache.
+ * A pending row is kept only if the server has not yet returned it (matched by canonical id).
+ */
+export function mergePendingWithServer(
+  server: CommentEntity[],
+  prev: CommentEntity[] | undefined
+): CommentEntity[] {
+  if (!prev || prev.length === 0) return server;
+  const serverIds = new Set(server.map(c => uuidToHex(c.id)));
+  const pendingOnly = prev.filter(c => c.isPendingPublish === true && !serverIds.has(uuidToHex(c.id)));
+  return pendingOnly.length > 0 ? [...server, ...pendingOnly] : server;
+}
+
 export function useComments({ entityId }: UseCommentsOptions) {
+  const queryClient = useQueryClient();
+
   const {
     data: rawComments,
     isLoading,
@@ -125,75 +246,12 @@ export function useComments({ entityId }: UseCommentsOptions) {
     refetch,
   } = useQuery({
     queryKey: ['comments', entityId],
-    queryFn: async () => {
-      const loaded = await Effect.runPromise(getCommentEntitiesViaParentEntityReplyBacklinks(entityId));
-      const targetKey = uuidToHex(entityId);
-      const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
-
-      const allEntities = loaded.filter(entity =>
-        entity.relations.some(
-          r => uuidToHex(r.type.id) === replyToType && uuidToHex(r.toEntity.id) === targetKey
-        )
-      );
-
-      const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
-      const profileMap = new Map<string, { address: string; name: string | null; avatarUrl: string | null }>();
-
-      if (uniqueSpaceIds.length > 0) {
-        const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
-        for (const profile of profiles) {
-          const avatarUrl =
-            profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-          profileMap.set(profile.spaceId, {
-            address: profile.address,
-            name: profile.name,
-            avatarUrl,
-          });
-        }
-      }
-
-      const allCommentIdKeys = new Set(allEntities.map(e => uuidToHex(e.id)));
-
-      const adjacency = new Map<string, string[]>();
-      for (const entity of allEntities) {
-        const targets = entity.relations
-          .filter(r => uuidToHex(r.type.id) === replyToType && allCommentIdKeys.has(uuidToHex(r.toEntity.id)))
-          .map(r => uuidToHex(r.toEntity.id));
-        adjacency.set(uuidToHex(entity.id), targets);
-      }
-
-      const depthMap = new Map<string, number>();
-      function computeDepth(commentKey: string): number {
-        if (depthMap.has(commentKey)) return depthMap.get(commentKey)!;
-        const targets = adjacency.get(commentKey) ?? [];
-        if (targets.length === 0) {
-          depthMap.set(commentKey, 0);
-          return 0;
-        }
-        const maxParentDepth = Math.max(...targets.map(t => computeDepth(t)));
-        const depth = maxParentDepth + 1;
-        depthMap.set(commentKey, depth);
-        return depth;
-      }
-      for (const key of allCommentIdKeys) {
-        computeDepth(key);
-      }
-
-      const comments = allEntities.map(entity => {
-        const comment = parseCommentEntity(entity, allCommentIdKeys, entityId, depthMap);
-        const profileInfo = profileMap.get(comment.spaceId);
-        if (profileInfo) {
-          comment.author = {
-            spaceId: comment.spaceId,
-            address: profileInfo.address,
-            name: profileInfo.name,
-            avatarUrl: profileInfo.avatarUrl,
-          };
-        }
-        return comment;
-      });
-
-      return comments;
+    // react-query passes an AbortSignal here; threading it through cancels in-flight GraphQL
+    // work when the component unmounts or the query is invalidated mid-flight.
+    queryFn: async ({ signal }) => {
+      const server = await fetchCommentEntitiesForTarget(entityId, signal);
+      const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]);
+      return mergePendingWithServer(server, prev);
     },
     enabled: !!entityId,
   });
