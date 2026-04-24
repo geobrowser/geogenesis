@@ -1274,17 +1274,26 @@ function TableBlockEntityFilterInput({
     expandVisibleEntityRowsIfListHasNoScrollbar();
   }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, searchResults.length, rowsToRender.length, entityVisibleCount]);
 
-  // Keep pulling pages until the dropdown has at least one full page of rows
-  // or the search result set is exhausted.
+  // Pull pages until either (a) the dropdown has a full page of rows, or
+  // (b) the most recent REST page contributed zero post-filter rows
+  // (findFuzzyPage drops entities whose spaces can't be resolved, so a
+  // page can be empty even when the result set isn't exhausted). Without
+  // this, stretches of sparse pages force the user to click "Load more"
+  // repeatedly to chew through them.
+  const lastSearchPage = searchPages?.pages[searchPages.pages.length - 1];
+  const lastSearchPageEmpty = Boolean(lastSearchPage && lastSearchPage.rows.length === 0);
   React.useEffect(() => {
     if (!focused) return;
-    if (rowsToRender.length >= FILTER_DROPDOWN_PAGE_SIZE) return;
-    if (hasNextSearchPage && !isSearchFetching && !isSearchFetchingNextPage) {
+    if (!hasNextSearchPage) return;
+    if (isSearchFetching || isSearchFetchingNextPage) return;
+    const initialFillIncomplete = rowsToRender.length < FILTER_DROPDOWN_PAGE_SIZE;
+    if (initialFillIncomplete || lastSearchPageEmpty) {
       void fetchNextSearchPage();
     }
   }, [
     focused,
     rowsToRender.length,
+    lastSearchPageEmpty,
     hasNextSearchPage,
     isSearchFetching,
     isSearchFetchingNextPage,
