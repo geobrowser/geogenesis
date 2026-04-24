@@ -825,7 +825,7 @@ function CommentItem({
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
           {relativeTime}
         </Text>
-        {comment.isPendingPublish && (
+        {comment.isPublishing && (
           <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
             Publishing…
           </Text>
@@ -1002,7 +1002,7 @@ function CommentItem({
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
               {relativeTime}
             </Text>
-            {comment.isPendingPublish && (
+            {comment.isPublishing && (
               <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
                 Publishing…
               </Text>

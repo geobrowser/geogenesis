@@ -240,6 +240,7 @@ export function useCreateComment(targetEntityId: string) {
           createdAt: new Date().toISOString(),
           spaceId: personalSpaceId,
           resolved: false,
+          isPublishing: true,
           isPendingPublish: true,
         };
 
@@ -317,6 +318,13 @@ export function useCreateComment(targetEntityId: string) {
         }
 
         setToast(<span>Comment published!</span>);
+
+        // Clear the "Publishing…" tag at the same moment the success toast appears. isPendingPublish
+        // stays set so mergePendingWithServer continues preserving the optimistic row across cache
+        // refetches until the indexer returns it; that's a separate concern from the UI tag.
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+          old.map(c => (c.id === commentEntityId ? { ...c, isPublishing: false } : c))
+        );
 
         // Indexer may lag behind the chain; poll instead of invalidate so the optimistic row is not dropped.
         const FIRST_POLL_MS = 1500;

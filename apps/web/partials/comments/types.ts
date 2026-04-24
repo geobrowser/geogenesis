@@ -23,7 +23,18 @@ export interface CommentEntity {
   spaceId: string;
   /** Whether this comment has been resolved */
   resolved: boolean;
-  /** True while the comment exists only locally or the indexer has not returned it yet */
+  /**
+   * True while the chain publish (IPFS upload + userOp) is in flight. Surfaces as the
+   * "Publishing…" tag. Cleared as soon as the publish Effect resolves, even though the
+   * indexer may still be catching up — we don't need a UI indicator after that point
+   * because the "Comment published!" toast has already told the user it's safe.
+   */
+  isPublishing?: boolean;
+  /**
+   * True while the optimistic row is waiting for the indexer to return the real comment.
+   * Used by mergePendingWithServer to preserve client-only rows across cache refetches
+   * (e.g. window-focus refetch) before the server has indexed them. No UI meaning.
+   */
   isPendingPublish?: boolean;
 }
 
