@@ -522,7 +522,7 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
       </div>
       <div className="shrink-0 pt-4">
         <Button type="button" onClick={handlePrimary} className="w-full">
-          {selectedResult ? 'Continue' : 'None of these are me'}
+          {selectedResult ? 'Use existing profile' : 'Create a profile'}
         </Button>
       </div>
     </div>
