@@ -246,8 +246,10 @@ export function useComments({ entityId }: UseCommentsOptions) {
     refetch,
   } = useQuery({
     queryKey: ['comments', entityId],
-    queryFn: async () => {
-      const server = await fetchCommentEntitiesForTarget(entityId);
+    // react-query passes an AbortSignal here; threading it through cancels in-flight GraphQL
+    // work when the component unmounts or the query is invalidated mid-flight.
+    queryFn: async ({ signal }) => {
+      const server = await fetchCommentEntitiesForTarget(entityId, signal);
       const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]);
       return mergePendingWithServer(server, prev);
     },

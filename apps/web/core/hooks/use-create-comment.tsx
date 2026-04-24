@@ -56,15 +56,22 @@ export function useCreateComment(targetEntityId: string) {
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
 
-  const [isCreating, setIsCreating] = React.useState(false);
+  // Counter (not boolean) because several publishes can be in flight at once — rapid submits,
+  // or concurrent create + edit. A plain boolean would flip false when the first finally runs
+  // even if later ones are still queued. `isCreating` is derived as `count > 0`.
+  const [inFlightCount, setInFlightCount] = React.useState(0);
+  const isCreating = inFlightCount > 0;
   const [error, setError] = React.useState<Error | null>(null);
 
-  // Aborts any in-flight post-publish pollers when the hook unmounts so we don't
-  // keep issuing network requests or mutating the query cache for a stale page.
-  const pollAbortRef = React.useRef<AbortController | null>(null);
+  // Track every active post-publish poller's AbortController so unmount can abort them all.
+  // Using a Set (not a single ref) so a new publish doesn't cancel an earlier publish's poller
+  // and orphan its optimistic row in the "Publishing…"-then-never-reconciled state.
+  const pollersRef = React.useRef<Set<AbortController>>(new Set());
   React.useEffect(() => {
+    const pollers = pollersRef.current;
     return () => {
-      pollAbortRef.current?.abort();
+      for (const c of pollers) c.abort();
+      pollers.clear();
     };
   }, []);
 
@@ -77,9 +84,15 @@ export function useCreateComment(targetEntityId: string) {
 
   // Reuse the navbar's cached profile fetch. useGeoProfile runs on every page (powers the
   // avatar in the top-right), so by the time the user clicks Comment the profile is already
-  // in React Query's cache — no extra request.
+  // in React Query's cache — no extra request. Stored in a ref so createComment can read the
+  // latest value without being re-created when the profile eventually loads (otherwise the
+  // memoized callback would close over a stale null profile until some other dep changed).
   const walletAddress = smartAccount?.account.address ?? null;
   const { profile: cachedProfile } = useGeoProfile(walletAddress ?? undefined);
+  const cachedProfileRef = React.useRef(cachedProfile);
+  React.useEffect(() => {
+    cachedProfileRef.current = cachedProfile;
+  }, [cachedProfile]);
 
   const createComment = React.useCallback(
     async ({
@@ -101,7 +114,7 @@ export function useCreateComment(targetEntityId: string) {
         return null;
       }
 
-      setIsCreating(true);
+      setInFlightCount(c => c + 1);
       setError(null);
 
       try {
@@ -219,9 +232,12 @@ export function useCreateComment(targetEntityId: string) {
         // avatar once useGeoProfile resolves (it's shared with the navbar, so on any page load
         // after the first it's already cached).
         const walletAddr = smartAccount.account.address;
+        // Read through the ref so we pick up whatever useGeoProfile has resolved by now,
+        // not whatever it had at the time this callback was memoized.
+        const profileSnapshot = cachedProfileRef.current;
         const profileAvatarUrl =
-          cachedProfile?.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
-            ? cachedProfile.avatarUrl
+          profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
+            ? profileSnapshot.avatarUrl
             : null;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
@@ -233,8 +249,8 @@ export function useCreateComment(targetEntityId: string) {
           replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
           author: {
             spaceId: personalSpaceId,
-            address: cachedProfile?.address ?? walletAddr,
-            name: cachedProfile?.name ?? null,
+            address: profileSnapshot?.address ?? walletAddr,
+            name: profileSnapshot?.name ?? null,
             avatarUrl: profileAvatarUrl,
           },
           createdAt: new Date().toISOString(),
@@ -331,11 +347,11 @@ export function useCreateComment(targetEntityId: string) {
         const POLL_INTERVAL_MS = 2000;
         const MAX_POLL_ATTEMPTS = 45;
 
-        // Each publish gets its own AbortController. Replacing the ref aborts any previous
-        // poller still running from an earlier publish on this hook instance.
-        pollAbortRef.current?.abort();
+        // Each publish gets its own AbortController, tracked in a Set so concurrent pollers
+        // coexist (a newer publish must not cancel an older publish's still-reconciling poller).
+        // The hook's unmount cleanup aborts every controller in the Set.
         const controller = new AbortController();
-        pollAbortRef.current = controller;
+        pollersRef.current.add(controller);
         const { signal } = controller;
 
         const sleep = (ms: number) =>
@@ -394,9 +410,7 @@ export function useCreateComment(targetEntityId: string) {
               console.error('[useCreateComment] Final comment sync failed:', e);
             }
           } finally {
-            if (pollAbortRef.current === controller) {
-              pollAbortRef.current = null;
-            }
+            pollersRef.current.delete(controller);
           }
         })();
 
@@ -407,7 +421,7 @@ export function useCreateComment(targetEntityId: string) {
         setError(err as Error);
         return null;
       } finally {
-        setIsCreating(false);
+        setInFlightCount(c => c - 1);
       }
     },
     [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]
@@ -439,7 +453,7 @@ export function useCreateComment(targetEntityId: string) {
         return false;
       }
 
-      setIsCreating(true);
+      setInFlightCount(c => c + 1);
       setError(null);
 
       try {
@@ -543,7 +557,7 @@ export function useCreateComment(targetEntityId: string) {
         setError(err as Error);
         return false;
       } finally {
-        setIsCreating(false);
+        setInFlightCount(c => c - 1);
       }
     },
     [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]

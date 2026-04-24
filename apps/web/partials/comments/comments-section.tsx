@@ -221,9 +221,18 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
       });
       if (sessionNewIds.length === 0) return sorted;
       const pinnedSet = new Set(sessionNewIds);
-      const rest = sorted.filter(c => !pinnedSet.has(c.id));
+      // Single pass: build id→item map so pinning is O(N) instead of O(N×M).
+      const byId = new Map<string, T>();
+      const rest: T[] = [];
+      for (const item of sorted) {
+        if (pinnedSet.has(item.id)) {
+          byId.set(item.id, item);
+        } else {
+          rest.push(item);
+        }
+      }
       const pinned: T[] = sessionNewIds
-        .map((id: string) => sorted.find((c: T) => c.id === id))
+        .map((id: string) => byId.get(id))
         .filter((c): c is T => c !== undefined);
       return [...pinned, ...rest];
     },
