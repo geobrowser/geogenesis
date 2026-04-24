@@ -19,6 +19,7 @@ import {
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
+import { uuidToHex } from '~/core/id/normalize';
 import { getSpace } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import type { Relation, Value } from '~/core/types';
@@ -422,6 +423,10 @@ export function useCreateComment(targetEntityId: string) {
           );
         };
 
+        // `IdUtils.generate()` yields a dashed UUID; the indexer returns ids in non-dashed hex.
+        // Compare canonically so the poll actually matches once the comment is indexed.
+        const targetIdKey = uuidToHex(commentEntityId);
+
         void (async () => {
           try {
             await sleep(FIRST_POLL_MS);
@@ -429,7 +434,7 @@ export function useCreateComment(targetEntityId: string) {
               if (signal.aborted) return;
               try {
                 const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
-                if (list.some(c => c.id === commentEntityId)) {
+                if (list.some(c => uuidToHex(c.id) === targetIdKey)) {
                   applyServerList(list);
                   return;
                 }
