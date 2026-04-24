@@ -73,7 +73,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   return (
     <>
       <div
-        className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3"
+        className="sticky top-0 z-50 flex min-h-[60px] w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3"
         style={{ paddingRight: 'var(--bounty-panel-width, 1rem)' }}
       >
         <div className="inline-flex items-center gap-4">
