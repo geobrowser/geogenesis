@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { mergeSearchResult } from '~/core/database/result';
@@ -17,11 +17,11 @@ import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { entityTypesMatchFilter, searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { buildEntityFilter } from '~/core/io/entity-filter-from-filters';
-import { getBrowseEntitiesByType, getScopedReferencedEntities, getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getResults, getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { reactiveRelations } from '~/core/sync/store';
@@ -41,7 +41,6 @@ import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { Divider } from '~/design-system/divider';
-import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -1276,11 +1275,6 @@ function DynamicFilters({
     waitForRelationTargetTypes
   );
 
-  const scopedFromEntityFilter = React.useMemo(
-    () => buildEntityFilter(filterState ?? []),
-    [filterState]
-  );
-
   const pendingFilterChips = React.useMemo(
     () => enumeratePendingFilterChips(state, options),
     [state, options]
@@ -1350,11 +1344,8 @@ function DynamicFilters({
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
-              suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
               scopedSuggestions={scoped.entitySuggestions}
-              scopedRelationPropertyId={state.selectedColumn ?? undefined}
-              scopedFromEntityFilter={scopedFromEntityFilter}
               selectedEntityIds={selectedEntityIds}
               onToggleEntity={e =>
                 dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
@@ -1452,22 +1443,7 @@ interface TableBlockEntityFilterInputProps {
   filterByTypes?: string[];
   waitForFilterTypes?: boolean;
   restrictSearchToTypes?: boolean;
-  /** Space used when listing entities by type for an empty table (relation target browse). */
-  suggestionSpaceId?: string;
   scopedSuggestions?: { id: string; name: string | null }[];
-  /**
-   * If present, the dropdown will also fetch a paged list of
-   * `relation.toEntity` references from the server to show every entity
-   * referenced by the table's data set (not just the locally hydrated rows).
-   */
-  scopedRelationPropertyId?: string;
-  /**
-   * EntityFilter (produced by `buildEntityFilter`) describing the table's
-   * active filter state. Used as the `backlinks.some.fromEntity` clause so
-   * the scoped aggregation returns only entities referenced from rows that
-   * match the table's filters.
-   */
-  scopedFromEntityFilter?: Record<string, unknown>;
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
   multiSelectPlaceholder?: string;
@@ -1480,38 +1456,31 @@ function TableBlockEntityFilterInput({
   filterByTypes,
   waitForFilterTypes = false,
   restrictSearchToTypes = false,
-  suggestionSpaceId,
   scopedSuggestions,
-  scopedRelationPropertyId,
-  scopedFromEntityFilter,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
-  const cache = useQueryClient();
-  const autocomplete = useSearch(
-    filterByTypes?.length || waitForFilterTypes || restrictSearchToTypes
-      ? {
-          filterByTypes: filterByTypes?.length ? filterByTypes : undefined,
-          waitForFilterTypes: waitForFilterTypes || undefined,
-          restrictToFilterTypes: restrictSearchToTypes || undefined,
-        }
-      : undefined
-  );
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
     useFilterValueInputFocus(filterInteractionRootRef);
 
+  const [rawQuery, setRawQuery] = React.useState('');
+  const query = useDebouncedValue(rawQuery);
+
+  const searchBlocked =
+    (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
+
   const filteredScoped = React.useMemo(() => {
     if (!scopedSuggestions?.length) return [];
-    const q = autocomplete.query.trim().toLowerCase();
+    const q = rawQuery.trim().toLowerCase();
     return !q
       ? scopedSuggestions
       : scopedSuggestions.filter(
           s =>
             (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
         );
-  }, [scopedSuggestions, autocomplete.query]);
+  }, [scopedSuggestions, rawQuery]);
 
   const filteredScopedByTargetType = React.useMemo(() => {
     if (!filterByTypes?.length && (waitForFilterTypes || restrictSearchToTypes)) {
@@ -1520,268 +1489,69 @@ function TableBlockEntityFilterInput({
     return filteredScoped;
   }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes]);
 
-
-  const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
-  const browseEnabled = focused && !autocomplete.query.trim() && canBrowseByType;
-
-  // The Types system property is connected to essentially every entity in
-  // the graph, so the scoped aggregation — even phrased as
-  // entitiesConnection + backlinks.some — is 10+ seconds server-side. And
-  // the scoped answer is low-value: for a table filtered by Types = X it
-  // resolves to "X" itself. Fall straight through to the browse list for
-  // this property.
-  const relationsEnabled =
-    focused &&
-    !autocomplete.query.trim() &&
-    Boolean(scopedRelationPropertyId) &&
-    scopedRelationPropertyId !== SystemIds.TYPES_PROPERTY &&
-    !waitForFilterTypes;
-
+  // Single unified search path: when the dropdown is open, fire the REST
+  // /search endpoint with the current (possibly empty) query and the
+  // target-type constraint. Empty query returns top-N globally ranked
+  // entities of the target type, typed query returns ranked matches.
   const {
-    data: relationsPages,
-    isPending: isRelationsPending,
-    isFetching: isRelationsFetching,
-    isFetchingNextPage: isRelationsFetchingNextPage,
-    fetchNextPage: fetchNextRelationsPage,
-    hasNextPage: hasNextRelationsPage,
+    data: searchPages,
+    isPending: isSearchPending,
+    isFetching: isSearchFetching,
+    isFetchingNextPage: isSearchFetchingNextPage,
+    fetchNextPage: fetchNextSearchPage,
+    hasNextPage: hasNextSearchPage,
   } = useInfiniteQuery({
     queryKey: [
-      'table-block-filter-scoped-relations',
-      scopedRelationPropertyId ?? '',
-      scopedFromEntityFilter ? JSON.stringify(scopedFromEntityFilter) : '',
+      'table-block-filter-search',
+      query,
       filterByTypes?.slice().sort().join(',') ?? '',
     ],
-    enabled: relationsEnabled,
-    initialPageParam: null as string | null,
+    enabled: focused && !searchBlocked,
+    initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
-      const t0 = performance.now();
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] relations START', {
-        propertyId: scopedRelationPropertyId,
-        fromEntityFilter: scopedFromEntityFilter,
-        toTypeIds: filterByTypes,
-        after: pageParam,
-      });
-      const page = await Effect.runPromise(
-        getScopedReferencedEntities(
+      const rows = await Effect.runPromise(
+        getResults(
           {
-            propertyId: scopedRelationPropertyId!,
-            fromEntityFilter: scopedFromEntityFilter,
-            toTypeIds: filterByTypes?.length ? filterByTypes : undefined,
-            first: FILTER_DROPDOWN_PAGE_SIZE,
-            after: pageParam,
+            query,
+            typeIds: filterByTypes?.length ? filterByTypes : undefined,
+            limit: FILTER_DROPDOWN_PAGE_SIZE,
+            offset: pageParam,
           },
           signal
         )
       );
-      const tRelations = performance.now();
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] relations NETWORK ms', Math.round(tRelations - t0), {
-        nodes: page.nodes.length,
-        hasNextPage: page.hasNextPage,
-      });
-
-      const spaceIdSet = new Set<string>();
-      for (const n of page.nodes) {
-        for (const sid of n.spaceIds) {
-          if (sid) spaceIdSet.add(sid);
-        }
-      }
-      if (suggestionSpaceId) spaceIdSet.add(suggestionSpaceId);
-      const uniqueSpaceIds = [...spaceIdSet];
-
-      const spaceEntityById = new Map<string, SpaceEntity>();
-      if (uniqueSpaceIds.length > 0) {
-        const fetchedSpaces = await cache.fetchQuery({
-          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
-          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
-          staleTime: Duration.toMillis(Duration.seconds(60)),
-        });
-        for (const s of fetchedSpaces) {
-          spaceEntityById.set(s.id, s.entity);
-        }
-      }
-
-      const results: SearchResult[] = page.nodes.map(n => {
-        const candidateSpaceIds = n.spaceIds.filter(id => spaceEntityById.has(id));
-        const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
-        const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
-        return {
-          id: n.id,
-          name: n.name,
-          description: n.description,
-          spaces,
-          types: n.types,
-        };
-      });
-
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] relations TOTAL ms', Math.round(performance.now() - t0));
-      return {
-        nodes: page.nodes,
-        results,
-        endCursor: page.endCursor,
-        hasNextPage: page.hasNextPage,
-      };
+      return { rows, offset: pageParam };
     },
-    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
+    getNextPageParam: lastPage =>
+      lastPage.rows.length < FILTER_DROPDOWN_PAGE_SIZE
+        ? undefined
+        : lastPage.offset + FILTER_DROPDOWN_PAGE_SIZE,
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 
-  const relationsResults = React.useMemo(
-    () => relationsPages?.pages.flatMap(p => p.results) ?? [],
-    [relationsPages]
+  const searchResults = React.useMemo(
+    () => searchPages?.pages.flatMap(p => p.rows) ?? [],
+    [searchPages]
   );
 
-  const relationsExhausted =
-    relationsEnabled && !isRelationsPending && !isRelationsFetching && !hasNextRelationsPage;
-
-  const {
-    data: browsePages,
-    isPending: isBrowsePending,
-    isFetching: isBrowseFetching,
-    isFetchingNextPage: isBrowseFetchingNextPage,
-    fetchNextPage: fetchNextBrowsePage,
-    hasNextPage: hasNextBrowsePage,
-  } = useInfiniteQuery({
-    queryKey: [
-      'table-block-filter-entity-browse',
-      filterByTypes?.slice().sort().join(',') ?? '',
-      'natural',
-    ],
-    enabled: browseEnabled && (!relationsEnabled || relationsExhausted),
-    initialPageParam: null as string | null,
-    queryFn: async ({ pageParam, signal }) => {
-      const t0 = performance.now();
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] browse START', {
-        typeIds: filterByTypes,
-        after: pageParam,
-      });
-      const page = await Effect.runPromise(
-        getBrowseEntitiesByType(
-          {
-            typeIds: filterByTypes?.length ? filterByTypes : undefined,
-            first: FILTER_DROPDOWN_PAGE_SIZE,
-            after: pageParam,
-          },
-          signal
-        )
-      );
-      const tBrowse = performance.now();
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] browse NETWORK ms', Math.round(tBrowse - t0), {
-        nodes: page.nodes.length,
-        hasNextPage: page.hasNextPage,
-      });
-
-      const spaceIdSet = new Set<string>();
-      for (const n of page.nodes) {
-        for (const sid of n.spaceIds) {
-          if (sid) spaceIdSet.add(sid);
-        }
-      }
-      const uniqueSpaceIds = [...spaceIdSet];
-
-      const spaceEntityById = new Map<string, SpaceEntity>();
-      if (uniqueSpaceIds.length > 0) {
-        const fetchedSpaces = await cache.fetchQuery({
-          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
-          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
-          staleTime: Duration.toMillis(Duration.seconds(60)),
-        });
-        for (const s of fetchedSpaces) {
-          spaceEntityById.set(s.id, s.entity);
-        }
-      }
-
-      const rows: SearchResult[] = page.nodes.map(n => {
-        const candidateSpaceIds = n.spaceIds.filter(id => spaceEntityById.has(id));
-        const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
-        const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
-        return {
-          id: n.id,
-          name: n.name,
-          description: n.description,
-          spaces,
-          types: n.types,
-        };
-      });
-
-      // eslint-disable-next-line no-console
-      console.log('[filter-query] browse TOTAL ms', Math.round(performance.now() - t0));
-      return { rows, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
-    },
-    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
-    staleTime: Duration.toMillis(Duration.seconds(60)),
-  });
-
-  const browseResults = browsePages?.pages.flatMap(p => p.rows) ?? [];
-
-  const relationsResultById = React.useMemo(() => {
-    const m = new Map<string, SearchResult>();
-    for (const r of relationsResults) {
-      if (!m.has(r.id)) m.set(r.id, r);
-    }
-    return m;
-  }, [relationsResults]);
-
-  const combinedScopedList = React.useMemo(() => {
-    const seen = new Set<string>();
-    const out: { id: string; name: string | null }[] = [];
-    for (const r of relationsResults) {
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      out.push({ id: r.id, name: r.name });
-    }
-    for (const s of filteredScopedByTargetType) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      out.push(s);
-    }
-    return out;
-  }, [relationsResults, filteredScopedByTargetType]);
-
   const rowsToRender = React.useMemo(() => {
-    const q = autocomplete.query.trim();
-    if (!q) {
-      const scopedRows = combinedScopedList.map(s => ({ kind: 'scoped' as const, scoped: s }));
-      const scopedIds = new Set(combinedScopedList.map(s => s.id));
-      const browseRows = browseResults
-        .filter(r => !scopedIds.has(r.id))
-        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
-        .map(r => ({ kind: 'search' as const, result: r }));
-      if (scopedRows.length > 0 || browseRows.length > 0) {
-        return [...scopedRows, ...browseRows];
-      }
-      return [];
-    }
-    const seen = new Set(combinedScopedList.map(s => s.id));
-    const fuzzyRows = autocomplete.results
-      .filter(r => !seen.has(r.id))
+    const scopedIds = new Set(filteredScopedByTargetType.map(s => s.id));
+    const searchRows = searchResults
+      .filter(r => !scopedIds.has(r.id))
       .filter(r => {
         if (restrictSearchToTypes && !filterByTypes?.length) return false;
         return searchResultMatchesAllowedTypes(r, filterByTypes);
-      });
+      })
+      .map(r => ({ kind: 'search' as const, result: r }));
     return [
-      ...combinedScopedList.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...fuzzyRows.map(r => ({ kind: 'search' as const, result: r })),
+      ...filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s })),
+      ...searchRows,
     ];
-  }, [
-    combinedScopedList,
-    autocomplete.query,
-    autocomplete.results,
-    browseResults,
-    filterByTypes,
-    restrictSearchToTypes,
-  ]);
+  }, [filteredScopedByTargetType, searchResults, filterByTypes, restrictSearchToTypes]);
 
   const entityListResetKey = [
-    autocomplete.query,
-    combinedScopedList.map(s => s.id).join('\0'),
-    browseEnabled ? 'browse' : '',
-    relationsEnabled ? 'relations' : '',
-    autocomplete.query.trim() ? autocomplete.results.map(r => r.id).join('\0') : '',
+    query,
+    filteredScopedByTargetType.map(s => s.id).join('\0'),
   ].join('|');
 
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
@@ -1803,25 +1573,19 @@ function TableBlockEntityFilterInput({
     queries: visibleScopedIds.map(id => ({
       queryKey: ['table-block-filter-scoped-entity', id] as const,
       queryFn: () => mergeSearchResult({ id, store }),
-      // Skip the per-id hydration for ids the relations query already
-      // returned with full data.
-      enabled: focused && visibleScopedIds.length > 0 && !relationsResultById.has(id),
+      enabled: focused && visibleScopedIds.length > 0,
       staleTime: Duration.toMillis(Duration.seconds(60)),
     })),
   });
 
   const scopedResultById = React.useMemo(() => {
     const m = new Map<string, SearchResult>();
-    for (const [id, result] of relationsResultById) {
-      m.set(id, result);
-    }
     visibleScopedIds.forEach((id, idx) => {
-      if (m.has(id)) return;
       const data = scopedResultQueries[idx]?.data;
       if (data != null) m.set(id, data);
     });
     return m;
-  }, [visibleScopedIds, scopedResultQueries, relationsResultById]);
+  }, [visibleScopedIds, scopedResultQueries]);
 
   const entityResultsListRef = React.useRef<HTMLUListElement>(null);
 
@@ -1848,101 +1612,54 @@ function TableBlockEntityFilterInput({
         setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
         return;
       }
-      if (relationsEnabled && hasNextRelationsPage && !isRelationsFetchingNextPage) {
-        void fetchNextRelationsPage();
-        return;
+      if (hasNextSearchPage && !isSearchFetchingNextPage) {
+        void fetchNextSearchPage();
       }
-      if (browseEnabled && hasNextBrowsePage && !isBrowseFetchingNextPage) {
-        void fetchNextBrowsePage();
-      }
-    }, [
-      entityVisibleCount,
-      rowsToRender.length,
-      relationsEnabled,
-      hasNextRelationsPage,
-      isRelationsFetchingNextPage,
-      fetchNextRelationsPage,
-      browseEnabled,
-      hasNextBrowsePage,
-      isBrowseFetchingNextPage,
-      fetchNextBrowsePage,
-    ]);
+    },
+    [entityVisibleCount, rowsToRender.length, hasNextSearchPage, isSearchFetchingNextPage, fetchNextSearchPage]
+  );
 
-  const showEmptyBrowseHint =
-    canBrowseByType &&
-    combinedScopedList.length === 0 &&
-    !autocomplete.query.trim() &&
-    !isRelationsFetching &&
-    !isBrowseFetching &&
-    browseResults.length === 0;
+  const showEmptyHint =
+    !searchBlocked &&
+    filteredScopedByTargetType.length === 0 &&
+    searchResults.length === 0 &&
+    !isSearchFetching &&
+    !isSearchPending;
 
   const showDropdown =
-    focused &&
-    (rowsToRender.length > 0 ||
-      (relationsEnabled && (isRelationsFetching || isRelationsPending)) ||
-      (browseEnabled && (isBrowseFetching || isBrowsePending)) ||
-      showEmptyBrowseHint);
+    focused && (rowsToRender.length > 0 || isSearchPending || isSearchFetching || showEmptyHint);
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
     expandVisibleEntityRowsIfListHasNoScrollbar();
-  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
+  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, searchResults.length, rowsToRender.length, entityVisibleCount]);
 
-  // Keep pulling pages (relations first, then browse) until the dropdown has
-  // at least one full page of rows or both sources are fully exhausted.
-  // Each relations page now returns unique target entities (the query is
-  // phrased as entitiesConnection + backlinks.some rather than a relations
-  // aggregation), so there's no duplicate-amplification runaway to cap.
+  // Keep pulling pages until the dropdown has at least one full page of rows
+  // or the search result set is exhausted.
   React.useEffect(() => {
     if (!focused) return;
-    if (autocomplete.query.trim()) return;
     if (rowsToRender.length >= FILTER_DROPDOWN_PAGE_SIZE) return;
-    if (
-      relationsEnabled &&
-      hasNextRelationsPage &&
-      !isRelationsFetching &&
-      !isRelationsFetchingNextPage
-    ) {
-      void fetchNextRelationsPage();
-      return;
-    }
-    if (
-      browseEnabled &&
-      hasNextBrowsePage &&
-      !isBrowseFetching &&
-      !isBrowseFetchingNextPage
-    ) {
-      void fetchNextBrowsePage();
+    if (hasNextSearchPage && !isSearchFetching && !isSearchFetchingNextPage) {
+      void fetchNextSearchPage();
     }
   }, [
     focused,
-    autocomplete.query,
     rowsToRender.length,
-    relationsEnabled,
-    hasNextRelationsPage,
-    isRelationsFetching,
-    isRelationsFetchingNextPage,
-    fetchNextRelationsPage,
-    browseEnabled,
-    hasNextBrowsePage,
-    isBrowseFetching,
-    isBrowseFetchingNextPage,
-    fetchNextBrowsePage,
+    hasNextSearchPage,
+    isSearchFetching,
+    isSearchFetchingNextPage,
+    fetchNextSearchPage,
   ]);
 
   const multi = Boolean(onToggleEntity);
-  const inputValue = multi
-    ? autocomplete.query
-    : autocomplete.query === ''
-      ? selectedValue
-      : autocomplete.query;
+  const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
 
   const handleEntityPick = (result: { id: string; name: string | null }) => {
     clearBlurTimeout();
     if (multi) {
       onToggleEntity?.(result);
     } else {
-      autocomplete.onQueryChange('');
+      setRawQuery('');
       onSelect?.(result);
       setFocused(false);
     }
@@ -1953,7 +1670,7 @@ function TableBlockEntityFilterInput({
       <Input
         placeholder={multi ? multiSelectPlaceholder : undefined}
         value={inputValue}
-        onChange={e => autocomplete.onQueryChange(e.target.value)}
+        onChange={e => setRawQuery(e.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
       />
@@ -1964,19 +1681,17 @@ function TableBlockEntityFilterInput({
         >
           <ResizableContainer duration={0.125}>
             <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
-              {rowsToRender.length === 0 &&
-              ((relationsEnabled && (isRelationsPending || isRelationsFetching)) ||
-                (browseEnabled && (isBrowsePending || isBrowseFetching))) ? (
+              {rowsToRender.length === 0 && (isSearchPending || isSearchFetching) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading…
                   </Text>
                 </ResultItem>
               ) : null}
-              {rowsToRender.length === 0 && showEmptyBrowseHint ? (
+              {rowsToRender.length === 0 && showEmptyHint ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
-                    Type to search, or pick from the list when the table has rows.
+                    No matches.
                   </Text>
                 </ResultItem>
               ) : null}
@@ -2015,36 +1730,21 @@ function TableBlockEntityFilterInput({
                   </motion.div>
                 )
               )}
-              {relationsEnabled &&
-              hasNextRelationsPage &&
-              !isRelationsFetchingNextPage &&
+              {hasNextSearchPage &&
+              !isSearchFetchingNextPage &&
               entityVisibleCount >= rowsToRender.length &&
               rowsToRender.length > 0 ? (
                 <ResultItem
                   onPointerDown={e => e.preventDefault()}
                   onClick={() => {
                     clearBlurTimeout();
-                    void fetchNextRelationsPage();
-                  }}
-                >
-                  <Text variant="metadataMedium">Load more</Text>
-                </ResultItem>
-              ) : browseEnabled &&
-                hasNextBrowsePage &&
-                !isBrowseFetchingNextPage &&
-                entityVisibleCount >= rowsToRender.length &&
-                rowsToRender.length > 0 ? (
-                <ResultItem
-                  onPointerDown={e => e.preventDefault()}
-                  onClick={() => {
-                    clearBlurTimeout();
-                    void fetchNextBrowsePage();
+                    void fetchNextSearchPage();
                   }}
                 >
                   <Text variant="metadataMedium">Load more</Text>
                 </ResultItem>
               ) : null}
-              {isRelationsFetchingNextPage || isBrowseFetchingNextPage ? (
+              {isSearchFetchingNextPage ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading more…
@@ -2052,11 +1752,6 @@ function TableBlockEntityFilterInput({
                 </ResultItem>
               ) : null}
             </ResultsList>
-            {autocomplete.isLoading && (
-              <div className="flex items-center justify-center py-3">
-                <Dots />
-              </div>
-            )}
           </ResizableContainer>
         </div>
       )}
