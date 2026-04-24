@@ -9,30 +9,26 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { mergeSearchResult } from '~/core/database/result';
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { entityTypesMatchFilter, searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
 import { reactiveRelations } from '~/core/sync/store';
-import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import {
   fetchRelationTargetTypeIdsForProperty,
   mergeRelationValueTypesFromStore,
 } from '~/core/utils/property/properties';
-import type { Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -66,14 +62,9 @@ export type TableBlockNewFilterRow = {
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
-  filterSuggestionRows?: Row[];
-  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
-  onFilterPromptOpenChange?: (open: boolean) => void;
 }
-
-const MAX_SCOPED_SUGGESTIONS = 100;
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
 
@@ -174,285 +165,6 @@ function useRelationColumnTargetTypeIds(
     (isFetchingNetworkTypes || isPendingNetworkTypes);
 
   return { typeIds, waitForFilterTypes };
-}
-
-function stubSearchResultForFilter(id: string, displayName: string | null): SearchResult {
-  const placeholderSpace: SpaceEntity = {
-    id: 'space-placeholder',
-    name: null,
-    description: null,
-    spaces: [],
-    types: [],
-    relations: [],
-    values: [],
-    spaceId: '',
-    image: PLACEHOLDER_SPACE_IMAGE,
-  };
-  return {
-    id,
-    name: displayName,
-    description: null,
-    spaces: [placeholderSpace],
-    types: [],
-  };
-}
-
-function searchResultForFilterDisplay(
-  merged: SearchResult | null | undefined,
-  id: string,
-  displayName: string | null
-): SearchResult {
-  if (merged?.spaces?.length) return merged;
-  return stubSearchResultForFilter(id, displayName);
-}
-
-type ScopedFilterSuggestions = {
-  entitySuggestions: { id: string; name: string | null }[];
-  stringSuggestions: string[];
-  spaceSuggestions: { id: string; name: string | null; image: string | null }[];
-};
-
-function useScopedFilterSuggestions(
-  dataRows: Row[] | undefined,
-  selectedColumnId: string,
-  valueType: FilterableValueType | undefined,
-  blockSpaceId: string | undefined,
-  relationTargetTypeIds?: string[],
-  activeFilters?: Filter[],
-  filterSuggestionEntityIds?: string[],
-  waitForRelationTargetTypes?: boolean
-): ScopedFilterSuggestions {
-  const { store } = useSyncEngine();
-
-  const entityIdsKey = React.useMemo(
-    () =>
-      (dataRows ?? [])
-        .filter(r => !r.placeholder)
-        .map(r => r.entityId)
-        .sort()
-        .join(','),
-    [dataRows]
-  );
-
-  const entityIdSet = React.useMemo(() => {
-    const s = new Set<string>();
-    if (entityIdsKey) {
-      for (const id of entityIdsKey.split(',')) {
-        if (id) s.add(id);
-      }
-    }
-    return s;
-  }, [entityIdsKey]);
-
-  const effectiveEntityIdSet = React.useMemo(() => {
-    if (filterSuggestionEntityIds?.length) {
-      return new Set(filterSuggestionEntityIds);
-    }
-    return entityIdSet;
-  }, [filterSuggestionEntityIds, entityIdSet]);
-
-  const relationsSubset = useRelations({
-    selector: React.useCallback(
-      (r: Relation) =>
-        valueType === 'RELATION' &&
-        effectiveEntityIdSet.size > 0 &&
-        effectiveEntityIdSet.has(r.fromEntity.id) &&
-        r.type.id === selectedColumnId,
-      [effectiveEntityIdSet, selectedColumnId, valueType]
-    ),
-  });
-  const relationsByType = useRelations({
-    selector: React.useCallback(
-      (r: Relation) => valueType === 'RELATION' && r.type.id === selectedColumnId,
-      [selectedColumnId, valueType]
-    ),
-  });
-  const valuesSubset = useValues({
-    selector: React.useCallback(
-      (v: Value) =>
-        valueType === 'TEXT' &&
-        effectiveEntityIdSet.size > 0 &&
-        effectiveEntityIdSet.has(v.entity.id) &&
-        v.property.id === selectedColumnId,
-      [effectiveEntityIdSet, selectedColumnId, valueType]
-    ),
-  });
-
-  const spaceStats = React.useMemo(() => {
-    if (
-      selectedColumnId !== SystemIds.SPACE_FILTER ||
-      effectiveEntityIdSet.size === 0 ||
-      !blockSpaceId
-    ) {
-      return { ids: [] as string[], counts: new Map<string, number>() };
-    }
-    const counts = new Map<string, number>();
-    for (const id of effectiveEntityIdSet) {
-      const e = store.getEntity(id, { spaceId: blockSpaceId });
-      for (const sp of e?.spaces ?? []) {
-        counts.set(sp, (counts.get(sp) ?? 0) + 1);
-      }
-    }
-    return { ids: [...counts.keys()], counts };
-  }, [selectedColumnId, effectiveEntityIdSet, store, blockSpaceId]);
-
-  const { spacesById } = useSpacesByIds(spaceStats.ids);
-  const activeTypeFilterIds = React.useMemo(
-    () =>
-      (activeFilters ?? [])
-        .filter(f => f.columnId === SystemIds.TYPES_PROPERTY)
-        .map(f => f.value),
-    [activeFilters]
-  );
-
-  return React.useMemo((): ScopedFilterSuggestions => {
-    if (valueType === 'RELATION') {
-      if (waitForRelationTargetTypes) {
-        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-      }
-      const noMembersInBlock =
-        !filterSuggestionEntityIds?.length &&
-        (!(dataRows?.length) || (dataRows?.every(r => r.placeholder) ?? true));
-      if (noMembersInBlock) {
-        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-      }
-
-      const globalCounts = new Map<string, number>();
-      const globalMeta = new Map<string, { id: string; name: string | null }>();
-      for (const r of relationsByType) {
-        if (filterSuggestionEntityIds?.length && !effectiveEntityIdSet.has(r.fromEntity.id)) {
-          continue;
-        }
-        const from = store.getEntity(r.fromEntity.id);
-        const to = store.getEntity(r.toEntity.id);
-
-        if (activeTypeFilterIds.length > 0) {
-          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
-          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
-        }
-        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
-          continue;
-        }
-
-        const id = r.toEntity.id;
-        globalCounts.set(id, (globalCounts.get(id) ?? 0) + 1);
-        if (!globalMeta.has(id)) globalMeta.set(id, { id, name: r.toEntity.name });
-      }
-      if (globalMeta.size > 0) {
-        const entitySuggestions = [...globalMeta.values()].sort((a, b) => {
-          const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
-          if (diff !== 0) return diff;
-          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-        });
-        return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
-      }
-
-      const counts = new Map<string, number>();
-      const meta = new Map<string, { id: string; name: string | null }>();
-      for (const r of relationsSubset) {
-        const from = store.getEntity(r.fromEntity.id);
-        const to = store.getEntity(r.toEntity.id);
-
-        if (activeTypeFilterIds.length > 0) {
-          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
-          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
-        }
-        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
-          continue;
-        }
-
-        const id = r.toEntity.id;
-        counts.set(id, (counts.get(id) ?? 0) + 1);
-        if (!meta.has(id)) meta.set(id, { id, name: r.toEntity.name });
-      }
-      const entitySuggestions = [...meta.values()].sort((a, b) => {
-        const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
-        if (diff !== 0) return diff;
-        return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-      });
-      return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
-    }
-
-    if (selectedColumnId === SystemIds.SPACE_FILTER) {
-      const spaceSuggestions = spaceStats.ids
-        .map(id => {
-          const entity = spacesById.get(id)?.entity;
-          return {
-            id,
-            name: entity?.name ?? null,
-            image: entity?.image ?? null,
-            _count: spaceStats.counts.get(id) ?? 0,
-          };
-        })
-        .sort((a, b) => {
-          const diff = b._count - a._count;
-          if (diff !== 0) return diff;
-          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-        })
-        .map(({ _count: _c, ...rest }) => rest)
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
-      return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions };
-    }
-
-    if (valueType === 'TEXT') {
-      if (selectedColumnId === SystemIds.NAME_PROPERTY) {
-        const nameCounts = new Map<string, number>();
-        const rowNameByEntityId = new Map<string, string>();
-        for (const row of dataRows ?? []) {
-          if (row.placeholder) continue;
-          const n = row.columns[SystemIds.NAME_PROPERTY]?.name?.trim();
-          if (n) rowNameByEntityId.set(row.entityId, n);
-        }
-
-        for (const id of effectiveEntityIdSet) {
-          const entity = store.getEntity(id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-          const n = entity?.name?.trim() || rowNameByEntityId.get(id)?.trim();
-          if (n) nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
-        }
-        const stringSuggestions = [...nameCounts.entries()]
-          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-          .map(([s]) => s)
-          .slice(0, MAX_SCOPED_SUGGESTIONS);
-        return {
-          entitySuggestions: [],
-          stringSuggestions,
-          spaceSuggestions: [],
-        };
-      }
-      const valueCounts = new Map<string, number>();
-      for (const v of valuesSubset) {
-        const t = v.value?.trim();
-        if (t) valueCounts.set(t, (valueCounts.get(t) ?? 0) + 1);
-      }
-      const stringSuggestions = [...valueCounts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([s]) => s)
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
-      return {
-        entitySuggestions: [],
-        stringSuggestions,
-        spaceSuggestions: [],
-      };
-    }
-
-    return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-  }, [
-    dataRows,
-    valueType,
-    selectedColumnId,
-    relationTargetTypeIds,
-    activeTypeFilterIds,
-    relationsSubset,
-    relationsByType,
-    valuesSubset,
-    spaceStats,
-    spacesById,
-    store,
-    blockSpaceId,
-    filterSuggestionEntityIds,
-    effectiveEntityIdSet,
-    waitForRelationTargetTypes,
-  ]);
 }
 
 /**
@@ -1057,10 +769,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       trigger,
       onCreate,
       options,
-      filterSuggestionRows,
-      filterSuggestionEntityIds,
       filterSuggestionSpaceId,
-      onFilterPromptOpenChange,
     },
     ref
   ) {
@@ -1089,10 +798,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const [relationType, setRelationType] = React.useState<Filter | null>(
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
-
-    React.useEffect(() => {
-      onFilterPromptOpenChange?.(state.open);
-    }, [state.open, onFilterPromptOpenChange]);
 
     const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
       if (queryMode === 'RELATIONS') {
@@ -1125,8 +830,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           options={options}
           state={state}
           dispatch={dispatch}
-          filterSuggestionRows={filterSuggestionRows}
-          filterSuggestionEntityIds={filterSuggestionEntityIds}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
         />
       );
@@ -1196,8 +899,6 @@ interface DynamicFiltersProps {
   options: TableBlockFilterPromptProps['options'];
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
-  filterSuggestionRows?: Row[];
-  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
 }
 
@@ -1230,11 +931,8 @@ function DynamicFilters({
   options,
   dispatch,
   state,
-  filterSuggestionRows,
-  filterSuggestionEntityIds,
   filterSuggestionSpaceId,
 }: DynamicFiltersProps) {
-  const { filterState } = useFilters();
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
   const selectedEntityIds = React.useMemo(
@@ -1244,10 +942,6 @@ function DynamicFilters({
   const selectedSpaceIds = React.useMemo(
     () => new Set(state.multiSpaceSelections.map(s => s.id)),
     [state.multiSpaceSelections]
-  );
-  const selectedStringsSet = React.useMemo(
-    () => new Set(state.multiStringSelections),
-    [state.multiStringSelections]
   );
 
   const selectedOption = options.find(o => o.columnId === state.selectedColumn);
@@ -1263,17 +957,6 @@ function DynamicFilters({
       filterSuggestionSpaceId,
       selectedOption?.relationValueTypes
     );
-
-  const scoped = useScopedFilterSuggestions(
-    filterSuggestionRows,
-    state.selectedColumn,
-    selectedOption?.valueType,
-    filterSuggestionSpaceId,
-    relationTargetTypeIds,
-    filterState,
-    filterSuggestionEntityIds,
-    waitForRelationTargetTypes
-  );
 
   const pendingFilterChips = React.useMemo(
     () => enumeratePendingFilterChips(state, options),
@@ -1333,7 +1016,6 @@ function DynamicFilters({
             <TableBlockSpaceFilterInput
               filterInteractionRootRef={filterInteractionRootRef}
               selectedValue=""
-              scopedSuggestions={scoped.spaceSuggestions}
               selectedSpaceIds={selectedSpaceIds}
               memberSpaceId={filterSuggestionSpaceId}
               onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
@@ -1345,7 +1027,6 @@ function DynamicFilters({
               waitForFilterTypes={waitForRelationTargetTypes}
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
               selectedValue=""
-              scopedSuggestions={scoped.entitySuggestions}
               selectedEntityIds={selectedEntityIds}
               onToggleEntity={e =>
                 dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
@@ -1439,7 +1120,6 @@ interface TableBlockEntityFilterInputProps {
   filterByTypes?: string[];
   waitForFilterTypes?: boolean;
   restrictSearchToTypes?: boolean;
-  scopedSuggestions?: { id: string; name: string | null }[];
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
   multiSelectPlaceholder?: string;
@@ -1452,7 +1132,6 @@ function TableBlockEntityFilterInput({
   filterByTypes,
   waitForFilterTypes = false,
   restrictSearchToTypes = false,
-  scopedSuggestions,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
@@ -1467,24 +1146,6 @@ function TableBlockEntityFilterInput({
 
   const searchBlocked =
     (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
-
-  const filteredScoped = React.useMemo(() => {
-    if (!scopedSuggestions?.length) return [];
-    const q = rawQuery.trim().toLowerCase();
-    return !q
-      ? scopedSuggestions
-      : scopedSuggestions.filter(
-          s =>
-            (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
-        );
-  }, [scopedSuggestions, rawQuery]);
-
-  const filteredScopedByTargetType = React.useMemo(() => {
-    if (!filterByTypes?.length && (waitForFilterTypes || restrictSearchToTypes)) {
-      return [];
-    }
-    return filteredScoped;
-  }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes]);
 
   // Single unified search path: when the dropdown is open, fire the REST
   // /search endpoint with the current (possibly empty) query and the
@@ -1546,58 +1207,26 @@ function TableBlockEntityFilterInput({
     [searchPages]
   );
 
-  const rowsToRender = React.useMemo(() => {
-    const scopedIds = new Set(filteredScopedByTargetType.map(s => s.id));
-    const searchRows = searchResults
-      .filter(r => !scopedIds.has(r.id))
-      .filter(r => {
-        if (restrictSearchToTypes && !filterByTypes?.length) return false;
-        return searchResultMatchesAllowedTypes(r, filterByTypes);
-      })
-      .map(r => ({ kind: 'search' as const, result: r }));
-    return [
-      ...filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...searchRows,
-    ];
-  }, [filteredScopedByTargetType, searchResults, filterByTypes, restrictSearchToTypes]);
-
-  const entityListResetKey = [
-    query,
-    filteredScopedByTargetType.map(s => s.id).join('\0'),
-  ].join('|');
+  const rowsToRender = React.useMemo(
+    () =>
+      searchResults
+        .filter(r => {
+          if (restrictSearchToTypes && !filterByTypes?.length) return false;
+          return searchResultMatchesAllowedTypes(r, filterByTypes);
+        })
+        .map(r => ({ kind: 'search' as const, result: r })),
+    [searchResults, filterByTypes, restrictSearchToTypes]
+  );
 
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
   React.useEffect(() => {
     setEntityVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [entityListResetKey]);
+  }, [query]);
 
   const visibleEntityRows = React.useMemo(
     () => rowsToRender.slice(0, entityVisibleCount),
     [rowsToRender, entityVisibleCount]
   );
-
-  const visibleScopedIds = React.useMemo(
-    () => visibleEntityRows.flatMap(r => (r.kind === 'scoped' ? [r.scoped.id] : [])),
-    [visibleEntityRows]
-  );
-
-  const scopedResultQueries = useQueries({
-    queries: visibleScopedIds.map(id => ({
-      queryKey: ['table-block-filter-scoped-entity', id] as const,
-      queryFn: () => mergeSearchResult({ id, store }),
-      enabled: focused && visibleScopedIds.length > 0,
-      staleTime: Duration.toMillis(Duration.seconds(60)),
-    })),
-  });
-
-  const scopedResultById = React.useMemo(() => {
-    const m = new Map<string, SearchResult>();
-    visibleScopedIds.forEach((id, idx) => {
-      const data = scopedResultQueries[idx]?.data;
-      if (data != null) m.set(id, data);
-    });
-    return m;
-  }, [visibleScopedIds, scopedResultQueries]);
 
   const entityResultsListRef = React.useRef<HTMLUListElement>(null);
 
@@ -1633,7 +1262,6 @@ function TableBlockEntityFilterInput({
 
   const showEmptyHint =
     !searchBlocked &&
-    filteredScopedByTargetType.length === 0 &&
     searchResults.length === 0 &&
     !isSearchFetching &&
     !isSearchPending;
@@ -1707,41 +1335,21 @@ function TableBlockEntityFilterInput({
                   </Text>
                 </ResultItem>
               ) : null}
-              {visibleEntityRows.map((row, i) =>
-                row.kind === 'scoped' ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={`scoped-${row.scoped.id}`}
-                  >
-                    <ResultContent
-                      result={searchResultForFilterDisplay(
-                        scopedResultById.get(row.scoped.id),
-                        row.scoped.id,
-                        row.scoped.name
-                      )}
-                      onClick={() => handleEntityPick(row.scoped)}
-                      active={Boolean(multi && selectedEntityIds?.has(row.scoped.id))}
-                      alreadySelected={false}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={`search-${row.result.id}`}
-                  >
-                    <ResultContent
-                      onClick={() => handleEntityPick(row.result)}
-                      active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
-                      alreadySelected={false}
-                      result={row.result}
-                    />
-                  </motion.div>
-                )
-              )}
+              {visibleEntityRows.map((row, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={`search-${row.result.id}`}
+                >
+                  <ResultContent
+                    onClick={() => handleEntityPick(row.result)}
+                    active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
+                    alreadySelected={false}
+                    result={row.result}
+                  />
+                </motion.div>
+              ))}
               {hasNextSearchPage &&
               !isSearchFetchingNextPage &&
               entityVisibleCount >= rowsToRender.length &&
@@ -1775,7 +1383,6 @@ interface TableBlockSpaceFilterInputProps {
   filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
-  scopedSuggestions?: { id: string; name: string | null; image: string | null }[];
   selectedSpaceIds?: Set<string>;
   memberSpaceId?: string;
   onToggleSpace?: (result: { id: string; name: string | null }) => void;
@@ -1785,7 +1392,6 @@ function TableBlockSpaceFilterInput({
   filterInteractionRootRef,
   onSelect,
   selectedValue,
-  scopedSuggestions,
   selectedSpaceIds,
   memberSpaceId,
   onToggleSpace,
@@ -1794,72 +1400,34 @@ function TableBlockSpaceFilterInput({
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
     useFilterValueInputFocus(filterInteractionRootRef);
 
-  const scopedWhenEmpty = React.useMemo(() => {
-    if (!scopedSuggestions?.length) return [];
-    return scopedSuggestions.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [scopedSuggestions]);
+  // Default suggestions shown on focus with empty query: the spaces the
+  // current block's entity is a member of.
   const { data: memberSpaces = [] } = useQuery({
     queryKey: ['filter-member-spaces', memberSpaceId],
     enabled: Boolean(memberSpaceId),
     staleTime: Duration.toMillis(Duration.seconds(60)),
     queryFn: ({ signal }) => Effect.runPromise(getSpacesWhereMember(memberSpaceId!, signal)),
   });
-  const defaultSpaceSuggestions = React.useMemo(() => {
-    const out: { id: string; name: string | null; image: string | null }[] = [];
-    const seen = new Set<string>();
-    for (const s of scopedWhenEmpty) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      out.push(s);
-    }
-    for (const s of memberSpaces) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      out.push({ id: s.id, name: s.entity.name ?? null, image: s.entity.image ?? null });
-    }
-    return out.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [scopedWhenEmpty, memberSpaces]);
-
-  const mergedWhenQuery = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const scopedMatches = (scopedSuggestions ?? []).filter(
-      s => (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
-    );
-    const seen = new Set(scopedMatches.map(s => s.id));
-    const remote = results.filter(r => !seen.has(r.id));
-    return [
-      ...scopedMatches.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...remote.map(r => ({ kind: 'remote' as const, result: r })),
-    ].slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [query, scopedSuggestions, results]);
+  const defaultSpaceSuggestions = React.useMemo(
+    () =>
+      memberSpaces.map(s => ({
+        id: s.id,
+        name: s.entity.name ?? null,
+        image: s.entity.image ?? null,
+      })),
+    [memberSpaces]
+  );
 
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
   const showQueryPanel = Boolean(query.trim());
   const multi = Boolean(onToggleSpace);
 
-  const spaceQueryRows = React.useMemo(() => {
-    if (!showQueryPanel) return [] as Array<
-      | { kind: 'scoped'; scoped: { id: string; name: string | null; image: string | null } }
-      | { kind: 'remote'; result: (typeof results)[number] }
-    >;
-    if (mergedWhenQuery.length > 0) return mergedWhenQuery;
-    return results.map(r => ({ kind: 'remote' as const, result: r }));
-  }, [showQueryPanel, mergedWhenQuery, results]);
-
-  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : spaceQueryRows.length;
+  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : results.length;
 
   const [spaceVisibleCount, setSpaceVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
   React.useEffect(() => {
     setSpaceVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [
-    query,
-    showScopedOnlyPanel,
-    showQueryPanel,
-    defaultSpaceSuggestions.length,
-    mergedWhenQuery.length,
-    results.length,
-  ]);
+  }, [query, showScopedOnlyPanel, showQueryPanel, defaultSpaceSuggestions.length, results.length]);
 
   const visibleScopedSpaceSuggestions = React.useMemo(
     () => defaultSpaceSuggestions.slice(0, spaceVisibleCount),
@@ -1867,8 +1435,8 @@ function TableBlockSpaceFilterInput({
   );
 
   const visibleSpaceQueryRows = React.useMemo(
-    () => spaceQueryRows.slice(0, spaceVisibleCount),
-    [spaceQueryRows, spaceVisibleCount]
+    () => results.slice(0, spaceVisibleCount),
+    [results, spaceVisibleCount]
   );
 
   const applySpaceListPagination = React.useCallback(
@@ -1998,36 +1566,18 @@ function TableBlockSpaceFilterInput({
         >
           <ResizableContainer duration={0.125}>
             <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
-              {visibleSpaceQueryRows.map((row, i) =>
-                row.kind === 'scoped'
-                  ? renderSpaceRow(
-                      row.scoped.id,
-                      row.scoped.name,
-                      row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.(row.scoped)
-                          : onSelect?.(row.scoped),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.scoped.id))
-                    )
-                  : renderSpaceRow(
-                      row.result.id,
-                      row.result.name,
-                      row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            })
-                          : onSelect?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            }),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.result.id))
-                    )
+              {visibleSpaceQueryRows.map((result, i) =>
+                renderSpaceRow(
+                  result.id,
+                  result.name,
+                  result.image ?? PLACEHOLDER_SPACE_IMAGE,
+                  () =>
+                    multi
+                      ? onToggleSpace?.({ id: result.id, name: result.name })
+                      : onSelect?.({ id: result.id, name: result.name }),
+                  i,
+                  Boolean(selectedSpaceIds?.has(result.id))
+                )
               )}
             </ResultsList>
           </ResizableContainer>
