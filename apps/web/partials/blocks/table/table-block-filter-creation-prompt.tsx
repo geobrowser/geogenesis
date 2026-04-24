@@ -32,7 +32,6 @@ import {
   fetchRelationTargetTypeIdsForProperty,
   mergeRelationValueTypesFromStore,
 } from '~/core/utils/property/properties';
-import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 import type { Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
@@ -1354,12 +1353,8 @@ function DynamicFilters({
             />
           ) : (
             <TableBlockTextFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               value={getFilterValue(state.value)}
               onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
-              stringSuggestions={scoped.stringSuggestions}
-              selectedStrings={selectedStringsSet}
-              onToggleString={s => dispatch({ type: 'toggleStringSelection', payload: { value: s } })}
             />
           )}
         </div>
@@ -1510,7 +1505,7 @@ function TableBlockEntityFilterInput({
     ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
       // Use the same fuzzy-search path the global search bar uses so the
       // row display (space icon + breadcrumb + type tags + description)
       // matches everywhere. findFuzzyPage returns both the filtered
@@ -1529,6 +1524,7 @@ function TableBlockEntityFilterInput({
         },
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
+        signal,
       });
       return { rows: results, offset: pageParam, rawCount, total };
     },
@@ -2042,138 +2038,20 @@ function TableBlockSpaceFilterInput({
 }
 
 interface TableBlockTextFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   value: string;
   onChange: (value: string) => void;
-  stringSuggestions: string[];
-  selectedStrings?: Set<string>;
-  onToggleString?: (s: string) => void;
 }
 
-function TableBlockTextFilterInput({
-  filterInteractionRootRef,
-  value,
-  onChange,
-  stringSuggestions,
-  selectedStrings,
-  onToggleString,
-}: TableBlockTextFilterInputProps) {
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
-
-  const filtered = React.useMemo(() => {
-    if (!stringSuggestions.length) return [];
-    const q = value.trim().toLowerCase();
-    const list = !q
-      ? stringSuggestions
-      : stringSuggestions.filter(s => s.toLowerCase().includes(q));
-    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [stringSuggestions, value]);
-
-  const [textVisibleCount, setTextVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
-  React.useEffect(() => {
-    setTextVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [value, filtered.length, stringSuggestions.length]);
-
-  const visibleTextSuggestions = React.useMemo(
-    () => filtered.slice(0, textVisibleCount),
-    [filtered, textVisibleCount]
-  );
-
-  const applyTextListPagination = React.useCallback(
-    (el: HTMLUListElement) => {
-      // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 275;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
-      if (!nearBottom && !noOverflow) return;
-      if (textVisibleCount < filtered.length) {
-        setTextVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, filtered.length));
-      }
-    },
-    [textVisibleCount, filtered.length]
-  );
-
-  const textResultsListRef = React.useRef<HTMLUListElement>(null);
-  const handleTextResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
-      applyTextListPagination(e.currentTarget);
-    },
-    [applyTextListPagination]
-  );
-
-  // Non-relation filters (Name, Description, etc.) don't surface a
-  // suggestions dropdown at all right now — user types the exact value
-  // they want to filter by.
-  const showEmptyTextHint = false;
-  const showDropdown = false;
-
-  React.useLayoutEffect(() => {
-    if (!showDropdown) return;
-    const el = textResultsListRef.current;
-    if (el) applyTextListPagination(el);
-  }, [showDropdown, applyTextListPagination, filtered.length, textVisibleCount]);
-
-  const multi = Boolean(onToggleString);
-
+/**
+ * Non-relation filter value input (Name, Description, and any scalar
+ * value-type filter). Plain controlled input — we don't surface a
+ * suggestions dropdown for these today; the user types the exact value
+ * they want to filter by.
+ */
+function TableBlockTextFilterInput({ value, onChange }: TableBlockTextFilterInputProps) {
   return (
     <div className="relative w-full">
-      <Input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      />
-      {showDropdown && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={textResultsListRef} onScroll={handleTextResultsScroll}>
-              {showEmptyTextHint ? (
-                <ResultItem className="pointer-events-none">
-                  <Text color="grey-03" variant="metadataMedium">
-                    Type a value to filter. Suggestions appear when the table has matching rows.
-                  </Text>
-                </ResultItem>
-              ) : null}
-              {visibleTextSuggestions.map((s, i) => {
-                const isSel = Boolean(selectedStrings?.has(s));
-                return (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={s}
-                  >
-                    <ResultItem
-                      className={isSel ? 'bg-grey-02' : undefined}
-                      onClick={() => {
-                        clearBlurTimeout();
-                        if (multi) {
-                          onToggleString?.(s);
-                        } else {
-                          onChange(s);
-                          setFocused(false);
-                        }
-                      }}
-                    >
-                      <div className="flex w-full items-center justify-between leading-4">
-                        <Text variant="metadataMedium" ellipsize className="leading-4.5">
-                          {s}
-                        </Text>
-                        {multi && isSel && <CheckCircleSmall color="grey-04" />}
-                      </div>
-                    </ResultItem>
-                  </motion.div>
-                );
-              })}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
+      <Input value={value} onChange={e => onChange(e.target.value)} />
     </div>
   );
 }

@@ -342,12 +342,14 @@ export class E {
     where,
     first,
     skip,
+    signal,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
+    signal?: AbortController['signal'];
   }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
@@ -360,7 +362,7 @@ export class E {
 
     const page = await cache.fetchQuery({
       queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip],
-      queryFn: ({ signal }) =>
+      queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(
             {
@@ -370,7 +372,10 @@ export class E {
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
             },
-            signal
+            // Prefer the caller-supplied signal so React Query cancellation
+            // on the hook side (query change, unmount) aborts the in-flight
+            // REST /search request instead of letting it run to completion.
+            signal ?? innerSignal
           )
         ),
     });
@@ -400,17 +405,14 @@ export class E {
     const [spaces, typeNames] = await Promise.all([
       cache.fetchQuery({
         queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-        queryFn: () =>
-          Effect.runPromise(
-            getSpaces({
-              spaceIds,
-            })
-          ),
+        queryFn: ({ signal: innerSignal }) =>
+          Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
       }),
       typeIds.length > 0
         ? cache.fetchQuery({
             queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
-            queryFn: () => Effect.runPromise(getEntityNames(typeIds)),
+            queryFn: ({ signal: innerSignal }) =>
+              Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
           })
         : Promise.resolve([]),
     ]);
