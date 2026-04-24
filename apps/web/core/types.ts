@@ -272,10 +272,10 @@ export type Entity = {
   types: { id: string; name: string | null }[];
   relations: Relation[];
   values: Value[];
-  /**
-   * UNIX timestamp in seconds
-   */
-  updatedAt?: string;
+  /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
+  createdAt?: string | number;
+  /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
+  updatedAt?: string | number;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };

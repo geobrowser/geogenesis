@@ -571,6 +571,14 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entityExistsQuery = graphql(/* GraphQL */ `
+  query EntityExists($id: UUID!) {
+    entity(id: $id) {
+      id
+    }
+  }
+`);
+
 export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
   query EntityCommentReplyBacklinksPage(
     $id: UUID!
@@ -603,6 +611,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      createdAt
       updatedAt
 
       types {
