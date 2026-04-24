@@ -1518,7 +1518,7 @@ function TableBlockEntityFilterInput({
       // raw count for pagination because the post-processing step
       // discards entities whose spaces can't be resolved, which would
       // otherwise shrink a full 25-row page and fool `hasNextPage`.
-      const { results, rawRemoteCount } = await E.findFuzzyPage({
+      const { results, rawCount, total } = await E.findFuzzyPage({
         store,
         cache,
         where: {
@@ -1530,12 +1530,18 @@ function TableBlockEntityFilterInput({
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
       });
-      return { rows: results, offset: pageParam, rawRemoteCount };
+      return { rows: results, offset: pageParam, rawCount, total };
     },
-    getNextPageParam: lastPage =>
-      lastPage.rawRemoteCount < FILTER_DROPDOWN_PAGE_SIZE
-        ? undefined
-        : lastPage.offset + FILTER_DROPDOWN_PAGE_SIZE,
+    getNextPageParam: lastPage => {
+      // Use REST `total` when available — it's the authoritative count
+      // of matches across the entire result set. Fall back to "did we
+      // get a full raw page?" when total is absent.
+      const nextOffset = lastPage.offset + FILTER_DROPDOWN_PAGE_SIZE;
+      if (typeof lastPage.total === 'number') {
+        return nextOffset >= lastPage.total ? undefined : nextOffset;
+      }
+      return lastPage.rawCount < FILTER_DROPDOWN_PAGE_SIZE ? undefined : nextOffset;
+    },
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 

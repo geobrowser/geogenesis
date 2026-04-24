@@ -596,7 +596,23 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
  * This replaces the previous GraphQL-based search with the OpenSearch-backed
  * REST endpoint which provides better relevance scoring and performance.
  */
-export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+export type SearchResultsPage = {
+  results: SearchResult[];
+  /**
+   * Total number of matches across the whole result set, as reported by the
+   * REST endpoint. Paginated callers should use this to detect exhaustion
+   * (`offset + rawCount >= total`).
+   */
+  total: number;
+  /**
+   * Raw number of per-space rows returned on this page, before grouping by
+   * entity. Useful as a "did we get a full page worth?" pagination signal
+   * when `total` is unavailable or unreliable.
+   */
+  rawCount: number;
+};
+
+export function getResultsPage(args: ResultsArgs, signal?: AbortController['signal']) {
   const params = new URLSearchParams();
   params.set('query', args.query);
   params.set('limit', String(args.limit ?? 10));
@@ -619,8 +635,19 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
       path: `/search?${params.toString()}`,
       signal,
     }),
-    response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
+    (response): SearchResultsPage => {
+      const filtered = response.results.filter(shouldIncludeRestSearchResult);
+      return {
+        results: groupRestResults(filtered),
+        total: response.total,
+        rawCount: response.results.length,
+      };
+    }
   );
+}
+
+export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  return Effect.map(getResultsPage(args, signal), page => page.results);
 }
 
 export type NameValueMatch = {

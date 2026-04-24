@@ -14,7 +14,7 @@ import {
   getEntity,
   getEntityNames,
   getRelation,
-  getResults,
+  getResultsPage,
   getSpaces,
 } from '../io/queries';
 import { OmitStrict } from '../types';
@@ -348,7 +348,7 @@ export class E {
     where: WhereCondition;
     first: number;
     skip: number;
-  }): Promise<{ results: SearchResult[]; rawRemoteCount: number }> {
+  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -358,11 +358,11 @@ export class E {
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
-    const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', where],
+    const page = await cache.fetchQuery({
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip],
       queryFn: ({ signal }) =>
         Effect.runPromise(
-          getResults(
+          getResultsPage(
             {
               limit: first,
               offset: skip,
@@ -374,6 +374,7 @@ export class E {
           )
         ),
     });
+    const remoteEntities = page.results;
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
@@ -444,7 +445,7 @@ export class E {
       })
       .filter(e => e.spaces.length > 0);
 
-    return { results, rawRemoteCount: remoteEntities.length };
+    return { results, rawCount: page.rawCount, total: page.total };
   }
 }
 
