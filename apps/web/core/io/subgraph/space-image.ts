@@ -1,6 +1,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE, ROOT_SPACE_IMAGE } from '~/core/constants';
 
 export interface SpaceImageValueNode {
   propertyId: string;
@@ -20,7 +20,9 @@ export const AVATAR_PROPERTY_ID = toHex(ContentIds.AVATAR_PROPERTY);
 export const COVER_PROPERTY_ID = toHex(SystemIds.COVER_PROPERTY);
 export const IMAGE_URL_PROPERTY_ID = toHex(SystemIds.IMAGE_URL_PROPERTY);
 
-export function resolveSpaceImage(relations: SpaceImageRelationNode[]): string {
+export function resolveSpaceImage(relations: SpaceImageRelationNode[], spaceId?: string): string {
+  if (spaceId === ROOT_SPACE) return ROOT_SPACE_IMAGE;
+
   const avatar = relations.find(r => r.typeId === AVATAR_PROPERTY_ID);
   const avatarUrl = avatar?.toEntity?.valuesList.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID)?.text;
 
