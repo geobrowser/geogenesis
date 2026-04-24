@@ -173,7 +173,7 @@ export const OnboardingDialog = () => {
   return (
     <Root open={isOnboardingVisible}>
       <AnimatePresence mode="wait">
-        <Portal>
+        <Portal key="onboarding-portal">
           <MotionOverlay
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.2 }}
