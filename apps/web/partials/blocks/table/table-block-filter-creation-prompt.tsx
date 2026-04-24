@@ -17,7 +17,7 @@ import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { entityTypesMatchFilter, searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
+import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -1218,10 +1218,11 @@ function TableBlockEntityFilterInput({
     [searchResults, filterByTypes, restrictSearchToTypes]
   );
 
+  const filterByTypesKey = filterByTypes?.slice().sort().join(',') ?? '';
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
   React.useEffect(() => {
     setEntityVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [query]);
+  }, [query, filterByTypesKey]);
 
   const visibleEntityRows = React.useMemo(
     () => rowsToRender.slice(0, entityVisibleCount),
