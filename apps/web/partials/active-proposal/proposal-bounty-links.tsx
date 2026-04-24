@@ -500,7 +500,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
               'right-0 top-0'
             )}
           >
-            <div className="flex items-center justify-between border-b border-grey-02 px-4 py-3">
+            <div className="flex min-h-[60px] items-center justify-between border-b border-grey-02 px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="text-purple">
                   <Gem color="purple" />
@@ -509,7 +509,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isAuthor && showSave && (
-                  <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount} className="!min-h-8">
+                  <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccount}>
                     <Pending isPending={isSaving}>Save changes</Pending>
                   </Button>
                 )}
@@ -545,13 +545,7 @@ export function ProposalBountyLinks({ daoSpaceId, proposalId, proposalName, auth
                     ) : (
                       <div className="flex flex-col divide-y divide-grey-02">
                         {draftBounties.map(b => (
-                          <BountyCard
-                            key={b.id}
-                            bounty={b}
-                            isSelected
-                            onToggle={toggleDraft}
-                            onRemove={toggleDraft}
-                          />
+                          <BountyCard key={b.id} bounty={b} isSelected onToggle={toggleDraft} />
                         ))}
                       </div>
                     )}
