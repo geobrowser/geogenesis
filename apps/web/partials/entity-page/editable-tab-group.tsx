@@ -188,32 +188,36 @@ export function EditableTabGroup({
   const handleDeleteTab = (tab: EditableTab) => {
     const tabEntityId = tab.entityId;
 
-    // 1. Gather every value and relation attached to the tab entity (both directions).
-    const tabValues = getValues({ selector: v => v.entity.id === tabEntityId });
-    const tabRelations = getRelations({
-      selector: r => r.fromEntity.id === tabEntityId || r.toEntity.id === tabEntityId,
+    // Mirrors the deleteEntityFromSource pattern in entity-to-space-dialog.tsx — all selectors
+    // scoped to the current spaceId so we don't reach into copies of the tab entity in other spaces.
+    const tabValues = getValues({
+      selector: v => v.entity.id === tabEntityId && v.spaceId === spaceId,
+    });
+    const outgoingRelations = getRelations({
+      selector: r => r.fromEntity.id === tabEntityId && r.spaceId === spaceId,
     });
 
-    // 2. Find block entities the tab owns via BLOCKS relations.
+    // Find block entities the tab owns via BLOCKS relations in this space.
     const blockIds = [
-      ...new Set(
-        tabRelations.filter(r => r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS).map(r => r.toEntity.id)
-      ),
+      ...new Set(outgoingRelations.filter(r => r.type.id === SystemIds.BLOCKS).map(r => r.toEntity.id)),
     ];
 
-    // A block is orphaned once the tab's BLOCKS relations are removed and nothing else points to it.
+    // A block is orphaned once the tab's BLOCKS relation (in this space) is removed and nothing else points to it.
     const orphanedBlockIds = blockIds.filter(blockId => {
       const remainingRefs = getRelations({
         selector: r =>
-          r.toEntity.id === blockId && !(r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS),
+          r.toEntity.id === blockId &&
+          !(r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId),
       });
       return remainingRefs.length === 0;
     });
 
-    // 3. Collect relation/value objects for orphan blocks so they get cleaned up too.
     const relationIds = new Set<string>();
-    const allRelationsToDelete: typeof tabRelations = [];
-    for (const r of [...tabRelations, tab.relation]) {
+    const allRelationsToDelete: typeof outgoingRelations = [];
+    for (const r of [
+      ...outgoingRelations,
+      ...getRelations({ selector: r => r.toEntity.id === tabEntityId && r.spaceId === spaceId }),
+    ]) {
       if (!relationIds.has(r.id)) {
         relationIds.add(r.id);
         allRelationsToDelete.push(r);
@@ -233,7 +237,7 @@ export function EditableTabGroup({
       }
     }
 
-    // 4. Batch the deletes so the UI only flashes once.
+    // Batch the deletes so the UI only flashes once.
     storage.values.deleteMany(allValuesToDelete);
     storage.relations.deleteMany(allRelationsToDelete);
 
@@ -385,14 +389,26 @@ function SortableTab({
     }
   };
 
-  const openPopover = () => {
-    cancelClose();
+  // Align 'start' when the trigger is in the left half of the viewport, 'end' otherwise.
+  const updateAlign = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       const triggerCenter = rect.left + rect.width / 2;
       setAlign(triggerCenter < window.innerWidth / 2 ? 'start' : 'end');
     }
+  };
+
+  const openPopover = () => {
+    cancelClose();
+    updateAlign();
     setIsPopoverOpen(true);
+  };
+
+  // Also recompute alignment for non-hover opens (click, keyboard) that go through Radix's
+  // onOpenChange instead of our hover handler.
+  const handleOpenChange = (open: boolean) => {
+    if (open) updateAlign();
+    setIsPopoverOpen(open);
   };
 
   const scheduleClose = () => {
@@ -453,7 +469,7 @@ function SortableTab({
             isPopoverOpen ? 'opacity-100' : 'opacity-0 group-hover/tab:opacity-100'
           )}
         >
-          <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+          <Popover.Root open={isPopoverOpen} onOpenChange={handleOpenChange}>
             <Popover.Trigger asChild>
               <button
                 ref={triggerRef}
