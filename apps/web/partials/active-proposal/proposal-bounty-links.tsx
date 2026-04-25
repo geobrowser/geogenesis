@@ -609,7 +609,7 @@ export function ProposalBountyHeadButton() {
           <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
         </button>
       )}
-      <span aria-hidden className="h-6 w-px shrink-0 self-center bg-grey-02" />
+      <span aria-hidden className="h-6 w-px shrink-0 self-center bg-grey-02 last:hidden" />
     </>
   );
 }

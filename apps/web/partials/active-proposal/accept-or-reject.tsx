@@ -114,6 +114,5 @@ export function AcceptOrReject({
     );
   }
 
-  // Janky placeholder for button height
-  return <div className="h-9 w-1" />;
+  return null;
 }
