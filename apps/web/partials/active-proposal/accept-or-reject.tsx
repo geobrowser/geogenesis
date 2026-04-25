@@ -61,12 +61,12 @@ export function AcceptOrReject({
 
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+      return <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">Accepted</div>;
     }
 
     if (status === 'REJECTED') {
       const rejectedBadge = (
-        <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>
+        <div className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01">Rejected</div>
       );
       if (proposalType === 'ADD_EDIT') {
         return (
@@ -80,40 +80,36 @@ export function AcceptOrReject({
     }
 
     if (canExecute && smartAccount) {
-      return <Execute spaceId={spaceId} proposalId={proposalId} />;
+      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     }
 
     if (canExecute) {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
+      return <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">Pending execution</div>;
     }
 
-    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
+    return <div className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01">Rejected</div>;
   }
 
   if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || hasApproved) {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
+      return <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">You accepted</div>;
     }
 
-    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
+    return <div className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01">You rejected</div>;
   }
 
   if (!isProposalEnded && smartAccount && isEditor) {
     return (
-      <div className="relative">
-        <div className="inline-flex items-center gap-4">
-          <Button onClick={onReject} variant="error" disabled={voteStatus !== 'idle'}>
-            <Pending isPending={isPendingRejection}>Reject</Pending>
-          </Button>
-          <span>or</span>
-          <Button onClick={onApprove} variant="success" disabled={voteStatus !== 'idle'}>
-            <Pending isPending={isPendingApproval}>Accept</Pending>
-          </Button>
-        </div>
+      <div className="inline-flex items-center gap-2">
+        <Button onClick={onReject} variant="error" small disabled={voteStatus !== 'idle'}>
+          <Pending isPending={isPendingRejection}>Reject</Pending>
+        </Button>
+        <Button onClick={onApprove} variant="success" small disabled={voteStatus !== 'idle'}>
+          <Pending isPending={isPendingApproval}>Accept</Pending>
+        </Button>
       </div>
     );
   }
 
-  // Janky placeholder for button height
-  return <div className="h-9 w-1" />;
+  return <div className="h-6 w-1" />;
 }

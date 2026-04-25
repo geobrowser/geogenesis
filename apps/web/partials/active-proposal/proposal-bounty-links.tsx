@@ -578,35 +578,39 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 export function ProposalBountyHeadButton() {
   const ctx = useBounties();
   if (!ctx || !ctx.showBounties) return null;
-  const { hasUnsaved, isSaving, smartAccountReady, n, onSave, isPanelOpen, togglePanel } = ctx;
+  const { isAuthor, hasUnsaved, isSaving, smartAccountReady, n, onSave, isPanelOpen, togglePanel } = ctx;
 
-  if (hasUnsaved) {
-    return (
-      <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
-        <Pending isPending={isSaving}>
-          <span className="inline-flex items-center gap-1.5">
-            <Gem color="white" strokeColor="#3963FE" />
-            Save changes
-          </span>
-        </Pending>
-      </Button>
-    );
-  }
+  // Non-authors only see the pill when there are linked bounties to view.
+  if (!isAuthor && n === 0) return null;
 
   return (
-    <button
-      type="button"
-      onClick={togglePanel}
-      className={cx(
-        'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-        'border-grey-02 bg-white text-text hover:border-text'
+    <>
+      {hasUnsaved ? (
+        <Button variant="primary" small onClick={onSave} disabled={isSaving || !smartAccountReady}>
+          <Pending isPending={isSaving}>
+            <span className="inline-flex items-center gap-1.5">
+              <Gem color="white" strokeColor="#3963FE" />
+              Save changes
+            </span>
+          </Pending>
+        </Button>
+      ) : (
+        <button
+          type="button"
+          onClick={togglePanel}
+          className={cx(
+            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
+            'border-grey-02 bg-white hover:border-text'
+          )}
+          title="Bounties"
+          aria-expanded={isPanelOpen}
+        >
+          <Gem color="purple" />
+          <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
+        </button>
       )}
-      title="Bounties"
-      aria-expanded={isPanelOpen}
-    >
-      <Gem color="purple" />
-      <span>{n === 0 ? 'Link to bounty' : String(n)}</span>
-    </button>
+      <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02" />
+    </>
   );
 }
 
