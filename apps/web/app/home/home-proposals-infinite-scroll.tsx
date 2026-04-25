@@ -48,35 +48,6 @@ export function HomeProposalsInfiniteScroll({
       isLoadingRef.current = true;
       setIsLoading(true);
 
-      // Calling a Next.js server action triggers an RSC refetch for the current
-      // route, which reconciles the proposal cards above the sentinel and breaks
-      // the browser's scroll anchor — snapping the viewport up to the top of
-      // the list. Capture the scroll position and pin it across the load:
-      // a single rAF isn't enough because the RSC payload commits asynchronously
-      // and images on the new cards can settle 100s of ms later.
-      const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
-      const pinScroll = () => {
-        if (typeof window === 'undefined') return () => {};
-        let stopped = false;
-        const restore = () => {
-          if (stopped) return;
-          if (Math.abs(window.scrollY - scrollY) > 1) {
-            window.scrollTo(0, scrollY);
-          }
-        };
-        const interval = setInterval(restore, 16);
-        const timeout = setTimeout(() => {
-          stopped = true;
-          clearInterval(interval);
-        }, 800);
-        return () => {
-          stopped = true;
-          clearInterval(interval);
-          clearTimeout(timeout);
-        };
-      };
-      const stopPinning = pinScroll();
-
       try {
         const [node, next, more] = await loadMoreHomeProposalsAction(
           connectedSpaceId,
@@ -85,10 +56,7 @@ export function HomeProposalsInfiniteScroll({
           currentPageRef.current,
           governanceFilters
         );
-        if (abortController?.signal.aborted) {
-          stopPinning();
-          return;
-        }
+        if (abortController?.signal.aborted) return;
         setLoadMoreNodes(prev => [...prev, node]);
         currentPageRef.current = next;
         hasMoreRef.current = more;
