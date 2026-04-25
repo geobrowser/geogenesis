@@ -21,6 +21,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
@@ -91,7 +92,11 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
+            {profile?.avatarUrl ? (
+              <FallbackImage value={profile.avatarUrl} sizes="28px" className="object-cover" />
+            ) : (
+              <Avatar value={address} size={28} />
+            )}
           </div>
         }
         open={open}
