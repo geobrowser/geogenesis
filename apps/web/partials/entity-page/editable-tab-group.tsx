@@ -424,8 +424,16 @@ function SortableTab({
   };
 
   // Clear any pending close timeout if the tab unmounts (e.g., after a route change)
-  // so it doesn't try to setState on an unmounted component.
-  useEffect(() => () => cancelClose(), []);
+  // so it doesn't try to setState on an unmounted component. Inlined rather than calling
+  // cancelClose to keep the effect's dep array honest with react-hooks/exhaustive-deps.
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Suppress the click that fires on pointer-up after a drag, so reordering a tab
   // doesn't navigate. Mirrors the justDragged pattern in table-block-dnd-items.tsx.
