@@ -46,7 +46,7 @@ const buttonClassNames = (className = '') =>
         },
         small: {
           false: 'gap-2 px-3 py-2 text-button text-[1.0625rem] leading-4.5',
-          true: 'h-6 gap-1.5 px-1.5 text-metadata! leading-none text-text',
+          true: 'h-6 gap-1.5 px-1.5 text-metadata! leading-none',
         },
         disabled: {
           true: 'cursor-pointer',
