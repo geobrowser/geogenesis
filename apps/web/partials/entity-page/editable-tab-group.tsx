@@ -364,6 +364,9 @@ function SortableTab({
 }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.relation.id,
+    // Snappier easing than dnd-kit's default 250ms cubic — neighbors settle into their new slot
+    // much closer to the pointer so the reorder feels tighter.
+    transition: { duration: 150, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
   });
 
   const style = {
