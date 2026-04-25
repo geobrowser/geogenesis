@@ -15,7 +15,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -26,16 +26,13 @@ import { useTabId } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-
-// Page entity type — new tabs are created as entities of this type.
-const PAGE_TYPE_ID = '480e3fc267f3499385fbacdf4ddeaa6b';
+import { NavUtils } from '~/core/utils/utils';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Menu } from '~/design-system/icons/menu';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { NavUtils } from '~/core/utils/utils';
 
 export type SystemTab = {
   label: string;
@@ -176,9 +173,9 @@ export function EditableTabGroup({
         name: null,
       },
       toEntity: {
-        id: PAGE_TYPE_ID,
+        id: SystemIds.PAGE_TYPE,
         name: 'Page',
-        value: PAGE_TYPE_ID,
+        value: SystemIds.PAGE_TYPE,
       },
     });
 
@@ -403,6 +400,29 @@ function SortableTab({
     closeTimeoutRef.current = setTimeout(() => setIsPopoverOpen(false), 200);
   };
 
+  // Clear any pending close timeout if the tab unmounts (e.g., after a route change)
+  // so it doesn't try to setState on an unmounted component.
+  useEffect(() => () => cancelClose(), []);
+
+  // Suppress the click that fires on pointer-up after a drag, so reordering a tab
+  // doesn't navigate. Mirrors the justDragged pattern in table-block-dnd-items.tsx.
+  const [justDragged, setJustDragged] = useState(false);
+  useEffect(() => {
+    if (isDragging) {
+      setJustDragged(true);
+    } else if (justDragged) {
+      const t = setTimeout(() => setJustDragged(false), 200);
+      return () => clearTimeout(t);
+    }
+  }, [isDragging, justDragged]);
+
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (justDragged) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   // tab.name already includes the live name via EntityTabs' liveNameMap, so no per-tab subscription needed here.
   const displayName = tab.name;
 
@@ -415,6 +435,7 @@ function SortableTab({
           className={cx(tabStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
           href={tab.href}
           prefetch
+          onClick={handleLinkClick}
           {...attributes}
           {...listeners}
         >
