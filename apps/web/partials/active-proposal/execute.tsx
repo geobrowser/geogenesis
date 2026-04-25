@@ -45,11 +45,7 @@ export function Execute({ proposalId, spaceId, variant = 'default' }: Props) {
   }
 
   if (isSuccess) {
-    return (
-      <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">
-        Executed
-      </div>
-    );
+    return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Executed</div>;
   }
 
   const ButtonComponent = variant === 'small' ? SmallButton : Button;

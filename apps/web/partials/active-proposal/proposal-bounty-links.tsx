@@ -586,7 +586,7 @@ export function ProposalBountyHeadButton() {
   return (
     <>
       {hasUnsaved ? (
-        <Button variant="primary" small onClick={onSave} disabled={isSaving || !smartAccountReady}>
+        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
           <Pending isPending={isSaving}>
             <span className="inline-flex items-center gap-1.5">
               <Gem color="white" strokeColor="#3963FE" />
@@ -599,8 +599,8 @@ export function ProposalBountyHeadButton() {
           type="button"
           onClick={togglePanel}
           className={cx(
-            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
-            'border-grey-02 bg-white hover:border-text'
+            'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+            'border-grey-02 bg-white text-text hover:border-text'
           )}
           title="Bounties"
           aria-expanded={isPanelOpen}
@@ -609,7 +609,7 @@ export function ProposalBountyHeadButton() {
           <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
         </button>
       )}
-      <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02" />
+      <span aria-hidden className="h-6 w-px shrink-0 self-center bg-grey-02" />
     </>
   );
 }
