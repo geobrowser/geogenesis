@@ -271,6 +271,7 @@ export function EditableTabGroup({
         autoScroll={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
       >
         <div
           className={cx(
