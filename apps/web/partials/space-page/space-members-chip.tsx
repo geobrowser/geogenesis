@@ -2,6 +2,7 @@ import pluralize from 'pluralize';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
+import { FallbackImage } from '~/design-system/fallback-image';
 
 import { getFirstThreeMembersForSpace } from './get-first-three-members-for-space';
 
@@ -18,7 +19,11 @@ export async function SpaceMembersChip({ spaceId }: Props) {
       <AvatarGroup>
         {firstThreeMembers.map(editor => (
           <AvatarGroup.Item key={editor.id}>
-            <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.address} />
+            {editor.avatarUrl ? (
+              <FallbackImage value={editor.avatarUrl} sizes="12px" className="object-cover" priority />
+            ) : (
+              <Avatar size={12} value={editor.address} />
+            )}
           </AvatarGroup.Item>
         ))}
       </AvatarGroup>
