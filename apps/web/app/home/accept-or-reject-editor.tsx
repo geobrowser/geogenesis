@@ -104,10 +104,10 @@ export function AcceptOrRejectEditor({
     return (
       <div className="relative">
         <div className="flex items-center gap-2">
-          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingRejection}>Reject</Pending>
           </SmallButton>
-          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
+          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingApproval}>Approve</Pending>
           </SmallButton>
         </div>

@@ -118,11 +118,11 @@ export function AcceptOrReject({
     return (
       <div className="relative">
         <div className="inline-flex items-center gap-4">
-          <Button onClick={onReject} variant="error" disabled={voteStatus !== 'idle'}>
+          <Button onClick={onReject} variant="error" disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingRejection}>Reject</Pending>
           </Button>
           <span>or</span>
-          <Button onClick={onApprove} variant="success" disabled={voteStatus !== 'idle'}>
+          <Button onClick={onApprove} variant="success" disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingApproval}>Accept</Pending>
           </Button>
         </div>

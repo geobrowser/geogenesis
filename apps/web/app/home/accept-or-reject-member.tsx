@@ -91,17 +91,14 @@ export function AcceptOrRejectMember({
     removeOptimisticVote(proposalId);
   };
 
-  const onApprove = () => {
-    setSelectedVote('ACCEPT');
+  const castVote = (choice: 'ACCEPT' | 'REJECT') => {
+    setSelectedVote(choice);
     addOptimisticVote(proposalId);
-    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
-  const onReject = () => {
-    setSelectedVote('REJECT');
-    addOptimisticVote(proposalId);
-    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
-  };
+  const onApprove = () => castVote('ACCEPT');
+  const onReject = () => castVote('REJECT');
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
@@ -162,7 +159,7 @@ export function AcceptOrRejectMember({
         <SmallButton
           variant="secondary"
           onClick={() => {
-            if (selectedVote) vote(selectedVote);
+            if (selectedVote) castVote(selectedVote);
           }}
         >
           Retry

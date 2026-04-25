@@ -122,7 +122,7 @@ export async function GovernanceProposalsList({
 
   return {
     node: (
-      <div className="flex flex-col divide-y divide-grey-01">
+      <div className="flex flex-col">
         {proposals.map(p => {
           const displayProfile = p.targetProfile ?? p.createdBy;
           const proposalTitle = p.targetProfile

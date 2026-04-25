@@ -253,7 +253,7 @@ function GovernanceFilterMenu({
             key={item.href}
             href={item.href}
             onClick={() => {
-              if (item.label !== label) setPendingLabel(item.label);
+              if (item.label !== displayLabel) setPendingLabel(item.label);
               setOpen(false);
             }}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
