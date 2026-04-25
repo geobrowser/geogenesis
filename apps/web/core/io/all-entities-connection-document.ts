@@ -2,10 +2,9 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
 
 /**
- * Mirrors the former `AllEntities` list query, but uses `entitiesConnection` so the API
- * does not reject `offset` values above 1000 (the `entities` field caps offset at 1000).
- * Callers must keep `first` (the `$limit` variable) at most 1000 per request; see
- * `getAllEntities`, which pages automatically for larger windows.
+ * Mirrors the former `AllEntities` list query, but uses `entitiesConnection`.
+ * The API caps `first` ($limit) at 1000 and rejects `offset` above 1000; see `getAllEntities`,
+ * which chunks `first` and stops paging once `offset` would exceed that cap.
  *
  * Kept as a `parse()` document so it does not require updating the generated `gql.ts` map.
  */

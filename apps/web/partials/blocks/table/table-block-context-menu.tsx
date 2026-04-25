@@ -4,13 +4,9 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
-
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { NavUtils } from '~/core/utils/utils';
 
-import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
@@ -19,47 +15,22 @@ import { Relation } from '~/design-system/icons/relation';
 import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
 
-import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
-
-import { TableBlockEditPropertiesPanel } from './table-block-edit-properties-panel';
-import { editingPropertiesAtom } from '~/atoms';
-
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, entityId, relationId } = useDataBlock();
-  const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
-  const [isEditingProperties, setIsEditingProperties] = useAtom(editingPropertiesAtom);
-
-  const isEditing = useUserIsEditing(spaceId);
-
-  React.useEffect(() => {
-    if (!isEditing) {
-      setIsEditingProperties(false);
-    }
-  }, [isEditing, setIsEditingProperties]);
+  const { spaceId, entityId, relationId } = useDataBlockInstance();
 
   const onCopyBlockId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
-      setIsEditingDataSource(false);
-      setIsEditingProperties(false);
-    } catch (err) {
+    } catch {
       console.error('Failed to copy table block entity ID for: ', entityId);
     }
   };
 
-  const onOpenChange = () => {
-    if (isMenuOpen) {
-      setIsMenuOpen(false);
-      setIsEditingDataSource(false);
-      setIsEditingProperties(false);
-    } else {
-      setIsMenuOpen(true);
-    }
+  const onOpenChange = (open: boolean) => {
+    setIsMenuOpen(open);
   };
-
-  const isInitialState = !isEditingDataSource && !isEditingProperties;
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
@@ -70,49 +41,30 @@ export function TableBlockContextMenu() {
           className="z-1001 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
           align="start"
         >
-          {isInitialState && (
-            <>
-              {isEditing && (
-                <>
-                  <MenuItem onClick={() => setIsEditingDataSource(true)}>
-                    <span>Change data source</span>
-                    <ChevronRight />
-                  </MenuItem>
-                  <MenuItem onClick={() => setIsEditingProperties(true)}>
-                    <TableBlockEditPropertiesPanel />
-                    <span>Edit properties</span>
-                    <ChevronRight />
-                  </MenuItem>
-                </>
-              )}
-              <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>Open fullscreen</span>
-                  <TableView />
-                </div>
-              </MenuItem>
-              <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>View config</span>
-                  <Cog />
-                </div>
-              </MenuItem>
-              <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>View block relation</span>
-                  <Relation />
-                </div>
-              </MenuItem>
-              <MenuItem onClick={onCopyBlockId}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>Copy block ID</span>
-                  <Copy />
-                </div>
-              </MenuItem>
-            </>
-          )}
-          {isEditingDataSource && <DataBlockSourceMenu onBack={() => setIsEditingDataSource(false)} />}
-          <TableBlockEditPropertiesPanel />
+          <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span>Open fullscreen</span>
+              <TableView />
+            </div>
+          </MenuItem>
+          <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span>View config</span>
+              <Cog />
+            </div>
+          </MenuItem>
+          <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span>View block relation</span>
+              <Relation />
+            </div>
+          </MenuItem>
+          <MenuItem onClick={onCopyBlockId}>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span>Copy block ID</span>
+              <Copy />
+            </div>
+          </MenuItem>
         </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>

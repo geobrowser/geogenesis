@@ -95,6 +95,9 @@ type GetAllEntitiesOptions = {
 /** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
 const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
+/** API rejects `offset` above this on `entitiesConnection` (e.g. offset 2000 → BAD_USER_INPUT). */
+const ENTITIES_CONNECTION_MAX_OFFSET = 1000;
+
 function decodeEntitiesConnectionNodes(data: { entitiesConnection?: { nodes?: unknown[] } | null }): Entity[] {
   return (
     data.entitiesConnection?.nodes
@@ -146,6 +149,10 @@ export function getAllEntities(
 
     const startOffset = offset ?? 0;
 
+    if (startOffset > ENTITIES_CONNECTION_MAX_OFFSET) {
+      return [];
+    }
+
     if (limit !== undefined) {
       if (limit === 0) {
         return [];
@@ -154,6 +161,9 @@ export function getAllEntities(
       let nextOffset = startOffset;
       let remaining = limit;
       while (remaining > 0) {
+        if (nextOffset > ENTITIES_CONNECTION_MAX_OFFSET) {
+          break;
+        }
         const chunk = Math.min(ENTITIES_CONNECTION_MAX_FIRST, remaining);
         const page = yield* fetchPage(chunk, nextOffset);
         collected.push(...page);
@@ -169,6 +179,9 @@ export function getAllEntities(
     const collected: Entity[] = [];
     let nextOffset = startOffset;
     while (true) {
+      if (nextOffset > ENTITIES_CONNECTION_MAX_OFFSET) {
+        break;
+      }
       const page = yield* fetchPage(ENTITIES_CONNECTION_MAX_FIRST, nextOffset);
       collected.push(...page);
       if (page.length < ENTITIES_CONNECTION_MAX_FIRST) {

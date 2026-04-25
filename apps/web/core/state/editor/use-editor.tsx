@@ -15,6 +15,7 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
@@ -499,9 +500,42 @@ export function useEditorStore() {
             break;
           }
           case SystemIds.DATA_BLOCK: {
-            // @TODO(performance): upsertMany
-            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
+            const initialSourceType =
+              node.attrs?.initialDataSource === 'QUERY' ? ('GEO' as const) : ('COLLECTION' as const);
+
+            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
               storage.relations.set(relation);
+            }
+
+            if (initialSourceType === 'SPACES') {
+              const defaultSpaceFilter = [
+                {
+                  columnId: SystemIds.SPACE_FILTER,
+                  columnName: 'Space',
+                  valueType: 'RELATION' as const,
+                  value: spaceId,
+                  valueName: null as string | null,
+                },
+              ];
+
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: node.id,
+                  propertyId: SystemIds.FILTER,
+                  spaceId,
+                }),
+                spaceId,
+                entity: {
+                  id: node.id,
+                  name: '',
+                },
+                property: {
+                  id: SystemIds.FILTER,
+                  name: 'Filter',
+                  dataType: 'TEXT',
+                },
+                value: toGeoFilterState(defaultSpaceFilter, 'AND'),
+              });
             }
 
             break;
@@ -523,6 +557,58 @@ export function useEditorStore() {
         blockRelations: blockRelations,
         entityPageId: activeEntityId,
       });
+
+      // New collection data blocks: persist Types + Description as shown columns (with Name)
+      for (const node of addedBlocks) {
+        if (node.type !== 'tableNode') continue;
+        if (node.attrs?.initialDataSource === 'QUERY') continue;
+
+        const blockRel = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            r.type.id === SystemIds.BLOCKS &&
+            ID.equals(r.toEntity.id, node.id) &&
+            r.spaceId === spaceId,
+        })[0];
+
+        if (!blockRel?.entityId) continue;
+
+        const fromId = blockRel.entityId;
+        const existingShown = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+            ID.equals(r.fromEntity.id, fromId) &&
+            r.spaceId === spaceId,
+        });
+
+        const addShownProperty = (propertyId: string, propertyName: string) => {
+          if (existingShown.some(r => ID.equals(r.toEntity.id, propertyId))) return;
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: IdUtils.generate(),
+            spaceId,
+            position: Position.generate(),
+            renderableType: 'RELATION',
+            type: {
+              id: SystemIds.PROPERTIES,
+              name: 'Properties',
+            },
+            fromEntity: {
+              id: fromId,
+              name: null,
+            },
+            toEntity: {
+              id: propertyId,
+              name: propertyName,
+              value: propertyId,
+            },
+          });
+        };
+
+        addShownProperty(SystemIds.TYPES_PROPERTY, 'Types');
+        addShownProperty(SystemIds.DESCRIPTION_PROPERTY, 'Description');
+      }
 
       /**
        * After creating/deleting any blocks and relations we set any updated

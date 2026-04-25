@@ -17,6 +17,8 @@ export const SORTABLE_DATA_TYPES: readonly DataType[] = [
   'TIME',
   'DATETIME',
   'POINT',
+  /** Types, Cover, and other entity-reference columns use server-side relation ordering. */
+  'RELATION',
 ];
 
 export function nextSortDirection(current: ColumnSortState, columnId: string): ColumnSortState {

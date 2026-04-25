@@ -13,6 +13,7 @@ import Image from 'next/legacy/image';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { ID } from '~/core/id';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
@@ -285,7 +286,7 @@ type ToggleColumnProps = {
 
 function ToggleColumn({ column }: ToggleColumnProps) {
   const { toggleProperty: setColumn, shownColumnIds } = useView();
-  const isShown = shownColumnIds.includes(column.id);
+  const isShown = shownColumnIds.some(sid => ID.equals(sid, column.id));
 
   const onToggleColumn = async () => {
     setColumn(column);

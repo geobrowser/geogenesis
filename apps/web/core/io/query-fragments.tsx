@@ -6,6 +6,8 @@ export const entityFragment = graphql(/* GraphQL */ `
     name
     description
     spaceIds
+    createdAt
+    createdAtBlock
     updatedAt
 
     types {

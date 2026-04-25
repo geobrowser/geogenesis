@@ -168,19 +168,20 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     }
 
     if (newSource.type === 'SPACES') {
-      // Remove any existing source-injected filters before adding the new space filter.
       setFilterState(
         produce(filterState, draft => {
           const next = draft.filter(
             f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY
           );
-          next.push({
-            columnId: SystemIds.SPACE_FILTER,
-            columnName: 'Space',
-            valueType: 'RELATION',
-            value: newSource.value[0],
-            valueName: null,
-          });
+          for (const spaceId of [...new Set(newSource.value)]) {
+            next.push({
+              columnId: SystemIds.SPACE_FILTER,
+              columnName: 'Space',
+              valueType: 'RELATION',
+              value: spaceId,
+              valueName: null,
+            });
+          }
           return next;
         })
       );

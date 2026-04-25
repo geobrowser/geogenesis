@@ -72,13 +72,17 @@ export function MenuItem({ className = '', active = false, children, href, ...re
     return (
       <Link
         href={href}
-        className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
+        className={cx(
+          'group relative flex w-full items-center px-3 py-2.5 text-button text-text',
+          active ? 'bg-grey-01' : 'bg-white',
+          className
+        )}
         {...rest}
       >
         <div
           className={cx(
-            'absolute inset-1 z-0 rounded',
-            active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+            'pointer-events-none absolute inset-1 z-0 rounded',
+            active ? 'bg-transparent' : 'transition-colors duration-75 group-hover:bg-grey-01'
           )}
         />
         <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
@@ -88,13 +92,17 @@ export function MenuItem({ className = '', active = false, children, href, ...re
 
   return (
     <button
-      className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
+      className={cx(
+        'group relative flex w-full items-center px-3 py-[10px] text-button text-text',
+        active ? 'bg-grey-01' : 'bg-white',
+        className
+      )}
       {...rest}
     >
       <div
         className={cx(
-          'absolute inset-1 z-0 rounded',
-          active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+          'pointer-events-none absolute inset-1 z-0 rounded',
+          active ? 'bg-transparent' : 'transition-colors duration-75 group-hover:bg-grey-01'
         )}
       />
       <div className="relative z-10 flex w-full items-center gap-2">{children}</div>

@@ -86,7 +86,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
   } = useView();
 
   const { sortState, setSortState } = useSort(options?.canEdit);
@@ -298,7 +301,12 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
     [rows, sortState]
   );
-  const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
+  const properties = React.useMemo(() => {
+    if (!propertiesSchema) return [];
+    return shownColumnIds
+      .map(id => propertiesSchema[id])
+      .filter((p): p is Property => Boolean(p));
+  }, [propertiesSchema, shownColumnIds]);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -372,7 +380,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
 
     // From useSource
     source,
