@@ -188,8 +188,9 @@ export function EditableTabGroup({
   const handleDeleteTab = (tab: EditableTab) => {
     const tabEntityId = tab.entityId;
 
-    // Mirrors the deleteEntityFromSource pattern in entity-to-space-dialog.tsx — all selectors
-    // scoped to the current spaceId so we don't reach into copies of the tab entity in other spaces.
+    // Mirrors the deleteEntityFromSource pattern in entity-to-space-dialog.tsx: the tab entity's
+    // own values/relations are scoped to the current spaceId, while orphan checks and deletion for
+    // block entities intentionally use global selectors so we only remove blocks that are truly unused.
     const tabValues = getValues({
       selector: v => v.entity.id === tabEntityId && v.spaceId === spaceId,
     });
@@ -409,7 +410,11 @@ function SortableTab({
   // Also recompute alignment for non-hover opens (click, keyboard) that go through Radix's
   // onOpenChange instead of our hover handler.
   const handleOpenChange = (open: boolean) => {
-    if (open) updateAlign();
+    if (open) {
+      // Cancel any pending close so a stale mouseleave timeout can't snap the menu shut after open.
+      cancelClose();
+      updateAlign();
+    }
     setIsPopoverOpen(open);
   };
 
