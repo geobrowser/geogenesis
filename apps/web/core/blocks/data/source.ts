@@ -85,16 +85,18 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
+  // Prefer explicit All-of-Geo before query so stale QUERY relation + cleared space filters
+  // still resolve to GEO after switching scope.
+  if (sourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE) {
+    return {
+      type: 'GEO',
+    };
+  }
+
   if (sourceType === SystemIds.QUERY_DATA_SOURCE) {
     return {
       type: 'SPACES',
       value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
-    };
-  }
-
-  if (sourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE) {
-    return {
-      type: 'GEO',
     };
   }
 

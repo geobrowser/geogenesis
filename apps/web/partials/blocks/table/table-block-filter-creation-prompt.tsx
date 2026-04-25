@@ -12,6 +12,7 @@ import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { Filter } from '~/core/blocks/data/filters';
+import { ID } from '~/core/id';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -346,7 +347,7 @@ type PromptAction =
   | { type: 'close' }
   | { type: 'onOpenChange'; payload: { open: boolean } }
   | { type: 'selectColumn'; payload: { columnId: string } }
-  | { type: 'openWithColumn'; payload: { columnId: string } }
+  | { type: 'openWithColumn'; payload: { columnId: string; seedDraft?: FilterColumnDraft } }
   | {
       type: 'selectEntityValue' | 'selectSpaceValue';
       payload: { id: string; name: string | null };
@@ -433,7 +434,8 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
       const prevCol = state.selectedColumn;
       const nextCol = action.payload.columnId;
       const savedPrev = snapshotColumnDraft(state);
-      const loaded = state.columnDrafts[nextCol] ?? emptyColumnDraft();
+      const stored = state.columnDrafts[nextCol] ?? emptyColumnDraft();
+      const loaded = action.payload.seedDraft ?? stored;
       return {
         ...state,
         open: true,
@@ -635,11 +637,11 @@ function draftHasPending(
   columnId: string,
   options: (Filter & { columnName: string })[]
 ): boolean {
-  const selectedOption = options.find(o => o.columnId === columnId);
+  const selectedOption = options.find(o => ID.equals(o.columnId, columnId));
   if (selectedOption?.valueType === 'RELATION') {
     return draft.multiEntitySelections.length > 0;
   }
-  if (columnId === SystemIds.SPACE_FILTER) {
+  if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
     return draft.multiSpaceSelections.length > 0;
   }
   if (selectedOption?.valueType === 'TEXT') {
@@ -654,6 +656,38 @@ function hasPendingFilterSelections(state: PromptState, options: (Filter & { col
     const d = merged[columnId];
     return d != null && draftHasPending(d, columnId, options);
   });
+}
+
+/** When local column drafts are empty (e.g. after Done), rebuild chips from committed table filters. */
+function seedColumnDraftFromCommittedFilters(
+  columnId: string,
+  filters: Filter[],
+  options: (Filter & { columnName: string })[]
+): FilterColumnDraft {
+  const draft = emptyColumnDraft();
+  const selectedOption = options.find(o => ID.equals(o.columnId, columnId));
+  const matching = filters.filter(f => ID.equals(f.columnId, columnId));
+
+  if (selectedOption?.valueType === 'RELATION') {
+    for (const f of matching) {
+      draft.multiEntitySelections.push({
+        id: f.value,
+        name: f.valueName,
+      });
+    }
+  } else if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
+    for (const f of matching) {
+      draft.multiSpaceSelections.push({ id: f.value, name: f.valueName });
+    }
+  } else if (selectedOption?.valueType === 'TEXT') {
+    for (const f of matching) {
+      if (!draft.multiStringSelections.includes(f.value)) {
+        draft.multiStringSelections.push(f.value);
+      }
+    }
+  }
+
+  return draft;
 }
 
 function collectAllPendingFilters(
@@ -849,10 +883,24 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
     );
 
+    const stateRef = React.useRef(state);
+    stateRef.current = state;
+    const optionsRef = React.useRef(options);
+    optionsRef.current = options;
+    const filterStateRef = React.useRef(filterState);
+    filterStateRef.current = filterState;
+
     React.useImperativeHandle(ref, () => ({
       openWithColumn: (columnId: string) => {
         setQueryMode('ENTITIES');
-        dispatch({ type: 'openWithColumn', payload: { columnId } });
+        const s = stateRef.current;
+        const opts = optionsRef.current;
+        const fs = filterStateRef.current;
+        const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
+        const seedDraft = draftHasPending(stored, columnId, opts)
+          ? undefined
+          : seedColumnDraftFromCommittedFilters(columnId, fs, opts);
+        dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
       },
     }));
 

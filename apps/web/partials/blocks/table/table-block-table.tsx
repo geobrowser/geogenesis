@@ -264,7 +264,7 @@ export const TableBlockTable = ({
 
   const isEmpty = rows.length === 0;
 
-  if (isEmpty && isFetched && !isLoading) {
+  if (isEmpty && isFetched && !isLoading && source.type !== 'COLLECTION') {
     return (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">

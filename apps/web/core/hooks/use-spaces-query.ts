@@ -14,7 +14,12 @@ import { useSyncEngine } from '../sync/use-sync-engine';
 
 const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space type entities
 
-export function useSpacesQuery(enabled = true) {
+export type UseSpacesQueryOptions = {
+  matchLimit?: number;
+};
+
+export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) {
+  const matchLimit = options?.matchLimit ?? 10;
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
@@ -22,7 +27,7 @@ export function useSpacesQuery(enabled = true) {
   const cache = useQueryClient();
 
   const { data: fuzzyMatchedSpaces = [], isLoading } = useQuery({
-    queryKey: ['spaces-by-name', debouncedQuery],
+    queryKey: ['spaces-by-name', debouncedQuery, matchLimit],
     queryFn: async () => {
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
@@ -42,7 +47,7 @@ export function useSpacesQuery(enabled = true) {
                   };
                 }),
               },
-              first: 10,
+              first: matchLimit,
               skip: 0,
             }),
           catch: error => {

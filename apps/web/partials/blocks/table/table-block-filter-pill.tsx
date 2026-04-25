@@ -6,6 +6,7 @@ import { Filter, FilterMode } from '~/core/blocks/data/filters';
 
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { Plus } from '~/design-system/icons/plus';
 import { colors } from '~/design-system/theme/colors';
 
 function PublishedFilterIconFilled() {
@@ -78,9 +79,9 @@ export function TableBlockFilterGroupPill({
   const hasAnyDeletable = isEditing || hasAnyLocalFilter;
 
   return (
-    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pr-1 pl-2 text-metadata">
+    <div className="flex h-6 min-w-0 max-w-full items-center gap-2 rounded bg-divider py-1 pl-2 pr-0.5 text-metadata">
       <PublishedFilterIconFilled />
-      <div className="flex items-center gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         <span className="whitespace-nowrap">
           {onAddSimilar ? (
             <button type="button" className="transition-colors hover:text-ctaPrimary" onClick={onAddSimilar}>
@@ -122,6 +123,22 @@ export function TableBlockFilterGroupPill({
           })}
         </div>
       </div>
+      {isEditing && onAddSimilar && (
+        <button
+          type="button"
+          aria-label={`Add another ${group.columnName ?? 'filter'} value`}
+          title="Add filter value"
+          onClick={e => {
+            e.stopPropagation();
+            onAddSimilar();
+          }}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-grey-04 transition hover:bg-white/90 hover:text-text"
+        >
+          <span className="inline-flex h-3 w-3 items-center justify-center [&_svg]:h-full [&_svg]:w-full [&_svg]:max-h-3 [&_svg]:max-w-3">
+            <Plus color="grey-04" />
+          </span>
+        </button>
+      )}
     </div>
   );
 }

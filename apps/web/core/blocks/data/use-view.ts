@@ -1,4 +1,7 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { arrayMove } from '@dnd-kit/sortable';
+
+import * as React from 'react';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -46,12 +49,20 @@ export function useView() {
     r => r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES
   );
 
-  const { mapping, isLoading, isFetched } = useMapping(
-    entityId,
-    shownColumnRelations.map(r => r.id)
+  const orderedShownColumnRelations = React.useMemo(
+    () =>
+      [...shownColumnRelations].sort((a, b) =>
+        Position.compare(a.position ?? null, b.position ?? null)
+      ),
+    [shownColumnRelations]
   );
 
-  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...shownColumnRelations.map(r => r.toEntity.id)];
+  const { mapping, isLoading, isFetched } = useMapping(
+    entityId,
+    orderedShownColumnRelations.map(r => r.id)
+  );
+
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(r => r.toEntity.id)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -230,6 +241,33 @@ export function useView() {
     }
   };
 
+  const hideAllShownPropertyColumns = React.useCallback(() => {
+    for (const rel of [...shownColumnRelations]) {
+      storage.relations.delete(rel);
+    }
+  }, [shownColumnRelations, storage]);
+
+  const reorderShownPropertyRelations = React.useCallback(
+    (fromIndex: number, toIndex: number) => {
+      const sorted = [...shownColumnRelations].sort((a, b) =>
+        Position.compare(a.position ?? null, b.position ?? null)
+      );
+      if (fromIndex < 0 || fromIndex >= sorted.length) return;
+      if (toIndex < 0 || toIndex >= sorted.length) return;
+      const moved = arrayMove(sorted, fromIndex, toIndex);
+      const slotPositions = sorted.map(r => r.position ?? Position.generate());
+      for (let i = 0; i < moved.length; i++) {
+        const rel = moved[i];
+        const pos = slotPositions[i];
+        if (!pos) continue;
+        storage.relations.update(rel, draft => {
+          draft.position = pos;
+        });
+      }
+    },
+    [shownColumnRelations, storage]
+  );
+
   return {
     isLoading,
     isFetched,
@@ -239,7 +277,10 @@ export function useView() {
     setView,
     shownColumnIds,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
     mapping,
   };
 }
