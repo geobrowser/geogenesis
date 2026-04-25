@@ -15,8 +15,6 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { Close } from '~/design-system/icons/close';
-import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
@@ -26,7 +24,7 @@ import {
   ProposalBountyPanel,
 } from './proposal-bounty-links';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
-import { ShowVoters } from './active-proposal-show-voters';
+import { ProposalVoteRow } from './proposal-vote-row';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
@@ -153,34 +151,12 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                       </div>
                     </div>
                   </div>
-                  <div className="flex w-full gap-[60px]">
-                    <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                      <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                        <Tick />
-                      </div>
-                      <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                        <div
-                          className="absolute top-0 bottom-0 left-0 bg-green"
-                          style={{ width: `${yesVotesPercentage}%` }}
-                        />
-                      </div>
-                      <div>{yesVotesPercentage}%</div>
-                    </div>
-                    <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                      <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                        <Close />
-                      </div>
-                      <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                        <div
-                          className="absolute top-0 bottom-0 left-0 bg-red-01"
-                          style={{ width: `${noVotesPercentage}%` }}
-                        />
-                      </div>
-                      <div>{noVotesPercentage}%</div>
-                    </div>
-                  </div>
-
-                  <ShowVoters votes={proposal.proposalVotes.nodes} votesCount={votesCount} />
+                  <ProposalVoteRow
+                    votes={proposal.proposalVotes.nodes}
+                    votesCount={votesCount}
+                    yesVotesPercentage={yesVotesPercentage}
+                    noVotesPercentage={noVotesPercentage}
+                  />
                 </div>
               </div>
             </MetadataMotionContainer>

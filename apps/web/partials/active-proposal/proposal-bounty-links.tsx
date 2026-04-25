@@ -65,6 +65,7 @@ type ContextValue = {
   n: number;
   isLoadingLinks: boolean;
   isLoadingLinkedEntities: boolean;
+  isLoadingAvailable: boolean;
   draftBounties: Bounty[];
   availableBounties: Bounty[];
   linkedBountiesLabeled: Bounty[];
@@ -98,7 +99,6 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const [isSaving, setIsSaving] = React.useState(false);
   const [optimisticLinkedIds, setOptimisticLinkedIds] = React.useState<string[] | null>(null);
   const [isPanelOpen, setIsPanelOpen] = React.useState(false);
-  const togglePanel = React.useCallback(() => setIsPanelOpen(o => !o), []);
 
   const { data: space } = useQuery({
     queryKey: ['space', daoSpaceId],
@@ -159,14 +159,14 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     [proposalTypeRelations]
   );
 
-  const { data: bountySearchSpaceIds = [] } = useQuery({
+  const { data: bountySearchSpaceIds = [], isLoading: isLoadingSpaces } = useQuery({
     queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
     enabled: showBounties && isAuthor,
     staleTime: 60_000,
     queryFn: () => fetchSpacesWithAncestors(daoSpaceId),
   });
 
-  const { data: remoteBountyEntities = [] } = useQuery({
+  const { data: remoteBountyEntities = [], isLoading: isLoadingRemote } = useQuery({
     queryKey: ['bounties-by-type', bountySearchSpaceIds.join(','), BOUNTY_TYPE_ID, 'gov-panel'],
     enabled: isAuthor && showBounties && bountySearchSpaceIds.length > 0,
     staleTime: 60_000,
@@ -267,10 +267,10 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   ]);
 
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
-    queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(','), daoSpaceId, authorSpaceId],
+    queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
     enabled: n > 0,
     queryFn: async () => {
-      const entities = await Promise.all(effectiveLinkedIds.map(id => Effect.runPromise(getEntity(id, daoSpaceId))));
+      const entities = await Promise.all(effectiveLinkedIds.map(id => Effect.runPromise(getEntity(id))));
       return entities.filter((e): e is NonNullable<typeof e> => e !== null);
     },
   });
@@ -402,6 +402,19 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     });
   }, []);
 
+  const togglePanel = React.useCallback(() => {
+    setIsPanelOpen(prev => {
+      const next = !prev;
+      if (!next) {
+        // Closing the panel discards any unsaved drafts.
+        setDraftIds(new Set(effectiveLinkedIds));
+      }
+      return next;
+    });
+  }, [effectiveLinkedIds]);
+
+  const isLoadingAvailable = isAuthor && (isLoadingSpaces || isLoadingRemote);
+
   const onSave = React.useCallback(async () => {
     if (!isAuthor || !personalSpaceId || !smartAccount) return;
     if (!hasUnsaved) return;
@@ -528,6 +541,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
       n,
       isLoadingLinks,
       isLoadingLinkedEntities,
+      isLoadingAvailable,
       draftBounties,
       availableBounties,
       linkedBountiesLabeled,
@@ -546,6 +560,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
       n,
       isLoadingLinks,
       isLoadingLinkedEntities,
+      isLoadingAvailable,
       draftBounties,
       availableBounties,
       linkedBountiesLabeled,
@@ -563,35 +578,35 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 export function ProposalBountyHeadButton() {
   const ctx = useBounties();
   if (!ctx || !ctx.showBounties) return null;
-  const { isAuthor, hasUnsaved, isSaving, smartAccountReady, n, onSave, isPanelOpen, togglePanel } = ctx;
-  const showSave = isAuthor && hasUnsaved;
+  const { hasUnsaved, isSaving, smartAccountReady, n, onSave, isPanelOpen, togglePanel } = ctx;
+
+  if (hasUnsaved) {
+    return (
+      <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
+        <Pending isPending={isSaving}>
+          <span className="inline-flex items-center gap-1.5">
+            <Gem color="white" strokeColor="#3963FE" />
+            Save changes
+          </span>
+        </Pending>
+      </Button>
+    );
+  }
 
   return (
-    <div className="inline-flex items-center gap-2">
-      <button
-        type="button"
-        onClick={togglePanel}
-        className={cx(
-          'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-          'border-grey-02 bg-white text-text hover:border-text'
-        )}
-        title="Bounties"
-        aria-expanded={isPanelOpen}
-      >
-        <Gem color="purple" />
-        <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
-      </button>
-      {showSave && (
-        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
-          <Pending isPending={isSaving}>
-            <span className="inline-flex items-center gap-1.5">
-              <Gem color="white" strokeColor="#3963FE" />
-              Save changes
-            </span>
-          </Pending>
-        </Button>
+    <button
+      type="button"
+      onClick={togglePanel}
+      className={cx(
+        'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+        'border-grey-02 bg-white text-text hover:border-text'
       )}
-    </div>
+      title="Bounties"
+      aria-expanded={isPanelOpen}
+    >
+      <Gem color="purple" />
+      <span>{n === 0 ? 'Link to bounty' : String(n)}</span>
+    </button>
   );
 }
 
@@ -606,6 +621,7 @@ export function ProposalBountyPanel() {
     n,
     isLoadingLinks,
     isLoadingLinkedEntities,
+    isLoadingAvailable,
     draftBounties,
     availableBounties,
     linkedBountiesLabeled,
@@ -677,7 +693,9 @@ export function ProposalBountyPanel() {
             </div>
             {availableExpanded && (
               <div className="border-t border-grey-02">
-                {availableBounties.length === 0 ? (
+                {isLoadingAvailable ? (
+                  <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading bounties…</p>
+                ) : availableBounties.length === 0 ? (
                   <p className="px-5 py-4 text-metadataMedium text-grey-04">
                     {linkableBountiesLabeled.length === 0
                       ? 'No allocated bounties available to link in current space'

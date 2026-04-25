@@ -684,7 +684,7 @@ export const ReviewChanges = () => {
           {hasRemainingSpaces ? (
             <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
               <div className="px-2">
-                <div className="rounded-xl bg-white px-4 py-10">
+                <div className="rounded-lg border border-grey-02 bg-white px-6 py-10">
                   <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -705,65 +705,70 @@ export const ReviewChanges = () => {
                   </div>
                 </div>
               </div>
-              <div ref={scrollContainerRef} className="grow overflow-y-scroll px-2 pb-2">
-                {isLoadingChanges ? (
-                  <div className="rounded-xl bg-white p-4">
-                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                      <div className="mb-4 flex items-center gap-3">
-                        <Skeleton className="h-8 w-8" />
-                        <Skeleton className="h-6 w-48" />
-                      </div>
-                      <div className="mb-4 grid grid-cols-2 gap-20">
-                        <Skeleton className="h-4 w-20" />
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-20">
-                          <Skeleton className="h-24 w-full" />
-                          <Skeleton className="h-24 w-full" />
+              <div className="grow overflow-hidden px-2 pb-2">
+                <div
+                  ref={scrollContainerRef}
+                  className="h-full overflow-y-auto rounded-lg border border-grey-02 bg-white"
+                >
+                  {isLoadingChanges ? (
+                    <div className="px-6 py-6">
+                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                        <div className="mb-4 flex items-center gap-3">
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-6 w-48" />
                         </div>
-                        <div className="grid grid-cols-2 gap-20">
-                          <Skeleton className="h-16 w-full" />
-                          <Skeleton className="h-16 w-full" />
+                        <div className="mb-4 grid grid-cols-2 gap-20">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-4 w-28" />
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : !hasVisibleEntities ? (
-                  <div className="rounded-xl bg-white p-4">
-                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                      <Text as="p" variant="body" className="text-grey-04">
-                        No changes to review. Make some edits to see them here.
-                      </Text>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
-                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                      const entity = visibleEntities[virtualRow.index];
-                      return (
-                        <div
-                          key={virtualRow.key}
-                          data-index={virtualRow.index}
-                          ref={node => rowVirtualizer.measureElement(node)}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                        >
-                          <div className="rounded-xl bg-white p-4">
-                            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                              <ChangedEntity entity={entity} spaceId={activeSpace} />
-                            </div>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-20">
+                            <Skeleton className="h-24 w-full" />
+                            <Skeleton className="h-24 w-full" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-20">
+                            <Skeleton className="h-16 w-full" />
+                            <Skeleton className="h-16 w-full" />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      </div>
+                    </div>
+                  ) : !hasVisibleEntities ? (
+                    <div className="px-6 py-6">
+                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                        <Text as="p" variant="body" className="text-grey-04">
+                          No changes to review. Make some edits to see them here.
+                        </Text>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                      {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                        const entity = visibleEntities[virtualRow.index];
+                        return (
+                          <div
+                            key={virtualRow.key}
+                            data-index={virtualRow.index}
+                            ref={node => rowVirtualizer.measureElement(node)}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <div className="px-6 py-4">
+                              <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                                <ChangedEntity entity={entity} spaceId={activeSpace} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
