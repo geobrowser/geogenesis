@@ -306,6 +306,7 @@ export function EditableTabGroup({
             ))}
 
             <button
+              type="button"
               onClick={handleAddTab}
               className="relative z-10 flex shrink-0 items-center gap-1 text-grey-04 transition-colors duration-100 hover:text-text"
               title="Add tab"
@@ -473,6 +474,9 @@ function SortableTab({
             <Popover.Trigger asChild>
               <button
                 ref={triggerRef}
+                type="button"
+                aria-label="Tab actions"
+                title="Tab actions"
                 onMouseEnter={openPopover}
                 onMouseLeave={scheduleClose}
                 onMouseDown={e => e.preventDefault()}
@@ -541,6 +545,7 @@ function MenuItem({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cx(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-smallButton transition-colors hover:bg-grey-01',
