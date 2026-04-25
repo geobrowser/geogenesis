@@ -23,7 +23,6 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { ID } from '~/core/id';
 import { useTabId } from '~/core/state/editor/use-editor';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
@@ -95,7 +94,8 @@ export function EditableTabGroup({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 4 },
+      // 8px matches table-block-dnd-items.tsx and avoids click-becomes-drag jitter on trackpads.
+      activationConstraint: { distance: 8 },
     })
   );
 
@@ -400,11 +400,11 @@ function SortableTab({
 
   const scheduleClose = () => {
     cancelClose();
-    closeTimeoutRef.current = setTimeout(() => setIsPopoverOpen(false), 120);
+    closeTimeoutRef.current = setTimeout(() => setIsPopoverOpen(false), 200);
   };
 
-  const liveName = useName(tab.entityId, tab.relation.spaceId);
-  const displayName = liveName ?? tab.name;
+  // tab.name already includes the live name via EntityTabs' liveNameMap, so no per-tab subscription needed here.
+  const displayName = tab.name;
 
   return (
     <div ref={setNodeRef} style={style} className="group/tab relative flex items-center">
