@@ -133,37 +133,37 @@ async function fetchBrowseSidebarSources(memberSpaceId: string) {
     ),
   ]);
 
-  return { editorIds, memberSpaces, pendingResult };
+  const pendingMemberIds =
+    Either.isRight(pendingResult)
+      ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
+      : [];
+  const pendingEditorIds =
+    Either.isRight(pendingResult)
+      ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
+      : [];
+
+  return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
 }
 
 async function buildBrowseSidebarDataFromSources(
   memberSpaceId: string,
-  { editorIds, memberSpaces, pendingResult }: Awaited<ReturnType<typeof fetchBrowseSidebarSources>>
+  { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds }: BrowseSidebarSources
 ): Promise<BrowseSidebarData> {
   const editorIdSet = new Set(editorIds);
-  const pendingMemberIds = new Set<string>();
-  const pendingEditorIds = new Set<string>();
-
-  if (Either.isRight(pendingResult)) {
-    for (const n of pendingResult.right.pendingMember?.nodes ?? []) {
-      pendingMemberIds.add(n.spaceId);
-    }
-    for (const n of pendingResult.right.pendingEditor?.nodes ?? []) {
-      pendingEditorIds.add(n.spaceId);
-    }
-  }
+  const pendingMemberIdSet = new Set(pendingMemberIds);
+  const pendingEditorIdSet = new Set(pendingEditorIds);
 
   const memberOnlyIdSet = new Set(
     memberSpaces.map(s => s.id).filter(id => id !== memberSpaceId && !editorIdSet.has(id))
   );
 
   const editorOfIds = [...editorIdSet];
-  for (const id of pendingEditorIds) {
+  for (const id of pendingEditorIdSet) {
     if (!editorIdSet.has(id)) editorOfIds.push(id);
   }
 
   const memberOfIdSet = new Set(memberOnlyIdSet);
-  for (const id of pendingMemberIds) {
+  for (const id of pendingMemberIdSet) {
     if (!editorIdSet.has(id)) memberOfIdSet.add(id);
   }
   const memberOfIds = [...memberOfIdSet];
@@ -171,8 +171,8 @@ async function buildBrowseSidebarDataFromSources(
   const excludedFromFeatured = new Set<string>([
     ...editorIdSet,
     ...memberOnlyIdSet,
-    ...pendingMemberIds,
-    ...pendingEditorIds,
+    ...pendingMemberIdSet,
+    ...pendingEditorIdSet,
   ]);
 
   const featuredIds = FEATURED_BROWSE_SPACES.map(f => f.id).filter(id => !excludedFromFeatured.has(id));
@@ -194,7 +194,7 @@ async function buildBrowseSidebarDataFromSources(
   const editorOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
     editorOfIds.map(id => {
       const base = rows.get(id)!;
-      return pendingEditorIds.has(id) && !editorIdSet.has(id)
+      return pendingEditorIdSet.has(id) && !editorIdSet.has(id)
         ? { ...base, pendingLabel: 'Editorship pending' as const }
         : base;
     })
@@ -203,7 +203,7 @@ async function buildBrowseSidebarDataFromSources(
   const memberOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
     memberOfIds.map(id => {
       const base = rows.get(id)!;
-      return pendingMemberIds.has(id) && !memberOnlyIdSet.has(id)
+      return pendingMemberIdSet.has(id) && !memberOnlyIdSet.has(id)
         ? { ...base, pendingLabel: 'Membership pending' as const }
         : base;
     })
@@ -217,6 +217,13 @@ async function buildBrowseSidebarDataFromSources(
     personalSpaceId: memberSpaceId,
   };
 }
+
+type BrowseSidebarSources = {
+  editorIds: string[];
+  memberSpaces: Space[];
+  pendingMemberIds: string[];
+  pendingEditorIds: string[];
+};
 
 export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
   if (!memberSpaceId) {
