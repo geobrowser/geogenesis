@@ -20,7 +20,7 @@ export async function SpaceEditorsChip({ spaceId }: Props) {
         {firstThreeEditors.map(editor => (
           <AvatarGroup.Item key={editor.id}>
             {editor.avatarUrl ? (
-              <FallbackImage value={editor.avatarUrl} sizes="12px" className="object-cover" />
+              <FallbackImage value={editor.avatarUrl} sizes="12px" className="object-cover" priority />
             ) : (
               <Avatar size={12} value={editor.address} />
             )}
