@@ -263,6 +263,16 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-[1rem] leading-5 tracking-[-0.35px] text-text">
           {entityCount}
         </span>
+        {hasData && hasUnmappedColumns && unmappedCount > 0 && (
+          <SmallButton
+            type="button"
+            variant="primary"
+            className="ml-auto shrink-0 rounded-md"
+            onClick={handleSkipAndDeleteUnmapped}
+          >
+            Next
+          </SmallButton>
+        )}
       </div>
 
       {hasNoRecords ? (
@@ -325,16 +335,6 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                     {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
                   </Text>
                 </button>
-              )}
-              {hasUnmappedColumns && unmappedCount > 0 && (
-                <SmallButton
-                  type="button"
-                  variant="primary"
-                  className="ml-auto shrink-0 rounded-md"
-                  onClick={handleSkipAndDeleteUnmapped}
-                >
-                  Next
-                </SmallButton>
               )}
             </div>
           ) : values.length > 0 ? (
