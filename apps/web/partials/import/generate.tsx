@@ -343,7 +343,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           <>
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex shrink-0 items-center" aria-hidden>
-                <Warning color="red-01" />
+                <Warning color="orange" />
               </span>
               <span className="text-[1rem] leading-5 tracking-[-0.35px] text-text">
                 {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
@@ -355,7 +355,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               className="shrink-0 rounded-md"
               onClick={handleNavigateToReview}
             >
-              Review
+              Next
             </SmallButton>
           </>
         ) : (
