@@ -252,6 +252,7 @@ export function EditableTabGroup({
   };
 
   const activeTab = activeId ? editableTabs.find(t => t.relation.id === activeId) : null;
+  const isAnyDragging = activeId !== null;
 
   // Stable array identity for SortableContext so drag doesn't re-register items on every render.
   // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
@@ -288,6 +289,7 @@ export function EditableTabGroup({
                   key={tab.relation.id}
                   tab={tab}
                   active={tab.href === fullPath}
+                  isAnyDragging={isAnyDragging}
                   isEditing={editingTabId === tab.entityId}
                   onStartEditing={() => setEditingTabId(tab.entityId)}
                   onRename={newName => handleRenameTab(tab, newName)}
@@ -340,6 +342,7 @@ function StaticTab({ href, label, active }: { href: string; label: string; activ
 type SortableTabProps = {
   tab: EditableTab;
   active: boolean;
+  isAnyDragging: boolean;
   isEditing: boolean;
   onStartEditing: () => void;
   onRename: (name: string) => void;
@@ -351,6 +354,7 @@ type SortableTabProps = {
 function SortableTab({
   tab,
   active,
+  isAnyDragging,
   isEditing,
   onStartEditing,
   onRename,
@@ -416,8 +420,9 @@ function SortableTab({
         </Link>
       )}
 
-      {/* Action menu — absolute so it doesn't push neighboring tabs apart */}
-      {!isEditing && !isDragging && (
+      {/* Action menu — absolute so it doesn't push neighboring tabs apart.
+          Skip rendering entirely during any drag so the Popover tree doesn't re-reconcile on every drag tick. */}
+      {!isEditing && !isDragging && !isAnyDragging && (
         <div
           className={cx(
             'absolute top-1/2 left-full z-20 ml-3 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-150',
