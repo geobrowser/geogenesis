@@ -4,12 +4,12 @@ import * as React from 'react';
 
 import { SmallButton } from '~/design-system/button';
 
-import { LoadingSkeleton } from './component';
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { loadMoreHomeProposalsAction } from './load-more-home-proposals-action';
+import { LoadingSkeleton } from './loading-skeleton';
 
 interface Props {
   page: number;
