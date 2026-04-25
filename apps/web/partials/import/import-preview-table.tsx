@@ -22,6 +22,7 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { Warning } from '~/design-system/icons/warning';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
@@ -528,8 +529,8 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                     initialQuery={col.headerLabel}
                     trigger={
                       <span className="flex items-center gap-1.5">
-                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                          !
+                        <span className="flex shrink-0 items-center" aria-hidden>
+                          <Warning color="orange" />
                         </span>
                         <Text variant="metadata" className="text-text">
                           Needs mapping
@@ -539,8 +540,8 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                   />
                 ) : (
                   <span className="mt-0.5 flex items-center gap-1.5">
-                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-01 text-[10px] font-semibold text-white">
-                      !
+                    <span className="flex shrink-0 items-center" aria-hidden>
+                      <Warning color="orange" />
                     </span>
                     <Text variant="metadata" className="text-text">
                       Needs mapping

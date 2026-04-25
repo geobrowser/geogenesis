@@ -49,11 +49,11 @@ export function GeoConnectButton() {
     setStep('start');
   };
 
-  const { login } = useGeoLogin({
-    onComplete: () => {
-      resetOnboarding();
-    },
-  });
+  // Reset is done on the explicit sign-in click below. Doing it here too
+  // would wipe the user's in-progress onboarding state if Privy fires
+  // onComplete on session restoration (e.g. when opening a new tab), which
+  // then syncs the cleared atoms back to the original tab via localStorage.
+  const { login } = useGeoLogin({});
 
   const onLogin = () => {
     resetOnboarding();
