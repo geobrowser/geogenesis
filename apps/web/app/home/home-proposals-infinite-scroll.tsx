@@ -48,6 +48,13 @@ export function HomeProposalsInfiniteScroll({
       isLoadingRef.current = true;
       setIsLoading(true);
 
+      // Calling a Next.js server action triggers a server-component re-render
+      // for the current route. Even though our action only reads, the re-render
+      // can re-reconcile the proposal cards above the sentinel and break the
+      // browser's scroll anchor, snapping the viewport up. Capture the scroll
+      // position and restore it once React commits the appended page.
+      const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+
       try {
         const [node, next, more] = await loadMoreHomeProposalsAction(
           connectedSpaceId,
@@ -66,6 +73,17 @@ export function HomeProposalsInfiniteScroll({
           isLoadingRef.current = false;
           setIsLoading(false);
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        // Two rAFs: first commits the React update, second catches any
+        // late layout shift (image-driven reflow on the freshly mounted cards).
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'instant' });
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: scrollY, behavior: 'instant' });
+          });
+        });
       }
     },
     [connectedSpaceId, connectedAddress, proposalType, governanceFilters]
@@ -100,9 +118,12 @@ export function HomeProposalsInfiniteScroll({
       ))}
 
       {hasMore && (
-        <div ref={sentinelRef}>
+        <div ref={sentinelRef} className="space-y-2">
           {isLoading ? (
-            <LoadingSkeleton />
+            <>
+              <LoadingSkeleton />
+              <LoadingSkeleton />
+            </>
           ) : (
             <SmallButton variant="secondary" onClick={() => loadMore()}>
               Load more
