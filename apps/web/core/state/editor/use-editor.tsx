@@ -15,7 +15,6 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
-import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
@@ -505,37 +504,6 @@ export function useEditorStore() {
 
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
               storage.relations.set(relation);
-            }
-
-            if (initialSourceType === 'SPACES') {
-              const defaultSpaceFilter = [
-                {
-                  columnId: SystemIds.SPACE_FILTER,
-                  columnName: 'Space',
-                  valueType: 'RELATION' as const,
-                  value: spaceId,
-                  valueName: null as string | null,
-                },
-              ];
-
-              storage.values.set({
-                id: ID.createValueId({
-                  entityId: node.id,
-                  propertyId: SystemIds.FILTER,
-                  spaceId,
-                }),
-                spaceId,
-                entity: {
-                  id: node.id,
-                  name: '',
-                },
-                property: {
-                  id: SystemIds.FILTER,
-                  name: 'Filter',
-                  dataType: 'TEXT',
-                },
-                value: toGeoFilterState(defaultSpaceFilter, 'AND'),
-              });
             }
 
             break;
