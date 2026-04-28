@@ -55,6 +55,15 @@ export function AcceptOrReject({
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
 
+  // Once the server-rendered userVote catches up after router.refresh, the
+  // optimistic entry has done its job — drop it so the atom doesn't grow
+  // across a session and the artificial CSS order bump stops applying.
+  React.useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
+
   const onVoteSuccess = () => {
     router.refresh();
   };

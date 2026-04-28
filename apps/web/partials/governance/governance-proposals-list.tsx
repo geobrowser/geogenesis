@@ -53,6 +53,13 @@ const PAGE_SIZE = 100;
 
 const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
 
+/** Finds the membership action in a proposal's action list. The REST schema does
+ *  not guarantee action order, so a lookup by index 0 can miss multi-action
+ *  proposals where the membership action is not first. */
+function findMembershipAction(actions: ApiProposalListItem['actions']): ApiProposalListItem['actions'][number] | undefined {
+  return actions.find(a => MEMBERSHIP_ACTION_TYPES.has(a.actionType));
+}
+
 /** Unvoted proposals first; voted ones sink to the bottom (same as governance home review). */
 function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalListItem[]): ApiProposalListItem[] {
   return [...items].sort((a, b) => {
@@ -406,9 +413,9 @@ async function fetchGovernanceProposals({
 
   // Filter by proposal type
   if (effectiveType === 'proposals') {
-    combinedProposals = combinedProposals.filter(p => !MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''));
+    combinedProposals = combinedProposals.filter(p => findMembershipAction(p.actions) === undefined);
   } else if (effectiveType === 'requests') {
-    combinedProposals = combinedProposals.filter(p => MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''));
+    combinedProposals = combinedProposals.filter(p => findMembershipAction(p.actions) !== undefined);
   }
 
   // Apply pagination
@@ -425,8 +432,7 @@ async function fetchGovernanceProposals({
 
   // Fetch target profiles for membership proposals (extract targetId from actions)
   const targetIds = paginatedProposals
-    .filter(p => MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''))
-    .map(p => p.actions[0]?.targetId)
+    .map(p => findMembershipAction(p.actions)?.targetId)
     .filter((id): id is string => !!id);
   const uniqueTargetIds = [...new Set(targetIds)];
 
@@ -441,7 +447,7 @@ async function fetchGovernanceProposals({
 
   const proposals = paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    const targetId = p.actions[0]?.targetId;
+    const targetId = findMembershipAction(p.actions)?.targetId;
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
     return apiProposalToGovernanceDto(p, getProposalBucket(p.status), maybeProfile, maybeTargetProfile);
   });

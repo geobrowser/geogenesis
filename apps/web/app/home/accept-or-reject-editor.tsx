@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -49,6 +49,15 @@ export function AcceptOrRejectEditor({
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
+
+  // Drop the optimistic entry once router.refresh has caught up and userVote
+  // is reflected on the prop — server render now naturally places the card
+  // at the bottom of its bucket without our artificial order bump.
+  useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
 
   const onVoteSuccess = () => {
     router.refresh();
