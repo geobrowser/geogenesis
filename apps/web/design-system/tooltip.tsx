@@ -56,7 +56,7 @@ export const Tooltip = ({
                 }}
               >
                 {variant === 'dark' && <Arrow />}
-                <div>{label}</div>
+                <div className={labelClassName[variant]}>{label}</div>
               </motion.div>
             </Content>
           )}
@@ -85,4 +85,10 @@ const variantClassName: Record<Variant, string> = {
   dark: 'bg-text text-white max-w-[192px] rounded p-2 shadow-button text-center text-breadcrumb',
   propertyDescription:
     'w-[350px] max-w-[calc(100vw-32px)] rounded-lg border border-grey-02 bg-white p-3 text-metadata text-text shadow-[0px_8px_25px_0px_rgba(0,0,0,0.09)]',
+};
+
+const labelClassName: Record<Variant, string> = {
+  light: '',
+  dark: '',
+  propertyDescription: 'h-[60px] line-clamp-3',
 };
