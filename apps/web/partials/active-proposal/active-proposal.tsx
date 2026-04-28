@@ -105,15 +105,24 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                     <div className="text-mediumTitle">{proposalTitle}</div>
                     <div className="flex items-center justify-between">
                       <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
-                        <Link
-                          href={proposal.createdBy.profileLink ?? ''}
-                          className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
-                        >
-                          <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                            <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                        {proposal.createdBy.profileLink ? (
+                          <Link
+                            href={proposal.createdBy.profileLink}
+                            className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
+                          >
+                            <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                            </div>
+                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                            </div>
+                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                           </div>
-                          <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
-                        </Link>
+                        )}
                         {isProposalEnded &&
                           (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
                             <>

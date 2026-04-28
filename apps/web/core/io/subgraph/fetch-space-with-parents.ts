@@ -59,8 +59,9 @@ export async function fetchParentSpaceIds(childSpaceId: string): Promise<string[
 /**
  * `spaceId` first, then its direct parent spaces (one level up), deduped.
  * Parents are discovered only through RELATED subspace rows today; that filter may be lifted later.
+ * Intentionally NOT recursive — does not climb past the immediate parents.
  */
-export async function fetchSpacesWithAncestors(spaceId: string): Promise<string[]> {
+export async function fetchSpaceWithParents(spaceId: string): Promise<string[]> {
   if (!validateSpaceId(spaceId)) {
     return [];
   }

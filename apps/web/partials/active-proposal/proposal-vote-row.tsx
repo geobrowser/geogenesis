@@ -95,15 +95,25 @@ export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotes
 }
 
 function VoterChip({ vote }: { vote: VoteWithProfile }) {
-  return (
-    <Link
-      href={vote.voter.profileLink ?? ''}
-      className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
-    >
+  const content = (
+    <>
       <div className="relative h-3 w-3 overflow-hidden rounded-full">
         <Avatar avatarUrl={vote.voter.avatarUrl} value={vote.voter.address} />
       </div>
       <p className="text-metadataMedium text-grey-04">{vote.voter.name ?? vote.voter.address}</p>
+    </>
+  );
+
+  if (!vote.voter.profileLink) {
+    return <div className="flex items-center gap-2">{content}</div>;
+  }
+
+  return (
+    <Link
+      href={vote.voter.profileLink}
+      className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
+    >
+      {content}
     </Link>
   );
 }

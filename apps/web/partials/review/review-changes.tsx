@@ -26,7 +26,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
-import { fetchSpacesWithAncestors } from '~/core/io/subgraph/fetch-spaces-with-ancestors';
+import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -215,12 +215,12 @@ export const ReviewChanges = () => {
   });
 
   const { data: bountySearchSpaceIds = [] } = useQuery({
-    queryKey: ['bounty-link-spaces-with-ancestors', activeSpace],
+    queryKey: ['bounty-link-spaces-with-parents', activeSpace],
     enabled: Boolean(activeSpace && isReviewOpen),
     staleTime: 60_000,
     queryFn: async () => {
       if (!activeSpace) return [];
-      return await fetchSpacesWithAncestors(activeSpace);
+      return await fetchSpaceWithParents(activeSpace);
     },
   });
 

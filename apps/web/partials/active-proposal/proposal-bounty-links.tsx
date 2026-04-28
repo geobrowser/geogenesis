@@ -20,7 +20,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { getAllEntities, getRelationsByFromEntityId, getRelationsByToEntityIds, getSpace, getSpaces } from '~/core/io/queries';
-import { fetchSpacesWithAncestors } from '~/core/io/subgraph/fetch-spaces-with-ancestors';
+import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import type { Relation, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -163,7 +163,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
     enabled: showBounties && isAuthor && isPanelOpen,
     staleTime: 60_000,
-    queryFn: () => fetchSpacesWithAncestors(daoSpaceId),
+    queryFn: () => fetchSpaceWithParents(daoSpaceId),
   });
 
   const { data: remoteBountyEntities = [], isLoading: isLoadingRemote } = useQuery({
@@ -583,7 +583,7 @@ export function ProposalBountyHeadButton() {
 
   return (
     <>
-      {hasUnsaved ? (
+      {isAuthor && hasUnsaved ? (
         <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
           <Pending isPending={isSaving}>
             <span className="inline-flex items-center gap-1.5">
@@ -673,7 +673,7 @@ export function ProposalBountyPanel() {
             />
             {linkedExpanded && (
               <div className="border-t border-grey-02">
-                {isLoadingLinks && draftBounties.length === 0 ? (
+                {(isLoadingLinks || isLoadingLinkedEntities) && draftBounties.length === 0 ? (
                   <p className="px-5 py-4 text-metadataMedium text-grey-04">Loading links…</p>
                 ) : draftBounties.length === 0 ? (
                   <p className="px-5 py-4 text-metadataMedium text-grey-04">No bounties linked</p>
