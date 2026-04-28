@@ -34,7 +34,7 @@ export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(
     <ul
       ref={ref}
       className={cx(
-        'm-0 flex max-h-[340px] list-none flex-col justify-start overscroll-contain overflow-x-hidden overflow-y-auto scroll-smooth',
+        'm-0 flex max-h-[340px] list-none flex-col justify-start overscroll-contain overflow-x-hidden overflow-y-auto',
         className
       )}
       onWheel={handleWheel}

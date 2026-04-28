@@ -14,6 +14,7 @@ import { SwitchableRenderableType } from '~/core/types';
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 import { NativeGeoImage } from './geo-image';
 import { trapWheelToElement } from './trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 import { Search } from './icons/search';
 import { Tag } from './tag';
 import { Text } from './text';
@@ -53,6 +54,7 @@ export function SelectEntityCompact({
   renderableTypeValue = 'TEXT',
   onRenderableTypeChange,
 }: SelectEntityCompactProps) {
+  const anchorInputRef = React.useRef<HTMLInputElement | null>(null);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
@@ -109,6 +111,12 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorInputRef, {
+    isOpen: query.trim().length > 0,
+    preferredHeight: 320,
+    gap: 12,
+  });
+
   useKey('Escape', () => {
     onQueryChange('');
   });
@@ -144,6 +152,7 @@ export function SelectEntityCompact({
               <Search />
             </div>
             <input
+              ref={anchorInputRef}
               type="text"
               value={query}
               onChange={e => {
@@ -193,10 +202,11 @@ export function SelectEntityCompact({
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
+          side={popoverSide}
+          align={popoverAlign}
           sideOffset={4}
-          align="start"
-          className="z-1001 w-(--radix-popper-anchor-width) overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
-          collisionPadding={10}
+          className="z-1001 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
+          collisionPadding={16}
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
         >

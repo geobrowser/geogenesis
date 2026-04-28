@@ -32,7 +32,7 @@ const contentStyles = cva(
         end: 'origin-top-right',
       },
       scroll: {
-        true: 'max-h-[180px] overscroll-contain overflow-y-auto overflow-x-hidden scroll-smooth',
+        true: 'max-h-[200px] overscroll-contain overflow-y-auto overflow-x-hidden scroll-smooth',
         false: 'overflow-hidden',
       },
     },
@@ -46,7 +46,11 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
+  const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 240,
+    gap: 8,
+  });
   const resolvedAlign = align === 'center' ? 'center' : align ?? adaptiveAlign;
   const onDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);

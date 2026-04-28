@@ -16,11 +16,12 @@ interface AdaptiveDropdownPlacement {
   side: DropdownSide;
 }
 
-const DEFAULT_DROPDOWN_HEIGHT = 180;
-const DEFAULT_GAP = 6;
+/** Default footprint (~4.5 short menu rows + padding) for “open above” decisions. */
+const DEFAULT_DROPDOWN_HEIGHT = 220;
+const DEFAULT_GAP = 8;
 
 export function useAdaptiveDropdownPlacement(
-  anchorRef: React.RefObject<HTMLElement | null>,
+  anchorRef: React.RefObject<Element | null>,
   { isOpen, preferredHeight = DEFAULT_DROPDOWN_HEIGHT, gap = DEFAULT_GAP }: UseAdaptiveDropdownPlacementOptions
 ): AdaptiveDropdownPlacement {
   const [placement, setPlacement] = React.useState<AdaptiveDropdownPlacement>({
@@ -37,25 +38,46 @@ export function useAdaptiveDropdownPlacement(
     const viewportWidth = window.innerWidth;
     const anchorCenterX = rect.left + rect.width / 2;
     const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const wantBelow = spaceBelow >= preferredHeight + gap;
+    const canFitAbove = spaceAbove >= preferredHeight + gap;
+
+    let side: DropdownSide = 'bottom';
+    if (!wantBelow) {
+      side = canFitAbove || spaceAbove > spaceBelow ? 'top' : 'bottom';
+    }
 
     setPlacement({
       align: anchorCenterX < viewportWidth / 2 ? 'start' : 'end',
-      side: spaceBelow < preferredHeight + gap ? 'top' : 'bottom',
+      side,
     });
   }, [anchorRef, gap, preferredHeight]);
+
+  const rafIdRef = React.useRef<number | null>(null);
 
   React.useLayoutEffect(() => {
     if (!isOpen) return;
 
     recomputePlacement();
 
-    const onWindowChange = () => recomputePlacement();
-    window.addEventListener('resize', onWindowChange);
-    window.addEventListener('scroll', onWindowChange, true);
+    const scheduleRecompute = () => {
+      if (rafIdRef.current !== null) return;
+      rafIdRef.current = window.requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        recomputePlacement();
+      });
+    };
+
+    window.addEventListener('resize', scheduleRecompute);
+    window.addEventListener('scroll', scheduleRecompute, true);
 
     return () => {
-      window.removeEventListener('resize', onWindowChange);
-      window.removeEventListener('scroll', onWindowChange, true);
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      window.removeEventListener('resize', scheduleRecompute);
+      window.removeEventListener('scroll', scheduleRecompute, true);
     };
   }, [isOpen, recomputePlacement]);
 

@@ -42,6 +42,7 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -242,7 +243,7 @@ export const SelectEntity = ({
 
     if (element) {
       element.scrollIntoView({
-        behavior: 'smooth',
+        behavior: 'auto',
         block: 'nearest',
       });
     }
@@ -279,6 +280,12 @@ export const SelectEntity = ({
     },
     [autoFocus]
   );
+
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
+    isOpen: Boolean(query),
+    preferredHeight: advanced ? 520 : 300,
+    gap: 12,
+  });
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -338,20 +345,27 @@ export const SelectEntity = ({
                 setPopoverElement(node);
                 popoverRef.current = node;
               }}
+              side={popoverSide}
+              align={popoverAlign}
+              sideOffset={4}
+              avoidCollisions
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
                 inputRef.current?.focus();
               }}
-              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
-              collisionPadding={10}
+              className={cx(
+                'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                width === 'full' && 'max-w-[calc(100vw-24px)]'
+              )}
+              collisionPadding={16}
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
                 <div
                   className={cx(
-                    '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
-                    width === 'clamped' ? 'w-[400px]' : '-mr-px',
+                    '-ml-px w-full max-w-full overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+                    width === 'full' && '-mr-px',
                     withSearchIcon && 'rounded-t-none'
                   )}
                   style={{ clipPath }}

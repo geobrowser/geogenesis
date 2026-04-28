@@ -36,7 +36,7 @@ const shellStyles = cva(
 });
 
 const scrollViewportClass =
-  'w-full max-h-[180px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
+  'w-full max-h-[200px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
 
 export function Menu({
   children,
@@ -51,7 +51,7 @@ export function Menu({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { align: adaptiveAlign, side: adaptiveSide } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
-    preferredHeight: 180,
+    preferredHeight: 240,
     gap: 8,
   });
 
