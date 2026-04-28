@@ -134,7 +134,6 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
             open={isMenuOpen}
             onOpenChange={() => setIsMenuOpen(!isMenuOpen)}
             trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-            side="bottom"
           >
             <MenuItem onClick={onCopyRelationId}>
               <span className={cx('absolute', !hasCopiedId && 'invisible')}>Copied!</span>
