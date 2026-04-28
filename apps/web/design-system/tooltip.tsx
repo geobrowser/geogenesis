@@ -1,6 +1,6 @@
 'use client';
 
-import { Arrow, Content, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
+import { Arrow, Content, Portal, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -36,31 +36,40 @@ export const Tooltip = ({
     <Provider delayDuration={300} skipDelayDuration={300}>
       <Root open={isOpen} onOpenChange={setIsOpen}>
         <Trigger asChild>{trigger}</Trigger>
-        <AnimatePresence mode="popLayout">
-          {isOpen && (
-            // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
-            <Content side={position} align={align} alignOffset={0} sideOffset={4} forceMount>
-              <motion.div
-                className={cx(
-                  'relative w-full focus:outline-hidden',
-                  positionClassName[position],
-                  variantClassName[variant]
-                )}
-                initial={{ opacity: 0, scale: 0.95, x, y }}
-                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, x, y }}
-                transition={{
-                  type: 'spring',
-                  duration: 0.15,
-                  bounce: 0,
-                }}
+        <Portal>
+          <AnimatePresence mode="popLayout">
+            {isOpen && (
+              // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
+              <Content
+                side={position}
+                align={align}
+                alignOffset={0}
+                sideOffset={4}
+                forceMount
+                className="z-1001"
               >
-                {variant === 'dark' && <Arrow />}
-                <div className={labelClassName[variant]}>{label}</div>
-              </motion.div>
-            </Content>
-          )}
-        </AnimatePresence>
+                <motion.div
+                  className={cx(
+                    'relative w-full focus:outline-hidden',
+                    positionClassName[position],
+                    variantClassName[variant]
+                  )}
+                  initial={{ opacity: 0, scale: 0.95, x, y }}
+                  animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, x, y }}
+                  transition={{
+                    type: 'spring',
+                    duration: 0.15,
+                    bounce: 0,
+                  }}
+                >
+                  {variant === 'dark' && <Arrow />}
+                  <div className={labelClassName[variant]}>{label}</div>
+                </motion.div>
+              </Content>
+            )}
+          </AnimatePresence>
+        </Portal>
       </Root>
     </Provider>
   );
