@@ -194,7 +194,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
   textCommandItem,
   {
     icon: <EditorList />,
-    title: 'Bullet points',
+    title: 'Bullet list',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
