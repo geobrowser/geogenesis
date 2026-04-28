@@ -15,7 +15,7 @@ type PropertyNameLinkProps = {
 
 export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
   const description = useDescription(property.id, spaceId)?.trim();
-  const propertyName = property.name ?? property.id;
+  const propertyName = property.name?.trim() || property.id;
 
   const link = (
     <Link
