@@ -41,10 +41,12 @@ export function useView() {
 
   const viewRelation = blockRelationRelations.find(r => r.type.id === SystemIds.VIEW_PROPERTY);
 
-  const shownColumnRelations = blockRelationRelations.filter(
-    // We fall back to an old property used to render shown columns.
-    r => r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES
-  );
+  const shownColumnRelations = blockRelationRelations
+    .filter(
+      // We fall back to an old property used to render shown columns.
+      r => r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES
+    )
+    .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 
   const { mapping, isLoading, isFetched } = useMapping(
     entityId,
@@ -125,6 +127,14 @@ export function useView() {
     const newRelationEntityId = IdUtils.generate();
 
     const existingMapping = mapping[newColumn.id];
+    const nextShownColumnPosition = (() => {
+      const positions = shownColumnRelations
+        .map(relation => relation.position)
+        .filter((position): position is string => typeof position === 'string')
+        .sort();
+      const lastPosition = positions.length > 0 ? positions[positions.length - 1] : null;
+      return Position.generateBetween(lastPosition, null);
+    })();
 
     // We run a separate branch of logic for RELATIONS queries where a selector may get passed through.
     //
@@ -181,7 +191,7 @@ export function useView() {
           id: newId,
           entityId: newRelationEntityId,
           spaceId: spaceId,
-          position: Position.generate(),
+          position: nextShownColumnPosition,
           renderableType: 'RELATION',
           type: {
             id: SystemIds.PROPERTIES,
@@ -207,7 +217,7 @@ export function useView() {
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
-        position: Position.generate(),
+        position: nextShownColumnPosition,
         renderableType: 'RELATION',
         type: {
           id: SystemIds.PROPERTIES,
@@ -230,6 +240,29 @@ export function useView() {
     }
   };
 
+  const reorderShownColumns = (orderedColumnIds: string[]) => {
+    const currentOrderedRelations = [...shownColumnRelations].sort((a, b) =>
+      Position.compare(a.position ?? null, b.position ?? null)
+    );
+
+    const relationByColumnId = new Map(currentOrderedRelations.map(relation => [relation.toEntity.id, relation]));
+    const normalizedOrderedIds = orderedColumnIds.filter(id => id !== SystemIds.NAME_PROPERTY);
+    const reorderedRelations = normalizedOrderedIds
+      .map(id => relationByColumnId.get(id))
+      .filter((relation): relation is Relation => relation !== undefined);
+
+    const limit = Math.min(currentOrderedRelations.length, reorderedRelations.length);
+    for (let i = 0; i < limit; i++) {
+      const relationToUpdate = reorderedRelations[i];
+      const targetPosition = currentOrderedRelations[i]?.position ?? null;
+      if (relationToUpdate.position !== targetPosition) {
+        storage.relations.update(relationToUpdate, draft => {
+          draft.position = targetPosition ?? draft.position ?? Position.generate();
+        });
+      }
+    }
+  };
+
   return {
     isLoading,
     isFetched,
@@ -240,6 +273,7 @@ export function useView() {
     shownColumnIds,
     shownColumnRelations,
     toggleProperty,
+    reorderShownColumns,
     mapping,
   };
 }

@@ -11,12 +11,25 @@ import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
+export type TableNodeInitialDataSource = 'COLLECTION' | 'QUERY';
+
 export const DataNode = Node.create({
   name: 'tableNode',
   group: 'block',
   atom: true,
   allowGapCursor: false,
   defining: true,
+
+  addAttributes() {
+    return {
+      initialDataSource: {
+        default: null as TableNodeInitialDataSource | null,
+      },
+      querySetupCompleted: {
+        default: null as boolean | null,
+      },
+    };
+  },
 
   parseHTML() {
     return [
@@ -35,19 +48,34 @@ export const DataNode = Node.create({
   },
 });
 
-function DataNodeComponent({ node }: NodeViewRendererProps) {
+type DataNodeComponentProps = NodeViewRendererProps & {
+  updateAttributes: (attributes: Record<string, unknown>) => void;
+};
+
+function DataNodeComponent({ node, updateAttributes }: DataNodeComponentProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
+  const querySetupPending =
+    node.attrs.initialDataSource === 'QUERY' && node.attrs.querySetupCompleted === false;
+
+  const onCompleteQuerySetup = () => {
+    updateAttributes({ querySetupCompleted: true });
+  };
 
   return (
     <NodeViewWrapper>
       <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
         <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
           <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
-            <TableBlock spaceId={spaceId} blockId={id} />
+            <TableBlock
+              spaceId={spaceId}
+              blockId={id}
+              querySetupPending={querySetupPending}
+              onCompleteQuerySetup={onCompleteQuerySetup}
+            />
           </DataBlockProvider>
         </ErrorBoundary>
       </div>

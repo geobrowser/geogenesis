@@ -11,7 +11,8 @@ import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
 import { EditorImage } from '~/design-system/icons/editor-image';
 import { EditorList } from '~/design-system/icons/editor-list';
-import { EditorTable } from '~/design-system/icons/editor-table';
+import { EditorCollection } from '~/design-system/icons/editor-collection';
+import { EditorQuery } from '~/design-system/icons/editor-query';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
 import { Link } from '~/design-system/icons/link';
@@ -147,9 +148,9 @@ export const getGlobalSpaceId = () => globalSpaceId;
 // Command Items
 // ============================================================================
 
-const tableCommandItem: CommandSuggestionItem = {
-  icon: <EditorTable />,
-  title: 'Data',
+const collectionDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorCollection />,
+  title: 'Collection',
   command: ({ editor, range }) => {
     editor
       .chain()
@@ -157,6 +158,26 @@ const tableCommandItem: CommandSuggestionItem = {
       .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
+        attrs: { initialDataSource: 'COLLECTION' },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
+const queryDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorQuery />,
+  title: 'Query',
+  command: ({ editor, range }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: range.from, to: range.to })
+      .insertContent({
+        type: 'tableNode',
+        attrs: { initialDataSource: 'QUERY', querySetupCompleted: false },
       })
       .createParagraphNear()
       .blur()
@@ -303,7 +324,8 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
       );
     },
   },
-  tableCommandItem,
+  collectionDataBlockCommandItem,
+  queryDataBlockCommandItem,
 ];
 
 // For backward compatibility if needed
