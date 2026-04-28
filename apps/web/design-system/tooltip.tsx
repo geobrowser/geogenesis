@@ -90,5 +90,5 @@ const variantClassName: Record<Variant, string> = {
 const labelClassName: Record<Variant, string> = {
   light: '',
   dark: '',
-  propertyDescription: 'h-[60px] line-clamp-3',
+  propertyDescription: 'line-clamp-3',
 };
