@@ -328,7 +328,6 @@ export const TableBlock = ({ spaceId, blockId, querySetupPending = false, onComp
     if (querySetupSourceDraft) {
       setSource(querySetupSourceDraft);
     }
-    setIsFilterOpen(true);
     onCompleteQuerySetup?.();
   }, [onCompleteQuerySetup, querySetupSourceDraft, setSource]);
 

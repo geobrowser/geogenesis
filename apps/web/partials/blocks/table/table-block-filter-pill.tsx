@@ -100,19 +100,13 @@ export function TableBlockFilterGroupPill({
           :
         </span>
         <div className={cx('flex items-center gap-1')}>
-          {group.filters.map(({ filter, originalIndex }) => {
+          {group.filters.map(({ filter, originalIndex }, i) => {
             const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
-            const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
-            const isRelationFilter = filter.valueType === 'RELATION';
+            const canDelete = isEditing;
 
             return (
               <React.Fragment key={`${filter.columnId}-${filter.value}`}>
-                <span
-                  className={cx(
-                    'inline-flex h-5 items-center gap-1 rounded-sm border pr-1 pl-2',
-                    isRelationFilter ? 'border-grey-02 bg-white' : 'border-transparent bg-grey-01'
-                  )}
-                >
+                <span className="inline-flex h-5 items-center gap-1 rounded-sm bg-grey-01 pr-1 pl-2">
                   <span className="whitespace-nowrap">{value}</span>
                   {canDelete && (
                     <button
