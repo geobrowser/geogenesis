@@ -506,7 +506,7 @@ function SortableTab({
                 sideOffset={8}
                 onMouseEnter={cancelClose}
                 onMouseLeave={scheduleClose}
-                className="z-100 min-w-[140px] rounded-lg border border-grey-02 bg-white p-1 shadow-lg"
+                className="z-100 rounded-lg border border-grey-02 bg-white p-1 shadow-lg"
                 onOpenAutoFocus={e => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -580,7 +580,7 @@ type TabNameInputProps = {
 
 function TabNameInput({ initialValue, onSubmit, onCancel }: TabNameInputProps) {
   const [value, setValue] = useState(initialValue);
-  const placeholder = 'Tab name';
+  const placeholder = 'Add tab...';
   // The hidden sizer renders the same text the input shows, so the input's width
   // tracks the rendered glyph width rather than ch units (which over-estimate narrow text).
   const sizerText = value.length > 0 ? value : placeholder;
