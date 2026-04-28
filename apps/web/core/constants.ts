@@ -22,6 +22,8 @@ export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
 /** Bounty "Task status" relation property; linking is disabled when it points at Done. */
 export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
 export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
+/** Share of a bounty's budget shown as the per-contributor estimated payout. */
+export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
 
 // Video file types and upload constraints

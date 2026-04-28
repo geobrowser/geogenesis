@@ -161,7 +161,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 
   const { data: bountySearchSpaceIds = [], isLoading: isLoadingSpaces } = useQuery({
     queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
-    enabled: showBounties && isAuthor,
+    enabled: showBounties && isAuthor && isPanelOpen,
     staleTime: 60_000,
     queryFn: () => fetchSpacesWithAncestors(daoSpaceId),
   });
@@ -198,14 +198,14 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 
   const { data: bountySubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations', allSelectableIds],
-    enabled: isAuthor && allSelectableIds.length > 0,
+    enabled: isAuthor && isPanelOpen && allSelectableIds.length > 0,
     staleTime: 60_000,
     queryFn: () => Effect.runPromise(getRelationsByToEntityIds(allSelectableIds, BOUNTIES_RELATION_TYPE)),
   });
 
   const { data: bountyPersonalSubmissionRelations = [] } = useQuery({
     queryKey: ['bounty-submission-relations-p', allSelectableIds, personalSpaceId],
-    enabled: isAuthor && allSelectableIds.length > 0 && Boolean(personalSpaceId),
+    enabled: isAuthor && isPanelOpen && allSelectableIds.length > 0 && Boolean(personalSpaceId),
     staleTime: 60_000,
     queryFn: () => {
       if (!personalSpaceId) return Promise.resolve([]);
@@ -268,7 +268,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
     queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
-    enabled: n > 0,
+    enabled: isPanelOpen && n > 0,
     queryFn: () =>
       Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })),
   });

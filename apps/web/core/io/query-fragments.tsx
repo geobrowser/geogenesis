@@ -482,7 +482,7 @@ export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
 `);
 
 export const relationsByFromEntityIdQuery = graphql(/* GraphQL */ `
-  query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID) {
+  query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID!) {
     relations(
       filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }
     ) {

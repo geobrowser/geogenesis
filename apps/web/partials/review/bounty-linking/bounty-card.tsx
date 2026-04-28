@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { BOUNTY_EST_PAYOUT_RATIO, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ThumbGeoImage } from '~/design-system/geo-image';
@@ -27,7 +27,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       year: 'numeric',
     });
 
-  const estPayout = bounty.budget != null ? Math.round(bounty.budget * 0.2) : null;
+  const estPayout = bounty.budget != null ? Math.round(bounty.budget * BOUNTY_EST_PAYOUT_RATIO) : null;
 
   const hasDetails =
     estPayout != null ||
@@ -60,13 +60,19 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
           <span />
         )}
         <label className="flex shrink-0 cursor-pointer items-center">
-          <input type="checkbox" checked={isSelected} onChange={() => onToggle(bounty.id)} className="sr-only" />
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggle(bounty.id)}
+            className="sr-only"
+            aria-label={isSelected ? `Unlink ${bounty.name}` : `Link ${bounty.name}`}
+          />
           <div
             className={cx(
               'flex h-4 w-4 items-center justify-center rounded border transition-all',
               isSelected ? 'border-text bg-text' : 'border-grey-03 bg-white'
             )}
-            aria-label={isSelected ? `Unlink ${bounty.name}` : `Link ${bounty.name}`}
+            aria-hidden
           >
             {isSelected && (
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">

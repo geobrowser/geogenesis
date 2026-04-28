@@ -65,29 +65,10 @@ export async function fetchSpacesWithAncestors(spaceId: string): Promise<string[
     return [];
   }
 
-  const ordered: string[] = [];
-  const seen = new Set<string>();
-  let frontier: string[] = [spaceId];
-
-  for (let depth = 0; depth < 2 && frontier.length > 0; depth++) {
-    const wave = [...new Set(frontier.filter(id => validateSpaceId(id)))];
-    const parentLists = await Promise.all(wave.map(id => fetchParentSpaceIds(id)));
-
-    for (const id of wave) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      ordered.push(id);
-    }
-
-    const nextFrontier: string[] = [];
-    for (const parents of parentLists) {
-      for (const p of parents) {
-        if (!seen.has(p)) nextFrontier.push(p);
-      }
-    }
-
-    frontier = [...new Set(nextFrontier)];
+  const ordered: string[] = [spaceId];
+  const directParents = await fetchParentSpaceIds(spaceId);
+  for (const parent of directParents) {
+    if (parent !== spaceId && !ordered.includes(parent)) ordered.push(parent);
   }
-
   return ordered;
 }
