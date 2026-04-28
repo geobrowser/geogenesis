@@ -160,7 +160,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   );
 
   const { data: bountySearchSpaceIds = [], isLoading: isLoadingSpaces } = useQuery({
-    queryKey: ['bounty-link-spaces-ancestors', daoSpaceId],
+    queryKey: ['bounty-link-spaces-with-parents', daoSpaceId],
     enabled: showBounties && isAuthor && isPanelOpen,
     staleTime: 60_000,
     queryFn: () => fetchSpaceWithParents(daoSpaceId),
@@ -501,12 +501,14 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
         relations,
         spaceId: personalSpaceId,
         name: needsBootstrap ? `Bounty links for: ${name}` : `Update bounty links: ${name}`,
+        onSuccess: () => {
+          setOptimisticLinkedIds([...draftIds]);
+          queryClient.invalidateQueries({ queryKey: ['proposal-bounty-relations', proposalId, authorSpaceId] });
+          queryClient.invalidateQueries({ queryKey: ['proposal-linked-bounty-entities'] });
+          queryClient.invalidateQueries({ queryKey: ['proposal-types-relations', proposalId, personalSpaceId] });
+        },
         onError: () => {},
       });
-      setOptimisticLinkedIds([...draftIds]);
-      await queryClient.invalidateQueries({ queryKey: ['proposal-bounty-relations', proposalId, authorSpaceId] });
-      await queryClient.invalidateQueries({ queryKey: ['proposal-linked-bounty-entities'] });
-      await queryClient.invalidateQueries({ queryKey: ['proposal-types-relations', proposalId, personalSpaceId] });
     } finally {
       setIsSaving(false);
     }
