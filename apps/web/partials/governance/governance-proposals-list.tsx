@@ -18,7 +18,7 @@ import {
   convertVoteOption,
   encodePathSegment,
   isValidUUID,
-  mapActionTypeToProposalType,
+  mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
 } from '~/core/io/rest';
@@ -253,8 +253,10 @@ function apiProposalToGovernanceDto(
 ): GovernanceProposal {
   const profile = maybeProfile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
-  const firstAction = proposal.actions[0];
-  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+  // Walks all actions rather than reading actions[0] — REST action order isn't
+  // guaranteed, so a multi-action proposal that contains a PUBLISH would be
+  // misclassified if PUBLISH happens to be at a later index.
+  const proposalType = mapApiActionsToProposalType(proposal.actions);
 
   return {
     id: proposal.proposalId,
@@ -278,10 +280,16 @@ function apiProposalToGovernanceDto(
   };
 }
 
-function getProposalBucket(apiStatus: string): ProposalBucket {
-  if (apiStatus === 'EXECUTABLE') return 'executable';
-  if (apiStatus === 'PROPOSED') return 'active';
-  return 'completed';
+function getProposalBucket(apiStatus: ApiProposalListItem['status']): ProposalBucket {
+  switch (apiStatus) {
+    case 'EXECUTABLE':
+      return 'executable';
+    case 'PROPOSED':
+      return 'active';
+    case 'ACCEPTED':
+    case 'REJECTED':
+      return 'completed';
+  }
 }
 
 /**
