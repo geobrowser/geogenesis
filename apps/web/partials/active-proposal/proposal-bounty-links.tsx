@@ -376,13 +376,14 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     const key = effectiveLinkedIds.join(',');
     if (key === lastSyncedKey.current) return;
     // Only sync when there are no in-flight (unsaved) modifications relative to the previous server state.
+    // Advance lastSyncedKey only when we actually apply the sync, so the
+    // "no edits since sync" check stays correct across subsequent server changes.
     setDraftIds(prev => {
       const prevKey = [...prev].sort().join(',');
       if (prevKey === lastSyncedKey.current) {
         lastSyncedKey.current = key;
         return new Set(effectiveLinkedIds);
       }
-      lastSyncedKey.current = key;
       return prev;
     });
   }, [effectiveLinkedIds]);
