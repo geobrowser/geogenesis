@@ -1,19 +1,29 @@
 export const EditorCollection = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" opacity="0.72">
-    <rect x="2.75" y="2.75" width="10.5" height="10.5" rx="2.25" stroke="currentColor" strokeWidth="1.5" />
     <path
-      d="M5.25 6.25C5.25 5.69772 5.69772 5.25 6.25 5.25H7C7 5.80228 6.55228 6.25 6 6.25H5.25Z"
+      d="M4 0.5H12C13.933 0.5 15.5 2.067 15.5 4V12C15.5 13.933 13.933 15.5 12 15.5H4C2.067 15.5 0.5 13.933 0.5 12V4C0.5 2.067 2.067 0.5 4 0.5Z"
       stroke="currentColor"
-      strokeWidth="1.25"
-      strokeLinejoin="round"
     />
-    <circle cx="10" cy="5.75" r="1" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M6.25 10.75L5.25 9H7.25L6.25 10.75Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-    <path
-      d="M9.25 9H11C11 9.9665 10.2165 10.75 9.25 10.75V9Z"
-      stroke="currentColor"
-      strokeWidth="1.25"
-      strokeLinejoin="round"
-    />
+    <g transform="translate(3 3) rotate(90 5 5)">
+      <g transform="translate(0 5.625) rotate(-90 2.1875 2.1875)">
+        <path
+          d="M3 0.5H3.375C3.65114 0.5 3.875 0.723858 3.875 1V1.375C3.87499 2.7557 2.75571 3.875 1.375 3.875H1C0.723863 3.875 0.500009 3.65113 0.5 3.375V3L0.512695 2.74414C0.640824 1.48361 1.70566 0.5 3 0.5Z"
+          stroke="currentColor"
+        />
+      </g>
+      <path
+        d="M6.19531 0.5C8.02024 0.5 9.5 1.97975 9.5 3.80469C9.49982 3.84343 9.46843 3.87481 9.42969 3.875H6.71875C6.39083 3.875 6.125 3.60917 6.125 3.28125V0.570312C6.12518 0.531561 6.15656 0.500181 6.19531 0.5Z"
+        stroke="currentColor"
+      />
+      <g transform="rotate(-90 2.1875 2.1875)">
+        <rect x="0.5" y="0.5" width="3.375" height="3.375" rx="1.6875" stroke="currentColor" />
+      </g>
+      <g transform="translate(5.625 5.625) rotate(-90 2.1875 2.1875)">
+        <path
+          d="M1.95605 0.643555C2.05142 0.452743 2.32358 0.452746 2.41895 0.643555L3.84668 3.5C3.93292 3.67256 3.80721 3.875 3.61523 3.875H0.759766C0.567785 3.875 0.442079 3.67256 0.52832 3.5L1.95605 0.643555Z"
+          stroke="currentColor"
+        />
+      </g>
+    </g>
   </svg>
 );
