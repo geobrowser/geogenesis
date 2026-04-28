@@ -10,11 +10,14 @@ import { NavUtils } from '~/core/utils/utils';
 
 type Props = React.ComponentPropsWithoutRef<typeof Link> & { entityId?: string; spaceId?: string };
 
-export function PrefetchLink({ children, entityId, spaceId, prefetch: prefetchProp = false, ...rest }: Props) {
+export const PrefetchLink = React.forwardRef<HTMLAnchorElement, Props>(function PrefetchLink(
+  { children, entityId, spaceId, prefetch: prefetchProp = false, onMouseEnter, ...rest },
+  ref
+) {
   const { hydrate } = useSyncEngine();
   const router = useRouter();
 
-  const prefetchOnHover = () => {
+  const prefetchOnHover = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (entityId && spaceId) {
       router.prefetch(NavUtils.toEntity(spaceId, entityId));
     }
@@ -22,11 +25,13 @@ export function PrefetchLink({ children, entityId, spaceId, prefetch: prefetchPr
     if (entityId) {
       hydrate([entityId]);
     }
+
+    onMouseEnter?.(event);
   };
 
   return (
-    <Link {...rest} prefetch={prefetchProp} onMouseEnter={prefetchOnHover}>
+    <Link {...rest} ref={ref} prefetch={prefetchProp} onMouseEnter={prefetchOnHover}>
       {children}
     </Link>
   );
-}
+});
