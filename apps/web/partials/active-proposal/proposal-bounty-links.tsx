@@ -305,9 +305,10 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   });
 
   const bountySpaceRowById = React.useMemo(() => {
+    const bountyLabelSpacesById = new Map(bountyLabelSpaces.map(space => [space.id, space]));
     const m = new Map<string, { label: string; image: string }>();
     for (const id of bountySpaceIdsForLabels) {
-      const found = bountyLabelSpaces.find(s => s.id === id);
+      const found = bountyLabelSpacesById.get(id);
       const name = found?.entity?.name?.trim();
       const label = name && name.length > 0 ? name : bountySpaceFallbackLabel(id);
       const image =
