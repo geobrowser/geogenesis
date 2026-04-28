@@ -10,6 +10,7 @@ type FallbackImageProps = {
   value: string;
   sizes: string;
   className?: string;
+  priority?: boolean;
 };
 
 /**
@@ -22,7 +23,7 @@ type FallbackImageProps = {
  *      `dangerouslyAllowSVG`, and timeouts where browser can still reach Pinata fine)
  *   3. Lighthouse unoptimized (legacy CIDs not on Pinata)
  */
-export function FallbackImage({ value, sizes, className }: FallbackImageProps) {
+export function FallbackImage({ value, sizes, className, priority = false }: FallbackImageProps) {
   const [stage, setStage] = React.useState<'primary' | 'primary-unoptimized' | 'lighthouse-unoptimized'>('primary');
 
   const src = stage === 'lighthouse-unoptimized' ? getImagePathFallback(value) : getImagePath(value);
@@ -36,6 +37,7 @@ export function FallbackImage({ value, sizes, className }: FallbackImageProps) {
       sizes={sizes}
       className={className}
       unoptimized={unoptimized}
+      priority={priority}
       onError={() => {
         setStage(prev => {
           if (prev === 'primary') return 'primary-unoptimized';
