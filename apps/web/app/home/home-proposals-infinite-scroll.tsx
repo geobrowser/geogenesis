@@ -9,6 +9,7 @@ import {
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { loadMoreHomeProposalsAction } from './load-more-home-proposals-action';
+import { LoadingSkeleton } from './loading-skeleton';
 
 interface Props {
   page: number;
@@ -31,7 +32,7 @@ export function HomeProposalsInfiniteScroll({
   initialHasMore = true,
   governanceFilters,
 }: Props) {
-  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.ReactNode[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [hasMore, setHasMore] = React.useState(initialHasMore);
@@ -72,7 +73,7 @@ export function HomeProposalsInfiniteScroll({
 
   React.useEffect(() => {
     const signal = new AbortController();
-    const element = buttonRef.current;
+    const element = sentinelRef.current;
 
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting && !isLoadingRef.current && hasMoreRef.current) {
@@ -93,13 +94,24 @@ export function HomeProposalsInfiniteScroll({
   }, [loadMore]);
 
   return (
-    <div>
-      {loadMoreNodes}
+    <div className="mt-2 space-y-2">
+      {loadMoreNodes.map((node, i) => (
+        <React.Fragment key={i}>{node}</React.Fragment>
+      ))}
 
       {hasMore && (
-        <SmallButton variant="secondary" ref={buttonRef} onClick={() => loadMore()} disabled={isLoading}>
-          {isLoading ? 'Loading...' : 'Load more'}
-        </SmallButton>
+        <div ref={sentinelRef} className="space-y-2">
+          {isLoading ? (
+            <>
+              <LoadingSkeleton />
+              <LoadingSkeleton />
+            </>
+          ) : (
+            <SmallButton variant="secondary" onClick={() => loadMore()}>
+              Load more
+            </SmallButton>
+          )}
+        </div>
       )}
     </div>
   );
