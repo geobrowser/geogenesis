@@ -29,7 +29,6 @@ import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
-import { NavUtils } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -48,7 +47,6 @@ import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -57,6 +55,7 @@ import { Text } from '~/design-system/text';
 
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 type EditableEntityPageProps = {
@@ -179,13 +178,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
 }
 
 function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
-  return (
-    <Link href={NavUtils.toEntity(spaceId, property.id)}>
-      <Text as="p" variant="bodySemibold">
-        {property.name ?? property.id}
-      </Text>
-    </Link>
-  );
+  return <PropertyNameLink property={property} spaceId={spaceId} />;
 }
 
 type RelationPropertyWithDeleteProps = {

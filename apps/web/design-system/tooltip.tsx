@@ -17,7 +17,7 @@ type TooltipProps = {
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
-type Variant = 'light' | 'dark';
+type Variant = 'light' | 'dark' | 'propertyDescription';
 
 export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'dark' }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -74,4 +74,6 @@ const positionClassName: Record<Position, string> = {
 const variantClassName: Record<Variant, string> = {
   light: 'bg-white text-text max-w-[250px] rounded p-3 shadow-lg text-metadata',
   dark: 'bg-text text-white max-w-[192px] rounded p-2 shadow-button text-center text-breadcrumb',
+  propertyDescription:
+    'w-[350px] max-w-[calc(100vw-32px)] rounded-lg border border-grey-02 bg-white p-3 text-metadata text-text shadow-[0px_8px_25px_0px_rgba(0,0,0,0.09)]',
 };

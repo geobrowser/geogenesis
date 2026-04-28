@@ -17,7 +17,7 @@ import {
 import { DataType, RenderableType } from '~/core/types';
 import { isUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
-import { GeoNumber, GeoPoint, NavUtils, sortRelations } from '~/core/utils/utils';
+import { GeoNumber, GeoPoint, sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -27,8 +27,9 @@ import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 interface Props {
   id: string;
@@ -124,11 +125,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
         }
         return (
           <div key={`${entityId}-${propertyId}-${index}`} className="min-w-0 max-w-full break-words">
-            <Link href={NavUtils.toEntity(spaceId, propertyId)}>
-              <Text as="p" variant="bodySemibold">
-                {property.name || propertyId}
-              </Text>
-            </Link>
+            <PropertyNameLink property={property} spaceId={spaceId} />
             <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
               <RenderedValue
                 propertyId={propertyId}
@@ -197,11 +194,7 @@ export function RelationsGroup({
     <>
       <div key={`${propertyId}-${property.name}`} className="min-w-0 max-w-full break-words">
         {propertyId !== SystemIds.TYPES_PROPERTY && (
-          <Link href={NavUtils.toEntity(spaceId, propertyId)}>
-            <Text as="p" variant="bodySemibold">
-              {property.name ?? propertyId}
-            </Text>
-          </Link>
+          <PropertyNameLink property={property} spaceId={spaceId} />
         )}
 
         <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
