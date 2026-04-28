@@ -168,7 +168,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
 
   const { data: remoteBountyEntities = [], isLoading: isLoadingRemote } = useQuery({
     queryKey: ['bounties-by-type', bountySearchSpaceIds.join(','), BOUNTY_TYPE_ID, 'gov-panel'],
-    enabled: isAuthor && showBounties && bountySearchSpaceIds.length > 0,
+    enabled: isAuthor && showBounties && isPanelOpen && bountySearchSpaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       const pages = await Promise.all(
