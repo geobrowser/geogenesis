@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 
 import cx from 'classnames';
 
@@ -23,6 +24,7 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -65,6 +67,8 @@ export function AcceptOrRejectMember({
 }: Props) {
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -76,16 +80,34 @@ export function AcceptOrRejectMember({
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
 
-  const onApprove = () => {
-    setSelectedVote('ACCEPT');
-    vote('ACCEPT');
+  // Drop the optimistic entry once router.refresh has caught up and userVote
+  // is reflected on the prop — server render now naturally places the card
+  // at the bottom of its bucket without our artificial order bump.
+  useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
+
+  const onVoteSuccess = () => {
+    router.refresh();
   };
 
-  const onReject = () => {
-    setSelectedVote('REJECT');
-    vote('REJECT');
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
   };
+
+  const castVote = (choice: 'ACCEPT' | 'REJECT') => {
+    setSelectedVote(choice);
+    addOptimisticVote(proposalId);
+    vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError });
+  };
+
+  const onApprove = () => castVote('ACCEPT');
+  const onReject = () => castVote('REJECT');
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
@@ -146,7 +168,7 @@ export function AcceptOrRejectMember({
         <SmallButton
           variant="secondary"
           onClick={() => {
-            if (selectedVote) vote(selectedVote);
+            if (selectedVote) castVote(selectedVote);
           }}
         >
           Retry

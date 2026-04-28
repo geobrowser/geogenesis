@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -11,6 +12,7 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
 
 import { Execute } from './execute';
@@ -35,6 +37,7 @@ export function AcceptOrReject({
   userVote,
   proposalId,
 }: Props) {
+  const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     spaceId,
@@ -49,14 +52,36 @@ export function AcceptOrReject({
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
+
+  // Once the server-rendered userVote catches up after router.refresh, the
+  // optimistic entry has done its job — drop it so the atom doesn't grow
+  // across a session and the artificial CSS order bump stops applying.
+  React.useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
+
+  const onVoteSuccess = () => {
+    router.refresh();
+  };
+
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
+  };
+
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT');
+    addOptimisticVote(proposalId);
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT');
+    addOptimisticVote(proposalId);
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   if (isProposalEnded) {
@@ -123,10 +148,10 @@ export function AcceptOrReject({
   if (!isProposalEnded && smartAccount && isEditor) {
     return (
       <div className="inline-flex items-center gap-2">
-        <Button onClick={onReject} variant="error" small disabled={voteStatus !== 'idle'}>
+        <Button onClick={onReject} variant="error" small disabled={voteStatus === 'pending'}>
           <Pending isPending={isPendingRejection}>Reject</Pending>
         </Button>
-        <Button onClick={onApprove} variant="success" small disabled={voteStatus !== 'idle'}>
+        <Button onClick={onApprove} variant="success" small disabled={voteStatus === 'pending'}>
           <Pending isPending={isPendingApproval}>Accept</Pending>
         </Button>
       </div>

@@ -63,7 +63,7 @@ export function useCreatePersonalSpace() {
         throw new Error('Timed out waiting for space ID after registration.');
       }
 
-      // 3. Generate ops for personal space content
+      // 3. Graph ops for the personal space; resolvedTopicId is the home entity and on-chain topic (same as Set topic).
       const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
         type: 'personal',
         spaceName,

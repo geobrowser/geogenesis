@@ -9,6 +9,8 @@ import {
   type EntitiesBatchForCommentsQuery,
   EntityCommentReplyBacklinksPageDocument,
   type EntityCommentReplyBacklinksPageQuery,
+  EntityExistsDocument,
+  type EntityExistsQuery,
   EntitiesOrderBy,
   type EntityFilter,
   SortOrder,
@@ -325,6 +327,20 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
 
 const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
 
+/**
+ * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
+ * the given id is queryable. Used by the post-publish poll so we don't have to refetch the
+ * full comment list every 2 seconds just to check for a single id.
+ */
+export function checkEntityExists(entityId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: EntityExistsDocument,
+    decoder: (data: EntityExistsQuery) => data.entity?.id != null,
+    variables: { id: entityId },
+    signal,
+  });
+}
+
 export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({
     query: EntitiesBatchForCommentsDocument,
@@ -614,7 +630,26 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
  * This replaces the previous GraphQL-based search with the OpenSearch-backed
  * REST endpoint which provides better relevance scoring and performance.
  */
-export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+export type SearchResultsPage = {
+  results: SearchResult[];
+  /**
+   * Total number of matches across the whole result set, as reported by the
+   * REST endpoint. Paginated callers should use this to detect exhaustion
+   * (`offset + rawCount >= total`).
+   */
+  total: number;
+  /**
+   * Per-space rows returned on this page after `shouldIncludeRestSearchResult`
+   * exclusions but before grouping by entity. Useful as a "did we get a full
+   * page worth of rows that can actually reach the UI?" pagination signal
+   * when `total` is unavailable or unreliable. Intentionally post-exclusion
+   * — a page where every raw row was excluded as a block/system type should
+   * read as empty, not as a full page.
+   */
+  rawCount: number;
+};
+
+export function getResultsPage(args: ResultsArgs, signal?: AbortController['signal']) {
   const params = new URLSearchParams();
   params.set('query', args.query);
   params.set('limit', String(args.limit ?? 10));
@@ -637,8 +672,22 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
       path: `/search?${params.toString()}`,
       signal,
     }),
-    response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
+    (response): SearchResultsPage => {
+      const filtered = response.results.filter(shouldIncludeRestSearchResult);
+      return {
+        results: groupRestResults(filtered),
+        total: response.total,
+        // Post-exclusion count — callers paginate against rows that can
+        // actually reach the UI, not rows filtered out as block/system
+        // types at this layer.
+        rawCount: filtered.length,
+      };
+    }
   );
+}
+
+export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  return Effect.map(getResultsPage(args, signal), page => page.results);
 }
 
 export type NameValueMatch = {

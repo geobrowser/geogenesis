@@ -68,6 +68,8 @@ export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
 export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';
 
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+/** Static icon shown for the Root space wherever a space thumbnail is rendered (search, sidebar, breadcrumbs, etc). */
+export const ROOT_SPACE_IMAGE = '/browse-nav/root.svg';
 
 /** Legacy external docs URL; browse menu links to `DOCUMENTATION_SPACE_ID` instead. */
 export const GEO_DOCUMENTATION_URL = 'https://docs.geobrowser.io';

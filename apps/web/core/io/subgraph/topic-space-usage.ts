@@ -37,7 +37,7 @@ function toUsageSpace(space: TopicUsageSpaceNode): TopicUsage['spaces'][number] 
   return {
     id: space.id,
     name: space.page?.name ?? PLACEHOLDER_TOPIC_NAME,
-    image: resolveSpaceImage(space.page?.relationsList ?? []),
+    image: resolveSpaceImage(space.page?.relationsList ?? [], space.id),
   };
 }
 

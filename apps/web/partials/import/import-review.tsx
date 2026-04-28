@@ -263,6 +263,16 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-grey-02 px-2 text-[1rem] leading-5 tracking-[-0.35px] text-text">
           {entityCount}
         </span>
+        {hasData && !isLoading && hasUnmappedColumns && unmappedCount > 0 && (
+          <SmallButton
+            type="button"
+            variant="primary"
+            className="ml-auto shrink-0 rounded-md"
+            onClick={handleSkipAndDeleteUnmapped}
+          >
+            Next
+          </SmallButton>
+        )}
       </div>
 
       {hasNoRecords ? (
@@ -304,7 +314,7 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                   className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
                 >
                   <span className="flex shrink-0 items-center" aria-hidden>
-                    <Warning color="red-01" />
+                    <Warning color="orange" />
                   </span>
                   <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
                     {unmappedCount} {unmappedCount === 1 ? 'property needs' : 'properties need'} linking
@@ -318,23 +328,13 @@ export const ImportReview = ({ spaceId }: ImportReviewProps) => {
                   className="flex items-center gap-1.5 rounded hover:bg-grey-02/60"
                 >
                   <span className="flex shrink-0 items-center" aria-hidden>
-                    <Warning color="red-01" />
+                    <Warning color="orange" />
                   </span>
                   <Text as="span" variant="metadata" className="tracking-[-0.35px] text-text">
                     {unresolvedDataCount.toLocaleString('en-US')}{' '}
                     {unresolvedDataCount === 1 ? 'data point needs' : 'data points need'} linking
                   </Text>
                 </button>
-              )}
-              {hasUnmappedColumns && unmappedCount > 0 && (
-                <SmallButton
-                  type="button"
-                  variant="primary"
-                  className="ml-auto shrink-0 rounded-md"
-                  onClick={handleSkipAndDeleteUnmapped}
-                >
-                  Skip
-                </SmallButton>
               )}
             </div>
           ) : values.length > 0 ? (

@@ -216,7 +216,7 @@ async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposa
     associatedSpaces: result.entity.spacesByTopicId.map(space => ({
       id: space.id,
       name: space.page?.name ?? space.id,
-      image: resolveSpaceImage(space.page?.relationsList ?? []),
+      image: resolveSpaceImage(space.page?.relationsList ?? [], space.id),
       editorsCount: space.editorsList.length,
       membersCount: space.membersList.length,
     })),

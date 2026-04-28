@@ -14,7 +14,7 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
-import { GEO_APPS_SIDEBAR_EXTERNAL_ICON, GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
+import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 
 import { Avatar } from '~/design-system/avatar';
@@ -110,16 +110,6 @@ function GeoAppsSidebarLinks() {
           <BrowseNavIcon src={item.icon} />
           <span className="min-w-0 flex-1 overflow-hidden">
             <p className="-my-0.5 truncate leading-5">{item.label}</p>
-          </span>
-          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-grey-04">
-            <img
-              src={GEO_APPS_SIDEBAR_EXTERNAL_ICON}
-              alt=""
-              width={16}
-              height={16}
-              className="h-4 w-4 max-h-none max-w-none object-contain"
-              draggable={false}
-            />
           </span>
         </a>
       ))}
@@ -323,7 +313,7 @@ export function BrowseSidebar() {
         aria-label="Browse menu (collapsed)"
       >
         {/* Vertical rail aligned to the centre of the navbar logo (navbar px-4 = 16px + 8px half-logo ≈ 24px). */}
-        <div className="pointer-events-none absolute bottom-0 left-6 top-11 w-px bg-divider" />
+        <div className="pointer-events-none absolute bottom-0 left-6 top-0 w-px bg-divider" />
         <SidebarToggle
           open={false}
           onToggle={() => setOpen(true)}
