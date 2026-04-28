@@ -12,7 +12,6 @@ import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
-import { SortTable } from '~/design-system/icons/sort-table';
 import { MenuItem } from '~/design-system/menu';
 
 type DataBlockSortMenuProps = {

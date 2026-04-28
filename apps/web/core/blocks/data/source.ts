@@ -202,11 +202,11 @@ function getSourceTypeName(
 ) {
   switch (sourceType) {
     case SystemIds.COLLECTION_DATA_SOURCE:
-      return 'Collection';
+      return 'Collection data source';
     case SystemIds.QUERY_DATA_SOURCE:
-      return 'Spaces';
+      return 'Query data source';
     case SystemIds.ALL_OF_GEO_DATA_SOURCE:
-      return 'All of Geo';
+      return 'Geo data source';
     default:
       return null;
   }

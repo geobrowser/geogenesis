@@ -18,7 +18,7 @@ import type { ServerBlock } from '~/partials/editor/server-content';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
-import { getRelationForBlockType } from './block-types';
+import { getRelationForBlockConfigType, getRelationForBlockType } from './block-types';
 import { useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import { markdownToEditorJson } from './markdown-adapter';
@@ -176,6 +176,9 @@ const makeBlocksRelations = async ({
     });
 
     storage.relations.set(newRelation);
+    if (tiptapBlock.type === 'tableNode') {
+      storage.relations.set(getRelationForBlockConfigType(newRelation, spaceId));
+    }
     newBlocks.push(newRelation);
   }
 
@@ -204,6 +207,9 @@ const makeBlocksRelations = async ({
     });
 
     storage.relations.set(newRelation);
+    if (nextBlocks.find(b => b.id === movedBlock.id)?.type === 'tableNode') {
+      storage.relations.set(getRelationForBlockConfigType(newRelation, spaceId));
+    }
   }
 };
 

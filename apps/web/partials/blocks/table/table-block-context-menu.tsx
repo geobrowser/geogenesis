@@ -56,12 +56,6 @@ export function TableBlockContextMenu() {
           className="z-1001 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
           align="start"
         >
-          <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
-            <div className="flex w-full items-center justify-between gap-2">
-              <span>Open fullscreen</span>
-              <Fullscreen />
-            </div>
-          </MenuItem>
           <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
             <div className="flex w-full items-center justify-between gap-2">
               <span>View config</span>

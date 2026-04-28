@@ -13,6 +13,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { useSearch } from '~/core/hooks/use-search';
 import { Dots } from '~/design-system/dots';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -33,13 +34,15 @@ type Props = {
 
 export function DataBlockPropertiesMenu({ disabled = false }: Props) {
   const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState('');
   const { filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
   const { shownColumnIds, toggleProperty, reorderShownColumns } = useView();
   const { spaceId } = useDataBlockInstance();
+  const { query, onQueryChange, results: searchedProperties, isLoading: isSearchingProperties } = useSearch({
+    filterByTypes: [SystemIds.PROPERTY],
+  });
 
-  const { data: availableColumns = [], isLoading } = useQuery({
+  const { data: availableColumns = [], isLoading: isPropertiesLoading } = useQuery({
     queryKey: ['data-block-properties-columns', filterState, spaceId],
     queryFn: async () => {
       const typeFilters = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }));
@@ -85,6 +88,12 @@ export function DataBlockPropertiesMenu({ disabled = false }: Props) {
 
   const shownFiltered = orderedShownColumns.filter(filterByQuery);
   const hiddenFiltered = hiddenColumns.filter(filterByQuery);
+  const searchedColumns = React.useMemo(() => {
+    if (!normalizedQuery) return [];
+    return searchedProperties
+      .filter(result => !columnsById.has(result.id) && !shownColumnIds.includes(result.id))
+      .map(result => ({ id: result.id, name: result.name ?? result.id }));
+  }, [columnsById, normalizedQuery, searchedProperties, shownColumnIds]);
   const shownNameColumn = shownFiltered.find(column => column.id === SystemIds.NAME_PROPERTY) ?? null;
   const shownReorderableColumns = orderedShownColumns.filter(column => column.id !== SystemIds.NAME_PROPERTY);
   const shownFilteredReorderableColumns = shownFiltered.filter(column => column.id !== SystemIds.NAME_PROPERTY);
@@ -112,7 +121,13 @@ export function DataBlockPropertiesMenu({ disabled = false }: Props) {
   }
 
   return (
-    <Dropdown.Root open={open} onOpenChange={setOpen}>
+    <Dropdown.Root
+      open={open}
+      onOpenChange={nextOpen => {
+        setOpen(nextOpen);
+        if (!nextOpen) onQueryChange('');
+      }}
+    >
       <Dropdown.Trigger asChild disabled={disabled}>
         <button
           type="button"
@@ -130,9 +145,14 @@ export function DataBlockPropertiesMenu({ disabled = false }: Props) {
           className="z-1001 w-[320px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <div className="border-b border-grey-02 p-2">
-            <Input withSearchIcon placeholder="Search for a property..." value={query} onChange={e => setQuery(e.target.value)} />
+            <Input
+              withSearchIcon
+              placeholder="Search for a property..."
+              value={query}
+              onChange={e => onQueryChange(e.target.value)}
+            />
           </div>
-          {isLoading ? (
+          {isPropertiesLoading ? (
             <div className="flex h-16 items-center justify-center">
               <Dots />
             </div>
@@ -188,6 +208,39 @@ export function DataBlockPropertiesMenu({ disabled = false }: Props) {
                   ))}
                 </div>
               </section>
+
+              {normalizedQuery && (
+                <section className="border-t border-grey-02 px-2 py-2">
+                  <div className="mb-1 flex items-center justify-between text-footnoteMedium text-grey-04">
+                    <span>Add property</span>
+                  </div>
+                  {isSearchingProperties ? (
+                    <div className="flex h-10 items-center justify-center">
+                      <Dots />
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {searchedColumns.map(column => (
+                        <button
+                          key={column.id}
+                          type="button"
+                          className="group flex h-8 w-full items-center gap-2 rounded px-2 text-left text-button text-text transition-colors hover:bg-grey-01"
+                          onClick={() => {
+                            toggleProperty(column);
+                            onQueryChange('');
+                          }}
+                        >
+                          <DragHandle />
+                          <span className="grow truncate">{column.name}</span>
+                          <span>
+                            <EyeHide color="grey-04" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </Dropdown.Content>
@@ -224,4 +277,3 @@ function SortableShownColumnRow({ column, onToggle }: { column: Column; onToggle
     </div>
   );
 }
-
