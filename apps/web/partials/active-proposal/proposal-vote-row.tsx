@@ -6,7 +6,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
-import { VoteWithProfile } from '~/core/io/dto/proposals';
+import type { VoteWithProfile } from '~/core/io/dto/proposals';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDown } from '~/design-system/icons/chevron-down';

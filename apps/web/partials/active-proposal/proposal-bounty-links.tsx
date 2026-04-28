@@ -218,9 +218,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const submissionCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const rel of bountySubmissionRelations) {
-      const id = (rel as { toEntityId?: string }).toEntityId;
-      if (!id) continue;
-      counts.set(id, (counts.get(id) ?? 0) + 1);
+      if (!rel.toEntityId) continue;
+      counts.set(rel.toEntityId, (counts.get(rel.toEntityId) ?? 0) + 1);
     }
     return counts;
   }, [bountySubmissionRelations]);
@@ -228,9 +227,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const personalSubmissionCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const rel of bountyPersonalSubmissionRelations) {
-      const id = (rel as { toEntityId?: string }).toEntityId;
-      if (!id) continue;
-      counts.set(id, (counts.get(id) ?? 0) + 1);
+      if (!rel.toEntityId) continue;
+      counts.set(rel.toEntityId, (counts.get(rel.toEntityId) ?? 0) + 1);
     }
     return counts;
   }, [bountyPersonalSubmissionRelations]);
