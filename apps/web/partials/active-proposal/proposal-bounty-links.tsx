@@ -586,7 +586,20 @@ export function ProposalBountyHeadButton() {
 
   return (
     <>
-      {isAuthor && hasUnsaved ? (
+      <button
+        type="button"
+        onClick={togglePanel}
+        className={cx(
+          'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
+          'border-grey-02 bg-white hover:border-text'
+        )}
+        title="Bounties"
+        aria-expanded={isPanelOpen}
+      >
+        <Gem color="purple" />
+        <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
+      </button>
+      {isAuthor && hasUnsaved && (
         <Button variant="primary" small onClick={onSave} disabled={isSaving || !smartAccountReady}>
           <Pending isPending={isSaving}>
             <span className="inline-flex items-center gap-1.5">
@@ -595,20 +608,6 @@ export function ProposalBountyHeadButton() {
             </span>
           </Pending>
         </Button>
-      ) : (
-        <button
-          type="button"
-          onClick={togglePanel}
-          className={cx(
-            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
-            'border-grey-02 bg-white hover:border-text'
-          )}
-          title="Bounties"
-          aria-expanded={isPanelOpen}
-        >
-          <Gem color="purple" />
-          <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
-        </button>
       )}
       <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
     </>
