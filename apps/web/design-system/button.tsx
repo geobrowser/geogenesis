@@ -30,14 +30,14 @@ const buttonClassNames = (className = '') =>
       variants: {
         variant: {
           primary:
-            'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover',
+            'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus-visible:border-ctaHover focus-visible:shadow-inner-ctaHover',
           secondary:
-            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:text-text! focus:border-text focus:shadow-inner-text',
+            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:text-text! focus-visible:border-text focus-visible:shadow-inner-text',
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
-            'border-transparent bg-white text-grey-04! shadow-none hover:border-text hover:bg-bg hover:text-text! hover:shadow-button focus:border-text focus:shadow-inner-text',
+            'border-transparent bg-white text-grey-04! shadow-none hover:border-text hover:bg-bg hover:text-text! hover:shadow-button focus-visible:border-text focus-visible:shadow-inner-text',
           transparent:
-            'border-text bg-transparent text-text! shadow-none hover:border-text hover:text-text! focus:border-text focus:shadow-inner-text',
+            'border-text bg-transparent text-text! shadow-none hover:border-text hover:text-text! focus-visible:border-text focus-visible:shadow-inner-text',
           success: 'border-white bg-green text-white shadow-none transition-colors duration-150 hover:bg-green/80',
           error: 'border-white bg-red-01 text-white shadow-none transition-colors duration-150 hover:bg-red-01/80',
           done: 'border-green bg-green text-text transition-colors duration-150 hover:bg-green/80',
