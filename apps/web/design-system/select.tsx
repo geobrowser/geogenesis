@@ -1,10 +1,14 @@
+'use client';
+
 import * as SelectPrimitive from '@radix-ui/react-select';
 
 import * as React from 'react';
+import { useState } from 'react';
 
 import cx from 'classnames';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 type Props = {
   value: string | undefined;
@@ -15,6 +19,7 @@ type Props = {
   className?: string;
   position?: 'item-aligned' | 'popper';
   disabled?: boolean;
+  contentClassName?: string;
 };
 
 export const Select = ({
@@ -24,12 +29,19 @@ export const Select = ({
   variant = 'secondary',
   placeholder = '',
   className = '',
-  position = 'item-aligned',
+  position = 'popper',
   disabled = false,
+  contentClassName = '',
 }: Props) => {
+  const [open, setOpen] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
+
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onChange}>
+    <SelectPrimitive.Root value={value} onValueChange={onChange} open={open} onOpenChange={setOpen}>
       <SelectPrimitive.Trigger
+        ref={triggerRef}
+        disabled={disabled}
         className={cx(
           variant === 'secondary' ? 'bg-white text-text' : 'bg-text text-white',
           !disabled
@@ -48,34 +60,45 @@ export const Select = ({
           </div>
         </div>
       </SelectPrimitive.Trigger>
-      <SelectPrimitive.Content
-        className={cx(
-          'z-2 overflow-hidden rounded border border-grey-02 bg-white',
-          position === 'item-aligned'
-            ? 'mt-10 max-w-[241px]'
-            : 'mt-1 max-h-[240px] w-(--radix-select-trigger-width) overflow-y-auto'
-        )}
-        position={position}
-      >
-        <SelectPrimitive.Group className="divide-y divide-grey-02">
-          {options.map(option => (
-            <SelectPrimitive.Item
-              key={option.value}
-              value={option.value}
-              disabled={option.disabled ?? false}
-              title={option.label}
-              aria-label={option.label}
-              className={cx(
-                'flex w-full flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
-                option.disabled && 'cursor-not-allowed! opacity-25!',
-                option?.className
-              )}
-            >
-              <SelectPrimitive.ItemText>{option.render ?? option.label}</SelectPrimitive.ItemText>
-            </SelectPrimitive.Item>
-          ))}
-        </SelectPrimitive.Group>
-      </SelectPrimitive.Content>
+      <SelectPrimitive.Portal>
+        <SelectPrimitive.Content
+          className={cx(
+            'z-20 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
+            contentClassName
+          )}
+          position={position}
+          align={align}
+          side={side}
+          sideOffset={6}
+          avoidCollisions={true}
+          collisionPadding={8}
+          sticky="always"
+        >
+          <SelectPrimitive.Viewport
+            className="max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth"
+            onWheelCapture={e => e.stopPropagation()}
+          >
+            <SelectPrimitive.Group className="divide-y divide-grey-02">
+              {options.map(option => (
+                <SelectPrimitive.Item
+                  key={option.value}
+                  value={option.value}
+                  disabled={option.disabled ?? false}
+                  title={option.label}
+                  aria-label={option.label}
+                  className={cx(
+                    'flex w-full min-h-10 flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
+                    option.disabled && 'cursor-not-allowed! opacity-25!',
+                    option?.className
+                  )}
+                >
+                  <SelectPrimitive.ItemText>{option.render ?? option.label}</SelectPrimitive.ItemText>
+                </SelectPrimitive.Item>
+              ))}
+            </SelectPrimitive.Group>
+          </SelectPrimitive.Viewport>
+        </SelectPrimitive.Content>
+      </SelectPrimitive.Portal>
     </SelectPrimitive.Root>
   );
 };

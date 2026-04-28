@@ -21,13 +21,40 @@ import { RightArrowLong } from '../icons/right-arrow-long';
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
-  props,
+  { className = '', onWheelCapture, ...props },
   ref
 ) {
+  const handleWheelCapture: React.WheelEventHandler<HTMLUListElement> = e => {
+    e.stopPropagation();
+
+    const el = e.currentTarget;
+    const canScroll = el.scrollHeight > el.clientHeight;
+    if (!canScroll) {
+      e.preventDefault();
+      onWheelCapture?.(e);
+      return;
+    }
+
+    const isScrollingDown = e.deltaY > 0;
+    const isScrollingUp = e.deltaY < 0;
+    const atTop = el.scrollTop <= 0;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+
+    if ((isScrollingUp && atTop) || (isScrollingDown && atBottom)) {
+      e.preventDefault();
+    }
+
+    onWheelCapture?.(e);
+  };
+
   return (
     <ul
       ref={ref}
-      className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
+      className={cx(
+        'm-0 flex max-h-[340px] list-none flex-col justify-start overscroll-contain overflow-x-hidden overflow-y-auto scroll-smooth',
+        className
+      )}
+      onWheelCapture={handleWheelCapture}
       {...props}
     />
   );

@@ -11,6 +11,7 @@ import cx from 'classnames';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 interface Props {
   trigger: React.ReactNode;
@@ -30,7 +31,7 @@ const contentStyles = cva(
         end: 'origin-top-right',
       },
       scroll: {
-        true: 'max-h-[min(22rem,65vh)] overflow-y-auto overflow-x-hidden',
+        true: 'max-h-[180px] overscroll-contain overflow-y-auto overflow-x-hidden scroll-smooth',
         false: 'overflow-hidden',
       },
     },
@@ -40,23 +41,34 @@ const contentStyles = cva(
   }
 );
 
-export const Dropdown = ({ trigger, align = 'end', scrollableList = false, options }: Props) => {
+export const Dropdown = ({ trigger, align, scrollableList = false, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
+  const resolvedAlign = align === 'center' ? 'center' : align ?? adaptiveAlign;
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <span className="shadow-button">
-        <DropdownPrimitive.Trigger className="flex grow items-center justify-between rounded bg-white px-3 py-2 text-button whitespace-nowrap text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text data-placeholder:text-text">
+        <DropdownPrimitive.Trigger
+          ref={triggerRef}
+          className="flex grow items-center justify-between rounded bg-white px-3 py-2 text-button whitespace-nowrap text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text data-placeholder:text-text"
+        >
           {trigger}
           <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </DropdownPrimitive.Trigger>
       </span>
       <DropdownPrimitive.Content
-        align={align}
-        sideOffset={2}
-        className={contentStyles({ align, scroll: scrollableList })}
+        align={resolvedAlign}
+        side={side}
+        sideOffset={6}
+        avoidCollisions={true}
+        collisionPadding={8}
+        sticky="always"
+        className={contentStyles({ align: resolvedAlign, scroll: scrollableList })}
+        onWheelCapture={e => e.stopPropagation()}
       >
         <DropdownPrimitive.Group className={cx(!scrollableList && 'overflow-hidden')}>
           {options.map((option, index) => (
@@ -64,7 +76,7 @@ export const Dropdown = ({ trigger, align = 'end', scrollableList = false, optio
               key={`dropdown-item-${index}`}
               disabled={option.disabled}
               onClick={option.onClick}
-              className="flex cursor-pointer items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 select-none last:border-none hover:bg-bg hover:text-text hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
+              className="flex min-h-10 cursor-pointer items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 select-none last:border-none hover:bg-bg hover:text-text hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
             >
               {option.label}
               {option.disabled && (

@@ -12,7 +12,7 @@ import { Properties } from '~/core/utils/property';
 
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
-import { ColorName } from '~/design-system/theme/colors';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 import { TYPE_ICONS, TypeIconComponent } from './type-icons';
 
@@ -24,6 +24,7 @@ interface Props {
 
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   // Show all available renderable types
   const availableOptions = React.useMemo(() => {
@@ -46,6 +47,11 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     },
     Icon: TYPE_ICONS[key],
   }));
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 180,
+    gap: 8,
+  });
 
   let Icon = DashedCircle as TypeIconComponent;
   if (value) {
@@ -61,6 +67,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
+          ref={triggerRef}
           className={`flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
         >
           <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
@@ -71,13 +78,19 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
         </button>
       </DropdownPrimitive.Trigger>
       <DropdownPrimitive.Content
-        align="start"
-        sideOffset={4}
-        collisionPadding={10}
+        align={align}
+        side={side}
+        sideOffset={8}
+        collisionPadding={8}
         avoidCollisions={true}
-        className="z-50 max-h-[50vh] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
+        sticky="always"
+        className={cx(
+          'z-50 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+          options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
+        )}
+        onWheelCapture={e => e.stopPropagation()}
       >
-        <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
+        <DropdownPrimitive.Group className="overflow-hidden">
           {options.map((option, index) => {
             const TypeIcon = option.Icon;
             return (
@@ -87,7 +100,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
                   option.onClick(option.value);
                 }}
                 className={cx(
-                  'flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                  'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
                   value === option.value && 'bg-divider!'
                 )}
               >
