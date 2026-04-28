@@ -47,7 +47,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       <div className="flex items-center justify-between gap-2">
         {(bounty.spaceLabel ?? bounty.spaceId) ? (
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-03 bg-grey-01">
+            <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm">
               <ThumbGeoImage
                 value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
                 alt=""
