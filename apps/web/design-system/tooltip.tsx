@@ -84,11 +84,11 @@ const variantClassName: Record<Variant, string> = {
   light: 'bg-white text-text max-w-[250px] rounded p-3 shadow-lg text-metadata',
   dark: 'bg-text text-white max-w-[192px] rounded p-2 shadow-button text-center text-breadcrumb',
   propertyDescription:
-    'w-[350px] max-w-[calc(100vw-32px)] rounded-lg border border-grey-02 bg-white p-3 text-metadata text-text shadow-[0px_8px_25px_0px_rgba(0,0,0,0.09)]',
+    'w-[350px] max-w-[min(700px,calc(100vw-32px))] overflow-hidden rounded-lg border border-grey-02 bg-white p-3 text-metadata text-text shadow-[0px_8px_25px_0px_rgba(0,0,0,0.09)]',
 };
 
 const labelClassName: Record<Variant, string> = {
   light: '',
   dark: '',
-  propertyDescription: 'line-clamp-3',
+  propertyDescription: 'line-clamp-3 break-words',
 };
