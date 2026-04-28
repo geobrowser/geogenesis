@@ -12,14 +12,23 @@ type TooltipProps = {
   trigger: ReactNode;
   label: ReactNode;
   position?: Position;
+  align?: Align;
   variant?: Variant;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
+type Align = 'start' | 'center' | 'end';
+
 type Variant = 'light' | 'dark' | 'propertyDescription';
 
-export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'dark' }: TooltipProps) => {
+export const Tooltip = ({
+  trigger,
+  label = '',
+  position = 'bottom',
+  align = 'center',
+  variant = 'dark',
+}: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [x, y] = originCoordinates[position];
 
@@ -30,7 +39,7 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'd
         <AnimatePresence mode="popLayout">
           {isOpen && (
             // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
-            <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
+            <Content side={position} align={align} alignOffset={0} sideOffset={4} forceMount>
               <motion.div
                 className={cx(
                   'relative w-full focus:outline-hidden',
