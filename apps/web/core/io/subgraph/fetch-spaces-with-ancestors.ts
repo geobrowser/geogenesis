@@ -57,8 +57,8 @@ export async function fetchParentSpaceIds(childSpaceId: string): Promise<string[
 }
 
 /**
- * `spaceId` first, then every ancestor parent space (breadth-first), deduped.
- * Ancestors are discovered only through RELATED subspace rows today; that filter may be lifted later.
+ * `spaceId` first, then its direct parent spaces (one level up), deduped.
+ * Parents are discovered only through RELATED subspace rows today; that filter may be lifted later.
  */
 export async function fetchSpacesWithAncestors(spaceId: string): Promise<string[]> {
   if (!validateSpaceId(spaceId)) {
@@ -69,7 +69,7 @@ export async function fetchSpacesWithAncestors(spaceId: string): Promise<string[
   const seen = new Set<string>();
   let frontier: string[] = [spaceId];
 
-  for (let depth = 0; depth < 20 && frontier.length > 0; depth++) {
+  for (let depth = 0; depth < 2 && frontier.length > 0; depth++) {
     const wave = [...new Set(frontier.filter(id => validateSpaceId(id)))];
     const parentLists = await Promise.all(wave.map(id => fetchParentSpaceIds(id)));
 

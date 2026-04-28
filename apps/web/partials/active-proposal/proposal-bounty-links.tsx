@@ -19,7 +19,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
-import { getAllEntities, getEntity, getRelationsByFromEntityId, getRelationsByToEntityIds, getSpace, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getRelationsByFromEntityId, getRelationsByToEntityIds, getSpace, getSpaces } from '~/core/io/queries';
 import { fetchSpacesWithAncestors } from '~/core/io/subgraph/fetch-spaces-with-ancestors';
 import type { Relation, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -269,10 +269,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
     queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
     enabled: n > 0,
-    queryFn: async () => {
-      const entities = await Promise.all(effectiveLinkedIds.map(id => Effect.runPromise(getEntity(id))));
-      return entities.filter((e): e is NonNullable<typeof e> => e !== null);
-    },
+    queryFn: () =>
+      Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })),
   });
 
   const linkedBountiesFromGraph = React.useMemo((): Bounty[] => {
