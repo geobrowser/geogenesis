@@ -368,8 +368,10 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   }, [bountyInfoById, draftIds]);
 
   // Sync drafts to effective linked ids when they change (initial mount, after save).
+  // Layout effect so the sync runs before paint and we don't briefly show the
+  // Publish CTA on the first post-fetch render before drafts catch up.
   const lastSyncedKey = React.useRef<string>('');
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const key = effectiveLinkedIds.join(',');
     if (key === lastSyncedKey.current) return;
     // Only sync when there are no in-flight (unsaved) modifications relative to the previous server state.
@@ -584,11 +586,11 @@ export function ProposalBountyHeadButton() {
   return (
     <>
       {isAuthor && hasUnsaved ? (
-        <Button variant="primary" onClick={onSave} disabled={isSaving || !smartAccountReady}>
+        <Button variant="primary" small onClick={onSave} disabled={isSaving || !smartAccountReady}>
           <Pending isPending={isSaving}>
             <span className="inline-flex items-center gap-1.5">
               <Gem color="white" strokeColor="#3963FE" />
-              Save changes
+              Publish
             </span>
           </Pending>
         </Button>
@@ -597,8 +599,8 @@ export function ProposalBountyHeadButton() {
           type="button"
           onClick={togglePanel}
           className={cx(
-            'group inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-            'border-grey-02 bg-white text-text hover:border-text'
+            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
+            'border-grey-02 bg-white hover:border-text'
           )}
           title="Bounties"
           aria-expanded={isPanelOpen}
@@ -607,7 +609,7 @@ export function ProposalBountyHeadButton() {
           <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
         </button>
       )}
-      <span aria-hidden className="h-6 w-px shrink-0 self-center bg-grey-02 last:hidden" />
+      <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
     </>
   );
 }

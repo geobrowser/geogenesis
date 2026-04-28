@@ -76,7 +76,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
 
   const body = (
     <>
-      <div className="sticky top-0 z-50 flex min-h-[60px] w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
+      <div className="sticky top-0 z-50 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 text-button text-text">
         <div className="inline-flex items-center gap-4">
           <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
@@ -95,7 +95,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           />
         </div>
       </div>
-      <div className="flex w-full items-stretch gap-2 bg-[#EDEEF3] p-2 min-h-[calc(100vh-60px)]">
+      <div className="flex w-full items-stretch gap-2 bg-[#EDEEF3] p-2 min-h-[calc(100vh-44px)]">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="overflow-x-clip rounded-lg border border-grey-02 bg-white">
             <MetadataMotionContainer>
