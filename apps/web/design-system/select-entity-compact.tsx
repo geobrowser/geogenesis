@@ -13,6 +13,7 @@ import { SwitchableRenderableType } from '~/core/types';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 import { NativeGeoImage } from './geo-image';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { Search } from './icons/search';
 import { Tag } from './tag';
 import { Text } from './text';
@@ -199,7 +200,10 @@ export function SelectEntityCompact({
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
         >
-          <div className="max-h-[min(50vh,300px)] overflow-y-auto">
+          <div
+            className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
+            onWheel={e => trapWheelToElement(e.currentTarget, e)}
+          >
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
             {!isLoading && isEmpty && <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>}
             {!isLoading && !isEmpty && (

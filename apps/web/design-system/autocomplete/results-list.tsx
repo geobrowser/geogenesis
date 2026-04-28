@@ -17,34 +17,17 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { RightArrowLong } from '../icons/right-arrow-long';
+import { trapWheelToElement } from '../trap-wheel-scroll';
 
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
-  { className = '', onWheelCapture, ...props },
+  { className = '', onWheel, ...props },
   ref
 ) {
-  const handleWheelCapture: React.WheelEventHandler<HTMLUListElement> = e => {
-    e.stopPropagation();
-
-    const el = e.currentTarget;
-    const canScroll = el.scrollHeight > el.clientHeight;
-    if (!canScroll) {
-      e.preventDefault();
-      onWheelCapture?.(e);
-      return;
-    }
-
-    const isScrollingDown = e.deltaY > 0;
-    const isScrollingUp = e.deltaY < 0;
-    const atTop = el.scrollTop <= 0;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-
-    if ((isScrollingUp && atTop) || (isScrollingDown && atBottom)) {
-      e.preventDefault();
-    }
-
-    onWheelCapture?.(e);
+  const handleWheel: React.WheelEventHandler<HTMLUListElement> = e => {
+    trapWheelToElement(e.currentTarget, e);
+    onWheel?.(e);
   };
 
   return (
@@ -54,7 +37,7 @@ export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(
         'm-0 flex max-h-[340px] list-none flex-col justify-start overscroll-contain overflow-x-hidden overflow-y-auto scroll-smooth',
         className
       )}
-      onWheelCapture={handleWheelCapture}
+      onWheel={handleWheel}
       {...props}
     />
   );

@@ -40,6 +40,7 @@ import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
@@ -484,7 +485,7 @@ export const SelectEntity = ({
                   {!result ? (
                     <ResizableContainer>
                       <div
-                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto bg-white"
+                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
@@ -494,6 +495,7 @@ export const SelectEntity = ({
                           // the dropdown above the input.
                           minHeight: results.length > 0 ? '100px' : '2.5rem',
                         }}
+                        onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {!results?.length && isLoading && (
                           <div className="w-full bg-white px-3 py-2">
@@ -654,12 +656,13 @@ export const SelectEntity = ({
                         </div>
                       </div>
                       <div
-                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto bg-white"
+                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
                           minHeight: '100px',
                         }}
+                        onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {(result.spaces ?? []).map((space, index) => (
                           <button

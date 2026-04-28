@@ -47,6 +47,7 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
 import { Toggle } from '~/design-system/toggle';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 export interface TableBlockFilterPromptHandle {
@@ -1413,11 +1414,7 @@ function TableBlockEntityFilterInput({
     rowsToRender.length
   );
   const onEntityDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const list = entityResultsListRef.current;
-    if (!list) return;
-    list.scrollTop += e.deltaY;
-    e.preventDefault();
-    e.stopPropagation();
+    trapWheelToElement(entityResultsListRef.current, e);
   }, []);
 
   const handleEntityPick = (result: { id: string; name: string | null }) => {
@@ -1446,7 +1443,6 @@ function TableBlockEntityFilterInput({
             entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
           } ${entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`}
           onPointerDown={e => e.preventDefault()}
-          onWheelCapture={e => e.stopPropagation()}
           onWheel={onEntityDropdownWheel}
           style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
         >
@@ -1677,13 +1673,13 @@ function TableBlockSpaceFilterInput({
     showScopedOnlyPanel || showQueryPanel,
     activeSpaceRowsCount
   );
-  const onSpaceDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
-    if (!list) return;
-    list.scrollTop += e.deltaY;
-    e.preventDefault();
-    e.stopPropagation();
-  }, [showQueryPanel, showScopedOnlyPanel]);
+  const onSpaceDropdownWheel = React.useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
+      trapWheelToElement(list, e);
+    },
+    [showQueryPanel, showScopedOnlyPanel]
+  );
   const spaceDropdownClassName = `absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 ${
     spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
   } ${spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`;
@@ -1701,7 +1697,6 @@ function TableBlockSpaceFilterInput({
         <div
           className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
-          onWheelCapture={e => e.stopPropagation()}
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
@@ -1732,7 +1727,6 @@ function TableBlockSpaceFilterInput({
         <div
           className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
-          onWheelCapture={e => e.stopPropagation()}
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >

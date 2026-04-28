@@ -8,22 +8,23 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  align?: 'start' | 'center' | 'end';
-  side?: 'bottom' | 'left' | 'right' | 'top';
   sideOffset?: number;
   className?: string;
   asChild?: boolean;
   modal?: boolean;
 }
 
-const contentStyles = cva(
-  'z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
+/** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
+const shellStyles = cva(
+  'z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none isolate',
   {
   variants: {
     align: {
@@ -34,26 +35,50 @@ const contentStyles = cva(
   },
 });
 
+const scrollViewportClass =
+  'w-full max-h-[180px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
+
 export function Menu({
   children,
   trigger,
   open,
   onOpenChange,
-  side,
   sideOffset = 8,
-  align = 'end',
   asChild = false,
   className = '',
   modal = false,
 }: Props) {
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align: adaptiveAlign, side: adaptiveSide } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 180,
+    gap: 8,
+  });
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const onMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(scrollRef.current, e);
+  }, []);
+
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open} modal={modal}>
-      <Trigger asChild={asChild} suppressHydrationWarning>
+      <Trigger ref={triggerRef} asChild={asChild} suppressHydrationWarning>
         {trigger}
       </Trigger>
-      <PopoverContent align={align} side={side} sideOffset={sideOffset} className={contentStyles({ align, className })}>
-        {children}
+      <PopoverContent
+        align={adaptiveAlign}
+        side={adaptiveSide}
+        sideOffset={sideOffset}
+        avoidCollisions={true}
+        collisionPadding={8}
+        className={cx(shellStyles({ align: adaptiveAlign }), className)}
+        onWheel={onMenuWheel}
+      >
+        <div ref={scrollRef} className={scrollViewportClass}>
+          {children}
+        </div>
       </PopoverContent>
     </Root>
   );

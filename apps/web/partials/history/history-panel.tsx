@@ -11,13 +11,7 @@ interface Props {
 
 export function HistoryPanel({ children, open, onOpenChange }: Props) {
   return (
-    <Menu
-      open={open}
-      onOpenChange={onOpenChange}
-      trigger={<History color="grey-04" />}
-      side="bottom"
-      className="max-h-[320px] overflow-y-scroll"
-    >
+    <Menu open={open} onOpenChange={onOpenChange} trigger={<History color="grey-04" />}>
       {children}
     </Menu>
   );

@@ -11,6 +11,7 @@ import cx from 'classnames';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 interface Props {
@@ -47,6 +48,9 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
   const resolvedAlign = align === 'center' ? 'center' : align ?? adaptiveAlign;
+  const onDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -68,7 +72,7 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
         collisionPadding={8}
         sticky="always"
         className={contentStyles({ align: resolvedAlign, scroll: scrollableList })}
-        onWheelCapture={e => e.stopPropagation()}
+        onWheel={onDropdownWheel}
       >
         <DropdownPrimitive.Group className={cx(!scrollableList && 'overflow-hidden')}>
           {options.map((option, index) => (

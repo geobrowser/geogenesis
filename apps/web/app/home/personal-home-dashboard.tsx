@@ -244,8 +244,7 @@ function GovernanceFilterMenu({
       open={open}
       onOpenChange={setOpen}
       asChild
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{displayLabel}</SmallButton>}
-      align="start"
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
     >
       <div className={maxHeightClass}>
         {items.map(item => (

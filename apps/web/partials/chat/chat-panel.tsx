@@ -150,8 +150,6 @@ export function ChatPanel({
             open={menuOpen}
             onOpenChange={setMenuOpen}
             className="max-w-[180px]"
-            side="bottom"
-            align="end"
             asChild
             trigger={
               <button

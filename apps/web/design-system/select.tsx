@@ -8,6 +8,7 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 type Props = {
@@ -35,7 +36,11 @@ export const Select = ({
 }: Props) => {
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const viewportRef = React.useRef<HTMLDivElement>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
+  const onSelectContentWheel = React.useCallback((e: React.WheelEvent) => {
+    trapWheelToElement(viewportRef.current, e);
+  }, []);
 
   return (
     <SelectPrimitive.Root value={value} onValueChange={onChange} open={open} onOpenChange={setOpen}>
@@ -73,10 +78,11 @@ export const Select = ({
           avoidCollisions={true}
           collisionPadding={8}
           sticky="always"
+          onWheel={onSelectContentWheel}
         >
           <SelectPrimitive.Viewport
+            ref={viewportRef}
             className="max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth"
-            onWheelCapture={e => e.stopPropagation()}
           >
             <SelectPrimitive.Group className="divide-y divide-grey-02">
               {options.map(option => (

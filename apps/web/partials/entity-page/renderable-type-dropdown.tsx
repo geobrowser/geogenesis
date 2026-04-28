@@ -12,6 +12,7 @@ import { Properties } from '~/core/utils/property';
 
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 import { TYPE_ICONS, TypeIconComponent } from './type-icons';
@@ -52,6 +53,9 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     preferredHeight: 180,
     gap: 8,
   });
+  const onTypeMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
 
   let Icon = DashedCircle as TypeIconComponent;
   if (value) {
@@ -88,7 +92,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
           'z-50 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
           options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
         )}
-        onWheelCapture={e => e.stopPropagation()}
+        onWheel={onTypeMenuWheel}
       >
         <DropdownPrimitive.Group className="overflow-hidden">
           {options.map((option, index) => {
