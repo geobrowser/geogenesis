@@ -179,7 +179,17 @@ async function fetchExploreEntitiesPage(args: {
   const filter: EntityFilter = {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
+    ...(args.requireName !== false
+      ? {
+          values: {
+            some: {
+              spaceId: { in: args.spaceIds },
+              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
+              text: { isNull: false, isNot: '' },
+            },
+          },
+        }
+      : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 

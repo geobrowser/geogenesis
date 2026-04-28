@@ -40,6 +40,7 @@ const SKIPPED_PROPERTIES: string[] = [
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
   SystemIds.COVER_PROPERTY,
+  SystemIds.TABS_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
   DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
@@ -180,6 +181,7 @@ export function RelationsGroup({
     propertyId === SystemIds.COVER_PROPERTY ||
     propertyId === ContentIds.AVATAR_PROPERTY ||
     (propertyId === SystemIds.TYPES_PROPERTY && !isMetadataHeader) ||
+    propertyId === SystemIds.TABS_PROPERTY ||
     propertyId === DATA_TYPE_PROPERTY ||
     propertyId === RENDERABLE_TYPE_PROPERTY
   ) {
