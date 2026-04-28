@@ -324,6 +324,7 @@ export class E {
     where: WhereCondition;
     first: number;
     skip: number;
+    additionalSpaceIds?: string[];
   }): Promise<SearchResult[]> {
     const page = await this.findFuzzyPage(args);
     return page.results;
@@ -343,6 +344,7 @@ export class E {
     first,
     skip,
     signal,
+    additionalSpaceIds,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -350,6 +352,7 @@ export class E {
     first: number;
     skip: number;
     signal?: AbortController['signal'];
+    additionalSpaceIds?: string[];
   }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
@@ -361,7 +364,7 @@ export class E {
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const page = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip],
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(
@@ -371,6 +374,7 @@ export class E {
               query: nameFilter,
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
+              additionalSpaceIds,
             },
             // Prefer the caller-supplied signal so React Query cancellation
             // on the hook side (query change, unmount) aborts the in-flight

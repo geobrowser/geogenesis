@@ -484,6 +484,7 @@ interface ResultsArgs {
   typeIds?: string[];
   limit?: number;
   offset?: number;
+  additionalSpaceIds?: string[];
 }
 
 /**
@@ -646,6 +647,10 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
   if (args.typeIds?.length) {
     // REST endpoint expects UUIDs with hyphens
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
+  }
+
+  if (args.additionalSpaceIds?.length) {
+    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 
   return Effect.map(
