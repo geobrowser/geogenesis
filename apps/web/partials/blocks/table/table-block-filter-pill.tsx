@@ -4,8 +4,7 @@ import cx from 'classnames';
 
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 
-import { IconButton } from '~/design-system/button';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { colors } from '~/design-system/theme/colors';
 
 function PublishedFilterIconFilled() {
@@ -71,18 +70,15 @@ export function TableBlockFilterGroupPill({
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
 
-  // The mode toggle is only interactive when the user can actually modify
-  // at least one value in the group (i.e. is editing, or has local filters).
-  const hasAnyLocalFilter = group.filters.some(({ filter }) => !serverFilterKeys.has(filterKey(filter)));
-  const canToggleMode = isEditing || hasAnyLocalFilter;
-  const hasAnyDeletable = isEditing || hasAnyLocalFilter;
+  // In non-edit mode, filter results are display-only.
+  const canToggleMode = isEditing;
 
   return (
-    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pr-1 pl-2 text-metadata">
+    <div className="flex h-6 items-center gap-2 rounded border border-grey-02 bg-white py-1 pr-1 pl-2 text-metadata">
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
         <span className="whitespace-nowrap">
-          {onAddSimilar ? (
+          {isEditing && onAddSimilar ? (
             <button type="button" className="transition-colors hover:text-ctaPrimary" onClick={onAddSimilar}>
               {group.columnName} is
             </button>
@@ -103,23 +99,40 @@ export function TableBlockFilterGroupPill({
           )}
           :
         </span>
-        <div className={cx('flex items-center', hasAnyDeletable ? 'gap-1' : 'gap-0')}>
+        <div className={cx('flex items-center gap-1')}>
           {group.filters.map(({ filter, originalIndex }, i) => {
             const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
-            const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
+            const canDelete = isEditing;
 
             return (
               <React.Fragment key={`${filter.columnId}-${filter.value}`}>
-                <span className="whitespace-nowrap">
-                  {i > 0 && <span className="text-grey-04">, </span>}
-                  {value}
+                <span className="inline-flex h-5 items-center gap-1 rounded-sm bg-grey-01 pr-1 pl-2">
+                  <span className="whitespace-nowrap">{value}</span>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-sm text-grey-04 transition-colors hover:bg-grey-02 hover:text-text"
+                      onClick={() => onDeleteValue(originalIndex)}
+                      aria-label={`Remove ${value ?? 'filter'} value`}
+                    >
+                      <CloseSmall color="grey-04" />
+                    </button>
+                  )}
                 </span>
-                {canDelete && (
-                  <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={() => onDeleteValue(originalIndex)} />
-                )}
               </React.Fragment>
             );
           })}
+          {isEditing && onAddSimilar && (
+            <button
+              type="button"
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-grey-01 text-grey-04 transition-colors hover:bg-grey-02 hover:text-text"
+              onClick={onAddSimilar}
+              aria-label={`Add ${group.columnName ?? 'filter'} filter`}
+              title={`Add ${group.columnName ?? 'filter'} filter`}
+            >
+              +
+            </button>
+          )}
         </div>
       </div>
     </div>

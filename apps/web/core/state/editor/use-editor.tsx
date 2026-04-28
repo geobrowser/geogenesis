@@ -499,8 +499,10 @@ export function useEditorStore() {
             break;
           }
           case SystemIds.DATA_BLOCK: {
+            const initialSourceType =
+              node.attrs?.initialDataSource === 'QUERY' ? ('GEO' as const) : ('COLLECTION' as const);
             // @TODO(performance): upsertMany
-            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
+            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
               storage.relations.set(relation);
             }
 

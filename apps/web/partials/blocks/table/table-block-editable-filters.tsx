@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { Filter } from '~/core/blocks/data/filters';
+import { FilterMode } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 
@@ -22,6 +23,8 @@ type RenderableFilter = Filter & { columnName: string };
 interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
+  filterMode?: FilterMode;
+  setFilterMode?: (mode: FilterMode) => void;
   filterSuggestionSpaceId?: string;
 }
 
@@ -30,6 +33,8 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     {
       filterState,
       setFilterState,
+      filterMode,
+      setFilterMode,
       filterSuggestionSpaceId,
     },
     ref
@@ -109,6 +114,8 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         options={sortedFilters}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
         onCreate={onCreateFilter}
+        filterMode={filterMode}
+        onFilterModeChange={setFilterMode}
         trigger={
           <SmallButton icon={<CreateSmall />} variant="secondary">
             Filter

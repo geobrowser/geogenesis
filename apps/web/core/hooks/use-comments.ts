@@ -18,20 +18,10 @@ import type { Entity } from '~/core/types';
 
 import type { CommentEntity, CommentWithReplies } from '~/partials/comments/types';
 
-/**
- * Normalize a timestamp from the indexer. The value may be:
- *   - a numeric string of unix seconds (e.g. "1745600000")
- *   - a numeric string of unix milliseconds (e.g. "1745600000000")
- *   - a number (either unit, same heuristic)
- *   - an ISO 8601 string ("2026-04-14T10:00:00Z")
- * Returns an ISO string, or null if the input can't be parsed.
- */
 function parseEntityTimestamp(raw: string | number | undefined | null): string | null {
   if (raw == null) return null;
   const asNum = typeof raw === 'number' ? raw : Number(raw);
   if (Number.isFinite(asNum)) {
-    // Values under ~1e12 are unix seconds (anything larger in seconds would put us past year 33000);
-    // values at or above ~1e12 are already milliseconds.
     const ms = asNum < 1e12 ? asNum * 1000 : asNum;
     const d = new Date(ms);
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
@@ -147,8 +137,6 @@ interface UseCommentsOptions {
 
 /**
  * Fetch all comments targeting a given entity from the server, fully parsed into CommentEntity objects.
- * Shared between the useComments queryFn and the post-publish poller in useCreateComment so both paths
- * apply identical parsing/ID-normalization rules.
  */
 export async function fetchCommentEntitiesForTarget(
   entityId: string,
@@ -224,7 +212,6 @@ export async function fetchCommentEntitiesForTarget(
 
 /**
  * Merge server-returned comments with any locally-pending comments still in the cache.
- * A pending row is kept only if the server has not yet returned it (matched by canonical id).
  */
 export function mergePendingWithServer(
   server: CommentEntity[],
@@ -246,8 +233,6 @@ export function useComments({ entityId }: UseCommentsOptions) {
     refetch,
   } = useQuery({
     queryKey: ['comments', entityId],
-    // react-query passes an AbortSignal here; threading it through cancels in-flight GraphQL
-    // work when the component unmounts or the query is invalidated mid-flight.
     queryFn: async ({ signal }) => {
       const server = await fetchCommentEntitiesForTarget(entityId, signal);
       const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]);

@@ -12,7 +12,7 @@ import equal from 'fast-deep-equal';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -64,6 +64,8 @@ interface TableBlockFilterPromptProps {
   options: (Filter & { columnName: string })[];
   filterSuggestionSpaceId?: string;
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
+  filterMode?: FilterMode;
+  onFilterModeChange?: (mode: FilterMode) => void;
 }
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
@@ -302,6 +304,7 @@ type PromptAction =
   | {
       type: 'open';
     }
+  | { type: 'hydrateFromFilterState'; payload: { filters: Filter[]; selectedColumn: string } }
   | { type: 'close' }
   | { type: 'onOpenChange'; payload: { open: boolean } }
   | { type: 'selectColumn'; payload: { columnId: string } }
@@ -355,12 +358,49 @@ function normalizePromptState(s: PromptState): PromptState {
 
 const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
   const state = normalizePromptState(rawState);
+
+  const buildColumnDraftsFromFilters = (filters: Filter[]): Record<string, FilterColumnDraft> => {
+    const drafts: Record<string, FilterColumnDraft> = emptyDrafts();
+
+    for (const f of filters) {
+      const current = drafts[f.columnId] ?? emptyColumnDraft();
+      if (f.columnId === SystemIds.SPACE_FILTER) {
+        if (!current.multiSpaceSelections.some(s => s.id === f.value)) {
+          current.multiSpaceSelections.push({ id: f.value, name: f.valueName });
+        }
+      } else if (f.valueType === 'RELATION') {
+        if (!current.multiEntitySelections.some(e => e.id === f.value)) {
+          current.multiEntitySelections.push({ id: f.value, name: f.valueName });
+        }
+      } else if (f.valueType === 'TEXT') {
+        if (!current.multiStringSelections.includes(f.value)) {
+          current.multiStringSelections.push(f.value);
+        }
+      }
+      drafts[f.columnId] = current;
+    }
+
+    return drafts;
+  };
+
   switch (action.type) {
     case 'open':
       return {
         ...state,
         open: true,
       };
+    case 'hydrateFromFilterState': {
+      const nextDrafts = buildColumnDraftsFromFilters(action.payload.filters);
+      const selectedColumn = action.payload.selectedColumn;
+      const selectedDraft = nextDrafts[selectedColumn] ?? emptyColumnDraft();
+      return {
+        ...state,
+        open: true,
+        selectedColumn,
+        ...applyColumnDraft(selectedDraft),
+        columnDrafts: nextDrafts,
+      };
+    }
     case 'close':
       return {
         ...state,
@@ -804,6 +844,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       onCreate,
       options,
       filterSuggestionSpaceId,
+      filterMode,
+      onFilterModeChange,
     },
     ref
   ) {
@@ -820,7 +862,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     React.useImperativeHandle(ref, () => ({
       openWithColumn: (columnId: string) => {
         setQueryMode('ENTITIES');
-        dispatch({ type: 'openWithColumn', payload: { columnId } });
+        dispatch({ type: 'hydrateFromFilterState', payload: { filters: filterState, selectedColumn: columnId } });
       },
     }));
 
@@ -865,6 +907,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           state={state}
           dispatch={dispatch}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
+          filterMode={filterMode}
+          onFilterModeChange={onFilterModeChange}
         />
       );
 
@@ -934,6 +978,8 @@ interface DynamicFiltersProps {
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
   filterSuggestionSpaceId?: string;
+  filterMode?: FilterMode;
+  onFilterModeChange?: (mode: FilterMode) => void;
 }
 
 function MultiSelectChip({
@@ -944,7 +990,7 @@ function MultiSelectChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-0.5 rounded-sm border border-grey-02 bg-grey-01 py-0.5 pr-0.5 pl-1.5 text-[0.8125rem] text-text">
+    <span className="inline-flex h-6 max-w-full items-center gap-0.5 rounded-sm bg-grey-01 pr-0.5 pl-1.5 text-[0.8125rem] leading-none text-text">
       <span className="min-w-0 truncate">{label}</span>
       <button
         type="button"
@@ -966,6 +1012,8 @@ function DynamicFilters({
   dispatch,
   state,
   filterSuggestionSpaceId,
+  filterMode = 'AND',
+  onFilterModeChange,
 }: DynamicFiltersProps) {
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
@@ -999,10 +1047,61 @@ function DynamicFilters({
 
   return (
     <div className="flex w-full flex-col gap-3 px-2">
+      <div className="flex items-start gap-3">
+        <div className="flex flex-1">
+          <Select
+            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+            value={state.selectedColumn}
+            onChange={onSelectColumnToFilter}
+            position="popper"
+            className="w-full min-w-0"
+          />
+        </div>
+        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
+        <div className="relative flex flex-1">
+          {state.selectedColumn === SystemIds.SPACE_FILTER ? (
+            <TableBlockSpaceFilterInput
+              selectedValue=""
+              selectedSpaceIds={selectedSpaceIds}
+              memberSpaceId={filterSuggestionSpaceId}
+              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
+            />
+          ) : selectedOption?.valueType === 'RELATION' ? (
+            <TableBlockEntityFilterInput
+              filterByTypes={relationTargetTypeIds}
+              waitForFilterTypes={waitForRelationTargetTypes}
+              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
+              selectedValue=""
+              selectedEntityIds={selectedEntityIds}
+              onToggleEntity={e =>
+                dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
+              }
+            />
+          ) : (
+            <TableBlockTextFilterInput
+              value={getFilterValue(state.value)}
+              onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
+            />
+          )}
+        </div>
+      </div>
       {pendingFilterChips.length > 0 && (
-        <div className="w-full rounded-md border border-grey-02 bg-grey-01 px-3 py-2">
-          <p className="mb-1.5 text-[0.75rem] text-grey-04">Filters to apply</p>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="w-full rounded-md border border-grey-02 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {pendingFilterChips.length > 1 && onFilterModeChange && (
+              <div className="w-[88px] shrink-0 self-center">
+                <Select
+                  value={filterMode}
+                  onChange={next => onFilterModeChange(next as FilterMode)}
+                  options={[
+                    { value: 'AND', label: 'And' },
+                    { value: 'OR', label: 'Or' },
+                  ]}
+                  position="popper"
+                  className="h-6 py-0 text-[0.8125rem] leading-none [&>div]:min-h-0 [&>div]:h-full [&>div]:items-center"
+                />
+              </div>
+            )}
             {pendingFilterChips.map(item => {
               const valueLabel =
                 item.kind === 'string' ? item.value : (item.name ?? item.id);
@@ -1034,42 +1133,6 @@ function DynamicFilters({
           </div>
         </div>
       )}
-      <div className="flex items-start gap-3">
-        <div className="flex flex-1">
-          <Select
-            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-            value={state.selectedColumn}
-            onChange={onSelectColumnToFilter}
-          />
-        </div>
-        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
-        <div className="relative flex flex-1">
-          {state.selectedColumn === SystemIds.SPACE_FILTER ? (
-            <TableBlockSpaceFilterInput
-              selectedValue=""
-              selectedSpaceIds={selectedSpaceIds}
-              memberSpaceId={filterSuggestionSpaceId}
-              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
-            />
-          ) : selectedOption?.valueType === 'RELATION' ? (
-            <TableBlockEntityFilterInput
-              filterByTypes={relationTargetTypeIds}
-              waitForFilterTypes={waitForRelationTargetTypes}
-              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
-              selectedValue=""
-              selectedEntityIds={selectedEntityIds}
-              onToggleEntity={e =>
-                dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
-              }
-            />
-          ) : (
-            <TableBlockTextFilterInput
-              value={getFilterValue(state.value)}
-              onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
-            />
-          )}
-        </div>
-      </div>
     </div>
   );
 }

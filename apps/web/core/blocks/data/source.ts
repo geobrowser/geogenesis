@@ -62,9 +62,11 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
+  void currentSpaceId;
   const sourceType = dataEntityRelations.find(
     r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
   )?.toEntity.id;
+  const spaceFilterValues = [...new Set(filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))];
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
 
@@ -88,7 +90,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
   if (sourceType === SystemIds.QUERY_DATA_SOURCE) {
     return {
       type: 'SPACES',
-      value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
+      value: spaceFilterValues,
     };
   }
 
@@ -98,9 +100,15 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
+  if (spaceFilterValues.length > 0) {
+    return {
+      type: 'SPACES',
+      value: spaceFilterValues,
+    };
+  }
+
   return {
-    type: 'SPACES',
-    value: [currentSpaceId],
+    type: 'GEO',
   };
 }
 

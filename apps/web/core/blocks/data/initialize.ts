@@ -5,6 +5,8 @@ import { EntityId } from '~/core/io/substream-schema';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { Relation } from '~/core/types';
 
+export type InitialDataBlockSource = 'COLLECTION' | 'SPACES' | 'GEO';
+
 /**
  * Returns the relations to create a data entity. Data entities require a type,
  * source type, and source relations by default to be valid.
@@ -16,10 +18,14 @@ import { Relation } from '~/core/types';
  * @param blockId the id of the new data block as an {@link EntityId}
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: string): [Relation, Relation] {
+export function makeInitialDataEntityRelations(
+  blockId: EntityId,
+  spaceId: string,
+  initialSourceType: InitialDataBlockSource = 'COLLECTION'
+): [Relation, Relation] {
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
-    makeRelationForSourceType('COLLECTION', blockId, spaceId),
+    makeRelationForSourceType(initialSourceType, blockId, spaceId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
     getRelationForBlockType(blockId, SystemIds.DATA_BLOCK, spaceId),
