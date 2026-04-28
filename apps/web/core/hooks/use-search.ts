@@ -81,7 +81,7 @@ export function useSearch({
       filterBySpace,
       Boolean(waitForFilterTypes),
       Boolean(restrictToFilterTypes),
-      additionalSpaceIds?.join('-'),
+      additionalSpaceIds,
     ],
     queryFn: async () => {
       if (query.length === 0) return [];

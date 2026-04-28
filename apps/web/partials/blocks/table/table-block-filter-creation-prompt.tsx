@@ -1197,7 +1197,7 @@ function TableBlockEntityFilterInput({
       'table-block-filter-search',
       query,
       filterByTypes?.slice().sort().join(',') ?? '',
-      additionalSpaceIds.join(','),
+      additionalSpaceIds,
     ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
