@@ -139,11 +139,17 @@ export const Space = Schema.Struct({
   address: AddressWithValidation,
   topicId: Schema.NullOr(HexId),
 
+  members: Schema.Struct({
+    totalCount: Schema.Number,
+  }),
   membersList: Schema.Array(
     Schema.Struct({
       memberSpaceId: HexId,
     })
   ),
+  editors: Schema.Struct({
+    totalCount: Schema.Number,
+  }),
   editorsList: Schema.Array(
     Schema.Struct({
       memberSpaceId: HexId,
