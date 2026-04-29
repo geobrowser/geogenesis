@@ -17,6 +17,7 @@ import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
@@ -1175,6 +1176,7 @@ function TableBlockEntityFilterInput({
 
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery);
+  const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const searchBlocked =
     (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
@@ -1195,6 +1197,7 @@ function TableBlockEntityFilterInput({
       'table-block-filter-search',
       query,
       filterByTypes?.slice().sort().join(',') ?? '',
+      additionalSpaceIds,
     ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
@@ -1218,6 +1221,7 @@ function TableBlockEntityFilterInput({
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
         signal,
+        additionalSpaceIds,
       });
       return { rows: results, offset: pageParam, rawCount, total };
     },

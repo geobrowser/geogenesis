@@ -502,6 +502,7 @@ interface ResultsArgs {
   typeIds?: string[];
   limit?: number;
   offset?: number;
+  additionalSpaceIds?: string[];
 }
 
 /**
@@ -649,7 +650,7 @@ export type SearchResultsPage = {
   rawCount: number;
 };
 
-export function getResultsPage(args: ResultsArgs, signal?: AbortController['signal']) {
+export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
   params.set('query', args.query);
   params.set('limit', String(args.limit ?? 10));
@@ -666,10 +667,18 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
+  if (args.additionalSpaceIds?.length) {
+    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  }
+
+  return `/search?${params.toString()}`;
+}
+
+export function getResultsPage(args: ResultsArgs, signal?: AbortController['signal']) {
   return Effect.map(
     restFetch<RestSearchResponse>({
       endpoint: getConfig().api,
-      path: `/search?${params.toString()}`,
+      path: buildSearchPath(args),
       signal,
     }),
     (response): SearchResultsPage => {

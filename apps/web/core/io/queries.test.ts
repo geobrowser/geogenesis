@@ -1,6 +1,62 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupRestResults } from './queries';
+import { buildSearchPath, groupRestResults } from './queries';
+
+describe('buildSearchPath', () => {
+  const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+  const CURRENT = 'c9f267dcb0d270718c2a3c45a64afd32';
+  const PERSONAL = 'f3dab79cb5a3d9d1759656dd5361d1c6';
+
+  it('builds a minimal global path with default limit/offset', () => {
+    expect(buildSearchPath({ query: 'football' })).toBe('/search?query=football&limit=10&offset=0');
+  });
+
+  it('omits additional_space_ids when the array is empty or undefined', () => {
+    expect(buildSearchPath({ query: 'football', additionalSpaceIds: [] })).toBe(
+      '/search?query=football&limit=10&offset=0'
+    );
+    expect(buildSearchPath({ query: 'football', additionalSpaceIds: undefined })).toBe(
+      '/search?query=football&limit=10&offset=0'
+    );
+  });
+
+  it('serializes additional_space_ids as a comma-joined list of hyphenated UUIDs', () => {
+    const path = buildSearchPath({
+      query: 'baseball',
+      additionalSpaceIds: [ROOT, CURRENT, PERSONAL],
+    });
+
+    // URLSearchParams encodes commas as %2C.
+    expect(path).toBe(
+      '/search?query=baseball&limit=10&offset=0&additional_space_ids=' +
+        'a19c345a-b986-6679-b001-d7d2138d88a1%2Cc9f267dc-b0d2-7071-8c2a-3c45a64afd32%2Cf3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
+    );
+  });
+
+  it('passes through ids that already contain hyphens', () => {
+    const alreadyHyphenated = 'a19c345a-b986-6679-b001-d7d2138d88a1';
+    const path = buildSearchPath({ query: 'q', additionalSpaceIds: [alreadyHyphenated] });
+    expect(path).toContain('additional_space_ids=a19c345a-b986-6679-b001-d7d2138d88a1');
+  });
+
+  it('combines additional_space_ids with single-space scope and type_ids', () => {
+    const path = buildSearchPath({
+      query: 'q',
+      spaceId: ROOT,
+      typeIds: [CURRENT],
+      additionalSpaceIds: [PERSONAL],
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(path).toBe(
+      '/search?query=q&limit=25&offset=50' +
+        '&scope=SPACE_SINGLE&space_id=a19c345a-b986-6679-b001-d7d2138d88a1' +
+        '&type_ids=c9f267dc-b0d2-7071-8c2a-3c45a64afd32' +
+        '&additional_space_ids=f3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
+    );
+  });
+});
 
 describe('groupRestResults', () => {
   it('groups nested REST search rows into search results', () => {
