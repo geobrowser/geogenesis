@@ -11,6 +11,7 @@ import {
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
 import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
@@ -1041,6 +1042,7 @@ async function applyTemplate(templateOptions: {
 // System properties that are editable elsewhere
 const SYSTEM_PROPERTIES = [
   SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
   SystemIds.TYPES_PROPERTY,
   SystemIds.COVER_PROPERTY,
   SystemIds.BLOCKS,
@@ -1049,6 +1051,7 @@ const SYSTEM_PROPERTIES = [
   DATA_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
 ];
 
 /**

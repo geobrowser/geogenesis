@@ -162,7 +162,7 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
       </Link>
       <Link href={docHref} className={isDoc ? navLinkActive : navLinkIdle}>
         <BrowseNavIconSwap idleSrc={BROWSE_NAV_ICON.docs} activeSrc={BROWSE_NAV_ICON.docsFilled} isActive={isDoc} />
-        <span>Documentation</span>
+        <span>Docs</span>
       </Link>
     </>
   );

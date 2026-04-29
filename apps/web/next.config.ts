@@ -4,83 +4,43 @@ import type { NextConfig } from 'next';
 
 import { ServerEnvironment } from './app/api/environment';
 
+const isDev = process.env.NODE_ENV === 'development';
+
+// Faster local dev. Opt in with ENABLE_TURBOPACK_OPTIMIZATIONS=1.
+// Flags defined on ExperimentalConfig:
+// https://github.com/vercel/next.js/blob/canary/packages/next/src/server/config-shared.ts
 const turbopackOptimizations =
-  process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
+  isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
     ? {
         turbopackInferModuleSideEffects: false,
         turbopackInputSourceMaps: false,
-        turbopackSourceMaps: false,
-        turbopackMinify: false,
-        turbopackPluginRuntimeStrategy: 'workerThreads' as const,
         turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
+        turbopackPluginRuntimeStrategy: 'workerThreads' as const,
+        turbopackRemoveUnusedExports: false,
+        turbopackRemoveUnusedImports: false,
+        turbopackSourceMaps: false,
+        turbopackTreeShaking: false,
       }
     : {};
+
+const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   allowedDevOrigins: ['localhost', '127.0.0.1'],
-  turbopack: {
-    resolveAlias: {
-      '@sentry/nextjs': './prebundled/sentry-stub.js',
-      '@sentry/browser': './prebundled/sentry-stub.js',
-      '@sentry/opentelemetry': './prebundled/sentry-stub.js',
-    },
-  },
+  turbopack: isDev
+    ? {
+        resolveAlias: {
+          '@sentry/nextjs': './prebundled/sentry-stub.js',
+          '@sentry/browser': './prebundled/sentry-stub.js',
+          '@sentry/opentelemetry': './prebundled/sentry-stub.js',
+        },
+      }
+    : undefined,
   experimental: {
     ...turbopackOptimizations,
-    optimizePackageImports: [
-      // Core heavy deps
-      'effect',
-      'viem',
-      'wagmi',
-      'permissionless',
-      'date-fns',
-      'date-fns-tz',
-      'graphql-request',
-
-      // Editor
-      '@tiptap/core',
-      '@tiptap/react',
-      '@tiptap/pm',
-      '@tiptap/extensions',
-      '@tiptap/extension-bold',
-      '@tiptap/extension-code',
-      '@tiptap/extension-code-block',
-      '@tiptap/extension-document',
-      '@tiptap/extension-hard-break',
-      '@tiptap/extension-heading',
-      '@tiptap/extension-italic',
-      '@tiptap/extension-link',
-      '@tiptap/extension-list',
-      '@tiptap/extension-paragraph',
-      '@tiptap/extension-text',
-      '@tiptap/suggestion',
-      'katex',
-      'markdown-it',
-
-      // UI
-      'framer-motion',
-      'jotai',
-      '@dnd-kit/core',
-      '@dnd-kit/sortable',
-      '@dnd-kit/utilities',
-      '@tanstack/react-query',
-      '@tanstack/react-table',
-      '@tanstack/pacer',
-      '@radix-ui/react-popover',
-      '@radix-ui/react-dropdown-menu',
-      '@radix-ui/react-select',
-      '@radix-ui/react-tooltip',
-      '@xstate/store',
-      'mapbox-gl',
-
-      // Misc
-      'immer',
-      'dexie',
-      'classnames',
-      'class-variance-authority',
-    ],
+    optimizePackageImports,
   },
   images: {
     remotePatterns: [
