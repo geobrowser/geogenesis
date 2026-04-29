@@ -308,15 +308,22 @@ export const SelectEntity = ({
     };
   }, [onQueryChange]);
 
+  const isQueried = query.length > 0;
+  const popoverAbove = popoverSide === 'top';
+
   return (
     <div
       ref={containerRef}
-      className={containerStyles({
-        width,
-        floating: variant === 'floating',
-        isQueried: query.length > 0,
-        className: containerClassName,
-      })}
+      className={cx(
+        containerStyles({
+          width,
+          floating: variant === 'floating',
+          className: containerClassName,
+        }),
+        // When attached to results, square off the edge that meets them — bottom by
+        // default, top when the popover flips above the input.
+        isQueried && (popoverAbove ? 'rounded-t-none' : 'rounded-b-none')
+      )}
     >
       {withSearchIcon && (
         <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
@@ -361,12 +368,17 @@ export const SelectEntity = ({
               collisionPadding={16}
               forceMount
             >
-              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
+              <div
+                className={cx(
+                  variant === 'fixed' && (popoverAbove ? 'pb-1' : 'pt-1'),
+                  width === 'full' && 'w-full'
+                )}
+              >
                 <div
                   className={cx(
                     '-ml-px w-full max-w-full overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
                     width === 'full' && '-mr-px',
-                    withSearchIcon && 'rounded-t-none'
+                    withSearchIcon && (popoverAbove ? 'rounded-b-none' : 'rounded-t-none')
                   )}
                   style={{ clipPath }}
                 >
@@ -773,14 +785,10 @@ const containerStyles = cva('relative', {
     floating: {
       true: 'rounded-md border border-grey-02 bg-white shadow-lg',
     },
-    isQueried: {
-      true: 'rounded-b-none',
-    },
   },
   defaultVariants: {
     width: 'clamped',
     floating: false,
-    isQueried: false,
   },
 });
 
