@@ -81,40 +81,49 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
           </div>
         </button>
       </DropdownPrimitive.Trigger>
-      <DropdownPrimitive.Content
-        align={align}
-        side={side}
-        sideOffset={8}
-        collisionPadding={8}
-        avoidCollisions={true}
-        sticky="always"
-        className={cx(
-          'z-50 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
-          options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
-        )}
-        onWheel={onTypeMenuWheel}
-      >
-        <DropdownPrimitive.Group className="overflow-hidden">
-          {options.map((option, index) => {
-            const TypeIcon = option.Icon;
-            return (
-              <DropdownPrimitive.Item
-                key={`triple-type-dropdown-${index}`}
-                onClick={() => {
-                  option.onClick(option.value);
-                }}
-                className={cx(
-                  'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  value === option.value && 'bg-divider!'
-                )}
-              >
-                <TypeIcon color="grey-04" />
-                {option.label}
-              </DropdownPrimitive.Item>
-            );
-          })}
-        </DropdownPrimitive.Group>
-      </DropdownPrimitive.Content>
+      {/*
+        Portal so the menu can escape ancestor `overflow-hidden` + `transform`
+        clipping (e.g. when this dropdown lives inside SelectEntity's popover
+        shell — without the portal, the menu opens but is invisible because
+        Radix's transform-positioned `Content` is clipped by the parent's
+        rounded overflow).
+      */}
+      <DropdownPrimitive.Portal>
+        <DropdownPrimitive.Content
+          align={align}
+          side={side}
+          sideOffset={8}
+          collisionPadding={8}
+          avoidCollisions={true}
+          sticky="always"
+          className={cx(
+            'z-9999 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+            options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
+          )}
+          onWheel={onTypeMenuWheel}
+        >
+          <DropdownPrimitive.Group className="overflow-hidden">
+            {options.map((option, index) => {
+              const TypeIcon = option.Icon;
+              return (
+                <DropdownPrimitive.Item
+                  key={`triple-type-dropdown-${index}`}
+                  onClick={() => {
+                    option.onClick(option.value);
+                  }}
+                  className={cx(
+                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    value === option.value && 'bg-divider!'
+                  )}
+                >
+                  <TypeIcon color="grey-04" />
+                  {option.label}
+                </DropdownPrimitive.Item>
+              );
+            })}
+          </DropdownPrimitive.Group>
+        </DropdownPrimitive.Content>
+      </DropdownPrimitive.Portal>
     </DropdownPrimitive.Root>
   );
 };
