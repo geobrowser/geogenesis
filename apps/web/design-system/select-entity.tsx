@@ -293,38 +293,6 @@ export const SelectEntity = ({
     gap: 12,
   });
 
-  // Close the popover only when the interaction is genuinely outside this
-  // popover and any nested Radix portals (renderable-type dropdown, etc.).
-  // The previous global mousedown handler treated clicks inside child portals
-  // as "outside" and closed the popover — preventing flows like picking a
-  // renderable type before submitting "Create new".
-  const dismissOnOutside = React.useCallback(
-    (event: Event) => {
-      const target = event.target as Element | null;
-      const container = containerRef.current;
-      const popover = popoverRef.current;
-      if (container && target && container.contains(target)) return;
-      if (popover && target && popover.contains(target)) return;
-      // Treat clicks inside any Radix popper portal as inside — covers nested
-      // dropdowns/popovers launched from within the popover footer.
-      if (target?.closest?.('[data-radix-popper-content-wrapper]')) return;
-      onQueryChange('');
-      setSelectedIndex(0);
-      setResult(null);
-    },
-    [onQueryChange]
-  );
-
-  useEffect(() => {
-    document.addEventListener('mousedown', dismissOnOutside);
-    document.addEventListener('touchstart', dismissOnOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', dismissOnOutside);
-      document.removeEventListener('touchstart', dismissOnOutside);
-    };
-  }, [dismissOnOutside]);
-
   const isQueried = query.length > 0;
   // Use Radix's rendered `data-side` (mirrored into actualSide) so the corner flip
   // matches the visible position, even when Radix's collision middleware briefly
@@ -380,6 +348,18 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
                 inputRef.current?.focus();
+              }}
+              onInteractOutside={event => {
+                // The input that controls `query` lives outside the portal but
+                // anchors this popover — typing/clicking it shouldn't dismiss us.
+                const target = event.target as Node | null;
+                if (target && containerRef.current?.contains(target)) {
+                  event.preventDefault();
+                  return;
+                }
+                onQueryChange('');
+                setSelectedIndex(0);
+                setResult(null);
               }}
               className={cx(
                 'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',

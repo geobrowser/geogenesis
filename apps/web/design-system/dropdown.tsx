@@ -17,7 +17,7 @@ import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement'
 interface Props {
   trigger: React.ReactNode;
   align?: 'end' | 'center' | 'start';
-  /** When true, the menu scrolls vertically after ~22rem / 65vh so long option lists stay usable. */
+  /** When true, the menu scrolls vertically after 200px so long option lists stay usable. */
   scrollableList?: boolean;
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
