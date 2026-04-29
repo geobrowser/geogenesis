@@ -63,7 +63,7 @@ export const EntityTableCell = ({
           <Link
             entityId={entityId}
             href={href}
-            className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
+            className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
           >
             {name || entityId}
           </Link>
@@ -84,7 +84,7 @@ export const EntityTableCell = ({
               entityId={entityId}
               spaceId={spaceId}
               href={href}
-              className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
+              className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
@@ -95,9 +95,14 @@ export const EntityTableCell = ({
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       {isRelation ? (
-        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} truncateLabel={relationChipTruncateLabel} />
+        <RelationGroup
+          entityId={entityId}
+          property={property}
+          spaceId={spaceId}
+          truncateLabel={relationChipTruncateLabel}
+        />
       ) : (
         <ValueGroup entityId={entityId} property={property} spaceId={spaceId} isExpanded={isExpanded} />
       )}

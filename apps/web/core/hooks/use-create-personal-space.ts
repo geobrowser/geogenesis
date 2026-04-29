@@ -200,7 +200,12 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 15, intervalMs
   return false;
 }
 
-async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 15, intervalMs = 2_000): Promise<boolean> {
+async function waitForSpaceTopic(
+  spaceId: string,
+  topicId: string,
+  maxAttempts = 15,
+  intervalMs = 2_000
+): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const space = await Effect.runPromise(getSpace(spaceId));

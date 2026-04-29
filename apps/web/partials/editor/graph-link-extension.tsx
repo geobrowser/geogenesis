@@ -1,6 +1,7 @@
 import { ChainedCommands, Extension, InputRule, PasteRule, Range as TipTapRange, mergeAttributes } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import { EditorState } from '@tiptap/pm/state';
+
 import { insertGraphLink } from './insert-graph-link';
 
 function isGraphHref(href: unknown): href is `graph://${string}` {
@@ -82,7 +83,17 @@ export const MarkdownLinkExtension = Extension.create({
     return [
       new InputRule({
         find: /\[([^\]]+)\]\(([^)]+)\)/,
-        handler: ({ state, range, match, chain }: { state: EditorState; range: TipTapRange; match: RegExpMatchArray; chain: () => ChainedCommands }) => {
+        handler: ({
+          state,
+          range,
+          match,
+          chain,
+        }: {
+          state: EditorState;
+          range: TipTapRange;
+          match: RegExpMatchArray;
+          chain: () => ChainedCommands;
+        }) => {
           const [fullMatch, linkText, url] = match;
 
           if (url.startsWith('graph://')) {
@@ -107,7 +118,16 @@ export const MarkdownLinkExtension = Extension.create({
     return [
       new PasteRule({
         find: /\[([^\]]+)\]\(([^)]+)\)/g,
-        handler: ({ range, match, chain }: { state: EditorState; range: TipTapRange; match: RegExpMatchArray; chain: () => ChainedCommands }) => {
+        handler: ({
+          range,
+          match,
+          chain,
+        }: {
+          state: EditorState;
+          range: TipTapRange;
+          match: RegExpMatchArray;
+          chain: () => ChainedCommands;
+        }) => {
           const [, linkText, url] = match;
 
           if (url.startsWith('graph://')) {

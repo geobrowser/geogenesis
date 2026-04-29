@@ -166,7 +166,7 @@ export function EditableEntityTableCell({
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       <ValueGroup entityId={entityId} property={property} spaceId={spaceId} />
     </div>
   );
@@ -257,10 +257,10 @@ function RelationsGroup({
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       {dedupedRelations.map(r => {
         return (
-          <div key={`relation-${r.id}-${r.toEntity.value}`} className="min-w-0 max-w-full">
+          <div key={`relation-${r.id}-${r.toEntity.value}`} className="max-w-full min-w-0">
             <LinkableRelationChip
               small
               isEditing
@@ -344,9 +344,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     writeValue(storage, entityId, spaceId, property, newValue, rawValue);
   };
 
-  const cellWrap = (node: ReactNode) => (
-    <div className="min-w-0 w-full max-w-full">{node}</div>
-  );
+  const cellWrap = (node: ReactNode) => <div className="w-full max-w-full min-w-0">{node}</div>;
 
   switch (renderableType) {
     case 'INTEGER':
@@ -388,9 +386,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     case 'BOOLEAN': {
       const checked = getChecked(value);
 
-      return cellWrap(
-        <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />
-      );
+      return cellWrap(<Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />);
     }
     case 'DATE':
     case 'DATETIME':
@@ -399,7 +395,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
         <DateField
           key={value || 'empty'}
           variant="tableCell"
-          className="min-w-0 max-w-full"
+          className="max-w-full min-w-0"
           isEditing={true}
           value={value}
           propertyId={property.id}

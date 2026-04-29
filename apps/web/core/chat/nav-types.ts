@@ -1,7 +1,3 @@
-// Navigate tool shapes shared between the API route (producer) and the chat
-// widget (consumer). Types only — no runtime code — so importing across the
-// client/server boundary is safe.
-
 export type NavigateTarget = 'root' | 'explore' | 'personalHome' | 'personalSpace' | 'space' | 'entity';
 
 export type NavigateInput = {
@@ -18,3 +14,9 @@ export type NavigateOutput =
       target: NavigateTarget;
       attemptedSpaceId?: string;
     };
+
+// Nav-side (not write): opens a client overlay without changing the graph.
+// Membership enforced at tool registration, not here.
+export type OpenReviewPanelInput = Record<string, never>;
+
+export type OpenReviewPanelOutput = { ok: true } | { ok: false; error: 'not_signed_in' };

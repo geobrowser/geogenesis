@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SpaceEntity } from '../types';
-
 import { resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {

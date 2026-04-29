@@ -1,13 +1,56 @@
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { jsonSchema, tool } from 'ai';
 import * as Effect from 'effect/Effect';
 
-import { getEntity, getSpace } from '~/core/io/queries';
+import { getBatchEntities, getEntity, getProperties, getSpace } from '~/core/io/queries';
+import type { Entity, Relation } from '~/core/types';
 
 import { MAX_RESULT_ENTRIES, isEntityId, limitEntries, normalizeEntityId, truncateText } from './shared';
+
+// Mirrors DEFAULT_ENTITY_SCHEMA from ~/core/database/entities — slots present
+// on every entity regardless of its types.
+const DEFAULT_SCHEMA: Array<{ id: string; name: string; dataType: 'TEXT' | 'RELATION' }> = [
+  { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT' },
+  { id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description', dataType: 'TEXT' },
+  { id: SystemIds.TYPES_PROPERTY, name: 'Types', dataType: 'RELATION' },
+  { id: SystemIds.COVER_PROPERTY, name: 'Cover', dataType: 'RELATION' },
+];
 
 type GetEntityInput = {
   entityId: string;
   spaceId?: string;
+};
+
+// Code blocks are stored identically to text blocks at the graph level (same
+// TEXT_BLOCK type, same MARKDOWN_CONTENT property, same TEXT renderable type)
+// and so read back as 'text' here. Callers wanting code behavior on update can
+// just pass kind: 'text' with fenced markdown.
+type BlockKind = 'text' | 'image' | 'video' | 'data' | 'unknown';
+
+// Larger cap than MAX_RESULT_ENTRIES: schemas on rich types easily exceed 10
+// slots and the assistant needs the full shape before creating duplicate
+// properties.
+const MAX_SCHEMA_ENTRIES = 30;
+
+type BlockEntry = {
+  id: string;
+  kind: BlockKind;
+  // For data blocks, the entity id of the BLOCKS relation itself — the VIEW
+  // relation hangs off this, not the block entity.
+  blockRelationEntityId: string;
+};
+
+type TabEntry = {
+  id: string;
+  name: string | null;
+};
+
+type SchemaEntry = {
+  propertyId: string;
+  propertyName: string | null;
+  dataType: string;
+  filled: boolean;
 };
 
 type GetEntityOutput =
@@ -18,14 +61,144 @@ type GetEntityOutput =
       spaceId: string | null;
       spaceName: string | null;
       types: string[];
-      values: Array<{ propertyName: string | null; value: string; dataType: string }>;
+      values: Array<{ propertyId: string | null; propertyName: string | null; value: string; dataType: string }>;
       relations: Array<{ typeName: string | null; toEntityId: string; toEntityName: string | null }>;
+      blocks: BlockEntry[];
+      tabs: TabEntry[];
+      schema: SchemaEntry[];
     }
   | { error: 'not_found' | 'invalid_id' | 'lookup_failed' };
 
+function sortRelationsByPosition(relations: Relation[]): Relation[] {
+  return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+// Server-side replica of fetchEntitiesWithRelations from
+// ~/core/database/entities. The entityQuery filters relations by spaceId, so
+// any entity whose first fetch came back with empty relations gets re-fetched
+// from its top-ranked space (cross-space type resolution).
+async function fetchTypeEntitiesWithRelations(spaceByType: Map<string, string | undefined>): Promise<Entity[]> {
+  if (spaceByType.size === 0) return [];
+
+  const idsBySpace = new Map<string | undefined, string[]>();
+  for (const [id, space] of spaceByType.entries()) {
+    const group = idsBySpace.get(space) ?? [];
+    group.push(id);
+    idsBySpace.set(space, group);
+  }
+
+  let entities = (
+    await Promise.all(
+      [...idsBySpace.entries()].map(([spaceId, entityIds]) => Effect.runPromise(getBatchEntities(entityIds, spaceId)))
+    )
+  ).flat();
+
+  const missing = entities.filter(entity => {
+    if (entity.relations.length > 0) return false;
+    const fetchedSpace = spaceByType.get(entity.id);
+    return entity.spaces.length > 0 && entity.spaces[0] !== fetchedSpace;
+  });
+
+  if (missing.length > 0) {
+    const retryBySpace = new Map<string, string[]>();
+    for (const entity of missing) {
+      const space = entity.spaces[0];
+      const group = retryBySpace.get(space) ?? [];
+      group.push(entity.id);
+      retryBySpace.set(space, group);
+    }
+
+    const retried = (
+      await Promise.all(
+        [...retryBySpace.entries()].map(([spaceId, entityIds]) =>
+          Effect.runPromise(getBatchEntities(entityIds, spaceId))
+        )
+      )
+    ).flat();
+
+    const retriedById = new Map(retried.map(e => [e.id, e]));
+    entities = entities.map(e => retriedById.get(e.id) ?? e);
+  }
+
+  return entities;
+}
+
+// Mirrors getSchemaFromTypeIds from ~/core/database/entities.
+async function fetchEntitySchema(entityRelations: Relation[], filledPropertyIds: Set<string>): Promise<SchemaEntry[]> {
+  try {
+    // toSpaceId is the type entity's native space — that's where its
+    // PROPERTIES relations live, so we use it as the fetch + filter scope.
+    const typesWithSpace: Array<{ id: string; spaceId?: string }> = [];
+    const seenTypes = new Set<string>();
+    for (const r of entityRelations) {
+      if (r.type.id !== SystemIds.TYPES_PROPERTY) continue;
+      if (seenTypes.has(r.toEntity.id)) continue;
+      seenTypes.add(r.toEntity.id);
+      typesWithSpace.push({ id: r.toEntity.id, spaceId: r.toSpaceId ?? undefined });
+    }
+
+    const propertyIds: string[] = [];
+    if (typesWithSpace.length > 0) {
+      const spaceByType = new Map(typesWithSpace.map(t => [t.id, t.spaceId]));
+      const typeEntities = await fetchTypeEntitiesWithRelations(spaceByType);
+      const typeById = new Map(typeEntities.map(e => [e.id, e]));
+
+      const seenProps = new Set<string>();
+      for (const { id } of typesWithSpace) {
+        const typeEntity = typeById.get(id);
+        if (!typeEntity) continue;
+        const typeSpaceId = spaceByType.get(id) ?? typeEntity.spaces[0];
+        const relevant = typeEntity.relations.filter(
+          r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+        );
+        for (const relation of sortRelationsByPosition(relevant)) {
+          const propertyId = relation.toEntity.id;
+          if (seenProps.has(propertyId)) continue;
+          seenProps.add(propertyId);
+          propertyIds.push(propertyId);
+        }
+      }
+    }
+
+    const allIds = [...new Set([...DEFAULT_SCHEMA.map(p => p.id), ...propertyIds])];
+    const fetched = propertyIds.length > 0 ? await Effect.runPromise(getProperties(propertyIds)) : [];
+    const fetchedById = new Map(fetched.map(p => [p.id, p]));
+    const defaultsById = new Map<string, (typeof DEFAULT_SCHEMA)[number]>(DEFAULT_SCHEMA.map(p => [p.id as string, p]));
+
+    return allIds.slice(0, MAX_SCHEMA_ENTRIES).map(id => {
+      const fromDefault = defaultsById.get(id);
+      const fromGraph = fetchedById.get(id);
+      return {
+        propertyId: normalizeEntityId(id),
+        propertyName: fromGraph?.name ?? fromDefault?.name ?? null,
+        dataType: fromGraph?.dataType ?? fromDefault?.dataType ?? 'TEXT',
+        filled: filledPropertyIds.has(id),
+      };
+    });
+  } catch (err) {
+    console.error('[chat/getEntity] schema lookup failed', err);
+    return [];
+  }
+}
+
+function renderableTypeToBlockKind(renderable: string | null | undefined): BlockKind {
+  switch (renderable) {
+    case 'TEXT':
+      return 'text';
+    case 'IMAGE':
+      return 'image';
+    case 'VIDEO':
+      return 'video';
+    case 'DATA':
+      return 'data';
+    default:
+      return 'unknown';
+  }
+}
+
 export const getEntityTool = tool({
   description:
-    'Fetch a single entity from the Geo knowledge graph by id, with its property values and outgoing relations. Use after searchGraph to expand a result, or when the user gives you an explicit entity id. Long values are truncated.',
+    'Fetch a single entity from the Geo knowledge graph by id. Returns its property `values`, outgoing `relations` (up to 10, with BLOCKS and TABS excluded), a `blocks` array of every content block in order, a `tabs` array of every tab on the page, and a `schema` array of the suggested properties from this entity\'s types — including `{ propertyId, propertyName, dataType, filled }` for each. Use `schema` to discover fillable slots the entity hasn\'t set yet (Tags, Roles, Date of birth, etc.) before saying "no such property" or creating a duplicate. Call this before any `deleteBlock` / `updateBlock` / `setDataBlockView`, to expand a searchGraph result, or to enumerate tabs (tabs have their own blocks — call `getEntity(tabId)`). Long values are truncated.',
   inputSchema: jsonSchema<GetEntityInput>({
     type: 'object',
     properties: {
@@ -58,16 +231,42 @@ export const getEntityTool = tool({
       }
 
       const values = limitEntries(entity.values, MAX_RESULT_ENTRIES).map(value => ({
+        propertyId: value.property?.id ? normalizeEntityId(value.property.id) : null,
         propertyName: value.property?.name ?? null,
         value: truncateText(value.value ?? ''),
         dataType: value.property?.dataType ?? 'TEXT',
       }));
 
-      const relations = limitEntries(entity.relations, MAX_RESULT_ENTRIES).map(relation => ({
+      // Exclude BLOCKS and TABS from the capped general relations list so
+      // they're always fully enumerated.
+      const blockRelations = entity.relations.filter(r => r.type.id === SystemIds.BLOCKS);
+      const tabRelations = entity.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY);
+      const otherRelations = entity.relations.filter(
+        r => r.type.id !== SystemIds.BLOCKS && r.type.id !== SystemIds.TABS_PROPERTY
+      );
+
+      const blocks: BlockEntry[] = blockRelations.map(relation => ({
+        id: normalizeEntityId(relation.toEntity.id),
+        kind: renderableTypeToBlockKind(relation.renderableType),
+        blockRelationEntityId: normalizeEntityId(relation.entityId),
+      }));
+
+      const tabs: TabEntry[] = tabRelations.map(relation => ({
+        id: normalizeEntityId(relation.toEntity.id),
+        name: relation.toEntity.name,
+      }));
+
+      const relations = limitEntries(otherRelations, MAX_RESULT_ENTRIES).map(relation => ({
         typeName: relation.type.name,
         toEntityId: normalizeEntityId(relation.toEntity.id),
         toEntityName: relation.toEntity.name,
       }));
+
+      const filledPropertyIds = new Set<string>([
+        ...entity.values.map(v => v.property?.id).filter((id): id is string => typeof id === 'string'),
+        ...otherRelations.map(r => r.type.id),
+      ]);
+      const schema = await fetchEntitySchema(entity.relations, filledPropertyIds);
 
       return {
         id: normalizedId,
@@ -78,6 +277,9 @@ export const getEntityTool = tool({
         types: entity.types.map(t => t.name).filter((n): n is string => typeof n === 'string' && n.length > 0),
         values,
         relations,
+        blocks,
+        tabs,
+        schema,
       };
     } catch (err) {
       console.error('[chat/getEntity] lookup failed', err);

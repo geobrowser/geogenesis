@@ -1,9 +1,10 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
-import equal from 'fast-deep-equal';
 
 import * as React from 'react';
+
+import equal from 'fast-deep-equal';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';

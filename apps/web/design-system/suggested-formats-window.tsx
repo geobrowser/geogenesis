@@ -7,9 +7,9 @@ import {
   DATA_TYPE_PROPERTY,
   GRC_20_SPECIFICATION_LINK,
   RENDERABLE_TYPE_PROPERTY,
-  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_DATETIME_FORMATS,
   SUGGESTED_DATE_FORMATS,
+  SUGGESTED_FLOAT_FORMATS,
   SUGGESTED_NUMBER_FORMATS,
   SUGGESTED_TIME_FORMATS,
   SUGGESTED_URL_FORMATS,
@@ -87,11 +87,7 @@ const SuggestedFormats = ({
     : formatKind === 'NUMBER' || formatKind === 'FLOAT'
       ? UNICODE_LINK
       : null;
-  const formatKindLabel = isTemporalType
-    ? 'date/time'
-    : formatKind === 'URL'
-      ? 'URL'
-      : 'number';
+  const formatKindLabel = isTemporalType ? 'date/time' : formatKind === 'URL' ? 'URL' : 'number';
 
   const formatLabel = React.useMemo(() => {
     // URL formats still rely on the predefined labels

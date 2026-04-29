@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import {
   type ModelMessage,
+  type ToolSet,
   type UIMessage,
   convertToModelMessages,
   createUIMessageStream,
@@ -13,6 +14,16 @@ import {
 } from 'ai';
 import { cookies } from 'next/headers';
 
+import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
+import {
+  ENTITY_ID_REGEX,
+  HISTORY_FULL_MESSAGE,
+  MAX_HISTORY_CHARS,
+  MAX_LAST_MESSAGE_CHARS,
+  MAX_MESSAGES,
+  MAX_PATH_CHARS,
+  MESSAGE_TOO_LONG_MESSAGE,
+} from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import {
@@ -21,6 +32,7 @@ import {
   MEMBER_SYSTEM_PROMPT,
   renderCurrentContextSection,
 } from './chat-system-prompt';
+import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
 import {
   anonBurstLimit,
   anonHourlyLimit,
@@ -31,26 +43,20 @@ import {
 } from './rate-limit';
 import { buildNavTools } from './tools/nav';
 import { readTools } from './tools/read';
+import { buildWriteContext, buildWriteTools } from './tools/write';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
-
-const MAX_HISTORY_CHARS = 50_000;
-const MAX_LAST_MESSAGE_CHARS = 4_000;
-const MAX_MESSAGES = 40;
-const MAX_OUTPUT_TOKENS = 2_000;
-const MAX_PATH_CHARS = 200;
+// Tool calls consume output tokens; a chained edit turn can exceed 2k. 6k leaves headroom.
+const MAX_OUTPUT_TOKENS = 6_000;
 const MAX_TOOL_STEPS = 6;
 
-const UUID_OR_DASHLESS = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 
-// currentPath is interpolated into the system prompt inside backticks, so
-// reject anything that could break out of the code span or smuggle newlines
-// / control chars into the prompt. Must start with '/' and contain no
-// whitespace, backticks, or control characters.
+// currentPath is interpolated into the system prompt inside backticks; reject
+// anything that could break out of the code span or smuggle control chars.
 const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
 
 function validateClientContext(input: unknown): ChatClientContext | null {
@@ -61,7 +67,6 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   const currentEntityId = raw.currentEntityId;
   const currentPath = raw.currentPath;
   const isEditMode = raw.isEditMode;
-  const personalSpaceId = raw.personalSpaceId;
 
   if (currentSpaceId != null && (typeof currentSpaceId !== 'string' || !UUID_OR_DASHLESS.test(currentSpaceId))) {
     return null;
@@ -78,16 +83,14 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (isEditMode != null && typeof isEditMode !== 'boolean') {
     return null;
   }
-  if (personalSpaceId != null && (typeof personalSpaceId !== 'string' || !UUID_OR_DASHLESS.test(personalSpaceId))) {
-    return null;
-  }
+  // personalSpaceId is ignored here; resolved server-side from membership so a
+  // forged context can't redirect navigation.
 
   return {
     currentSpaceId: typeof currentSpaceId === 'string' ? currentSpaceId : null,
     currentEntityId: typeof currentEntityId === 'string' ? currentEntityId : null,
     currentPath: typeof currentPath === 'string' ? currentPath : null,
     isEditMode: typeof isEditMode === 'boolean' ? isEditMode : false,
-    personalSpaceId: typeof personalSpaceId === 'string' ? personalSpaceId : null,
   };
 }
 
@@ -96,11 +99,16 @@ function getClientIp(req: Request): string {
   if (forwarded) {
     return forwarded.split(',')[0].trim();
   }
-  return req.headers.get('x-real-ip') ?? 'unknown';
+  const real = req.headers.get('x-real-ip');
+  if (real) return real;
+  // No proxy headers — random key per request avoids false-positive 429s from
+  // a shared `unknown` bucket. Vercel always sets x-forwarded-for so this is
+  // unreachable in prod.
+  return `noip:${crypto.randomUUID()}`;
 }
 
-// The WALLET_ADDRESS cookie is client-set and unsigned, so a forged value could
-// otherwise promote an anon caller to the member prompt and higher quotas.
+// httpOnly + sameSite=lax means script can't forge this cookie, but we still
+// validate shape to fall back to the guest prompt on a malformed value.
 function parseWalletCookie(raw: string | undefined): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase();
@@ -139,26 +147,45 @@ function rateLimitResponse(reset: number) {
   });
 }
 
-// When the final assistant turn has no text content and only emitted a
-// `navigate` tool call, skip the follow-up round trip — there's nothing
-// substantive to anchor "next step" suggestions to.
-function shouldSkipFollowUps(firstStreamMessages: ModelMessage[]): boolean {
+type LimitProbe = { success: boolean; reset: number };
+
+// Take `reset` only from the limiters that actually rejected — taking max
+// across all four would let an exhausted 10-second burst surface a 1-hour
+// Retry-After if the hourly window happens to reset later.
+function failedLimiterReset(probes: LimitProbe[]): number {
+  let max = 0;
+  for (const probe of probes) {
+    if (probe.success) continue;
+    if (probe.reset > max) max = probe.reset;
+  }
+  return max;
+}
+
+const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
+// Navigation turns: text-empty turns containing only these skip follow-up generation.
+const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
+
+function classifyTurn(firstStreamMessages: ModelMessage[]): 'skip' | 'edit' | 'default' {
   const lastAssistant = [...firstStreamMessages].reverse().find(m => m.role === 'assistant');
-  if (!lastAssistant) return false;
+  if (!lastAssistant) return 'default';
   const content = lastAssistant.content;
-  if (typeof content === 'string') return content.trim().length === 0;
-  if (!Array.isArray(content)) return false;
+  if (typeof content === 'string') return content.trim().length === 0 ? 'skip' : 'default';
+  if (!Array.isArray(content)) return 'default';
 
   let hasText = false;
-  let onlyNavigate = true;
+  let onlyNavLike = true;
+  let hasEditCall = false;
   for (const part of content) {
     if (part.type === 'text' && part.text.trim().length > 0) {
       hasText = true;
-    } else if (part.type === 'tool-call' && part.toolName !== 'navigate') {
-      onlyNavigate = false;
+    } else if (part.type === 'tool-call') {
+      if (!NAV_LIKE_TOOL_NAMES.has(part.toolName)) onlyNavLike = false;
+      if (EDIT_TOOL_NAME_SET.has(part.toolName)) hasEditCall = true;
     }
   }
-  return !hasText && onlyNavigate;
+  if (hasEditCall) return 'edit';
+  if (!hasText && onlyNavLike) return 'skip';
+  return 'default';
 }
 
 function lastUserMessageLength(uiMessages: UIMessage[]): number {
@@ -170,16 +197,21 @@ function lastUserMessageLength(uiMessages: UIMessage[]): number {
   return 0;
 }
 
-// The client sends the full UIMessage[] on every request. We trust nothing in
-// the payload — in particular, we reject any role other than user/assistant so
-// a caller can't smuggle a second `system` turn in after our real prompt.
+// Reject any role other than user/assistant so a caller can't smuggle a
+// second `system` turn in after the real prompt.
 function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   for (const msg of input) {
     if (!msg || typeof msg !== 'object') return null;
     const role = (msg as { role?: unknown }).role;
     if (role !== 'user' && role !== 'assistant') return null;
-    if (!Array.isArray((msg as { parts?: unknown }).parts)) return null;
+    const parts = (msg as { parts?: unknown }).parts;
+    if (!Array.isArray(parts)) return null;
+    // Shallow check: null or shape-bogus parts would crash convertToModelMessages.
+    for (const part of parts) {
+      if (!part || typeof part !== 'object') return null;
+      if (typeof (part as { type?: unknown }).type !== 'string') return null;
+    }
   }
   return input as UIMessage[];
 }
@@ -207,7 +239,7 @@ export async function POST(req: Request) {
     ]);
 
     if (!burst.success || !hourly.success || !ipBurst.success || !ipHourly.success) {
-      return rateLimitResponse(Math.max(burst.reset, hourly.reset, ipBurst.reset, ipHourly.reset));
+      return rateLimitResponse(failedLimiterReset([burst, hourly, ipBurst, ipHourly]));
     }
   } catch (err) {
     console.error('[chat] rate limiter unavailable', err);
@@ -238,21 +270,25 @@ export async function POST(req: Request) {
   }
 
   if (uiMessages.length > MAX_MESSAGES) {
-    return jsonError(413, 'Conversation too long. Please start a new chat.');
+    return jsonError(413, HISTORY_FULL_MESSAGE);
   }
 
   if (lastUserMessageLength(uiMessages) > MAX_LAST_MESSAGE_CHARS) {
-    return jsonError(413, 'Message is too long. Please shorten it and try again.');
+    return jsonError(413, MESSAGE_TOO_LONG_MESSAGE);
   }
 
   if (JSON.stringify(uiMessages).length > MAX_HISTORY_CHARS) {
-    return jsonError(413, 'Conversation too long. Please start a new chat.');
+    return jsonError(413, HISTORY_FULL_MESSAGE);
   }
 
   const converted = await convertToModelMessages(uiMessages);
 
+  const writeContext = buildWriteContext({ walletAddress: wallet });
+
+  const serverPersonalSpaceId = writeContext.kind === 'member' ? await writeContext.personalSpaceId() : null;
+
   const basePrompt = isLoggedIn ? MEMBER_SYSTEM_PROMPT : GUEST_SYSTEM_PROMPT;
-  const contextSection = renderCurrentContextSection(clientContext);
+  const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId);
   const systemContent = contextSection ? `${basePrompt}\n${contextSection}` : basePrompt;
 
   const messages: ModelMessage[] = [
@@ -288,58 +324,69 @@ export async function POST(req: Request) {
   };
 
   // The AI SDK's multi-step loop only continues when a step has tool calls to
-  // respond to, so a single streamText with forced toolChoice either skips the
-  // text or skips the tool. Chain two streamText calls manually instead:
-  // (1) stream the text reply (with any tools registered), (2) re-send the full
-  // conversation plus a synthetic "call the tool now" user turn and force
-  // suggestFollowUps. Anthropic rejects requests that end on an assistant turn,
-  // hence the extra user message.
-  const navTools = buildNavTools({ personalSpaceId: clientContext?.personalSpaceId ?? null });
+  // respond to, so a single streamText with forced toolChoice either skips
+  // the text or skips the tool. Chain two streamTexts manually: (1) text
+  // reply, then (2) forced suggestFollowUps that sees the completed turn.
+  const navTools = buildNavTools(
+    {
+      resolvePersonalSpaceId: () =>
+        writeContext.kind === 'member' ? writeContext.personalSpaceId() : Promise.resolve(null),
+    },
+    writeContext
+  );
+  const writeTools: ToolSet = isLoggedIn ? buildWriteTools(writeContext) : {};
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const textResult = streamText({
-        model: anthropic(CLAUDE_MODEL),
+        model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        tools: { ...readTools, ...navTools },
+        tools: { ...readTools, ...navTools, ...writeTools },
         toolChoice: 'auto',
         stopWhen: stepCountIs(MAX_TOOL_STEPS),
       });
       writer.merge(textResult.toUIMessageStream({ sendReasoning: false, sendFinish: false }));
 
-      // Forward the full assistant turn — text plus any tool-use / tool-result
-      // parts — into the follow-up stream so suggestions can reference what was
-      // actually shown instead of the generic product surface.
       const firstStreamMessages = (await textResult.response).messages;
 
-      // Skip the follow-up call entirely when the assistant only routed the
-      // user elsewhere — "where to go next" suggestions aren't useful on a
-      // navigation turn, and it saves a round trip.
-      if (shouldSkipFollowUps(firstStreamMessages)) {
+      const turnKind = classifyTurn(firstStreamMessages);
+
+      if (turnKind === 'skip') {
         return;
       }
 
+      const followUpInstruction =
+        turnKind === 'edit'
+          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
+          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.';
+
       const followUpResult = streamText({
-        model: anthropic(CLAUDE_MODEL),
+        model: anthropic(FOLLOW_UPS_MODEL),
         messages: [
           ...messages,
           ...firstStreamMessages,
           {
             role: 'user',
-            content:
-              'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.',
+            content: followUpInstruction,
           },
         ],
         tools: followUpTools,
         toolChoice: { type: 'tool', toolName: 'suggestFollowUps' },
-        maxOutputTokens: 200,
+        // 100 tokens is plenty for 3 short strings; lower cap = faster finish.
+        maxOutputTokens: 100,
       });
       writer.merge(followUpResult.toUIMessageStream({ sendReasoning: false, sendStart: false }));
     },
     onError: err => {
       console.error('[chat] stream error', err);
-      return 'An error occurred.';
+      // Coarse classification lets the client show a sharper error message.
+      const message = err instanceof Error ? err.message : '';
+      if (message.toLowerCase().includes('rate')) return 'rate_limited';
+      if (message.toLowerCase().includes('overload') || message.toLowerCase().includes('timeout')) {
+        return 'transient';
+      }
+      return 'unknown_stream_error';
     },
   });
 

@@ -47,3 +47,19 @@ export const ipCeilingHourlyLimit = new Ratelimit({
   analytics: true,
   prefix: 'chat:ip-ceiling:hour',
 });
+
+// Separate axis for write tools: more expensive than reads and each call
+// mutates state, so cap independently of read volume.
+export const editBurstLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(25, '60 s'),
+  analytics: true,
+  prefix: 'chat:edit:burst',
+});
+
+export const editHourlyLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(300, '1 h'),
+  analytics: true,
+  prefix: 'chat:edit:hour',
+});

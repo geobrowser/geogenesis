@@ -102,8 +102,11 @@ describe('detectWeb2URLsInMarkdown', () => {
   });
 
   it('should detect auto-generated markdown links', () => {
-    const text = '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)';
+    const text =
+      '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)';
     const result = detectWeb2URLsInMarkdown(text);
-    expect(result).toEqual(['[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)']);
+    expect(result).toEqual([
+      '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)',
+    ]);
   });
 });

@@ -1,18 +1,8 @@
 import type { UIMessage } from 'ai';
 import { isToolUIPart } from 'ai';
 
-/**
- * Lightweight cache of entity metadata populated from chat tool-result parts.
- * Used by the chat markdown renderer to resolve `geo://entity/{id}` citations
- * into <ChatRelationPill> components without a second fetch.
- *
- * Entries come from tool results on visible assistant messages:
- *   - searchGraph → { results: [{ id, name, spaceId, spaceName, typeNames }] }
- *   - getEntity   → { id, name, spaceId, spaceName, types }
- *
- * Missing keys fall back to plain text in the renderer — this cache is
- * best-effort, never a source of truth.
- */
+// Populated from tool-result parts to resolve geo:// citations into relation
+// pills. Best-effort; missing keys fall back to plain text.
 
 export type CachedEntity = {
   id: string;

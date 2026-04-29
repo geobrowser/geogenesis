@@ -17,8 +17,8 @@ import { GalleryView } from '~/design-system/icons/gallery-view';
 import { ListView } from '~/design-system/icons/list-view';
 import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
-import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { ColorName } from '~/design-system/theme/colors';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 const VIEW_MENU_SURFACE =

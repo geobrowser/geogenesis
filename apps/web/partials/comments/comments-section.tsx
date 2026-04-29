@@ -7,9 +7,7 @@ import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
-
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
-
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -21,7 +19,7 @@ import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
@@ -38,9 +36,7 @@ const THREAD_SEGMENT_DIM_STROKE = 'stroke-[var(--color-grey-02)]';
 const THREAD_SEGMENT_HI = 'bg-grey-03';
 const THREAD_SEGMENT_HI_STROKE = 'stroke-[var(--color-grey-03)]';
 
-type BranchFocus =
-  | { kind: 'parent-thread'; threadCommentId: string }
-  | { kind: 'row-connectors'; commentId: string };
+type BranchFocus = { kind: 'parent-thread'; threadCommentId: string } | { kind: 'row-connectors'; commentId: string };
 
 type CommentBranchHighlightValue = {
   focus: BranchFocus | null;
@@ -117,7 +113,9 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
   return false;
 }
 
-function branchPointerBlurProps(clearFocus: () => void): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
+function branchPointerBlurProps(
+  clearFocus: () => void
+): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
   return {
     onPointerLeave: e => {
       const next = e.relatedTarget;
@@ -231,9 +229,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
           rest.push(item);
         }
       }
-      const pinned: T[] = sessionNewIds
-        .map((id: string) => byId.get(id))
-        .filter((c): c is T => c !== undefined);
+      const pinned: T[] = sessionNewIds.map((id: string) => byId.get(id)).filter((c): c is T => c !== undefined);
       return [...pinned, ...rest];
     },
     [sortOrder, sessionNewIds]
@@ -250,47 +246,45 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   return (
     <CommentBranchHighlightProvider>
       <div id="entity-comments" className="flex w-full flex-col pt-10">
-      <div className="text-mediumTitle">
-        Comments ({totalCount})
-      </div>
-      <Spacer height={16} />
-      <TopLevelCommentInput onSubmit={handleCreateComment} />
-      {totalCount > 0 && (
-        <>
-          <Spacer height={16} />
-          <CommentFilters
-            sortOrder={sortOrder}
-            onSortChange={setSortOrder}
-            filter={filter}
-            onFilterChange={setFilter}
-          />
-        </>
-      )}
-      {isLoading ? (
-        <div className="py-4">
-          <Text variant="body" color="grey-04">
-            Loading comments...
-          </Text>
-        </div>
-      ) : (
-        filteredComments.length > 0 && (
+        <div className="text-mediumTitle">Comments ({totalCount})</div>
+        <Spacer height={16} />
+        <TopLevelCommentInput onSubmit={handleCreateComment} />
+        {totalCount > 0 && (
           <>
             <Spacer height={16} />
-            <CommentList
-              comments={filteredComments}
-              entityId={entityId}
-              spaceId={spaceId}
-              onReply={handleCreateComment}
-              onEdit={handleEditComment}
-              personalSpaceId={personalSpaceId}
-              editorSpaceIds={editorSpaceIds}
-              isThreadCollapsed={isThreadCollapsed}
-              toggleThreadCollapsed={toggleThreadCollapsed}
-              sortReplies={sortWithSessionPinned}
+            <CommentFilters
+              sortOrder={sortOrder}
+              onSortChange={setSortOrder}
+              filter={filter}
+              onFilterChange={setFilter}
             />
           </>
-        )
-      )}
+        )}
+        {isLoading ? (
+          <div className="py-4">
+            <Text variant="body" color="grey-04">
+              Loading comments...
+            </Text>
+          </div>
+        ) : (
+          filteredComments.length > 0 && (
+            <>
+              <Spacer height={16} />
+              <CommentList
+                comments={filteredComments}
+                entityId={entityId}
+                spaceId={spaceId}
+                onReply={handleCreateComment}
+                onEdit={handleEditComment}
+                personalSpaceId={personalSpaceId}
+                editorSpaceIds={editorSpaceIds}
+                isThreadCollapsed={isThreadCollapsed}
+                toggleThreadCollapsed={toggleThreadCollapsed}
+                sortReplies={sortWithSessionPinned}
+              />
+            </>
+          )
+        )}
       </div>
     </CommentBranchHighlightProvider>
   );
@@ -324,18 +318,14 @@ function CommentFilters({
   return (
     <div className="flex items-center gap-2">
       <Dropdown
-        trigger={
-          <Text variant="smallButton">{sortOrder === 'newest' ? 'Most recent' : 'Oldest'}</Text>
-        }
+        trigger={<Text variant="smallButton">{sortOrder === 'newest' ? 'Most recent' : 'Oldest'}</Text>}
         options={[
           { label: 'Most recent', value: 'newest', disabled: false, onClick: () => onSortChange('newest') },
           { label: 'Oldest', value: 'oldest', disabled: false, onClick: () => onSortChange('oldest') },
         ]}
       />
       <Dropdown
-        trigger={
-          <Text variant="smallButton">{filter === 'all' ? 'All' : 'Editors replies'}</Text>
-        }
+        trigger={<Text variant="smallButton">{filter === 'all' ? 'All' : 'Editors replies'}</Text>}
         options={[
           { label: 'All', value: 'all', disabled: false, onClick: () => onFilterChange('all') },
           { label: 'Editors replies', value: 'editors', disabled: false, onClick: () => onFilterChange('editors') },
@@ -346,11 +336,7 @@ function CommentFilters({
 }
 
 /** Top-level pill-style input matching the design ("Start the discussion...") */
-function TopLevelCommentInput({
-  onSubmit,
-}: {
-  onSubmit: (text: string) => void;
-}) {
+function TopLevelCommentInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!isExpanded) {
@@ -533,8 +519,7 @@ function CommentList({
   const [lastReplyTop, setLastReplyTop] = React.useState<number | null>(null);
 
   const listLayoutKey = React.useMemo(
-    () =>
-      `${comments.length}:${comments.map(c => `${c.id}:${isThreadCollapsed(c.id) ? 1 : 0}`).join(',')}`,
+    () => `${comments.length}:${comments.map(c => `${c.id}:${isThreadCollapsed(c.id) ? 1 : 0}`).join(',')}`,
     [comments, isThreadCollapsed]
   );
 
@@ -566,11 +551,8 @@ function CommentList({
   }, [listLayoutKey, updateLastReplyTop]);
 
   const parentBundle =
-    parentCommentId != null &&
-    hi.focus?.kind === 'parent-thread' &&
-    hi.focus.threadCommentId === parentCommentId;
-  const listSpineLit =
-    parentBundle || (parentCommentId != null && hi.spinePressedListParentId === parentCommentId);
+    parentCommentId != null && hi.focus?.kind === 'parent-thread' && hi.focus.threadCommentId === parentCommentId;
+  const listSpineLit = parentBundle || (parentCommentId != null && hi.spinePressedListParentId === parentCommentId);
   const branchLeave = branchPointerBlurProps(hi.clearFocus);
 
   return (
@@ -580,9 +562,7 @@ function CommentList({
         <button
           type="button"
           aria-expanded={!isThreadCollapsed(parentCommentId)}
-          aria-label={
-            isThreadCollapsed(parentCommentId) ? 'Expand comment thread' : 'Collapse comment thread'
-          }
+          aria-label={isThreadCollapsed(parentCommentId) ? 'Expand comment thread' : 'Collapse comment thread'}
           onClick={() => toggleThreadCollapsed(parentCommentId)}
           onPointerEnter={() => hi.setParentThreadFocus(parentCommentId)}
           onFocus={() => hi.setParentThreadFocus(parentCommentId)}
@@ -606,28 +586,18 @@ function CommentList({
         const childReplies = Array.isArray(comment.replies) ? comment.replies : [];
         const childHasReplies = childReplies.length > 0;
         const connectorsLit =
-          parentCommentId != null &&
-          !rowDefersConnectorHighlightToNestedRow(comment, hi.focus) &&
-          parentBundle;
+          parentCommentId != null && !rowDefersConnectorHighlightToNestedRow(comment, hi.focus) && parentBundle;
         const pathStroke = connectorsLit ? THREAD_SEGMENT_HI_STROKE : THREAD_SEGMENT_DIM_STROKE;
         const spanFill = connectorsLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM;
         return (
-          <div
-            key={comment.id}
-            className="relative comment-branch-row"
-            ref={isLastReply ? lastReplyRef : undefined}
-          >
+          <div key={comment.id} className="comment-branch-row relative" ref={isLastReply ? lastReplyRef : undefined}>
             <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
               {isLastReply ? (
                 childHasReplies ? (
                   <button
                     type="button"
                     aria-expanded={!isThreadCollapsed(comment.id)}
-                    aria-label={
-                      isThreadCollapsed(comment.id)
-                        ? 'Expand comment thread'
-                        : 'Collapse comment thread'
-                    }
+                    aria-label={isThreadCollapsed(comment.id) ? 'Expand comment thread' : 'Collapse comment thread'}
                     onClick={() => toggleThreadCollapsed(comment.id)}
                     onPointerEnter={() => hi.setParentThreadFocus(parentCommentId!)}
                     onFocus={() => hi.setParentThreadFocus(parentCommentId!)}
@@ -669,11 +639,7 @@ function CommentList({
                 <button
                   type="button"
                   aria-expanded={!isThreadCollapsed(comment.id)}
-                  aria-label={
-                    isThreadCollapsed(comment.id)
-                      ? 'Expand comment thread'
-                      : 'Collapse comment thread'
-                  }
+                  aria-label={isThreadCollapsed(comment.id) ? 'Expand comment thread' : 'Collapse comment thread'}
                   onClick={() => toggleThreadCollapsed(comment.id)}
                   onPointerEnter={() => hi.setParentThreadFocus(parentCommentId!)}
                   onFocus={() => hi.setParentThreadFocus(parentCommentId!)}
@@ -683,7 +649,7 @@ function CommentList({
                   style={{ left: '-28px', top: '16px', width: '28px', height: '12px' }}
                 >
                   <span
-                    className={`${THREAD_LEVEL_BRANCH_SEGMENT} absolute left-0 top-1/2 h-px w-[28px] -translate-y-1/2 transition-colors ${spanFill}`}
+                    className={`${THREAD_LEVEL_BRANCH_SEGMENT} absolute top-1/2 left-0 h-px w-[28px] -translate-y-1/2 transition-colors ${spanFill}`}
                   />
                 </button>
               ) : (
@@ -776,8 +742,7 @@ function CommentItem({
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -28;
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
-  const threadLineCenterXFromRootPx =
-    depth === 0 || hasReplies ? COMMENT_AVATAR_COLUMN_CENTER_PX : nestedSpineLeftPx;
+  const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? COMMENT_AVATAR_COLUMN_CENTER_PX : nestedSpineLeftPx;
   const threadLineStrokeCenterNudgePx = 0.5;
   /** X of thread line relative to body inner left (vote row). */
   const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - COMMENT_BODY_INSET_PX;
@@ -837,7 +802,7 @@ function CommentItem({
           </Text>
         )}
         {comment.resolved && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5 text-resultSuccess">
+          <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path
                 d="M2.5 6L5 8.5L9.5 4"
@@ -916,17 +881,11 @@ function CommentItem({
             </button>
           )}
           <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
-          <button
-            onClick={() => setIsReplying(!isReplying)}
-            className="text-smallButton text-grey-04 hover:text-text"
-          >
+          <button onClick={() => setIsReplying(!isReplying)} className="text-smallButton text-grey-04 hover:text-text">
             Reply
           </button>
           {isOwnComment && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="text-smallButton text-grey-04 hover:text-text"
-            >
+            <button onClick={() => setIsEditing(true)} className="text-smallButton text-grey-04 hover:text-text">
               Edit
             </button>
           )}
@@ -951,7 +910,7 @@ function CommentItem({
       )}
 
       {replies.length > 0 && (
-        <div className={`mt-4${hasReplies ? ' comment-replies-slot' : ''}`} ref={repliesRef}>
+        <div className={`mt-4${hasReplies ? 'comment-replies-slot' : ''}`} ref={repliesRef}>
           <CommentList
             comments={sortedReplies}
             entityId={entityId}
@@ -981,9 +940,7 @@ function CommentItem({
               <button
                 type="button"
                 aria-expanded={false}
-                aria-label={
-                  hasReplies ? 'Expand comment thread' : 'Expand comment'
-                }
+                aria-label={hasReplies ? 'Expand comment thread' : 'Expand comment'}
                 onClick={() => toggleThreadCollapsed(comment.id)}
                 className="z-[2] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 bg-bg text-grey-04 hover:bg-grey-01"
               >
@@ -994,10 +951,7 @@ function CommentItem({
             )}
           </div>
           <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <a
-              href={NavUtils.toSpace(comment.author.spaceId)}
-              className="shrink-0 hover:underline"
-            >
+            <a href={NavUtils.toSpace(comment.author.spaceId)} className="shrink-0 hover:underline">
               <Text variant="bodySemibold" as="span">
                 {comment.author.name ?? 'Anonymous'}
               </Text>
@@ -1046,10 +1000,7 @@ function CommentItem({
             </button>
           )}
           {expandedHeaderRow}
-          <div
-            className="comment-body-slot mt-1"
-            style={{ marginLeft: COMMENT_BODY_INSET_PX }}
-          >
+          <div className="comment-body-slot mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
             {expandedBodyMain}
           </div>
         </div>
@@ -1061,7 +1012,6 @@ function CommentItem({
           </div>
         </>
       )}
-
     </div>
   );
 }

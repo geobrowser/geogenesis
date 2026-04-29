@@ -1,5 +1,6 @@
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
 import { parse } from 'graphql';
 
 import {
@@ -140,6 +141,7 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
   }
 `;
 
-export const exploreEntitiesConnectionDocument = parse(
-  EXPLORE_ENTITIES_CONNECTION_SOURCE
-) as TypedDocumentNode<any, any>;
+export const exploreEntitiesConnectionDocument = parse(EXPLORE_ENTITIES_CONNECTION_SOURCE) as TypedDocumentNode<
+  any,
+  any
+>;

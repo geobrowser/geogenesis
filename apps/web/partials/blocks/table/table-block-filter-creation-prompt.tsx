@@ -2,20 +2,20 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
-import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
@@ -35,10 +35,10 @@ import { FilterableValueType } from '~/core/value-types';
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { Divider } from '~/design-system/divider';
+import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Select } from '~/design-system/select';
@@ -117,10 +117,7 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
       // input doesn't refire onFocus (the browser already considers it
       // focused) so the dropdown wouldn't reopen.
       const active = document.activeElement;
-      if (
-        active instanceof HTMLElement &&
-        filterInteractionRootRef?.current?.contains(active)
-      ) {
+      if (active instanceof HTMLElement && filterInteractionRootRef?.current?.contains(active)) {
         active.blur();
       }
     };
@@ -215,13 +212,8 @@ function useRelationColumnTargetTypeIds(
   const fromStore = React.useMemo(() => {
     void relationsSnapshot;
     if (!propertyId) return undefined;
-    const merged = mergeRelationValueTypesFromStore(
-      { id: propertyId, name: null, dataType: 'RELATION' },
-      store
-    );
-    return merged.relationValueTypes?.length
-      ? merged.relationValueTypes.map(t => t.id)
-      : undefined;
+    const merged = mergeRelationValueTypesFromStore({ id: propertyId, name: null, dataType: 'RELATION' }, store);
+    return merged.relationValueTypes?.length ? merged.relationValueTypes.map(t => t.id) : undefined;
   }, [propertyId, relationsSnapshot, store]);
 
   const {
@@ -246,9 +238,7 @@ function useRelationColumnTargetTypeIds(
 
   /** Until we have target type ids, do not show unfiltered relation suggestions or run unscoped search. */
   const waitForFilterTypes =
-    Boolean(propertyId) &&
-    !typeIds?.length &&
-    (isFetchingNetworkTypes || isPendingNetworkTypes);
+    Boolean(propertyId) && !typeIds?.length && (isFetchingNetworkTypes || isPendingNetworkTypes);
 
   return { typeIds, waitForFilterTypes };
 }
@@ -315,10 +305,9 @@ function snapshotColumnDraft(state: PromptState): FilterColumnDraft {
   };
 }
 
-function applyColumnDraft(draft: FilterColumnDraft): Pick<
-  PromptState,
-  'multiEntitySelections' | 'multiSpaceSelections' | 'multiStringSelections' | 'value'
-> {
+function applyColumnDraft(
+  draft: FilterColumnDraft
+): Pick<PromptState, 'multiEntitySelections' | 'multiSpaceSelections' | 'multiStringSelections' | 'value'> {
   return {
     multiEntitySelections: draft.multiEntitySelections.map(e => ({ ...e })),
     multiSpaceSelections: draft.multiSpaceSelections.map(s => ({ ...s })),
@@ -766,8 +755,7 @@ function enumeratePendingFilterChips(
     if (!draft) continue;
 
     const opt = options.find(o => o.columnId === columnId);
-    const columnName =
-      opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
+    const columnName = opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
 
     if (opt?.valueType === 'RELATION') {
       for (const e of draft.multiEntitySelections) {
@@ -850,15 +838,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
-  function TableBlockFilterPrompt(
-    {
-      trigger,
-      onCreate,
-      options,
-      filterSuggestionSpaceId,
-    },
-    ref
-  ) {
+  function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId }, ref) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
@@ -988,13 +968,7 @@ interface DynamicFiltersProps {
   filterSuggestionSpaceId?: string;
 }
 
-function MultiSelectChip({
-  label,
-  onRemove,
-}: {
-  label: string;
-  onRemove: () => void;
-}) {
+function MultiSelectChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <span className="inline-flex max-w-full items-center gap-0.5 rounded-sm border border-grey-02 bg-grey-01 py-0.5 pr-0.5 pl-1.5 text-[0.8125rem] text-text">
       <span className="min-w-0 truncate">{label}</span>
@@ -1013,12 +987,7 @@ function MultiSelectChip({
   );
 }
 
-function DynamicFilters({
-  options,
-  dispatch,
-  state,
-  filterSuggestionSpaceId,
-}: DynamicFiltersProps) {
+function DynamicFilters({ options, dispatch, state, filterSuggestionSpaceId }: DynamicFiltersProps) {
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
   const selectedEntityIds = React.useMemo(
@@ -1044,10 +1013,7 @@ function DynamicFilters({
       selectedOption?.relationValueTypes
     );
 
-  const pendingFilterChips = React.useMemo(
-    () => enumeratePendingFilterChips(state, options),
-    [state, options]
-  );
+  const pendingFilterChips = React.useMemo(() => enumeratePendingFilterChips(state, options), [state, options]);
 
   return (
     <div className="flex w-full flex-col gap-3 px-2">
@@ -1056,8 +1022,7 @@ function DynamicFilters({
           <p className="mb-1.5 text-[0.75rem] text-grey-04">Filters to apply</p>
           <div className="flex flex-wrap gap-1.5">
             {pendingFilterChips.map(item => {
-              const valueLabel =
-                item.kind === 'string' ? item.value : (item.name ?? item.id);
+              const valueLabel = item.kind === 'string' ? item.value : (item.name ?? item.id);
               return (
                 <MultiSelectChip
                   key={item.key}
@@ -1110,9 +1075,7 @@ function DynamicFilters({
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
               selectedValue=""
               selectedEntityIds={selectedEntityIds}
-              onToggleEntity={e =>
-                dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
-              }
+              onToggleEntity={e => dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })}
             />
           ) : (
             <TableBlockTextFilterInput
@@ -1222,15 +1185,13 @@ function TableBlockEntityFilterInput({
   // clicking a sibling control (e.g. the column-picker Select) dismisses
   // the dropdown instead of keeping it open.
   const interactionRootRef = React.useRef<HTMLDivElement>(null);
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(interactionRootRef);
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
 
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery);
   const additionalSpaceIds = useGlobalSearchSpaceIds();
 
-  const searchBlocked =
-    (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
+  const searchBlocked = (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
 
   // Single unified search path: when the dropdown is open, fire the REST
   // /search endpoint with the current (possibly empty) query and the
@@ -1244,12 +1205,7 @@ function TableBlockEntityFilterInput({
     fetchNextPage: fetchNextSearchPage,
     hasNextPage: hasNextSearchPage,
   } = useInfiniteQuery({
-    queryKey: [
-      'table-block-filter-search',
-      query,
-      filterByTypes?.slice().sort().join(',') ?? '',
-      additionalSpaceIds,
-    ],
+    queryKey: ['table-block-filter-search', query, filterByTypes?.slice().sort().join(',') ?? '', additionalSpaceIds],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
@@ -1265,9 +1221,7 @@ function TableBlockEntityFilterInput({
         cache,
         where: {
           name: { fuzzy: query },
-          ...(filterByTypes?.length
-            ? { types: filterByTypes.map(id => ({ id: { equals: id } })) }
-            : {}),
+          ...(filterByTypes?.length ? { types: filterByTypes.map(id => ({ id: { equals: id } })) } : {}),
         },
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
@@ -1289,10 +1243,7 @@ function TableBlockEntityFilterInput({
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 
-  const searchResults = React.useMemo(
-    () => searchPages?.pages.flatMap(p => p.rows) ?? [],
-    [searchPages]
-  );
+  const searchResults = React.useMemo(() => searchPages?.pages.flatMap(p => p.rows) ?? [], [searchPages]);
 
   const rowsToRender = React.useMemo(() => {
     const seen = new Set<string>();
@@ -1350,19 +1301,20 @@ function TableBlockEntityFilterInput({
     [entityVisibleCount, rowsToRender.length, hasNextSearchPage, isSearchFetchingNextPage, fetchNextSearchPage]
   );
 
-  const showEmptyHint =
-    !searchBlocked &&
-    searchResults.length === 0 &&
-    !isSearchFetching &&
-    !isSearchPending;
+  const showEmptyHint = !searchBlocked && searchResults.length === 0 && !isSearchFetching && !isSearchPending;
 
-  const showDropdown =
-    focused && (rowsToRender.length > 0 || isSearchPending || isSearchFetching || showEmptyHint);
+  const showDropdown = focused && (rowsToRender.length > 0 || isSearchPending || isSearchFetching || showEmptyHint);
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
     expandVisibleEntityRowsIfListHasNoScrollbar();
-  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, searchResults.length, rowsToRender.length, entityVisibleCount]);
+  }, [
+    showDropdown,
+    expandVisibleEntityRowsIfListHasNoScrollbar,
+    searchResults.length,
+    rowsToRender.length,
+    entityVisibleCount,
+  ]);
 
   // Pull pages until either (a) the dropdown has a full page of rows, or
   // (b) the REST endpoint returned a full raw page but every row got
@@ -1372,9 +1324,7 @@ function TableBlockEntityFilterInput({
   // nothing more to give and we should stop.
   const lastSearchPage = searchPages?.pages[searchPages.pages.length - 1];
   const lastSearchPageFullRawButEmptyFiltered = Boolean(
-    lastSearchPage &&
-      lastSearchPage.rows.length === 0 &&
-      lastSearchPage.rawCount >= FILTER_DROPDOWN_PAGE_SIZE
+    lastSearchPage && lastSearchPage.rows.length === 0 && lastSearchPage.rawCount >= FILTER_DROPDOWN_PAGE_SIZE
   );
 
   // Guard against runaway auto-fetch loops when a large stretch of the
@@ -1421,11 +1371,7 @@ function TableBlockEntityFilterInput({
     preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
     gap: 8,
   });
-  const entityDropdownMaxHeight = useFourAndHalfRowsMaxHeight(
-    entityResultsListRef,
-    showDropdown,
-    rowsToRender.length
-  );
+  const entityDropdownMaxHeight = useFourAndHalfRowsMaxHeight(entityResultsListRef, showDropdown, rowsToRender.length);
   const onEntityDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(entityResultsListRef.current, e);
   }, []);
@@ -1509,8 +1455,7 @@ function TableBlockEntityFilterInput({
                   <Text variant="metadataMedium">Load more</Text>
                 </ResultItem>
               ) : null}
-              {isSearchFetchingNextPage ||
-              (lastSearchPageFullRawButEmptyFiltered && !autoPumpCapped) ? (
+              {isSearchFetchingNextPage || (lastSearchPageFullRawButEmptyFiltered && !autoPumpCapped) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading more…
@@ -1542,8 +1487,7 @@ function TableBlockSpaceFilterInput({
 }: TableBlockSpaceFilterInputProps) {
   const { query, setQuery, spaces: results } = useSpacesQuery();
   const interactionRootRef = React.useRef<HTMLDivElement>(null);
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(interactionRootRef);
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
 
   // Default suggestions shown on focus with empty query: the spaces the
   // current block's entity is a member of.
@@ -1579,10 +1523,7 @@ function TableBlockSpaceFilterInput({
     [defaultSpaceSuggestions, spaceVisibleCount]
   );
 
-  const visibleSpaceQueryRows = React.useMemo(
-    () => results.slice(0, spaceVisibleCount),
-    [results, spaceVisibleCount]
-  );
+  const visibleSpaceQueryRows = React.useMemo(() => results.slice(0, spaceVisibleCount), [results, spaceVisibleCount]);
 
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
@@ -1724,10 +1665,7 @@ function TableBlockSpaceFilterInput({
                   s.id,
                   s.name,
                   s.image ?? PLACEHOLDER_SPACE_IMAGE,
-                  () =>
-                    multi
-                      ? onToggleSpace?.(s)
-                      : onSelect?.(s),
+                  () => (multi ? onToggleSpace?.(s) : onSelect?.(s)),
                   i,
                   Boolean(selectedSpaceIds?.has(s.id))
                 )

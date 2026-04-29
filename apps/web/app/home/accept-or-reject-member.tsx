@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import cx from 'classnames';
+import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
-
 import {
   NavUtils,
   formatGovernanceOutcomeDate,
@@ -115,7 +114,7 @@ export function AcceptOrRejectMember({
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
         <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
-        <span aria-hidden className="shrink-0 select-none text-grey-03">
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
         <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
@@ -147,17 +146,13 @@ export function AcceptOrRejectMember({
     } else if (canExecute && smartAccount) {
       actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     } else if (canExecute) {
-      actions = (
-        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>
-      );
+      actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     }
   } else if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || selectedVote === 'ACCEPT') {
-      actions = (
-        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>
-      );
+      actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
     } else {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
     }

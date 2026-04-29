@@ -2,25 +2,24 @@
 
 import * as React from 'react';
 
-import { usePathname } from 'next/navigation';
 import { useAtom } from 'jotai';
+import { usePathname } from 'next/navigation';
 
+import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
+import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
-import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
-import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
-import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
-
 import { Avatar } from '~/design-system/avatar';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { FallbackImage } from '~/design-system/fallback-image';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -40,8 +39,7 @@ function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
   return [...seen];
 }
 
-const navLinkBase =
-  'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
+const navLinkBase = 'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
 const navLinkIdle = `${navLinkBase} text-text hover:bg-grey-01`;
 const navLinkActive = `${navLinkBase} bg-divider text-text`;
 
@@ -53,7 +51,7 @@ function BrowseNavIcon({ src }: { src: string }) {
         alt=""
         width={16}
         height={16}
-        className="h-4 w-4 max-h-none max-w-none object-contain"
+        className="h-4 max-h-none w-4 max-w-none object-contain"
         draggable={false}
       />
     </span>
@@ -81,7 +79,7 @@ function BrowseNavIconSwap({
         alt=""
         width={16}
         height={16}
-        className={`absolute inset-0 h-4 w-4 max-h-none max-w-none object-contain ${isActive ? 'invisible' : ''}`}
+        className={`absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain ${isActive ? 'invisible' : ''}`}
         draggable={false}
       />
       <img
@@ -89,7 +87,7 @@ function BrowseNavIconSwap({
         alt=""
         width={16}
         height={16}
-        className={`absolute inset-0 h-4 w-4 max-h-none max-w-none object-contain ${isActive ? '' : 'invisible'}`}
+        className={`absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain ${isActive ? '' : 'invisible'}`}
         draggable={false}
       />
     </span>
@@ -100,13 +98,7 @@ function GeoAppsSidebarLinks() {
   return (
     <>
       {GEO_APPS_SIDEBAR_LINKS.map(item => (
-        <a
-          key={item.href}
-          href={item.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={navLinkIdle}
-        >
+        <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" className={navLinkIdle}>
           <BrowseNavIcon src={item.icon} />
           <span className="min-w-0 flex-1 overflow-hidden">
             <p className="-my-0.5 truncate leading-5">{item.label}</p>
@@ -169,11 +161,7 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         <span>Root</span>
       </Link>
       <Link href={docHref} className={isDoc ? navLinkActive : navLinkIdle}>
-        <BrowseNavIconSwap
-          idleSrc={BROWSE_NAV_ICON.docs}
-          activeSrc={BROWSE_NAV_ICON.docsFilled}
-          isActive={isDoc}
-        />
+        <BrowseNavIconSwap idleSrc={BROWSE_NAV_ICON.docs} activeSrc={BROWSE_NAV_ICON.docsFilled} isActive={isDoc} />
         <span>Documentation</span>
       </Link>
     </>
@@ -184,7 +172,7 @@ function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
   if (!row.image) {
     const initial = row.name.trim().slice(0, 1).toUpperCase() || '?';
     return (
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04 ring-1 ring-inset ring-grey-02/40">
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04 ring-1 ring-grey-02/40 ring-inset">
         {initial}
       </span>
     );
@@ -232,7 +220,7 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-browseSection font-normal not-italic text-grey-04 hover:text-text"
+        className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-browseSection font-normal text-grey-04 not-italic hover:text-text"
       >
         <span>{title}</span>
         <span className={`transition-transform ${open ? '' : '-rotate-90'}`}>
@@ -244,15 +232,7 @@ function CollapsibleSection({
   );
 }
 
-function SidebarToggle({
-  open,
-  onToggle,
-  className,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  className?: string;
-}) {
+function SidebarToggle({ open, onToggle, className }: { open: boolean; onToggle: () => void; className?: string }) {
   return (
     <button
       type="button"
@@ -313,11 +293,11 @@ export function BrowseSidebar() {
         aria-label="Browse menu (collapsed)"
       >
         {/* Vertical rail aligned to the centre of the navbar logo (navbar px-4 = 16px + 8px half-logo ≈ 24px). */}
-        <div className="pointer-events-none absolute bottom-0 left-6 top-0 w-px bg-divider" />
+        <div className="pointer-events-none absolute top-0 bottom-0 left-6 w-px bg-divider" />
         <SidebarToggle
           open={false}
           onToggle={() => setOpen(true)}
-          className="pointer-events-auto left-3.5 top-[3.25rem]"
+          className="pointer-events-auto top-[3.25rem] left-3.5"
         />
       </aside>
     );
@@ -338,10 +318,10 @@ export function BrowseSidebar() {
       <SidebarToggle
         open
         onToggle={() => setOpen(false)}
-        className="right-0 top-[calc(2.75rem+0.75rem)] translate-x-1/2"
+        className="top-[calc(2.75rem+0.75rem)] right-0 translate-x-1/2"
       />
 
-      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+      <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3">
         <nav className="space-y-0.5">
           <BrowseNavPrimaryLinks personalSpaceId={personalSpaceId} />
         </nav>
@@ -351,7 +331,7 @@ export function BrowseSidebar() {
         </CollapsibleSection>
 
         {!data ? (
-          <p className="mt-4 px-2 text-browseMenu not-italic text-grey-04">Loading spaces…</p>
+          <p className="mt-4 px-2 text-browseMenu text-grey-04 not-italic">Loading spaces…</p>
         ) : (
           <>
             <CollapsibleSection title="Featured spaces" hidden={data.featured.length === 0}>
@@ -364,7 +344,7 @@ export function BrowseSidebar() {
                 <div key={row.id}>
                   <SpaceRowLink row={row} />
                   {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseSection not-italic text-grey-04">{row.pendingLabel}</p>
+                    <p className="px-2 pb-1 pl-9 text-browseSection text-grey-04 not-italic">{row.pendingLabel}</p>
                   ) : null}
                 </div>
               ))}
@@ -374,7 +354,7 @@ export function BrowseSidebar() {
                 <div key={row.id}>
                   <SpaceRowLink row={row} />
                   {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseSection not-italic text-grey-04">{row.pendingLabel}</p>
+                    <p className="px-2 pb-1 pl-9 text-browseSection text-grey-04 not-italic">{row.pendingLabel}</p>
                   ) : null}
                 </div>
               ))}

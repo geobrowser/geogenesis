@@ -54,9 +54,7 @@ export const ImportSessionStore = {
   removeColumns(sessionId: string, columnIndices: number[]): boolean {
     const data = sessions.get(sessionId);
     if (!data || columnIndices.length === 0) return false;
-    const remove = new Set(
-      columnIndices.filter(i => Number.isInteger(i) && i >= 0 && i < data.headers.length)
-    );
+    const remove = new Set(columnIndices.filter(i => Number.isInteger(i) && i >= 0 && i < data.headers.length));
     if (remove.size === 0) return false;
 
     const headerLen = data.headers.length;

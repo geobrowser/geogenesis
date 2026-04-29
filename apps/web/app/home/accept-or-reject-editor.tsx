@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -24,14 +25,7 @@ interface Props {
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({
-  spaceId,
-  isProposalEnded,
-  canExecute,
-  status,
-  userVote,
-  proposalId,
-}: Props) {
+export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
   const router = useRouter();
 
   const { vote, status: voteStatus } = useVote({

@@ -1,19 +1,14 @@
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
-import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import {
-  resolveMemberSpaceFromWalletSafe,
-} from '~/core/browse/resolve-member-space-from-wallet';
+import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
-import {
-  type ExploreSort,
-  type ExploreTime,
-  fetchExploreFeed,
-} from '~/core/explore/fetch-explore-feed';
+import { type ExploreSort, type ExploreTime, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
+
+import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
 function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();

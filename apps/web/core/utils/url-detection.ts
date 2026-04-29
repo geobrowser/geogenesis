@@ -64,9 +64,7 @@ export function detectWeb2URLsInMarkdown(text: string): string[] {
     const urlEnd = urlMatch.index + url.length;
 
     // Check if this URL is within any processed markdown link range
-    const isWithinMarkdownLink = processedRanges.some(range => 
-      urlStart >= range.start && urlEnd <= range.end
-    );
+    const isWithinMarkdownLink = processedRanges.some(range => urlStart >= range.start && urlEnd <= range.end);
 
     if (!isWithinMarkdownLink) {
       results.push(url);

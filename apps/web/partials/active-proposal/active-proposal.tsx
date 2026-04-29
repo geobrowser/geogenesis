@@ -18,16 +18,12 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
-import {
-  ProposalBountiesProvider,
-  ProposalBountyHeadButton,
-  ProposalBountyPanel,
-} from './proposal-bounty-links';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
-import { ProposalVoteRow } from './proposal-vote-row';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
+import { ProposalBountiesProvider, ProposalBountyHeadButton, ProposalBountyPanel } from './proposal-bounty-links';
+import { ProposalVoteRow } from './proposal-vote-row';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 
@@ -95,7 +91,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           />
         </div>
       </div>
-      <div className="flex w-full items-stretch gap-2 bg-[#EDEEF3] p-2 min-h-[calc(100vh-44px)]">
+      <div className="flex min-h-[calc(100vh-44px)] w-full items-stretch gap-2 bg-[#EDEEF3] p-2">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="overflow-x-clip rounded-lg border border-grey-02 bg-white">
             <MetadataMotionContainer>
@@ -123,27 +119,26 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                             <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                           </div>
                         )}
-                        {isProposalEnded &&
-                          (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
-                            <>
-                              <span aria-hidden className="shrink-0 select-none text-grey-04">
-                                ·
-                              </span>
-                              <span className="shrink-0 text-grey-04">
-                                {formatGovernanceOutcomeDate(proposal.endTime)}
-                              </span>
-                              <span aria-hidden className="shrink-0 select-none text-grey-04">
-                                ·
-                              </span>
-                              <time
-                                className="shrink-0 tabular-nums text-grey-04"
-                                dateTime={new Date(proposal.endTime * 1000).toISOString()}
-                              >
-                                {formatGovernanceOutcomeTime(proposal.endTime)}
-                              </time>
-                            </>
-                          )}
-                        <span aria-hidden className="shrink-0 select-none text-grey-04">
+                        {isProposalEnded && (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
+                          <>
+                            <span aria-hidden className="shrink-0 text-grey-04 select-none">
+                              ·
+                            </span>
+                            <span className="shrink-0 text-grey-04">
+                              {formatGovernanceOutcomeDate(proposal.endTime)}
+                            </span>
+                            <span aria-hidden className="shrink-0 text-grey-04 select-none">
+                              ·
+                            </span>
+                            <time
+                              className="shrink-0 text-grey-04 tabular-nums"
+                              dateTime={new Date(proposal.endTime * 1000).toISOString()}
+                            >
+                              {formatGovernanceOutcomeTime(proposal.endTime)}
+                            </time>
+                          </>
+                        )}
+                        <span aria-hidden className="shrink-0 text-grey-04 select-none">
                           ·
                         </span>
                         <span className="text-text">

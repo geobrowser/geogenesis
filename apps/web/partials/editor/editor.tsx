@@ -370,10 +370,7 @@ const useSuppressFlushSyncWarning = () => {
     const orig = console.error;
     console.error = (...args: unknown[]) => {
       // Only suppress the specific TipTap flushSync warning
-      if (
-        typeof args[0] === 'string' &&
-        args[0].includes('flushSync was called from inside a lifecycle method')
-      ) {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
         return;
       }
       orig.apply(console, args);
@@ -387,11 +384,11 @@ const useSuppressFlushSyncWarning = () => {
 function normalizeEditorContent(content: JSONContent): JSONContent {
   const normalizedAttrs = content.attrs
     ? Object.fromEntries(
-      Object.entries(content.attrs).filter(([key, value]) => {
-        if (value === null || value === undefined) return false;
-        return key !== 'spaceId' && key !== 'relationId';
-      })
-    )
+        Object.entries(content.attrs).filter(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          return key !== 'spaceId' && key !== 'relationId';
+        })
+      )
     : undefined;
 
   return {
@@ -400,8 +397,8 @@ function normalizeEditorContent(content: JSONContent): JSONContent {
     ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
     ...(content.content
       ? {
-        content: content.content.map(child => normalizeEditorContent(child)),
-      }
+          content: content.content.map(child => normalizeEditorContent(child)),
+        }
       : {}),
   };
 }

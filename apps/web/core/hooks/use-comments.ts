@@ -1,15 +1,12 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import {
-  COMMENT_MARKDOWN_CONTENT_ID,
-  COMMENT_REPLY_TO_ID,
-  COMMENT_RESOLVED_ID,
-} from '~/core/comment-ids';
+import { Effect } from 'effect';
+
+import { COMMENT_MARKDOWN_CONTENT_ID, COMMENT_REPLY_TO_ID, COMMENT_RESOLVED_ID } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import { getCommentEntitiesViaParentEntityReplyBacklinks } from '~/core/io/queries';
@@ -59,8 +56,7 @@ function parseCommentEntity(
   targetEntityId: string,
   depthMap: Map<string, number>
 ): CommentEntity {
-  const markdownContent =
-    entity.values.find(v => v.property.id === COMMENT_MARKDOWN_CONTENT_ID)?.value ?? '';
+  const markdownContent = entity.values.find(v => v.property.id === COMMENT_MARKDOWN_CONTENT_ID)?.value ?? '';
 
   const resolvedValue = entity.values.find(v => v.property.id === COMMENT_RESOLVED_ID)?.value;
   const resolved = resolvedValue === '1' || resolvedValue === 'true' || resolvedValue === 'True';
@@ -100,9 +96,7 @@ function parseCommentEntity(
       avatarUrl: null,
     },
     createdAt:
-      parseEntityTimestamp(entity.createdAt) ??
-      parseEntityTimestamp(entity.updatedAt) ??
-      new Date().toISOString(),
+      parseEntityTimestamp(entity.createdAt) ?? parseEntityTimestamp(entity.updatedAt) ?? new Date().toISOString(),
     spaceId,
     resolved,
   };
@@ -159,9 +153,7 @@ export async function fetchCommentEntitiesForTarget(
   const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
 
   const allEntities = loaded.filter(entity =>
-    entity.relations.some(
-      r => uuidToHex(r.type.id) === replyToType && uuidToHex(r.toEntity.id) === targetKey
-    )
+    entity.relations.some(r => uuidToHex(r.type.id) === replyToType && uuidToHex(r.toEntity.id) === targetKey)
   );
 
   const uniqueSpaceIds = [...new Set(allEntities.map(e => e.spaces[0]).filter(Boolean))];
@@ -170,8 +162,7 @@ export async function fetchCommentEntitiesForTarget(
   if (uniqueSpaceIds.length > 0) {
     const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
     for (const profile of profiles) {
-      const avatarUrl =
-        profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+      const avatarUrl = profile.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
       profileMap.set(profile.spaceId, {
         address: profile.address,
         name: profile.name,
@@ -226,10 +217,7 @@ export async function fetchCommentEntitiesForTarget(
  * Merge server-returned comments with any locally-pending comments still in the cache.
  * A pending row is kept only if the server has not yet returned it (matched by canonical id).
  */
-export function mergePendingWithServer(
-  server: CommentEntity[],
-  prev: CommentEntity[] | undefined
-): CommentEntity[] {
+export function mergePendingWithServer(server: CommentEntity[], prev: CommentEntity[] | undefined): CommentEntity[] {
   if (!prev || prev.length === 0) return server;
   const serverIds = new Set(server.map(c => uuidToHex(c.id)));
   const pendingOnly = prev.filter(c => c.isPendingPublish === true && !serverIds.has(uuidToHex(c.id)));

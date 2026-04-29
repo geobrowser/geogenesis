@@ -4,12 +4,7 @@ import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 
-export function cloneEntityIntoSpace(
-  entityId: string,
-  sourceSpaceId: string,
-  targetSpaceId: string,
-  storage: Mutator
-) {
+export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, targetSpaceId: string, storage: Mutator) {
   const sourceValues = getValues({
     selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
   });

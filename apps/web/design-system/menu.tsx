@@ -26,16 +26,17 @@ interface Props {
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
 const shellStyles = cva(
-  'z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none isolate',
+  'isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
   {
-  variants: {
-    align: {
-      start: 'origin-top-left',
-      center: 'origin-top',
-      end: 'origin-top-right',
+    variants: {
+      align: {
+        start: 'origin-top-left',
+        center: 'origin-top',
+        end: 'origin-top-right',
+      },
     },
-  },
-});
+  }
+);
 
 // 200px capped scrolling at ~5 items, so an 8-item menu had ~120px of scroll range.
 // That tiny range made each wheel tick feel like a big jump even when the underlying
@@ -107,12 +108,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
         className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
         {...rest}
       >
-        <div
-          className={cx(
-            'absolute inset-1 z-0 rounded',
-            active ? 'bg-grey-01' : 'group-hover:bg-grey-01'
-          )}
-        />
+        <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />
         <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
       </Link>
     );
@@ -123,12 +119,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
       className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
       {...rest}
     >
-      <div
-        className={cx(
-          'absolute inset-1 z-0 rounded',
-          active ? 'bg-grey-01' : 'group-hover:bg-grey-01'
-        )}
-      />
+      <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />
       <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
     </button>
   );

@@ -2,9 +2,9 @@
 
 import { cookies } from 'next/headers';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { type BrowseSidebarData, fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWallet } from '~/core/browse/resolve-member-space-from-wallet';
-import { fetchBrowseSidebarData, type BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { WALLET_ADDRESS } from '~/core/cookie';
 
 /**
  * @param walletAddressHint — Smart account address from the client when the session cookie

@@ -253,9 +253,7 @@ export async function getSchemaFromTypeIds(
 
     filterPropertyIds = results.flatMap(({ spaceId, entities }) =>
       orderEntitiesByIdList(dedupedTypeIds, entities).flatMap(entity => {
-        const props = entity.relations.filter(
-          r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId
-        );
+        const props = entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES && r.spaceId === spaceId);
         return sortRelations(props).map(r => r.toEntity.id);
       })
     );
