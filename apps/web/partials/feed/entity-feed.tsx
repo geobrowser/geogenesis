@@ -48,6 +48,8 @@ type EntityFeedProps = {
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
   initialTime?: ExploreTime;
+  /** Initial value for the sort dropdown. Defaults to "new". */
+  initialSort?: ExploreSort;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (New / Top). Defaults to false. */
@@ -84,11 +86,12 @@ export function EntityFeed({
   initialSpaceOptions = [],
   lockedSpaceId,
   initialTime = 'week',
+  initialSort = 'new',
   showTimeFilter = true,
   showSortFilter = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
-  const [sort, setSort] = React.useState<ExploreSort>('new');
+  const [sort, setSort] = React.useState<ExploreSort>(initialSort);
   const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
   const spaceId = lockedSpaceId ?? selectedSpaceId;
 
