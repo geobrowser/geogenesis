@@ -42,8 +42,21 @@ export const Select = ({
     trapWheelToElement(viewportRef.current, e);
   }, []);
 
+  // Force-close if `disabled` flips true while the menu is open.
+  React.useEffect(() => {
+    if (disabled && open) setOpen(false);
+  }, [disabled, open]);
+
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (disabled && next) return;
+      setOpen(next);
+    },
+    [disabled]
+  );
+
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onChange} open={open} onOpenChange={setOpen}>
+    <SelectPrimitive.Root value={value} onValueChange={onChange} open={open} onOpenChange={handleOpenChange}>
       <SelectPrimitive.Trigger
         ref={triggerRef}
         disabled={disabled}

@@ -18,6 +18,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   sideOffset?: number;
   className?: string;
+  /** Override the inner scroll viewport classes (e.g., to set a different max height). */
+  viewportClassName?: string;
   asChild?: boolean;
   modal?: boolean;
 }
@@ -35,7 +37,7 @@ const shellStyles = cva(
   },
 });
 
-const scrollViewportClass =
+const defaultScrollViewportClass =
   'w-full max-h-[200px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
 
 export function Menu({
@@ -46,6 +48,7 @@ export function Menu({
   sideOffset = 8,
   asChild = false,
   className = '',
+  viewportClassName,
   modal = false,
 }: Props) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -76,7 +79,7 @@ export function Menu({
         className={cx(shellStyles({ align: adaptiveAlign }), className)}
         onWheel={onMenuWheel}
       >
-        <div ref={scrollRef} className={scrollViewportClass}>
+        <div ref={scrollRef} className={viewportClassName ?? defaultScrollViewportClass}>
           {children}
         </div>
       </PopoverContent>

@@ -1283,16 +1283,18 @@ function TableBlockEntityFilterInput({
     [searchPages]
   );
 
-  const rowsToRender = React.useMemo(
-    () =>
-      searchResults
-        .filter(r => {
-          if (restrictSearchToTypes && !filterByTypes?.length) return false;
-          return searchResultMatchesAllowedTypes(r, filterByTypes);
-        })
-        .map(r => ({ kind: 'search' as const, result: r })),
-    [searchResults, filterByTypes, restrictSearchToTypes]
-  );
+  const rowsToRender = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: { kind: 'search'; result: (typeof searchResults)[number] }[] = [];
+    for (const r of searchResults) {
+      if (restrictSearchToTypes && !filterByTypes?.length) continue;
+      if (!searchResultMatchesAllowedTypes(r, filterByTypes)) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({ kind: 'search', result: r });
+    }
+    return out;
+  }, [searchResults, filterByTypes, restrictSearchToTypes]);
 
   const filterByTypesKey = filterByTypes?.slice().sort().join(',') ?? '';
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
@@ -1471,7 +1473,7 @@ function TableBlockEntityFilterInput({
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.02 * i }}
-                  key={`search-${row.result.id}-${i}`}
+                  key={`search-${row.result.id}`}
                 >
                   <ResultContent
                     onClick={() => handleEntityPick(row.result)}

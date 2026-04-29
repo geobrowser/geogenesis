@@ -54,7 +54,7 @@ export function SelectEntityCompact({
   renderableTypeValue = 'TEXT',
   onRenderableTypeChange,
 }: SelectEntityCompactProps) {
-  const anchorInputRef = React.useRef<HTMLInputElement | null>(null);
+  const anchorWrapperRef = React.useRef<HTMLDivElement | null>(null);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
@@ -111,7 +111,7 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
-  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorInputRef, {
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
     isOpen: query.trim().length > 0,
     preferredHeight: 320,
     gap: 12,
@@ -146,13 +146,12 @@ export function SelectEntityCompact({
   return (
     <Popover.Root open={query.trim().length > 0}>
       <Popover.Anchor asChild>
-        <div className="w-full space-y-2">
+        <div ref={anchorWrapperRef} className="w-full space-y-2">
           <div className="relative w-full">
             <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2">
               <Search />
             </div>
             <input
-              ref={anchorInputRef}
               type="text"
               value={query}
               onChange={e => {
