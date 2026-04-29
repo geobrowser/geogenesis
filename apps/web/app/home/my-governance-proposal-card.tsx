@@ -5,21 +5,22 @@ import * as React from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Address, ProposalStatus, ProposalType, type SubstreamVote } from '~/core/io/substream-schema';
 import {
+  NavUtils,
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
   getIsProposalEnded,
   getProposalTimeRemaining,
-  NavUtils,
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 import { GovernanceProposalVoteState } from '~/partials/governance/governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from '~/partials/governance/governance-status-chip';
+
+import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 
 function percentageFromCounts(count: number, total: number): number {
   if (total === 0) return 0;
@@ -75,8 +76,7 @@ export function MyGovernanceProposalCard({
   viewerCanVoteAsEditor,
   governanceHomeReturnSearch,
 }: MyGovernanceProposalCardProps) {
-  const showReopenMenu =
-    status === 'REJECTED' && proposalType === 'ADD_EDIT' && getIsProposalEnded(status, endTime);
+  const showReopenMenu = status === 'REJECTED' && proposalType === 'ADD_EDIT' && getIsProposalEnded(status, endTime);
 
   const yesPercentage = percentageFromCounts(yesCount, totalVotes);
   const noPercentage = percentageFromCounts(noCount, totalVotes);
@@ -87,7 +87,7 @@ export function MyGovernanceProposalCard({
     status === 'ACCEPTED' || status === 'REJECTED' || votingEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
         <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
-        <span aria-hidden className="shrink-0 select-none text-grey-03">
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
         <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
@@ -99,9 +99,7 @@ export function MyGovernanceProposalCard({
     );
 
   const userVoteSubstream: SubstreamVote | undefined =
-    userVote && viewerMemberSpaceId
-      ? { vote: userVote, accountId: Address(viewerMemberSpaceId) }
-      : undefined;
+    userVote && viewerMemberSpaceId ? { vote: userVote, accountId: Address(viewerMemberSpaceId) } : undefined;
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">

@@ -1,8 +1,8 @@
+import * as React from 'react';
+
 import cx from 'classnames';
 import katex from 'katex';
 import type Token from 'markdown-it/lib/token.mjs';
-
-import * as React from 'react';
 
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 
@@ -28,12 +28,13 @@ export function hasMarkdownSyntax(markdown: string): boolean {
 
     if (token.type !== 'inline') return false;
 
-    return (token.children ?? []).some(child =>
-      child.type === 'code_inline' ||
-      child.type === 'inline_math' ||
-      child.type === 'link_open' ||
-      child.type === 'strong_open' ||
-      child.type === 'em_open'
+    return (token.children ?? []).some(
+      child =>
+        child.type === 'code_inline' ||
+        child.type === 'inline_math' ||
+        child.type === 'link_open' ||
+        child.type === 'strong_open' ||
+        child.type === 'em_open'
     );
   });
 }
@@ -248,21 +249,13 @@ function renderInlineTokenRange(
 
         if (isValid && safeHref) {
           nodes.push(
-            <a
-              key={`link-${index}`}
-              href={safeHref}
-              className={cx(className, options?.markClassName)}
-            >
+            <a key={`link-${index}`} href={safeHref} className={cx(className, options?.markClassName)}>
               {rendered.nodes}
             </a>
           );
         } else {
           nodes.push(
-            <span
-              key={`link-${index}`}
-              data-invalid-link="true"
-              className={cx(className, options?.markClassName)}
-            >
+            <span key={`link-${index}`} data-invalid-link="true" className={cx(className, options?.markClassName)}>
               {rendered.nodes}
             </span>
           );

@@ -643,13 +643,13 @@ export function PowerToolsScreen() {
     () =>
       isEditing && selectableCount > 0
         ? {
-          selectedEntityIds,
-          onToggleRowSelection: toggleRowSelection,
-          onSetRowSelection: setRowSelection,
-          onMasterToggle,
-          selectableCount,
-          isAllSelected,
-        }
+            selectedEntityIds,
+            onToggleRowSelection: toggleRowSelection,
+            onSetRowSelection: setRowSelection,
+            onMasterToggle,
+            selectableCount,
+            isAllSelected,
+          }
         : undefined,
     [isEditing, selectableCount, selectedEntityIds, toggleRowSelection, setRowSelection, onMasterToggle, isAllSelected]
   );
@@ -906,6 +906,7 @@ export function PowerToolsScreen() {
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}
             className="w-[200px]!"
+            viewportClassName="w-full min-h-0 min-w-0 max-h-[320px] overflow-y-auto overscroll-contain scroll-smooth bg-white py-1 [background-clip:padding-box]"
             trigger={
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
@@ -915,21 +916,19 @@ export function PowerToolsScreen() {
               </div>
             }
           >
-            <div className="max-h-[320px] overflow-y-auto py-1">
-              {orderedPropertyIds.map(id => {
-                const property = data.propertiesById[id];
-                if (!property) return null;
-                const isHidden = hiddenColumnIds.has(id);
-                return (
-                  <MenuItem key={id} onClick={() => toggleColumnVisibility(id)}>
-                    <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
-                      <span>{property.name || id}</span>
-                      {isHidden ? <EyeHide /> : <Eye />}
-                    </div>
-                  </MenuItem>
-                );
-              })}
-            </div>
+            {orderedPropertyIds.map(id => {
+              const property = data.propertiesById[id];
+              if (!property) return null;
+              const isHidden = hiddenColumnIds.has(id);
+              return (
+                <MenuItem key={id} onClick={() => toggleColumnVisibility(id)}>
+                  <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
+                    <span>{property.name || id}</span>
+                    {isHidden ? <EyeHide /> : <Eye />}
+                  </div>
+                </MenuItem>
+              );
+            })}
           </Menu>
           {isEditing && (
             <button

@@ -1,7 +1,8 @@
 'use client';
 
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback } from 'react';
+
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -52,10 +53,7 @@ function makeColumnShifter(removed: Set<number>): (col: number) => number {
   };
 }
 
-function remapColumnMappingAfterRemove(
-  prev: Record<number, string>,
-  removed: Set<number>
-): Record<number, string> {
+function remapColumnMappingAfterRemove(prev: Record<number, string>, removed: Set<number>): Record<number, string> {
   const shiftBefore = makeColumnShifter(removed);
   const next: Record<number, string> = {};
   for (const [k, v] of Object.entries(prev)) {
@@ -66,10 +64,7 @@ function remapColumnMappingAfterRemove(
   return next;
 }
 
-function remapTypesColumnIndexAfterRemove(
-  prev: number | undefined,
-  removed: Set<number>
-): number | undefined {
+function remapTypesColumnIndexAfterRemove(prev: number | undefined, removed: Set<number>): number | undefined {
   if (prev === undefined) return undefined;
   if (removed.has(prev)) return undefined;
   return prev - makeColumnShifter(removed)(prev);
@@ -186,7 +181,16 @@ export function useImportSession(spaceId: string) {
         setStep(options.step);
       }
     },
-    [resetMappedState, setFileName, setStep, currentSessionId, setHeaders, setRowCount, setImportSessionId, setImportRevision]
+    [
+      resetMappedState,
+      setFileName,
+      setStep,
+      currentSessionId,
+      setHeaders,
+      setRowCount,
+      setImportSessionId,
+      setImportRevision,
+    ]
   );
 
   const deleteImportColumns = useCallback(

@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { SortOrder } from '~/core/gql/graphql';
+import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
@@ -14,7 +14,7 @@ import {
   getEntity,
   getEntityNames,
   getRelation,
-  getResults,
+  getResultsPage,
   getSpaces,
 } from '../io/queries';
 import { OmitStrict } from '../types';
@@ -214,6 +214,7 @@ export class E {
     skip,
     spaceId,
     sort,
+    orderBy,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -222,6 +223,7 @@ export class E {
     skip: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    orderBy?: EntitiesOrderBy[];
   }): Promise<{ merged: Entity[]; remote: Entity[] }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
@@ -295,6 +297,7 @@ export class E {
             offset,
             filter,
             typeIds,
+            orderBy,
           })
         );
 
@@ -315,45 +318,72 @@ export class E {
     return { merged, remote: remoteEntities };
   }
 
-  static async findFuzzy({
+  static async findFuzzy(args: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+    additionalSpaceIds?: string[];
+  }): Promise<SearchResult[]> {
+    const page = await this.findFuzzyPage(args);
+    return page.results;
+  }
+
+  /**
+   * Same as findFuzzy but exposes the raw REST /search count alongside the
+   * post-processed results. Paginated callers need this because the post-
+   * processing step filters out entities whose spaces cannot be resolved —
+   * a full 25-row REST page can shrink to <25 results, which would otherwise
+   * be mistaken for "end of the result set".
+   */
+  static async findFuzzyPage({
     store,
     cache,
     where,
     first,
     skip,
+    signal,
+    additionalSpaceIds,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
-  }): Promise<SearchResult[]> {
-    const nameFilter = where.name?.fuzzy;
-
-    if (!nameFilter) {
-      console.error('findFuzzy requires a query. Received: ', nameFilter);
-      return [];
-    }
+    signal?: AbortController['signal'];
+    additionalSpaceIds?: string[];
+  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
+    // Empty string is intentional here: the REST /search endpoint accepts
+    // an empty query and returns top-N globally ranked entities (optionally
+    // constrained by typeIds / spaceId). Callers that want paginated "every
+    // entity of this type" results pass '' on purpose.
+    const nameFilter = where.name?.fuzzy ?? '';
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
-    const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', where],
-      queryFn: ({ signal }) =>
+    const page = await cache.fetchQuery({
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds],
+      queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
-          getResults(
+          getResultsPage(
             {
               limit: first,
               offset: skip,
               query: nameFilter,
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
+              additionalSpaceIds,
             },
-            signal
+            // Prefer the caller-supplied signal so React Query cancellation
+            // on the hook side (query change, unmount) aborts the in-flight
+            // REST /search request instead of letting it run to completion.
+            signal ?? innerSignal
           )
         ),
     });
+    const remoteEntities = page.results;
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
@@ -379,17 +409,12 @@ export class E {
     const [spaces, typeNames] = await Promise.all([
       cache.fetchQuery({
         queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-        queryFn: () =>
-          Effect.runPromise(
-            getSpaces({
-              spaceIds,
-            })
-          ),
+        queryFn: ({ signal: innerSignal }) => Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
       }),
       typeIds.length > 0
         ? cache.fetchQuery({
             queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
-            queryFn: () => Effect.runPromise(getEntityNames(typeIds)),
+            queryFn: ({ signal: innerSignal }) => Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
           })
         : Promise.resolve([]),
     ]);
@@ -397,7 +422,7 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities
+    const results = entities
       .map(e => {
         const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
           .filter(s => hasName(s.name))
@@ -423,6 +448,8 @@ export class E {
         };
       })
       .filter(e => e.spaces.length > 0);
+
+    return { results, rawCount: page.rawCount, total: page.total };
   }
 }
 

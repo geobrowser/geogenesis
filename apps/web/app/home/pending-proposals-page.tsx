@@ -26,9 +26,9 @@ import { AcceptOrRejectEditor } from './accept-or-reject-editor';
 import { AcceptOrRejectMember } from './accept-or-reject-member';
 import {
   ActiveProposalsForSpacesWhereEditor,
-  getActiveProposalsForSpacesWhereEditor,
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
+  getActiveProposalsForSpacesWhereEditor,
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
@@ -240,19 +240,15 @@ async function PendingContentProposal({
     ? { vote: proposal.userVote, accountId: Address(connectedSpaceId ?? '') }
     : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
-  const showReopenMenu =
-    proposal.status === 'REJECTED' && proposal.type === 'ADD_EDIT' && isProposalEnded;
+  const showReopenMenu = proposal.status === 'REJECTED' && proposal.type === 'ADD_EDIT' && isProposalEnded;
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
         <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
-        <span aria-hidden className="shrink-0 select-none text-grey-03">
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time
-          className="shrink-0 tabular-nums"
-          dateTime={new Date(proposal.endTime * 1000).toISOString()}
-        >
+        <time className="shrink-0 tabular-nums" dateTime={new Date(proposal.endTime * 1000).toISOString()}>
           {formatGovernanceOutcomeTime(proposal.endTime)}
         </time>
       </div>

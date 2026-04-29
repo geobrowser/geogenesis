@@ -2,47 +2,43 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
-import { useSelector } from '@xstate/store/react';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
-import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { mergeSearchResult } from '~/core/database/result';
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { entityTypesMatchFilter, searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-search';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
+import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
 import { reactiveRelations } from '~/core/sync/store';
-import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import {
   fetchRelationTargetTypeIdsForProperty,
   mergeRelationValueTypesFromStore,
 } from '~/core/utils/property/properties';
-import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
-import type { Entity, Relation, Row, SearchResult, SpaceEntity, Value } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { Divider } from '~/design-system/divider';
-import { Dots } from '~/design-system/dots';
+import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Select } from '~/design-system/select';
@@ -51,6 +47,8 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
 import { Toggle } from '~/design-system/toggle';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 export interface TableBlockFilterPromptHandle {
   openWithColumn: (columnId: string) => void;
@@ -67,16 +65,16 @@ export type TableBlockNewFilterRow = {
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
-  filterSuggestionRows?: Row[];
-  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
-  onFilterPromptOpenChange?: (open: boolean) => void;
 }
 
-const MAX_SCOPED_SUGGESTIONS = 100;
-
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
+// Used as the placement-hook `preferredHeight` so it matches the actual ceiling
+// applied by `useFourAndHalfRowsMaxHeight` below — otherwise the placement code
+// thinks the dropdown wants 180px, picks `bottom`, and the dropdown overflows
+// off the viewport when space-below is between 180 and the real cap.
+const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 320;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -97,6 +95,37 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
       }
     };
   }, []);
+
+  // Dismiss the dropdown when the user clicks anywhere outside the
+  // filter's interaction root — including non-focusable targets like
+  // plain text, which don't fire a blur event on the input and would
+  // otherwise leave the dropdown lingering after clicking away.
+  React.useEffect(() => {
+    if (!focused) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target;
+      if (target instanceof Node && filterInteractionRootRef?.current?.contains(target)) {
+        return;
+      }
+      if (target instanceof Element && target.closest('[data-radix-select-content]')) {
+        return;
+      }
+      clearBlurTimeout();
+      setFocused(false);
+      // Also drop DOM focus from the input. Without this the caret stays
+      // visible in the input after clicking out, and re-clicking the
+      // input doesn't refire onFocus (the browser already considers it
+      // focused) so the dropdown wouldn't reopen.
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && filterInteractionRootRef?.current?.contains(active)) {
+        active.blur();
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [focused, filterInteractionRootRef, clearBlurTimeout]);
 
   const onFocus = React.useCallback(() => {
     clearBlurTimeout();
@@ -128,6 +157,50 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
   return { focused, setFocused, onFocus, onBlur, clearBlurTimeout };
 }
 
+// Hard ceiling for the dynamic measurement so tall rows (e.g. type results with a
+// "Geo > Type" breadcrumb at ~100px each) can't blow past the default ResultsList
+// max-height of 340px when the inline style overrides the class.
+// Aliased to the placement constant above so the placement hook's `preferredHeight`
+// stays in sync with the actual ceiling.
+const DROPDOWN_MAX_HEIGHT_PX = FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX;
+
+function useFourAndHalfRowsMaxHeight(
+  listRef: React.RefObject<HTMLUListElement | null>,
+  isOpen: boolean,
+  rowCount: number
+) {
+  const [maxHeight, setMaxHeight] = React.useState<number | undefined>(undefined);
+
+  React.useLayoutEffect(() => {
+    if (!isOpen) {
+      setMaxHeight(undefined);
+      return;
+    }
+
+    if (rowCount < 5) {
+      setMaxHeight(undefined);
+      return;
+    }
+
+    const list = listRef.current;
+    if (!list) return;
+
+    const measure = () => {
+      const firstRow = list.firstElementChild;
+      if (!(firstRow instanceof HTMLElement)) return;
+      const rowHeight = firstRow.getBoundingClientRect().height;
+      if (rowHeight <= 0) return;
+      setMaxHeight(Math.min(rowHeight * 4.5, DROPDOWN_MAX_HEIGHT_PX));
+    };
+
+    measure();
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
+  }, [isOpen, rowCount, listRef]);
+
+  return maxHeight;
+}
+
 function useRelationColumnTargetTypeIds(
   propertyId: string | undefined,
   blockSpaceId: string | undefined,
@@ -139,13 +212,8 @@ function useRelationColumnTargetTypeIds(
   const fromStore = React.useMemo(() => {
     void relationsSnapshot;
     if (!propertyId) return undefined;
-    const merged = mergeRelationValueTypesFromStore(
-      { id: propertyId, name: null, dataType: 'RELATION' },
-      store
-    );
-    return merged.relationValueTypes?.length
-      ? merged.relationValueTypes.map(t => t.id)
-      : undefined;
+    const merged = mergeRelationValueTypesFromStore({ id: propertyId, name: null, dataType: 'RELATION' }, store);
+    return merged.relationValueTypes?.length ? merged.relationValueTypes.map(t => t.id) : undefined;
   }, [propertyId, relationsSnapshot, store]);
 
   const {
@@ -170,321 +238,9 @@ function useRelationColumnTargetTypeIds(
 
   /** Until we have target type ids, do not show unfiltered relation suggestions or run unscoped search. */
   const waitForFilterTypes =
-    Boolean(propertyId) &&
-    !typeIds?.length &&
-    (isFetchingNetworkTypes || isPendingNetworkTypes);
+    Boolean(propertyId) && !typeIds?.length && (isFetchingNetworkTypes || isPendingNetworkTypes);
 
   return { typeIds, waitForFilterTypes };
-}
-
-function stubSearchResultForFilter(id: string, displayName: string | null): SearchResult {
-  const placeholderSpace: SpaceEntity = {
-    id: 'space-placeholder',
-    name: null,
-    description: null,
-    spaces: [],
-    types: [],
-    relations: [],
-    values: [],
-    spaceId: '',
-    image: PLACEHOLDER_SPACE_IMAGE,
-  };
-  return {
-    id,
-    name: displayName,
-    description: null,
-    spaces: [placeholderSpace],
-    types: [],
-  };
-}
-
-function searchResultFromBrowseEntityWithSpaces(
-  entity: Entity,
-  spaceEntityById: Map<string, SpaceEntity>,
-  preferredSpaceId?: string
-): SearchResult {
-  let candidateSpaceIds = entity.spaces.filter(id => spaceEntityById.has(id));
-  if (
-    candidateSpaceIds.length === 0 &&
-    preferredSpaceId &&
-    spaceEntityById.has(preferredSpaceId)
-  ) {
-    candidateSpaceIds = [preferredSpaceId];
-  }
-  const sortedIds = sortSpaceIdsByRank(candidateSpaceIds);
-  const spaces = sortedIds.map(id => spaceEntityById.get(id)!).filter(Boolean);
-  if (spaces.length === 0) {
-    return { ...stubSearchResultForFilter(entity.id, entity.name), types: entity.types };
-  }
-  return {
-    id: entity.id,
-    name: entity.name,
-    description: entity.description,
-    spaces,
-    types: entity.types,
-  };
-}
-
-function searchResultForFilterDisplay(
-  merged: SearchResult | null | undefined,
-  id: string,
-  displayName: string | null
-): SearchResult {
-  if (merged?.spaces?.length) return merged;
-  return stubSearchResultForFilter(id, displayName);
-}
-
-type ScopedFilterSuggestions = {
-  entitySuggestions: { id: string; name: string | null }[];
-  stringSuggestions: string[];
-  spaceSuggestions: { id: string; name: string | null; image: string | null }[];
-};
-
-function useScopedFilterSuggestions(
-  dataRows: Row[] | undefined,
-  selectedColumnId: string,
-  valueType: FilterableValueType | undefined,
-  blockSpaceId: string | undefined,
-  relationTargetTypeIds?: string[],
-  activeFilters?: Filter[],
-  filterSuggestionEntityIds?: string[],
-  waitForRelationTargetTypes?: boolean
-): ScopedFilterSuggestions {
-  const { store } = useSyncEngine();
-
-  const entityIdsKey = React.useMemo(
-    () =>
-      (dataRows ?? [])
-        .filter(r => !r.placeholder)
-        .map(r => r.entityId)
-        .sort()
-        .join(','),
-    [dataRows]
-  );
-
-  const entityIdSet = React.useMemo(() => {
-    const s = new Set<string>();
-    if (entityIdsKey) {
-      for (const id of entityIdsKey.split(',')) {
-        if (id) s.add(id);
-      }
-    }
-    return s;
-  }, [entityIdsKey]);
-
-  const effectiveEntityIdSet = React.useMemo(() => {
-    if (filterSuggestionEntityIds?.length) {
-      return new Set(filterSuggestionEntityIds);
-    }
-    return entityIdSet;
-  }, [filterSuggestionEntityIds, entityIdSet]);
-
-  const relationsSubset = useRelations({
-    selector: React.useCallback(
-      (r: Relation) =>
-        valueType === 'RELATION' &&
-        effectiveEntityIdSet.size > 0 &&
-        effectiveEntityIdSet.has(r.fromEntity.id) &&
-        r.type.id === selectedColumnId,
-      [effectiveEntityIdSet, selectedColumnId, valueType]
-    ),
-  });
-  const relationsByType = useRelations({
-    selector: React.useCallback(
-      (r: Relation) => valueType === 'RELATION' && r.type.id === selectedColumnId,
-      [selectedColumnId, valueType]
-    ),
-  });
-  const valuesSubset = useValues({
-    selector: React.useCallback(
-      (v: Value) =>
-        valueType === 'TEXT' &&
-        effectiveEntityIdSet.size > 0 &&
-        effectiveEntityIdSet.has(v.entity.id) &&
-        v.property.id === selectedColumnId,
-      [effectiveEntityIdSet, selectedColumnId, valueType]
-    ),
-  });
-
-  const spaceStats = React.useMemo(() => {
-    if (
-      selectedColumnId !== SystemIds.SPACE_FILTER ||
-      effectiveEntityIdSet.size === 0 ||
-      !blockSpaceId
-    ) {
-      return { ids: [] as string[], counts: new Map<string, number>() };
-    }
-    const counts = new Map<string, number>();
-    for (const id of effectiveEntityIdSet) {
-      const e = store.getEntity(id, { spaceId: blockSpaceId });
-      for (const sp of e?.spaces ?? []) {
-        counts.set(sp, (counts.get(sp) ?? 0) + 1);
-      }
-    }
-    return { ids: [...counts.keys()], counts };
-  }, [selectedColumnId, effectiveEntityIdSet, store, blockSpaceId]);
-
-  const { spacesById } = useSpacesByIds(spaceStats.ids);
-  const activeTypeFilterIds = React.useMemo(
-    () =>
-      (activeFilters ?? [])
-        .filter(f => f.columnId === SystemIds.TYPES_PROPERTY)
-        .map(f => f.value),
-    [activeFilters]
-  );
-
-  return React.useMemo((): ScopedFilterSuggestions => {
-    if (valueType === 'RELATION') {
-      if (waitForRelationTargetTypes) {
-        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-      }
-      const noMembersInBlock =
-        !filterSuggestionEntityIds?.length &&
-        (!(dataRows?.length) || (dataRows?.every(r => r.placeholder) ?? true));
-      if (noMembersInBlock) {
-        return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-      }
-
-      const globalCounts = new Map<string, number>();
-      const globalMeta = new Map<string, { id: string; name: string | null }>();
-      for (const r of relationsByType) {
-        if (filterSuggestionEntityIds?.length && !effectiveEntityIdSet.has(r.fromEntity.id)) {
-          continue;
-        }
-        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-
-        if (activeTypeFilterIds.length > 0) {
-          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
-          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
-        }
-        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
-          continue;
-        }
-
-        const id = r.toEntity.id;
-        globalCounts.set(id, (globalCounts.get(id) ?? 0) + 1);
-        if (!globalMeta.has(id)) globalMeta.set(id, { id, name: r.toEntity.name });
-      }
-      if (globalMeta.size > 0) {
-        const entitySuggestions = [...globalMeta.values()]
-          .sort((a, b) => {
-            const diff = (globalCounts.get(b.id) ?? 0) - (globalCounts.get(a.id) ?? 0);
-            if (diff !== 0) return diff;
-            return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-          })
-          .slice(0, MAX_SCOPED_SUGGESTIONS);
-        return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
-      }
-
-      const counts = new Map<string, number>();
-      const meta = new Map<string, { id: string; name: string | null }>();
-      for (const r of relationsSubset) {
-        const from = store.getEntity(r.fromEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-        const to = store.getEntity(r.toEntity.id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-
-        if (activeTypeFilterIds.length > 0) {
-          const fromTypeSet = new Set((from?.types ?? []).map(t => t.id));
-          if (!activeTypeFilterIds.some(id => fromTypeSet.has(id))) continue;
-        }
-        if (!entityTypesMatchFilter(to?.types, relationTargetTypeIds)) {
-          continue;
-        }
-
-        const id = r.toEntity.id;
-        counts.set(id, (counts.get(id) ?? 0) + 1);
-        if (!meta.has(id)) meta.set(id, { id, name: r.toEntity.name });
-      }
-      const entitySuggestions = [...meta.values()]
-        .sort((a, b) => {
-          const diff = (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
-          if (diff !== 0) return diff;
-          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-        })
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
-      return { entitySuggestions, stringSuggestions: [], spaceSuggestions: [] };
-    }
-
-    if (selectedColumnId === SystemIds.SPACE_FILTER) {
-      const spaceSuggestions = spaceStats.ids
-        .map(id => {
-          const entity = spacesById.get(id)?.entity;
-          return {
-            id,
-            name: entity?.name ?? null,
-            image: entity?.image ?? null,
-            _count: spaceStats.counts.get(id) ?? 0,
-          };
-        })
-        .sort((a, b) => {
-          const diff = b._count - a._count;
-          if (diff !== 0) return diff;
-          return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-        })
-        .map(({ _count: _c, ...rest }) => rest)
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
-      return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions };
-    }
-
-    if (valueType === 'TEXT') {
-      if (selectedColumnId === SystemIds.NAME_PROPERTY) {
-        const nameCounts = new Map<string, number>();
-        const rowNameByEntityId = new Map<string, string>();
-        for (const row of dataRows ?? []) {
-          if (row.placeholder) continue;
-          const n = row.columns[SystemIds.NAME_PROPERTY]?.name?.trim();
-          if (n) rowNameByEntityId.set(row.entityId, n);
-        }
-
-        for (const id of effectiveEntityIdSet) {
-          const entity = store.getEntity(id, blockSpaceId ? { spaceId: blockSpaceId } : undefined);
-          const n = entity?.name?.trim() || rowNameByEntityId.get(id)?.trim();
-          if (n) nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
-        }
-        const stringSuggestions = [...nameCounts.entries()]
-          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-          .map(([s]) => s)
-          .slice(0, MAX_SCOPED_SUGGESTIONS);
-        return {
-          entitySuggestions: [],
-          stringSuggestions,
-          spaceSuggestions: [],
-        };
-      }
-      const valueCounts = new Map<string, number>();
-      for (const v of valuesSubset) {
-        const t = v.value?.trim();
-        if (t) valueCounts.set(t, (valueCounts.get(t) ?? 0) + 1);
-      }
-      const stringSuggestions = [...valueCounts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([s]) => s)
-        .slice(0, MAX_SCOPED_SUGGESTIONS);
-      return {
-        entitySuggestions: [],
-        stringSuggestions,
-        spaceSuggestions: [],
-      };
-    }
-
-    return { entitySuggestions: [], stringSuggestions: [], spaceSuggestions: [] };
-  }, [
-    dataRows,
-    valueType,
-    selectedColumnId,
-    relationTargetTypeIds,
-    activeTypeFilterIds,
-    relationsSubset,
-    relationsByType,
-    valuesSubset,
-    spaceStats,
-    spacesById,
-    store,
-    blockSpaceId,
-    filterSuggestionEntityIds,
-    effectiveEntityIdSet,
-    waitForRelationTargetTypes,
-  ]);
 }
 
 /**
@@ -549,10 +305,9 @@ function snapshotColumnDraft(state: PromptState): FilterColumnDraft {
   };
 }
 
-function applyColumnDraft(draft: FilterColumnDraft): Pick<
-  PromptState,
-  'multiEntitySelections' | 'multiSpaceSelections' | 'multiStringSelections' | 'value'
-> {
+function applyColumnDraft(
+  draft: FilterColumnDraft
+): Pick<PromptState, 'multiEntitySelections' | 'multiSpaceSelections' | 'multiStringSelections' | 'value'> {
   return {
     multiEntitySelections: draft.multiEntitySelections.map(e => ({ ...e })),
     multiSpaceSelections: draft.multiSpaceSelections.map(s => ({ ...s })),
@@ -1000,8 +755,7 @@ function enumeratePendingFilterChips(
     if (!draft) continue;
 
     const opt = options.find(o => o.columnId === columnId);
-    const columnName =
-      opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
+    const columnName = opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
 
     if (opt?.valueType === 'RELATION') {
       for (const e of draft.multiEntitySelections) {
@@ -1084,18 +838,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
-  function TableBlockFilterPrompt(
-    {
-      trigger,
-      onCreate,
-      options,
-      filterSuggestionRows,
-      filterSuggestionEntityIds,
-      filterSuggestionSpaceId,
-      onFilterPromptOpenChange,
-    },
-    ref
-  ) {
+  function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId }, ref) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
@@ -1121,10 +864,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const [relationType, setRelationType] = React.useState<Filter | null>(
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
-
-    React.useEffect(() => {
-      onFilterPromptOpenChange?.(state.open);
-    }, [state.open, onFilterPromptOpenChange]);
 
     const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
       if (queryMode === 'RELATIONS') {
@@ -1157,8 +896,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           options={options}
           state={state}
           dispatch={dispatch}
-          filterSuggestionRows={filterSuggestionRows}
-          filterSuggestionEntityIds={filterSuggestionEntityIds}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
         />
       );
@@ -1228,18 +965,10 @@ interface DynamicFiltersProps {
   options: TableBlockFilterPromptProps['options'];
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
-  filterSuggestionRows?: Row[];
-  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
 }
 
-function MultiSelectChip({
-  label,
-  onRemove,
-}: {
-  label: string;
-  onRemove: () => void;
-}) {
+function MultiSelectChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <span className="inline-flex max-w-full items-center gap-0.5 rounded-sm border border-grey-02 bg-grey-01 py-0.5 pr-0.5 pl-1.5 text-[0.8125rem] text-text">
       <span className="min-w-0 truncate">{label}</span>
@@ -1258,15 +987,7 @@ function MultiSelectChip({
   );
 }
 
-function DynamicFilters({
-  options,
-  dispatch,
-  state,
-  filterSuggestionRows,
-  filterSuggestionEntityIds,
-  filterSuggestionSpaceId,
-}: DynamicFiltersProps) {
-  const { filterState } = useFilters();
+function DynamicFilters({ options, dispatch, state, filterSuggestionSpaceId }: DynamicFiltersProps) {
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
   const selectedEntityIds = React.useMemo(
@@ -1276,10 +997,6 @@ function DynamicFilters({
   const selectedSpaceIds = React.useMemo(
     () => new Set(state.multiSpaceSelections.map(s => s.id)),
     [state.multiSpaceSelections]
-  );
-  const selectedStringsSet = React.useMemo(
-    () => new Set(state.multiStringSelections),
-    [state.multiStringSelections]
   );
 
   const selectedOption = options.find(o => o.columnId === state.selectedColumn);
@@ -1296,23 +1013,7 @@ function DynamicFilters({
       selectedOption?.relationValueTypes
     );
 
-  const scoped = useScopedFilterSuggestions(
-    filterSuggestionRows,
-    state.selectedColumn,
-    selectedOption?.valueType,
-    filterSuggestionSpaceId,
-    relationTargetTypeIds,
-    filterState,
-    filterSuggestionEntityIds,
-    waitForRelationTargetTypes
-  );
-
-  const pendingFilterChips = React.useMemo(
-    () => enumeratePendingFilterChips(state, options),
-    [state, options]
-  );
-
-  const filterInteractionRootRef = React.useRef<HTMLDivElement>(null);
+  const pendingFilterChips = React.useMemo(() => enumeratePendingFilterChips(state, options), [state, options]);
 
   return (
     <div className="flex w-full flex-col gap-3 px-2">
@@ -1321,8 +1022,7 @@ function DynamicFilters({
           <p className="mb-1.5 text-[0.75rem] text-grey-04">Filters to apply</p>
           <div className="flex flex-wrap gap-1.5">
             {pendingFilterChips.map(item => {
-              const valueLabel =
-                item.kind === 'string' ? item.value : (item.name ?? item.id);
+              const valueLabel = item.kind === 'string' ? item.value : (item.name ?? item.id);
               return (
                 <MultiSelectChip
                   key={item.key}
@@ -1351,7 +1051,7 @@ function DynamicFilters({
           </div>
         </div>
       )}
-      <div ref={filterInteractionRootRef} className="flex items-start gap-3">
+      <div className="flex items-start gap-3">
         <div className="flex flex-1">
           <Select
             options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
@@ -1363,35 +1063,24 @@ function DynamicFilters({
         <div className="relative flex flex-1">
           {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               selectedValue=""
-              scopedSuggestions={scoped.spaceSuggestions}
               selectedSpaceIds={selectedSpaceIds}
               memberSpaceId={filterSuggestionSpaceId}
               onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               filterByTypes={relationTargetTypeIds}
               waitForFilterTypes={waitForRelationTargetTypes}
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
-              suggestionSpaceId={filterSuggestionSpaceId}
               selectedValue=""
-              scopedSuggestions={scoped.entitySuggestions}
               selectedEntityIds={selectedEntityIds}
-              onToggleEntity={e =>
-                dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })
-              }
+              onToggleEntity={e => dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })}
             />
           ) : (
             <TableBlockTextFilterInput
-              filterInteractionRootRef={filterInteractionRootRef}
               value={getFilterValue(state.value)}
               onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
-              stringSuggestions={scoped.stringSuggestions}
-              selectedStrings={selectedStringsSet}
-              onToggleString={s => dispatch({ type: 'toggleStringSelection', payload: { value: s } })}
             />
           )}
         </div>
@@ -1470,203 +1159,115 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 }
 
 interface TableBlockEntityFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
   waitForFilterTypes?: boolean;
   restrictSearchToTypes?: boolean;
-  /** Space used when listing entities by type for an empty table (relation target browse). */
-  suggestionSpaceId?: string;
-  scopedSuggestions?: { id: string; name: string | null }[];
   selectedEntityIds?: Set<string>;
   onToggleEntity?: (result: { id: string; name: string | null }) => void;
   multiSelectPlaceholder?: string;
 }
 
 function TableBlockEntityFilterInput({
-  filterInteractionRootRef,
   onSelect,
   selectedValue,
   filterByTypes,
   waitForFilterTypes = false,
   restrictSearchToTypes = false,
-  suggestionSpaceId,
-  scopedSuggestions,
   selectedEntityIds,
   onToggleEntity,
   multiSelectPlaceholder,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
-  const autocomplete = useSearch(
-    filterByTypes?.length || waitForFilterTypes || restrictSearchToTypes
-      ? {
-          filterByTypes: filterByTypes?.length ? filterByTypes : undefined,
-          waitForFilterTypes: waitForFilterTypes || undefined,
-          restrictToFilterTypes: restrictSearchToTypes || undefined,
-        }
-      : undefined
-  );
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
+  // Local ref scopes focus tracking to just this input + its dropdown, so
+  // clicking a sibling control (e.g. the column-picker Select) dismisses
+  // the dropdown instead of keeping it open.
+  const interactionRootRef = React.useRef<HTMLDivElement>(null);
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
 
-  const filteredScoped = React.useMemo(() => {
-    if (!scopedSuggestions?.length) return [];
-    const q = autocomplete.query.trim().toLowerCase();
-    const list = !q
-      ? scopedSuggestions
-      : scopedSuggestions.filter(
-          s =>
-            (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
-        );
-    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [scopedSuggestions, autocomplete.query]);
+  const [rawQuery, setRawQuery] = React.useState('');
+  const query = useDebouncedValue(rawQuery);
+  const additionalSpaceIds = useGlobalSearchSpaceIds();
 
-  const filteredScopedByTargetType = React.useMemo(() => {
-    if (!filterByTypes?.length && (waitForFilterTypes || restrictSearchToTypes)) {
-      return [];
-    }
-    if (!filterByTypes?.length) return filteredScoped;
-    return filteredScoped.filter(s => {
-      const e = store.getEntity(s.id, suggestionSpaceId ? { spaceId: suggestionSpaceId } : undefined);
-      return entityTypesMatchFilter(e?.types, filterByTypes);
-    });
-  }, [filteredScoped, filterByTypes, waitForFilterTypes, restrictSearchToTypes, store, suggestionSpaceId]);
+  const searchBlocked = (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
 
-  const canBrowseByType = Boolean(filterByTypes?.length) && !waitForFilterTypes;
-  const browseEnabled =
-    focused &&
-    filteredScopedByTargetType.length === 0 &&
-    !autocomplete.query.trim() &&
-    canBrowseByType;
-
-  const { data: browsePages, isFetching: isBrowseFetching, isFetchingNextPage: isBrowseFetchingNextPage, fetchNextPage: fetchNextBrowsePage, hasNextPage: hasNextBrowsePage } = useInfiniteQuery({
-    queryKey: [
-      'table-block-filter-entity-browse',
-      filterByTypes?.slice().sort().join(',') ?? '',
-      suggestionSpaceId ?? '',
-    ],
-    enabled: browseEnabled,
+  // Single unified search path: when the dropdown is open, fire the REST
+  // /search endpoint with the current (possibly empty) query and the
+  // target-type constraint. Empty query returns top-N globally ranked
+  // entities of the target type, typed query returns ranked matches.
+  const {
+    data: searchPages,
+    isPending: isSearchPending,
+    isFetching: isSearchFetching,
+    isFetchingNextPage: isSearchFetchingNextPage,
+    fetchNextPage: fetchNextSearchPage,
+    hasNextPage: hasNextSearchPage,
+  } = useInfiniteQuery({
+    queryKey: ['table-block-filter-search', query, filterByTypes?.slice().sort().join(',') ?? '', additionalSpaceIds],
+    enabled: focused && !searchBlocked,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
-      const where = {
-        types: filterByTypes!.map(id => ({ id: { equals: id } })),
-      };
-      const entities = await E.findMany({
+      // Use the same fuzzy-search path the global search bar uses so the
+      // row display (space icon + breadcrumb + type tags + description)
+      // matches everywhere. findFuzzyPage returns both the filtered
+      // SearchResult rows and the raw REST /search count — we need the
+      // raw count for pagination because the post-processing step
+      // discards entities whose spaces can't be resolved, which would
+      // otherwise shrink a full 25-row page and fool `hasNextPage`.
+      const { results, rawCount, total } = await E.findFuzzyPage({
         store,
         cache,
-        where,
+        where: {
+          name: { fuzzy: query },
+          ...(filterByTypes?.length ? { types: filterByTypes.map(id => ({ id: { equals: id } })) } : {}),
+        },
         first: FILTER_DROPDOWN_PAGE_SIZE,
         skip: pageParam,
-        spaceId: suggestionSpaceId,
+        signal,
+        additionalSpaceIds,
       });
-      const nonNull = entities.filter((e): e is Entity => e != null);
-
-      const spaceIdSet = new Set<string>();
-      for (const e of nonNull) {
-        for (const sid of e.spaces) {
-          if (sid) spaceIdSet.add(sid);
-        }
-      }
-      if (suggestionSpaceId) spaceIdSet.add(suggestionSpaceId);
-      const uniqueSpaceIds = [...spaceIdSet];
-
-      const spaceEntityById = new Map<string, SpaceEntity>();
-      if (uniqueSpaceIds.length > 0) {
-        const fetchedSpaces = await cache.fetchQuery({
-          queryKey: ['table-block-filter-browse-spaces', [...uniqueSpaceIds].sort().join(',')],
-          queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds }, signal)),
-          staleTime: Duration.toMillis(Duration.seconds(60)),
-        });
-        for (const s of fetchedSpaces) {
-          spaceEntityById.set(s.id, s.entity);
-        }
-      }
-
-      return nonNull
-        .map(e => searchResultFromBrowseEntityWithSpaces(e, spaceEntityById, suggestionSpaceId))
-        .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
+      return { rows: results, offset: pageParam, rawCount, total };
     },
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < FILTER_DROPDOWN_PAGE_SIZE ? undefined : allPages.length * FILTER_DROPDOWN_PAGE_SIZE,
+    getNextPageParam: lastPage => {
+      // Use REST `total` when available — it's the authoritative count
+      // of matches across the entire result set. Fall back to "did we
+      // get a full raw page?" when total is absent.
+      const nextOffset = lastPage.offset + FILTER_DROPDOWN_PAGE_SIZE;
+      if (typeof lastPage.total === 'number') {
+        return nextOffset >= lastPage.total ? undefined : nextOffset;
+      }
+      return lastPage.rawCount < FILTER_DROPDOWN_PAGE_SIZE ? undefined : nextOffset;
+    },
     staleTime: Duration.toMillis(Duration.seconds(60)),
   });
 
-  const browseResults = browsePages?.pages.flat() ?? [];
+  const searchResults = React.useMemo(() => searchPages?.pages.flatMap(p => p.rows) ?? [], [searchPages]);
 
   const rowsToRender = React.useMemo(() => {
-    const q = autocomplete.query.trim();
-    if (!q) {
-      if (filteredScopedByTargetType.length > 0) {
-        return filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s }));
-      }
-      if (browseResults.length > 0) {
-        return browseResults
-          .filter(r => searchResultMatchesAllowedTypes(r, filterByTypes))
-          .map(r => ({ kind: 'search' as const, result: r }));
-      }
-      return [];
+    const seen = new Set<string>();
+    const out: { kind: 'search'; result: (typeof searchResults)[number] }[] = [];
+    for (const r of searchResults) {
+      if (restrictSearchToTypes && !filterByTypes?.length) continue;
+      if (!searchResultMatchesAllowedTypes(r, filterByTypes)) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({ kind: 'search', result: r });
     }
-    const seen = new Set(filteredScopedByTargetType.map(s => s.id));
-    const fuzzyRows = autocomplete.results
-      .filter(r => !seen.has(r.id))
-      .filter(r => {
-        if (restrictSearchToTypes && !filterByTypes?.length) return false;
-        return searchResultMatchesAllowedTypes(r, filterByTypes);
-      });
-    return [
-      ...filteredScopedByTargetType.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...fuzzyRows.map(r => ({ kind: 'search' as const, result: r })),
-    ];
-  }, [
-    filteredScopedByTargetType,
-    autocomplete.query,
-    autocomplete.results,
-    browseResults,
-    filterByTypes,
-    restrictSearchToTypes,
-  ]);
+    return out;
+  }, [searchResults, filterByTypes, restrictSearchToTypes]);
 
-  const entityListResetKey = [
-    autocomplete.query,
-    filteredScopedByTargetType.map(s => s.id).join('\0'),
-    browseEnabled ? 'browse' : '',
-    autocomplete.query.trim() ? autocomplete.results.map(r => r.id).join('\0') : '',
-  ].join('|');
-
+  const filterByTypesKey = filterByTypes?.slice().sort().join(',') ?? '';
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
   React.useEffect(() => {
     setEntityVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [entityListResetKey]);
+  }, [query, filterByTypesKey]);
 
   const visibleEntityRows = React.useMemo(
     () => rowsToRender.slice(0, entityVisibleCount),
     [rowsToRender, entityVisibleCount]
   );
-
-  const visibleScopedIds = React.useMemo(
-    () => visibleEntityRows.flatMap(r => (r.kind === 'scoped' ? [r.scoped.id] : [])),
-    [visibleEntityRows]
-  );
-
-  const scopedResultQueries = useQueries({
-    queries: visibleScopedIds.map(id => ({
-      queryKey: ['table-block-filter-scoped-entity', id] as const,
-      queryFn: () => mergeSearchResult({ id, store }),
-      enabled: focused && visibleScopedIds.length > 0,
-      staleTime: Duration.toMillis(Duration.seconds(60)),
-    })),
-  });
-
-  const scopedResultById = React.useMemo(() => {
-    const m = new Map<string, SearchResult>();
-    visibleScopedIds.forEach((id, idx) => {
-      const data = scopedResultQueries[idx]?.data;
-      if (data != null) m.set(id, data);
-    });
-    return m;
-  }, [visibleScopedIds, scopedResultQueries]);
 
   const entityResultsListRef = React.useRef<HTMLUListElement>(null);
 
@@ -1683,7 +1284,8 @@ function TableBlockEntityFilterInput({
   const handleEntityResultsScroll = React.useCallback(
     (e: React.UIEvent<HTMLUListElement>) => {
       const el = e.currentTarget;
-      const threshold = 48;
+      // ~2 result-row heights of early prefetch on top of the baseline.
+      const threshold = 275;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -1692,126 +1294,168 @@ function TableBlockEntityFilterInput({
         setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
         return;
       }
-      if (browseEnabled && hasNextBrowsePage && !isBrowseFetchingNextPage) {
-        void fetchNextBrowsePage();
+      if (hasNextSearchPage && !isSearchFetchingNextPage) {
+        void fetchNextSearchPage();
       }
-    }, [ entityVisibleCount, rowsToRender.length, browseEnabled, hasNextBrowsePage, isBrowseFetchingNextPage, fetchNextBrowsePage ]);
+    },
+    [entityVisibleCount, rowsToRender.length, hasNextSearchPage, isSearchFetchingNextPage, fetchNextSearchPage]
+  );
 
-  const showEmptyBrowseHint =
-    canBrowseByType &&
-    filteredScopedByTargetType.length === 0 &&
-    !autocomplete.query.trim() &&
-    !isBrowseFetching &&
-    browseResults.length === 0;
+  const showEmptyHint = !searchBlocked && searchResults.length === 0 && !isSearchFetching && !isSearchPending;
 
-  const showDropdown =
-    focused &&
-    (rowsToRender.length > 0 || (browseEnabled && isBrowseFetching) || showEmptyBrowseHint);
+  const showDropdown = focused && (rowsToRender.length > 0 || isSearchPending || isSearchFetching || showEmptyHint);
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
     expandVisibleEntityRowsIfListHasNoScrollbar();
-  }, [showDropdown, expandVisibleEntityRowsIfListHasNoScrollbar, browseResults.length, rowsToRender.length, entityVisibleCount]);
+  }, [
+    showDropdown,
+    expandVisibleEntityRowsIfListHasNoScrollbar,
+    searchResults.length,
+    rowsToRender.length,
+    entityVisibleCount,
+  ]);
+
+  // Pull pages until either (a) the dropdown has a full page of rows, or
+  // (b) the REST endpoint returned a full raw page but every row got
+  // dropped by findFuzzyPage's space-resolution filter. Case (b)
+  // specifically signals "we're in a sparse run mid-result-set" rather
+  // than "we've hit the tail" — a partial raw page means REST itself has
+  // nothing more to give and we should stop.
+  const lastSearchPage = searchPages?.pages[searchPages.pages.length - 1];
+  const lastSearchPageFullRawButEmptyFiltered = Boolean(
+    lastSearchPage && lastSearchPage.rows.length === 0 && lastSearchPage.rawCount >= FILTER_DROPDOWN_PAGE_SIZE
+  );
+
+  // Guard against runaway auto-fetch loops when a large stretch of the
+  // result set is made of entities whose spaces can't be resolved:
+  // count how many pages from the end contributed zero post-filter rows
+  // and stop the auto-pump once that streak hits the cap. The user can
+  // still click "Load more" manually to push past it.
+  const MAX_AUTO_PUMP_EMPTY_PAGES = 10;
+  const trailingEmptyPageStreak = React.useMemo(() => {
+    const pages = searchPages?.pages ?? [];
+    let n = 0;
+    for (let i = pages.length - 1; i >= 0; i--) {
+      if (pages[i].rows.length === 0) n++;
+      else break;
+    }
+    return n;
+  }, [searchPages]);
+  const autoPumpCapped = trailingEmptyPageStreak >= MAX_AUTO_PUMP_EMPTY_PAGES;
+
+  React.useEffect(() => {
+    if (!focused) return;
+    if (!hasNextSearchPage) return;
+    if (isSearchFetching || isSearchFetchingNextPage) return;
+    if (autoPumpCapped) return;
+    const initialFillIncomplete = rowsToRender.length < FILTER_DROPDOWN_PAGE_SIZE;
+    if (initialFillIncomplete || lastSearchPageFullRawButEmptyFiltered) {
+      void fetchNextSearchPage();
+    }
+  }, [
+    focused,
+    rowsToRender.length,
+    lastSearchPageFullRawButEmptyFiltered,
+    autoPumpCapped,
+    hasNextSearchPage,
+    isSearchFetching,
+    isSearchFetchingNextPage,
+    fetchNextSearchPage,
+  ]);
 
   const multi = Boolean(onToggleEntity);
-  const inputValue = multi
-    ? autocomplete.query
-    : autocomplete.query === ''
-      ? selectedValue
-      : autocomplete.query;
+  const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
+  const entityDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
+    isOpen: showDropdown,
+    preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
+    gap: 8,
+  });
+  const entityDropdownMaxHeight = useFourAndHalfRowsMaxHeight(entityResultsListRef, showDropdown, rowsToRender.length);
+  const onEntityDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(entityResultsListRef.current, e);
+  }, []);
 
   const handleEntityPick = (result: { id: string; name: string | null }) => {
     clearBlurTimeout();
     if (multi) {
       onToggleEntity?.(result);
     } else {
-      autocomplete.onQueryChange('');
+      setRawQuery('');
       onSelect?.(result);
       setFocused(false);
     }
   };
 
   return (
-    <div className="relative w-full">
+    <div ref={interactionRootRef} className="relative w-full">
       <Input
         placeholder={multi ? multiSelectPlaceholder : undefined}
         value={inputValue}
-        onChange={e => autocomplete.onQueryChange(e.target.value)}
+        onChange={e => setRawQuery(e.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
       />
       {showDropdown && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={`absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 ${
+            entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+          } ${entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onEntityDropdownWheel}
+          style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
-              {rowsToRender.length === 0 && isBrowseFetching ? (
+            <ResultsList
+              ref={entityResultsListRef}
+              onScroll={handleEntityResultsScroll}
+              style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
+            >
+              {rowsToRender.length === 0 && (isSearchPending || isSearchFetching) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading…
                   </Text>
                 </ResultItem>
               ) : null}
-              {rowsToRender.length === 0 && showEmptyBrowseHint ? (
+              {rowsToRender.length === 0 && showEmptyHint ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
-                    Type to search, or pick from the list when the table has rows.
+                    No matches.
                   </Text>
                 </ResultItem>
               ) : null}
-              {visibleEntityRows.map((row, i) =>
-                row.kind === 'scoped' ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={`scoped-${row.scoped.id}`}
-                  >
-                    <ResultContent
-                      result={searchResultForFilterDisplay(
-                        scopedResultById.get(row.scoped.id),
-                        row.scoped.id,
-                        row.scoped.name
-                      )}
-                      onClick={() => handleEntityPick(row.scoped)}
-                      active={Boolean(multi && selectedEntityIds?.has(row.scoped.id))}
-                      alreadySelected={false}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={`search-${row.result.id}`}
-                  >
-                    <ResultContent
-                      onClick={() => handleEntityPick(row.result)}
-                      active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
-                      alreadySelected={false}
-                      result={row.result}
-                    />
-                  </motion.div>
-                )
-              )}
-              {browseEnabled &&
-              hasNextBrowsePage &&
-              !isBrowseFetchingNextPage &&
+              {visibleEntityRows.map((row, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={`search-${row.result.id}`}
+                >
+                  <ResultContent
+                    onClick={() => handleEntityPick(row.result)}
+                    active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
+                    alreadySelected={false}
+                    result={row.result}
+                  />
+                </motion.div>
+              ))}
+              {hasNextSearchPage &&
+              !isSearchFetchingNextPage &&
+              (autoPumpCapped || !lastSearchPageFullRawButEmptyFiltered) &&
               entityVisibleCount >= rowsToRender.length &&
               rowsToRender.length > 0 ? (
                 <ResultItem
                   onPointerDown={e => e.preventDefault()}
                   onClick={() => {
                     clearBlurTimeout();
-                    void fetchNextBrowsePage();
+                    void fetchNextSearchPage();
                   }}
                 >
                   <Text variant="metadataMedium">Load more</Text>
                 </ResultItem>
               ) : null}
-              {isBrowseFetchingNextPage ? (
+              {isSearchFetchingNextPage || (lastSearchPageFullRawButEmptyFiltered && !autoPumpCapped) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
                     Loading more…
@@ -1819,11 +1463,6 @@ function TableBlockEntityFilterInput({
                 </ResultItem>
               ) : null}
             </ResultsList>
-            {autocomplete.isLoading && (
-              <div className="flex items-center justify-center py-3">
-                <Dots />
-              </div>
-            )}
           </ResizableContainer>
         </div>
       )}
@@ -1832,108 +1471,64 @@ function TableBlockEntityFilterInput({
 }
 
 interface TableBlockSpaceFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
-  scopedSuggestions?: { id: string; name: string | null; image: string | null }[];
   selectedSpaceIds?: Set<string>;
   memberSpaceId?: string;
   onToggleSpace?: (result: { id: string; name: string | null }) => void;
 }
 
 function TableBlockSpaceFilterInput({
-  filterInteractionRootRef,
   onSelect,
   selectedValue,
-  scopedSuggestions,
   selectedSpaceIds,
   memberSpaceId,
   onToggleSpace,
 }: TableBlockSpaceFilterInputProps) {
   const { query, setQuery, spaces: results } = useSpacesQuery();
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
+  const interactionRootRef = React.useRef<HTMLDivElement>(null);
+  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
 
-  const scopedWhenEmpty = React.useMemo(() => {
-    if (!scopedSuggestions?.length) return [];
-    return scopedSuggestions.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [scopedSuggestions]);
+  // Default suggestions shown on focus with empty query: the spaces the
+  // current block's entity is a member of.
   const { data: memberSpaces = [] } = useQuery({
     queryKey: ['filter-member-spaces', memberSpaceId],
     enabled: Boolean(memberSpaceId),
     staleTime: Duration.toMillis(Duration.seconds(60)),
     queryFn: ({ signal }) => Effect.runPromise(getSpacesWhereMember(memberSpaceId!, signal)),
   });
-  const defaultSpaceSuggestions = React.useMemo(() => {
-    const out: { id: string; name: string | null; image: string | null }[] = [];
-    const seen = new Set<string>();
-    for (const s of scopedWhenEmpty) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      out.push(s);
-    }
-    for (const s of memberSpaces) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      out.push({ id: s.id, name: s.entity.name ?? null, image: s.entity.image ?? null });
-    }
-    return out.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [scopedWhenEmpty, memberSpaces]);
-
-  const mergedWhenQuery = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const scopedMatches = (scopedSuggestions ?? []).filter(
-      s => (s.name ?? '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
-    );
-    const seen = new Set(scopedMatches.map(s => s.id));
-    const remote = results.filter(r => !seen.has(r.id));
-    return [
-      ...scopedMatches.map(s => ({ kind: 'scoped' as const, scoped: s })),
-      ...remote.map(r => ({ kind: 'remote' as const, result: r })),
-    ].slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [query, scopedSuggestions, results]);
+  const defaultSpaceSuggestions = React.useMemo(
+    () =>
+      memberSpaces.map(s => ({
+        id: s.id,
+        name: s.entity.name ?? null,
+        image: s.entity.image ?? null,
+      })),
+    [memberSpaces]
+  );
 
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
   const showQueryPanel = Boolean(query.trim());
   const multi = Boolean(onToggleSpace);
 
-  const spaceQueryRows = React.useMemo(() => {
-    if (!showQueryPanel) return [] as Array<
-      | { kind: 'scoped'; scoped: { id: string; name: string | null; image: string | null } }
-      | { kind: 'remote'; result: (typeof results)[number] }
-    >;
-    if (mergedWhenQuery.length > 0) return mergedWhenQuery;
-    return results.map(r => ({ kind: 'remote' as const, result: r }));
-  }, [showQueryPanel, mergedWhenQuery, results]);
-
-  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : spaceQueryRows.length;
+  const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : results.length;
 
   const [spaceVisibleCount, setSpaceVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
   React.useEffect(() => {
     setSpaceVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [
-    query,
-    showScopedOnlyPanel,
-    showQueryPanel,
-    defaultSpaceSuggestions.length,
-    mergedWhenQuery.length,
-    results.length,
-  ]);
+  }, [query, showScopedOnlyPanel, showQueryPanel, defaultSpaceSuggestions.length, results.length]);
 
   const visibleScopedSpaceSuggestions = React.useMemo(
     () => defaultSpaceSuggestions.slice(0, spaceVisibleCount),
     [defaultSpaceSuggestions, spaceVisibleCount]
   );
 
-  const visibleSpaceQueryRows = React.useMemo(
-    () => spaceQueryRows.slice(0, spaceVisibleCount),
-    [spaceQueryRows, spaceVisibleCount]
-  );
+  const visibleSpaceQueryRows = React.useMemo(() => results.slice(0, spaceVisibleCount), [results, spaceVisibleCount]);
 
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
-      const threshold = 48;
+      // ~2 result-row heights of early prefetch on top of the baseline.
+      const threshold = 275;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
       const nearBottom = distanceFromBottom <= threshold;
@@ -1969,7 +1564,7 @@ function TableBlockSpaceFilterInput({
     spaceFullRowCount,
     spaceVisibleCount,
     defaultSpaceSuggestions.length,
-    spaceQueryRows.length,
+    results.length,
   ]);
 
   const renderSpaceRow = (
@@ -2016,9 +1611,35 @@ function TableBlockSpaceFilterInput({
   );
 
   const inputDisplay = multi ? query : query === '' ? selectedValue : query;
+  const spaceDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
+    isOpen: showScopedOnlyPanel || showQueryPanel,
+    preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
+    gap: 8,
+  });
+  const activeSpaceListRef = showScopedOnlyPanel ? spaceScopedListRef : spaceQueryListRef;
+  const activeSpaceRowsCount = showScopedOnlyPanel
+    ? defaultSpaceSuggestions.length
+    : showQueryPanel
+      ? results.length
+      : 0;
+  const spaceDropdownMaxHeight = useFourAndHalfRowsMaxHeight(
+    activeSpaceListRef,
+    showScopedOnlyPanel || showQueryPanel,
+    activeSpaceRowsCount
+  );
+  const onSpaceDropdownWheel = React.useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
+      trapWheelToElement(list, e);
+    },
+    [showQueryPanel, showScopedOnlyPanel]
+  );
+  const spaceDropdownClassName = `absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 ${
+    spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+  } ${spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`;
 
   return (
-    <div className="relative w-full">
+    <div ref={interactionRootRef} className="relative w-full">
       <Input
         placeholder={multi ? 'Search…' : undefined}
         value={inputDisplay}
@@ -2028,20 +1649,23 @@ function TableBlockSpaceFilterInput({
       />
       {showScopedOnlyPanel && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onSpaceDropdownWheel}
+          style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceScopedListRef} onScroll={handleSpaceResultsScroll}>
+            <ResultsList
+              ref={spaceScopedListRef}
+              onScroll={handleSpaceResultsScroll}
+              style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
+            >
               {visibleScopedSpaceSuggestions.map((s, i) =>
                 renderSpaceRow(
                   s.id,
                   s.name,
                   s.image ?? PLACEHOLDER_SPACE_IMAGE,
-                  () =>
-                    multi
-                      ? onToggleSpace?.(s)
-                      : onSelect?.(s),
+                  () => (multi ? onToggleSpace?.(s) : onSelect?.(s)),
                   i,
                   Boolean(selectedSpaceIds?.has(s.id))
                 )
@@ -2052,41 +1676,29 @@ function TableBlockSpaceFilterInput({
       )}
       {showQueryPanel && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onSpaceDropdownWheel}
+          style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
-              {visibleSpaceQueryRows.map((row, i) =>
-                row.kind === 'scoped'
-                  ? renderSpaceRow(
-                      row.scoped.id,
-                      row.scoped.name,
-                      row.scoped.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.(row.scoped)
-                          : onSelect?.(row.scoped),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.scoped.id))
-                    )
-                  : renderSpaceRow(
-                      row.result.id,
-                      row.result.name,
-                      row.result.image ?? PLACEHOLDER_SPACE_IMAGE,
-                      () =>
-                        multi
-                          ? onToggleSpace?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            })
-                          : onSelect?.({
-                              id: row.result.id,
-                              name: row.result.name,
-                            }),
-                      i,
-                      Boolean(selectedSpaceIds?.has(row.result.id))
-                    )
+            <ResultsList
+              ref={spaceQueryListRef}
+              onScroll={handleSpaceResultsScroll}
+              style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
+            >
+              {visibleSpaceQueryRows.map((result, i) =>
+                renderSpaceRow(
+                  result.id,
+                  result.name,
+                  result.image ?? PLACEHOLDER_SPACE_IMAGE,
+                  () =>
+                    multi
+                      ? onToggleSpace?.({ id: result.id, name: result.name })
+                      : onSelect?.({ id: result.id, name: result.name }),
+                  i,
+                  Boolean(selectedSpaceIds?.has(result.id))
+                )
               )}
             </ResultsList>
           </ResizableContainer>
@@ -2097,134 +1709,20 @@ function TableBlockSpaceFilterInput({
 }
 
 interface TableBlockTextFilterInputProps {
-  filterInteractionRootRef?: React.RefObject<HTMLElement | null>;
   value: string;
   onChange: (value: string) => void;
-  stringSuggestions: string[];
-  selectedStrings?: Set<string>;
-  onToggleString?: (s: string) => void;
 }
 
-function TableBlockTextFilterInput({
-  filterInteractionRootRef,
-  value,
-  onChange,
-  stringSuggestions,
-  selectedStrings,
-  onToggleString,
-}: TableBlockTextFilterInputProps) {
-  const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } =
-    useFilterValueInputFocus(filterInteractionRootRef);
-
-  const filtered = React.useMemo(() => {
-    if (!stringSuggestions.length) return [];
-    const q = value.trim().toLowerCase();
-    const list = !q
-      ? stringSuggestions
-      : stringSuggestions.filter(s => s.toLowerCase().includes(q));
-    return list.slice(0, MAX_SCOPED_SUGGESTIONS);
-  }, [stringSuggestions, value]);
-
-  const [textVisibleCount, setTextVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
-  React.useEffect(() => {
-    setTextVisibleCount(FILTER_DROPDOWN_PAGE_SIZE);
-  }, [value, filtered.length, stringSuggestions.length]);
-
-  const visibleTextSuggestions = React.useMemo(
-    () => filtered.slice(0, textVisibleCount),
-    [filtered, textVisibleCount]
-  );
-
-  const applyTextListPagination = React.useCallback(
-    (el: HTMLUListElement) => {
-      const threshold = 48;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
-      if (!nearBottom && !noOverflow) return;
-      if (textVisibleCount < filtered.length) {
-        setTextVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, filtered.length));
-      }
-    },
-    [textVisibleCount, filtered.length]
-  );
-
-  const textResultsListRef = React.useRef<HTMLUListElement>(null);
-  const handleTextResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
-      applyTextListPagination(e.currentTarget);
-    },
-    [applyTextListPagination]
-  );
-
-  const showEmptyTextHint = focused && stringSuggestions.length === 0;
-  const showDropdown = focused && (showEmptyTextHint || filtered.length > 0);
-
-  React.useLayoutEffect(() => {
-    if (!showDropdown) return;
-    const el = textResultsListRef.current;
-    if (el) applyTextListPagination(el);
-  }, [showDropdown, applyTextListPagination, filtered.length, textVisibleCount]);
-
-  const multi = Boolean(onToggleString);
-
+/**
+ * Non-relation filter value input (Name, Description, and any scalar
+ * value-type filter). Plain controlled input — we don't surface a
+ * suggestions dropdown for these today; the user types the exact value
+ * they want to filter by.
+ */
+function TableBlockTextFilterInput({ value, onChange }: TableBlockTextFilterInputProps) {
   return (
     <div className="relative w-full">
-      <Input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      />
-      {showDropdown && (
-        <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-          onPointerDown={e => e.preventDefault()}
-        >
-          <ResizableContainer duration={0.125}>
-            <ResultsList ref={textResultsListRef} onScroll={handleTextResultsScroll}>
-              {showEmptyTextHint ? (
-                <ResultItem className="pointer-events-none">
-                  <Text color="grey-03" variant="metadataMedium">
-                    Type a value to filter. Suggestions appear when the table has matching rows.
-                  </Text>
-                </ResultItem>
-              ) : null}
-              {visibleTextSuggestions.map((s, i) => {
-                const isSel = Boolean(selectedStrings?.has(s));
-                return (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={s}
-                  >
-                    <ResultItem
-                      className={isSel ? 'bg-grey-02' : undefined}
-                      onClick={() => {
-                        clearBlurTimeout();
-                        if (multi) {
-                          onToggleString?.(s);
-                        } else {
-                          onChange(s);
-                          setFocused(false);
-                        }
-                      }}
-                    >
-                      <div className="flex w-full items-center justify-between leading-4">
-                        <Text variant="metadataMedium" ellipsize className="leading-4.5">
-                          {s}
-                        </Text>
-                        {multi && isSel && <CheckCircleSmall color="grey-04" />}
-                      </div>
-                    </ResultItem>
-                  </motion.div>
-                );
-              })}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
+      <Input value={value} onChange={e => onChange(e.target.value)} />
     </div>
   );
 }

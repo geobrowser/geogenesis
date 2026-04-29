@@ -11,7 +11,8 @@ import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/c
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
-import { ColorName } from '~/design-system/theme/colors';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 import { TYPE_ICONS, TypeIconComponent } from './type-icons';
 
@@ -24,6 +25,7 @@ interface Props {
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
   const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);
   const [open, setOpen] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   // Determine which options are available based on the property's dataType
   const availableOptions = React.useMemo(() => {
@@ -73,6 +75,14 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
     },
     Icon: TYPE_ICONS[key],
   }));
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 180,
+    gap: 8,
+  });
+  const onTypeMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
 
   let Icon = DashedCircle as TypeIconComponent;
   if (selectedValue) {
@@ -94,6 +104,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
+          ref={triggerRef}
           className={`flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
         >
           <Icon color={open ? 'text' : 'grey-04'} />
@@ -103,33 +114,52 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
           </div>
         </button>
       </DropdownPrimitive.Trigger>
-      <DropdownPrimitive.Content
-        align="end"
-        sideOffset={4}
-        className="absolute left-0 z-10 max-h-[280px] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
-      >
-        <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
-          {options.map((option, index) => {
-            const TypeIcon = option.Icon;
-            return (
-              <DropdownPrimitive.Item
-                key={`triple-type-dropdown-${index}`}
-                onClick={() => {
-                  option.onClick(setSelectedValue, option.value);
-                  onChange?.(option.value);
-                }}
-                className={cx(
-                  'flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  selectedValue === option.value && 'bg-divider!'
-                )}
-              >
-                <TypeIcon color="grey-04" />
-                {option.label}
-              </DropdownPrimitive.Item>
-            );
-          })}
-        </DropdownPrimitive.Group>
-      </DropdownPrimitive.Content>
+      {/*
+        Portal so the menu can escape ancestor `overflow-hidden` + `transform`
+        clipping (e.g. when this dropdown is rendered inside a popover/dialog
+        with rounded shell — without the portal, the menu opens but is
+        invisible because Radix's transform-positioned `Content` is clipped
+        by the parent).
+      */}
+      <DropdownPrimitive.Portal>
+        <DropdownPrimitive.Content
+          align={align}
+          side={side}
+          sideOffset={8}
+          avoidCollisions={true}
+          collisionPadding={8}
+          sticky="always"
+          className={cx(
+            'z-9999 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+            options.length > 4 && 'max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth'
+          )}
+          onWheel={onTypeMenuWheel}
+        >
+          <DropdownPrimitive.Group className="overflow-hidden">
+            {options.map((option, index) => {
+              const TypeIcon = option.Icon;
+              return (
+                <DropdownPrimitive.Item
+                  key={`triple-type-dropdown-${index}`}
+                  onClick={() => {
+                    option.onClick(setSelectedValue, option.value);
+                    onChange?.(option.value);
+                  }}
+                  className={cx(
+                    // Match sidebar idle/hover/active treatment so selection state
+                    // is distinguishable from cursor hover.
+                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-grey-01 focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04 data-highlighted:bg-grey-01',
+                    selectedValue === option.value && 'bg-divider!'
+                  )}
+                >
+                  <TypeIcon color="grey-04" />
+                  {option.label}
+                </DropdownPrimitive.Item>
+              );
+            })}
+          </DropdownPrimitive.Group>
+        </DropdownPrimitive.Content>
+      </DropdownPrimitive.Portal>
     </DropdownPrimitive.Root>
   );
 };

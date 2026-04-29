@@ -1,13 +1,13 @@
-import * as Effect from 'effect/Effect';
-
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import { fetchProfile } from '~/core/io/subgraph';
+import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
 
 import {
@@ -179,6 +179,7 @@ function decodeExploreEntitiesByProperty(data: {
 }
 
 function buildFeedFilter(args: {
+  spaceIds: string[];
   time: ExploreTime;
   typeIds?: readonly string[];
   requireName?: boolean;
@@ -187,7 +188,17 @@ function buildFeedFilter(args: {
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-    ...(args.requireName !== false ? { name: { isNull: false, isNot: '' } } : {}),
+    ...(args.requireName !== false
+      ? {
+          values: {
+            some: {
+              spaceId: { in: args.spaceIds },
+              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
+              text: { isNull: false, isNot: '' },
+            },
+          },
+        }
+      : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
 }
@@ -261,8 +272,7 @@ function buildItems(
     // from space C. Fall back to the top-level aggregated name/description when the
     // entity has no value in the display space — avoids "Untitled" cards purely
     // because of the space boundary.
-    const title =
-      textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
+    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
     const description =
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 

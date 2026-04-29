@@ -1,4 +1,4 @@
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE, ROOT_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { SpaceEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -16,6 +16,8 @@ export type Space = {
   // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
   members: string[];
+  totalMembers: number;
+  totalEditors: number;
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
@@ -30,6 +32,8 @@ export function SpaceDto(space: RemoteSpace): Space {
     topicId: space.topicId ?? null,
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
+    totalMembers: space.members.totalCount,
+    totalEditors: space.editors.totalCount,
   };
 }
 
@@ -47,18 +51,25 @@ export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | nul
     };
   }
 
+  const resolvedImage =
+    spaceId === ROOT_SPACE
+      ? ROOT_SPACE_IMAGE
+      : entity
+        ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? PLACEHOLDER_SPACE_IMAGE)
+        : PLACEHOLDER_SPACE_IMAGE;
+
   const spaceConfigWithImage: SpaceEntity = entity
     ? {
         ...entity,
         spaceId: spaceId,
-        image: Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? PLACEHOLDER_SPACE_IMAGE,
+        image: resolvedImage,
       }
     : {
         id: '',
         spaceId: spaceId,
         name: null,
         description: null,
-        image: PLACEHOLDER_SPACE_IMAGE,
+        image: resolvedImage,
         values: [],
         types: [],
         spaces: [],

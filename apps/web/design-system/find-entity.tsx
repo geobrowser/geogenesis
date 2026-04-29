@@ -18,6 +18,7 @@ import { Tag } from '~/design-system/tag';
 
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
 
 type FindEntityProps = {
@@ -105,7 +106,10 @@ export const FindEntity = ({
                   </div>
                 </div>
                 <ResizableContainer>
-                  <div className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto border-t border-grey-02 bg-white">
+                  <div
+                    className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
+                    onWheel={e => trapWheelToElement(e.currentTarget, e)}
+                  >
                     {!results?.length && isLoading && (
                       <div className="w-full border-b border-divider bg-white px-3 py-2">
                         <div className="truncate text-button text-text">Loading...</div>

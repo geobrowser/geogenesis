@@ -63,7 +63,7 @@ export function useCreatePersonalSpace() {
         throw new Error('Timed out waiting for space ID after registration.');
       }
 
-      // 3. Generate ops for personal space content
+      // 3. Graph ops for the personal space; resolvedTopicId is the home entity and on-chain topic (same as Set topic).
       const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
         type: 'personal',
         spaceName,
@@ -200,7 +200,12 @@ async function waitForSpaceContent(spaceId: string, maxAttempts = 15, intervalMs
   return false;
 }
 
-async function waitForSpaceTopic(spaceId: string, topicId: string, maxAttempts = 15, intervalMs = 2_000): Promise<boolean> {
+async function waitForSpaceTopic(
+  spaceId: string,
+  topicId: string,
+  maxAttempts = 15,
+  intervalMs = 2_000
+): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const space = await Effect.runPromise(getSpace(spaceId));

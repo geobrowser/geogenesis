@@ -6,21 +6,20 @@ import { cva } from 'class-variance-authority';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { useSearchParams } from 'next/navigation';
 
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
 
 import { SmallButton } from '~/design-system/button';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
-import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Member } from '~/design-system/icons/member';
 import { Menu } from '~/design-system/menu';
-import { useSearchParams } from 'next/navigation';
-
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
@@ -116,11 +115,7 @@ function GovernanceTabsRow({
               />
             ) : null}
           </Link>
-          <Link
-            href={hrefForTab('my')}
-            prefetch
-            className={tabGroupTabLinkStyles({ active: governanceTab === 'my' })}
-          >
+          <Link href={hrefForTab('my')} prefetch className={tabGroupTabLinkStyles({ active: governanceTab === 'my' })}>
             My proposals
             {governanceTab === 'my' ? (
               <motion.div
@@ -152,7 +147,7 @@ export function PersonalHomeDashboard({
   const spaceLabel =
     governanceFilters.spaceId === 'all'
       ? 'All spaces'
-      : spaceOptions.find(s => s.id === governanceFilters.spaceId)?.name ?? 'All spaces';
+      : (spaceOptions.find(s => s.id === governanceFilters.spaceId)?.name ?? 'All spaces');
 
   const categoryLabel = categoryLabels[governanceFilters.category];
   const statusLabel = statusLabels[governanceFilters.status];
@@ -227,20 +222,37 @@ function GovernanceFilterMenu({
   maxHeightClass?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [pendingLabel, setPendingLabel] = React.useState<string | null>(null);
+  const prevLabelRef = React.useRef(label);
+
+  React.useEffect(() => {
+    if (prevLabelRef.current !== label) {
+      prevLabelRef.current = label;
+      setPendingLabel(null);
+    }
+  }, [label]);
+
+  const displayLabel = pendingLabel ?? label;
+
   return (
     <Menu
       open={open}
       onOpenChange={setOpen}
       asChild
+      viewportClassName={`w-full min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box] ${
+        maxHeightClass ?? 'max-h-[200px]'
+      }`}
       trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
-      align="start"
     >
-      <div className={maxHeightClass}>
+      <>
         {items.map(item => (
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              if (item.label !== displayLabel) setPendingLabel(item.label);
+              setOpen(false);
+            }}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
             {showImages && item.showImage !== false ? (
@@ -259,7 +271,7 @@ function GovernanceFilterMenu({
             </Text>
           </Link>
         ))}
-      </div>
+      </>
     </Menu>
   );
 }
@@ -277,7 +289,7 @@ const Notices = () => {
             <img
               src="/home.png"
               alt=""
-              className="pointer-events-none block h-[calc(100%+21px)] w-full min-h-0 min-w-0 -translate-y-[21px] select-none object-cover object-left object-top sm:h-[calc(100%+24px)] sm:-translate-y-6"
+              className="pointer-events-none block h-[calc(100%+21px)] min-h-0 w-full min-w-0 -translate-y-[21px] object-cover object-left object-top select-none sm:h-[calc(100%+24px)] sm:-translate-y-6"
             />
           </div>
         }

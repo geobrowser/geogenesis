@@ -481,6 +481,14 @@ export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const relationsByFromEntityIdQuery = graphql(/* GraphQL */ `
+  query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID!) {
+    relations(filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
+      ...FullRelation
+    }
+  }
+`);
+
 export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
@@ -571,6 +579,114 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entityExistsQuery = graphql(/* GraphQL */ `
+  query EntityExists($id: UUID!) {
+    entity(id: $id) {
+      id
+    }
+  }
+`);
+
+export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
+  query EntityCommentReplyBacklinksPage(
+    $id: UUID!
+    $replyToTypeId: UUID!
+    $commentTypeId: UUID!
+    $first: Int!
+    $offset: Int!
+  ) {
+    entity(id: $id) {
+      backlinksList(
+        first: $first
+        offset: $offset
+        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
+      ) {
+        fromEntity {
+          id
+        }
+      }
+    }
+  }
+`);
+
+export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForComments($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      name
+      description
+      spaceIds
+      createdAt
+      updatedAt
+
+      types {
+        id
+        name
+      }
+
+      valuesList {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        text
+        integer
+        float
+        point
+        boolean
+        time
+        language
+        unit
+        datetime
+        date
+        decimal
+        bytes
+        schedule
+      }
+
+      relationsList {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            spaceId
+            propertyId
+            text
+            integer
+            float
+            point
+            boolean
+            time
+            datetime
+            date
+            decimal
+            bytes
+            schedule
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+        }
+      }
+    }
+  }
+`);
+
 export const entityBacklinksQuery = graphql(/* GraphQL */ `
   query EntityBacklinksPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
@@ -602,8 +718,16 @@ export const spaceFragment = graphql(/* GraphQL */ `
       ...FullEntity
     }
 
+    members {
+      totalCount
+    }
+
     membersList {
       memberSpaceId
+    }
+
+    editors {
+      totalCount
     }
 
     editorsList {

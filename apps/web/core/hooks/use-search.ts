@@ -15,6 +15,7 @@ import { mergeSearchResult } from '../database/result';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import { useDebouncedValue } from './use-debounced-value';
+import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
 interface SearchOptions {
   filterByTypes?: string[];
@@ -44,10 +45,7 @@ export function entityTypesMatchFilter(
   return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
 }
 
-function resultMatchesFilterTypes(
-  result: { types: { id: string }[] },
-  filterByTypes: string[] | undefined
-): boolean {
+function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
   return searchResultMatchesAllowedTypes(result, filterByTypes);
 }
 
@@ -62,6 +60,8 @@ export function useSearch({
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
+
+  const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const maybeEntityId = debouncedQuery.trim();
 
@@ -78,6 +78,7 @@ export function useSearch({
       filterBySpace,
       Boolean(waitForFilterTypes),
       Boolean(restrictToFilterTypes),
+      additionalSpaceIds,
     ],
     queryFn: async () => {
       if (query.length === 0) return [];
@@ -147,6 +148,7 @@ export function useSearch({
               },
               first: 10,
               skip: 0,
+              additionalSpaceIds,
             }),
           catch: error => {
             console.error('error', error);

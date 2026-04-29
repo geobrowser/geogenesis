@@ -14,6 +14,11 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { SortTable } from '~/design-system/icons/sort-table';
 import { MenuItem } from '~/design-system/menu';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+
+const SORT_MENU_SURFACE =
+  'z-100 block max-h-[180px] min-w-0 w-[200px] overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
 
 type DataBlockSortMenuProps = {
   properties: Property[];
@@ -23,10 +28,20 @@ type DataBlockSortMenuProps = {
 
 export function DataBlockSortMenu({ properties, sortState, onSort }: DataBlockSortMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: isMenuOpen,
+    preferredHeight: 180,
+    gap: 8,
+  });
 
-  const onOpenChange = () => {
-    setIsMenuOpen(!isMenuOpen);
+  const onOpenChange = (open: boolean) => {
+    setIsMenuOpen(open);
   };
+
+  const onContentWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
 
   const handleSort = (propertyId: string) => {
     onSort(nextSortDirection(sortState, propertyId));
@@ -39,14 +54,18 @@ export function DataBlockSortMenu({ properties, sortState, onSort }: DataBlockSo
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
-      <Dropdown.Trigger>
+      <Dropdown.Trigger ref={triggerRef}>
         {isMenuOpen ? <Close color="grey-04" /> : <SortTable color={sortState ? 'text' : 'grey-04'} />}
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          side={side}
+          align={align}
           sideOffset={8}
-          className="z-100 block max-h-[356px] w-[200px]! overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
-          align="end"
+          avoidCollisions={true}
+          collisionPadding={8}
+          className={SORT_MENU_SURFACE}
+          onWheel={onContentWheel}
         >
           {properties
             .filter(p => SORTABLE_DATA_TYPES.includes(p.dataType))

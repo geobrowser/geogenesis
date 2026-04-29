@@ -27,9 +27,6 @@ import { useView } from './use-view';
 
 export const PAGE_SIZE = 9;
 
-/** Max entities to hydrate for filter value suggestions (names, text values, relations) beyond the current table page. */
-const FILTER_SUGGESTION_ENTITY_CAP = 5000;
-
 interface RenderablesQueryKey {
   sourceType: Source['type'];
   sourceKey: string;
@@ -47,13 +44,11 @@ interface UseDataBlockOptions {
   filterState?: Filter[];
   filterMode?: FilterMode;
   canEdit?: boolean;
-  fetchFilterSuggestions?: boolean;
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
-  const fetchFilterSuggestions = options?.fetchFilterSuggestions ?? false;
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
     spaceId: spaceId,
@@ -137,47 +132,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     sort: serverSort,
   });
 
-  const collectionSuggestionIdSlice = React.useMemo(() => {
-    if (source.type !== 'COLLECTION' || !collectionFilterSuggestionEntityIds?.length) return undefined;
-    return collectionFilterSuggestionEntityIds.slice(0, FILTER_SUGGESTION_ENTITY_CAP);
-  }, [source.type, collectionFilterSuggestionEntityIds]);
-
-  useQueryEntities({
-    where: { id: { in: collectionSuggestionIdSlice ?? [] } },
-    enabled: fetchFilterSuggestions && Boolean(collectionSuggestionIdSlice?.length),
-    first: collectionSuggestionIdSlice?.length ?? 0,
-    skip: 0,
-    placeholderData: keepPreviousData,
-    deferUntilFetched: true,
-  });
-
-  const {
-    entities: queryBlockSuggestionEntities,
-    isFetched: isQueryBlockSuggestionEntitiesFetched,
-  } = useQueryEntities({
-    where,
-    enabled: fetchFilterSuggestions && (source.type === 'SPACES' || source.type === 'GEO'),
-    first: FILTER_SUGGESTION_ENTITY_CAP,
-    skip: 0,
-    placeholderData: keepPreviousData,
-    deferUntilFetched: true,
-  });
-
-  const filterSuggestionEntityIds = React.useMemo(() => {
-    if (source.type === 'COLLECTION') {
-      return collectionFilterSuggestionEntityIds;
-    }
-    if (source.type === 'SPACES' || source.type === 'GEO') {
-      if (!isQueryBlockSuggestionEntitiesFetched) return undefined;
-      return queryBlockSuggestionEntities.map(e => e.id);
-    }
-    return undefined;
-  }, [
-    source.type,
-    collectionFilterSuggestionEntityIds,
-    isQueryBlockSuggestionEntitiesFetched,
-    queryBlockSuggestionEntities,
-  ]);
+  // For COLLECTION sources we already have the row ids locally (from
+  // collectionRelations), so we expose them without any network work. For
+  // SPACES/GEO sources we used to fire a massive entitiesConnection fetch
+  // here to seed filter-suggestion scoping; the filter dropdown has since
+  // been rewritten to paginate against the REST /search endpoint directly
+  // and no longer consumes these ids, so this hook intentionally returns
+  // undefined for non-COLLECTION sources. The field is kept for
+  // COLLECTION consumers that still use it downstream.
+  const filterSuggestionEntityIds = source.type === 'COLLECTION' ? collectionFilterSuggestionEntityIds : undefined;
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
   // We just need to organize the data here

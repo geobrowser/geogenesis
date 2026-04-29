@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { Effect } from 'effect';
 import { useAtom, useAtomValue } from 'jotai';
 
+import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { getProperty, getResults } from '~/core/io/queries';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property } from '~/core/types';
@@ -29,6 +30,7 @@ export function useAutoMapColumns(spaceId: string) {
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);
   const [, setExtraProperties] = useAtom(extraPropertiesAtom);
   const { store } = useSyncEngine();
+  const additionalSpaceIds = useGlobalSearchSpaceIds();
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
   const runWithConcurrency = useCallback(async <T>(tasks: Array<() => Promise<T>>, concurrency: number) => {
@@ -82,6 +84,7 @@ export function useAutoMapColumns(spaceId: string) {
               getResults({
                 query: headerName,
                 typeIds: [SystemIds.PROPERTY],
+                additionalSpaceIds,
               })
             );
 
@@ -142,7 +145,16 @@ export function useAutoMapColumns(spaceId: string) {
     } finally {
       setIsAutoMapping(false);
     }
-  }, [headers, typesColumnIndex, columnMapping, store, setColumnMapping, setExtraProperties, runWithConcurrency]);
+  }, [
+    headers,
+    typesColumnIndex,
+    columnMapping,
+    store,
+    additionalSpaceIds,
+    setColumnMapping,
+    setExtraProperties,
+    runWithConcurrency,
+  ]);
 
   return { autoMap, isAutoMapping };
 }

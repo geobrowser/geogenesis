@@ -8,52 +8,85 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  align?: 'start' | 'center' | 'end';
-  side?: 'bottom' | 'left' | 'right' | 'top';
   sideOffset?: number;
   className?: string;
+  /** Override the inner scroll viewport classes (e.g., to set a different max height). */
+  viewportClassName?: string;
   asChild?: boolean;
   modal?: boolean;
 }
 
-const contentStyles = cva(
-  'z-100 w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
+/** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
+const shellStyles = cva(
+  'isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
   {
-  variants: {
-    align: {
-      start: 'origin-top-left',
-      center: 'origin-top',
-      end: 'origin-top-right',
+    variants: {
+      align: {
+        start: 'origin-top-left',
+        center: 'origin-top',
+        end: 'origin-top-right',
+      },
     },
-  },
-});
+  }
+);
+
+// 200px capped scrolling at ~5 items, so an 8-item menu had ~120px of scroll range.
+// That tiny range made each wheel tick feel like a big jump even when the underlying
+// scroll was smooth. Default to a height that fits ~10 items, capped at 75vh on small
+// screens. Callers that want a smaller scroll well can still pass `viewportClassName`.
+const defaultScrollViewportClass =
+  'w-full max-h-[min(400px,75vh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
 
 export function Menu({
   children,
   trigger,
   open,
   onOpenChange,
-  side,
   sideOffset = 8,
-  align = 'end',
   asChild = false,
   className = '',
+  viewportClassName,
   modal = false,
 }: Props) {
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align: adaptiveAlign, side: adaptiveSide } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 240,
+    gap: 8,
+  });
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const onMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(scrollRef.current, e);
+  }, []);
+
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open} modal={modal}>
-      <Trigger asChild={asChild} suppressHydrationWarning>
+      <Trigger ref={triggerRef} asChild={asChild} suppressHydrationWarning>
         {trigger}
       </Trigger>
-      <PopoverContent align={align} side={side} sideOffset={sideOffset} className={contentStyles({ align, className })}>
-        {children}
+      <PopoverContent
+        align={adaptiveAlign}
+        side={adaptiveSide}
+        sideOffset={sideOffset}
+        avoidCollisions={true}
+        collisionPadding={8}
+        className={cx(shellStyles({ align: adaptiveAlign }), className)}
+        onWheel={onMenuWheel}
+      >
+        <div ref={scrollRef} className={viewportClassName ?? defaultScrollViewportClass}>
+          {children}
+        </div>
       </PopoverContent>
     </Root>
   );
@@ -75,12 +108,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
         className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
         {...rest}
       >
-        <div
-          className={cx(
-            'absolute inset-1 z-0 rounded',
-            active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
-          )}
-        />
+        <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />
         <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
       </Link>
     );
@@ -91,12 +119,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
       className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
       {...rest}
     >
-      <div
-        className={cx(
-          'absolute inset-1 z-0 rounded',
-          active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
-        )}
-      />
+      <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />
       <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
     </button>
   );

@@ -113,8 +113,11 @@ export const Entity = Schema.Struct({
   // blocks: Schema.
   valuesList: Schema.Array(Value),
   relationsList: Schema.Array(Relation),
-  // createdAt
-  updatedAt: Schema.optional(Schema.String),
+  // The indexer has historically returned these as stringified unix seconds, but pg_graphql's
+  // Datetime scalar can also serialize as a full ISO string. Accept either shape; the parser
+  // downstream (`parseEntityTimestamp` in use-comments) handles both.
+  createdAt: Schema.optional(Schema.Union(Schema.String, Schema.Number)),
+  updatedAt: Schema.optional(Schema.Union(Schema.String, Schema.Number)),
 });
 
 export type RemoteEntity = Schema.Schema.Type<typeof Entity>;
@@ -136,11 +139,17 @@ export const Space = Schema.Struct({
   address: AddressWithValidation,
   topicId: Schema.NullOr(HexId),
 
+  members: Schema.Struct({
+    totalCount: Schema.Number,
+  }),
   membersList: Schema.Array(
     Schema.Struct({
       memberSpaceId: HexId,
     })
   ),
+  editors: Schema.Struct({
+    totalCount: Schema.Number,
+  }),
   editorsList: Schema.Array(
     Schema.Struct({
       memberSpaceId: HexId,

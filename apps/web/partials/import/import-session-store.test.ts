@@ -78,10 +78,7 @@ describe('ImportSessionStore.removeColumns', () => {
   it('pads short rows up to headers.length before removing columns', () => {
     // Second row is shorter than the headers — the store should treat the missing
     // cells as empty strings, then apply the removal so row widths stay consistent.
-    seed([
-      ['a1', 'b1', 'c1', 'd1'],
-      ['a2'],
-    ]);
+    seed([['a1', 'b1', 'c1', 'd1'], ['a2']]);
 
     const ok = ImportSessionStore.removeColumns(SESSION_ID, [1]);
 

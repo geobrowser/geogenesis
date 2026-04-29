@@ -28,7 +28,6 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
 
   return {
     firstThreeEditors: firstThreeProfiles,
-    // @TODO: Use total count from graphql
-    totalEditors: space.editors.length,
+    totalEditors: space.totalEditors,
   };
 });

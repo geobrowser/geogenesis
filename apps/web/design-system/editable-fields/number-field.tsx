@@ -71,7 +71,7 @@ export function NumberField({
   }
 
   return (
-    <div className={variant === 'tableCell' ? 'min-w-0 w-full max-w-full' : undefined}>
+    <div className={variant === 'tableCell' ? 'w-full max-w-full min-w-0' : undefined}>
       <input
         type="text"
         className={cx(

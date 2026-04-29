@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import cx from 'classnames';
+import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
-
 import {
   NavUtils,
   formatGovernanceOutcomeDate,
@@ -23,6 +23,7 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -65,6 +66,8 @@ export function AcceptOrRejectMember({
 }: Props) {
   const [selectedVote, setSelectedVote] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -76,16 +79,34 @@ export function AcceptOrRejectMember({
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
 
-  const onApprove = () => {
-    setSelectedVote('ACCEPT');
-    vote('ACCEPT');
+  // Drop the optimistic entry once router.refresh has caught up and userVote
+  // is reflected on the prop — server render now naturally places the card
+  // at the bottom of its bucket without our artificial order bump.
+  useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
+
+  const onVoteSuccess = () => {
+    router.refresh();
   };
 
-  const onReject = () => {
-    setSelectedVote('REJECT');
-    vote('REJECT');
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
   };
+
+  const castVote = (choice: 'ACCEPT' | 'REJECT') => {
+    setSelectedVote(choice);
+    addOptimisticVote(proposalId);
+    vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError });
+  };
+
+  const onApprove = () => castVote('ACCEPT');
+  const onReject = () => castVote('REJECT');
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
@@ -93,7 +114,7 @@ export function AcceptOrRejectMember({
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
         <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
-        <span aria-hidden className="shrink-0 select-none text-grey-03">
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
         <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
@@ -125,17 +146,13 @@ export function AcceptOrRejectMember({
     } else if (canExecute && smartAccount) {
       actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     } else if (canExecute) {
-      actions = (
-        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>
-      );
+      actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     }
   } else if (userVote || hasVoted) {
     if (userVote?.vote === 'ACCEPT' || selectedVote === 'ACCEPT') {
-      actions = (
-        <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>
-      );
+      actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
     } else {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
     }
@@ -146,7 +163,7 @@ export function AcceptOrRejectMember({
         <SmallButton
           variant="secondary"
           onClick={() => {
-            if (selectedVote) vote(selectedVote);
+            if (selectedVote) castVote(selectedVote);
           }}
         >
           Retry

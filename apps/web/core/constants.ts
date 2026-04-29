@@ -22,6 +22,8 @@ export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
 /** Bounty "Task status" relation property; linking is disabled when it points at Done. */
 export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
 export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
+/** Share of a bounty's budget shown as the per-contributor estimated payout. */
+export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
 
 // Video file types and upload constraints
@@ -66,6 +68,8 @@ export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
 export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';
 
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+/** Static icon shown for the Root space wherever a space thumbnail is rendered (search, sidebar, breadcrumbs, etc). */
+export const ROOT_SPACE_IMAGE = '/browse-nav/root.svg';
 
 /** Legacy external docs URL; browse menu links to `DOCUMENTATION_SPACE_ID` instead. */
 export const GEO_DOCUMENTATION_URL = 'https://docs.geobrowser.io';

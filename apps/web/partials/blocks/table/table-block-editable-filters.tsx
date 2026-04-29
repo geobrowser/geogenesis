@@ -7,7 +7,6 @@ import * as React from 'react';
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import type { Row } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -23,26 +22,11 @@ type RenderableFilter = Filter & { columnName: string };
 interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
-  /** Rows from the current table page (fallback when no full ID list) */
-  filterSuggestionRows?: Row[];
-  /** All row entity IDs matching active table filters (COLLECTION blocks). Powers suggestions across the full filtered set, not only the current page. */
-  filterSuggestionEntityIds?: string[];
   filterSuggestionSpaceId?: string;
-  onFilterPromptOpenChange?: (open: boolean) => void;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters(
-    {
-      filterState,
-      setFilterState,
-      filterSuggestionRows,
-      filterSuggestionEntityIds,
-      filterSuggestionSpaceId,
-      onFilterPromptOpenChange,
-    },
-    ref
-  ) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
@@ -116,11 +100,8 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       <TableBlockFilterPrompt
         ref={ref}
         options={sortedFilters}
-        filterSuggestionRows={filterSuggestionRows}
-        filterSuggestionEntityIds={filterSuggestionEntityIds}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
         onCreate={onCreateFilter}
-        onFilterPromptOpenChange={onFilterPromptOpenChange}
         trigger={
           <SmallButton icon={<CreateSmall />} variant="secondary">
             Filter

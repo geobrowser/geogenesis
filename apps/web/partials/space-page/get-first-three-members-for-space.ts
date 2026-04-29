@@ -26,7 +26,6 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
 
   return {
     firstThreeMembers: firstThreeProfiles,
-    // @TODO: Use total count from graphql
-    totalMembers: space.members.length,
+    totalMembers: space.totalMembers,
   };
 });

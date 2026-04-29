@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
@@ -11,6 +13,7 @@ import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
   spaceId: string;
@@ -22,14 +25,9 @@ interface Props {
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({
-  spaceId,
-  isProposalEnded,
-  canExecute,
-  status,
-  userVote,
-  proposalId,
-}: Props) {
+export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
+  const router = useRouter();
+
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
@@ -43,15 +41,36 @@ export function AcceptOrRejectEditor({
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
+  const addOptimisticVote = useAddOptimisticVote();
+  const removeOptimisticVote = useRemoveOptimisticVote();
+
+  // Drop the optimistic entry once router.refresh has caught up and userVote
+  // is reflected on the prop — server render now naturally places the card
+  // at the bottom of its bucket without our artificial order bump.
+  useEffect(() => {
+    if (userVote) {
+      removeOptimisticVote(proposalId);
+    }
+  }, [userVote, proposalId, removeOptimisticVote]);
+
+  const onVoteSuccess = () => {
+    router.refresh();
+  };
+
+  const onVoteError = () => {
+    removeOptimisticVote(proposalId);
+  };
 
   const onApprove = () => {
     setHasApproved(true);
-    vote('ACCEPT');
+    addOptimisticVote(proposalId);
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    vote('REJECT');
+    addOptimisticVote(proposalId);
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
   };
 
   // Terminal / post-vote states on the proposal must win over "You accepted" so we match space
@@ -88,10 +107,10 @@ export function AcceptOrRejectEditor({
     return (
       <div className="relative">
         <div className="flex items-center gap-2">
-          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingRejection}>Reject</Pending>
           </SmallButton>
-          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
+          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus === 'pending'}>
             <Pending isPending={isPendingApproval}>Approve</Pending>
           </SmallButton>
         </div>

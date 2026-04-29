@@ -5,7 +5,6 @@ import {
   BOUNTY_DESCRIPTION_PROPERTY_ID,
   BOUNTY_DIFFICULTY_PROPERTY_ID,
   BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID,
-  BOUNTY_STATUS_PROPERTY_ID,
   BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID,
   BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
   BOUNTY_TASK_STATUS_PROPERTY_ID,
@@ -15,7 +14,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import type { Bounty, BountyDifficulty, BountyStatus } from './types';
+import type { Bounty } from './types';
 
 export function isBountyTypeRelation(relation: StoreRelation): boolean {
   return relation.toEntity.id === BOUNTY_TYPE_ID;
@@ -102,35 +101,33 @@ export function buildBounty(
 
   const budget = parseNumber(
     findValueById(entityValues, BOUNTY_BUDGET_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_BUDGET_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_BUDGET_PROPERTY_ID)
   );
 
   const maxContributors = parseNumber(
     findValueById(entityValues, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID)
   );
 
   const submissionsPerPerson = parseNumber(
     findValueById(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID)
   );
 
   const submissionsCount = submissionCounts.get(entityId) ?? 0;
   const userSubmissionsCount = personalSubmissionCounts.get(entityId) ?? 0;
 
-  const difficulty = parseDifficulty(
-    findValueById(entityValues, BOUNTY_DIFFICULTY_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_DIFFICULTY_PROPERTY_ID)
-  );
+  const difficulty =
+    findFirstRelationName(entityRelations, BOUNTY_DIFFICULTY_PROPERTY_ID) ??
+    findValueById(entityValues, BOUNTY_DIFFICULTY_PROPERTY_ID);
 
-  const status = parseStatus(
-    findValueById(entityValues, BOUNTY_STATUS_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_STATUS_PROPERTY_ID)
-  );
+  const status =
+    findFirstRelationName(entityRelations, BOUNTY_TASK_STATUS_PROPERTY_ID) ??
+    findValueById(entityValues, BOUNTY_TASK_STATUS_PROPERTY_ID);
 
   const deadline =
     findValueById(entityValues, BOUNTY_DEADLINE_PROPERTY_ID) ??
-    findRelationValueById(entityRelations, BOUNTY_DEADLINE_PROPERTY_ID) ??
+    findFirstRelationName(entityRelations, BOUNTY_DEADLINE_PROPERTY_ID) ??
     null;
 
   return {
@@ -178,9 +175,10 @@ function findValueById(values: StoreValue[], propertyId: string): string | null 
   return match?.value ?? null;
 }
 
-function findRelationValueById(relations: StoreRelation[], propertyId: string): string | null {
+function findFirstRelationName(relations: StoreRelation[], propertyId: string): string | null {
   const match = relations.find(relation => relation.type.id === propertyId);
-  return match?.toEntity.name ?? null;
+  const name = match?.toEntity?.name?.trim();
+  return name && name.length > 0 ? name : null;
 }
 
 function parseNumber(value: string | null): number | null {
@@ -189,26 +187,4 @@ function parseNumber(value: string | null): number | null {
   if (!cleaned) return null;
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseDifficulty(value: string | null): BountyDifficulty | null {
-  if (!value) return null;
-  const normalized = value.trim().toUpperCase();
-  if (normalized.startsWith('LOW')) return 'LOW';
-  if (normalized.startsWith('MED')) return 'MEDIUM';
-  if (normalized.startsWith('HARD')) return 'HARD';
-  if (normalized.startsWith('EXP')) return 'EXPERT';
-  return null;
-}
-
-function parseStatus(value: string | null): BountyStatus | null {
-  if (!value) return null;
-  const normalized = value.trim().toUpperCase();
-  if (normalized.includes('OPEN')) return 'OPEN';
-  if (normalized.includes('ALLOCATED')) return 'ALLOCATED';
-  if (normalized.includes('SELF')) return 'SELF_ASSIGNED';
-  if (normalized.includes('PROGRESS')) return 'IN_PROGRESS';
-  if (normalized.includes('COMPLETE')) return 'COMPLETED';
-  if (normalized.includes('CANCEL')) return 'CANCELLED';
-  return null;
 }

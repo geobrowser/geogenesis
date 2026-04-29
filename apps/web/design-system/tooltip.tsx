@@ -1,6 +1,6 @@
 'use client';
 
-import { Arrow, Content, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
+import { Arrow, Content, Portal, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -12,14 +12,23 @@ type TooltipProps = {
   trigger: ReactNode;
   label: ReactNode;
   position?: Position;
+  align?: Align;
   variant?: Variant;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
-type Variant = 'light' | 'dark';
+type Align = 'start' | 'center' | 'end';
 
-export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'dark' }: TooltipProps) => {
+type Variant = 'light' | 'dark' | 'propertyDescription';
+
+export const Tooltip = ({
+  trigger,
+  label = '',
+  position = 'bottom',
+  align = 'center',
+  variant = 'dark',
+}: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [x, y] = originCoordinates[position];
 
@@ -27,31 +36,33 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'd
     <Provider delayDuration={300} skipDelayDuration={300}>
       <Root open={isOpen} onOpenChange={setIsOpen}>
         <Trigger asChild>{trigger}</Trigger>
-        <AnimatePresence mode="popLayout">
-          {isOpen && (
-            // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
-            <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
-              <motion.div
-                className={cx(
-                  'relative w-full focus:outline-hidden',
-                  positionClassName[position],
-                  variantClassName[variant]
-                )}
-                initial={{ opacity: 0, scale: 0.95, x, y }}
-                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, x, y }}
-                transition={{
-                  type: 'spring',
-                  duration: 0.15,
-                  bounce: 0,
-                }}
-              >
-                {variant === 'dark' && <Arrow />}
-                <div>{label}</div>
-              </motion.div>
-            </Content>
-          )}
-        </AnimatePresence>
+        <Portal>
+          <AnimatePresence mode="popLayout">
+            {isOpen && (
+              // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
+              <Content side={position} align={align} alignOffset={0} sideOffset={4} forceMount className="z-1001">
+                <motion.div
+                  className={cx(
+                    'relative w-full focus:outline-hidden',
+                    positionClassName[position],
+                    variantClassName[variant]
+                  )}
+                  initial={{ opacity: 0, scale: 0.95, x, y }}
+                  animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, x, y }}
+                  transition={{
+                    type: 'spring',
+                    duration: 0.15,
+                    bounce: 0,
+                  }}
+                >
+                  {variant === 'dark' && <Arrow />}
+                  <div className={labelClassName[variant]}>{label}</div>
+                </motion.div>
+              </Content>
+            )}
+          </AnimatePresence>
+        </Portal>
       </Root>
     </Provider>
   );
@@ -74,4 +85,12 @@ const positionClassName: Record<Position, string> = {
 const variantClassName: Record<Variant, string> = {
   light: 'bg-white text-text max-w-[250px] rounded p-3 shadow-lg text-metadata',
   dark: 'bg-text text-white max-w-[192px] rounded p-2 shadow-button text-center text-breadcrumb',
+  propertyDescription:
+    'w-[350px] max-w-[min(700px,calc(100vw-32px))] overflow-hidden rounded-lg border border-grey-02 bg-white p-3 text-metadata text-text shadow-[0px_8px_25px_0px_rgba(0,0,0,0.09)]',
+};
+
+const labelClassName: Record<Variant, string> = {
+  light: '',
+  dark: '',
+  propertyDescription: 'line-clamp-3 break-words',
 };

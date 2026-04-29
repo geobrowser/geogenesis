@@ -1,5 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { Effect } from 'effect';
+
 import {
   ADDRESS,
   DATA_TYPE_ENTITY_IDS,
@@ -12,10 +14,8 @@ import {
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
-import { Effect } from 'effect';
-
-import { getEntity } from '~/core/io/queries';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
+import { getEntity } from '~/core/io/queries';
 import type { GeoStore } from '~/core/sync/store';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
@@ -296,9 +296,7 @@ export async function fetchRelationTargetTypeIdsForProperty(
   blockSpaceId: string | undefined
 ): Promise<string[] | null> {
   const hasRvts = (entity: Entity | null | undefined) =>
-    Boolean(
-      entity?.relations.some(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-    );
+    Boolean(entity?.relations.some(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE));
 
   const candidates: Array<Entity | null> = [];
 
@@ -317,9 +315,8 @@ export async function fetchRelationTargetTypeIdsForProperty(
   for (const entity of candidates) {
     if (!hasRvts(entity)) continue;
     const ids =
-      entity!.relations
-        .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-        .map(r => r.toEntity.id) ?? [];
+      entity!.relations.filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE).map(r => r.toEntity.id) ??
+      [];
     if (ids.length > 0) return ids;
   }
 

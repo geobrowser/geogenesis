@@ -17,17 +17,27 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { RightArrowLong } from '../icons/right-arrow-long';
+import { trapWheelToElement } from '../trap-wheel-scroll';
 
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
-  props,
+  { className = '', onWheel, ...props },
   ref
 ) {
+  const handleWheel: React.WheelEventHandler<HTMLUListElement> = e => {
+    trapWheelToElement(e.currentTarget, e);
+    onWheel?.(e);
+  };
+
   return (
     <ul
       ref={ref}
-      className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
+      className={cx(
+        'm-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto overscroll-contain',
+        className
+      )}
+      onWheel={handleWheel}
       {...props}
     />
   );

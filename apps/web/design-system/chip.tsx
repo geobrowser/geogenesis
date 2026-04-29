@@ -195,11 +195,9 @@ export function LinkableRelationChip({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
-  const shouldClamp =
-    !truncateLabel && typeof children === 'string' && children.length >= 42;
+  const shouldClamp = !truncateLabel && typeof children === 'string' && children.length >= 42;
 
-  const labelInner =
-    truncateLabel ? <span className="block truncate">{children}</span> : children;
+  const labelInner = truncateLabel ? <span className="block truncate">{children}</span> : children;
 
   const { space } = useSpace(spaceId);
 
@@ -226,13 +224,13 @@ export function LinkableRelationChip({
           entityId={entityId}
           spaceId={spaceId ?? currentSpaceId}
           href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
-          className={truncateLabel ? 'min-w-0 min-h-0 flex-1 overflow-hidden pr-0' : undefined}
+          className={truncateLabel ? 'min-h-0 min-w-0 flex-1 overflow-hidden pr-0' : undefined}
         >
           {labelInner}
         </Link>
       )}
       {verified && (
-        <span className={`inline-block shrink-0 pl-1.5${truncateLabel ? ' py-1' : ''}`}>
+        <span className={`inline-block shrink-0 pl-1.5${truncateLabel ? 'py-1' : ''}`}>
           <CheckCircle color="current" />
         </span>
       )}

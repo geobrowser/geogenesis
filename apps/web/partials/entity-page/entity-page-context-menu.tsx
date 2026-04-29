@@ -133,7 +133,6 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
           setIsMovingEntity(false);
         }}
         trigger={<Context color="grey-04" />}
-        side="bottom"
       >
         {isCreatingNewVersion && (
           <CreateNewVersionInSpace

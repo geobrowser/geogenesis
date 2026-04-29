@@ -2,8 +2,20 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
+import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import { getConfig } from '~/core/environment/environment';
-import { EntitiesOrderBy, type EntityFilter, SortOrder, type UuidFilter } from '~/core/gql/graphql';
+import {
+  EntitiesBatchForCommentsDocument,
+  type EntitiesBatchForCommentsQuery,
+  EntitiesOrderBy,
+  EntityCommentReplyBacklinksPageDocument,
+  type EntityCommentReplyBacklinksPageQuery,
+  EntityExistsDocument,
+  type EntityExistsQuery,
+  type EntityFilter,
+  SortOrder,
+  type UuidFilter,
+} from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
@@ -30,6 +42,7 @@ import {
   propertyQuery,
   relationEntityQuery,
   relationEntityRelationsQuery,
+  relationsByFromEntityIdQuery,
   relationsByToEntityIdsQuery,
   resultQuery,
   spaceQuery,
@@ -242,6 +255,23 @@ export function getRelationsByToEntityIds(
   });
 }
 
+export function getRelationsByFromEntityId(
+  fromEntityId: string,
+  typeId: string,
+  spaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: relationsByFromEntityIdQuery,
+    decoder: data =>
+      data.relations
+        ? data.relations.map(r => RelationDecoder.decode(r)).filter((r): r is NonNullable<typeof r> => r !== null)
+        : [],
+    variables: { fromEntityId, typeId, spaceId },
+    signal,
+  });
+}
+
 export type EntityTiebreakerData = {
   id: string;
   createdAt: string;
@@ -295,6 +325,79 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
   });
 }
 
+const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+
+/**
+ * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
+ * the given id is queryable. Used by the post-publish poll so we don't have to refetch the
+ * full comment list every 2 seconds just to check for a single id.
+ */
+export function checkEntityExists(entityId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: EntityExistsDocument,
+    decoder: (data: EntityExistsQuery) => data.entity?.id != null,
+    variables: { id: entityId },
+    signal,
+  });
+}
+
+export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: EntitiesBatchForCommentsDocument,
+    decoder: (data: EntitiesBatchForCommentsQuery) =>
+      data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    variables: { filter: { id: { in: entityIds } } },
+    signal,
+  });
+}
+
+/**
+ * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
+ * Nested replies are included when they also backlink to the parent (same index pattern).
+ */
+export function getCommentEntitiesViaParentEntityReplyBacklinks(
+  parentEntityId: string,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const page = yield* graphql({
+        query: EntityCommentReplyBacklinksPageDocument,
+        decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+        variables: {
+          id: parentEntityId,
+          replyToTypeId: COMMENT_REPLY_TO_ID,
+          commentTypeId: COMMENT_TYPE_ID,
+          first: COMMENT_REPLY_BACKLINKS_PAGE_SIZE,
+          offset,
+        },
+        signal,
+      });
+
+      if (page.length === 0) break;
+
+      for (const row of page) {
+        const rawId = row?.fromEntity?.id;
+        if (typeof rawId !== 'string' || !rawId) continue;
+        if (!seen.has(rawId)) {
+          seen.add(rawId);
+          ids.push(rawId);
+        }
+      }
+
+      if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
+      offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
+    }
+
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entityBacklinksQuery,
@@ -320,16 +423,28 @@ export function getSpace(spaceId: string, signal?: AbortController['signal']) {
 }
 
 export function getSpaces(
-  { limit, offset, spaceIds }: { limit?: number; offset?: number; spaceIds?: string[] } = {},
+  {
+    limit,
+    offset,
+    spaceIds,
+    topicIds,
+  }: { limit?: number; offset?: number; spaceIds?: string[]; topicIds?: string[] } = {},
   signal?: AbortController['signal']
 ) {
+  // Build the filter from whichever id set the caller passed. `topicIds` is
+  // how we resolve an entity-of-type-Space (returned by the search endpoint)
+  // back to the actual space container the app navigates to.
+  let filter: { id?: { in: string[] }; topicId?: { in: string[] } } | undefined;
+  if (spaceIds) filter = { ...filter, id: { in: spaceIds } };
+  if (topicIds) filter = { ...filter, topicId: { in: topicIds } };
+
   return graphql({
     query: spacesQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
     variables: {
       limit,
       offset,
-      filter: spaceIds ? { id: { in: spaceIds } } : undefined,
+      filter,
     },
     signal,
   });
@@ -387,6 +502,7 @@ interface ResultsArgs {
   typeIds?: string[];
   limit?: number;
   offset?: number;
+  additionalSpaceIds?: string[];
 }
 
 /**
@@ -515,7 +631,26 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
  * This replaces the previous GraphQL-based search with the OpenSearch-backed
  * REST endpoint which provides better relevance scoring and performance.
  */
-export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+export type SearchResultsPage = {
+  results: SearchResult[];
+  /**
+   * Total number of matches across the whole result set, as reported by the
+   * REST endpoint. Paginated callers should use this to detect exhaustion
+   * (`offset + rawCount >= total`).
+   */
+  total: number;
+  /**
+   * Per-space rows returned on this page after `shouldIncludeRestSearchResult`
+   * exclusions but before grouping by entity. Useful as a "did we get a full
+   * page worth of rows that can actually reach the UI?" pagination signal
+   * when `total` is unavailable or unreliable. Intentionally post-exclusion
+   * — a page where every raw row was excluded as a block/system type should
+   * read as empty, not as a full page.
+   */
+  rawCount: number;
+};
+
+export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
   params.set('query', args.query);
   params.set('limit', String(args.limit ?? 10));
@@ -532,14 +667,36 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
+  if (args.additionalSpaceIds?.length) {
+    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  }
+
+  return `/search?${params.toString()}`;
+}
+
+export function getResultsPage(args: ResultsArgs, signal?: AbortController['signal']) {
   return Effect.map(
     restFetch<RestSearchResponse>({
       endpoint: getConfig().api,
-      path: `/search?${params.toString()}`,
+      path: buildSearchPath(args),
       signal,
     }),
-    response => groupRestResults(response.results.filter(shouldIncludeRestSearchResult))
+    (response): SearchResultsPage => {
+      const filtered = response.results.filter(shouldIncludeRestSearchResult);
+      return {
+        results: groupRestResults(filtered),
+        total: response.total,
+        // Post-exclusion count — callers paginate against rows that can
+        // actually reach the UI, not rows filtered out as block/system
+        // types at this layer.
+        rawCount: filtered.length,
+      };
+    }
   );
+}
+
+export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  return Effect.map(getResultsPage(args, signal), page => page.results);
 }
 
 export type NameValueMatch = {

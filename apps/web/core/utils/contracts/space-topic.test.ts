@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-
 import { decodeAbiParameters, decodeFunctionData } from 'viem';
+import { describe, expect, it } from 'vitest';
 
 import { DAOSpaceAbi, GOVERNANCE_ACTIONS, SpaceRegistryAbi, VOTING_MODE } from './space-registry';
 import { buildDaoTopicDeclaredCalldata, buildPersonalTopicDeclaredCalldata, encodeInitialTopicId } from './space-topic';

@@ -18,6 +18,11 @@ import { ListView } from '~/design-system/icons/list-view';
 import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
 import { ColorName } from '~/design-system/theme/colors';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+
+const VIEW_MENU_SURFACE =
+  'z-100 block max-h-[180px] min-w-0 w-40 overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
 
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
@@ -26,26 +31,40 @@ type TableBlockViewMenuProps = {
 
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: isMenuOpen,
+    preferredHeight: 180,
+    gap: 8,
+  });
   const { spaceId } = useDataBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
-  const onOpenChange = () => {
-    setIsMenuOpen(!isMenuOpen);
+  const onOpenChange = (open: boolean) => {
+    setIsMenuOpen(open);
   };
+
+  const onContentWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
 
   if (!isEditing) return null;
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
-      <Dropdown.Trigger>
+      <Dropdown.Trigger ref={triggerRef}>
         {isMenuOpen ? <Close color="grey-04" /> : <ViewIcon view={activeView} color="grey-04" />}
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          side={side}
+          align={align}
           sideOffset={8}
-          className="z-100 block w-40! overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          align="end"
+          avoidCollisions={true}
+          collisionPadding={8}
+          className={VIEW_MENU_SURFACE}
+          onWheel={onContentWheel}
         >
           {DATA_BLOCK_VIEWS.map(view => {
             return <ToggleView key={view.value} activeView={activeView} view={view} isLoading={isLoading} />;
