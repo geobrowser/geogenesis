@@ -52,7 +52,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
     };
 
     return (
-      <div className="text-text">
+      <div className="-mt-3 mb-3 text-text">
         <PageStringField
           variant="body"
           placeholder="Add a description..."
@@ -67,7 +67,11 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
     return null;
   }
 
-  return <TruncatedDescription text={description} />;
+  return (
+    <div className="-mt-3 mb-3">
+      <TruncatedDescription text={description} />
+    </div>
+  );
 }
 
 function TruncatedDescription({ text }: { text: string }) {
