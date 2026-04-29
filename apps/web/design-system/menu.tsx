@@ -38,7 +38,7 @@ const shellStyles = cva(
 });
 
 const defaultScrollViewportClass =
-  'w-full max-h-[200px] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
+  'w-full max-h-[200px] min-h-0 min-w-0 overflow-y-auto overscroll-contain bg-white [background-clip:padding-box]';
 
 export function Menu({
   children,

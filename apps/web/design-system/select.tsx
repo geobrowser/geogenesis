@@ -95,7 +95,7 @@ export const Select = ({
         >
           <SelectPrimitive.Viewport
             ref={viewportRef}
-            className="max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth"
+            className="max-h-[180px] overscroll-contain overflow-y-auto"
           >
             <SelectPrimitive.Group className="divide-y divide-grey-02">
               {options.map(option => (

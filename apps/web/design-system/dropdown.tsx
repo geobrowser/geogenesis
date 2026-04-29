@@ -32,7 +32,7 @@ const contentStyles = cva(
         end: 'origin-top-right',
       },
       scroll: {
-        true: 'max-h-[200px] overscroll-contain overflow-y-auto overflow-x-hidden scroll-smooth',
+        true: 'max-h-[200px] overscroll-contain overflow-y-auto overflow-x-hidden',
         false: 'overflow-hidden',
       },
     },

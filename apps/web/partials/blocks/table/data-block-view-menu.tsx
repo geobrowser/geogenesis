@@ -22,7 +22,7 @@ import { ColorName } from '~/design-system/theme/colors';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 const VIEW_MENU_SURFACE =
-  'z-100 block max-h-[180px] min-w-0 w-40 overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
+  'z-100 block max-h-[180px] min-w-0 w-40 overscroll-contain overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg';
 
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;

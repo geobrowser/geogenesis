@@ -27,7 +27,7 @@ import { TableBlockEditPropertiesPanel } from './table-block-edit-properties-pan
 import { editingPropertiesAtom } from '~/atoms';
 
 const TABLE_BLOCK_CONTEXT_MENU_SURFACE =
-  'z-1001 block max-h-[180px] min-w-0 w-[200px] overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
+  'z-1001 block max-h-[180px] min-w-0 w-[200px] overscroll-contain overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg';
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
