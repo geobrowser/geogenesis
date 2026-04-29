@@ -42,7 +42,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
     $filter: EntityFilter
     $propertyId: UUID!
     $dataType: String!
-    $sortDirection: SortDirection!
+    $sortDirection: SortOrder!
     $spaceIdsForLists: [UUID!]!
   ) {
     entitiesOrderedByPropertyConnection(
