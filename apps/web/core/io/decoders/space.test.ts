@@ -32,6 +32,7 @@ function makeRemoteSpace(overrides?: Partial<Record<string, unknown>>) {
     type: 'DAO',
     address: '0x1234567890123456789012345678901234567890',
     topicId: TOPIC_ID,
+    members: { totalCount: 0 },
     membersList: [],
     editorsList: [],
     page: makeRemoteEntity({ id: '00000000000000000000000000000003', name: 'Page name' }),
