@@ -42,15 +42,15 @@ export function useAdaptiveDropdownPlacement(
     const wantBelow = spaceBelow >= preferredHeight + gap;
     const canFitAbove = spaceAbove >= preferredHeight + gap;
 
-    let side: DropdownSide = 'bottom';
+    let nextSide: DropdownSide = 'bottom';
     if (!wantBelow) {
-      side = canFitAbove || spaceAbove > spaceBelow ? 'top' : 'bottom';
+      nextSide = canFitAbove || spaceAbove > spaceBelow ? 'top' : 'bottom';
     }
+    const nextAlign: DropdownAlign = anchorCenterX < viewportWidth / 2 ? 'start' : 'end';
 
-    setPlacement({
-      align: anchorCenterX < viewportWidth / 2 ? 'start' : 'end',
-      side,
-    });
+    // Bail out if nothing changed — otherwise every wheel/scroll event
+    // creates a fresh state object and re-renders the popover, causing jitter.
+    setPlacement(prev => (prev.align === nextAlign && prev.side === nextSide ? prev : { align: nextAlign, side: nextSide }));
   }, [anchorRef, gap, preferredHeight]);
 
   const rafIdRef = React.useRef<number | null>(null);
@@ -68,8 +68,23 @@ export function useAdaptiveDropdownPlacement(
       });
     };
 
+    // Only recompute when something that can move the anchor scrolls — the
+    // document, or an element that contains the anchor. Scrolls inside the
+    // open popover itself don't affect the anchor's position.
+    const onScroll = (e: Event) => {
+      const anchor = anchorRef.current;
+      const target = e.target;
+      if (target instanceof Document) {
+        scheduleRecompute();
+        return;
+      }
+      if (anchor && target instanceof Node && target.contains(anchor)) {
+        scheduleRecompute();
+      }
+    };
+
     window.addEventListener('resize', scheduleRecompute);
-    window.addEventListener('scroll', scheduleRecompute, true);
+    window.addEventListener('scroll', onScroll, true);
 
     return () => {
       if (rafIdRef.current !== null) {
@@ -77,9 +92,9 @@ export function useAdaptiveDropdownPlacement(
         rafIdRef.current = null;
       }
       window.removeEventListener('resize', scheduleRecompute);
-      window.removeEventListener('scroll', scheduleRecompute, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [isOpen, recomputePlacement]);
+  }, [anchorRef, isOpen, recomputePlacement]);
 
   return placement;
 }
