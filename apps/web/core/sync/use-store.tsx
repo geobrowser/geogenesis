@@ -254,6 +254,29 @@ export function useQueryEntities({
     },
   });
 
+  // Prefetch the next page once the current one resolves so a click on
+  // "Next" hits a warm React Query cache. Keyed by the same shape the actual
+  // fetch uses (after = current endCursor, offset = 0), so the subsequent
+  // useQuery call inside the data block will deduplicate against this entry.
+  const prefetchEndCursor = data?.hasNextPage ? data.endCursor : null;
+  React.useEffect(() => {
+    if (!enabled) return;
+    if (!prefetchEndCursor) return;
+    const nextAfter = prefetchEndCursor;
+    cache.prefetchQuery({
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryFn: async () => {
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: result.merged,
+          remoteEntities: result.remote,
+        });
+        return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
+      },
+    });
+  }, [enabled, prefetchEndCursor, where, first, sort, cache, store, stream]);
+
   const results = useSelector(
     reactive,
     () => {
