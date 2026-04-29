@@ -8,6 +8,7 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 interface Props {
@@ -23,14 +24,9 @@ interface Props {
   modal?: boolean;
 }
 
-/**
- * Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel.
- * `overscroll-contain` here keeps the page from scrolling when the wheel lands on the
- * shell border/non-overflowing menus — without us needing a non-passive React wheel
- * listener (which would force main-thread scrolling and feel jittery).
- */
+/** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
 const shellStyles = cva(
-  'z-100 w-full max-w-[360px] min-w-0 overflow-hidden overscroll-contain rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none isolate',
+  'z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none isolate',
   {
   variants: {
     align: {
@@ -66,6 +62,12 @@ export function Menu({
     gap: 8,
   });
 
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const onMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(scrollRef.current, e);
+  }, []);
+
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open} modal={modal}>
@@ -79,8 +81,9 @@ export function Menu({
         avoidCollisions={true}
         collisionPadding={8}
         className={cx(shellStyles({ align: adaptiveAlign }), className)}
+        onWheel={onMenuWheel}
       >
-        <div className={viewportClassName ?? defaultScrollViewportClass}>
+        <div ref={scrollRef} className={viewportClassName ?? defaultScrollViewportClass}>
           {children}
         </div>
       </PopoverContent>
