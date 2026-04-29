@@ -731,6 +731,10 @@ export const spaceFragment = graphql(/* GraphQL */ `
       memberSpaceId
     }
 
+    editors {
+      totalCount
+    }
+
     editorsList {
       memberSpaceId
     }

@@ -17,6 +17,7 @@ export type Space = {
   editors: string[];
   members: string[];
   totalMembers: number;
+  totalEditors: number;
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
@@ -32,6 +33,7 @@ export function SpaceDto(space: RemoteSpace): Space {
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
     totalMembers: space.members.totalCount,
+    totalEditors: space.editors.totalCount,
   };
 }
 

@@ -147,6 +147,9 @@ export const Space = Schema.Struct({
       memberSpaceId: HexId,
     })
   ),
+  editors: Schema.Struct({
+    totalCount: Schema.Number,
+  }),
   editorsList: Schema.Array(
     Schema.Struct({
       memberSpaceId: HexId,
