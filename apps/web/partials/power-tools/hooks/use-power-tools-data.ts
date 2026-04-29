@@ -84,6 +84,11 @@ export function usePowerToolsData(options?: {
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const [page, setPage] = React.useState(0);
+  // pageCursors[i] is the GraphQL `after` value used to fetch page i.
+  // Index 0 is always undefined (start of the connection); each successful
+  // SPACES/GEO fetch appends the returned endCursor so the next page can
+  // pick up where the prior one left off.
+  const [pageCursors, setPageCursors] = React.useState<(string | undefined)[]>([undefined]);
   const [loadedEntityPages, setLoadedEntityPages] = React.useState<
     Array<{
       page: number;
@@ -121,6 +126,7 @@ export function usePowerToolsData(options?: {
 
   React.useEffect(() => {
     setPage(0);
+    setPageCursors([undefined]);
     setLoadedEntityPages([]);
     setLastPageCount(0);
     setLoadedCollectionRelationPages([]);
@@ -185,19 +191,37 @@ export function usePowerToolsData(options?: {
   } = useCollection({
     source,
     first: pageSize,
-    skip: page * pageSize,
+    pageNumber: page,
+    after: pageCursors[page],
     where,
     sort,
   });
 
-  const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryLoading,
+    endCursor: queriedEndCursor,
+  } = useQueryEntities({
     where,
     first: pageSize,
-    skip: page * pageSize,
+    after: pageCursors[page],
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
     sort,
   });
+
+  // Record the cursor for the next page so `setPage(prev => prev + 1)` can
+  // pick up the right `after` value.
+  React.useEffect(() => {
+    if (source.type !== 'SPACES' && source.type !== 'GEO') return;
+    if (!queriedEndCursor) return;
+    setPageCursors(prev => {
+      if (prev[page + 1] === queriedEndCursor) return prev;
+      const next = prev.slice();
+      next[page + 1] = queriedEndCursor;
+      return next;
+    });
+  }, [source.type, queriedEndCursor, page]);
 
   React.useEffect(() => {
     if (source.type === 'COLLECTION') {
@@ -397,7 +421,6 @@ export function usePowerToolsData(options?: {
           ...where,
         },
         first: candidateIds.length,
-        skip: 0,
       });
 
       return matching.map(entity => entity.id);
@@ -407,7 +430,6 @@ export function usePowerToolsData(options?: {
       const pageResults = await queryEntitiesAsync({
         where,
         first: FETCH_ALL_IDS_FIRST,
-        skip: 0,
       });
       return pageResults.map(entity => entity.id);
     }

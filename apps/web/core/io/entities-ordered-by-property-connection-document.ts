@@ -2,13 +2,13 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
 
 /**
- * Cursor-paginated entities query. Use `$after` (the prior page's `endCursor`)
- * for forward navigation; `getAllEntities` loops on `pageInfo.hasNextPage`
- * when callers ask for more than `ENTITIES_CONNECTION_MAX_FIRST` rows.
+ * Cursor-paginated variant of the legacy `entitiesOrderedByProperty` field.
+ * Returns an `EntitiesConnection` so we can drive forward navigation off
+ * `pageInfo.endCursor` instead of offset arithmetic.
  *
  * Kept as a `parse()` document so it does not require updating the generated `gql.ts` map.
  */
-const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
+const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
   fragment PropertyFragment on PropertyInfo {
     id
     name
@@ -20,27 +20,25 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
     isType
   }
 
-  query AllEntitiesConnection(
+  query EntitiesOrderedByPropertyConnection(
+    $propertyId: UUID
+    $sortDirection: SortOrder
+    $dataType: String
     $spaceId: UUID
-    $spaceIds: UUIDFilter
-    $typeId: UUID
-    $typeIds: UUIDFilter
     $limit: Int
     $after: Cursor
     $offset: Int
     $filter: EntityFilter
-    $orderBy: [EntitiesOrderBy!]
   ) {
-    entitiesConnection(
+    entitiesOrderedByPropertyConnection(
+      propertyId: $propertyId
+      sortDirection: $sortDirection
+      dataType: $dataType
+      spaceId: $spaceId
       first: $limit
       after: $after
       offset: $offset
       filter: $filter
-      orderBy: $orderBy
-      spaceId: $spaceId
-      spaceIds: $spaceIds
-      typeId: $typeId
-      typeIds: $typeIds
     ) {
       pageInfo {
         endCursor
@@ -122,6 +120,6 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
   }
 `;
 
-export const allEntitiesConnectionDocument = parse(
-  ALL_ENTITIES_CONNECTION_SOURCE
+export const entitiesOrderedByPropertyConnectionDocument = parse(
+  ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE
 ) as TypedDocumentNode<any, any>;

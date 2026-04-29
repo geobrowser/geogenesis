@@ -19,6 +19,7 @@ import {
 import { Entity, SearchResult } from '~/core/types';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -28,7 +29,6 @@ import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
-  entitiesOrderedByPropertyQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -84,6 +84,13 @@ export function getEntityNames(entityIds: string[], signal?: AbortController['si
 
 type GetAllEntitiesOptions = {
   limit?: number;
+  after?: string;
+  /**
+   * Bounded offset relative to `after`. Used by the hybrid jump-to-page
+   * pager to skip forward from a known anchor cursor without walking each
+   * intermediate page. Callers (the pagination hook) are expected to cap
+   * this value; this layer just forwards it to the API.
+   */
   offset?: number;
   spaceId?: string;
   spaceIds?: UuidFilter;
@@ -96,16 +103,31 @@ type GetAllEntitiesOptions = {
 /** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
 const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
-function decodeEntitiesConnectionNodes(data: { entitiesConnection?: { nodes?: unknown[] } | null }): Entity[] {
-  return (
-    data.entitiesConnection?.nodes
+export type EntitiesPage = {
+  entities: Entity[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+type EntitiesConnectionShape = {
+  nodes?: unknown[] | null;
+  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
+} | null;
+
+function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape): EntitiesPage {
+  const entities =
+    connection?.nodes
       ?.map((n: unknown) => EntityDecoder.decode(n))
-      .filter((e: Entity | null): e is Entity => e !== null) ?? []
-  );
+      .filter((e: Entity | null): e is Entity => e !== null) ?? [];
+  return {
+    entities,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
+  };
 }
 
 export function getAllEntities(
-  { limit, offset, spaceId, spaceIds, typeId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
+  { limit, after, offset, spaceId, spaceIds, typeId, typeIds, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
   return Effect.gen(function* () {
@@ -137,47 +159,54 @@ export function getAllEntities(
       orderBy,
     };
 
-    const fetchPage = (pageLimit: number, pageOffset: number) =>
+    const fetchPage = (pageLimit: number, pageAfter: string | undefined, pageOffset: number | undefined) =>
       graphql({
         query: allEntitiesConnectionDocument,
-        decoder: decodeEntitiesConnectionNodes,
-        variables: { ...variablesBase, limit: pageLimit, offset: pageOffset },
+        decoder: (data: { entitiesConnection?: EntitiesConnectionShape }) =>
+          decodeEntitiesConnectionPage(data.entitiesConnection ?? null),
+        variables: { ...variablesBase, limit: pageLimit, after: pageAfter, offset: pageOffset },
         signal,
       });
 
-    const startOffset = offset ?? 0;
-
-    if (limit !== undefined) {
-      if (limit === 0) {
-        return [];
-      }
-      const collected: Entity[] = [];
-      let nextOffset = startOffset;
-      let remaining = limit;
-      while (remaining > 0) {
-        const chunk = Math.min(ENTITIES_CONNECTION_MAX_FIRST, remaining);
-        const page = yield* fetchPage(chunk, nextOffset);
-        collected.push(...page);
-        if (page.length < chunk) {
-          break;
-        }
-        nextOffset += page.length;
-        remaining -= page.length;
-      }
-      return collected;
+    if (limit === 0) {
+      return { entities: [], endCursor: after ?? null, hasNextPage: false } satisfies EntitiesPage;
     }
 
+    // When the caller requests a window <= the API cap, do a single round-trip
+    // and surface the connection cursor straight through.
+    if (limit !== undefined && limit <= ENTITIES_CONNECTION_MAX_FIRST) {
+      return yield* fetchPage(limit, after, offset);
+    }
+
+    // Either an unbounded fetch-all (limit undefined) or a window larger than
+    // the API's per-request cap. Loop until satisfied, threading endCursor.
+    // Offset only applies to the first request — subsequent loops walk the
+    // connection forward via endCursor with no additional skip.
     const collected: Entity[] = [];
-    let nextOffset = startOffset;
-    while (true) {
-      const page = yield* fetchPage(ENTITIES_CONNECTION_MAX_FIRST, nextOffset);
-      collected.push(...page);
-      if (page.length < ENTITIES_CONNECTION_MAX_FIRST) {
+    let nextAfter = after;
+    let nextOffset: number | undefined = offset;
+    let remaining = limit;
+    let lastEndCursor: string | null = after ?? null;
+    let lastHasNextPage = false;
+
+    while (remaining === undefined || remaining > 0) {
+      const chunk = Math.min(ENTITIES_CONNECTION_MAX_FIRST, remaining ?? ENTITIES_CONNECTION_MAX_FIRST);
+      const page = yield* fetchPage(chunk, nextAfter, nextOffset);
+      collected.push(...page.entities);
+      lastEndCursor = page.endCursor;
+      lastHasNextPage = page.hasNextPage;
+
+      if (!page.hasNextPage || page.entities.length === 0) {
         break;
       }
-      nextOffset += page.length;
+      if (remaining !== undefined) {
+        remaining -= page.entities.length;
+      }
+      nextAfter = page.endCursor ?? undefined;
+      nextOffset = undefined;
     }
-    return collected;
+
+    return { entities: collected, endCursor: lastEndCursor, hasNextPage: lastHasNextPage } satisfies EntitiesPage;
   });
 }
 
@@ -187,24 +216,27 @@ type GetEntitiesOrderedByPropertyOptions = {
   dataType?: string;
   spaceId?: string;
   limit?: number;
+  after?: string;
+  /** Bounded forward skip relative to `after`. See `GetAllEntitiesOptions.offset`. */
   offset?: number;
   filter?: EntityFilter;
 };
 
-export function getEntitiesOrderedByProperty(
-  { propertyId, sortDirection, dataType, spaceId, limit, offset, filter }: GetEntitiesOrderedByPropertyOptions,
+export function getEntitiesOrderedByPropertyConnection(
+  { propertyId, sortDirection, dataType, spaceId, limit, after, offset, filter }: GetEntitiesOrderedByPropertyOptions,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entitiesOrderedByPropertyQuery,
-    decoder: data =>
-      data.entitiesOrderedByProperty?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    query: entitiesOrderedByPropertyConnectionDocument,
+    decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
+      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
     variables: {
       propertyId,
       sortDirection,
       dataType,
       spaceId,
       limit,
+      after,
       offset,
       filter,
     },

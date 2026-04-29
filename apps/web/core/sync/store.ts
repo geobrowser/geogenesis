@@ -222,8 +222,8 @@ export class GeoStore {
     return ['store', 'entity', id];
   }
 
-  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', stableStringify(where), first, skip];
+  static queryKeys(where: WhereCondition, first?: number, after?: string, offset?: number) {
+    return ['store', 'entities', stableStringify(where), first, after ?? null, offset ?? 0];
   }
 
   clear() {

@@ -183,8 +183,8 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
           )
         )
       );
-      const merged = new Map<string, (typeof pages)[0][0]>();
-      for (const entities of pages) {
+      const merged = new Map<string, (typeof pages)[0]['entities'][0]>();
+      for (const { entities } of pages) {
         for (const entity of entities) {
           merged.set(entity.id, entity);
         }
@@ -269,8 +269,12 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
     queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
     enabled: isPanelOpen && n > 0,
-    queryFn: () =>
-      Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })),
+    queryFn: async () => {
+      const { entities } = await Effect.runPromise(
+        getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })
+      );
+      return entities;
+    },
   });
 
   const linkedBountiesFromGraph = React.useMemo((): Bounty[] => {

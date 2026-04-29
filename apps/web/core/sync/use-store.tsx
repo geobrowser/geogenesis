@@ -162,7 +162,19 @@ export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOpt
 type QueryEntitiesOptions = {
   where: WhereCondition;
   first?: number;
-  skip?: number;
+  /**
+   * Cursor-based pagination. Pass the `endCursor` from the previous page's
+   * result to fetch the next page; omit (or pass undefined) to start at the
+   * beginning.
+   */
+  after?: string;
+  /**
+   * Bounded forward offset relative to `after`. Used by the hybrid jump-to-page
+   * pager: the data block UI keeps a small set of cursor anchors and uses
+   * `offset` to bridge to a target page from the closest anchor (capped to
+   * keep the offset out of the SQL slow zone).
+   */
+  offset?: number;
   placeholderData?: typeof keepPreviousData;
   /**
    * When true, returns an empty array until the initial fetch completes.
@@ -191,7 +203,8 @@ type QueryEntitiesOptions = {
 export function useQueryEntities({
   where,
   first = 9,
-  skip = 0,
+  after,
+  offset,
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
@@ -221,15 +234,23 @@ export function useQueryEntities({
   const {
     isFetched,
     isLoading,
-    data: orderedIds,
+    data,
   } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, skip), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
     queryFn: async () => {
-      const { merged, remote } = await E.syncMany({ store, cache, where, first, skip, sort });
+      const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
+        store,
+        cache,
+        where,
+        first,
+        after,
+        offset,
+        sort,
+      });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
-      return merged.map(e => e.id);
+      return { ids: merged.map(e => e.id), endCursor, hasNextPage };
     },
   });
 
@@ -246,14 +267,13 @@ export function useQueryEntities({
 
       // When a server-side sort is active, preserve the server-returned order
       // but read fresh entity data from the store to pick up local edits.
-      if (sort && orderedIds) {
-        return orderedIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+      if (sort && data?.ids) {
+        return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
       }
 
       const query = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
-        .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' });
 
       return query.execute();
@@ -265,6 +285,8 @@ export function useQueryEntities({
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
     isFetched: isFetched && enabled,
+    endCursor: data?.endCursor ?? null,
+    hasNextPage: data?.hasNextPage ?? false,
   };
 }
 
@@ -411,7 +433,8 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
 interface FindManyParameters {
   first?: number;
-  skip?: number;
+  after?: string;
+  offset?: number;
   where: WhereCondition;
 }
 
@@ -419,7 +442,8 @@ export function useQueryEntitiesAsync() {
   const cache = useQueryClient();
   const { store } = useSyncEngine();
 
-  return ({ where, first = 9, skip = 0 }: FindManyParameters) => E.findMany({ store, cache, where, first, skip });
+  return ({ where, first = 9, after, offset }: FindManyParameters) =>
+    E.findMany({ store, cache, where, first, after, offset });
 }
 
 export function useQueryEntityAsync() {
