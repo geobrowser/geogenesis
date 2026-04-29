@@ -17,7 +17,7 @@ const MAX_LINES = 3;
 const LINE_CLAMP_CLASS: Record<number, string> = {
   1: 'line-clamp-1',
   2: 'line-clamp-2',
-  3: CLAMP_CLASS,
+  3: 'line-clamp-3',
   4: 'line-clamp-4',
   5: 'line-clamp-5',
   6: 'line-clamp-6',
