@@ -4,7 +4,13 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { ADDRESS_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import {
+  ADDRESS_PROPERTY,
+  DATA_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
+  VENUE_PROPERTY,
+} from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
@@ -45,6 +51,7 @@ const SKIPPED_PROPERTIES: string[] = [
   ContentIds.AVATAR_PROPERTY,
   DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
 ];
 
 function countRenderableProperty(renderedProperties: string[]): number {
@@ -124,7 +131,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
       {nonEmptyValues.map((t, index) => {
         // hide name property, it is already rendered in the header
         // @TODO: filter ahead of time rather than returning null here
-        if (propertyId === SystemIds.NAME_PROPERTY) {
+        if (propertyId === SystemIds.NAME_PROPERTY || propertyId === SCORE_SYSTEM_PROPERTY) {
           return null;
         }
         return (
