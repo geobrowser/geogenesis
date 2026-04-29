@@ -6,15 +6,20 @@ import { ServerEnvironment } from './app/api/environment';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// Opt-in dev compile-time wins. Opt-out because they degrade DevTools stacks
-// (no source maps) and disable tree-shaking inference, which some devs prefer
-// to leave on. Set ENABLE_TURBOPACK_OPTIMIZATIONS=1 to enable.
-const turbopackDevSkips =
+// Faster local dev. Opt in with ENABLE_TURBOPACK_OPTIMIZATIONS=1.
+// Flags defined on ExperimentalConfig:
+// https://github.com/vercel/next.js/blob/canary/packages/next/src/server/config-shared.ts
+const turbopackOptimizations =
   isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
     ? {
         turbopackInferModuleSideEffects: false,
         turbopackInputSourceMaps: false,
+        turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
+        turbopackPluginRuntimeStrategy: 'workerThreads' as const,
+        turbopackRemoveUnusedExports: false,
+        turbopackRemoveUnusedImports: false,
         turbopackSourceMaps: false,
+        turbopackTreeShaking: false,
       }
     : {};
 
@@ -34,7 +39,7 @@ const nextConfig: NextConfig = {
       }
     : undefined,
   experimental: {
-    ...turbopackDevSkips,
+    ...turbopackOptimizations,
     optimizePackageImports,
   },
   images: {
