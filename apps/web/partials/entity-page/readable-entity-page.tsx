@@ -39,6 +39,7 @@ interface Props {
 const SKIPPED_PROPERTIES: string[] = [
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
   SystemIds.COVER_PROPERTY,
   SystemIds.TABS_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
@@ -65,7 +66,9 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      {Object.entries(renderedProperties).map(([propertyId, property]) => {
+      {Object.entries(renderedProperties)
+        .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
+        .map(([propertyId, property]) => {
         const isRelation = property.dataType === 'RELATION';
 
         if (isRelation) {

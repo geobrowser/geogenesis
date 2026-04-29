@@ -1041,6 +1041,7 @@ async function applyTemplate(templateOptions: {
 // System properties that are editable elsewhere
 const SYSTEM_PROPERTIES = [
   SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
   SystemIds.TYPES_PROPERTY,
   SystemIds.COVER_PROPERTY,
   SystemIds.BLOCKS,
