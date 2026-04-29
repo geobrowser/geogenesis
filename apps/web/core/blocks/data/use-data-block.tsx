@@ -140,8 +140,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // and no longer consumes these ids, so this hook intentionally returns
   // undefined for non-COLLECTION sources. The field is kept for
   // COLLECTION consumers that still use it downstream.
-  const filterSuggestionEntityIds =
-    source.type === 'COLLECTION' ? collectionFilterSuggestionEntityIds : undefined;
+  const filterSuggestionEntityIds = source.type === 'COLLECTION' ? collectionFilterSuggestionEntityIds : undefined;
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
   // We just need to organize the data here

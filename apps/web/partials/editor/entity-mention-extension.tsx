@@ -1,9 +1,9 @@
+import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
+import type { VirtualElement } from '@floating-ui/dom';
 import { PluginKey as PmPluginKey } from '@tiptap/pm/state';
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
-import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
-import type { VirtualElement } from '@floating-ui/dom';
 
 import { insertGraphLink } from './insert-graph-link';
 import { MentionList } from './mention-list';
@@ -24,11 +24,7 @@ interface EntityMentionItem {
 /**
  * Type for the command callback in MentionList
  */
-type EntityMentionCommand = (
-  entityId: string,
-  entityName: string,
-  entitySpaceId: string
-) => void;
+type EntityMentionCommand = (entityId: string, entityName: string, entitySpaceId: string) => void;
 
 /**
  * Type for the escape callback
@@ -193,8 +189,7 @@ export const createEntityMentionExtension = (spaceId: string) =>
              * scroll events on every scrollable container above the editor,
              * including the window.
              */
-            (virtualRef as VirtualElement & { contextElement?: Element }).contextElement =
-              props.editor.view.dom;
+            (virtualRef as VirtualElement & { contextElement?: Element }).contextElement = props.editor.view.dom;
 
             // Create popup container with fixed positioning
             popupElement = document.createElement('div');

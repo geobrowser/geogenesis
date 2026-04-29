@@ -10,9 +10,8 @@ import type { WriteContext } from './context';
 
 export { isEntityId, normalizeEntityId };
 
-// Case-insensitive to match `isEntityId` — the model sometimes emits
-// uppercase hex even though we normalize to lowercase. A lowercase-only
-// pattern in the JSON Schema would silently reject those before validation.
+// Case-insensitive to match isEntityId — the model can emit uppercase hex,
+// and a lowercase-only pattern would silently reject before runtime.
 export const ENTITY_ID_PATTERN =
   '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$';
 
@@ -65,22 +64,13 @@ export function normalizeDescription(description: string): string {
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
-/**
- * Member-only gate. Returns null on success or notSignedIn() for guests. Use
- * for tools that don't actually mutate the graph (toggleEditMode) so they
- * don't burn an edit-rate-limit token.
- */
+// Use for non-mutating tools (e.g. toggleEditMode) to skip burning an
+// edit-rate-limit token.
 export function requireMember(context: WriteContext): EditToolFailure | null {
   if (context.kind !== 'member') return notSignedIn();
   return null;
 }
 
-/**
- * Common gate run at the top of every graph-mutating write tool's execute:
- * rejects non-members and checks the per-wallet edit rate limit. Returns null
- * when the caller should proceed, or an EditToolFailure the caller should
- * return as-is.
- */
 export async function writePrecheck(context: WriteContext): Promise<EditToolFailure | null> {
   const memberCheck = requireMember(context);
   if (memberCheck) return memberCheck;
@@ -89,29 +79,8 @@ export async function writePrecheck(context: WriteContext): Promise<EditToolFail
   return null;
 }
 
-/**
- * Verifies that a BLOCKS relation from `parentEntityId` → `blockId` exists in
- * the given space. Used by deleteBlock / updateBlock / moveBlock /
- * setDataBlockView to stop the model from passing a wrong parentEntityId (the
- * common failure mode is the space id on a space-home page, where
- * `currentEntityId` can be absent and the model defaults to `currentSpaceId`).
- * Without this gate the client dispatcher ran its BLOCKS-edge loop against an
- * empty relation set, silently leaving a half-deleted block in the graph.
- *
- * Two short-circuits skip the live-graph check, both of them legitimate:
- * 1. Same-request mints (`context.mintedBlockIds`) — the BLOCKS edge is only
- *    staged locally until publish.
- * 2. Cross-session staged blocks — the block doesn't resolve in the live
- *    graph at all because it was created in an earlier chat turn and isn't
- *    published yet. We can't tell those from the server, but the client
- *    dispatcher resolves merged local+remote state correctly, so passing the
- *    intent through is safe. The wrong-parent failure mode we're guarding
- *    against requires the block to BE in the graph (otherwise there's no
- *    "real parent" to be wrong about); when both block and parent resolve we
- *    enforce the edge check normally.
- *
- * Returns null on success or an EditToolFailure the caller should return as-is.
- */
+// Verifies the BLOCKS edge exists; without it the dispatcher ran against an
+// empty relation set and left a half-deleted block.
 export async function resolveBlocksEdge(
   context: WriteContext,
   parentEntityId: string,

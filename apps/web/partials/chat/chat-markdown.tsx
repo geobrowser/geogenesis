@@ -27,9 +27,6 @@ function toInternalHref(rawHref: string): string | null {
 
 const md = createMarkdownIt();
 
-// Map of simple markdown-it tokens → plain React element. All tokens here render
-// as pairs (open/close) and contain inline children; block/inline delegation is
-// handled in the walker itself.
 const BLOCK_TAGS: Record<string, React.ElementType> = {
   paragraph_open: 'p',
   heading_open: 'h3',
@@ -145,13 +142,11 @@ function consumeInline(state: WalkerState): React.ReactNode {
       const geo = parseGeoEntityHref(rawHref);
       const label = collectInlineText(state.tokens, state.index + 1, 'link_close');
 
-      // Advance past link_open, inline children, and link_close
       state.index += 1;
-      // Drop the children, since we already extracted the label as text.
       while (state.index < state.tokens.length && state.tokens[state.index].type !== 'link_close') {
         state.index += 1;
       }
-      if (state.index < state.tokens.length) state.index += 1; // consume link_close
+      if (state.index < state.tokens.length) state.index += 1;
 
       if (geo) {
         const cached = state.cache.get(geo.id);
@@ -241,7 +236,7 @@ function renderBlockToken(state: WalkerState): React.ReactNode {
     return <Tag className={className}>{children}</Tag>;
   }
 
-  // Any token we don't explicitly handle (e.g. link_close slipped to block level): advance.
+  // Unknown token — skip without crashing.
   state.index += 1;
   return null;
 }

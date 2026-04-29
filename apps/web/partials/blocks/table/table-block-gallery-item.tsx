@@ -275,11 +275,7 @@ export function TableBlockGalleryItem({
           <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
         </div>
         {description && propertyDataHasDescription && (
-          <div
-            className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}
-          >
-            {description}
-          </div>
+          <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
         )}
 
         {orderCellsForBrowseFigma(

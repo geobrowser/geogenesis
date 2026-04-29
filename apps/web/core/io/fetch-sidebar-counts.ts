@@ -1,15 +1,10 @@
+import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { Schema } from 'effect';
 
 import { Environment } from '../environment';
 import { getSpacesWhereMember } from './queries';
-import {
-  type ApiProposalListItem,
-  ApiProposalListResponseSchema,
-  encodePathSegment,
-  restFetch,
-} from './rest';
+import { type ApiProposalListItem, ApiProposalListResponseSchema, encodePathSegment, restFetch } from './rest';
 import { isValidUUID, spaceIdToGraphqlUuid } from './rest/validation';
 import { fetchEditorSpaceIds } from './subgraph/fetch-editor-space-ids';
 import { graphql } from './subgraph/graphql';

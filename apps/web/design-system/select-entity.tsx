@@ -336,7 +336,7 @@ export const SelectEntity = ({
         {query && (
           <Popover.Portal>
             <Popover.Content
-              ref={(node) => {
+              ref={node => {
                 setPopoverElement(node);
                 popoverRef.current = node;
               }}
@@ -375,10 +375,7 @@ export const SelectEntity = ({
               forceMount
             >
               <div
-                className={cx(
-                  variant === 'fixed' && (popoverAbove ? 'pb-1' : 'pt-1'),
-                  width === 'full' && 'w-full'
-                )}
+                className={cx(variant === 'fixed' && (popoverAbove ? 'pb-1' : 'pt-1'), width === 'full' && 'w-full')}
               >
                 <div
                   className={cx(

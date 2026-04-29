@@ -57,9 +57,6 @@ export function ChatPanel({
 
   const isBusy = status === 'submitted' || status === 'streaming';
   const hasMessages = messages.length > 0;
-  // "Expand" only appears at the default size. Any other size — the expanded
-  // preset or a custom drag-resized one — shows "Collapse" so the user always
-  // has a one-click path back to the small default.
   const isAtDefault = size.width === DEFAULT_CHAT_SIZE.width && size.height === DEFAULT_CHAT_SIZE.height;
 
   const togglePreset = () => setSize(isAtDefault ? EXPANDED_CHAT_SIZE : DEFAULT_CHAT_SIZE);

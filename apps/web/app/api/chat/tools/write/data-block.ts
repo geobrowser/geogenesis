@@ -206,28 +206,13 @@ type CollectionItemInput = {
   spaceId: string;
 };
 
-/**
- * Verify a data block uses a COLLECTION source when we can see it in the live
- * graph. Items attached to non-COLLECTION (QUERY / GEO) blocks won't render,
- * so we want to surface that as a clear `wrong_type` error.
- *
- * **Trust the caller when the block isn't in the live graph.** Same-turn
- * minted blocks short-circuit via `mintedBlockIds`, but blocks staged in a
- * previous chat turn are also not in the live graph yet — and those still
- * need to work. We only return `wrong_type` when we can prove the block is a
- * non-COLLECTION data block; we never return `not_found` for the block
- * itself, because the client dispatcher resolves staged state correctly.
- */
+// Trust the caller when the block isn't in the live graph — cross-session
+// staged blocks aren't published yet but must still work.
 async function resolveCollectionBlock(context: WriteContext, blockId: string, spaceId: string) {
   if (context.kind === 'member' && context.mintedBlockIds.has(blockId)) return { ok: true as const };
   try {
     const block = await Effect.runPromise(getEntity(blockId, spaceId));
     if (!block) {
-      // Block isn't published yet — trust the caller. The dispatcher writes
-      // the COLLECTION_ITEM relation regardless, and if the block turns out
-      // not to be a COLLECTION source the items just won't render until the
-      // user re-sources the block. Better than hard-rejecting cross-session
-      // staged blocks the assistant can't see from the server.
       return { ok: true as const };
     }
     const sourceTypeRelation = (block.relations ?? []).find(
@@ -281,9 +266,8 @@ export function buildAddCollectionItemTool(context: WriteContext) {
       const blockGate = await resolveCollectionBlock(context, blockId, spaceId);
       if (!blockGate.ok) return blockGate;
 
-      // Verify the target entity exists before staging a relation pointing at
-      // a hallucinated id. Cross-space lookup is deliberate — collection items
-      // can reference entities from other spaces.
+      // Cross-space lookup intentional: collection items can reference
+      // entities from other spaces.
       let targetName: string | null = null;
       try {
         const target = await Effect.runPromise(getEntity(entityId));
@@ -294,10 +278,8 @@ export function buildAddCollectionItemTool(context: WriteContext) {
         return { ok: false, error: 'lookup_failed' };
       }
 
-      // Reuse the setRelation intent — the dispatcher writes a Relation, and
-      // a Collection Item is just a Relation with type=COLLECTION_ITEM. Saves
-      // a dispatcher branch and keeps reorder / remove flowing through the
-      // existing moveRelation / deleteRelation paths.
+      // Collection Item is just a Relation with type=COLLECTION_ITEM; reuse
+      // setRelation to avoid a separate dispatcher branch.
       return {
         ok: true,
         intent: {
@@ -339,11 +321,9 @@ export function buildRemoveCollectionItemTool(context: WriteContext) {
 
       if (!(await context.isMember(spaceId))) return notAuthorized(spaceId);
 
-      // Removal is idempotent and safe: the dispatcher's deleteRelation
-      // no-ops when nothing matches. We don't pre-validate the block in the
-      // graph because cross-session staged blocks (created in a prior chat
-      // turn, not yet published) wouldn't resolve and we'd reject a legit
-      // remove call. The dispatcher tombstones what it finds locally.
+      // Idempotent: the dispatcher no-ops on nothing-matches. No block
+      // pre-validation because cross-session staged blocks won't be in the
+      // live graph.
       return {
         ok: true,
         intent: {

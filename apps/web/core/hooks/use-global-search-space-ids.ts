@@ -19,8 +19,7 @@ export function useGlobalSearchSpaceIds(): string[] {
   const { personalSpaceId } = usePersonalSpaceId();
 
   return React.useMemo(
-    () =>
-      Array.from(new Set([ROOT_SPACE, currentSpaceId, personalSpaceId].filter((id): id is string => Boolean(id)))),
+    () => Array.from(new Set([ROOT_SPACE, currentSpaceId, personalSpaceId].filter((id): id is string => Boolean(id)))),
     [currentSpaceId, personalSpaceId]
   );
 }

@@ -45,10 +45,7 @@ export function entityTypesMatchFilter(
   return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
 }
 
-function resultMatchesFilterTypes(
-  result: { types: { id: string }[] },
-  filterByTypes: string[] | undefined
-): boolean {
+function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
   return searchResultMatchesAllowedTypes(result, filterByTypes);
 }
 

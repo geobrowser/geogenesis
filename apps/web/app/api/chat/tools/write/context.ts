@@ -4,15 +4,8 @@ import { getSpaceByAddress, getSpacesWhereMember } from '~/core/io/queries';
 
 import { editBurstLimit, editHourlyLimit } from '../../rate-limit';
 
-/**
- * Write tools can only be invoked by signed-in users, and each write targets a
- * specific space the user must be a member of. This helper resolves that
- * membership once per request and exposes an async `isMember(spaceId)` check.
- *
- * The membership promise is memoized: the first tool to call `isMember` pays
- * for the two GraphQL round trips; subsequent calls await the same promise.
- * Read-only turns never pay anything because tools never call isMember.
- */
+// Membership is resolved once per request and memoized; read-only turns
+// never pay the GraphQL cost.
 export type RateLimitResult = { ok: true } | { ok: false; retryAfter: number };
 
 export type WriteContext =
@@ -31,12 +24,8 @@ export type WriteContext =
       personalSpaceId: () => Promise<string | null>;
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
-      /**
-       * Block ids that `createBlock` minted in this request. Validation helpers
-       * (resolveBlocksEdge) consult this set so follow-up intents in the same
-       * turn — e.g. `setDataBlockView` right after `createBlock` — don't fail
-       * the live-graph BLOCKS-edge check for a block that's only staged.
-       */
+      // Tracks createBlock-minted ids so same-turn follow-ups skip the
+      // live-graph BLOCKS-edge check.
       mintedBlockIds: Set<string>;
     };
 
@@ -78,9 +67,8 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         return { personalSpaceId, memberSpaceIds };
       } catch (err) {
         console.error('[chat/writeContext] membership lookup failed', err);
-        // Clear unconditionally so the next tool call retries — the previous
-        // identity check (`membershipPromise === attempt`) was racy when two
-        // concurrent first-callers each installed their own attempt.
+        // Clear unconditionally so the next call retries; an identity check
+        // here was racy with concurrent first-callers.
         membershipPromise = null;
         return { personalSpaceId: null, memberSpaceIds: new Set<string>() };
       }
@@ -110,11 +98,9 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         }
         return { ok: true };
       } catch (err) {
-        // Upstash unreachable. In dev (no redis env vars) we let edits through
-        // so local work isn't blocked. In production we fail closed — partial
-        // Redis degradation could make this catch fire even when the route's
-        // top-level limiter succeeded against a healthy replica, and silently
-        // bypassing the per-wallet edit cap there would defeat the purpose.
+        // Upstash unreachable: dev passes through (don't block local work),
+        // prod fails closed so partial Redis degradation can't bypass the
+        // per-wallet edit cap.
         console.error('[chat/editRateLimit] unavailable', err);
         if (process.env.NODE_ENV === 'production') {
           return { ok: false, retryAfter: 5 };

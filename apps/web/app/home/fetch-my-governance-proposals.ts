@@ -1,10 +1,10 @@
 import * as Effect from 'effect/Effect';
 
 import {
+  type ApiProposalListItem,
   convertVoteOption,
   mapApiActionsToProposalType,
   mapProposalStatus,
-  type ApiProposalListItem,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
@@ -64,11 +64,7 @@ export async function getMyGovernanceProposals(opts: {
   const { memberSpaceId, spaceIds, spaceFilter, category, status, page = 0 } = opts;
 
   const effectiveSpaceIds =
-    spaceFilter && spaceFilter !== 'all'
-      ? spaceIds.includes(spaceFilter)
-        ? [spaceFilter]
-        : []
-      : spaceIds;
+    spaceFilter && spaceFilter !== 'all' ? (spaceIds.includes(spaceFilter) ? [spaceFilter] : []) : spaceIds;
 
   if (effectiveSpaceIds.length === 0) {
     return { proposals: [], hasMore: false };
@@ -90,8 +86,7 @@ export async function getMyGovernanceProposals(opts: {
     }
   }
 
-  const votingRows =
-    status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
+  const votingRows = status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
   votingRows.sort((a, b) => b.timing.endTime - a.timing.endTime);
   const unique = dedupeByProposalId(votingRows);
   const offset = page * PAGE_SIZE;

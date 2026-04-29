@@ -11,15 +11,11 @@ interface Props {
   href?: string;
 }
 
-const tableCellBreakable =
-  'block min-h-[22px] min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell';
+const tableCellBreakable = 'block min-h-[22px] min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell';
 
 export function CellContent({ isExpanded, value, href }: Props) {
   const content = href ? (
-    <Link
-      href={href}
-      className={`${tableCellBreakable} text-ctaHover hover:underline hover:decoration-ctaHover`}
-    >
+    <Link href={href} className={`${tableCellBreakable} text-ctaHover hover:underline hover:decoration-ctaHover`}>
       {value}
     </Link>
   ) : (
@@ -29,7 +25,7 @@ export function CellContent({ isExpanded, value, href }: Props) {
   );
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden">
+    <div className="w-full max-w-full min-w-0 overflow-hidden">
       {isExpanded ? (
         content
       ) : (

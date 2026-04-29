@@ -8,18 +8,19 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
-import {
-  BOUNTIES_RELATION_TYPE,
-  BOUNTY_TYPE_ID,
-  PLACEHOLDER_SPACE_IMAGE,
-  PROPOSAL_TYPE_ID,
-} from '~/core/constants';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
-import { getAllEntities, getRelationsByFromEntityId, getRelationsByToEntityIds, getSpace, getSpaces } from '~/core/io/queries';
+import {
+  getAllEntities,
+  getRelationsByFromEntityId,
+  getRelationsByToEntityIds,
+  getSpace,
+  getSpaces,
+} from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
@@ -83,7 +84,13 @@ function useBounties(): ContextValue | null {
   return React.useContext(Context);
 }
 
-export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName, authorSpaceId, children }: ProviderProps) {
+export function ProposalBountiesProvider({
+  daoSpaceId,
+  proposalId,
+  proposalName,
+  authorSpaceId,
+  children,
+}: ProviderProps) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -125,10 +132,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     return m;
   }, [linkedRelations]);
 
-  const linkedBountyIds = React.useMemo(
-    () => [...relationByBountyId.keys()].sort(),
-    [relationByBountyId]
-  );
+  const linkedBountyIds = React.useMemo(() => [...relationByBountyId.keys()].sort(), [relationByBountyId]);
 
   const effectiveLinkedIds = React.useMemo(() => {
     if (!optimisticLinkedIds) return linkedBountyIds;
@@ -211,9 +215,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     staleTime: 60_000,
     queryFn: () => {
       if (!personalSpaceId) return Promise.resolve([]);
-      return Effect.runPromise(
-        getRelationsByToEntityIds(allSelectableIds, BOUNTIES_RELATION_TYPE, personalSpaceId)
-      );
+      return Effect.runPromise(getRelationsByToEntityIds(allSelectableIds, BOUNTIES_RELATION_TYPE, personalSpaceId));
     },
   });
 
@@ -241,8 +243,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     return remoteBountyEntities
       .filter(
         e =>
-          isAllocatedToUser(e.relations ?? [], allocationTargets) &&
-          !hasBountyTaskStatusDoneRelation(e.relations ?? [])
+          isAllocatedToUser(e.relations ?? [], allocationTargets) && !hasBountyTaskStatusDoneRelation(e.relations ?? [])
       )
       .map(entity => {
         const bountySpaceId = entity.spaces?.[0] ?? daoSpaceId;
@@ -269,8 +270,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const { data: linkedBountyDetails = [], isLoading: isLoadingLinkedEntities } = useQuery({
     queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
     enabled: isPanelOpen && n > 0,
-    queryFn: () =>
-      Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })),
+    queryFn: () => Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })),
   });
 
   const linkedBountiesFromGraph = React.useMemo((): Bounty[] => {
@@ -795,14 +795,20 @@ function BountyReadOnly({ bounty }: { bounty: Bounty }) {
       {bounty.spaceLabel && (
         <div className="mb-1 flex min-w-0 items-center gap-1.5 text-[14px] text-text">
           <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-03 bg-grey-01">
-            <NativeGeoImage value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE} alt="" className="h-full w-full object-cover" />
+            <NativeGeoImage
+              value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           </span>
           <span className="min-w-0 truncate">{bounty.spaceLabel}</span>
         </div>
       )}
       <button
         type="button"
-        onClick={() => bounty.spaceId && window.open(NavUtils.toEntity(bounty.spaceId, bounty.id), '_blank', 'noopener,noreferrer')}
+        onClick={() =>
+          bounty.spaceId && window.open(NavUtils.toEntity(bounty.spaceId, bounty.id), '_blank', 'noopener,noreferrer')
+        }
         className="text-left text-[15px] font-semibold text-text hover:underline"
       >
         {bounty.name}

@@ -259,10 +259,7 @@ export function EditableTabGroup({
   // Stable array identity for SortableContext so drag doesn't re-register items on every render.
   // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
   const sortableIdsKey = editableTabs.map(t => t.relation.id).join(',');
-  const sortableIds = React.useMemo(
-    () => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')),
-    [sortableIdsKey]
-  );
+  const sortableIds = React.useMemo(() => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')), [sortableIdsKey]);
 
   return (
     <div className="relative">

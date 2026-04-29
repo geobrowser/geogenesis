@@ -4,14 +4,8 @@ import type { OpenReviewPanelInput, OpenReviewPanelOutput } from '~/core/chat/na
 
 import type { WriteContext } from '../write/context';
 
-// Opens the Review edits / Review changes panel — the overlay that lists
-// staged edits and lets the user name + publish a proposal. This tool only
-// *opens* the panel; the assistant never names a proposal or clicks Publish.
-//
-// Lives in nav (not write) because it changes what the user sees without
-// staging a graph edit. Registered with a member-aware context only so guests
-// don't see it in their tool list — a guest can't have staged edits anyway
-// (they have no write tools), but hiding it keeps the capability set honest.
+// Lives in nav (not write) — changes UI state without staging a graph edit.
+// Guests excluded: no staged edits to review.
 export function buildOpenReviewPanelTool(context: WriteContext) {
   return tool({
     description:

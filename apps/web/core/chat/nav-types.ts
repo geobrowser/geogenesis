@@ -1,7 +1,3 @@
-// Navigate tool shapes shared between the API route (producer) and the chat
-// widget (consumer). Types only — no runtime code — so importing across the
-// client/server boundary is safe.
-
 export type NavigateTarget = 'root' | 'explore' | 'personalHome' | 'personalSpace' | 'space' | 'entity';
 
 export type NavigateInput = {
@@ -19,10 +15,8 @@ export type NavigateOutput =
       attemptedSpaceId?: string;
     };
 
-// openReviewPanel is a nav-side action too — it changes what the user sees (a
-// client-side overlay) without changing the graph. Shape is minimal because
-// the server can't usefully validate: "can I open the panel?" is just "am I a
-// member?" and that's enforced at tool registration.
+// Nav-side (not write): opens a client overlay without changing the graph.
+// Membership enforced at tool registration, not here.
 export type OpenReviewPanelInput = Record<string, never>;
 
 export type OpenReviewPanelOutput = { ok: true } | { ok: false; error: 'not_signed_in' };

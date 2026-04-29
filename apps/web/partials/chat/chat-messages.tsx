@@ -23,11 +23,8 @@ function userText(message: UIMessage): string {
     .join('');
 }
 
-// Text the user should see for an assistant turn — only text parts that come
-// AFTER the last "main" (non-followup) tool part. Interim narration emitted
-// before/between tool calls is hidden: the model is told not to emit it, but
-// if it does we drop it for the same reason — the user only wants the closing
-// summary, not running commentary.
+// Only text after the last main tool call — drops any preamble the model
+// emits before/between tools.
 function visibleAssistantText(message: UIMessage): string {
   let lastMainToolIndex = -1;
   message.parts.forEach((part, i) => {
@@ -43,20 +40,14 @@ function visibleAssistantText(message: UIMessage): string {
     if (part.text.length === 0) continue;
     const trimmed = part.text.trim();
     const prior = (texts[texts.length - 1] ?? '').trim();
-    // Equality-on-trimmed dedup. The earlier `endsWith` heuristic would
-    // silently swallow legitimate short trailing parts like "." or " Done."
-    // when they followed a longer text. Trimming both sides still catches
-    // whitespace-only SSE re-emits without doing prefix/suffix matching.
+    // Equality-on-trimmed dedup. An endsWith heuristic would swallow
+    // legitimate short trailing parts like "." that follow a longer text.
     if (prior === trimmed) continue;
     texts.push(part.text);
   }
   return texts.join('\n\n');
 }
 
-// True while the model is still working through tool calls (any non-followup
-// tool part hasn't reached `output-available` / `output-error`). Once every
-// main tool has resolved, the model is producing its final-text reply and we
-// hand control back to the streaming text view.
 function hasPendingMainTools(message: UIMessage): boolean {
   for (const part of message.parts) {
     if (!isToolUIPart(part)) continue;
@@ -66,9 +57,7 @@ function hasPendingMainTools(message: UIMessage): boolean {
   return false;
 }
 
-// Edit-tool outputs that returned `{ ok: false, ... }` — the model may or may
-// not narrate these in its closing text, so we surface them inline as a small
-// chip near the message so a silent failure isn't completely invisible.
+// Silent edit failures: surface inline since the model may not narrate them.
 type EditFailureNote = { toolName: string; failure: EditToolFailure };
 
 function messageEditFailures(message: UIMessage): EditFailureNote[] {
@@ -139,10 +128,6 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   const lastAssistantId = lastAssistant?.id;
   const followUps = lastAssistant ? messageFollowUps(lastAssistant) : [];
 
-  // "Thinking" = before the first byte arrives, OR while any main tool call
-  // is still in flight. Once every main tool has resolved and the model has
-  // started emitting the final-text reply, the overlay drops and the text
-  // streams in via `useSmoothStream` like a normal chat reply.
   const inFlightAssistant = status === 'streaming' || status === 'submitted' ? lastAssistant : null;
   const isThinking =
     status === 'submitted' ||
@@ -154,26 +139,19 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
 
   const hiddenAssistantId = isThinking ? lastAssistantId : null;
 
-  // Gate on `ready` so a previous turn's pills aren't keyboard-reachable while
-  // the next turn is `submitted` / `streaming`. The thinking overlay covers
-  // them visually, but Tab + Enter would still fire `onSuggestion`.
+  // Gate on `ready` so a previous turn's pills aren't keyboard-reachable
+  // while the next turn is in flight (Tab+Enter would still fire onSuggestion).
   const showFollowUps = status === 'ready' && !error && followUps.length > 0;
-  // Skeleton pills bridge the gap between the main reply finishing and the
-  // (sequential, response-aware) follow-up stream landing. They render as soon
-  // as the assistant's visible text exists and stay until either the real
-  // suggestions land or the stream finishes (a 'skip' nav-only turn never
-  // produces follow-ups, so the skeletons disappear when status flips ready).
+  // Skeleton pills bridge the gap between main reply finish and the
+  // sequential follow-up stream landing.
   const hasVisibleAssistantText = lastAssistant !== undefined && visibleAssistantText(lastAssistant).length > 0;
   const showSkeletonFollowUps =
     !error && !showFollowUps && status === 'streaming' && !isThinking && hasVisibleAssistantText;
 
   const entityCache = React.useMemo(() => buildEntityCacheFromMessages(messages), [messages]);
 
-  // Track whether the user has scrolled away from the bottom so streaming
-  // tokens don't fight them. A ref flag suppresses scrolled-away detection
-  // for scroll events we trigger ourselves — otherwise clamping to keep the
-  // assistant icon visible would look like a user scroll-up and freeze
-  // auto-scroll for the rest of the turn.
+  // Ref flag distinguishes our own programmatic scrolls from user-initiated
+  // ones — otherwise clamping looks like a scroll-up and freezes auto-scroll.
   const stuckToBottomRef = React.useRef(true);
   const isAutoScrollingRef = React.useRef(false);
 
@@ -221,8 +199,6 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
       armClear();
     };
 
-    // Sending a new user turn always re-anchors to the bottom — even if the
-    // user had scrolled up earlier, the new turn should pull them back down.
     if (last.role === 'user') {
       stuckToBottomRef.current = true;
       isAutoScrollingRef.current = true;
@@ -240,8 +216,6 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
       return;
     }
 
-    // Position of the assistant message's top edge inside the scroll container.
-    // Using rects keeps this robust across offsetParent boundaries.
     const elRect = el.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const nodeTop = nodeRect.top - elRect.top + el.scrollTop;
@@ -257,11 +231,9 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
     runAutoScroll();
   }, [runAutoScroll, status]);
 
-  // Catches height growth between message updates (e.g. the smooth-reveal
-  // hook drip-feeding characters) that doesn't re-run the effect above.
-  // Re-runs when messages.length changes so newly appended message nodes get
-  // observed too — a ResizeObserver only tracks the children present when it
-  // was attached.
+  // ResizeObserver catches height growth (e.g. smooth-stream drip-feeding
+  // chars) that doesn't trigger the layout effect. Re-runs on messages.length
+  // change so new children get observed.
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -355,11 +327,8 @@ const SPARKLE_LAYOUT_ID = 'thinking-sparkle';
 
 function ThinkingOverlay() {
   return (
-    // Opaque white cover (not a dim) so any layout reflow happening underneath
-    // — pills disappearing, new user message added, auto-scroll repositioning
-    // — is hidden until the overlay fades out and the new state is settled.
-    // pointer-events-auto keeps the user from accidentally scrolling history
-    // through the cover (which would just be moving an invisible target).
+    // Opaque cover hides layout reflow during tool execution;
+    // pointer-events-auto blocks scroll through the overlay.
     <motion.div
       className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-white"
       initial={{ opacity: 0 }}
@@ -392,10 +361,8 @@ type AssistantMessageProps = {
   messageId: string;
   text: string;
   isStreaming: boolean;
-  // True only for the message that just emerged from the thinking overlay —
-  // its leading sparkle shares `layoutId` so the centered sparkle physically
-  // flies into place instead of cross-fading. Older finalized messages render
-  // a plain SVG so they don't compete for the same shared layout id.
+  // Only for the message just emerging from the overlay — sparkle uses
+  // layoutId to animate from the thinking indicator.
   isLandingFromThinking: boolean;
   entityCache: EntityCache;
   editFailures: EditFailureNote[];

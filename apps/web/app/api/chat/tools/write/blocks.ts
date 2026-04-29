@@ -64,8 +64,8 @@ function buildContent(input: CreateBlockInput): BlockContent | { error: string }
       if (input.source !== undefined && !DATA_SOURCES.includes(input.source)) return { error: 'invalid source' };
       if (input.view !== undefined && !DATA_VIEWS.includes(input.view)) return { error: 'invalid view' };
       const title = input.title?.trim();
-      // Forward only the fields the caller actually set. The dispatcher
-      // applies defaults on create and preserves existing values on update.
+      // Omit unset fields so the dispatcher can distinguish "absent" from
+      // "explicitly cleared".
       return {
         kind: 'data',
         ...(input.source !== undefined ? { source: input.source } : {}),
@@ -110,8 +110,6 @@ export function buildCreateBlockTool(context: WriteContext) {
 
       if (!(await context.isMember(spaceId))) return notAuthorized(spaceId);
 
-      // Text blocks render as a single paragraph — auto-split on newlines so
-      // multi-section text still renders correctly.
       if (input.blockKind === 'text' && input.markdown && /\n/.test(input.markdown)) {
         const lines = input.markdown
           .split(/\n+/)
@@ -140,9 +138,8 @@ export function buildCreateBlockTool(context: WriteContext) {
       if ('error' in content) return invalid(content.error);
 
       const blockId = IdUtils.generate();
-      // Track the id so same-turn follow-up intents (setDataBlockView,
-      // updateBlock, deleteBlock, moveBlock) skip the live-graph BLOCKS-edge
-      // check — the edge is only staged client-side until publish.
+      // Same-turn follow-up intents skip the live-graph BLOCKS-edge check —
+      // the edge is only staged client-side until publish.
       context.mintedBlockIds.add(blockId);
 
       return {
@@ -207,10 +204,8 @@ export function buildUpdateBlockTool(context: WriteContext) {
       const edgeGate = await resolveBlocksEdge(context, parentEntityId, blockId, spaceId);
       if (edgeGate) return edgeGate;
 
-      // `view` belongs to setDataBlockView (the VIEW_PROPERTY edge hangs off
-      // the BLOCKS-relation entity, not the block). Reject early before
-      // buildContent so the caller gets a clear error and we don't pay the
-      // cost of building a content object we'll throw away.
+      // view belongs to setDataBlockView — VIEW_PROPERTY hangs off the
+      // BLOCKS-relation entity, not the block.
       if (input.view !== undefined) {
         return invalid('updateBlock cannot change view; call setDataBlockView instead');
       }

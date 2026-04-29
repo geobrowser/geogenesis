@@ -6,8 +6,8 @@ import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
-import { LoadingSkeleton } from './loading-skeleton';
 import { HomeProposalsInfiniteScroll } from './home-proposals-infinite-scroll';
+import { LoadingSkeleton } from './loading-skeleton';
 import { MyGovernanceProposalsList } from './my-governance-proposals-list';
 import { PendingProposalsPage } from './pending-proposals-page';
 import { PersonalHomeDashboard } from './personal-home-dashboard';

@@ -7,9 +7,8 @@ import { buildOpenReviewPanelTool } from './open-review-panel';
 export { buildNavigateTool, buildOpenReviewPanelTool };
 export type { NavigateToolContext };
 
-// openReviewPanel only registers for members — guests can't stage edits, so
-// opening the review panel has no meaning for them. Keeping it off the guest
-// tool list also avoids adding prompt tokens they'd never use.
+// openReviewPanel only registers for members; guests have no staged edits and
+// the tool would just burn prompt tokens.
 export function buildNavTools(navContext: NavigateToolContext, writeContext: WriteContext): ToolSet {
   if (writeContext.kind === 'member') {
     return {

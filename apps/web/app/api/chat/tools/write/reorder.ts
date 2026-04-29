@@ -13,10 +13,8 @@ import {
   writePrecheck,
 } from './shared';
 
-// The model passes position as a flat enum + optional referenceId. We keep the
-// RelativePosition type (a tagged union) internal to the dispatcher and the
-// tool's output intent — flattening the schema avoids the AI SDK's JSON schema
-// quirks with discriminated unions at the input layer.
+// Flat enum + referenceId at the input layer: AI SDK has quirks with
+// discriminated-union JSON schemas.
 type MoveBlockInput = {
   blockId: string;
   parentEntityId: string;

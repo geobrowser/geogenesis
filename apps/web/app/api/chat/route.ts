@@ -49,19 +49,14 @@ const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// Tool-call JSON eats output tokens too. A chained edit turn (resolve types
-// + searchGraph + createBlock + setDataBlockFilters + setDataBlockView +
-// closing summary) can run past 2k. 6k leaves headroom without exposing more
-// of an attack surface than the existing per-IP rate limits do.
+// Tool calls consume output tokens; a chained edit turn can exceed 2k. 6k leaves headroom.
 const MAX_OUTPUT_TOKENS = 6_000;
 const MAX_TOOL_STEPS = 6;
 
 const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 
-// currentPath is interpolated into the system prompt inside backticks, so
-// reject anything that could break out of the code span or smuggle newlines
-// / control chars into the prompt. Must start with '/' and contain no
-// whitespace, backticks, or control characters.
+// currentPath is interpolated into the system prompt inside backticks; reject
+// anything that could break out of the code span or smuggle control chars.
 const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
 
 function validateClientContext(input: unknown): ChatClientContext | null {
@@ -88,9 +83,8 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (isEditMode != null && typeof isEditMode !== 'boolean') {
     return null;
   }
-  // Note: any `personalSpaceId` the client sends is ignored. The route resolves
-  // the real personal space from the wallet's membership graph (via
-  // writeContext) so a forged client context can't redirect navigation.
+  // personalSpaceId is ignored here; resolved server-side from membership so a
+  // forged context can't redirect navigation.
 
   return {
     currentSpaceId: typeof currentSpaceId === 'string' ? currentSpaceId : null,
@@ -107,18 +101,14 @@ function getClientIp(req: Request): string {
   }
   const real = req.headers.get('x-real-ip');
   if (real) return real;
-  // No proxy headers — rather than dropping every anonymous-IP request into a
-  // single shared `unknown` bucket (which causes false-positive 429s for any
-  // legitimate user behind the same edge), emit a per-request random key so
-  // rate limiting degrades open. The IP-ceiling axes still cap volume from a
-  // single TCP source upstream.
+  // No proxy headers — random key per request avoids false-positive 429s from
+  // a shared `unknown` bucket. Vercel always sets x-forwarded-for so this is
+  // unreachable in prod.
   return `noip:${crypto.randomUUID()}`;
 }
 
-// The WALLET_ADDRESS cookie is httpOnly + sameSite=lax, so script can't forge
-// or rotate it from the page; we still validate the shape here as a belt-and-
-// suspenders check (and to fall back to the guest prompt on a malformed
-// value).
+// httpOnly + sameSite=lax means script can't forge this cookie, but we still
+// validate shape to fall back to the guest prompt on a malformed value.
 function parseWalletCookie(raw: string | undefined): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase();
@@ -172,16 +162,9 @@ function failedLimiterReset(probes: LimitProbe[]): number {
 }
 
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
-// Tools that change what the user sees without staging a graph edit. A turn
-// that's text-empty and only consists of these should skip follow-ups — the
-// UI has just changed, so the clickable pills wouldn't be visible anyway.
+// Navigation turns: text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
 
-// Classify the assistant's last turn to pick follow-up framing.
-//  - `skip`: text-empty, nav-like-only — no substantive content to anchor to.
-//  - `edit`: included at least one write tool call; follow-ups should suggest
-//    further edits (more fields, related blocks, filter tweaks).
-//  - `default`: read / mixed turn; use the generic next-step framing.
 function classifyTurn(firstStreamMessages: ModelMessage[]): 'skip' | 'edit' | 'default' {
   const lastAssistant = [...firstStreamMessages].reverse().find(m => m.role === 'assistant');
   if (!lastAssistant) return 'default';
@@ -214,9 +197,8 @@ function lastUserMessageLength(uiMessages: UIMessage[]): number {
   return 0;
 }
 
-// The client sends the full UIMessage[] on every request. We trust nothing in
-// the payload — in particular, we reject any role other than user/assistant so
-// a caller can't smuggle a second `system` turn in after our real prompt.
+// Reject any role other than user/assistant so a caller can't smuggle a
+// second `system` turn in after the real prompt.
 function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   for (const msg of input) {
@@ -225,9 +207,7 @@ function validateUIMessages(input: unknown): UIMessage[] | null {
     if (role !== 'user' && role !== 'assistant') return null;
     const parts = (msg as { parts?: unknown }).parts;
     if (!Array.isArray(parts)) return null;
-    // Shallow per-item check: each part must at least be an object with a
-    // string `type`. A null or shape-bogus part would otherwise crash inside
-    // convertToModelMessages further down.
+    // Shallow check: null or shape-bogus parts would crash convertToModelMessages.
     for (const part of parts) {
       if (!part || typeof part !== 'object') return null;
       if (typeof (part as { type?: unknown }).type !== 'string') return null;
@@ -305,10 +285,6 @@ export async function POST(req: Request) {
 
   const writeContext = buildWriteContext({ walletAddress: wallet });
 
-  // Resolve the personal-space id from the wallet's actual graph state — the
-  // client's claim about it is ignored. The lookup is memoized on writeContext
-  // so reading it for the prompt and reading it inside `navigate` share the
-  // same round trip.
   const serverPersonalSpaceId = writeContext.kind === 'member' ? await writeContext.personalSpaceId() : null;
 
   const basePrompt = isLoggedIn ? MEMBER_SYSTEM_PROMPT : GUEST_SYSTEM_PROMPT;
@@ -348,14 +324,9 @@ export async function POST(req: Request) {
   };
 
   // The AI SDK's multi-step loop only continues when a step has tool calls to
-  // respond to, so a single streamText with forced toolChoice either skips the
-  // text or skips the tool. Chain two streamTexts manually instead:
-  // (1) text reply with any tools registered
-  // (2) suggestFollowUps with toolChoice forced — runs SEQUENTIALLY after the
-  //     first stream so it can see the assistant's just-completed turn (text +
-  //     tool calls + tool results) and produce suggestions that actually match
-  //     what was shown. The client renders skeleton pills during the gap so
-  //     the wait doesn't feel like dead time, and Haiku keeps the gap short.
+  // respond to, so a single streamText with forced toolChoice either skips
+  // the text or skips the tool. Chain two streamTexts manually: (1) text
+  // reply, then (2) forced suggestFollowUps that sees the completed turn.
   const navTools = buildNavTools(
     {
       resolvePersonalSpaceId: () =>
@@ -377,16 +348,10 @@ export async function POST(req: Request) {
       });
       writer.merge(textResult.toUIMessageStream({ sendReasoning: false, sendFinish: false }));
 
-      // Forward the full assistant turn — text plus any tool-use / tool-result
-      // parts — into the follow-up stream so suggestions can reference what was
-      // actually shown instead of the user's question alone.
       const firstStreamMessages = (await textResult.response).messages;
 
       const turnKind = classifyTurn(firstStreamMessages);
 
-      // Skip the follow-up call entirely when the assistant only routed the
-      // user elsewhere — "where to go next" suggestions aren't useful on a
-      // navigation turn, and it saves a round trip.
       if (turnKind === 'skip') {
         return;
       }
@@ -408,17 +373,14 @@ export async function POST(req: Request) {
         ],
         tools: followUpTools,
         toolChoice: { type: 'tool', toolName: 'suggestFollowUps' },
-        // Output is just `{ suggestions: [s1, s2, s3] }` with each string ≤6
-        // words. 100 tokens is more than enough; lower cap = faster finish.
+        // 100 tokens is plenty for 3 short strings; lower cap = faster finish.
         maxOutputTokens: 100,
       });
       writer.merge(followUpResult.toUIMessageStream({ sendReasoning: false, sendStart: false }));
     },
     onError: err => {
       console.error('[chat] stream error', err);
-      // Surface a coarse classification so the client can show a sharper
-      // message (rate-limited / overloaded / transport / generic). Returned
-      // string ends up as a stream-error event the UI parses.
+      // Coarse classification lets the client show a sharper error message.
       const message = err instanceof Error ? err.message : '';
       if (message.toLowerCase().includes('rate')) return 'rate_limited';
       if (message.toLowerCase().includes('overload') || message.toLowerCase().includes('timeout')) {

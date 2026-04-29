@@ -50,9 +50,7 @@ export type ApplyCtx = {
 
 // Block structure changes need the Tiptap editor to reset — in edit mode it
 // treats itself as the source of truth and ignores store changes unless the
-// version atom is bumped. Data block filter / view changes are rendered by
-// React node-views that subscribe to the store directly, so they don't need
-// a Tiptap recreate.
+// version atom is bumped.
 const EDITOR_REFRESHING_INTENTS = new Set<EditIntent['kind']>([
   'createBlock',
   'createBlocks',
@@ -74,9 +72,8 @@ function applySetValue(intent: Extract<EditIntent, { kind: 'setValue' }>) {
   });
 }
 
-// The local store only holds values the user has modified this session;
-// server-hydrated data isn't there until something reads it in. Use E.findOne
-// to merge local + remote so deletes work on published data too.
+// E.findOne merges local + remote — the local store only holds values the
+// user has modified this session.
 async function resolveEntity(entityId: string, spaceId: string | undefined): Promise<Entity | null> {
   try {
     return await E.findOne({ id: entityId, spaceId, store, cache: queryClient });
@@ -134,8 +131,8 @@ function applyCreateProperty(intent: Extract<EditIntent, { kind: 'createProperty
 }
 
 async function nextBlockPosition(parentEntityId: string, spaceId: string): Promise<string> {
-  // Pull from the merged local+remote view so we don't ignore published blocks
-  // the user hasn't touched this session and jam the new one at the top.
+  // Merged local+remote view so we don't jam new blocks above untouched
+  // published siblings.
   const parent = await resolveEntity(parentEntityId, spaceId);
   const existing = (parent?.relations ?? []).filter(
     r => r.fromEntity.id === parentEntityId && r.type.id === SystemIds.BLOCKS && !r.isDeleted
@@ -202,22 +199,17 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
       break;
     }
     case 'data': {
-      // Default source to COLLECTION on create when the model omits it.
       const source = content.source ?? 'COLLECTION';
       if (source === 'COLLECTION') {
         for (const relation of makeInitialDataEntityRelations(EntityId(blockId), spaceId)) {
           storage.relations.set(relation);
         }
       } else {
-        // Map 'QUERY' → SPACES source and 'GEO' → GEO source.
         const sourceKind = source === 'QUERY' ? 'SPACES' : 'GEO';
         storage.relations.set(makeRelationForSourceType(sourceKind, blockId, spaceId));
         storage.relations.set(getRelationForBlockType(blockId, SystemIds.DATA_BLOCK, spaceId));
       }
-      // Data blocks render their entity name as the block header. The in-UI
-      // flow auto-fills "New data" when the user inserts one; we mirror that
-      // by defaulting the title when the assistant omits it, so the published
-      // block never ships with a blank header.
+      // Mirror in-UI default: blocks publish with a blank header if title is omitted.
       const dataTitle = content.title && content.title.trim().length > 0 ? content.title.trim() : 'New data';
       storage.entities.name.set(blockId, spaceId, dataTitle);
       break;
@@ -260,8 +252,6 @@ async function applyCreateBlock(intent: Extract<EditIntent, { kind: 'createBlock
   };
   storage.relations.set(blocksRelation);
 
-  // For data blocks, set the initial view on the block-relation entity.
-  // Default to TABLE when the model doesn't specify one on creation.
   if (content.kind === 'data') {
     const view = content.view ?? 'TABLE';
     const viewId = VIEW_TO_SYSTEM_ID[view];
@@ -329,16 +319,13 @@ async function applyUpdateBlock(intent: Extract<EditIntent, { kind: 'updateBlock
       break;
     }
     case 'data': {
-      // Update only the fields the caller supplied. Re-writing the source
-      // relation when the model passes nothing but a new title would clobber
-      // the existing source (e.g. turn a GEO block into a COLLECTION one) —
-      // so gate it on `content.source !== undefined`.
+      // Gate on source !== undefined: a title-only update would otherwise
+      // clobber the existing source (e.g. GEO → COLLECTION).
       if (content.source !== undefined) {
         const blockEntity = await resolveEntity(blockId, spaceId);
         if (!blockEntity) {
-          // Can't tombstone the old source if we never found it — writing a
-          // new source relation anyway would leave two competing edges on the
-          // block. Bail loudly instead of producing a broken block.
+          // Bail rather than write a new source: without tombstoning the old
+          // edge we'd leave two competing source relations on the block.
           console.error('[chat/edit-dispatcher] updateBlock: block not found', { blockId, spaceId });
           return;
         }
@@ -366,22 +353,16 @@ async function applyUpdateBlock(intent: Extract<EditIntent, { kind: 'updateBlock
 async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock' }>) {
   const { blockId, parentEntityId, spaceId } = intent;
 
-  // Fetch local+remote state for both the block (to drop its values + outgoing
-  // relations) and the parent page (to drop the BLOCKS relation that hangs the
-  // block off the page). Using E.findOne instead of the local store because a
-  // published block isn't in reactiveValues/reactiveRelations until something
-  // else read it in.
+  // E.findOne (not local store) — published blocks aren't in local state
+  // until something reads them in.
   const [blockEntity, parentEntity] = await Promise.all([
     resolveEntity(blockId, spaceId),
     resolveEntity(parentEntityId, spaceId),
   ]);
 
-  // CRITICAL: find the page → block BLOCKS edge *before* touching the block's
-  // contents. If we can't find it (wrong parentEntityId, block not under this
-  // page, or parent entity missing), bail without tombstoning anything.
-  // Otherwise we'd orphan the block — its values and outgoing relations would
-  // be nuked while the parent's BLOCKS edge still points at the (now empty)
-  // block entity, producing a broken stub on the published page.
+  // CRITICAL: find the BLOCKS edge before mutating anything. If it's missing
+  // and we tombstone the block's values anyway, the parent's BLOCKS edge
+  // points at an empty block — a broken stub on the published page.
   const blocksEdge = (parentEntity?.relations ?? []).find(
     relation =>
       relation.fromEntity.id === parentEntityId &&
@@ -412,10 +393,8 @@ async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock
     }
   }
 
-  // The block-relation entity (the entity id on the BLOCKS edge itself) holds
-  // the VIEW_PROPERTY edge and any FILTER value for data blocks. Tombstone its
-  // outgoing edges and values too — otherwise they linger as dead edges
-  // pointing at the now-deleted block.
+  // The block-relation entity holds VIEW_PROPERTY and FILTER for data blocks;
+  // tombstone its edges/values too or they linger pointing at a dead block.
   const blockRelationEntity = await resolveEntity(blocksEdge.entityId, spaceId);
   for (const value of blockRelationEntity?.values ?? []) {
     if (value.spaceId === spaceId && !value.isDeleted) {
@@ -432,10 +411,8 @@ async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock
 }
 
 async function applySetDataBlockFilters(intent: Extract<EditIntent, { kind: 'setDataBlockFilters' }>) {
-  // Resolve the block first so a hallucinated / typo'd blockId doesn't write a
-  // stray FILTER value onto an unrelated entity id. Blocks staged earlier in
-  // the same session resolve via the merged local+remote view, so this is
-  // compatible with setDataBlockFilters called right after createBlock.
+  // Resolve the block first: a hallucinated blockId would otherwise write a
+  // FILTER onto an unrelated entity.
   const block = await resolveEntity(intent.blockId, intent.spaceId);
   if (!block) {
     console.error('[chat/edit-dispatcher] setDataBlockFilters: block not found', {
@@ -456,11 +433,7 @@ async function applySetDataBlockFilters(intent: Extract<EditIntent, { kind: 'set
 }
 
 async function applySetDataBlockView(intent: Extract<EditIntent, { kind: 'setDataBlockView' }>) {
-  // The VIEW_PROPERTY relation hangs off the BLOCKS relation's entity, not the
-  // block itself. Resolve that entity from the parent's merged relations so
-  // this works both for published blocks and for ones staged earlier in the
-  // same session (reactiveRelations picks up the staged BLOCKS edge that live
-  // GraphQL doesn't see yet).
+  // VIEW_PROPERTY hangs off the BLOCKS-relation entity, not the block itself.
   const { blockId, parentEntityId, spaceId, view } = intent;
 
   const parent = await resolveEntity(parentEntityId, spaceId);
@@ -480,9 +453,8 @@ async function applySetDataBlockView(intent: Extract<EditIntent, { kind: 'setDat
 
   const relationEntity = await resolveEntity(blockRelationEntityId, spaceId);
   if (!relationEntity) {
-    // If we can't see the block-relation entity yet we can't tombstone the
-    // current VIEW edge. Writing a new one would leave two conflicting VIEW
-    // relations (renders unpredictably). Bail and log.
+    // Bail rather than write: without tombstoning the current VIEW edge we'd
+    // leave two conflicting VIEW relations.
     console.error('[chat/edit-dispatcher] setDataBlockView: block-relation entity not found — aborting', {
       blockRelationEntityId,
       spaceId,
@@ -545,10 +517,8 @@ function applyCreateEntity(intent: Extract<EditIntent, { kind: 'createEntity' }>
   }
 }
 
-// Finds the new position string relative to a sibling set. The moving relation
-// is excluded by object identity (not position equality) — legacy data can
-// have two siblings sharing the same fractional-index, so filtering on
-// position string alone could drop the wrong relation.
+// Excludes moving relation by object identity, not position — legacy data
+// can have two siblings sharing the same fractional-index.
 function computeRelativePosition<T extends { position?: string | null }>(
   siblings: T[],
   moving: T,
@@ -602,8 +572,8 @@ async function applyMoveBlock(intent: Extract<EditIntent, { kind: 'moveBlock' }>
     return;
   }
 
-  // Upsert by the same relation.id so block-relation entity id (and the
-  // VIEW_PROPERTY / filter relations hanging off it) survive the move.
+  // Upsert by relation.id so block-relation entity id (and VIEW_PROPERTY /
+  // filter relations hanging off it) survive the move.
   storage.relations.set({ ...moving, position: newPosition });
 }
 
@@ -668,19 +638,9 @@ export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<vo
   }
 }
 
-/**
- * Watches assistant messages for edit-tool outputs and applies each intent
- * exactly once. Dedupes by toolCallId so re-renders don't re-apply.
- *
- * Intents are applied *sequentially* through a shared promise chain —
- * concurrent apply() would let a follow-up like setDataBlockView resolve its
- * E.findOne before the preceding createBlock had staged its BLOCKS relation,
- * leaving the view silently unset.
- *
- * On unmount the chain short-circuits: any queued intent that hasn't started
- * yet is dropped instead of mutating the store after the widget closes / the
- * user starts a new chat.
- */
+// Applies edit intents exactly once (deduped by toolCallId). Sequential
+// promise chain ensures createBlock completes before follow-ups like
+// setDataBlockView resolve.
 export function useEditDispatcher(messages: UIMessage[]) {
   const { setEditable } = useEditable();
   const setEditorContentVersion = useSetAtom(editorContentVersionAtom);
@@ -689,10 +649,8 @@ export function useEditDispatcher(messages: UIMessage[]) {
   const cancelledRef = React.useRef(false);
 
   React.useEffect(() => {
-    // A previous unmount may have set this true; reset on (re)mount so a
-    // remount under StrictMode (or a New Chat that keeps the widget mounted)
-    // resumes processing. The Set ref already guards against re-applying any
-    // already-dispatched toolCallId.
+    // Reset on remount so StrictMode double-mount or a kept-mounted New Chat
+    // resumes processing. The dispatchedRef Set guards against double-apply.
     cancelledRef.current = false;
     return () => {
       cancelledRef.current = true;
@@ -722,9 +680,8 @@ export function useEditDispatcher(messages: UIMessage[]) {
           })
           .then(() => {
             if (cancelledRef.current) return;
-            // In edit mode Tiptap ignores store changes — bump the version atom
-            // so it recreates with the current editorJson and reflects any
-            // blocks the assistant added / removed / retyped.
+            // In edit mode Tiptap ignores store changes; bump the version
+            // atom so it recreates from the current editorJson.
             if (EDITOR_REFRESHING_INTENTS.has(intent.kind)) {
               bumpEditorVersion();
             }

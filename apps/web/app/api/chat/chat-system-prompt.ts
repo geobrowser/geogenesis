@@ -15,21 +15,23 @@ export function renderCurrentContextSection(
 ): string | null {
   if (!context && !serverPersonalSpaceId) return null;
   const lines: string[] = [];
-  if (context?.currentPath) {
-    // Strip query/hash — the model doesn't need search state, and keeping the
-    // prefix stable helps the cached system prompt reuse across turns.
-    const pathname = context.currentPath.split(/[?#]/, 1)[0];
-    lines.push(`- Current page: \`${pathname}\``);
+  if (context) {
+    if (context.currentPath) {
+      // Strip query/hash — the model doesn't need search state, and keeping the
+      // prefix stable helps the cached system prompt reuse across turns.
+      const pathname = context.currentPath.split(/[?#]/, 1)[0];
+      lines.push(`- Current page: \`${pathname}\``);
+    }
+    if (context.currentSpaceId) {
+      lines.push(`- Current space id: \`${context.currentSpaceId}\``);
+    } else {
+      lines.push('- Current space: (none — the user is not inside a space page)');
+    }
+    if (context.currentEntityId) {
+      lines.push(`- Current entity id: \`${context.currentEntityId}\``);
+    }
+    lines.push(`- Edit mode: ${context.isEditMode ? 'on' : 'off'}`);
   }
-  if (context?.currentSpaceId) {
-    lines.push(`- Current space id: \`${context.currentSpaceId}\``);
-  } else {
-    lines.push('- Current space: (none — the user is not inside a space page)');
-  }
-  if (context?.currentEntityId) {
-    lines.push(`- Current entity id: \`${context.currentEntityId}\``);
-  }
-  lines.push(`- Edit mode: ${context?.isEditMode ? 'on' : 'off'}`);
   if (serverPersonalSpaceId) {
     lines.push(
       `- Personal space id: \`${serverPersonalSpaceId}\` (use with \`navigate({ target: 'personalSpace' })\`)`

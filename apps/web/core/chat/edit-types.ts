@@ -1,6 +1,4 @@
-// Edit-mode tool shapes shared between the API route (producer) and the chat
-// widget (consumer). Types only — no runtime code — so importing across the
-// client/server boundary is safe.
+// Types only — safe to import across client/server boundary.
 import type { Filter, FilterMode } from '~/core/blocks/data/filters';
 import type { DataType } from '~/core/types';
 
@@ -99,28 +97,22 @@ export type EditIntent =
   | {
       kind: 'setDataBlockView';
       blockId: string;
-      // The page or tab that holds the block. The dispatcher reads this entity's
-      // merged (local + remote) BLOCKS relations to find the block-relation
-      // entity — the one that actually carries the VIEW_PROPERTY edge. Doing
-      // the lookup on the client lets view changes work on freshly-staged
-      // blocks whose BLOCKS relation isn't in the live graph yet.
+      // The block's parent page. Dispatcher uses this to find the
+      // BLOCKS-relation entity that carries the VIEW_PROPERTY edge.
       parentEntityId: string;
       spaceId: string;
       view: DataBlockView;
     }
   | {
       kind: 'createEntity';
-      entityId: string; // server-minted new entity id
+      entityId: string;
       spaceId: string;
       name: string;
       description?: string;
       typeIds?: string[];
     }
-  // Reorder primitives: share `RelativePosition` so the client dispatcher can
-  // handle blocks and arbitrary relations with the same position-computation
-  // helper. The dispatcher updates the existing relation's `position` field
-  // upserting by relation id, so block-relation entity ids (and the VIEW /
-  // filter relations hanging off them) are preserved.
+  // Reorder primitives: both use RelativePosition so the dispatcher's
+  // position-computation helper covers both.
   | {
       kind: 'moveBlock';
       blockId: string;
@@ -154,7 +146,6 @@ export type EditToolFailure = {
     | 'rate_limited'
     | 'lookup_failed'
     | 'already_exists';
-  // Optional context fields populated by individual tools.
   spaceId?: string;
   entityId?: string;
   propertyId?: string;
@@ -189,8 +180,7 @@ export const EDIT_TOOL_NAMES = [
   'removeCollectionItem',
 ] as const;
 
-// The AI SDK prefixes tool-part types with 'tool-'. The dispatcher uses this
-// set to decide whether a part represents a write tool worth applying.
+// The AI SDK prefixes part types with 'tool-'.
 const EDIT_TOOL_PART_TYPES = new Set(EDIT_TOOL_NAMES.map(name => `tool-${name}`));
 
 export function isEditToolPartType(type: string): boolean {

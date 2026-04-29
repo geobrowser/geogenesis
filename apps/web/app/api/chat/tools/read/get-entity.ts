@@ -28,19 +28,16 @@ type GetEntityInput = {
 // just pass kind: 'text' with fenced markdown.
 type BlockKind = 'text' | 'image' | 'video' | 'data' | 'unknown';
 
-// Schema is the model's primary tool for "what fields can I fill on this
-// entity" — capping at MAX_RESULT_ENTRIES (10) was starving rich types
-// (Person with 12 properties → only 6 type-specific slots returned). Use a
-// dedicated, larger cap so the assistant sees the full shape before deciding
-// to create a duplicate property.
+// Larger cap than MAX_RESULT_ENTRIES: schemas on rich types easily exceed 10
+// slots and the assistant needs the full shape before creating duplicate
+// properties.
 const MAX_SCHEMA_ENTRIES = 30;
 
 type BlockEntry = {
   id: string;
   kind: BlockKind;
   // For data blocks, the entity id of the BLOCKS relation itself — the VIEW
-  // relation hangs off this, not the block entity. Populated for all block
-  // kinds but primarily useful for data blocks.
+  // relation hangs off this, not the block entity.
   blockRelationEntityId: string;
 };
 
@@ -53,7 +50,6 @@ type SchemaEntry = {
   propertyId: string;
   propertyName: string | null;
   dataType: string;
-  // True if the entity already has a value or relation set for this property.
   filled: boolean;
 };
 
@@ -69,8 +65,6 @@ type GetEntityOutput =
       relations: Array<{ typeName: string | null; toEntityId: string; toEntityName: string | null }>;
       blocks: BlockEntry[];
       tabs: TabEntry[];
-      // Suggested properties from the entity's types — the same fillable
-      // slots the page UI shows. Empty if schema lookup fails.
       schema: SchemaEntry[];
     }
   | { error: 'not_found' | 'invalid_id' | 'lookup_failed' };
@@ -129,11 +123,7 @@ async function fetchTypeEntitiesWithRelations(spaceByType: Map<string, string | 
   return entities;
 }
 
-// Mirrors getSchemaFromTypeIds from ~/core/database/entities. For each type
-// the entity declares, fetches the type entity, filters its PROPERTIES
-// relations to that type's space, then batch-fetches the property defs.
-// Always prepends DEFAULT_SCHEMA so name / description / types / cover show
-// up even when the entity has no types.
+// Mirrors getSchemaFromTypeIds from ~/core/database/entities.
 async function fetchEntitySchema(entityRelations: Relation[], filledPropertyIds: Set<string>): Promise<SchemaEntry[]> {
   try {
     // toSpaceId is the type entity's native space — that's where its
@@ -247,10 +237,8 @@ export const getEntityTool = tool({
         dataType: value.property?.dataType ?? 'TEXT',
       }));
 
-      // Split content blocks (BLOCKS) and tab pointers (TABS_PROPERTY) out of
-      // the general relations list so the model can enumerate them without us
-      // blowing the 10-entry cap on pages that also have many type / property
-      // relations. Order is preserved.
+      // Exclude BLOCKS and TABS from the capped general relations list so
+      // they're always fully enumerated.
       const blockRelations = entity.relations.filter(r => r.type.id === SystemIds.BLOCKS);
       const tabRelations = entity.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY);
       const otherRelations = entity.relations.filter(

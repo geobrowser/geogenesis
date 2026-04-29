@@ -6,24 +6,17 @@ import { ENTITY_ID_REGEX } from '~/core/chat/limits';
 import type { NavigateInput, NavigateOutput } from '~/core/chat/nav-types';
 import { getSpace } from '~/core/io/queries';
 
-// Case-insensitive to match `ENTITY_ID_REGEX` — JSON Schema patterns have no
-// `i` flag, so we spell the case range out so uppercase ids the model emits
-// don't get rejected at schema validation before runtime ever sees them.
+// JSON Schema patterns have no `i` flag, so spell the case range out — model
+// can emit uppercase hex and we don't want pre-runtime schema rejection.
 const ENTITY_ID_PATTERN =
   '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$';
 
 export type NavigateToolContext = {
-  // Async because we resolve personal space from the wallet's membership graph
-  // server-side rather than trusting whatever id the client sent — otherwise
-  // a forged ChatClientContext could direct the user to any space when target
-  // is 'personalSpace'.
+  // Resolved server-side from membership so a forged client context can't
+  // redirect personalSpace.
   resolvePersonalSpaceId: () => Promise<string | null>;
 };
 
-// Factory rather than a bare tool: the personalSpace target is only valid
-// when the signed-in user has a personal space, so we resolve from the
-// member's actual graph state and return `{ ok: false, error: 'no_personal_space' }`
-// when none exists, instead of silently succeeding and letting the client no-op.
 export function buildNavigateTool(context: NavigateToolContext) {
   return tool({
     description:
@@ -51,9 +44,8 @@ export function buildNavigateTool(context: NavigateToolContext) {
       required: ['target'],
       additionalProperties: false,
     }),
-    // The client performs the actual router.push only after seeing ok: true in
-    // the output, so this validation is the gate that prevents a hallucinated
-    // or topic-entity id from being used as a space id.
+    // router.push only fires client-side on ok: true, so this validation
+    // gates hallucinated ids.
     execute: async (input: NavigateInput): Promise<NavigateOutput> => {
       if ((input.target === 'space' || input.target === 'entity') && !isValidId(input.spaceId)) {
         return { ok: false, error: 'invalid_input', target: input.target };

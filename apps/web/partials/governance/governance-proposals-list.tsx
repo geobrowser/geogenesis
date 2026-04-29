@@ -56,7 +56,9 @@ const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDI
 /** Finds the membership action in a proposal's action list. The REST schema does
  *  not guarantee action order, so a lookup by index 0 can miss multi-action
  *  proposals where the membership action is not first. */
-function findMembershipAction(actions: ApiProposalListItem['actions']): ApiProposalListItem['actions'][number] | undefined {
+function findMembershipAction(
+  actions: ApiProposalListItem['actions']
+): ApiProposalListItem['actions'][number] | undefined {
   return actions.find(a => MEMBERSHIP_ACTION_TYPES.has(a.actionType));
 }
 
@@ -150,68 +152,61 @@ export async function GovernanceProposalsList({
           const baseOrder = BUCKET_BASE_ORDER[p.bucket] + bucketPositions[p.bucket]++;
 
           return (
-            <ProposalListItem
-              key={p.id}
-              proposalId={p.id}
-              baseOrder={baseOrder}
-              canSink={p.bucket !== 'completed'}
-            >
-            <Link
-              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-              className="flex w-full flex-col gap-3 py-4"
-            >
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
-                  {showReopenMenu ? (
-                    <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
-                  <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                    <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
+            <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
+              <Link
+                href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+                className="flex w-full flex-col gap-3 py-4"
+              >
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
+                    {showReopenMenu ? <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} /> : null}
                   </div>
-                  <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
-                  {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
-                    <>
-                      <span aria-hidden className="shrink-0 select-none">
-                        ·
-                      </span>
-                      <span className="shrink-0">{formatGovernanceOutcomeDate(p.endTime)}</span>
-                      <span aria-hidden className="shrink-0 select-none">
-                        ·
-                      </span>
-                      <time
-                        className="shrink-0 tabular-nums"
-                        dateTime={new Date(p.endTime * 1000).toISOString()}
-                      >
-                        {formatGovernanceOutcomeTime(p.endTime)}
-                      </time>
-                    </>
-                  )}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
+                    <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                      <Avatar
+                        avatarUrl={displayProfile.avatarUrl}
+                        value={displayProfile.address ?? displayProfile.id}
+                      />
+                    </div>
+                    <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                    {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
+                      <>
+                        <span aria-hidden className="shrink-0 select-none">
+                          ·
+                        </span>
+                        <span className="shrink-0">{formatGovernanceOutcomeDate(p.endTime)}</span>
+                        <span aria-hidden className="shrink-0 select-none">
+                          ·
+                        </span>
+                        <time className="shrink-0 tabular-nums" dateTime={new Date(p.endTime * 1000).toISOString()}>
+                          {formatGovernanceOutcomeTime(p.endTime)}
+                        </time>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="inline-flex min-w-0 flex-3 items-center gap-8">
-                  <GovernanceProposalVoteState
-                    variant="space"
-                    yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
-                    noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
-                    userVote={p.userVote}
-                    user={
-                      profile || connectedAddress
-                        ? {
-                            address: connectedAddress,
-                            avatarUrl: profile?.avatarUrl ?? null,
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex min-w-0 flex-3 items-center gap-8">
+                    <GovernanceProposalVoteState
+                      variant="space"
+                      yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
+                      noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
+                      userVote={p.userVote}
+                      user={
+                        profile || connectedAddress
+                          ? {
+                              address: connectedAddress,
+                              avatarUrl: profile?.avatarUrl ?? null,
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
 
-                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
-              </div>
-            </Link>
+                  <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
+                </div>
+              </Link>
             </ProposalListItem>
           );
         })}

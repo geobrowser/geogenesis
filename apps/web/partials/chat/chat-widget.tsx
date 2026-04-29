@@ -75,10 +75,8 @@ export function ChatWidget() {
   const currentEntityId =
     routeEntityId ?? (spaceHomeEntityId && ENTITY_ID_REGEX.test(spaceHomeEntityId) ? spaceHomeEntityId : null);
 
-  // Keep the latest context in a ref so the transport body callback never
-  // closes over stale values, but the transport instance stays stable.
-  // The server resolves the personal-space id from the wallet's membership
-  // graph; we deliberately don't send it in the body.
+  // Ref keeps context current without re-creating the transport instance on
+  // every render.
   const contextRef = React.useRef({
     currentSpaceId,
     currentEntityId,
@@ -124,11 +122,8 @@ export function ChatWidget() {
     }
   }, [messages, router]);
 
-  // Open the Review edits panel when the assistant fires openReviewPanel.
-  // Same dedup-by-toolCallId shape as the navigate effect so re-renders don't
-  // re-open the panel after the user dismisses it. bumpReviewVersion forces
-  // the panel to recompute its diff list from current staged state, matching
-  // what the Review-edits flow bar does on click.
+  // Dedup by toolCallId so re-renders don't re-open after user dismisses.
+  // bumpReviewVersion recomputes the diff from current staged state.
   const openedReviewPanelToolCallIds = React.useRef(new Set<string>());
   React.useEffect(() => {
     for (const message of messages) {
@@ -147,16 +142,11 @@ export function ChatWidget() {
     }
   }, [messages, setIsReviewOpen, bumpReviewVersion]);
 
-  // Apply edit-tool outputs (setValue, createBlock, etc.) to local storage
-  // once each, in the order they arrive. Mirrors the navigate effect above.
   useEditDispatcher(messages);
 
   const isBusy = status === 'submitted' || status === 'streaming';
 
-  // The conversation is "full" either when the local history is large enough
-  // that the next request would be at risk of tripping the server's 413, or
-  // when the server actually returned a history-full 413 on the last request.
-  // Memoized on `messages` so we only stringify when the transcript changes.
+  // "Full" = locally over the threshold OR server returned a 413 history-full error.
   const isFull = React.useMemo(() => isHistoryFull(messages) || isHistoryFullError(error), [messages, error]);
 
   const handleNewChat = () => {

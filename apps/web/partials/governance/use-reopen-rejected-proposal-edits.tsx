@@ -5,9 +5,9 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 
 import { useToast } from '~/core/hooks/use-toast';
-import type { EntityDiff } from '~/core/utils/diff/types';
 import { useDiff } from '~/core/state/diff-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { EntityDiff } from '~/core/utils/diff/types';
 import { applyEntityDiffsToLocalStore } from '~/core/utils/reopen-rejected-proposal/apply-entity-diffs-to-local-store';
 
 import { governanceReopenEditLoadingAtom } from './governance-reopen-edit-loading-bar';
