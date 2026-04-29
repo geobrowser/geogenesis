@@ -101,17 +101,17 @@ export function buildBounty(
 
   const budget = parseNumber(
     findValueById(entityValues, BOUNTY_BUDGET_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_BUDGET_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_BUDGET_PROPERTY_ID)
   );
 
   const maxContributors = parseNumber(
     findValueById(entityValues, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_MAX_CONTRIBUTORS_PROPERTY_ID)
   );
 
   const submissionsPerPerson = parseNumber(
     findValueById(entityValues, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID) ??
-      findRelationValueById(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID)
+      findFirstRelationName(entityRelations, BOUNTY_SUBMISSIONS_PER_PERSON_PROPERTY_ID)
   );
 
   const submissionsCount = submissionCounts.get(entityId) ?? 0;
@@ -127,7 +127,7 @@ export function buildBounty(
 
   const deadline =
     findValueById(entityValues, BOUNTY_DEADLINE_PROPERTY_ID) ??
-    findRelationValueById(entityRelations, BOUNTY_DEADLINE_PROPERTY_ID) ??
+    findFirstRelationName(entityRelations, BOUNTY_DEADLINE_PROPERTY_ID) ??
     null;
 
   return {
@@ -173,11 +173,6 @@ export function hasBountyTaskStatusDoneRelation(relations: StoreRelation[]): boo
 function findValueById(values: StoreValue[], propertyId: string): string | null {
   const match = values.find(value => value.property.id === propertyId);
   return match?.value ?? null;
-}
-
-function findRelationValueById(relations: StoreRelation[], propertyId: string): string | null {
-  const match = relations.find(relation => relation.type.id === propertyId);
-  return match?.toEntity.name ?? null;
 }
 
 function findFirstRelationName(relations: StoreRelation[], propertyId: string): string | null {
