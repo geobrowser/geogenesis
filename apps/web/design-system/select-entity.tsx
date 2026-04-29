@@ -293,26 +293,37 @@ export const SelectEntity = ({
     gap: 12,
   });
 
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const target = event.target as Node | null;
+  // Close the popover only when the interaction is genuinely outside this
+  // popover and any nested Radix portals (renderable-type dropdown, etc.).
+  // The previous global mousedown handler treated clicks inside child portals
+  // as "outside" and closed the popover — preventing flows like picking a
+  // renderable type before submitting "Create new".
+  const dismissOnOutside = React.useCallback(
+    (event: Event) => {
+      const target = event.target as Element | null;
       const container = containerRef.current;
       const popover = popoverRef.current;
-      if (target && container && container.contains(target)) return;
-      if (target && popover && popover.contains(target)) return;
+      if (container && target && container.contains(target)) return;
+      if (popover && target && popover.contains(target)) return;
+      // Treat clicks inside any Radix popper portal as inside — covers nested
+      // dropdowns/popovers launched from within the popover footer.
+      if (target?.closest?.('[data-radix-popper-content-wrapper]')) return;
       onQueryChange('');
       setSelectedIndex(0);
       setResult(null);
-    };
+    },
+    [onQueryChange]
+  );
 
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('touchstart', handler);
+  useEffect(() => {
+    document.addEventListener('mousedown', dismissOnOutside);
+    document.addEventListener('touchstart', dismissOnOutside);
 
     return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('touchstart', handler);
+      document.removeEventListener('mousedown', dismissOnOutside);
+      document.removeEventListener('touchstart', dismissOnOutside);
     };
-  }, [onQueryChange]);
+  }, [dismissOnOutside]);
 
   const isQueried = query.length > 0;
   // Use Radix's rendered `data-side` (mirrored into actualSide) so the corner flip

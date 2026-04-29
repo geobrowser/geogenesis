@@ -146,7 +146,9 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
                     onChange?.(option.value);
                   }}
                   className={cx(
-                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-divider focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    // Match sidebar idle/hover/active treatment so selection state
+                    // is distinguishable from cursor hover.
+                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-grey-01 focus:outline-hidden data-highlighted:bg-grey-01 aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
                     selectedValue === option.value && 'bg-divider!'
                   )}
                 >
