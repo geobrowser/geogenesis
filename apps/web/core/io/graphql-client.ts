@@ -329,20 +329,17 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
   decoder,
   variables,
   signal,
-  endpointOverride,
 }: {
   query: TDocument;
   decoder: (data: QueryResult<TDocument>) => Decoded;
   variables?: QueryVariables<TDocument>;
   signal?: AbortController['signal'];
-  endpointOverride?: string;
 }) {
   return Effect.gen(function* () {
     const clientRequestId = createClientRequestId();
     const operationName = getOperationName(query);
-    const endpoint = endpointOverride ?? getConfig().api;
 
-    const client = new GraphQLClient(endpoint, {
+    const client = new GraphQLClient(getConfig().api, {
       signal,
       headers: {
         'x-request-id': clientRequestId,
@@ -401,7 +398,7 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
             errorDetails.request = {
               operationName,
               variableKeys: variables ? Object.keys(variables as Record<string, unknown>) : [],
-              url: endpoint,
+              url: getConfig().api,
               clientRequestId,
             };
           }

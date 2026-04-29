@@ -21,11 +21,11 @@ const CARD_RELATION_TYPE_IDS = [SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROP
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');
 const relationTypeIdList = CARD_RELATION_TYPE_IDS.map(id => `"${id}"`).join(', ');
 
-// TEMP(explore-top-sort): uses `entitiesOrderedByScoreConnection`, only available
-// on the staging API right now. Selection set mirrors ExploreEntitiesConnection so
-// the existing decoder and feed cards render unchanged.
-const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
-  fragment ExploreByScorePropertyFragment on PropertyInfo {
+// Mirrors `ExploreEntitiesConnection`'s selection set so the shared decoder/cards
+// can render results from `entitiesOrderedByPropertyConnection` unchanged. Used
+// by the "Top" sort, where `propertyId` is the integer score property.
+const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
+  fragment ExploreByPropertyFragment on PropertyInfo {
     id
     name
     dataTypeId
@@ -36,19 +36,21 @@ const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
     isType
   }
 
-  query ExploreEntitiesByScoreConnection(
-    $limit: Int
+  query ExploreEntitiesByPropertyConnection(
+    $first: Int
     $after: Cursor
     $filter: EntityFilter
-    $scoreType: ScoreType!
+    $propertyId: UUID!
+    $dataType: String!
     $sortDirection: SortDirection!
     $spaceIdsForLists: [UUID!]!
   ) {
-    entitiesOrderedByScoreConnection(
-      first: $limit
+    entitiesOrderedByPropertyConnection(
+      first: $first
       after: $after
       filter: $filter
-      scoreType: $scoreType
+      propertyId: $propertyId
+      dataType: $dataType
       sortDirection: $sortDirection
     ) {
       pageInfo {
@@ -77,7 +79,7 @@ const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
         }) {
           spaceId
           property {
-            ...ExploreByScorePropertyFragment
+            ...ExploreByPropertyFragment
           }
           text
           integer
@@ -131,6 +133,6 @@ const EXPLORE_ENTITIES_BY_SCORE_SOURCE = /* GraphQL */ `
   }
 `;
 
-export const exploreEntitiesByScoreConnectionDocument = parse(
-  EXPLORE_ENTITIES_BY_SCORE_SOURCE
+export const exploreEntitiesByPropertyConnectionDocument = parse(
+  EXPLORE_ENTITIES_BY_PROPERTY_SOURCE
 ) as TypedDocumentNode<any, any>;

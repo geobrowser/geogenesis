@@ -16,9 +16,9 @@ import {
   EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
-  SCORE_API_STAGING_URL_TEMP,
+  SCORE_SYSTEM_PROPERTY,
 } from './explore-constants';
-import { exploreEntitiesByScoreConnectionDocument } from './explore-entities-by-score-document';
+import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
@@ -172,10 +172,10 @@ function decodeExploreEntities(data: { entitiesConnection?: EntitiesConnectionSh
   return decodeConnection(data.entitiesConnection ?? null);
 }
 
-function decodeExploreEntitiesByScore(data: {
-  entitiesOrderedByScoreConnection?: EntitiesConnectionShape;
+function decodeExploreEntitiesByProperty(data: {
+  entitiesOrderedByPropertyConnection?: EntitiesConnectionShape;
 }): ExploreEntitiesPageResponse {
-  return decodeConnection(data.entitiesOrderedByScoreConnection ?? null);
+  return decodeConnection(data.entitiesOrderedByPropertyConnection ?? null);
 }
 
 function buildFeedFilter(args: {
@@ -217,9 +217,8 @@ async function fetchExploreEntitiesPage(args: {
   );
 }
 
-// TEMP(explore-top-sort): hits the staging API via endpointOverride. When the
-// field lands on the production testnet endpoint, drop the override and this
-// function can be folded back into the main fetcher with a different document.
+// "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
+// The endpoint takes `spaceIds` only inside `filter` (no top-level arg, unlike `entitiesConnection`).
 async function fetchTopEntitiesPage(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -230,16 +229,14 @@ async function fetchTopEntitiesPage(args: {
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
-      query: exploreEntitiesByScoreConnectionDocument,
-      decoder: decodeExploreEntitiesByScore,
-      endpointOverride: SCORE_API_STAGING_URL_TEMP,
+      query: exploreEntitiesByPropertyConnectionDocument,
+      decoder: decodeExploreEntitiesByProperty,
       variables: {
-        limit: args.limit,
+        first: args.limit,
         after: args.after,
-        // `entitiesOrderedByScoreConnection` has no top-level `spaceIds` arg — it
-        // must be nested inside `filter` (unlike the regular `entitiesConnection`).
         filter: { ...buildFeedFilter(args), spaceIds: { in: args.spaceIds } as UuidFilter },
-        scoreType: 'RAW',
+        propertyId: SCORE_SYSTEM_PROPERTY,
+        dataType: 'integer',
         sortDirection: 'DESC',
         spaceIdsForLists: args.spaceIds,
       },
