@@ -41,8 +41,12 @@ const shellStyles = cva(
   },
 });
 
+// 200px capped scrolling at ~5 items, so an 8-item menu had ~120px of scroll range.
+// That tiny range made each wheel tick feel like a big jump even when the underlying
+// scroll was smooth. Default to a height that fits ~10 items, capped at 75vh on small
+// screens. Callers that want a smaller scroll well can still pass `viewportClassName`.
 const defaultScrollViewportClass =
-  'w-full max-h-[200px] min-h-0 min-w-0 overflow-y-auto overscroll-contain bg-white [background-clip:padding-box]';
+  'w-full max-h-[min(400px,75vh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain bg-white [background-clip:padding-box]';
 
 export function Menu({
   children,
