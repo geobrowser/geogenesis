@@ -76,14 +76,14 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
       {Object.entries(renderedProperties)
         .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
         .map(([propertyId, property]) => {
-        const isRelation = property.dataType === 'RELATION';
+          const isRelation = property.dataType === 'RELATION';
 
-        if (isRelation) {
-          return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
-        }
+          if (isRelation) {
+            return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+          }
 
-        return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
-      })}
+          return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+        })}
     </div>
   );
 }
@@ -131,7 +131,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
       {nonEmptyValues.map((t, index) => {
         // hide name property, it is already rendered in the header
         // @TODO: filter ahead of time rather than returning null here
-        if (propertyId === SystemIds.NAME_PROPERTY || propertyId === SCORE_SYSTEM_PROPERTY) {
+        if (propertyId === SystemIds.NAME_PROPERTY) {
           return null;
         }
         return (
