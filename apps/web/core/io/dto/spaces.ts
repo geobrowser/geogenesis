@@ -16,6 +16,8 @@ export type Space = {
   // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
   members: string[];
+  totalMembers: number;
+  totalEditors: number;
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
@@ -30,6 +32,8 @@ export function SpaceDto(space: RemoteSpace): Space {
     topicId: space.topicId ?? null,
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
+    totalMembers: space.members.totalCount,
+    totalEditors: space.editors.totalCount,
   };
 }
 

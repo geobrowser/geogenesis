@@ -481,6 +481,16 @@ export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const relationsByFromEntityIdQuery = graphql(/* GraphQL */ `
+  query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID!) {
+    relations(
+      filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }
+    ) {
+      ...FullRelation
+    }
+  }
+`);
+
 export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
@@ -713,8 +723,16 @@ export const spaceFragment = graphql(/* GraphQL */ `
       ...FullEntity
     }
 
+    members {
+      totalCount
+    }
+
     membersList {
       memberSpaceId
+    }
+
+    editors {
+      totalCount
     }
 
     editorsList {

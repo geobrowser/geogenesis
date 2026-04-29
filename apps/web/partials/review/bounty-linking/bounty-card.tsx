@@ -4,13 +4,13 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { BOUNTY_EST_PAYOUT_RATIO, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Gem } from '~/design-system/icons/gem';
 
-import type { Bounty, BountyDifficulty, BountyStatus } from './types';
+import type { Bounty } from './types';
 
 interface BountyCardProps {
   bounty: Bounty;
@@ -27,14 +27,13 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
       year: 'numeric',
     });
 
+  const estPayout = bounty.budget != null ? Math.round(bounty.budget * BOUNTY_EST_PAYOUT_RATIO) : null;
+
   const hasDetails =
-    bounty.budget != null ||
-    bounty.maxContributors != null ||
-    bounty.submissionsPerPerson != null ||
-    bounty.submissionsCount != null ||
-    bounty.userSubmissionsCount != null ||
+    estPayout != null ||
     bounty.difficulty ||
     bounty.status ||
+    bounty.userSubmissionsCount != null ||
     formattedDeadline;
 
   const handleOpenBounty = () => {
@@ -45,38 +44,45 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
 
   return (
     <div className="py-4">
-      {/* Checkbox row */}
-      <label className="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" checked={isSelected} onChange={() => onToggle(bounty.id)} className="sr-only" />
-        <div
-          className={cx(
-            'flex h-4 w-4 items-center justify-center rounded border transition-all',
-            isSelected ? 'border-text bg-text' : 'border-grey-03 bg-white'
-          )}
-        >
-          {isSelected && (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </div>
-        {isSelected && <span className="text-metadata font-medium text-text">Linked</span>}
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        {(bounty.spaceLabel ?? bounty.spaceId) ? (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm">
+              <ThumbGeoImage
+                value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </span>
+            <span className="min-w-0 truncate text-[14px] leading-snug text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
+          </div>
+        ) : (
+          <span />
+        )}
+        <label className="flex shrink-0 cursor-pointer items-center">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggle(bounty.id)}
+            className="sr-only"
+            aria-label={isSelected ? `Unlink ${bounty.name}` : `Link ${bounty.name}`}
+          />
+          <div
+            className={cx(
+              'flex h-4 w-4 items-center justify-center rounded border transition-all',
+              isSelected ? 'border-text bg-text' : 'border-grey-03 bg-white'
+            )}
+            aria-hidden
+          >
+            {isSelected && (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        </label>
+      </div>
 
-      {(bounty.spaceLabel ?? bounty.spaceId) && (
-        <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          <span className="relative inline-flex size-[14px] shrink-0 items-center justify-center overflow-hidden rounded-sm border border-grey-03 bg-grey-01">
-            <ThumbGeoImage
-              value={bounty.spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          </span>
-          <span className="min-w-0 truncate text-[14px] leading-snug text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
-        </div>
-      )}
-
-      {/* Title */}
       <button
         type="button"
         onClick={handleOpenBounty}
@@ -85,53 +91,40 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
         {bounty.name}
       </button>
 
-      {/* Description */}
-      {bounty.description ? (
+      {bounty.description && (
         <p className="mt-2 line-clamp-3 text-[14px] leading-snug text-grey-04">{bounty.description}</p>
-      ) : (
-        <p className="mt-2 text-[14px] leading-snug text-grey-03 italic">No description</p>
       )}
 
-      {/* Details table */}
       {hasDetails && (
         <div className="mt-3 flex flex-col gap-0">
-          {bounty.budget != null && (
-            <DetailRow label="Bounty budget">
+          {estPayout != null && (
+            <DetailRow label="Est. payout">
               <span className="inline-flex items-center gap-1">
                 <span className="text-purple">
                   <Gem color="purple" />
                 </span>
-                <span className="text-[14px] text-text">{bounty.budget.toLocaleString('en-US')}</span>
-              </span>
-            </DetailRow>
-          )}
-          {bounty.maxContributors != null && (
-            <DetailRow label="Submissions">
-              <span className="text-[14px] text-text">
-                {(bounty.submissionsCount ?? 0).toLocaleString('en-US')} /{' '}
-                {bounty.maxContributors.toLocaleString('en-US')}
-              </span>
-            </DetailRow>
-          )}
-
-          {bounty.submissionsPerPerson != null && (
-            <DetailRow label="Your submissions">
-              <span className="text-[14px] text-text">
-                {(bounty.userSubmissionsCount ?? 0).toLocaleString('en-US')} /{' '}
-                {bounty.submissionsPerPerson.toLocaleString('en-US')}
+                <span className="text-[14px] text-text">{estPayout.toLocaleString('en-US')}</span>
               </span>
             </DetailRow>
           )}
 
           {bounty.difficulty && (
             <DetailRow label="Difficulty">
-              <span className="text-[14px] text-text">{formatDifficulty(bounty.difficulty)}</span>
+              <span className="text-[14px] text-text">{bounty.difficulty}</span>
             </DetailRow>
           )}
 
           {bounty.status && (
             <DetailRow label="Status">
-              <span className="text-[14px] text-text">{formatStatus(bounty.status)}</span>
+              <span className="text-[14px] text-text">{bounty.status}</span>
+            </DetailRow>
+          )}
+
+          {bounty.userSubmissionsCount != null && (
+            <DetailRow label="Your submissions">
+              <span className="text-[14px] text-text">
+                {bounty.userSubmissionsCount.toLocaleString('en-US')}
+              </span>
             </DetailRow>
           )}
 
@@ -153,26 +146,4 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
       {children}
     </div>
   );
-}
-
-function formatDifficulty(difficulty: BountyDifficulty): string {
-  const map: Record<BountyDifficulty, string> = {
-    LOW: 'Low',
-    MEDIUM: 'Medium',
-    HARD: 'Hard',
-    EXPERT: 'Expert',
-  };
-  return map[difficulty];
-}
-
-function formatStatus(status: BountyStatus): string {
-  const map: Record<BountyStatus, string> = {
-    OPEN: 'Open',
-    ALLOCATED: 'Allocated',
-    SELF_ASSIGNED: 'Self-assigned',
-    IN_PROGRESS: 'In progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-  };
-  return map[status];
 }

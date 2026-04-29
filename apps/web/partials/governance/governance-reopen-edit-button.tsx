@@ -17,6 +17,7 @@ export function GovernanceReopenEditButton({ proposalId, spaceId }: Props) {
   return (
     <Button
       variant="secondary"
+      small
       disabled={busy}
       onClick={() => void reopenEdit()}
       className="shrink-0"

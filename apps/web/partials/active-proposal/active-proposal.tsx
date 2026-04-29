@@ -15,13 +15,16 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { Close } from '~/design-system/icons/close';
-import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
+import {
+  ProposalBountiesProvider,
+  ProposalBountyHeadButton,
+  ProposalBountyPanel,
+} from './proposal-bounty-links';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
-import { ShowVoters } from './active-proposal-show-voters';
+import { ProposalVoteRow } from './proposal-vote-row';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { CloseProposalButton } from './close-proposal-button';
 import { ContentProposal } from './content-proposal';
@@ -69,117 +72,129 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const proposalTitle =
     proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
 
-  return (
+  const isAddEdit = proposal.type === 'ADD_EDIT';
+
+  const body = (
     <>
-      <div className="sticky top-0 z-50 flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 text-button text-text md:px-4 md:py-3">
+      <div className="sticky top-0 z-50 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 text-button text-text">
         <div className="inline-flex items-center gap-4">
           <CloseProposalButton spaceId={spaceId} />
           <p>Review proposal</p>
         </div>
 
-        <AcceptOrReject
-          spaceId={spaceId}
-          proposalId={proposal.id}
-          isProposalEnded={isProposalEnded}
-          status={proposal.status}
-          canExecute={proposal.canExecute}
-          proposalType={proposal.type}
-          userVote={userVote}
-        />
-      </div>
-      <div className="relative overflow-x-clip">
-        <MetadataMotionContainer>
-          <div className="mx-auto max-w-[1200px] py-10 xl:pr-[2ch] xl:pl-[2ch]">
-            <div className="flex flex-col items-center gap-8">
-              <div className="flex flex-col items-center gap-3">
-                <div className="text-mediumTitle">{proposalTitle}</div>
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
-                    <Link
-                      href={proposal.createdBy.profileLink ?? ''}
-                      className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
-                    >
-                      <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                        <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
-                      </div>
-                      <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
-                    </Link>
-                    {isProposalEnded &&
-                      (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
-                        <>
-                          <span aria-hidden className="shrink-0 select-none text-grey-04">
-                            ·
-                          </span>
-                          <span className="shrink-0 text-grey-04">
-                            {formatGovernanceOutcomeDate(proposal.endTime)}
-                          </span>
-                          <span aria-hidden className="shrink-0 select-none text-grey-04">
-                            ·
-                          </span>
-                          <time
-                            className="shrink-0 tabular-nums text-grey-04"
-                            dateTime={new Date(proposal.endTime * 1000).toISOString()}
-                          >
-                            {formatGovernanceOutcomeTime(proposal.endTime)}
-                          </time>
-                        </>
-                      )}
-                    <span aria-hidden className="shrink-0 select-none text-grey-04">
-                      ·
-                    </span>
-                    <span className="text-text">
-                      {isProposalEnded
-                        ? proposal.status === 'ACCEPTED'
-                          ? 'Accepted'
-                          : proposal.status === 'REJECTED'
-                            ? 'Rejected'
-                            : proposal.canExecute
-                              ? 'Pending execution'
-                              : 'Rejected'
-                        : `${hours}h ${minutes}m remaining`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex w-full gap-[60px]">
-                <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                    <Tick />
-                  </div>
-                  <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-green"
-                      style={{ width: `${yesVotesPercentage}%` }}
-                    />
-                  </div>
-                  <div>{yesVotesPercentage}%</div>
-                </div>
-                <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
-                  <div className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-grey-04 *:h-2! *:w-auto">
-                    <Close />
-                  </div>
-                  <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-red-01"
-                      style={{ width: `${noVotesPercentage}%` }}
-                    />
-                  </div>
-                  <div>{noVotesPercentage}%</div>
-                </div>
-              </div>
-
-              <ShowVoters votes={proposal.proposalVotes.nodes} votesCount={votesCount} />
-            </div>
-          </div>
-        </MetadataMotionContainer>
-        <div className="h-full overflow-x-clip border-t border-divider">
-          <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-            {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
-            {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
-            {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
-          </div>
+        <div className="inline-flex shrink-0 items-center gap-2">
+          {isAddEdit && <ProposalBountyHeadButton />}
+          <AcceptOrReject
+            spaceId={spaceId}
+            proposalId={proposal.id}
+            isProposalEnded={isProposalEnded}
+            status={proposal.status}
+            canExecute={proposal.canExecute}
+            proposalType={proposal.type}
+            userVote={userVote}
+          />
         </div>
       </div>
+      <div className="flex w-full items-stretch gap-2 bg-[#EDEEF3] p-2 min-h-[calc(100vh-44px)]">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="overflow-x-clip rounded-lg border border-grey-02 bg-white">
+            <MetadataMotionContainer>
+              <div className="mx-auto max-w-[1200px] px-6 py-10">
+                <div className="flex flex-col items-center gap-8">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="text-mediumTitle">{proposalTitle}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
+                        {proposal.createdBy.profileLink ? (
+                          <Link
+                            href={proposal.createdBy.profileLink}
+                            className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
+                          >
+                            <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                            </div>
+                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                            </div>
+                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                          </div>
+                        )}
+                        {isProposalEnded &&
+                          (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (
+                            <>
+                              <span aria-hidden className="shrink-0 select-none text-grey-04">
+                                ·
+                              </span>
+                              <span className="shrink-0 text-grey-04">
+                                {formatGovernanceOutcomeDate(proposal.endTime)}
+                              </span>
+                              <span aria-hidden className="shrink-0 select-none text-grey-04">
+                                ·
+                              </span>
+                              <time
+                                className="shrink-0 tabular-nums text-grey-04"
+                                dateTime={new Date(proposal.endTime * 1000).toISOString()}
+                              >
+                                {formatGovernanceOutcomeTime(proposal.endTime)}
+                              </time>
+                            </>
+                          )}
+                        <span aria-hidden className="shrink-0 select-none text-grey-04">
+                          ·
+                        </span>
+                        <span className="text-text">
+                          {isProposalEnded
+                            ? proposal.status === 'ACCEPTED'
+                              ? 'Accepted'
+                              : proposal.status === 'REJECTED'
+                                ? 'Rejected'
+                                : proposal.canExecute
+                                  ? 'Pending execution'
+                                  : 'Rejected'
+                            : `${hours}h ${minutes}m remaining`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <ProposalVoteRow
+                    votes={proposal.proposalVotes.nodes}
+                    votesCount={votesCount}
+                    yesVotesPercentage={yesVotesPercentage}
+                    noVotesPercentage={noVotesPercentage}
+                  />
+                </div>
+              </div>
+            </MetadataMotionContainer>
+          </div>
+          <div className="flex-1 overflow-x-clip rounded-lg border border-grey-02 bg-white">
+            <div className="mx-auto max-w-[1200px] px-6 pt-10 pb-20 xl:pt-[40px] xl:pb-[4ch]">
+              {isAddEdit && <ContentProposal proposal={proposal} spaceId={spaceId} />}
+              {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
+              {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
+            </div>
+          </div>
+        </div>
+        {isAddEdit && <ProposalBountyPanel />}
+      </div>
     </>
+  );
+
+  if (!isAddEdit) {
+    return body;
+  }
+
+  return (
+    <ProposalBountiesProvider
+      daoSpaceId={spaceId}
+      proposalId={proposal.id}
+      proposalName={proposal.name ?? proposalTitle}
+      authorSpaceId={proposal.createdBy.spaceId}
+    >
+      {body}
+    </ProposalBountiesProvider>
   );
 }
