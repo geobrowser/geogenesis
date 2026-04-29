@@ -103,7 +103,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
         <div
           className={cx(
             'absolute inset-1 z-0 rounded',
-            active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+            active ? 'bg-grey-01' : 'group-hover:bg-grey-01'
           )}
         />
         <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
@@ -119,7 +119,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
       <div
         className={cx(
           'absolute inset-1 z-0 rounded',
-          active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+          active ? 'bg-grey-01' : 'group-hover:bg-grey-01'
         )}
       />
       <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
