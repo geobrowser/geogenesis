@@ -616,31 +616,42 @@ export function ProposalBountyHeadButton() {
   // Non-authors only see the pill when there are linked bounties to view.
   if (!isAuthor && n === 0) return null;
 
+  const showPublish = isAuthor && hasUnsaved;
+
   return (
     <>
-      <button
-        type="button"
-        onClick={togglePanel}
-        className={cx(
-          'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
-          'border-grey-02 bg-white hover:border-text'
+      <div className="inline-flex items-center">
+        <button
+          type="button"
+          onClick={togglePanel}
+          className={cx(
+            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded border px-1.5 text-metadata leading-none text-text transition-colors',
+            'border-grey-02 bg-white hover:border-text',
+            showPublish && 'rounded-r-none border-r-0'
+          )}
+          title="Bounties"
+          aria-expanded={isPanelOpen}
+        >
+          <Gem color="purple" />
+          <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
+        </button>
+        {showPublish && (
+          <Button
+            variant="primary"
+            small
+            onClick={onSave}
+            disabled={isSaving || !smartAccountReady}
+            className="rounded-l-none"
+          >
+            <Pending isPending={isSaving}>
+              <span className="inline-flex items-center gap-1.5">
+                <Gem color="white" strokeColor="#3963FE" />
+                Publish
+              </span>
+            </Pending>
+          </Button>
         )}
-        title="Bounties"
-        aria-expanded={isPanelOpen}
-      >
-        <Gem color="purple" />
-        <span>{isAuthor && n === 0 ? 'Link to bounty' : String(n)}</span>
-      </button>
-      {isAuthor && hasUnsaved && (
-        <Button variant="primary" small onClick={onSave} disabled={isSaving || !smartAccountReady}>
-          <Pending isPending={isSaving}>
-            <span className="inline-flex items-center gap-1.5">
-              <Gem color="white" strokeColor="#3963FE" />
-              Publish
-            </span>
-          </Pending>
-        </Button>
-      )}
+      </div>
       <span aria-hidden className="h-4 w-px shrink-0 self-center bg-grey-02 last:hidden" />
     </>
   );
