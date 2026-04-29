@@ -359,9 +359,27 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     return m;
   }, [linkableById, linkedById]);
 
+  // Already-linked bounties may no longer be "linkable" (e.g. allocation removed
+  // or task status flipped to Done after linking). Include them so a user who
+  // unticks one before saving can re-tick it instead of losing it from the panel.
+  const selectableBounties = React.useMemo(() => {
+    const seen = new Set<string>();
+    const merged: Bounty[] = [];
+    for (const bounty of linkableBountiesLabeled) {
+      seen.add(bounty.id);
+      merged.push(bounty);
+    }
+    for (const bounty of linkedBountiesLabeled) {
+      if (seen.has(bounty.id)) continue;
+      seen.add(bounty.id);
+      merged.push(bounty);
+    }
+    return merged;
+  }, [linkableBountiesLabeled, linkedBountiesLabeled]);
+
   const availableBounties = React.useMemo(
-    () => linkableBountiesLabeled.filter(b => !draftIds.has(b.id)),
-    [linkableBountiesLabeled, draftIds]
+    () => selectableBounties.filter(b => !draftIds.has(b.id)),
+    [selectableBounties, draftIds]
   );
 
   const draftBounties = React.useMemo(() => {
