@@ -13,7 +13,7 @@ import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropd
 import { useReopenRejectedProposalEdits } from './use-reopen-rejected-proposal-edits';
 
 const REJECTED_MENU_SURFACE =
-  'z-1001 max-h-[180px] min-w-[180px] overscroll-contain overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-lg';
+  'z-1001 max-h-[180px] min-w-[180px] overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white py-1 shadow-lg';
 
 type Props = {
   proposalId: string;

@@ -906,7 +906,7 @@ export function PowerToolsScreen() {
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}
             className="w-[200px]!"
-            viewportClassName="w-full min-h-0 min-w-0 max-h-[320px] overflow-y-auto overscroll-contain bg-white py-1 [background-clip:padding-box]"
+            viewportClassName="w-full min-h-0 min-w-0 max-h-[320px] overflow-y-auto overscroll-contain scroll-smooth bg-white py-1 [background-clip:padding-box]"
             trigger={
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"

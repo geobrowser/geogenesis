@@ -90,7 +90,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
         sticky="always"
         className={cx(
           'z-50 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
-          options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto'
+          options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
         )}
         onWheel={onTypeMenuWheel}
       >

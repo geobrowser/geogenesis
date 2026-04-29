@@ -244,7 +244,7 @@ function GovernanceFilterMenu({
       open={open}
       onOpenChange={setOpen}
       asChild
-      viewportClassName={`w-full min-h-0 min-w-0 overflow-y-auto overscroll-contain bg-white [background-clip:padding-box] ${
+      viewportClassName={`w-full min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box] ${
         maxHeightClass ?? 'max-h-[200px]'
       }`}
       trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}

@@ -18,7 +18,7 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 const SORT_MENU_SURFACE =
-  'z-100 block max-h-[180px] min-w-0 w-[200px] overscroll-contain overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg';
+  'z-100 block max-h-[180px] min-w-0 w-[200px] overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
 
 type DataBlockSortMenuProps = {
   properties: Property[];

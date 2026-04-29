@@ -46,7 +46,7 @@ const shellStyles = cva(
 // scroll was smooth. Default to a height that fits ~10 items, capped at 75vh on small
 // screens. Callers that want a smaller scroll well can still pass `viewportClassName`.
 const defaultScrollViewportClass =
-  'w-full max-h-[min(400px,75vh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain bg-white [background-clip:padding-box]';
+  'w-full max-h-[min(400px,75vh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]';
 
 export function Menu({
   children,
