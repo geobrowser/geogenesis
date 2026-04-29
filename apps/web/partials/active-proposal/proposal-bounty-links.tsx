@@ -21,6 +21,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { getAllEntities, getRelationsByFromEntityId, getRelationsByToEntityIds, getSpace, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
+import { useStatusBar } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -90,6 +91,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
   const personalPageEntityId = profile?.id ?? null;
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
+  const { dispatch: dispatchStatusBar } = useStatusBar();
 
   const isAuthor = Boolean(
     personalSpaceId && personalSpaceId.length > 0 && spaceIdsEqual(personalSpaceId, authorSpaceId)
@@ -497,6 +499,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
       ? [proposalTypeRelation, ...newRelations, ...removeRelations]
       : [...newRelations, ...removeRelations];
 
+    let didComplete = false;
     try {
       await makeProposal({
         values,
@@ -504,13 +507,22 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
         spaceId: personalSpaceId,
         name: needsBootstrap ? `Bounty links for: ${name}` : `Update bounty links: ${name}`,
         onSuccess: () => {
+          didComplete = true;
           setOptimisticLinkedIds([...draftIds]);
           queryClient.invalidateQueries({ queryKey: ['proposal-bounty-relations', proposalId, authorSpaceId] });
           queryClient.invalidateQueries({ queryKey: ['proposal-linked-bounty-entities'] });
           queryClient.invalidateQueries({ queryKey: ['proposal-types-relations', proposalId, personalSpaceId] });
         },
-        onError: () => {},
+        onError: () => {
+          didComplete = true;
+        },
       });
+      // makeProposal can return early without firing either callback (e.g. the
+      // resolved space is missing or prepared ops are empty). Surface a status
+      // bar error so the click doesn't appear to succeed silently.
+      if (!didComplete) {
+        dispatchStatusBar({ type: 'ERROR', payload: 'Could not save bounty links. Please try again.' });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -531,6 +543,7 @@ export function ProposalBountiesProvider({ daoSpaceId, proposalId, proposalName,
     queryClient,
     proposalId,
     authorSpaceId,
+    dispatchStatusBar,
   ]);
 
   const value = React.useMemo<ContextValue>(
