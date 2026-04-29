@@ -116,14 +116,16 @@ function TruncatedDescription({ text }: { text: string }) {
     return () => ro.disconnect();
   }, [text]);
 
+  // Always clamp on first paint to avoid a flash of unclamped text before the
+  // layout effect runs. `isOverflowing` only gates the More/Less toggle.
   const showToggle = isOverflowing;
-  const clamp = showToggle && !expanded;
+  const clamp = !expanded;
 
   return (
     <p
       ref={ref}
       className={[
-        'relative text-body text-text',
+        'relative text-body wrap-break-word text-text',
         clamp ? CLAMP_CLASS : '',
       ]
         .filter(Boolean)
