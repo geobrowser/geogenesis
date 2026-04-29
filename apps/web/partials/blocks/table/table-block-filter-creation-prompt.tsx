@@ -156,6 +156,11 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
   return { focused, setFocused, onFocus, onBlur, clearBlurTimeout };
 }
 
+// Hard ceiling for the dynamic measurement so tall rows (e.g. type results with a
+// "Geo > Type" breadcrumb at ~100px each) can't blow past the default ResultsList
+// max-height of 340px when the inline style overrides the class.
+const DROPDOWN_MAX_HEIGHT_PX = 320;
+
 function useFourAndHalfRowsMaxHeight(
   listRef: React.RefObject<HTMLUListElement | null>,
   isOpen: boolean,
@@ -182,7 +187,7 @@ function useFourAndHalfRowsMaxHeight(
       if (!(firstRow instanceof HTMLElement)) return;
       const rowHeight = firstRow.getBoundingClientRect().height;
       if (rowHeight <= 0) return;
-      setMaxHeight(rowHeight * 4.5);
+      setMaxHeight(Math.min(rowHeight * 4.5, DROPDOWN_MAX_HEIGHT_PX));
     };
 
     measure();
