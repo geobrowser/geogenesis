@@ -39,6 +39,7 @@ interface Props {
 const SKIPPED_PROPERTIES: string[] = [
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
   SystemIds.COVER_PROPERTY,
   SystemIds.TABS_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
