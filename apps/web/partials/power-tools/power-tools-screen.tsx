@@ -966,6 +966,9 @@ export function PowerToolsScreen() {
                   mode={activeFilterMode}
                   onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
                   onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                  onClearGroup={() => {
+                    effectiveSetFilterState(effectiveFilterState.filter(f => f.columnId !== group.columnId));
+                  }}
                   isEditing={isEditing}
                   serverFilterKeys={serverFilterKeys}
                 />

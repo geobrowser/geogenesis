@@ -11,7 +11,7 @@ import { produce } from 'immer';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -31,6 +31,7 @@ import { Check } from '~/design-system/icons/check';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
+import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
@@ -105,11 +106,6 @@ function useEntries(
 ) {
   const isEditing = useUserIsEditing(spaceId);
   const { setEditable } = useEditable();
-
-  React.useLayoutEffect(() => {
-    if (source.type !== 'COLLECTION' || !canEdit || !collectionDataReady || entries.length > 0) return;
-    setEditable(true);
-  }, [source.type, canEdit, collectionDataReady, entries.length, setEditable]);
 
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
@@ -280,6 +276,8 @@ export const TableBlock = ({
 }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
+  const { entityId, relationId } = useDataBlockInstance();
+  const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
 
@@ -333,6 +331,7 @@ export const TableBlock = ({
   togglePropertyRef.current = toggleProperty;
 
   const handleConfirmQuerySetup = React.useCallback(() => {
+    setEditable(true);
     onCompleteQuerySetup?.();
 
     if (!canEdit || source.type === 'COLLECTION') {
@@ -366,7 +365,7 @@ export const TableBlock = ({
     };
 
     window.setTimeout(() => tryApplyColumn(0, 0), 0);
-  }, [canEdit, onCompleteQuerySetup, source.type]);
+  }, [canEdit, onCompleteQuerySetup, setEditable, source.type]);
 
   React.useEffect(() => {
     if (querySetupPending) setIsFilterOpen(false);
@@ -452,6 +451,11 @@ export const TableBlock = ({
   }, [activeFilters, spacesById]);
 
   const filterGroups = React.useMemo(() => groupFilters(filtersWithPropertyName), [filtersWithPropertyName]);
+
+  const filterGroupsForToolbarPills = React.useMemo(
+    () => filterGroups.filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
+    [filterGroups]
+  );
 
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
@@ -633,6 +637,16 @@ export const TableBlock = ({
             icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
+          <Link
+            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+            className={cx(
+              'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04',
+              querySetupPending && 'pointer-events-none opacity-40'
+            )}
+            aria-label="Open fullscreen"
+          >
+            <Fullscreen color="grey-04" />
+          </Link>
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
           {renderPlusButtonAsInline && (
@@ -657,53 +671,65 @@ export const TableBlock = ({
               exit={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
-              className="flex flex-wrap items-center gap-2"
+              className="flex flex-col gap-2"
             >
-              {isQueryDataBlock && !querySetupPending && (
-                <>
-                  <DataBlockScopeDropdown source={source} setSource={setSource} />
-                  <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-                </>
-              )}
-              <DataBlockSortMenu
-                triggerVariant="segment"
-                disabled={querySetupPending}
-                isEditing={isEditing}
-                properties={mergedBlockProperties}
-                sortState={sortState}
-                onSort={handleSortChange}
-              />
-              <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-              <TableBlockEditableFilters
-                ref={filterPromptRef}
-                filterState={activeFilters}
-                setFilterState={setActiveFilters}
-                filterSuggestionSpaceId={spaceId}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {isQueryDataBlock && !querySetupPending && (
+                  <>
+                    <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                  </>
+                )}
+                <DataBlockSortMenu
+                  triggerVariant="segment"
+                  disabled={querySetupPending}
+                  isEditing={isEditing}
+                  properties={mergedBlockProperties}
+                  sortState={sortState}
+                  onSort={handleSortChange}
+                />
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                <TableBlockEditableFilters
+                  ref={filterPromptRef}
+                  filterState={activeFilters}
+                  setFilterState={setActiveFilters}
+                  filterSuggestionSpaceId={spaceId}
+                  isEditing={isEditing}
+                />
+              </div>
 
-              {filterGroups.map(group => (
-                <React.Fragment key={group.columnId}>
-                  <TableBlockFilterGroupPill
-                    group={group}
-                    mode={activeFilterMode}
-                    onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                    onDeleteValue={originalIndex => {
-                      const newFilterState = produce(activeFilters, draft => {
-                        draft.splice(originalIndex, 1);
-                      });
-                      setActiveFilters(newFilterState);
-                    }}
-                    onAddSimilar={() => {
-                      setIsFilterOpen(true);
-                      requestAnimationFrame(() => {
-                        filterPromptRef.current?.openWithColumn(group.columnId);
-                      });
-                    }}
-                    isEditing={isEditing}
-                    serverFilterKeys={serverFilterKeys}
-                  />
-                </React.Fragment>
-              ))}
+              {filterGroupsForToolbarPills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {filterGroupsForToolbarPills.map(group => (
+                    <React.Fragment key={group.columnId}>
+                      <TableBlockFilterGroupPill
+                        group={group}
+                        mode={activeFilterMode}
+                        onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                        onDeleteValue={originalIndex => {
+                          const newFilterState = produce(activeFilters, draft => {
+                            draft.splice(originalIndex, 1);
+                          });
+                          setActiveFilters(newFilterState);
+                        }}
+                        onClearGroup={() => {
+                          setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                        }}
+                        onAddSimilar={anchorEl => {
+                          setIsFilterOpen(true);
+                          requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                              filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                            });
+                          });
+                        }}
+                        isEditing={isEditing}
+                        serverFilterKeys={serverFilterKeys}
+                      />
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </motion.div>
         </AnimatePresence>

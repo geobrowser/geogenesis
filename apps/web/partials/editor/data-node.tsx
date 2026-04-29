@@ -56,10 +56,33 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
 
-  const querySetupPending =
-    node.attrs.initialDataSource === 'QUERY' && node.attrs.querySetupCompleted === false;
+  const [querySetupCompletedOptimistic, setQuerySetupCompletedOptimistic] = React.useState(false);
+
+  React.useEffect(() => {
+    setQuerySetupCompletedOptimistic(false);
+  }, [id]);
+
+  React.useEffect(() => {
+    const persisted =
+      node.attrs.querySetupCompleted === true || node.attrs.querySetupCompleted === 'true';
+    if (persisted) {
+      setQuerySetupCompletedOptimistic(false);
+    }
+  }, [node.attrs.querySetupCompleted]);
+
+  const explicitQuerySetupIncomplete =
+    node.attrs.querySetupCompleted === false || node.attrs.querySetupCompleted === 'false';
+
+  const isQuerySetupDone =
+    querySetupCompletedOptimistic ||
+    node.attrs.querySetupCompleted === true ||
+    node.attrs.querySetupCompleted === 'true' ||
+    !explicitQuerySetupIncomplete;
+
+  const querySetupPending = node.attrs.initialDataSource === 'QUERY' && !isQuerySetupDone;
 
   const onCompleteQuerySetup = () => {
+    setQuerySetupCompletedOptimistic(true);
     updateAttributes({ querySetupCompleted: true });
   };
 

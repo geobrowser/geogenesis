@@ -304,7 +304,7 @@ export const TableBlockTable = ({
 
                 return (
                   <th
-                    key={column.id}
+                    key={`${column.id}-${i}`}
                     className={cx(
                       'group relative p-[10px] text-left',
                       headerClassNames,
@@ -335,8 +335,8 @@ export const TableBlockTable = ({
 
               return (
                 <tr key={row.original.entityId ?? index} className="hover:bg-bg">
-                  {cells.map(cell => {
-                    const cellId = `${row.original.entityId}-${cell.column.id}`;
+                  {cells.map((cell, cellIndex) => {
+                    const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (

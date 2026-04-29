@@ -18,13 +18,19 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Effect, Either } from 'effect';
 
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { ID } from '~/core/id';
+import { Subgraph } from '~/core/io';
+import { E } from '~/core/sync/orm';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { editingPropertiesAtom } from '~/atoms';
 import { Property, Relation } from '~/core/types';
 
@@ -41,6 +47,20 @@ const sectionHeaderClass = 'flex items-center justify-between px-2.5 py-1.5 text
 
 const rowClass =
   'flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left text-sm text-text hover:bg-bg';
+
+const GEO_PROPERTY_SEARCH_LIMIT = 100;
+
+function labelMatchesQuery(label: string | null, id: string, q: string): boolean {
+  if (!q) return true;
+  const hay = (label ?? id).toLowerCase();
+  return hay.includes(q);
+}
+
+function relationPropertyId(r: Relation): string {
+  const v = r.toEntity.value;
+  if (v && String(v).length > 0) return String(v);
+  return r.toEntity.id;
+}
 
 type TableBlockPropertiesMenuProps = {
   sourceType: Source['type'];
@@ -118,6 +138,9 @@ export function TableBlockPropertiesMenu({
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const setEditingProperties = useSetAtom(editingPropertiesAtom);
+  const { store } = useSyncEngine();
+  const cache = useQueryClient();
+  const debouncedSearch = useDebouncedValue(search, 200);
 
   React.useEffect(() => {
     setEditingProperties(open);
@@ -133,8 +156,37 @@ export function TableBlockPropertiesMenu({
     if (!next) setSearch('');
   };
 
+  const q = debouncedSearch.trim().toLowerCase();
+
+  const { data: geoPropertyHits = [], isFetching: isGeoPropertySearchFetching } = useQuery({
+    queryKey: ['table-block-properties-menu', 'geo-property-search', q],
+    queryFn: async () => {
+      const fetchResultsEffect = Effect.either(
+        Effect.tryPromise({
+          try: async () =>
+            await E.findFuzzy({
+              store,
+              cache,
+              where: {
+                name: { fuzzy: debouncedSearch },
+                types: [{ id: { equals: SystemIds.PROPERTY } }],
+              },
+              first: GEO_PROPERTY_SEARCH_LIMIT,
+              skip: 0,
+            }),
+          catch: () => new Subgraph.Errors.AbortError(),
+        })
+      );
+      const resultOrError = await Effect.runPromise(fetchResultsEffect);
+      if (Either.isLeft(resultOrError)) {
+        return [];
+      }
+      return resultOrError.right;
+    },
+    enabled: open && q.length > 0,
+  });
+
   const hiddenProperties = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
     const isShown = (propertyId: string) => shownColumnIds.some(sid => ID.equals(sid, propertyId));
     return filterableProperties.filter(p => {
       if (ID.equals(p.id, SystemIds.NAME_PROPERTY)) return false;
@@ -142,15 +194,65 @@ export function TableBlockPropertiesMenu({
       if (!q) return true;
       return (p.name ?? p.id).toLowerCase().includes(q);
     });
-  }, [filterableProperties, shownColumnIds, search]);
+  }, [filterableProperties, shownColumnIds, q]);
 
-  const shownRelationIds = orderedShownColumnRelations.map(r => r.id);
+  const sortableShownRelations = React.useMemo(() => {
+    const withoutName = orderedShownColumnRelations.filter(
+      r => !ID.equals(relationPropertyId(r), SystemIds.NAME_PROPERTY)
+    );
+    const seen = new Set<string>();
+    const out: Relation[] = [];
+    for (const r of withoutName) {
+      const pid = relationPropertyId(r);
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      out.push(r);
+    }
+    return out;
+  }, [orderedShownColumnRelations]);
+
+  const filteredSortableShown = React.useMemo(() => {
+    if (!q) return sortableShownRelations;
+    return sortableShownRelations.filter(r => labelMatchesQuery(r.toEntity.name, r.toEntity.id, q));
+  }, [sortableShownRelations, q]);
+
+  const shownRelationIds = filteredSortableShown.map(r => r.id);
+  const dragDisabledWhileSearch = Boolean(q);
+
+  const nameRowMatchesSearch = !q || labelMatchesQuery('Name', SystemIds.NAME_PROPERTY, q);
+
+  const schemaAndShownPropertyIds = React.useMemo(
+    () =>
+      new Set<string>([
+        ...shownColumnIds,
+        ...filterableProperties.map(p => p.id),
+      ]),
+    [shownColumnIds, filterableProperties]
+  );
+
+  const extraGeoProperties = React.useMemo((): Property[] => {
+    if (!q) return [];
+    const out: Property[] = [];
+    const seen = new Set<string>(schemaAndShownPropertyIds);
+    for (const hit of geoPropertyHits) {
+      if (!hit.types.some((t: { id: string }) => ID.equals(t.id, SystemIds.PROPERTY))) continue;
+      if (seen.has(hit.id)) continue;
+      seen.add(hit.id);
+      out.push({
+        id: hit.id,
+        name: hit.name,
+        dataType: 'RELATION',
+      });
+    }
+    return out;
+  }, [geoPropertyHits, schemaAndShownPropertyIds, q]);
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = shownRelationIds.indexOf(String(active.id));
-    const newIndex = shownRelationIds.indexOf(String(over.id));
+    const ordered = orderedShownColumnRelations;
+    const oldIndex = ordered.findIndex(r => r.id === String(active.id));
+    const newIndex = ordered.findIndex(r => r.id === String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
     reorderShownPropertyRelations(oldIndex, newIndex);
   };
@@ -199,22 +301,27 @@ export function TableBlockPropertiesMenu({
               </button>
             </div>
             <div className="px-1 pb-2">
-              <div className={rowClass}>
-                <span className="inline-flex w-5 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">Name</span>
-                <span className="inline-flex shrink-0 text-grey-04" aria-hidden>
-                  <Eye color="grey-04" />
-                </span>
-              </div>
+              {nameRowMatchesSearch && (
+                <div className={rowClass}>
+                  <span className="inline-flex w-5 shrink-0" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">Name</span>
+                  <span className="inline-flex shrink-0 text-grey-04" aria-hidden>
+                    <Eye color="grey-04" />
+                  </span>
+                </div>
+              )}
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                 <SortableContext items={shownRelationIds} strategy={verticalListSortingStrategy}>
-                  {orderedShownColumnRelations.map(rel => (
+                  {filteredSortableShown.map(rel => (
                     <SortablePropertyRow
                       key={rel.id}
                       id={rel.id}
                       label={rel.toEntity.name ?? rel.toEntity.id}
                       isShown
-                      onToggleVisibility={() => toggleProperty({ id: rel.toEntity.id, name: rel.toEntity.name })}
+                      dragDisabled={dragDisabledWhileSearch}
+                      onToggleVisibility={() =>
+                        toggleProperty({ id: relationPropertyId(rel), name: rel.toEntity.name })
+                      }
                     />
                   ))}
                 </SortableContext>
@@ -232,23 +339,41 @@ export function TableBlockPropertiesMenu({
               </button>
             </div>
             <div className="px-1 pb-2">
-              {hiddenProperties.length === 0 ? (
+              {q.length > 0 && isGeoPropertySearchFetching && hiddenProperties.length === 0 && extraGeoProperties.length === 0 ? (
+                <p className="px-2 py-2 text-footnote text-grey-04">Searching…</p>
+              ) : hiddenProperties.length === 0 && extraGeoProperties.length === 0 ? (
                 <p className="px-2 py-2 text-footnote text-grey-04">No matching properties.</p>
               ) : (
-                hiddenProperties.map(p => (
-                  <div key={p.id} className={rowClass}>
-                    <span className="inline-flex w-5 shrink-0" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleProperty({ id: p.id, name: p.name })}
-                      className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
-                      aria-label="Show in table"
-                    >
-                      <EyeHide color="grey-04" />
-                    </button>
-                  </div>
-                ))
+                <>
+                  {hiddenProperties.map(p => (
+                    <div key={p.id} className={rowClass}>
+                      <span className="inline-flex w-5 shrink-0" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                        className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
+                        aria-label="Show in table"
+                      >
+                        <EyeHide color="grey-04" />
+                      </button>
+                    </div>
+                  ))}
+                  {extraGeoProperties.map(p => (
+                    <div key={`geo:${p.id}`} className={rowClass}>
+                      <span className="inline-flex w-5 shrink-0" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                        className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
+                        aria-label="Show in table"
+                      >
+                        <EyeHide color="grey-04" />
+                      </button>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </div>

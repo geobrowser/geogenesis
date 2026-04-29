@@ -7,6 +7,10 @@ import { storage } from '~/core/sync/use-mutate';
 import { store } from '~/core/sync/use-sync-engine';
 import { Relation } from '~/core/types';
 
+function uniqueSpaceFilterIds(filterState: Filter[]): string[] {
+  return [...new Set(filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))];
+}
+
 type EntitySource = {
   type: 'RELATIONS';
   value: string; // EntityId
@@ -62,9 +66,15 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceType = dataEntityRelations.find(
+  const sourceTypeFromStore = store
+    .getResolvedRelations(blockId)
+    .find(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted)?.toEntity.id;
+
+  const sourceTypeFromArgs = dataEntityRelations.find(
     r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
   )?.toEntity.id;
+
+  const sourceType = sourceTypeFromStore ?? sourceTypeFromArgs;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
 
@@ -94,9 +104,21 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
   }
 
   if (sourceType === SystemIds.QUERY_DATA_SOURCE) {
+    const spaceIds = uniqueSpaceFilterIds(filterState);
+    if (spaceIds.length === 0) {
+      return { type: 'GEO' };
+    }
     return {
       type: 'SPACES',
-      value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
+      value: spaceIds,
+    };
+  }
+
+  const spaceIdsFromFilters = uniqueSpaceFilterIds(filterState);
+  if (spaceIdsFromFilters.length > 0) {
+    return {
+      type: 'SPACES',
+      value: spaceIdsFromFilters,
     };
   }
 

@@ -12,7 +12,6 @@ import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Relation } from '~/design-system/icons/relation';
-import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
@@ -45,12 +44,6 @@ export function TableBlockContextMenu() {
           avoidCollisions={true}
           collisionPadding={8}
         >
-          <MenuItem href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}>
-            <div className="flex w-full items-center justify-between gap-2">
-              <span>Open fullscreen</span>
-              <TableView />
-            </div>
-          </MenuItem>
           <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
             <div className="flex w-full items-center justify-between gap-2">
               <span>View config</span>

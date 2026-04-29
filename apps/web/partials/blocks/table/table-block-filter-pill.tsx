@@ -4,18 +4,16 @@ import cx from 'classnames';
 
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 
-import { IconButton } from '~/design-system/button';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Plus } from '~/design-system/icons/plus';
-import { colors } from '~/design-system/theme/colors';
 
-function PublishedFilterIconFilled() {
+function FilterIconBlack() {
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
       <path
         d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
-        fill={colors['light'].text}
-        stroke={colors['light'].text}
+        fill="#000000"
+        stroke="#000000"
         strokeLinecap="round"
       />
     </svg>
@@ -52,7 +50,8 @@ type TableBlockFilterGroupPillProps = {
   mode: FilterMode;
   onToggleMode: () => void;
   onDeleteValue: (originalIndex: number) => void;
-  onAddSimilar?: () => void;
+  onClearGroup: () => void;
+  onAddSimilar?: (anchorEl: HTMLElement) => void;
   isEditing: boolean;
   serverFilterKeys: Set<string>;
 };
@@ -61,39 +60,90 @@ function filterKey(f: Filter): string {
   return `${f.columnId}:${f.value}`;
 }
 
+function FilterValueChip({
+  label,
+  onRemove,
+  disabled,
+  removable,
+}: {
+  label: string;
+  onRemove: () => void;
+  disabled: boolean;
+  removable: boolean;
+}) {
+  return (
+    <span
+      className={cx(
+        'inline-flex max-w-full items-center gap-0.5 rounded-sm py-0.5 pl-1.5 text-[0.8125rem] text-text',
+        removable ? 'border border-grey-02 bg-grey-01 pr-0.5' : 'border-0 bg-grey-01 pr-1.5'
+      )}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      {removable && (
+        <button
+          type="button"
+          disabled={disabled}
+          className={cx(
+            'flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text',
+            disabled && 'pointer-events-none opacity-30'
+          )}
+          onClick={e => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          aria-label={`Remove ${label}`}
+        >
+          <CloseSmall color="grey-04" />
+        </button>
+      )}
+    </span>
+  );
+}
+
 export function TableBlockFilterGroupPill({
   group,
   mode,
   onToggleMode,
   onDeleteValue,
+  onClearGroup,
   onAddSimilar,
   isEditing,
   serverFilterKeys,
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
 
-  // The mode toggle is only interactive when the user can actually modify
-  // at least one value in the group (i.e. is editing, or has local filters).
   const hasAnyLocalFilter = group.filters.some(({ filter }) => !serverFilterKeys.has(filterKey(filter)));
   const canToggleMode = isEditing || hasAnyLocalFilter;
-  const hasAnyDeletable = isEditing || hasAnyLocalFilter;
+  const showAddButton = Boolean(onAddSimilar) && isEditing;
+  const showGroupClearButton = isEditing;
 
   return (
-    <div className="flex h-6 min-w-0 max-w-full items-center gap-2 rounded bg-divider py-1 pl-2 pr-0.5 text-metadata">
-      <PublishedFilterIconFilled />
-      <div className="flex min-w-0 flex-1 items-center gap-1">
-        <span className="whitespace-nowrap">
-          {onAddSimilar ? (
-            <button type="button" className="transition-colors hover:text-ctaPrimary" onClick={onAddSimilar}>
+    <div
+      className={cx(
+        'inline-flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md px-2 py-1.5',
+        isEditing ? 'border border-grey-02 bg-white' : 'border-0 bg-grey-01'
+      )}
+    >
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        <span className="flex shrink-0 items-center text-black" aria-hidden>
+          <FilterIconBlack />
+        </span>
+        <span className="flex shrink-0 flex-wrap items-baseline gap-x-0.5 text-[0.8125rem] text-text">
+          {onAddSimilar && isEditing ? (
+            <button
+              type="button"
+              className="whitespace-nowrap transition-colors hover:text-ctaPrimary"
+              onClick={e => onAddSimilar(e.currentTarget)}
+            >
               {group.columnName} is
             </button>
           ) : (
-            <>{group.columnName} is</>
+            <span className="whitespace-nowrap">{group.columnName} is</span>
           )}
           {hasMultipleValues && (
             <>
               {' '}
-              {canToggleMode ? (
+              {isEditing && canToggleMode ? (
                 <button type="button" className="text-grey-04 transition-colors hover:text-text" onClick={onToggleMode}>
                   ({mode === 'OR' ? 'or' : 'and'})
                 </button>
@@ -102,41 +152,52 @@ export function TableBlockFilterGroupPill({
               )}
             </>
           )}
-          :
         </span>
-        <div className={cx('flex items-center', hasAnyDeletable ? 'gap-1' : 'gap-0')}>
-          {group.filters.map(({ filter, originalIndex }, i) => {
-            const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
-            const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
+        {group.filters.map(({ filter, originalIndex }) => {
+          const value =
+            filter.valueType === 'RELATION' ? (filter.valueName ?? filter.value) : filter.value;
+          const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
+          const label = value ?? '';
 
-            return (
-              <React.Fragment key={`${filter.columnId}-${filter.value}`}>
-                <span className="whitespace-nowrap">
-                  {i > 0 && <span className="text-grey-04">, </span>}
-                  {value}
-                </span>
-                {canDelete && (
-                  <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={() => onDeleteValue(originalIndex)} />
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
+          return (
+            <FilterValueChip
+              key={`${filter.columnId}-${filter.value}-${originalIndex}`}
+              label={label}
+              disabled={!canDelete}
+              removable={isEditing && canDelete}
+              onRemove={() => onDeleteValue(originalIndex)}
+            />
+          );
+        })}
+        {showAddButton && (
+          <button
+            type="button"
+            aria-label={`Add another ${group.columnName ?? 'filter'} value`}
+            title="Add filter value"
+            onClick={e => {
+              e.stopPropagation();
+              onAddSimilar?.(e.currentTarget);
+            }}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-grey-02 bg-grey-01 text-grey-04 transition hover:bg-grey-02 hover:text-text"
+          >
+            <span className="inline-flex h-3 w-3 items-center justify-center [&_svg]:h-full [&_svg]:w-full [&_svg]:max-h-3 [&_svg]:max-w-3">
+              <Plus color="grey-04" />
+            </span>
+          </button>
+        )}
       </div>
-      {isEditing && onAddSimilar && (
+      {showGroupClearButton && (
         <button
           type="button"
-          aria-label={`Add another ${group.columnName ?? 'filter'} value`}
-          title="Add filter value"
+          className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-grey-02 bg-grey-01 text-grey-04 transition hover:bg-grey-02 hover:text-text"
+          aria-label={`Clear all ${group.columnName ?? 'filter'} values`}
+          title="Clear filter group"
           onClick={e => {
             e.stopPropagation();
-            onAddSimilar();
+            onClearGroup();
           }}
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-grey-04 transition hover:bg-white/90 hover:text-text"
         >
-          <span className="inline-flex h-3 w-3 items-center justify-center [&_svg]:h-full [&_svg]:w-full [&_svg]:max-h-3 [&_svg]:max-w-3">
-            <Plus color="grey-04" />
-          </span>
+          <CloseSmall color="grey-04" />
         </button>
       )}
     </div>

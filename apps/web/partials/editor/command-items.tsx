@@ -10,10 +10,10 @@ import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
 import { EditorImage } from '~/design-system/icons/editor-image';
+import { EditorCollection } from '~/design-system/icons/editor-collection';
 import { EditorList } from '~/design-system/icons/editor-list';
-import { EditorTable } from '~/design-system/icons/editor-table';
+import { EditorQuery } from '~/design-system/icons/editor-query';
 import { EditorText } from '~/design-system/icons/editor-text';
-import { Search } from '~/design-system/icons/search';
 import { EditorVideo } from '~/design-system/icons/editor-video';
 import { Link } from '~/design-system/icons/link';
 
@@ -149,7 +149,7 @@ export const getGlobalSpaceId = () => globalSpaceId;
 // ============================================================================
 
 const collectionDataBlockCommandItem: CommandSuggestionItem = {
-  icon: <EditorTable />,
+  icon: <EditorCollection />,
   title: 'Collection',
   command: ({ editor, range }) => {
     editor
@@ -168,7 +168,7 @@ const collectionDataBlockCommandItem: CommandSuggestionItem = {
 };
 
 const queryDataBlockCommandItem: CommandSuggestionItem = {
-  icon: <Search />,
+  icon: <EditorQuery />,
   title: 'Query',
   command: ({ editor, range }) => {
     editor

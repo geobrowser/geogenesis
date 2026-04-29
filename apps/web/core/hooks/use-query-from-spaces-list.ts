@@ -2,30 +2,36 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { Effect } from 'effect';
-
 import { fetchBrowseSidebarDataWithMemberSpaces, type BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import type { Space } from '~/core/io/dto/spaces';
-import { getSpaces } from '~/core/io/queries';
 
 export type QueryFromSpaceRow = {
   id: string;
   name: string;
   image: string | null;
-  /**
-   * Mirrors browse sidebar sections, then “everyone else”:
-   * 0 = featured, 1 = editor of, 2 = member of, 3 = other (`createdAt` oldest first).
-   */
+  /** 0 = editor of, 1 = member of, 2 = top / featured spaces. */
   tier: 0 | 1 | 2 | 3;
+  pendingLabel?: 'Membership pending' | 'Editorship pending';
 };
 
-function spaceDisplayName(s: Space): string {
-  return s.entity?.name?.trim() || 'Untitled space';
-}
+/** Used to rank fuzzy-search hits the same way as the sectioned list. */
+export type SpaceDropdownOrderingMeta = {
+  editorIds: Set<string>;
+  memberIds: Set<string>;
+  featuredIds: Set<string>;
+  createdAtMs: Map<string, number>;
+};
 
-function spaceImage(s: Space): string | null {
-  return s.entity?.image ?? null;
-}
+export type ScopeDropdownSections = {
+  editors: QueryFromSpaceRow[];
+  members: QueryFromSpaceRow[];
+  featured: QueryFromSpaceRow[];
+};
+
+export type QueryFromSpacesListData = {
+  sections: ScopeDropdownSections;
+  ordering: SpaceDropdownOrderingMeta;
+};
 
 function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpaceRow {
   return {
@@ -33,17 +39,9 @@ function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpa
     name: row.name,
     image: row.image,
     tier,
+    ...(row.pendingLabel ? { pendingLabel: row.pendingLabel } : {}),
   };
 }
-
-/** GraphQL `first` max for `spaces` list. */
-const SPACE_PAGE_SIZE = 1000;
-
-/**
- * Geo GraphQL rejects `spaces(..., offset: N)` when N is greater than 1000, so only two windows are valid:
- * offset 0 and offset 1000 (each with `first: 1000`). More spaces are reachable via search.
- */
-const SPACES_MAX_OFFSET = 1000;
 
 function entityCreatedAtMs(entity: Space['entity'] | undefined): number {
   const raw = entity?.createdAt;
@@ -62,67 +60,79 @@ function entityCreatedAtMs(entity: Space['entity'] | undefined): number {
   return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
 }
 
-async function fetchSpacesWithinApiOffsetLimit(): Promise<Space[]> {
-  /** Sequential pages avoid stacking two huge `spaces` responses alongside other GraphQL traffic. */
-  const first = await Effect.runPromise(getSpaces({ limit: SPACE_PAGE_SIZE, offset: 0 }));
-  const second = await Effect.runPromise(getSpaces({ limit: SPACE_PAGE_SIZE, offset: SPACES_MAX_OFFSET }));
-  return [...first, ...second];
+/** Rank search hits: editors → members → featured → everyone else (then name). */
+export function sortSpacesForDropdownSearch(
+  rows: Array<{ id: string; name: string; image: string | null }>,
+  ordering: SpaceDropdownOrderingMeta
+): QueryFromSpaceRow[] {
+  function tierOf(id: string): 0 | 1 | 2 | 3 {
+    if (ordering.editorIds.has(id)) return 0;
+    if (ordering.memberIds.has(id)) return 1;
+    if (ordering.featuredIds.has(id)) return 2;
+    return 3;
+  }
+
+  const enriched: QueryFromSpaceRow[] = rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    image: r.image,
+    tier: tierOf(r.id),
+  }));
+
+  enriched.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    const ca = ordering.createdAtMs.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const cb = ordering.createdAtMs.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    if (ca !== cb) return ca - cb;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  return enriched;
 }
 
 /**
- * Spaces for “query from” scope UI: same ordering as the browse sidebar (featured → editor of → member of),
- * then up to 2000 non-sidebar spaces from `spaces` (API offset cap), oldest `createdAt` first; use search for more.
+ * Spaces for “Query from”: same buckets as the browse sidebar — editor of, member of, top (featured) spaces only.
+ * Use search for any other space. No bulk `spaces` GraphQL list.
  */
 export function useQueryFromSpacesList(memberSpaceId: string | undefined, enabled: boolean) {
   return useQuery({
-    queryKey: ['query-from-spaces-ordered', memberSpaceId],
+    queryKey: ['query-from-spaces-sidebar-sections', memberSpaceId],
     enabled: Boolean(memberSpaceId) && enabled,
-    queryFn: async (): Promise<QueryFromSpaceRow[]> => {
-      if (!memberSpaceId) return [];
-
-      const { sidebar, memberSpaces } = await fetchBrowseSidebarDataWithMemberSpaces(memberSpaceId);
-      const allSpacesPages = await fetchSpacesWithinApiOffsetLimit();
-
-      const shownIds = new Set<string>();
-      const ordered: QueryFromSpaceRow[] = [];
-
-      const pushSection = (rows: BrowseSpaceRow[], tier: 0 | 1 | 2) => {
-        for (const r of rows) {
-          if (shownIds.has(r.id)) continue;
-          shownIds.add(r.id);
-          ordered.push(browseRowToQueryRow(r, tier));
-        }
-      };
-
-      pushSection(sidebar.featured, 0);
-      pushSection(sidebar.editorOf, 1);
-      pushSection(sidebar.memberOf, 2);
-
-      const byId = new Map<string, Space>();
-      for (const s of allSpacesPages) byId.set(s.id, s);
-      for (const s of memberSpaces) byId.set(s.id, s);
-
-      const otherRows: QueryFromSpaceRow[] = [];
-      for (const s of byId.values()) {
-        if (shownIds.has(s.id)) continue;
-        otherRows.push({
-          id: s.id,
-          name: spaceDisplayName(s),
-          image: spaceImage(s),
-          tier: 3,
-        });
+    queryFn: async (): Promise<QueryFromSpacesListData> => {
+      if (!memberSpaceId) {
+        return {
+          sections: { editors: [], members: [], featured: [] },
+          ordering: {
+            editorIds: new Set(),
+            memberIds: new Set(),
+            featuredIds: new Set(),
+            createdAtMs: new Map(),
+          },
+        };
       }
 
-      otherRows.sort((a, b) => {
-        const sa = byId.get(a.id);
-        const sb = byId.get(b.id);
-        const t1 = entityCreatedAtMs(sa?.entity);
-        const t2 = entityCreatedAtMs(sb?.entity);
-        if (t1 !== t2) return t1 - t2;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
+      const { sidebar, memberSpaces } = await fetchBrowseSidebarDataWithMemberSpaces(memberSpaceId);
 
-      return [...ordered, ...otherRows];
+      const editors = sidebar.editorOf.map(r => browseRowToQueryRow(r, 0));
+      const members = sidebar.memberOf.map(r => browseRowToQueryRow(r, 1));
+      const featured = sidebar.featured.map(r => browseRowToQueryRow(r, 2));
+
+      const createdAtMs = new Map<string, number>();
+      for (const s of memberSpaces) {
+        createdAtMs.set(s.id, entityCreatedAtMs(s.entity));
+      }
+
+      const ordering: SpaceDropdownOrderingMeta = {
+        editorIds: new Set(sidebar.editorOf.map(r => r.id)),
+        memberIds: new Set(sidebar.memberOf.map(r => r.id)),
+        featuredIds: new Set(sidebar.featured.map(r => r.id)),
+        createdAtMs,
+      };
+
+      return {
+        sections: { editors, members, featured },
+        ordering,
+      };
     },
     staleTime: 60_000,
   });

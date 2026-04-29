@@ -564,6 +564,8 @@ export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AN
   for (const [, filters] of groups) {
     if (filters.length === 1) {
       groupConditions.push(buildSingleFilterWhere(filters[0]));
+    } else if (ID.equals(filters[0].columnId, SystemIds.SPACE_FILTER)) {
+      groupConditions.push(buildSpaceFiltersWhere(filters));
     } else if (mode === 'OR') {
       groupConditions.push(buildOrWhere(filters));
     } else {
@@ -642,6 +644,18 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
   }
 
   return {};
+}
+
+/** Multiple SPACE_FILTER */
+function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
+  const ids = [...new Set(filters.map(f => f.value).filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return {};
+  if (ids.length === 1) {
+    return buildSingleFilterWhere({ ...filters[0], value: ids[0] });
+  }
+  return {
+    spaces: ids.map(id => ({ equals: id })),
+  };
 }
 
 function buildOrWhere(filterState: Filter[]): WhereCondition {

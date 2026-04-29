@@ -23,10 +23,11 @@ interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
   filterSuggestionSpaceId?: string;
+  isEditing?: boolean;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId }, ref) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, isEditing = true, }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
@@ -83,8 +84,11 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     const sortedFilters = sortFilters(filterableColumns);
 
     const onCreateFilter = (filters: TableBlockNewFilterRow[]) => {
-      const newFilters = [
-        ...effectiveFilterState,
+      if (filters.length === 0) return;
+      const touchedColumnIds = new Set(filters.map(f => f.columnId));
+      const base = effectiveFilterState.filter(f => !touchedColumnIds.has(f.columnId));
+      const next = [
+        ...base,
         ...filters.map(f => ({
           valueType: f.valueType,
           columnId: f.columnId,
@@ -93,7 +97,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           valueName: f.valueName,
         })),
       ];
-      effectiveSetFilterState(newFilters);
+      effectiveSetFilterState(next);
     };
 
     return (
@@ -101,7 +105,9 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         ref={ref}
         options={sortedFilters}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
+        filterStateForSeed={effectiveFilterState}
         onCreate={onCreateFilter}
+        isEditing={isEditing}
         trigger={
           <SmallButton icon={<CreateSmall />} variant="secondary">
             Filter

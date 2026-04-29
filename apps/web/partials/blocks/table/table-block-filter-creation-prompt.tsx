@@ -1,17 +1,18 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
+import { Anchor, Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, type FilterMode } from '~/core/blocks/data/filters';
 import { ID } from '~/core/id';
 import { Source } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -40,6 +41,7 @@ import { Divider } from '~/design-system/divider';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { Filter as FilterIcon } from '~/design-system/icons/filter';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Select } from '~/design-system/select';
@@ -52,7 +54,8 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 export interface TableBlockFilterPromptHandle {
-  openWithColumn: (columnId: string) => void;
+  /** Pass `anchorEl` when opening from another control (e.g. pill "+") so the popover positions against it instead of the main Filter trigger. */
+  openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => void;
 }
 
 export type TableBlockNewFilterRow = {
@@ -67,8 +70,15 @@ interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
   filterSuggestionSpaceId?: string;
+  /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
+  filterStateForSeed?: Filter[];
   onCreate: (filters: TableBlockNewFilterRow[]) => void;
+  /** When false, pending filter chips and value inputs use read-only (grey, no remove) styling. */
+  isEditing?: boolean;
 }
+
+const filterValueInputReadonlyClass =
+  '[&_input]:rounded-md [&_input]:border-0 [&_input]:bg-grey-01 [&_input]:shadow-none [&_input]:hover:shadow-none [&_input]:focus:shadow-none';
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
 // Used as the placement-hook `preferredHeight` so it matches the actual ceiling
@@ -427,6 +437,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
         columnDrafts: {
           ...state.columnDrafts,
           [prevCol]: savedPrev,
+          [nextCol]: loaded,
         },
       };
     }
@@ -444,6 +455,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
         columnDrafts: {
           ...state.columnDrafts,
           [prevCol]: savedPrev,
+          [nextCol]: loaded,
         },
       };
     }
@@ -650,6 +662,37 @@ function draftHasPending(
   return false;
 }
 
+function columnDraftMatchesCommitted(
+  draft: FilterColumnDraft,
+  committed: FilterColumnDraft,
+  columnId: string,
+  options: (Filter & { columnName: string })[]
+): boolean {
+  const selectedOption = options.find(o => ID.equals(o.columnId, columnId));
+  if (selectedOption?.valueType === 'RELATION') {
+    const a = new Set(draft.multiEntitySelections.map(e => e.id));
+    const b = new Set(committed.multiEntitySelections.map(e => e.id));
+    return a.size === b.size && [...a].every(id => b.has(id));
+  }
+  if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
+    const a = new Set(draft.multiSpaceSelections.map(s => s.id));
+    const b = new Set(committed.multiSpaceSelections.map(s => s.id));
+    return a.size === b.size && [...a].every(id => b.has(id));
+  }
+  if (selectedOption?.valueType === 'TEXT') {
+    const norm = (d: FilterColumnDraft) => {
+      const vals = new Set(d.multiStringSelections);
+      const t = d.textInput.trim();
+      if (t) vals.add(t);
+      return vals;
+    };
+    const x = norm(draft);
+    const y = norm(committed);
+    return x.size === y.size && [...x].every(v => y.has(v));
+  }
+  return equal(draft, committed);
+}
+
 function hasPendingFilterSelections(state: PromptState, options: (Filter & { columnName: string })[]): boolean {
   const merged = mergeAllColumnDrafts(normalizePromptState(state));
   return Object.keys(merged).some(columnId => {
@@ -832,6 +875,14 @@ function enumeratePendingFilterChips(
   return items;
 }
 
+function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): boolean {
+  const byColumn = new Map<string, number>();
+  for (const item of items) {
+    byColumn.set(item.columnId, (byColumn.get(item.columnId) ?? 0) + 1);
+  }
+  return [...byColumn.values()].some(count => count >= 2);
+}
+
 interface ToggleQueryModeProps {
   queryMode: 'ENTITIES' | 'RELATIONS';
   setQueryMode: (value: 'ENTITIES' | 'RELATIONS') => void;
@@ -872,11 +923,11 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
-  function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId }, ref) {
+  function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true, }, ref) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
-    const { filterState, setFilterState } = useFilters();
+    const { filterState, setFilterState, filterMode, setFilterMode } = useFilters();
     const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
     const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
@@ -889,17 +940,55 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     optionsRef.current = options;
     const filterStateRef = React.useRef(filterState);
     filterStateRef.current = filterState;
+    const seedFilterState = filterStateForSeed ?? filterState;
+    const seedFilterStateRef = React.useRef(seedFilterState);
+    seedFilterStateRef.current = seedFilterState;
+
+    const externalAnchorElRef = React.useRef<HTMLElement | null>(null);
+    const [externalAnchorBox, setExternalAnchorBox] = React.useState<{
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+    } | null>(null);
+
+    const syncExternalAnchorBox = React.useCallback(() => {
+      const el = externalAnchorElRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
+    }, []);
+
+    React.useLayoutEffect(() => {
+      if (!state.open || !externalAnchorElRef.current) return;
+      syncExternalAnchorBox();
+      window.addEventListener('resize', syncExternalAnchorBox);
+      window.addEventListener('scroll', syncExternalAnchorBox, true);
+      return () => {
+        window.removeEventListener('resize', syncExternalAnchorBox);
+        window.removeEventListener('scroll', syncExternalAnchorBox, true);
+      };
+    }, [state.open, syncExternalAnchorBox]);
 
     React.useImperativeHandle(ref, () => ({
-      openWithColumn: (columnId: string) => {
+      openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
         setQueryMode('ENTITIES');
+        externalAnchorElRef.current = anchorEl ?? null;
+        if (anchorEl) {
+          const r = anchorEl.getBoundingClientRect();
+          setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
+        } else {
+          setExternalAnchorBox(null);
+        }
         const s = stateRef.current;
         const opts = optionsRef.current;
-        const fs = filterStateRef.current;
+        const fs = seedFilterStateRef.current;
         const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
-        const seedDraft = draftHasPending(stored, columnId, opts)
-          ? undefined
-          : seedColumnDraftFromCommittedFilters(columnId, fs, opts);
+        const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
+        const reuseStored =
+          draftHasPending(stored, columnId, opts) &&
+          columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
+        const seedDraft = reuseStored ? undefined : committedDraft;
         dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
       },
     }));
@@ -945,6 +1034,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           state={state}
           dispatch={dispatch}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
+          filterMode={filterMode}
+          onFilterModeChange={setFilterMode}
+          isEditing={isEditing}
         />
       );
 
@@ -966,11 +1058,32 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         </AnimatePresence>
       ) : null;
 
-    const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
+    const onOpenChange = (open: boolean) => {
+      if (!open) {
+        externalAnchorElRef.current = null;
+        setExternalAnchorBox(null);
+      }
+      dispatch({ type: 'onOpenChange', payload: { open } });
+    };
 
     return (
       <Root open={state.open} onOpenChange={onOpenChange}>
         <Trigger asChild>{trigger}</Trigger>
+        {state.open && externalAnchorBox != null ? (
+          <Anchor asChild>
+            <div
+              aria-hidden
+              className="pointer-events-none"
+              style={{
+                position: 'fixed',
+                left: externalAnchorBox.left,
+                top: externalAnchorBox.top,
+                width: externalAnchorBox.width,
+                height: externalAnchorBox.height,
+              }}
+            />
+          </Anchor>
+        ) : null}
         <Portal>
           <AnimatePresence>
             {state.open && (
@@ -1014,28 +1127,54 @@ interface DynamicFiltersProps {
   state: PromptState;
   dispatch: React.Dispatch<PromptAction>;
   filterSuggestionSpaceId?: string;
+  filterMode: FilterMode;
+  onFilterModeChange: (mode: FilterMode) => void;
+  isEditing: boolean;
 }
 
-function MultiSelectChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+function MultiSelectChip({
+  label,
+  onRemove,
+  removable,
+}: {
+  label: string;
+  onRemove: () => void;
+  removable: boolean;
+}) {
   return (
-    <span className="inline-flex max-w-full items-center gap-0.5 rounded-sm border border-grey-02 bg-grey-01 py-0.5 pr-0.5 pl-1.5 text-[0.8125rem] text-text">
+    <span
+      className={cx(
+        'inline-flex max-w-full items-center gap-0.5 rounded-sm py-0.5 pl-1.5 text-[0.8125rem] text-text',
+        removable ? 'border border-grey-02 bg-grey-01 pr-0.5' : 'border-0 bg-grey-01 pr-1.5'
+      )}
+    >
       <span className="min-w-0 truncate">{label}</span>
-      <button
-        type="button"
-        className="flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
-        onClick={e => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        aria-label={`Remove ${label}`}
-      >
-        <CloseSmall color="grey-04" />
-      </button>
+      {removable && (
+        <button
+          type="button"
+          className="flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text"
+          onClick={e => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          aria-label={`Remove ${label}`}
+        >
+          <CloseSmall color="grey-04" />
+        </button>
+      )}
     </span>
   );
 }
 
-function DynamicFilters({ options, dispatch, state, filterSuggestionSpaceId }: DynamicFiltersProps) {
+function DynamicFilters({
+  options,
+  dispatch,
+  state,
+  filterSuggestionSpaceId,
+  filterMode,
+  onFilterModeChange,
+  isEditing,
+}: DynamicFiltersProps) {
   const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
   const selectedEntityIds = React.useMemo(
@@ -1061,19 +1200,95 @@ function DynamicFilters({ options, dispatch, state, filterSuggestionSpaceId }: D
       selectedOption?.relationValueTypes
     );
 
-  const pendingFilterChips = React.useMemo(() => enumeratePendingFilterChips(state, options), [state, options]);
+  const pendingFilterChips = React.useMemo(
+    () => enumeratePendingFilterChips(state, options),
+    [state, options]
+  );
+  const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
 
   return (
     <div className="flex w-full flex-col gap-3 px-2">
+      <div className="flex items-start gap-3">
+        <div className="flex flex-1">
+          {isEditing ? (
+            <Select
+              options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+              value={state.selectedColumn}
+              onChange={onSelectColumnToFilter}
+            />
+          ) : (
+            <div className="flex min-h-[38px] w-full items-center rounded-md border-0 bg-grey-01 px-3 py-2 text-button text-text">
+              <span className="truncate">{selectedOption?.columnName ?? '—'}</span>
+            </div>
+          )}
+        </div>
+        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
+        <div className={cx('relative flex flex-1', !isEditing && filterValueInputReadonlyClass)}>
+          {state.selectedColumn === SystemIds.SPACE_FILTER ? (
+            <TableBlockSpaceFilterInput
+              selectedValue=""
+              selectedSpaceIds={selectedSpaceIds}
+              memberSpaceId={filterSuggestionSpaceId}
+              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
+            />
+          ) : selectedOption?.valueType === 'RELATION' ? (
+            <TableBlockEntityFilterInput
+              filterByTypes={relationTargetTypeIds}
+              waitForFilterTypes={waitForRelationTargetTypes}
+              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
+              selectedValue=""
+              selectedEntityIds={selectedEntityIds}
+              onToggleEntity={e => dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })}
+            />
+          ) : (
+            <TableBlockTextFilterInput
+              value={getFilterValue(state.value)}
+              onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
+            />
+          )}
+        </div>
+      </div>
       {pendingFilterChips.length > 0 && (
-        <div className="w-full rounded-md border border-grey-02 bg-grey-01 px-3 py-2">
-          <p className="mb-1.5 text-[0.75rem] text-grey-04">Filters to apply</p>
-          <div className="flex flex-wrap gap-1.5">
+        <div
+          className={cx(
+            'w-full rounded-md px-3 py-2 shadow-none',
+            isEditing ? 'border border-grey-02' : 'border-0 bg-grey-01'
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            {showFilterModeControl && (
+              <>
+                <span
+                  className="flex h-6 shrink-0 items-center text-black [&_svg]:h-3 [&_svg]:w-3"
+                  aria-hidden
+                >
+                  <FilterIcon />
+                </span>
+                {isEditing ? (
+                  <Select
+                    value={filterMode}
+                    onChange={v => onFilterModeChange(v as FilterMode)}
+                    options={[
+                      { value: 'AND', label: 'And' },
+                      { value: 'OR', label: 'Or' },
+                    ]}
+                    position="popper"
+                    className="!inline-flex !h-6 !min-h-0 !w-auto !min-w-0 !max-w-[5.25rem] !flex-none shrink-0 items-center rounded-sm border border-grey-02 bg-grey-01 !px-1.5 !py-0 text-[0.8125rem] leading-tight text-text shadow-none [&>div]:min-h-0 [&>div]:gap-0.5"
+                  />
+                ) : (
+                  <span className="inline-flex h-6 shrink-0 items-center rounded-sm bg-grey-01 px-1.5 text-[0.8125rem] leading-tight text-text">
+                    {filterMode === 'OR' ? 'Or' : 'And'}
+                  </span>
+                )}
+              </>
+            )}
             {pendingFilterChips.map(item => {
-              const valueLabel = item.kind === 'string' ? item.value : (item.name ?? item.id);
+              const valueLabel =
+                item.kind === 'string' ? item.value : (item.name ?? item.id);
               return (
                 <MultiSelectChip
                   key={item.key}
+                  removable={isEditing}
                   label={`${item.columnName} · ${valueLabel}`}
                   onRemove={() => {
                     if (item.kind === 'entity') {
@@ -1099,40 +1314,6 @@ function DynamicFilters({ options, dispatch, state, filterSuggestionSpaceId }: D
           </div>
         </div>
       )}
-      <div className="flex items-start gap-3">
-        <div className="flex flex-1">
-          <Select
-            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-            value={state.selectedColumn}
-            onChange={onSelectColumnToFilter}
-          />
-        </div>
-        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
-        <div className="relative flex flex-1">
-          {state.selectedColumn === SystemIds.SPACE_FILTER ? (
-            <TableBlockSpaceFilterInput
-              selectedValue=""
-              selectedSpaceIds={selectedSpaceIds}
-              memberSpaceId={filterSuggestionSpaceId}
-              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
-            />
-          ) : selectedOption?.valueType === 'RELATION' ? (
-            <TableBlockEntityFilterInput
-              filterByTypes={relationTargetTypeIds}
-              waitForFilterTypes={waitForRelationTargetTypes}
-              restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
-              selectedValue=""
-              selectedEntityIds={selectedEntityIds}
-              onToggleEntity={e => dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })}
-            />
-          ) : (
-            <TableBlockTextFilterInput
-              value={getFilterValue(state.value)}
-              onChange={v => dispatch({ type: 'selectStringValue', payload: { value: v } })}
-            />
-          )}
-        </div>
-      </div>
     </div>
   );
 }
