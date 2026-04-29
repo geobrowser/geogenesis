@@ -4,7 +4,13 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { ADDRESS_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import {
+  ADDRESS_PROPERTY,
+  DATA_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
+  VENUE_PROPERTY,
+} from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
@@ -45,6 +51,7 @@ const SKIPPED_PROPERTIES: string[] = [
   ContentIds.AVATAR_PROPERTY,
   DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
 ];
 
 function countRenderableProperty(renderedProperties: string[]): number {
@@ -69,14 +76,14 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
       {Object.entries(renderedProperties)
         .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
         .map(([propertyId, property]) => {
-        const isRelation = property.dataType === 'RELATION';
+          const isRelation = property.dataType === 'RELATION';
 
-        if (isRelation) {
-          return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
-        }
+          if (isRelation) {
+            return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+          }
 
-        return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
-      })}
+          return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+        })}
     </div>
   );
 }
