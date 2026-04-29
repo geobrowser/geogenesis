@@ -672,7 +672,7 @@ export function ProposalBountyPanel() {
 
   return (
     <aside
-      className="sticky top-[44px] flex max-h-[calc(100vh-44px)] w-full max-w-[400px] shrink-0 flex-col self-start"
+      className="sticky top-[52px] flex h-[calc(100vh-60px)] w-full max-w-[400px] shrink-0 flex-col self-start"
       aria-label="Bounties"
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-grey-02 bg-white">
