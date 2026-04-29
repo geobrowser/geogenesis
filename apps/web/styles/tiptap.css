@@ -76,9 +76,9 @@
 }
 
 /* Focused empty paragraph: switch from "Add content..." to the slash hint.
-   Scoped to wrappers containing a paragraph so the hint never leaks onto
-   focused-empty NodeView wrappers (data blocks, code blocks, etc.). */
-.ProseMirror .is-empty.has-focus:has(> p)::before {
+   ParagraphNode renders <NodeViewWrapper><div class="paragraph-node"><p/></div></NodeViewWrapper>,
+   so we scope via .paragraph-node to avoid leaking onto other focused-empty NodeView wrappers. */
+.ProseMirror .is-empty.has-focus:has(> .paragraph-node)::before {
   content: '/ to select content block or write some content...';
 }
 
