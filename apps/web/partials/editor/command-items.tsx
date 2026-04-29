@@ -254,7 +254,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
           type: 'image',
         })
         .createParagraphNear()
-        .blur() 
+        .blur()
         .focus()
         .run();
     },

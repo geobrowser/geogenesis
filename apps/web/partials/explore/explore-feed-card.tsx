@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
+import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -62,7 +62,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
           {!hideSpaceLink ? (
             <Link
               href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] font-normal leading-[13px] tracking-[-0.35px] text-text hover:underline"
+              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
             >
               <SpaceThumb image={item.spaceImage} name={item.spaceName} />
               <span className="min-w-0 truncate">{item.spaceName}</span>
@@ -73,14 +73,14 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {uniqueTypes.map(t => (
                 <span
                   key={t.id}
-                  className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04"
+                  className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04"
                 >
                   {t.name}
                 </span>
               ))}
             </div>
           ) : null}
-          <span className="text-[12px] font-normal leading-[13px] tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
         </div>
         {!hideJoinButton && !item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton
@@ -93,12 +93,12 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       <div className={`flex gap-10 ${item.description ? 'items-start' : 'items-center'}`}>
         <div className="min-w-0 flex-1">
           <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
-            <h2 className="text-[19px] font-semibold leading-[23px] tracking-[-0.02em] text-text hover:underline">
+            <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text hover:underline">
               {item.title}
             </h2>
           </Link>
           {item.description ? (
-            <p className="mt-1 line-clamp-2 text-[16px] font-normal leading-[20px] tracking-[-0.03em] text-grey-04">
+            <p className="mt-1 line-clamp-2 text-[16px] leading-[20px] font-normal tracking-[-0.03em] text-grey-04">
               {item.description}
             </p>
           ) : null}

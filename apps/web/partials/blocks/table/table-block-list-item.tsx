@@ -136,7 +136,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="min-w-0 w-full space-y-3">
+        <div className="w-full min-w-0 space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -254,7 +254,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="min-w-0 w-full">
+        <div className="w-full min-w-0">
           {source.type !== 'COLLECTION' ? (
             <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           ) : (
@@ -274,11 +274,7 @@ export function TableBlockListItem({
             </CollectionMetadata>
           )}
           {description && (
-            <div
-              className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}
-            >
-              {description}
-            </div>
+            <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
           )}
 
           {orderCellsForBrowseFigma(otherPropertyData, properties).map(p => {

@@ -61,9 +61,7 @@ export const searchGraph = tool({
         })
       );
 
-      // Drop entities with no resolvable space — spaceId is used downstream as
-      // a citation/navigation identifier, so an empty one would produce
-      // malformed `geo://entity/...?space=` hrefs and bad navigate calls.
+      // Entities with no space produce malformed geo:// hrefs and broken navigate calls.
       const results = limitEntries(raw, effectiveLimit).flatMap(entity => {
         const firstSpace = entity.spaces[0];
         if (!firstSpace) return [];

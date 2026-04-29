@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 // Paces Anthropic's bursty SSE deltas into a steady reveal via rAF so the
-// text flows in instead of popping in chunks.
+// final-text reply flows in instead of popping in chunks.
 export function useSmoothStream(target: string, isStreaming: boolean): string {
   const [displayed, setDisplayed] = React.useState(target);
   const displayedRef = React.useRef(target);
@@ -19,17 +19,20 @@ export function useSmoothStream(target: string, isStreaming: boolean): string {
 
   React.useEffect(() => {
     if (!isStreaming) return;
+    if (displayedRef.current === target) return;
 
     let raf = 0;
     const tick = () => {
       const t = targetRef.current;
       const prev = displayedRef.current;
-      const backlog = t.length - prev.length;
-      if (backlog < 0) {
+      // Target shrunk (e.g. visible-text source rolled back when a new tool
+      // call landed) — snap to it instead of slicing past the new length.
+      if (!t.startsWith(prev) || t.length < prev.length) {
         displayedRef.current = t;
         setDisplayed(t);
         return;
       }
+      const backlog = t.length - prev.length;
       if (backlog === 0) return;
       const chars = Math.max(1, Math.min(12, Math.ceil(backlog * 0.15)));
       const next = t.slice(0, prev.length + Math.min(chars, backlog));
@@ -39,7 +42,7 @@ export function useSmoothStream(target: string, isStreaming: boolean): string {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isStreaming]);
+  }, [isStreaming, target]);
 
   return displayed;
 }

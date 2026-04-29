@@ -9,6 +9,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { isUrlTemplate } from '~/core/utils/url-template';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -20,8 +21,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
-
-import { isUrlTemplate } from '~/core/utils/url-template';
 
 import { createPropertyRelation, createTypeRelationForNewEntity, onChangeEntryFn, writeValue } from './change-entry';
 import { LIST_GALLERY_BROWSE_BODY_CLASS } from './table-block-browse-layout';
@@ -99,7 +98,13 @@ type PropertyProps = {
   browseListBody?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, browseListBody = false }: PropertyProps) => {
+const RenderedProperty = ({
+  entityId,
+  property,
+  spaceId,
+  disableLink = false,
+  browseListBody = false,
+}: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';

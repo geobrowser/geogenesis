@@ -38,7 +38,5 @@ export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
     return link;
   }
 
-  return (
-    <Tooltip trigger={link} label={description} position="top" align="start" variant="propertyDescription" />
-  );
+  return <Tooltip trigger={link} label={description} position="top" align="start" variant="propertyDescription" />;
 }

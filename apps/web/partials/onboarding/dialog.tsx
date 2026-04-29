@@ -2,6 +2,7 @@
 
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
@@ -12,8 +13,6 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -21,9 +20,9 @@ import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboa
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
+import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import type { SearchResult } from '~/core/types';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
@@ -62,8 +61,7 @@ function filterExactNameMatches(results: SearchResult[], name: string, allowedTy
   const normalized = name.trim().toLowerCase();
   if (!normalized) return [];
   return results.filter(
-    r =>
-      (r.name ?? '').trim().toLowerCase() === normalized && searchResultMatchesAllowedTypes(r, allowedTypes)
+    r => (r.name ?? '').trim().toLowerCase() === normalized && searchResultMatchesAllowedTypes(r, allowedTypes)
   );
 }
 
@@ -140,8 +138,7 @@ export const OnboardingDialog = () => {
   async function createSpace(options?: CreatePersonalSpaceTopicArg) {
     if (!address) return;
 
-    const effectiveTopicId =
-      options?.topicIdForPublish !== undefined ? options.topicIdForPublish : topicId;
+    const effectiveTopicId = options?.topicIdForPublish !== undefined ? options.topicIdForPublish : topicId;
 
     try {
       const spaceId = await createPersonalSpace({
@@ -198,40 +195,39 @@ export const OnboardingDialog = () => {
   // 'existing-entity-match' the candidates array would be empty — render
   // StepOnboarding during that window so we don't flash an empty match
   // step for a frame before the reset effect kicks in.
-  const effectiveStep =
-    step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'enter-profile' : step;
+  const effectiveStep = step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'enter-profile' : step;
 
   return (
     <Root open={isOnboardingVisible}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
-            <ModalCard childKey="card">
-              <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
-              {effectiveStep === 'start' && <StepStart />}
-              {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
-              {effectiveStep === 'existing-entity-match' && (
-                <StepExistingEntityMatch
-                  candidates={entityMatchCandidates}
-                  onSkip={async () => {
-                    setTopicId('');
-                    setStep('create-space');
-                    await sleep(100);
-                    createSpace({ topicIdForPublish: '' });
-                  }}
-                  onSelect={async (entityId, entityName) => {
-                    setTopicId(entityId);
-                    if (entityName) setName(entityName);
-                    setStep('create-space');
-                    await sleep(100);
-                    createSpace({ topicIdForPublish: entityId });
-                  }}
-                />
-              )}
-              {workflowSteps.includes(effectiveStep) && (
-                <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
-              )}
-            </ModalCard>
+          <ModalCard childKey="card">
+            <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            {effectiveStep === 'start' && <StepStart />}
+            {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
+            {effectiveStep === 'existing-entity-match' && (
+              <StepExistingEntityMatch
+                candidates={entityMatchCandidates}
+                onSkip={async () => {
+                  setTopicId('');
+                  setStep('create-space');
+                  await sleep(100);
+                  createSpace({ topicIdForPublish: '' });
+                }}
+                onSelect={async (entityId, entityName) => {
+                  setTopicId(entityId);
+                  if (entityName) setName(entityName);
+                  setStep('create-space');
+                  await sleep(100);
+                  createSpace({ topicIdForPublish: entityId });
+                }}
+              />
+            )}
+            {workflowSteps.includes(effectiveStep) && (
+              <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
+            )}
+          </ModalCard>
         </Content>
       </Portal>
     </Root>
@@ -421,10 +417,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             </div>
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
-            <SmallButton
-              icon={isUploadingAvatar ? <Dots /> : <Upload />}
-              onClick={() => fileInputRef.current?.click()}
-            >
+            <SmallButton icon={isUploadingAvatar ? <Dots /> : <Upload />} onClick={() => fileInputRef.current?.click()}>
               {isUploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
             </SmallButton>
             <input

@@ -40,14 +40,7 @@ export const Tooltip = ({
           <AnimatePresence mode="popLayout">
             {isOpen && (
               // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
-              <Content
-                side={position}
-                align={align}
-                alignOffset={0}
-                sideOffset={4}
-                forceMount
-                className="z-1001"
-              >
+              <Content side={position} align={align} alignOffset={0} sideOffset={4} forceMount className="z-1001">
                 <motion.div
                   className={cx(
                     'relative w-full focus:outline-hidden',
