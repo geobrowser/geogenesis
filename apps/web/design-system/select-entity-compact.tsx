@@ -13,6 +13,8 @@ import { SwitchableRenderableType } from '~/core/types';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 import { NativeGeoImage } from './geo-image';
+import { trapWheelToElement } from './trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 import { Search } from './icons/search';
 import { Tag } from './tag';
 import { Text } from './text';
@@ -52,6 +54,7 @@ export function SelectEntityCompact({
   renderableTypeValue = 'TEXT',
   onRenderableTypeChange,
 }: SelectEntityCompactProps) {
+  const anchorWrapperRef = React.useRef<HTMLDivElement | null>(null);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
@@ -108,6 +111,12 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
+    isOpen: query.trim().length > 0,
+    preferredHeight: 320,
+    gap: 12,
+  });
+
   useKey('Escape', () => {
     onQueryChange('');
   });
@@ -137,7 +146,7 @@ export function SelectEntityCompact({
   return (
     <Popover.Root open={query.trim().length > 0}>
       <Popover.Anchor asChild>
-        <div className="w-full space-y-2">
+        <div ref={anchorWrapperRef} className="w-full space-y-2">
           <div className="relative w-full">
             <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2">
               <Search />
@@ -192,14 +201,18 @@ export function SelectEntityCompact({
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
+          side={popoverSide}
+          align={popoverAlign}
           sideOffset={4}
-          align="start"
-          className="z-1001 w-(--radix-popper-anchor-width) overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
-          collisionPadding={10}
+          className="z-1001 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
+          collisionPadding={16}
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
         >
-          <div className="max-h-[min(50vh,300px)] overflow-y-auto">
+          <div
+            className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
+            onWheel={e => trapWheelToElement(e.currentTarget, e)}
+          >
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
             {!isLoading && isEmpty && <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>}
             {!isLoading && !isEmpty && (

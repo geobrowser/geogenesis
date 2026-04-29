@@ -244,10 +244,12 @@ function GovernanceFilterMenu({
       open={open}
       onOpenChange={setOpen}
       asChild
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{displayLabel}</SmallButton>}
-      align="start"
+      viewportClassName={`w-full min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box] ${
+        maxHeightClass ?? 'max-h-[200px]'
+      }`}
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
     >
-      <div className={maxHeightClass}>
+      <>
         {items.map(item => (
           <Link
             key={item.href}
@@ -274,7 +276,7 @@ function GovernanceFilterMenu({
             </Text>
           </Link>
         ))}
-      </div>
+      </>
     </Menu>
   );
 }

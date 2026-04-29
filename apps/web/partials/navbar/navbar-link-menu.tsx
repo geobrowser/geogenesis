@@ -31,7 +31,6 @@ export function NavbarLinkMenu() {
       <Menu
         open={open}
         onOpenChange={onOpenChange}
-        align="start"
         trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
       >
         {urlComponents?.map((component, index) => {

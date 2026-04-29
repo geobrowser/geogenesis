@@ -47,6 +47,8 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
 import { Toggle } from '~/design-system/toggle';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 export interface TableBlockFilterPromptHandle {
   openWithColumn: (columnId: string) => void;
@@ -68,6 +70,11 @@ interface TableBlockFilterPromptProps {
 }
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
+// Used as the placement-hook `preferredHeight` so it matches the actual ceiling
+// applied by `useFourAndHalfRowsMaxHeight` below — otherwise the placement code
+// thinks the dropdown wants 180px, picks `bottom`, and the dropdown overflows
+// off the viewport when space-below is between 180 and the real cap.
+const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 320;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -151,6 +158,50 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
   );
 
   return { focused, setFocused, onFocus, onBlur, clearBlurTimeout };
+}
+
+// Hard ceiling for the dynamic measurement so tall rows (e.g. type results with a
+// "Geo > Type" breadcrumb at ~100px each) can't blow past the default ResultsList
+// max-height of 340px when the inline style overrides the class.
+// Aliased to the placement constant above so the placement hook's `preferredHeight`
+// stays in sync with the actual ceiling.
+const DROPDOWN_MAX_HEIGHT_PX = FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX;
+
+function useFourAndHalfRowsMaxHeight(
+  listRef: React.RefObject<HTMLUListElement | null>,
+  isOpen: boolean,
+  rowCount: number
+) {
+  const [maxHeight, setMaxHeight] = React.useState<number | undefined>(undefined);
+
+  React.useLayoutEffect(() => {
+    if (!isOpen) {
+      setMaxHeight(undefined);
+      return;
+    }
+
+    if (rowCount < 5) {
+      setMaxHeight(undefined);
+      return;
+    }
+
+    const list = listRef.current;
+    if (!list) return;
+
+    const measure = () => {
+      const firstRow = list.firstElementChild;
+      if (!(firstRow instanceof HTMLElement)) return;
+      const rowHeight = firstRow.getBoundingClientRect().height;
+      if (rowHeight <= 0) return;
+      setMaxHeight(Math.min(rowHeight * 4.5, DROPDOWN_MAX_HEIGHT_PX));
+    };
+
+    measure();
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
+  }, [isOpen, rowCount, listRef]);
+
+  return maxHeight;
 }
 
 function useRelationColumnTargetTypeIds(
@@ -1243,16 +1294,18 @@ function TableBlockEntityFilterInput({
     [searchPages]
   );
 
-  const rowsToRender = React.useMemo(
-    () =>
-      searchResults
-        .filter(r => {
-          if (restrictSearchToTypes && !filterByTypes?.length) return false;
-          return searchResultMatchesAllowedTypes(r, filterByTypes);
-        })
-        .map(r => ({ kind: 'search' as const, result: r })),
-    [searchResults, filterByTypes, restrictSearchToTypes]
-  );
+  const rowsToRender = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: { kind: 'search'; result: (typeof searchResults)[number] }[] = [];
+    for (const r of searchResults) {
+      if (restrictSearchToTypes && !filterByTypes?.length) continue;
+      if (!searchResultMatchesAllowedTypes(r, filterByTypes)) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({ kind: 'search', result: r });
+    }
+    return out;
+  }, [searchResults, filterByTypes, restrictSearchToTypes]);
 
   const filterByTypesKey = filterByTypes?.slice().sort().join(',') ?? '';
   const [entityVisibleCount, setEntityVisibleCount] = React.useState(FILTER_DROPDOWN_PAGE_SIZE);
@@ -1363,6 +1416,19 @@ function TableBlockEntityFilterInput({
 
   const multi = Boolean(onToggleEntity);
   const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
+  const entityDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
+    isOpen: showDropdown,
+    preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
+    gap: 8,
+  });
+  const entityDropdownMaxHeight = useFourAndHalfRowsMaxHeight(
+    entityResultsListRef,
+    showDropdown,
+    rowsToRender.length
+  );
+  const onEntityDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(entityResultsListRef.current, e);
+  }, []);
 
   const handleEntityPick = (result: { id: string; name: string | null }) => {
     clearBlurTimeout();
@@ -1386,11 +1452,19 @@ function TableBlockEntityFilterInput({
       />
       {showDropdown && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={`absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 ${
+            entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+          } ${entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onEntityDropdownWheel}
+          style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={entityResultsListRef} onScroll={handleEntityResultsScroll}>
+            <ResultsList
+              ref={entityResultsListRef}
+              onScroll={handleEntityResultsScroll}
+              style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
+            >
               {rowsToRender.length === 0 && (isSearchPending || isSearchFetching) ? (
                 <ResultItem className="pointer-events-none">
                   <Text color="grey-03" variant="metadataMedium">
@@ -1596,6 +1670,32 @@ function TableBlockSpaceFilterInput({
   );
 
   const inputDisplay = multi ? query : query === '' ? selectedValue : query;
+  const spaceDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
+    isOpen: showScopedOnlyPanel || showQueryPanel,
+    preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
+    gap: 8,
+  });
+  const activeSpaceListRef = showScopedOnlyPanel ? spaceScopedListRef : spaceQueryListRef;
+  const activeSpaceRowsCount = showScopedOnlyPanel
+    ? defaultSpaceSuggestions.length
+    : showQueryPanel
+      ? results.length
+      : 0;
+  const spaceDropdownMaxHeight = useFourAndHalfRowsMaxHeight(
+    activeSpaceListRef,
+    showScopedOnlyPanel || showQueryPanel,
+    activeSpaceRowsCount
+  );
+  const onSpaceDropdownWheel = React.useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
+      trapWheelToElement(list, e);
+    },
+    [showQueryPanel, showScopedOnlyPanel]
+  );
+  const spaceDropdownClassName = `absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 ${
+    spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+  } ${spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'}`;
 
   return (
     <div ref={interactionRootRef} className="relative w-full">
@@ -1608,11 +1708,17 @@ function TableBlockSpaceFilterInput({
       />
       {showScopedOnlyPanel && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onSpaceDropdownWheel}
+          style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceScopedListRef} onScroll={handleSpaceResultsScroll}>
+            <ResultsList
+              ref={spaceScopedListRef}
+              onScroll={handleSpaceResultsScroll}
+              style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
+            >
               {visibleScopedSpaceSuggestions.map((s, i) =>
                 renderSpaceRow(
                   s.id,
@@ -1632,11 +1738,17 @@ function TableBlockSpaceFilterInput({
       )}
       {showQueryPanel && (
         <div
-          className="absolute top-10 z-1 flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
+          onWheel={onSpaceDropdownWheel}
+          style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList ref={spaceQueryListRef} onScroll={handleSpaceResultsScroll}>
+            <ResultsList
+              ref={spaceQueryListRef}
+              onScroll={handleSpaceResultsScroll}
+              style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
+            >
               {visibleSpaceQueryRows.map((result, i) =>
                 renderSpaceRow(
                   result.id,

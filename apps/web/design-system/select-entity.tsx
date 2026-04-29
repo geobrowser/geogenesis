@@ -40,7 +40,9 @@ import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
+import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -125,6 +127,10 @@ export const SelectEntity = ({
   const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
 
   const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
+  // Mirror Radix's actual rendered `data-side` so the corner flip stays in lockstep
+  // with the visible position. Driving it from our placement hook drifts during scroll
+  // because Radix's collision middleware can disagree by a frame.
+  const [actualSide, setActualSide] = useState<'top' | 'bottom'>('bottom');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -241,7 +247,7 @@ export const SelectEntity = ({
 
     if (element) {
       element.scrollIntoView({
-        behavior: 'smooth',
+        behavior: 'auto',
         block: 'nearest',
       });
     }
@@ -255,14 +261,16 @@ export const SelectEntity = ({
   useLayoutEffect(() => {
     if (!popoverElement) return;
 
-    const updateClipPath = () => {
+    const sync = () => {
       const side = popoverElement.getAttribute('data-side');
-      setClipPath(side === 'top' ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+      const isTop = side === 'top';
+      setClipPath(isTop ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+      if (side === 'top' || side === 'bottom') setActualSide(side);
     };
 
-    updateClipPath(); // initial check
+    sync(); // initial check
 
-    const observer = new MutationObserver(updateClipPath);
+    const observer = new MutationObserver(sync);
     observer.observe(popoverElement, { attributes: true, attributeFilter: ['data-side'] });
 
     return () => observer.disconnect();
@@ -279,36 +287,31 @@ export const SelectEntity = ({
     [autoFocus]
   );
 
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const target = event.target as Node | null;
-      const container = containerRef.current;
-      const popover = popoverRef.current;
-      if (target && container && container.contains(target)) return;
-      if (target && popover && popover.contains(target)) return;
-      onQueryChange('');
-      setSelectedIndex(0);
-      setResult(null);
-    };
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
+    isOpen: Boolean(query),
+    preferredHeight: advanced ? 520 : 300,
+    gap: 12,
+  });
 
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('touchstart', handler);
-
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('touchstart', handler);
-    };
-  }, [onQueryChange]);
+  const isQueried = query.length > 0;
+  // Use Radix's rendered `data-side` (mirrored into actualSide) so the corner flip
+  // matches the visible position, even when Radix's collision middleware briefly
+  // disagrees with our placement hook during scroll.
+  const popoverAbove = actualSide === 'top';
 
   return (
     <div
       ref={containerRef}
-      className={containerStyles({
-        width,
-        floating: variant === 'floating',
-        isQueried: query.length > 0,
-        className: containerClassName,
-      })}
+      className={cx(
+        containerStyles({
+          width,
+          floating: variant === 'floating',
+          className: containerClassName,
+        }),
+        // When attached to results, square off the edge that meets them — bottom by
+        // default, top when the popover flips above the input.
+        isQueried && (popoverAbove ? 'rounded-t-none' : 'rounded-b-none')
+      )}
     >
       {withSearchIcon && (
         <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
@@ -337,21 +340,51 @@ export const SelectEntity = ({
                 setPopoverElement(node);
                 popoverRef.current = node;
               }}
+              side={popoverSide}
+              align={popoverAlign}
+              sideOffset={4}
+              avoidCollisions
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
                 inputRef.current?.focus();
               }}
-              className="z-9999 w-(--radix-popper-anchor-width) leading-none"
-              collisionPadding={10}
+              onInteractOutside={event => {
+                // The input that controls `query` lives outside the portal but
+                // anchors this popover — typing/clicking it shouldn't dismiss us.
+                const target = event.target as Node | null;
+                if (target && containerRef.current?.contains(target)) {
+                  event.preventDefault();
+                  return;
+                }
+                onQueryChange('');
+                setSelectedIndex(0);
+                setResult(null);
+              }}
+              className={cx(
+                'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                width === 'full' && 'max-w-[calc(100vw-24px)]'
+              )}
+              // Reserve space at the bottom of the viewport so the dropdown — including
+              // its `Create new` footer — can't slide under floating bottom toolbars
+              // (e.g. the "Review edits" action bar in edit mode). 96px covers the
+              // typical floating-bar height + a little breathing room. This also feeds
+              // into `--radix-popper-available-height`, shrinking the inner scroll
+              // viewport accordingly.
+              collisionPadding={{ top: 16, right: 16, bottom: 96, left: 16 }}
               forceMount
             >
-              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
+              <div
+                className={cx(
+                  variant === 'fixed' && (popoverAbove ? 'pb-1' : 'pt-1'),
+                  width === 'full' && 'w-full'
+                )}
+              >
                 <div
                   className={cx(
-                    '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
-                    width === 'clamped' ? 'w-[400px]' : '-mr-px',
-                    withSearchIcon && 'rounded-t-none'
+                    '-ml-px w-full max-w-full overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+                    width === 'full' && '-mr-px',
+                    withSearchIcon && (popoverAbove ? 'rounded-b-none' : 'rounded-t-none')
                   )}
                   style={{ clipPath }}
                 >
@@ -484,7 +517,7 @@ export const SelectEntity = ({
                   {!result ? (
                     <ResizableContainer>
                       <div
-                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto bg-white"
+                        className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
@@ -494,6 +527,7 @@ export const SelectEntity = ({
                           // the dropdown above the input.
                           minHeight: results.length > 0 ? '100px' : '2.5rem',
                         }}
+                        onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {!results?.length && isLoading && (
                           <div className="w-full bg-white px-3 py-2">
@@ -654,12 +688,13 @@ export const SelectEntity = ({
                         </div>
                       </div>
                       <div
-                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto bg-white"
+                        className="no-scrollbar flex flex-col divide-y divide-divider overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
                           maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
                           minHeight: '100px',
                         }}
+                        onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {(result.spaces ?? []).map((space, index) => (
                           <button
@@ -756,14 +791,10 @@ const containerStyles = cva('relative', {
     floating: {
       true: 'rounded-md border border-grey-02 bg-white shadow-lg',
     },
-    isQueried: {
-      true: 'rounded-b-none',
-    },
   },
   defaultVariants: {
     width: 'clamped',
     floating: false,
-    isQueried: false,
   },
 });
 
