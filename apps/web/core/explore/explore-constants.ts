@@ -16,6 +16,3 @@ export const EXPLORE_COVER_PROPERTY_ID = '34f535072e6b42c5a84443981a77cfa2';
 export const EXPLORE_AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 export const EXPLORE_PAGE_SIZE = 22;
-
-/** Integer score property used to rank entities for the Explore "Top" sort. */
-export const SCORE_SYSTEM_PROPERTY = '85a4668a42fa4f488969c0a9de0c294b';

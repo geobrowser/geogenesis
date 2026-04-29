@@ -10,13 +10,14 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
 
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
   EXPLORE_COVER_PROPERTY_ID,
   EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
-  SCORE_SYSTEM_PROPERTY,
 } from './explore-constants';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
