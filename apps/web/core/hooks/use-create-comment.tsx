@@ -26,7 +26,6 @@ import { Publish } from '~/core/utils/publish';
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
-
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
@@ -102,9 +101,7 @@ export function useCreateComment(targetEntityId: string) {
   React.useEffect(() => {
     if (!cachedProfile || !personalSpaceId) return;
     const avatarUrl =
-      cachedProfile.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
-        ? cachedProfile.avatarUrl
-        : null;
+      cachedProfile.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? cachedProfile.avatarUrl : null;
     queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], old => {
       if (!old) return old;
       let changed = false;
@@ -425,9 +422,7 @@ export function useCreateComment(targetEntityId: string) {
             for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
               if (signal.aborted) return;
               try {
-                const exists = await Effect.runPromise(
-                  checkEntityExists(commentEntityId, signal)
-                );
+                const exists = await Effect.runPromise(checkEntityExists(commentEntityId, signal));
                 if (exists) {
                   const list = await fetchCommentEntitiesForTarget(targetEntityId, signal);
                   applyServerList(list);

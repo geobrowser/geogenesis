@@ -30,11 +30,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
   const estPayout = bounty.budget != null ? Math.round(bounty.budget * BOUNTY_EST_PAYOUT_RATIO) : null;
 
   const hasDetails =
-    estPayout != null ||
-    bounty.difficulty ||
-    bounty.status ||
-    bounty.userSubmissionsCount != null ||
-    formattedDeadline;
+    estPayout != null || bounty.difficulty || bounty.status || bounty.userSubmissionsCount != null || formattedDeadline;
 
   const handleOpenBounty = () => {
     if (!bounty.spaceId) return;
@@ -54,7 +50,9 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
                 className="h-full w-full object-cover"
               />
             </span>
-            <span className="min-w-0 truncate text-[14px] leading-snug text-text">{bounty.spaceLabel ?? bounty.spaceId}</span>
+            <span className="min-w-0 truncate text-[14px] leading-snug text-text">
+              {bounty.spaceLabel ?? bounty.spaceId}
+            </span>
           </div>
         ) : (
           <span />
@@ -122,9 +120,7 @@ export function BountyCard({ bounty, isSelected, onToggle }: BountyCardProps) {
 
           {bounty.userSubmissionsCount != null && (
             <DetailRow label="Your submissions">
-              <span className="text-[14px] text-text">
-                {bounty.userSubmissionsCount.toLocaleString('en-US')}
-              </span>
+              <span className="text-[14px] text-text">{bounty.userSubmissionsCount.toLocaleString('en-US')}</span>
             </DetailRow>
           )}
 

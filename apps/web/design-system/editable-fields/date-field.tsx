@@ -387,7 +387,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-6 flex-col">
@@ -569,7 +569,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex grow items-center">
           <div className="flex items-center gap-1">
@@ -850,7 +850,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-6 flex-col">

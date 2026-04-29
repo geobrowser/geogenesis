@@ -22,25 +22,22 @@ interface Props {
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
 
-const contentStyles = cva(
-  'z-10 w-[273px] rounded border border-grey-02 bg-white shadow-lg',
-  {
-    variants: {
-      align: {
-        start: 'origin-top-left',
-        center: 'origin-top',
-        end: 'origin-top-right',
-      },
-      scroll: {
-        true: 'max-h-[200px] overscroll-contain overflow-y-auto overflow-x-hidden scroll-smooth',
-        false: 'overflow-hidden',
-      },
+const contentStyles = cva('z-10 w-[273px] rounded border border-grey-02 bg-white shadow-lg', {
+  variants: {
+    align: {
+      start: 'origin-top-left',
+      center: 'origin-top',
+      end: 'origin-top-right',
     },
-    defaultVariants: {
-      scroll: false,
+    scroll: {
+      true: 'max-h-[200px] overflow-x-hidden overflow-y-auto overscroll-contain scroll-smooth',
+      false: 'overflow-hidden',
     },
-  }
-);
+  },
+  defaultVariants: {
+    scroll: false,
+  },
+});
 
 export const Dropdown = ({ trigger, align, scrollableList = false, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
@@ -51,7 +48,7 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
     preferredHeight: 240,
     gap: 8,
   });
-  const resolvedAlign = align === 'center' ? 'center' : align ?? adaptiveAlign;
+  const resolvedAlign = align === 'center' ? 'center' : (align ?? adaptiveAlign);
   const onDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);
   }, []);

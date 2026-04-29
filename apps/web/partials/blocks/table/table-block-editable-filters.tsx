@@ -26,14 +26,7 @@ interface TableBlockEditableFiltersProps {
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters(
-    {
-      filterState,
-      setFilterState,
-      filterSuggestionSpaceId,
-    },
-    ref
-  ) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 

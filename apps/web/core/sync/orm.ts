@@ -415,14 +415,12 @@ export class E {
     const [spaces, typeNames] = await Promise.all([
       cache.fetchQuery({
         queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-        queryFn: ({ signal: innerSignal }) =>
-          Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
+        queryFn: ({ signal: innerSignal }) => Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
       }),
       typeIds.length > 0
         ? cache.fetchQuery({
             queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
-            queryFn: ({ signal: innerSignal }) =>
-              Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
+            queryFn: ({ signal: innerSignal }) => Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
           })
         : Promise.resolve([]),
     ]);

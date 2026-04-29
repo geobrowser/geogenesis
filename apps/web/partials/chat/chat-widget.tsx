@@ -9,9 +9,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
-import type { NavigateOutput } from '~/core/chat/nav-types';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
+import { ENTITY_ID_REGEX, isHistoryFull, isHistoryFullError } from '~/core/chat/limits';
+import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
+import { useSpace } from '~/core/hooks/use-space';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -19,12 +22,10 @@ import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatPanel } from './chat-panel';
 
-const ENTITY_ID = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-
 // The model can hallucinate id shapes. Guard router.push so a bad tool call
 // can't shove us onto a malformed URL.
 function validId(value: string | undefined): value is string {
-  return typeof value === 'string' && ENTITY_ID.test(value);
+  return typeof value === 'string' && ENTITY_ID_REGEX.test(value);
 }
 
 function resolveNavigateHref(output: NavigateOutput): string | null {
@@ -59,26 +60,34 @@ export function ChatWidget() {
   const params = useParams();
   const router = useRouter();
   const { editable } = useEditable();
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { setIsReviewOpen, bumpReviewVersion } = useDiff();
 
   const currentSpaceId = typeof params?.['id'] === 'string' ? params['id'] : null;
-  const currentEntityId = typeof params?.['entityId'] === 'string' ? params['entityId'] : null;
+  const routeEntityId = typeof params?.['entityId'] === 'string' ? params['entityId'] : null;
 
-  // Keep the latest context in a ref so the transport body callback never
-  // closes over stale values, but the transport instance stays stable.
+  // On a space home page (`/space/{id}`) there's no `entityId` route param, but
+  // the page renders the space's home entity (either `space.entity.id` or
+  // `space.topicId` for topic spaces). Without this, the assistant's
+  // `getEntity(spaceId)` call looks up the governance space, not the entity
+  // whose blocks / values are on screen.
+  const { space } = useSpace(routeEntityId === null ? (currentSpaceId ?? undefined) : undefined);
+  const spaceHomeEntityId = space?.topicId || space?.entity?.id || null;
+  const currentEntityId =
+    routeEntityId ?? (spaceHomeEntityId && ENTITY_ID_REGEX.test(spaceHomeEntityId) ? spaceHomeEntityId : null);
+
+  // Ref keeps context current without re-creating the transport instance on
+  // every render.
   const contextRef = React.useRef({
     currentSpaceId,
     currentEntityId,
     currentPath: pathname,
     isEditMode: editable,
-    personalSpaceId,
   });
   contextRef.current = {
     currentSpaceId,
     currentEntityId,
     currentPath: pathname,
     isEditMode: editable,
-    personalSpaceId,
   };
 
   const transport = React.useMemo(
@@ -113,7 +122,32 @@ export function ChatWidget() {
     }
   }, [messages, router]);
 
+  // Dedup by toolCallId so re-renders don't re-open after user dismisses.
+  // bumpReviewVersion recomputes the diff from current staged state.
+  const openedReviewPanelToolCallIds = React.useRef(new Set<string>());
+  React.useEffect(() => {
+    for (const message of messages) {
+      if (message.role !== 'assistant') continue;
+      for (const part of message.parts) {
+        if (!isToolUIPart(part)) continue;
+        if (part.type !== 'tool-openReviewPanel') continue;
+        if (part.state !== 'output-available') continue;
+        if (openedReviewPanelToolCallIds.current.has(part.toolCallId)) continue;
+        openedReviewPanelToolCallIds.current.add(part.toolCallId);
+        const output = part.output as OpenReviewPanelOutput;
+        if (!output.ok) continue;
+        bumpReviewVersion();
+        setIsReviewOpen(true);
+      }
+    }
+  }, [messages, setIsReviewOpen, bumpReviewVersion]);
+
+  useEditDispatcher(messages);
+
   const isBusy = status === 'submitted' || status === 'streaming';
+
+  // "Full" = locally over the threshold OR server returned a 413 history-full error.
+  const isFull = React.useMemo(() => isHistoryFull(messages) || isHistoryFullError(error), [messages, error]);
 
   const handleNewChat = () => {
     if (isBusy) stop();
@@ -142,13 +176,13 @@ export function ChatWidget() {
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || isBusy) return;
+    if (!text || isBusy || isFull) return;
     sendMessage({ text });
     setInput('');
   };
 
   const handleSuggestion = (text: string) => {
-    if (isBusy) return;
+    if (isBusy || isFull) return;
     sendMessage({ text });
   };
 
@@ -161,6 +195,7 @@ export function ChatWidget() {
             messages={messages}
             status={status}
             error={error}
+            isFull={isFull}
             input={input}
             onInputChange={setInput}
             onSend={handleSend}

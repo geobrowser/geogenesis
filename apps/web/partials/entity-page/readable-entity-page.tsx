@@ -4,7 +4,13 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { ADDRESS_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import {
+  ADDRESS_PROPERTY,
+  DATA_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
+  VENUE_PROPERTY,
+} from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import {
   useHydrateEntity,
@@ -39,11 +45,13 @@ interface Props {
 const SKIPPED_PROPERTIES: string[] = [
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
   SystemIds.COVER_PROPERTY,
   SystemIds.TABS_PROPERTY,
   ContentIds.AVATAR_PROPERTY,
   DATA_TYPE_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
+  SCORE_SYSTEM_PROPERTY,
 ];
 
 function countRenderableProperty(renderedProperties: string[]): number {
@@ -65,15 +73,17 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      {Object.entries(renderedProperties).map(([propertyId, property]) => {
-        const isRelation = property.dataType === 'RELATION';
+      {Object.entries(renderedProperties)
+        .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
+        .map(([propertyId, property]) => {
+          const isRelation = property.dataType === 'RELATION';
 
-        if (isRelation) {
-          return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
-        }
+          if (isRelation) {
+            return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+          }
 
-        return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
-      })}
+          return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+        })}
     </div>
   );
 }
@@ -125,9 +135,9 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
           return null;
         }
         return (
-          <div key={`${entityId}-${propertyId}-${index}`} className="min-w-0 max-w-full break-words">
+          <div key={`${entityId}-${propertyId}-${index}`} className="max-w-full min-w-0 break-words">
             <PropertyNameLink property={property} spaceId={spaceId} />
-            <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
+            <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
               <RenderedValue
                 propertyId={propertyId}
                 entityId={entityId}
@@ -194,12 +204,10 @@ export function RelationsGroup({
 
   return (
     <>
-      <div key={`${propertyId}-${property.name}`} className="min-w-0 max-w-full break-words">
-        {propertyId !== SystemIds.TYPES_PROPERTY && (
-          <PropertyNameLink property={property} spaceId={spaceId} />
-        )}
+      <div key={`${propertyId}-${property.name}`} className="max-w-full min-w-0 break-words">
+        {propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
 
-        <div className="flex min-w-0 w-full max-w-full flex-wrap gap-2">
+        <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
           {relations.map(r => {
             const linkedEntityId = r.toEntity.id;
             const linkedSpaceId = r.toSpaceId ?? r.spaceId;
@@ -232,7 +240,7 @@ export function RelationsGroup({
             return (
               <div
                 key={`relation-${relationId}-${linkedEntityId}`}
-                className={`min-w-0 max-w-full ${isMetadataHeader ? '' : 'mt-1'}`}
+                className={`max-w-full min-w-0 ${isMetadataHeader ? '' : 'mt-1'}`}
               >
                 <LinkableRelationChip
                   isEditing={false}
@@ -354,7 +362,7 @@ function RenderedValue({
           format={format}
         />
       ) : (
-        <Text key={`string-${propertyId}-${value}`} as="p" className="min-w-0 max-w-full break-words">
+        <Text key={`string-${propertyId}-${value}`} as="p" className="max-w-full min-w-0 break-words">
           {value}
         </Text>
       );

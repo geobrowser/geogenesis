@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -12,8 +13,9 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
-import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
+
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
+import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 import { Execute } from './execute';
 

@@ -4,8 +4,8 @@ import { Analytics } from '@vercel/analytics/react';
 
 import * as React from 'react';
 
-import dynamic from 'next/dynamic';
 import { useAtomValue } from 'jotai';
+import dynamic from 'next/dynamic';
 
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';

@@ -1,6 +1,7 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
@@ -129,7 +130,7 @@ export function EntityFeed({
   const spaceLabel =
     selectedSpaceId === 'all'
       ? 'Any space'
-      : initialSpaceOptions.find(o => o.value === selectedSpaceId)?.label ?? 'Any space';
+      : (initialSpaceOptions.find(o => o.value === selectedSpaceId)?.label ?? 'Any space');
 
   return (
     <div className="mx-auto w-full max-w-[880px]">

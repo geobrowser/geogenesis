@@ -4,6 +4,7 @@ import { useRelationEntityRelations } from '~/core/state/entity-page-store/entit
 import type { Relation } from '~/core/types';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
 
@@ -29,6 +30,9 @@ export function EntityPageHeader({
     <div className="space-y-2">
       <EntityPageRelations entityId={entityId} spaceId={spaceId} serverRelations={serverRelations} />
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
+      {showHeading && !isRelationPage && (
+        <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
+      )}
       {showHeader && !isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
     </div>
   );

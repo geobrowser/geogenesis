@@ -4,21 +4,18 @@ import Code from '@tiptap/extension-code';
 import CodeBlock from '@tiptap/extension-code-block';
 import Document from '@tiptap/extension-document';
 import HardBreak from '@tiptap/extension-hard-break';
+import Heading from '@tiptap/extension-heading';
 import Italic from '@tiptap/extension-italic';
 import Link from '@tiptap/extension-link';
 import { BulletList, ListItem } from '@tiptap/extension-list';
-import Heading from '@tiptap/extension-heading';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
+
 import { describe, expect, it } from 'vitest';
 
 import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
-import {
-  editorNodeToMarkdown,
-  markdownToEditorJson,
-  markdownToRenderedHtml,
-} from './markdown-adapter';
+import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';
 
 // Minimal extensions for test — no React node views, no browser-only code
 const testExtensions = [
@@ -84,9 +81,7 @@ describe('markdown-adapter', () => {
     });
 
     it('inline math with bracket delimiters round-trips', () => {
-      expect(roundTrip('The formula \\(x^2\\) is quadratic')).toBe(
-        'The formula \\(x^2\\) is quadratic'
-      );
+      expect(roundTrip('The formula \\(x^2\\) is quadratic')).toBe('The formula \\(x^2\\) is quadratic');
     });
 
     it('code block round-trips', () => {
@@ -259,7 +254,9 @@ describe('markdown-adapter', () => {
     it('serializes web2URL label text as markdown links', () => {
       const node = {
         type: 'paragraph',
-        content: [{ type: 'text', text: 'See all albums', marks: [{ type: 'web2URL', attrs: { url: 'www.rhcp.com/albums' } }] }],
+        content: [
+          { type: 'text', text: 'See all albums', marks: [{ type: 'web2URL', attrs: { url: 'www.rhcp.com/albums' } }] },
+        ],
       };
       expect(editorNodeToMarkdown(node)).toBe('[See all albums](www.rhcp.com/albums)');
     });
@@ -267,7 +264,13 @@ describe('markdown-adapter', () => {
     it('preserves standalone web2URL text', () => {
       const node = {
         type: 'paragraph',
-        content: [{ type: 'text', text: 'www.rhcp.com/albums', marks: [{ type: 'web2URL', attrs: { url: 'https://www.rhcp.com/albums' } }] }],
+        content: [
+          {
+            type: 'text',
+            text: 'www.rhcp.com/albums',
+            marks: [{ type: 'web2URL', attrs: { url: 'https://www.rhcp.com/albums' } }],
+          },
+        ],
       };
       expect(editorNodeToMarkdown(node)).toBe('www.rhcp.com/albums');
     });

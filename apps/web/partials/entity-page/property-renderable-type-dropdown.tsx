@@ -131,7 +131,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
           sticky="always"
           className={cx(
             'z-9999 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
-            options.length > 4 && 'max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth'
+            options.length > 4 && 'max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth'
           )}
           onWheel={onTypeMenuWheel}
         >
@@ -148,7 +148,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
                   className={cx(
                     // Match sidebar idle/hover/active treatment so selection state
                     // is distinguishable from cursor hover.
-                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-grey-01 focus:outline-hidden data-highlighted:bg-grey-01 aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    'flex h-10 w-full items-center gap-2 bg-white px-3 text-button text-text select-none hover:cursor-pointer hover:bg-grey-01 focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04 data-highlighted:bg-grey-01',
                     selectedValue === option.value && 'bg-divider!'
                   )}
                 >

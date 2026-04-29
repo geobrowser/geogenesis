@@ -391,9 +391,7 @@ export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
 
 export const relationsByFromEntityIdQuery = graphql(/* GraphQL */ `
   query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID!) {
-    relations(
-      filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }
-    ) {
+    relations(filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
       ...FullRelation
     }
   }
@@ -509,10 +507,7 @@ export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
       backlinksList(
         first: $first
         offset: $offset
-        filter: {
-          typeId: { is: $replyToTypeId }
-          fromEntity: { typeIds: { overlaps: [$commentTypeId] } }
-        }
+        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
       ) {
         fromEntity {
           id

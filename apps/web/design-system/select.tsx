@@ -95,7 +95,7 @@ export const Select = ({
         >
           <SelectPrimitive.Viewport
             ref={viewportRef}
-            className="max-h-[180px] overscroll-contain overflow-y-auto scroll-smooth"
+            className="max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth"
           >
             <SelectPrimitive.Group className="divide-y divide-grey-02">
               {options.map(option => (
@@ -106,7 +106,7 @@ export const Select = ({
                   title={option.label}
                   aria-label={option.label}
                   className={cx(
-                    'flex w-full min-h-10 flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
+                    'flex min-h-10 w-full flex-col justify-center truncate overflow-hidden px-3 py-2.5 text-button text-grey-04 select-none hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-hidden data-highlighted:bg-bg data-highlighted:text-text',
                     option.disabled && 'cursor-not-allowed! opacity-25!',
                     option?.className
                   )}

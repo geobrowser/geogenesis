@@ -1,4 +1,5 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
 import { parse } from 'graphql';
 
 /**
@@ -122,6 +123,4 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
   }
 `;
 
-export const allEntitiesConnectionDocument = parse(
-  ALL_ENTITIES_CONNECTION_SOURCE
-) as TypedDocumentNode<any, any>;
+export const allEntitiesConnectionDocument = parse(ALL_ENTITIES_CONNECTION_SOURCE) as TypedDocumentNode<any, any>;

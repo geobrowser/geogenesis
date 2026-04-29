@@ -12,12 +12,13 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { SwitchableRenderableType } from '~/core/types';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { NativeGeoImage } from './geo-image';
-import { trapWheelToElement } from './trap-wheel-scroll';
-import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 import { Search } from './icons/search';
 import { Tag } from './tag';
 import { Text } from './text';
+import { trapWheelToElement } from './trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 export type SelectEntityCompactResult = {
   id: string;

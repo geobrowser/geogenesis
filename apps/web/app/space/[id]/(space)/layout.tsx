@@ -17,6 +17,7 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
@@ -59,6 +60,7 @@ export default async function Layout(props0: LayoutProps) {
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
+            <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
             <SpacePageMetadataHeader
               spaceId={spaceId}
               membersComponent={

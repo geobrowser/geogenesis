@@ -2,21 +2,21 @@ import { jsonSchema, tool } from 'ai';
 import { Either } from 'effect';
 import * as Effect from 'effect/Effect';
 
+import { ENTITY_ID_REGEX } from '~/core/chat/limits';
 import type { NavigateInput, NavigateOutput } from '~/core/chat/nav-types';
 import { getSpace } from '~/core/io/queries';
 
-const ENTITY_ID_PATTERN = '^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$';
-const ENTITY_ID_REGEX = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+// JSON Schema patterns have no `i` flag, so spell the case range out — model
+// can emit uppercase hex and we don't want pre-runtime schema rejection.
+const ENTITY_ID_PATTERN =
+  '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$';
 
 export type NavigateToolContext = {
-  personalSpaceId: string | null;
+  // Resolved server-side from membership so a forged client context can't
+  // redirect personalSpace.
+  resolvePersonalSpaceId: () => Promise<string | null>;
 };
 
-// Factory rather than a bare tool: the personalSpace target is only valid
-// when the signed-in user has a personal space, and that signal lives in the
-// client-supplied ChatClientContext the route validates. Closing over it here
-// lets the tool return `{ ok: false, error: 'no_personal_space' }` instead of
-// silently succeeding and letting the client no-op.
 export function buildNavigateTool(context: NavigateToolContext) {
   return tool({
     description:
@@ -44,9 +44,8 @@ export function buildNavigateTool(context: NavigateToolContext) {
       required: ['target'],
       additionalProperties: false,
     }),
-    // The client performs the actual router.push only after seeing ok: true in
-    // the output, so this validation is the gate that prevents a hallucinated
-    // or topic-entity id from being used as a space id.
+    // router.push only fires client-side on ok: true, so this validation
+    // gates hallucinated ids.
     execute: async (input: NavigateInput): Promise<NavigateOutput> => {
       if ((input.target === 'space' || input.target === 'entity') && !isValidId(input.spaceId)) {
         return { ok: false, error: 'invalid_input', target: input.target };
@@ -59,11 +58,12 @@ export function buildNavigateTool(context: NavigateToolContext) {
       const entityId = normalizeId(input.entityId);
 
       if (input.target === 'personalSpace') {
-        if (!context.personalSpaceId) {
+        const resolved = await context.resolvePersonalSpaceId();
+        if (!resolved) {
           return { ok: false, error: 'no_personal_space', target: 'personalSpace' };
         }
         // Echo the resolved id so the client doesn't have to re-read context.
-        return { ok: true, target: 'personalSpace', spaceId: normalizeId(context.personalSpaceId) };
+        return { ok: true, target: 'personalSpace', spaceId: normalizeId(resolved) };
       }
 
       if (input.target === 'space' && spaceId) {

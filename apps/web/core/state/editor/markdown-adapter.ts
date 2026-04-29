@@ -1,6 +1,7 @@
 import type { Extensions } from '@tiptap/core';
 import type { JSONContent } from '@tiptap/core';
 import { generateJSON } from '@tiptap/html';
+
 import katex from 'katex';
 import type Token from 'markdown-it/lib/token.mjs';
 
@@ -21,9 +22,7 @@ editorMd.renderer.rules['link_open'] = (tokens: Token[], idx: number) => {
     return `<span data-web2-url="true" data-url="${escapeHtml(href)}">`;
   }
   // Non-web2 links (e.g. graph://) — emit a normal <a>
-  const attrs = (tokens[idx].attrs ?? [])
-    .map(([k, v]) => `${k}="${escapeHtml(v)}"`)
-    .join(' ');
+  const attrs = (tokens[idx].attrs ?? []).map(([k, v]) => `${k}="${escapeHtml(v)}"`).join(' ');
   return `<a ${attrs}>`;
 };
 
@@ -39,11 +38,7 @@ editorMd.renderer.rules['link_close'] = (tokens: Token[], idx: number) => {
 
 editorMd.renderer.rules['inline_math'] = (tokens: Token[], idx: number) => {
   const latex = tokens[idx].content;
-  const escaped = latex
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const escaped = latex.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<span data-type="inlineMath" data-latex="${escaped}">${escapeHtml(latex)}</span>`;
 };
 
@@ -158,9 +153,7 @@ function serializeNode(node: JSONContent): string {
     case 'bulletList':
       return (node.content ?? []).map(child => serializeListItem(child, '-')).join('');
     case 'orderedList':
-      return (node.content ?? [])
-        .map((child, i) => serializeListItem(child, `${i + 1}.`))
-        .join('');
+      return (node.content ?? []).map((child, i) => serializeListItem(child, `${i + 1}.`)).join('');
     case 'listItem':
       return (node.content ?? []).map(serializeNode).join('');
     case 'hardBreak':
@@ -305,9 +298,7 @@ function renderLinkTagOpen(token: Token): string {
   }
 
   // Invalid link → <span> tag
-  const attrs = new Map(
-    (token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel')
-  );
+  const attrs = new Map((token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel'));
   attrs.set('class', appendClassName(attrs.get('class') ?? null, className));
   attrs.set('data-invalid-link', 'true');
 

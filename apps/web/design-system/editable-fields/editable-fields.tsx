@@ -50,7 +50,7 @@ type TableStringFieldProps = {
 };
 
 const tableCellTruncateInputStyles = cva(
-  'm-0 w-full min-w-0 max-w-full truncate border-0 bg-transparent p-0 placeholder:text-grey-03 focus:outline-hidden',
+  'm-0 w-full max-w-full min-w-0 truncate border-0 bg-transparent p-0 placeholder:text-grey-03 focus:outline-hidden',
   {
     variants: {
       variant: {
@@ -62,11 +62,7 @@ const tableCellTruncateInputStyles = cva(
   }
 );
 
-export function TableStringField({
-  variant = 'tableCell',
-  truncateOverflow = false,
-  ...props
-}: TableStringFieldProps) {
+export function TableStringField({ variant = 'tableCell', truncateOverflow = false, ...props }: TableStringFieldProps) {
   if (truncateOverflow) {
     return (
       <input

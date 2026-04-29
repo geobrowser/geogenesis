@@ -643,13 +643,13 @@ export function PowerToolsScreen() {
     () =>
       isEditing && selectableCount > 0
         ? {
-          selectedEntityIds,
-          onToggleRowSelection: toggleRowSelection,
-          onSetRowSelection: setRowSelection,
-          onMasterToggle,
-          selectableCount,
-          isAllSelected,
-        }
+            selectedEntityIds,
+            onToggleRowSelection: toggleRowSelection,
+            onSetRowSelection: setRowSelection,
+            onMasterToggle,
+            selectableCount,
+            isAllSelected,
+          }
         : undefined,
     [isEditing, selectableCount, selectedEntityIds, toggleRowSelection, setRowSelection, onMasterToggle, isAllSelected]
   );
