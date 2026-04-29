@@ -172,7 +172,6 @@ async function fetchEntitiesWithRelations(
           where: { id: { in: entityIds } },
           spaceId,
           first: 100,
-          skip: 0,
         })
       )
     )
@@ -204,7 +203,6 @@ async function fetchEntitiesWithRelations(
             where: { id: { in: entityIds } },
             spaceId,
             first: 100,
-            skip: 0,
           })
         )
       )
