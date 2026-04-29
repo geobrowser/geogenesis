@@ -20,13 +20,16 @@ const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   allowedDevOrigins: ['localhost', '127.0.0.1'],
-  turbopack: {
-    resolveAlias: {
-      '@sentry/nextjs': './prebundled/sentry-stub.js',
-      '@sentry/browser': './prebundled/sentry-stub.js',
-      '@sentry/opentelemetry': './prebundled/sentry-stub.js',
-    },
-  },
+  turbopack:
+    process.env.NODE_ENV === 'production'
+      ? undefined
+      : {
+          resolveAlias: {
+            '@sentry/nextjs': './prebundled/sentry-stub.js',
+            '@sentry/browser': './prebundled/sentry-stub.js',
+            '@sentry/opentelemetry': './prebundled/sentry-stub.js',
+          },
+        },
   experimental: {
     ...turbopackOptimizations,
     optimizePackageImports: [
