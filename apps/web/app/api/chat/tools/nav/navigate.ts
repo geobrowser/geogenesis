@@ -2,21 +2,28 @@ import { jsonSchema, tool } from 'ai';
 import { Either } from 'effect';
 import * as Effect from 'effect/Effect';
 
+import { ENTITY_ID_REGEX } from '~/core/chat/limits';
 import type { NavigateInput, NavigateOutput } from '~/core/chat/nav-types';
 import { getSpace } from '~/core/io/queries';
 
-const ENTITY_ID_PATTERN = '^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$';
-const ENTITY_ID_REGEX = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+// Case-insensitive to match `ENTITY_ID_REGEX` — JSON Schema patterns have no
+// `i` flag, so we spell the case range out so uppercase ids the model emits
+// don't get rejected at schema validation before runtime ever sees them.
+const ENTITY_ID_PATTERN =
+  '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$';
 
 export type NavigateToolContext = {
-  personalSpaceId: string | null;
+  // Async because we resolve personal space from the wallet's membership graph
+  // server-side rather than trusting whatever id the client sent — otherwise
+  // a forged ChatClientContext could direct the user to any space when target
+  // is 'personalSpace'.
+  resolvePersonalSpaceId: () => Promise<string | null>;
 };
 
 // Factory rather than a bare tool: the personalSpace target is only valid
-// when the signed-in user has a personal space, and that signal lives in the
-// client-supplied ChatClientContext the route validates. Closing over it here
-// lets the tool return `{ ok: false, error: 'no_personal_space' }` instead of
-// silently succeeding and letting the client no-op.
+// when the signed-in user has a personal space, so we resolve from the
+// member's actual graph state and return `{ ok: false, error: 'no_personal_space' }`
+// when none exists, instead of silently succeeding and letting the client no-op.
 export function buildNavigateTool(context: NavigateToolContext) {
   return tool({
     description:
@@ -59,11 +66,12 @@ export function buildNavigateTool(context: NavigateToolContext) {
       const entityId = normalizeId(input.entityId);
 
       if (input.target === 'personalSpace') {
-        if (!context.personalSpaceId) {
+        const resolved = await context.resolvePersonalSpaceId();
+        if (!resolved) {
           return { ok: false, error: 'no_personal_space', target: 'personalSpace' };
         }
         // Echo the resolved id so the client doesn't have to re-read context.
-        return { ok: true, target: 'personalSpace', spaceId: normalizeId(context.personalSpaceId) };
+        return { ok: true, target: 'personalSpace', spaceId: normalizeId(resolved) };
       }
 
       if (input.target === 'space' && spaceId) {

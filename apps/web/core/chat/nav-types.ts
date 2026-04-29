@@ -18,3 +18,11 @@ export type NavigateOutput =
       target: NavigateTarget;
       attemptedSpaceId?: string;
     };
+
+// openReviewPanel is a nav-side action too — it changes what the user sees (a
+// client-side overlay) without changing the graph. Shape is minimal because
+// the server can't usefully validate: "can I open the panel?" is just "am I a
+// member?" and that's enforced at tool registration.
+export type OpenReviewPanelInput = Record<string, never>;
+
+export type OpenReviewPanelOutput = { ok: true } | { ok: false; error: 'not_signed_in' };

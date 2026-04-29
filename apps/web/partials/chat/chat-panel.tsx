@@ -28,6 +28,7 @@ type Props = {
   messages: UIMessage[];
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   error?: Error;
+  isFull: boolean;
   input: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
@@ -42,6 +43,7 @@ export function ChatPanel({
   messages,
   status,
   error,
+  isFull,
   input,
   onInputChange,
   onSend,
@@ -202,27 +204,47 @@ export function ChatPanel({
           messages={messages}
           status={status}
           error={error}
+          isFull={isFull}
           onRetry={onRetry}
           onSuggestion={onSuggestion}
-          disabled={isBusy}
+          disabled={isBusy || isFull}
         />
       ) : (
-        <ChatWelcome onSuggestion={onSuggestion} disabled={isBusy} />
+        <ChatWelcome onSuggestion={onSuggestion} disabled={isBusy || isFull} />
       )}
 
-      <ChatInput
-        value={input}
-        onChange={onInputChange}
-        onSubmit={onSend}
-        disabled={isBusy}
-        placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
-      />
+      {isFull ? (
+        <ConversationFullNotice onNewChat={onNewChat} />
+      ) : (
+        <ChatInput
+          value={input}
+          onChange={onInputChange}
+          onSubmit={onSend}
+          disabled={isBusy}
+          placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
+        />
+      )}
     </motion.div>
   );
 }
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max);
+}
+
+function ConversationFullNotice({ onNewChat }: { onNewChat: () => void }) {
+  return (
+    <div className="flex flex-col items-start gap-2 border-t border-grey-02 p-3">
+      <div className="text-chat text-grey-04">This conversation is full. Start a new chat to keep going.</div>
+      <button
+        type="button"
+        onClick={onNewChat}
+        className="rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-chat leading-4 text-text transition-colors hover:border-text"
+      >
+        Start a new chat
+      </button>
+    </div>
+  );
 }
 
 function formatTranscript(messages: UIMessage[]): string {

@@ -40,6 +40,16 @@ const BLOCK_TAGS: Record<string, React.ElementType> = {
   hr: 'hr',
   code_block: 'pre',
   fence: 'pre',
+  thead_open: 'thead',
+  tbody_open: 'tbody',
+  tr_open: 'tr',
+  th_open: 'th',
+  td_open: 'td',
+};
+
+const BLOCK_CLASSES: Record<string, string> = {
+  th_open: 'border border-grey-02 px-2 py-1 text-left font-medium',
+  td_open: 'border border-grey-02 px-2 py-1 align-top',
 };
 
 const INLINE_TAGS: Record<string, React.ElementType> = {
@@ -202,9 +212,25 @@ function renderBlockToken(state: WalkerState): React.ReactNode {
     return <hr className="my-2 border-grey-02" />;
   }
 
+  if (token.type === 'table_open') {
+    state.index += 1;
+    const children: React.ReactNode[] = [];
+    while (state.index < state.tokens.length && state.tokens[state.index].type !== 'table_close') {
+      const node = renderBlockToken(state);
+      if (node !== null) children.push(<React.Fragment key={nextKey(state)}>{node}</React.Fragment>);
+    }
+    if (state.index < state.tokens.length) state.index += 1;
+    return (
+      <div className="my-2 overflow-x-auto">
+        <table className="w-full border-collapse text-chat">{children}</table>
+      </div>
+    );
+  }
+
   if (token.type.endsWith('_open') && BLOCK_TAGS[token.type]) {
     const Tag = BLOCK_TAGS[token.type];
     const closeType = token.type.replace('_open', '_close');
+    const className = BLOCK_CLASSES[token.type];
     state.index += 1;
     const children: React.ReactNode[] = [];
     while (state.index < state.tokens.length && state.tokens[state.index].type !== closeType) {
@@ -212,7 +238,7 @@ function renderBlockToken(state: WalkerState): React.ReactNode {
       if (node !== null) children.push(<React.Fragment key={nextKey(state)}>{node}</React.Fragment>);
     }
     if (state.index < state.tokens.length) state.index += 1; // consume close
-    return <Tag>{children}</Tag>;
+    return <Tag className={className}>{children}</Tag>;
   }
 
   // Any token we don't explicitly handle (e.g. link_close slipped to block level): advance.

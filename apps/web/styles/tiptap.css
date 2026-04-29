@@ -4,7 +4,7 @@
   padding-bottom: 0;
 }
 
-.ProseMirror>* {
+.ProseMirror > * {
   margin-bottom: 0 !important;
   /* Override Tiptap's margin-bottom */
 }
@@ -21,7 +21,6 @@
 .ProseMirror .tiptap-block:hover .tiptap-menu-trigger {
   opacity: 1;
 }
-
 
 /* Inadvertently makes editable titles grey when not focused */
 /* .ProseMirror-hideselection .data-node input {
@@ -43,13 +42,12 @@
 
 /* Display Placeholders on every new line. */
 .ProseMirror .is-empty::before {
-  color: #adb5bd;
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
 
-  @apply text-body;
+  @apply text-body text-grey-03;
 }
 
 /* Heading placeholders: is-empty is on the decoration wrapper, not the h1/h2/h3.
@@ -68,12 +66,20 @@
 
 /* Display a Placeholder only for the first line in an empty editor. */
 .ProseMirror p.is-editor-empty:first-child::before {
-  color: #adb5bd;
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
   margin-bottom: 0;
+
+  @apply text-grey-03;
+}
+
+/* Focused empty paragraph: switch from "Add content..." to the slash hint.
+   Scoped to wrappers containing a paragraph so the hint never leaks onto
+   focused-empty NodeView wrappers (data blocks, code blocks, etc.). */
+.ProseMirror .is-empty.has-focus:has(> p)::before {
+  content: '/ to select content block or write some content...';
 }
 
 .ProseMirror:focus {
@@ -87,9 +93,9 @@
   @apply mt-10;
 }
 
-.ProseMirror>*:first-child h1,
-.ProseMirror>*:first-child h2,
-.ProseMirror>*:first-child h3 {
+.ProseMirror > *:first-child h1,
+.ProseMirror > *:first-child h2,
+.ProseMirror > *:first-child h3 {
   @apply mt-0;
 }
 
@@ -125,7 +131,7 @@
   @apply my-4;
 }
 
-.ProseMirror>* {
+.ProseMirror > * {
   margin-bottom: 16px;
 }
 
@@ -147,7 +153,12 @@
   background: #f5f5f5;
   border-radius: 8px;
   padding: 12px 16px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-family:
+    SFMono-Regular,
+    Consolas,
+    Liberation Mono,
+    Menlo,
+    monospace;
   font-size: 14px;
   line-height: 1.6;
   overflow-x: auto;
@@ -176,7 +187,12 @@
   background: #f0f0f0;
   border-radius: 4px;
   padding: 2px 6px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-family:
+    SFMono-Regular,
+    Consolas,
+    Liberation Mono,
+    Menlo,
+    monospace;
   font-size: 0.9em;
 }
 
@@ -185,65 +201,12 @@
   background: #f5f5f5;
   border-radius: 4px;
   padding: 2px 6px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
-  font-size: 0.9em;
-}
-
-.Tiptap-mathematics-render {
-  cursor: pointer;
-  padding: 0 2px;
-}
-
-.Tiptap-mathematics-editor--active {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-/* Code blocks */
-.code-block {
-  display: flex;
-  background: #f5f5f5;
-  border-radius: 8px;
-  padding: 12px 16px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  overflow-x: auto;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.code-block-line-numbers {
-  user-select: none;
-  text-align: right;
-  color: #999;
-  padding-right: 16px;
-  margin-right: 16px;
-  border-right: 1px solid #ddd;
-  min-width: 24px;
-}
-
-.code-block code {
-  flex: 1;
-  white-space: pre;
-}
-
-/* Inline code */
-.inline-code,
-.ProseMirror code:not(pre code) {
-  background: #f0f0f0;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
-  font-size: 0.9em;
-}
-
-/* Math extension styles */
-.Tiptap-mathematics-editor {
-  background: #f5f5f5;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  font-family:
+    SFMono-Regular,
+    Consolas,
+    Liberation Mono,
+    Menlo,
+    monospace;
   font-size: 0.9em;
 }
 
@@ -265,7 +228,7 @@
 /* External/Invalid link highlighting */
 .ProseMirror .entity-link-invalid,
 .ProseMirror [data-web2-url] {
-  @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted rounded px-0.5;
+  @apply cursor-pointer rounded px-0.5 text-red-01 underline decoration-red-01 decoration-dotted;
 }
 
 /* External/Invalid link and edit mode web2 URL hover */
@@ -276,5 +239,5 @@
 
 /* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
 .ProseMirror .web2-url-edit-mode {
-  @apply underline decoration-dotted decoration-red-01;
+  @apply underline decoration-red-01 decoration-dotted;
 }

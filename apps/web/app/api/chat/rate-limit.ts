@@ -47,3 +47,21 @@ export const ipCeilingHourlyLimit = new Ratelimit({
   analytics: true,
   prefix: 'chat:ip-ceiling:hour',
 });
+
+// Write tools are more expensive than reads (GraphQL lookups + client-side
+// mutation + IndexedDB writes) and — unlike reads — change state the user
+// sees. A separate limiter axis caps the assistant's ability to spray edits
+// across the graph on behalf of a misbehaving caller.
+export const editBurstLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(25, '60 s'),
+  analytics: true,
+  prefix: 'chat:edit:burst',
+});
+
+export const editHourlyLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(300, '1 h'),
+  analytics: true,
+  prefix: 'chat:edit:hour',
+});
