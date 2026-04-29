@@ -70,7 +70,11 @@ interface TableBlockFilterPromptProps {
 }
 
 const FILTER_DROPDOWN_PAGE_SIZE = 25;
-const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 180;
+// Used as the placement-hook `preferredHeight` so it matches the actual ceiling
+// applied by `useFourAndHalfRowsMaxHeight` below — otherwise the placement code
+// thinks the dropdown wants 180px, picks `bottom`, and the dropdown overflows
+// off the viewport when space-below is between 180 and the real cap.
+const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 320;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -159,7 +163,9 @@ function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTM
 // Hard ceiling for the dynamic measurement so tall rows (e.g. type results with a
 // "Geo > Type" breadcrumb at ~100px each) can't blow past the default ResultsList
 // max-height of 340px when the inline style overrides the class.
-const DROPDOWN_MAX_HEIGHT_PX = 320;
+// Aliased to the placement constant above so the placement hook's `preferredHeight`
+// stays in sync with the actual ceiling.
+const DROPDOWN_MAX_HEIGHT_PX = FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX;
 
 function useFourAndHalfRowsMaxHeight(
   listRef: React.RefObject<HTMLUListElement | null>,
