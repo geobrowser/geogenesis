@@ -12,6 +12,19 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
 
 const MAX_LINES = 3;
 
+// Tailwind needs literal class names to include them in the build; pick from a
+// static map keyed by line count so MAX_LINES stays the single source of truth.
+const LINE_CLAMP_CLASS: Record<number, string> = {
+  1: 'line-clamp-1',
+  2: 'line-clamp-2',
+  3: CLAMP_CLASS,
+  4: 'line-clamp-4',
+  5: 'line-clamp-5',
+  6: 'line-clamp-6',
+};
+
+const CLAMP_CLASS = LINE_CLAMP_CLASS[MAX_LINES];
+
 export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
@@ -85,11 +98,11 @@ function TruncatedDescription({ text }: { text: string }) {
 
     const measure = () => {
       // Temporarily remove clamp to measure the natural height.
-      const wasClamped = el.classList.contains('line-clamp-3');
-      if (wasClamped) el.classList.remove('line-clamp-3');
+      const wasClamped = el.classList.contains(CLAMP_CLASS);
+      if (wasClamped) el.classList.remove(CLAMP_CLASS);
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight || '0');
       const fullHeight = el.scrollHeight;
-      if (wasClamped) el.classList.add('line-clamp-3');
+      if (wasClamped) el.classList.add(CLAMP_CLASS);
 
       if (lineHeight > 0) {
         setIsOverflowing(fullHeight > lineHeight * MAX_LINES + 1);
@@ -111,7 +124,7 @@ function TruncatedDescription({ text }: { text: string }) {
       ref={ref}
       className={[
         'relative text-body text-text',
-        clamp ? 'line-clamp-3' : '',
+        clamp ? CLAMP_CLASS : '',
       ]
         .filter(Boolean)
         .join(' ')}
