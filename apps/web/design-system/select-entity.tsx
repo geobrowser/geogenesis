@@ -127,6 +127,10 @@ export const SelectEntity = ({
   const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
 
   const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
+  // Mirror Radix's actual rendered `data-side` so the corner flip stays in lockstep
+  // with the visible position. Driving it from our placement hook drifts during scroll
+  // because Radix's collision middleware can disagree by a frame.
+  const [actualSide, setActualSide] = useState<'top' | 'bottom'>('bottom');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -257,14 +261,16 @@ export const SelectEntity = ({
   useLayoutEffect(() => {
     if (!popoverElement) return;
 
-    const updateClipPath = () => {
+    const sync = () => {
       const side = popoverElement.getAttribute('data-side');
-      setClipPath(side === 'top' ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+      const isTop = side === 'top';
+      setClipPath(isTop ? 'inset(-100px -100px -0px -100px)' : 'inset(-0px -100px -100px -100px)');
+      if (side === 'top' || side === 'bottom') setActualSide(side);
     };
 
-    updateClipPath(); // initial check
+    sync(); // initial check
 
-    const observer = new MutationObserver(updateClipPath);
+    const observer = new MutationObserver(sync);
     observer.observe(popoverElement, { attributes: true, attributeFilter: ['data-side'] });
 
     return () => observer.disconnect();
@@ -309,7 +315,10 @@ export const SelectEntity = ({
   }, [onQueryChange]);
 
   const isQueried = query.length > 0;
-  const popoverAbove = popoverSide === 'top';
+  // Use Radix's rendered `data-side` (mirrored into actualSide) so the corner flip
+  // matches the visible position, even when Radix's collision middleware briefly
+  // disagrees with our placement hook during scroll.
+  const popoverAbove = actualSide === 'top';
 
   return (
     <div
@@ -365,7 +374,13 @@ export const SelectEntity = ({
                 'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
                 width === 'full' && 'max-w-[calc(100vw-24px)]'
               )}
-              collisionPadding={16}
+              // Reserve space at the bottom of the viewport so the dropdown — including
+              // its `Create new` footer — can't slide under floating bottom toolbars
+              // (e.g. the "Review edits" action bar in edit mode). 96px covers the
+              // typical floating-bar height + a little breathing room. This also feeds
+              // into `--radix-popper-available-height`, shrinking the inner scroll
+              // viewport accordingly.
+              collisionPadding={{ top: 16, right: 16, bottom: 96, left: 16 }}
               forceMount
             >
               <div
