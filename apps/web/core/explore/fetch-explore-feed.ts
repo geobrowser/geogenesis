@@ -3,7 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
@@ -187,6 +187,7 @@ function buildFeedFilter(args: {
   const t = timeThresholdSec(args.time);
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
+    spaceIds: { overlaps: [...args.spaceIds] },
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
     ...(args.requireName !== false
       ? {
@@ -217,7 +218,6 @@ async function fetchExploreEntitiesPage(args: {
       query: exploreEntitiesConnectionDocument,
       decoder: decodeExploreEntities,
       variables: {
-        spaceIds: { in: args.spaceIds } as UuidFilter,
         limit: args.limit,
         after: args.after,
         filter: buildFeedFilter(args),
@@ -245,7 +245,7 @@ async function fetchTopEntitiesPage(args: {
       variables: {
         first: args.limit,
         after: args.after,
-        filter: { ...buildFeedFilter(args), spaceIds: { in: args.spaceIds } as UuidFilter },
+        filter: buildFeedFilter(args),
         propertyId: SCORE_SYSTEM_PROPERTY,
         dataType: 'integer',
         sortDirection: 'DESC',

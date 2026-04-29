@@ -47,7 +47,6 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
   }
 
   query ExploreEntitiesConnection(
-    $spaceIds: UUIDFilter
     $limit: Int
     $after: Cursor
     $filter: EntityFilter
@@ -59,7 +58,6 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
       after: $after
       filter: $filter
       orderBy: $orderBy
-      spaceIds: $spaceIds
     ) {
       pageInfo {
         endCursor
