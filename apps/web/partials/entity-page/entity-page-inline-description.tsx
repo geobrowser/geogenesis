@@ -69,6 +69,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
         <PageStringField
           variant="body"
           placeholder="Add a description..."
+          aria-label="Description"
           value={description}
           onChange={onChange}
         />
@@ -90,20 +91,17 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
 function TruncatedDescription({ text }: { text: string }) {
   const [expanded, setExpanded] = React.useState(false);
   const [isOverflowing, setIsOverflowing] = React.useState(false);
-  const ref = React.useRef<HTMLParagraphElement>(null);
+  // Measure overflow on a hidden sibling that's never clamped, so we don't
+  // mutate layout-affecting classes on the visible (and observed) element.
+  const measureRef = React.useRef<HTMLParagraphElement>(null);
 
   React.useLayoutEffect(() => {
-    const el = ref.current;
+    const el = measureRef.current;
     if (!el) return;
 
     const measure = () => {
-      // Temporarily remove clamp to measure the natural height.
-      const wasClamped = el.classList.contains(CLAMP_CLASS);
-      if (wasClamped) el.classList.remove(CLAMP_CLASS);
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight || '0');
       const fullHeight = el.scrollHeight;
-      if (wasClamped) el.classList.add(CLAMP_CLASS);
-
       if (lineHeight > 0) {
         setIsOverflowing(fullHeight > lineHeight * MAX_LINES + 1);
       }
@@ -121,42 +119,55 @@ function TruncatedDescription({ text }: { text: string }) {
   const showToggle = isOverflowing;
   const clamp = !expanded;
 
+  const buttonFocus =
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+
   return (
-    <p
-      ref={ref}
-      className={[
-        'relative text-body wrap-break-word text-text',
-        clamp ? CLAMP_CLASS : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      {text}
-      {showToggle && expanded && (
-        <>
-          {' '}
+    <div className="relative">
+      <p
+        className={[
+          'text-body wrap-break-word text-text',
+          clamp ? CLAMP_CLASS : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {text}
+        {showToggle && expanded && (
+          <>
+            {' '}
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-expanded={true}
+              className={`cursor-pointer underline ${buttonFocus}`}
+            >
+              Less
+            </button>
+          </>
+        )}
+        {showToggle && !expanded && (
           <button
             type="button"
-            onClick={() => setExpanded(false)}
-            className="cursor-pointer underline"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            className={`absolute bottom-0 right-0 cursor-pointer bg-white pl-6 underline ${buttonFocus}`}
+            style={{
+              backgroundImage:
+                'linear-gradient(to right, rgba(255,255,255,0), #fff 1.25rem)',
+            }}
           >
-            Less
+            More
           </button>
-        </>
-      )}
-      {showToggle && !expanded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="absolute bottom-0 right-0 cursor-pointer bg-white pl-6 underline"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, rgba(255,255,255,0), #fff 1.25rem)',
-          }}
-        >
-          More
-        </button>
-      )}
-    </p>
+        )}
+      </p>
+      <p
+        ref={measureRef}
+        aria-hidden="true"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 text-body wrap-break-word"
+      >
+        {text}
+      </p>
+    </div>
   );
 }
