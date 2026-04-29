@@ -20,6 +20,18 @@ interface AdaptiveDropdownPlacement {
 const DEFAULT_DROPDOWN_HEIGHT = 220;
 const DEFAULT_GAP = 8;
 
+/**
+ * Read `--app-bottom-inset` (set by global floating bars like flow-bar) so
+ * dropdowns can subtract it from spaceBelow. Returns 0 when unset/invalid.
+ */
+function readBottomInset(): number {
+  if (typeof document === 'undefined') return 0;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-bottom-inset').trim();
+  if (!raw) return 0;
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function useAdaptiveDropdownPlacement(
   anchorRef: React.RefObject<Element | null>,
   { isOpen, preferredHeight = DEFAULT_DROPDOWN_HEIGHT, gap = DEFAULT_GAP }: UseAdaptiveDropdownPlacementOptions
@@ -37,7 +49,11 @@ export function useAdaptiveDropdownPlacement(
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     const anchorCenterX = rect.left + rect.width / 2;
-    const spaceBelow = viewportHeight - rect.bottom;
+    // Subtract any global bottom inset (e.g. flow-bar's "Review edits" footprint)
+    // from the available space below so the dropdown flips up instead of sliding
+    // under a floating action bar.
+    const bottomInset = readBottomInset();
+    const spaceBelow = viewportHeight - rect.bottom - bottomInset;
     const spaceAbove = rect.top;
     const wantBelow = spaceBelow >= preferredHeight + gap;
     const canFitAbove = spaceAbove >= preferredHeight + gap;
