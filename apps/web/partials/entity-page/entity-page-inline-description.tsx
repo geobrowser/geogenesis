@@ -125,7 +125,7 @@ function TruncatedDescription({ text }: { text: string }) {
   // Reserve room at the right of the last line so the auto line-clamp
   // ellipsis ("…") lands inline with the text and the More button sits in
   // the reserved padding to the right of it.
-  const togglePadding = 'pr-12';
+  const togglePadding = 'pr-11';
   // text-body so the More button matches the inline Less button's size —
   // buttons don't inherit font styles from their ancestors by default.
   const buttonStyle = `cursor-pointer text-body text-grey-04 hover:underline ${buttonFocus}`;
@@ -168,7 +168,7 @@ function TruncatedDescription({ text }: { text: string }) {
       <p
         ref={measureRef}
         aria-hidden="true"
-        className="pointer-events-none invisible absolute inset-x-0 top-0 pr-12 text-body wrap-break-word"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 pr-11 text-body wrap-break-word"
       >
         {text}
       </p>
