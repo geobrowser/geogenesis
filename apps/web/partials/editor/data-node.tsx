@@ -29,6 +29,9 @@ export const DataNode = Node.create({
       querySetupCompleted: {
         default: null as boolean | null,
       },
+      filtersOpenOnCreate: {
+        default: null as boolean | null,
+      },
     };
   },
 
@@ -96,6 +99,10 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
               blockId={id}
               querySetupPending={querySetupPending}
               onCompleteQuerySetup={onCompleteQuerySetup}
+              initialFiltersOpen={
+                node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'
+              }
+              onConsumedInitialFiltersOpen={() => updateAttributes({ filtersOpenOnCreate: false })}
             />
           </DataBlockProvider>
         </ErrorBoundary>

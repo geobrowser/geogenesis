@@ -120,6 +120,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
+    const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
 
     const cellData = getValue<Cell | undefined>();
@@ -169,6 +170,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
+          focusRequestKey={row.original.placeholder ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
         />
       );
@@ -208,6 +210,7 @@ type TableBlockTableProps = {
   onAddPlaceholder?: () => void;
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
@@ -227,6 +230,7 @@ export const TableBlockTable = ({
   onAddPlaceholder,
   source,
   shouldAutoFocusPlaceholder,
+  placeholderFocusKey = 0,
   collectionTypeFilters,
   sortState,
   onSort,
@@ -258,6 +262,7 @@ export const TableBlockTable = ({
       propertiesSchema,
       source,
       shouldAutoFocusPlaceholder,
+      placeholderFocusKey,
       collectionTypeFilters,
     },
   });

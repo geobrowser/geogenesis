@@ -14,6 +14,7 @@ const renderItem = ({
   source,
   isPlaceholder,
   autoFocus,
+  placeholderFocusKey,
   collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockGalleryItem
@@ -28,6 +29,7 @@ const renderItem = ({
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    focusRequestKey={placeholderFocusKey}
     collectionTypeFilters={collectionTypeFilters}
   />
 );

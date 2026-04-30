@@ -1200,10 +1200,10 @@ function DynamicFilters({
       selectedOption?.relationValueTypes
     );
 
-  const pendingFilterChips = React.useMemo(
-    () => enumeratePendingFilterChips(state, options),
-    [state, options]
-  );
+  const pendingFilterChips = React.useMemo(() => {
+    const all = enumeratePendingFilterChips(state, options);
+    return all.filter(item => ID.equals(item.columnId, state.selectedColumn));
+  }, [state, options]);
   const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
 
   return (
@@ -1289,7 +1289,7 @@ function DynamicFilters({
                 <MultiSelectChip
                   key={item.key}
                   removable={isEditing}
-                  label={`${item.columnName} · ${valueLabel}`}
+                  label={valueLabel}
                   onRemove={() => {
                     if (item.kind === 'entity') {
                       dispatch({

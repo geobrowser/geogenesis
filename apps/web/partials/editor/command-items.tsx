@@ -158,7 +158,7 @@ const collectionDataBlockCommandItem: CommandSuggestionItem = {
       .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
-        attrs: { initialDataSource: 'COLLECTION' },
+        attrs: { initialDataSource: 'COLLECTION', filtersOpenOnCreate: true },
       })
       .createParagraphNear()
       .blur()

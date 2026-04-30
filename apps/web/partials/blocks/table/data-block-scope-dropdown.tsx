@@ -153,7 +153,9 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
 
   const draft = pendingSource ?? source;
   const selectedSpaceIds = draft.type === 'SPACES' ? draft.value : [];
-  const { spacesById } = useSpacesByIds(source.type === 'SPACES' ? source.value : []);
+  const labelSource = open ? draft : source;
+  const spaceIdsForLabel = labelSource.type === 'SPACES' ? labelSource.value : [];
+  const { spacesById } = useSpacesByIds(spaceIdsForLabel);
 
   const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(spaceId, open);
   const sections = scopeData?.sections;
@@ -199,7 +201,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
 
   const listLoading = searchMode ? remoteSearchLoading : initialListLoading;
 
-  const label = React.useMemo(() => scopeLabel(source, spacesById), [source, spacesById]);
+  const label = React.useMemo(() => scopeLabel(labelSource, spacesById), [labelSource, spacesById]);
   const isAllOfGeo = draft.type === 'GEO';
 
   const toggleSpace = (id: string) => {

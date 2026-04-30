@@ -67,6 +67,16 @@ export function useView() {
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
 
+  /** Append new shown columns after existing ones (avoid `Position.generate()` random order). */
+  const nextPropertiesColumnPosition = React.useCallback((): string | null => {
+    const sorted = [...shownColumnRelations].sort((a, b) =>
+      Position.compare(a.position ?? null, b.position ?? null)
+    );
+    const last = sorted[sorted.length - 1]?.position;
+    const lastStr = typeof last === 'string' && last.length > 0 ? last : null;
+    return Position.generateBetween(lastStr, null);
+  }, [shownColumnRelations]);
+
   const setView = async (newView: DataBlockViewDetails) => {
     const isCurrentView = newView.value === view;
 
@@ -192,7 +202,7 @@ export function useView() {
           id: newId,
           entityId: newRelationEntityId,
           spaceId: spaceId,
-          position: Position.generate(),
+          position: nextPropertiesColumnPosition(),
           renderableType: 'RELATION',
           type: {
             id: SystemIds.PROPERTIES,
@@ -218,7 +228,7 @@ export function useView() {
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
-        position: Position.generate(),
+        position: nextPropertiesColumnPosition(),
         renderableType: 'RELATION',
         type: {
           id: SystemIds.PROPERTIES,

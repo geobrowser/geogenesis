@@ -4,6 +4,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import equal from 'fast-deep-equal';
+
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -97,6 +99,9 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           valueName: f.valueName,
         })),
       ];
+      if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
+        return;
+      }
       effectiveSetFilterState(next);
     };
 
@@ -117,6 +122,16 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     );
   }
 );
+
+function comparableFilterList(filters: Filter[]) {
+  return [...filters]
+    .map(f => ({
+      columnId: f.columnId,
+      value: f.value,
+      valueType: f.valueType,
+    }))
+    .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
+}
 
 function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
   /* Visible triples includes both real triples and placeholder triples */

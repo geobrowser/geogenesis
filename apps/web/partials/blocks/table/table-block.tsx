@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import equal from 'fast-deep-equal';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
@@ -59,6 +60,9 @@ interface Props {
   /** New Query blocks: choose scope before the main block chrome is interactive. */
   querySetupPending?: boolean;
   onCompleteQuerySetup?: () => void;
+  /** New Collection blocks: open the filters strip once on insert. */
+  initialFiltersOpen?: boolean;
+  onConsumedInitialFiltersOpen?: () => void;
 }
 
 function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
@@ -109,6 +113,7 @@ function useEntries(
 
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
+  const [placeholderFocusKey, setPlaceholderFocusKey] = React.useState(0);
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -257,6 +262,7 @@ function useEntries(
   const onAddPlaceholder = () => {
     setEditable(true);
     setHasPlaceholderRow(true);
+    setPlaceholderFocusKey(k => k + 1);
   };
 
   return {
@@ -266,13 +272,26 @@ function useEntries(
     onLinkEntry,
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
+    placeholderFocusKey,
   };
+}
+
+function comparableFilterList(filters: Filter[]) {
+  return [...filters]
+    .map(f => ({
+      columnId: f.columnId,
+      value: f.value,
+      valueType: f.valueType,
+    }))
+    .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
 }
 
 export const TableBlock = ({
   spaceId,
   querySetupPending = false,
   onCompleteQuerySetup,
+  initialFiltersOpen = false,
+  onConsumedInitialFiltersOpen,
 }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
@@ -371,6 +390,14 @@ export const TableBlock = ({
     if (querySetupPending) setIsFilterOpen(false);
   }, [querySetupPending]);
 
+  const initialFiltersOpenConsumedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialFiltersOpen || initialFiltersOpenConsumedRef.current) return;
+    initialFiltersOpenConsumedRef.current = true;
+    setIsFilterOpen(true);
+    onConsumedInitialFiltersOpen?.();
+  }, [initialFiltersOpen, onConsumedInitialFiltersOpen]);
+
   const setActiveFilterMode = React.useCallback(
     (mode: FilterMode) => {
       if (canEdit) setFilterMode(mode);
@@ -389,6 +416,9 @@ export const TableBlock = ({
   // Also resets to page 1 when filters change
   const setActiveFilters = React.useCallback(
     (filters: Filter[]) => {
+      if (equal(comparableFilterList(filters), comparableFilterList(activeFilters))) {
+        return;
+      }
       if (canEdit) {
         setFilterState(filters);
       } else {
@@ -397,7 +427,7 @@ export const TableBlock = ({
       // Reset to first page when filters change
       setPage(0);
     },
-    [canEdit, setFilterState, setTemporaryFilters, setPage]
+    [canEdit, setFilterState, setTemporaryFilters, setPage, activeFilters]
   );
 
   const handleSortChange = React.useCallback(
@@ -408,8 +438,15 @@ export const TableBlock = ({
     [setSortState, setPage]
   );
 
-  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
-    useEntries(rows, properties, spaceId, activeFilters, relations, source, canEdit, isFetched && !isLoading);
+  const {
+    entries,
+    onAddPlaceholder,
+    onChangeEntry,
+    onLinkEntry,
+    onUpdateRelation,
+    shouldAutoFocusPlaceholder,
+    placeholderFocusKey,
+  } = useEntries(rows, properties, spaceId, activeFilters, relations, source, canEdit, isFetched && !isLoading);
 
   const collectionTypeFilters = React.useMemo(
     () =>
@@ -499,6 +536,7 @@ export const TableBlock = ({
       onLinkEntry={onLinkEntry}
       onAddPlaceholder={onAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      placeholderFocusKey={placeholderFocusKey}
       collectionTypeFilters={collectionTypeFilters}
       sortState={sortState}
       onSort={handleSortChange}
@@ -522,6 +560,7 @@ export const TableBlock = ({
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
         collectionTypeFilters={collectionTypeFilters}
       />
     );
@@ -544,6 +583,7 @@ export const TableBlock = ({
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
         collectionTypeFilters={collectionTypeFilters}
       />
     );
@@ -566,6 +606,7 @@ export const TableBlock = ({
         pageNumber={pageNumber}
         pageSize={pageSize}
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
         collectionTypeFilters={collectionTypeFilters}
       />
     );
