@@ -1,4 +1,4 @@
-import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { RelationDtoLive } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -10,11 +10,11 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
   const relationsOut = remoteEntity.relationsList.map(r => RelationDtoLive(r));
   const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
-  // Drop spaces whose only contribution to this entity is the hidden score
-  // property, so navigation doesn't route to a space that has no real content.
+  // Drop spaces whose only contribution to this entity is a hidden property,
+  // so navigation doesn't route to a space that has no real content.
   const spacesWithRealContent = new Set<string>();
   for (const v of remoteEntity.valuesList) {
-    if (v.property.id !== SCORE_SYSTEM_PROPERTY) spacesWithRealContent.add(v.spaceId);
+    if (!HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
   }
   for (const r of remoteEntity.relationsList) {
     spacesWithRealContent.add(r.spaceId);

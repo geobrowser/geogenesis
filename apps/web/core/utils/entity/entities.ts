@@ -1,6 +1,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -73,14 +73,13 @@ export function cover(relations?: Relation[]): string | null {
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {
   const realContent: string[] = [];
-  const scoreOnly: string[] = [];
+  const hiddenOnly: string[] = [];
 
-  // Score values alone shouldn't make a space count as a "real" home for this
-  // entity (the score property is hidden), so route around them when other
-  // content exists in the same set.
+  // Hidden-property values alone shouldn't make a space count as a "real"
+  // home for this entity, so route around them when other content exists.
   for (const value of values ?? []) {
-    if (value.property.id === SCORE_SYSTEM_PROPERTY) {
-      scoreOnly.push(value.spaceId);
+    if (HIDDEN_PROPERTIES.has(value.property.id)) {
+      hiddenOnly.push(value.spaceId);
     } else {
       realContent.push(value.spaceId);
     }
@@ -95,7 +94,7 @@ export function spaces(values?: Value[], relations?: Relation[]): string[] {
     return sortSpaceIdsByRank([...realSet]);
   }
 
-  // Fallback: if there is no non-score content anywhere, keep the score-only
+  // Fallback: if there is no non-hidden content anywhere, keep the hidden-only
   // spaces so the entity is still navigable.
-  return sortSpaceIdsByRank([...new Set(scoreOnly)]);
+  return sortSpaceIdsByRank([...new Set(hiddenOnly)]);
 }
