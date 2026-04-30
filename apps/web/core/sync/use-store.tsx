@@ -298,24 +298,21 @@ export function useQueryEntities({
         return [];
       }
 
-      // For id.in queries (COLLECTION sources, search-result hydration, etc.)
-      // the where condition is fully bounded by a known id list, so the local
-      // store is authoritative for membership. Materialize entities in the
-      // caller-supplied id order so consumers that ranked the list (search
-      // relevance, collection Position, etc.) get back what they asked for.
-      // Reading via store.getEntity also makes newly-created entities show up
-      // immediately, without waiting for keepPreviousData to clear when the
-      // network query key flips.
-      if (where?.id?.in && !sort) {
+      // Pure id.in queries: bounded by the caller's id list, so we read from
+      // the store in caller order to preserve ranked lists (search relevance,
+      // Position) and surface newly-created entities immediately. The
+      // single-key gate is load-bearing — with extra clauses (e.g. a name
+      // filter) `store.getEntity` would return every id regardless, so we
+      // must fall through to the server-filtered `data.ids`.
+      if (where?.id?.in && !sort && Object.keys(where).length === 1) {
         const ids = where.id.in;
         const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
         return first !== undefined ? entities.slice(0, first) : entities;
       }
 
-      // Cursor/offset paginated queries: materialize the page from the
-      // server-returned ids so the active window matches the fetched data.
-      // Reading each entity through the store still picks up local edits.
-      // Falls back to a local EntityQuery only before the first fetch lands.
+      // Server-paginated queries, plus filtered id.in: materialize the page
+      // from the server-returned ids; store.getEntity still picks up local
+      // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
         return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
       }
