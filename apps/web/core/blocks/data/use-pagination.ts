@@ -5,17 +5,23 @@ import { atom, useAtom } from 'jotai';
 /**
  * Hybrid cursor + bounded-offset pagination state per data block.
  *
- * The pager is cursor-primary: every fetch is `(after = anchorCursor, offset)`
- * where the offset bridges from the closest known anchor to the active page.
- * Sequential `'next'` walks add new anchors so the offset stays small. Numeric
- * jumps (e.g. clicking page 42 from page 3) use a bounded offset on top of
- * the closest anchor — capped by `MAX_JUMP_PAGES` to keep the SQL offset out
- * of the slow zone. Once a jumped-to page resolves, the returned `endCursor`
- * is recorded as a new anchor, so the user can keep jumping in 99-page hops.
+ * For cursor-driven sources (SPACES/GEO data blocks), every fetch is
+ * `(after = anchorCursor, offset)` where the offset bridges from the closest
+ * known anchor to the active page. Sequential `'next'` walks add new anchors
+ * so the offset stays small. Once a jumped-to page resolves, its `endCursor`
+ * is recorded as a new anchor, letting the user keep hopping forward in
+ * `MAX_JUMP_PAGES`-sized jumps.
  *
  * Anchors are sparse: `{ pageNumber, cursor }` where `pageNumber` is the page
  * the cursor unlocks as page-0 of its sub-window. `cursor === null` means
  * "start of the connection" and is always present at index 0.
+ *
+ * Note: `setPage` does **not** clamp numeric jumps — it always sets the
+ * requested page. The cap is informational, exposed via `canJumpTo(target)`
+ * and `maxJumpPages`. This is deliberate: COLLECTION data blocks paginate
+ * locally (no cursor, no SQL offset) and need arbitrary numeric jumps. The
+ * pager UI is responsible for gating chips/buttons by `canJumpTo` for
+ * cursor-driven sources.
  */
 export const MAX_JUMP_PAGES = 99;
 

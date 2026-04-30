@@ -200,6 +200,7 @@ export function usePowerToolsData(options?: {
   const {
     entities: queriedEntities,
     isLoading: isQueryLoading,
+    isPlaceholderData: isQueryPlaceholder,
     endCursor: queriedEndCursor,
   } = useQueryEntities({
     where,
@@ -211,9 +212,12 @@ export function usePowerToolsData(options?: {
   });
 
   // Record the cursor for the next page so `setPage(prev => prev + 1)` can
-  // pick up the right `after` value.
+  // pick up the right `after` value. Skip while showing placeholder data —
+  // the endCursor reflects the previous page in that window and would seed
+  // the wrong cursor for `pageCursors[page + 1]`.
   React.useEffect(() => {
     if (source.type !== 'SPACES' && source.type !== 'GEO') return;
+    if (isQueryPlaceholder) return;
     if (!queriedEndCursor) return;
     setPageCursors(prev => {
       if (prev[page + 1] === queriedEndCursor) return prev;
@@ -221,7 +225,7 @@ export function usePowerToolsData(options?: {
       next[page + 1] = queriedEndCursor;
       return next;
     });
-  }, [source.type, queriedEndCursor, page]);
+  }, [source.type, isQueryPlaceholder, queriedEndCursor, page]);
 
   React.useEffect(() => {
     if (source.type === 'COLLECTION') {

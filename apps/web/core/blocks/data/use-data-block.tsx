@@ -170,6 +170,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     entities: queriedEntities,
     isLoading: isQueryEntitiesLoading,
     isFetched: isQueryEntitiesFetched,
+    isPlaceholderData: isQueryEntitiesPlaceholder,
     endCursor: queriedEndCursor,
     hasNextPage: queriedHasNextPage,
   } = useQueryEntities({
@@ -185,12 +186,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   // Anchor the cursor of the page we just fetched so subsequent forward
   // navigation (single steps or jumps) starts from the closest known anchor
-  // and keeps the SQL offset small.
+  // and keeps the SQL offset small. Skip while serving placeholder data —
+  // `queriedEndCursor` is still from the prior page in that window and
+  // would write a wrong-page anchor.
   React.useEffect(() => {
     if (source.type !== 'SPACES' && source.type !== 'GEO') return;
     if (!isQueryEntitiesFetched) return;
+    if (isQueryEntitiesPlaceholder) return;
     recordEndCursor(pageNumber, queriedEndCursor);
-  }, [source.type, isQueryEntitiesFetched, queriedEndCursor, pageNumber, recordEndCursor]);
+  }, [source.type, isQueryEntitiesFetched, isQueryEntitiesPlaceholder, queriedEndCursor, pageNumber, recordEndCursor]);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {

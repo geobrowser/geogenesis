@@ -17,7 +17,7 @@ import { Properties } from '../utils/property';
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
-import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames } from './store';
+import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames, stableStringify } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
@@ -234,6 +234,7 @@ export function useQueryEntities({
   const {
     isFetched,
     isLoading,
+    isPlaceholderData,
     data,
   } = useQuery({
     enabled,
@@ -258,7 +259,16 @@ export function useQueryEntities({
   // "Next" hits a warm React Query cache. Keyed by the same shape the actual
   // fetch uses (after = current endCursor, offset = 0), so the subsequent
   // useQuery call inside the data block will deduplicate against this entry.
-  const prefetchEndCursor = data?.hasNextPage ? data.endCursor : null;
+  // Skip while showing placeholder data — the endCursor is from the prior
+  // page in that window and would seed the wrong anchor.
+  const prefetchEndCursor = !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
+  // Stringify ref-unstable inputs (callers like useCollection rebuild `where`
+  // inline each render) so the effect only re-runs when the semantic key
+  // changes, not on every render.
+  const prefetchKeyTail = React.useMemo(
+    () => stableStringify({ where, first, sort: sort ?? null }),
+    [where, first, sort]
+  );
   React.useEffect(() => {
     if (!enabled) return;
     if (!prefetchEndCursor) return;
@@ -275,7 +285,8 @@ export function useQueryEntities({
         return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
       },
     });
-  }, [enabled, prefetchEndCursor, where, first, sort, cache, store, stream]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefetchKeyTail subsumes where/first/sort
+  }, [enabled, prefetchEndCursor, prefetchKeyTail, cache, store, stream]);
 
   const results = useSelector(
     reactive,
@@ -288,9 +299,12 @@ export function useQueryEntities({
         return [];
       }
 
-      // When a server-side sort is active, preserve the server-returned order
-      // but read fresh entity data from the store to pick up local edits.
-      if (sort && data?.ids) {
+      // When a remote fetch has resolved, materialize the page from the
+      // server-returned ids so cursor/offset pagination reflects the correct
+      // window. Reading each entity through the store still picks up local
+      // edits. The local-only EntityQuery fallback is only used before the
+      // first fetch lands (placeholderData=undefined keeps `data` falsy).
+      if (data?.ids) {
         return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
       }
 
@@ -308,6 +322,14 @@ export function useQueryEntities({
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
     isFetched: isFetched && enabled,
+    /**
+     * True while React Query is serving the previous page's data because
+     * `placeholderData: keepPreviousData` is in effect and the current key
+     * hasn't resolved yet. Consumers driving cursor history off `endCursor`
+     * must skip recording while this is true — the cursor in `data` is from
+     * the prior page.
+     */
+    isPlaceholderData,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
   };
