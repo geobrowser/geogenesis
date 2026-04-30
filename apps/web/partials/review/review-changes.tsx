@@ -235,8 +235,8 @@ export const ReviewChanges = () => {
           )
         )
       );
-      const merged = new Map<string, (typeof pages)[0][0]>();
-      for (const entities of pages) {
+      const merged = new Map<string, (typeof pages)[0]['entities'][0]>();
+      for (const { entities } of pages) {
         for (const entity of entities) {
           merged.set(entity.id, entity);
         }

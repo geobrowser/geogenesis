@@ -47,7 +47,19 @@ interface UseDataBlockOptions {
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
-  const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
+  const {
+    entityId,
+    spaceId,
+    pageNumber,
+    currentAfter,
+    currentOffset,
+    relationId,
+    setPage,
+    recordEndCursor,
+    reset: resetPagination,
+    canJumpTo,
+    maxJumpPages,
+  } = useDataBlockInstance();
   const { storage } = useMutate();
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
@@ -124,10 +136,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading: isCollectionLoading,
     collectionLength,
     filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
+    endCursor: collectionEndCursor,
+    hasNextPage: collectionHasNextPage,
+    isPlaceholderData: isCollectionPlaceholder,
   } = useCollection({
     source,
     first: PAGE_SIZE,
-    skip: pageNumber * PAGE_SIZE,
+    pageNumber,
+    after: currentAfter,
+    offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
     where: where,
     sort: serverSort,
   });
@@ -156,15 +173,47 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     entities: queriedEntities,
     isLoading: isQueryEntitiesLoading,
     isFetched: isQueryEntitiesFetched,
+    isPlaceholderData: isQueryEntitiesPlaceholder,
+    endCursor: queriedEndCursor,
+    hasNextPage: queriedHasNextPage,
   } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
-    first: PAGE_SIZE + 1,
-    skip: pageNumber * PAGE_SIZE,
+    first: PAGE_SIZE,
+    after: currentAfter,
+    offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
     sort: serverSort,
   });
+
+  // Anchor the cursor of the page we just fetched so subsequent forward
+  // navigation (single steps or jumps) starts from the closest known anchor
+  // and keeps the SQL offset small. Skip while serving placeholder data —
+  // `queriedEndCursor` is still from the prior page in that window and
+  // would write a wrong-page anchor.
+  React.useEffect(() => {
+    if (source.type !== 'SPACES' && source.type !== 'GEO') return;
+    if (!isQueryEntitiesFetched) return;
+    if (isQueryEntitiesPlaceholder) return;
+    recordEndCursor(pageNumber, queriedEndCursor);
+  }, [source.type, isQueryEntitiesFetched, isQueryEntitiesPlaceholder, queriedEndCursor, pageNumber, recordEndCursor]);
+
+  React.useEffect(() => {
+    if (source.type !== 'COLLECTION') return;
+    if (!serverSort) return;
+    if (!isCollectionFetched) return;
+    if (isCollectionPlaceholder) return;
+    recordEndCursor(pageNumber, collectionEndCursor);
+  }, [
+    source.type,
+    serverSort,
+    isCollectionFetched,
+    isCollectionPlaceholder,
+    collectionEndCursor,
+    pageNumber,
+    recordEndCursor,
+  ]);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
@@ -292,6 +341,19 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     return [];
   }, [collectionData.items, collectionData.relations, queriedEntities, relationsMapping, shownColumnIds, source.type]);
 
+  // Reset to page 0 (and drop all cursor anchors) when the filter or sort
+  // signature changes — cursors are tied to a specific filter+sort combination
+  // and stop being meaningful when either changes.
+  const sortKey = React.useMemo(() => stableStringify(serverSort ?? null), [serverSort]);
+  const lastResetKeyRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const key = `${filterStateKey}::${sortKey}`;
+    if (lastResetKeyRef.current !== null && lastResetKeyRef.current !== key) {
+      resetPagination();
+    }
+    lastResetKeyRef.current = key;
+  }, [filterStateKey, sortKey, resetPagination]);
+
   const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
   const sortedRows = React.useMemo(
     () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
@@ -328,12 +390,18 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
-  // For collections, check if there are more items beyond the current page
+  // For COLLECTION with a server-side sort, the response is a single page so
+  // count math is misleading (totalCount caps at pageSize when filter+sort
+  // are combined) — read hasNextPage off the connection. For unsorted
+  // COLLECTION we fetched every matching id, so count math is accurate.
+  // For SPACES/GEO we read the cursor signal directly off the GraphQL response.
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
-      : rows
-        ? rows.length > PAGE_SIZE
+      ? serverSort
+        ? collectionHasNextPage
+        : (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? queriedHasNextPage
         : false;
 
   const result = {
@@ -351,6 +419,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
+    canJumpTo,
+    maxJumpPages,
 
     isLoading,
     isFetched,
@@ -405,7 +475,13 @@ const DataBlockContext = React.createContext<{
   spaceId: string;
   relationId: string;
   pageNumber: number;
+  currentAfter: string | undefined;
+  currentOffset: number | undefined;
   setPage: (page: number | 'next' | 'previous') => void;
+  recordEndCursor: (fetchedPage: number, endCursor: string | null) => void;
+  reset: () => void;
+  canJumpTo: (target: number) => boolean;
+  maxJumpPages: number;
 } | null>(null);
 
 interface Props {
@@ -416,7 +492,8 @@ interface Props {
 }
 
 export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
-  const { pageNumber, setPage } = usePagination(entityId);
+  const { pageNumber, currentAfter, currentOffset, setPage, recordEndCursor, reset, canJumpTo, maxJumpPages } =
+    usePagination(entityId);
 
   const store = React.useMemo(() => {
     return {
@@ -424,9 +501,27 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
       entityId,
       relationId,
       pageNumber,
+      currentAfter,
+      currentOffset,
       setPage,
+      recordEndCursor,
+      reset,
+      canJumpTo,
+      maxJumpPages,
     };
-  }, [spaceId, entityId, relationId, pageNumber, setPage]);
+  }, [
+    spaceId,
+    entityId,
+    relationId,
+    pageNumber,
+    currentAfter,
+    currentOffset,
+    setPage,
+    recordEndCursor,
+    reset,
+    canJumpTo,
+    maxJumpPages,
+  ]);
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }

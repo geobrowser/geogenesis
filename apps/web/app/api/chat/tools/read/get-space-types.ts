@@ -45,7 +45,7 @@ export const getSpaceTypes = tool({
     const effectiveLimit = Math.min(50, Math.max(1, limit ?? 25));
     const scopedSpaceId = normalizeEntityId(spaceId);
     try {
-      const raw = await Effect.runPromise(
+      const { entities: raw } = await Effect.runPromise(
         getAllEntities({
           spaceId: scopedSpaceId,
           typeId: SystemIds.SCHEMA_TYPE,

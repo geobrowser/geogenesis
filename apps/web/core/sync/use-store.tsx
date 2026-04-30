@@ -17,7 +17,7 @@ import { Properties } from '../utils/property';
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
-import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames } from './store';
+import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames, stableStringify } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
@@ -162,7 +162,19 @@ export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOpt
 type QueryEntitiesOptions = {
   where: WhereCondition;
   first?: number;
-  skip?: number;
+  /**
+   * Cursor-based pagination. Pass the `endCursor` from the previous page's
+   * result to fetch the next page; omit (or pass undefined) to start at the
+   * beginning.
+   */
+  after?: string;
+  /**
+   * Bounded forward offset relative to `after`. Used by the hybrid jump-to-page
+   * pager: the data block UI keeps a small set of cursor anchors and uses
+   * `offset` to bridge to a target page from the closest anchor (capped to
+   * keep the offset out of the SQL slow zone).
+   */
+  offset?: number;
   placeholderData?: typeof keepPreviousData;
   /**
    * When true, returns an empty array until the initial fetch completes.
@@ -191,7 +203,8 @@ type QueryEntitiesOptions = {
 export function useQueryEntities({
   where,
   first = 9,
-  skip = 0,
+  after,
+  offset,
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
@@ -221,17 +234,58 @@ export function useQueryEntities({
   const {
     isFetched,
     isLoading,
-    data: orderedIds,
+    isPlaceholderData,
+    data,
   } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, skip), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
     queryFn: async () => {
-      const { merged, remote } = await E.syncMany({ store, cache, where, first, skip, sort });
+      const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
+        store,
+        cache,
+        where,
+        first,
+        after,
+        offset,
+        sort,
+      });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
-      return merged.map(e => e.id);
+      return { ids: merged.map(e => e.id), endCursor, hasNextPage };
     },
   });
+
+  // Prefetch the next page once the current one resolves so a click on
+  // "Next" hits a warm React Query cache. Keyed by the same shape the actual
+  // fetch uses (after = current endCursor, offset = 0), so the subsequent
+  // useQuery call inside the data block will deduplicate against this entry.
+  // Skip while showing placeholder data — the endCursor is from the prior
+  // page in that window and would seed the wrong anchor.
+  const prefetchEndCursor = !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
+  // Stringify ref-unstable inputs (callers like useCollection rebuild `where`
+  // inline each render) so the effect only re-runs when the semantic key
+  // changes, not on every render.
+  const prefetchKeyTail = React.useMemo(
+    () => stableStringify({ where, first, sort: sort ?? null }),
+    [where, first, sort]
+  );
+  React.useEffect(() => {
+    if (!enabled) return;
+    if (!prefetchEndCursor) return;
+    const nextAfter = prefetchEndCursor;
+    cache.prefetchQuery({
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryFn: async () => {
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: result.merged,
+          remoteEntities: result.remote,
+        });
+        return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
+      },
+    });
+  }, [enabled, prefetchEndCursor, prefetchKeyTail, cache, store, stream]);
 
   const results = useSelector(
     reactive,
@@ -244,16 +298,28 @@ export function useQueryEntities({
         return [];
       }
 
-      // When a server-side sort is active, preserve the server-returned order
-      // but read fresh entity data from the store to pick up local edits.
-      if (sort && orderedIds) {
-        return orderedIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+      // Pure id.in queries: bounded by the caller's id list, so we read from
+      // the store in caller order to preserve ranked lists (search relevance,
+      // Position) and surface newly-created entities immediately. The
+      // single-key gate is load-bearing — with extra clauses (e.g. a name
+      // filter) `store.getEntity` would return every id regardless, so we
+      // must fall through to the server-filtered `data.ids`.
+      if (where?.id?.in && !sort && Object.keys(where).length === 1) {
+        const ids = where.id.in;
+        const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
+        return first !== undefined ? entities.slice(0, first) : entities;
+      }
+
+      // Server-paginated queries, plus filtered id.in: materialize the page
+      // from the server-returned ids; store.getEntity still picks up local
+      // edits. Falls through to a local EntityQuery only before first fetch.
+      if (data?.ids) {
+        return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
       }
 
       const query = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
-        .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' });
 
       return query.execute();
@@ -265,6 +331,16 @@ export function useQueryEntities({
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
     isFetched: isFetched && enabled,
+    /**
+     * True while React Query is serving the previous page's data because
+     * `placeholderData: keepPreviousData` is in effect and the current key
+     * hasn't resolved yet. Consumers driving cursor history off `endCursor`
+     * must skip recording while this is true — the cursor in `data` is from
+     * the prior page.
+     */
+    isPlaceholderData,
+    endCursor: data?.endCursor ?? null,
+    hasNextPage: data?.hasNextPage ?? false,
   };
 }
 
@@ -411,7 +487,8 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
 interface FindManyParameters {
   first?: number;
-  skip?: number;
+  after?: string;
+  offset?: number;
   where: WhereCondition;
 }
 
@@ -419,7 +496,8 @@ export function useQueryEntitiesAsync() {
   const cache = useQueryClient();
   const { store } = useSyncEngine();
 
-  return ({ where, first = 9, skip = 0 }: FindManyParameters) => E.findMany({ store, cache, where, first, skip });
+  return ({ where, first = 9, after, offset }: FindManyParameters) =>
+    E.findMany({ store, cache, where, first, after, offset });
 }
 
 export function useQueryEntityAsync() {
