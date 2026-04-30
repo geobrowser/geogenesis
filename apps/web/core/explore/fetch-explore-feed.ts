@@ -3,12 +3,14 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { EntitiesOrderBy, type EntityFilter, type UuidFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
+
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -17,10 +19,11 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
+import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
-export type ExploreSort = 'new';
+export type ExploreSort = 'new' | 'top';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export type ExploreFeedItem = {
@@ -141,14 +144,14 @@ type ExploreEntitiesPageResponse = {
   hasNextPage: boolean;
 };
 
-function decodeExploreEntities(data: {
-  entitiesConnection?: {
-    nodes?: unknown[];
-    pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-  } | null;
-}): ExploreEntitiesPageResponse {
+type EntitiesConnectionShape = {
+  nodes?: unknown[];
+  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
+} | null;
+
+function decodeConnection(connection: EntitiesConnectionShape): ExploreEntitiesPageResponse {
   const entities: ExploreEntity[] = [];
-  for (const n of (data.entitiesConnection?.nodes ?? []) as Array<
+  for (const n of (connection?.nodes ?? []) as Array<
     Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string }
   >) {
     const decoded = EntityDecoder.decode(n);
@@ -161,23 +164,31 @@ function decodeExploreEntities(data: {
   }
   return {
     entities,
-    endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
-    hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
   };
 }
 
-async function fetchExploreEntitiesPage(args: {
+function decodeExploreEntities(data: { entitiesConnection?: EntitiesConnectionShape }): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesConnection ?? null);
+}
+
+function decodeExploreEntitiesByProperty(data: {
+  entitiesOrderedByPropertyConnection?: EntitiesConnectionShape;
+}): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesOrderedByPropertyConnection ?? null);
+}
+
+function buildFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
-  limit: number;
-  after: string | null;
-  orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
   requireName?: boolean;
-}): Promise<ExploreEntitiesPageResponse> {
+}): EntityFilter {
   const t = timeThresholdSec(args.time);
-  const filter: EntityFilter = {
+  return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
+    spaceIds: { overlaps: [...args.spaceIds] },
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
     ...(args.requireName !== false
       ? {
@@ -192,17 +203,53 @@ async function fetchExploreEntitiesPage(args: {
       : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
+}
 
+async function fetchExploreEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  after: string | null;
+  orderBy: EntitiesOrderBy[];
+  typeIds?: readonly string[];
+  requireName?: boolean;
+}): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
       query: exploreEntitiesConnectionDocument,
       decoder: decodeExploreEntities,
       variables: {
-        spaceIds: { in: args.spaceIds } as UuidFilter,
         limit: args.limit,
         after: args.after,
-        filter,
+        filter: buildFeedFilter(args),
         orderBy: args.orderBy,
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
+// "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
+// The endpoint takes `spaceIds` only inside `filter` (no top-level arg, unlike `entitiesConnection`).
+async function fetchTopEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  after: string | null;
+  typeIds?: readonly string[];
+  requireName?: boolean;
+}): Promise<ExploreEntitiesPageResponse> {
+  return Effect.runPromise(
+    graphql({
+      query: exploreEntitiesByPropertyConnectionDocument,
+      decoder: decodeExploreEntitiesByProperty,
+      variables: {
+        first: args.limit,
+        after: args.after,
+        filter: buildFeedFilter(args),
+        propertyId: SCORE_SYSTEM_PROPERTY,
+        dataType: 'integer',
+        sortDirection: 'DESC',
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -333,15 +380,25 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
-  const page = await fetchExploreEntitiesPage({
-    spaceIds: baseIds,
-    time: args.time,
-    limit: scanChunk,
-    after: args.cursor,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
-    typeIds: args.typeIds,
-    requireName: args.requireName,
-  });
+  const page =
+    args.sort === 'top'
+      ? await fetchTopEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          typeIds: args.typeIds,
+          requireName: args.requireName,
+        })
+      : await fetchExploreEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          orderBy: [EntitiesOrderBy.CreatedAtDesc],
+          typeIds: args.typeIds,
+          requireName: args.requireName,
+        });
 
   const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
   const items = await attachMeta(enriched.slice(0, pageSize));
