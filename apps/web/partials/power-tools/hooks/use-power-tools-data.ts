@@ -188,6 +188,9 @@ export function usePowerToolsData(options?: {
     collectionRelations,
     isLoading: isCollectionLoading,
     collectionLength,
+    isPlaceholderData: isCollectionPlaceholder,
+    endCursor: collectionEndCursor,
+    hasNextPage: collectionHasNextPage,
   } = useCollection({
     source,
     first: pageSize,
@@ -227,6 +230,19 @@ export function usePowerToolsData(options?: {
       return next;
     });
   }, [source.type, isQueryPlaceholder, queriedEndCursor, page]);
+
+  React.useEffect(() => {
+    if (source.type !== 'COLLECTION') return;
+    if (!sort) return;
+    if (isCollectionPlaceholder) return;
+    if (!collectionEndCursor) return;
+    setPageCursors(prev => {
+      if (prev[page + 1] === collectionEndCursor) return prev;
+      const next = prev.slice();
+      next[page + 1] = collectionEndCursor;
+      return next;
+    });
+  }, [source.type, sort, isCollectionPlaceholder, collectionEndCursor, page]);
 
   React.useEffect(() => {
     if (source.type === 'COLLECTION') {
@@ -284,6 +300,9 @@ export function usePowerToolsData(options?: {
 
   const hasMore = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
+      if (sort) {
+        return collectionHasNextPage;
+      }
       return (page + 1) * pageSize < (collectionLength ?? 0);
     }
 
@@ -296,7 +315,7 @@ export function usePowerToolsData(options?: {
     }
 
     return false;
-  }, [source.type, page, pageSize, collectionLength, queriedHasNextPage]);
+  }, [source.type, sort, collectionHasNextPage, page, pageSize, collectionLength, queriedHasNextPage]);
 
   const allEntityIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
 
