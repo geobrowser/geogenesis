@@ -12,11 +12,20 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
 
   // Drop spaces whose only contribution to this entity is a hidden property,
   // so navigation doesn't route to a space that has no real content.
+  //
+  // Use the unscoped allValuesList / allRelationsList projections when the
+  // query provided them — the main valuesList/relationsList are filtered to
+  // a single spaceId for display, so they can't tell us which other spaces
+  // have real content. Fall back to the scoped lists for queries that don't
+  // request the projections.
+  const valuesForRouting = remoteEntity.allValuesList ?? remoteEntity.valuesList;
+  const relationsForRouting = remoteEntity.allRelationsList ?? remoteEntity.relationsList;
+
   const spacesWithRealContent = new Set<string>();
-  for (const v of remoteEntity.valuesList) {
+  for (const v of valuesForRouting) {
     if (!HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
   }
-  for (const r of remoteEntity.relationsList) {
+  for (const r of relationsForRouting) {
     spacesWithRealContent.add(r.spaceId);
   }
   const filteredSpaceIds = remoteEntity.spaceIds.filter(id => spacesWithRealContent.has(id));

@@ -103,12 +103,30 @@ export const Relation = Schema.Struct({
 
 export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
 
+/**
+ * Cross-space projections used only for routing (`EntityDtoLive` derives
+ * `Entity.spaces` from these). The main valuesList/relationsList are space
+ * scoped, so they can't tell us which other spaces have real content.
+ */
+export const RoutingValueProjection = Schema.Struct({
+  spaceId: HexId,
+  property: Schema.Struct({
+    id: HexId,
+  }),
+});
+
+export const RoutingRelationProjection = Schema.Struct({
+  spaceId: HexId,
+});
+
 export const Entity = Schema.Struct({
   id: HexId,
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   types: Schema.Array(EntityType),
   spaceIds: Schema.Array(Schema.String),
+  allValuesList: Schema.optional(Schema.Array(RoutingValueProjection)),
+  allRelationsList: Schema.optional(Schema.Array(RoutingRelationProjection)),
   // cover
   // blocks: Schema.
   valuesList: Schema.Array(Value),
