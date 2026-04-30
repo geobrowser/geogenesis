@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { describe, expect, it } from 'vitest';
 
-import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { HIDDEN_PROPERTIES, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/types';
 
 import { description, descriptionTriple, name, nameValue, spaces } from './entities';
@@ -81,6 +81,10 @@ describe('Entity name helpers', () => {
 });
 
 describe('Entity space helpers', () => {
+  it('treats score as a hidden property', () => {
+    expect(HIDDEN_PROPERTIES.has(SCORE_SYSTEM_PROPERTY)).toBe(true);
+  });
+
   const value = (propertyId: string, spaceId: string): Value =>
     ({
       id: `${propertyId}-${spaceId}`,
