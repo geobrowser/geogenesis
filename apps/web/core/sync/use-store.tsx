@@ -285,7 +285,6 @@ export function useQueryEntities({
         return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
       },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefetchKeyTail subsumes where/first/sort
   }, [enabled, prefetchEndCursor, prefetchKeyTail, cache, store, stream]);
 
   const results = useSelector(
