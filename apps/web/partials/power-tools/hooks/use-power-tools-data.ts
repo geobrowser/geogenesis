@@ -202,6 +202,7 @@ export function usePowerToolsData(options?: {
     isLoading: isQueryLoading,
     isPlaceholderData: isQueryPlaceholder,
     endCursor: queriedEndCursor,
+    hasNextPage: queriedHasNextPage,
   } = useQueryEntities({
     where,
     first: pageSize,
@@ -287,11 +288,15 @@ export function usePowerToolsData(options?: {
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      return lastPageCount >= pageSize;
+      // Trust pageInfo.hasNextPage from the connection — comparing
+      // lastPageCount to pageSize would falsely say "more" when the total
+      // count is an exact multiple of pageSize, triggering an extra empty
+      // fetch.
+      return queriedHasNextPage;
     }
 
     return false;
-  }, [source.type, page, pageSize, collectionLength, lastPageCount]);
+  }, [source.type, page, pageSize, collectionLength, queriedHasNextPage]);
 
   const allEntityIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
 

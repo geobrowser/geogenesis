@@ -298,18 +298,18 @@ export function useQueryEntities({
         return [];
       }
 
-      // For id.in queries (COLLECTION sources), the where condition is fully
-      // bounded by a known id list, so the local store is authoritative for
-      // membership. Read directly from EntityQuery so newly-created entities
-      // appear immediately — without this, keepPreviousData would keep the
-      // selector pinned to the previous id list until the new network fetch
-      // resolves, hiding just-created items in the UI.
+      // For id.in queries (COLLECTION sources, search-result hydration, etc.)
+      // the where condition is fully bounded by a known id list, so the local
+      // store is authoritative for membership. Materialize entities in the
+      // caller-supplied id order so consumers that ranked the list (search
+      // relevance, collection Position, etc.) get back what they asked for.
+      // Reading via store.getEntity also makes newly-created entities show up
+      // immediately, without waiting for keepPreviousData to clear when the
+      // network query key flips.
       if (where?.id?.in && !sort) {
-        return new EntityQuery(store.getEntities())
-          .where(where)
-          .limit(first)
-          .sortBy({ field: 'updatedAt', direction: 'desc' })
-          .execute();
+        const ids = where.id.in;
+        const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
+        return first !== undefined ? entities.slice(0, first) : entities;
       }
 
       // Cursor/offset paginated queries: materialize the page from the
