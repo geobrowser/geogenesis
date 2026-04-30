@@ -298,6 +298,14 @@ export function useQueryEntities({
         return [];
       }
 
+      // Mirror the server-side empty-name exclusion (added by
+      // convertWhereConditionToEntityFilter) at the local layer. Local-only
+      // entities — e.g. a freshly-created collection item that hasn't been
+      // named yet, or a synced entity whose name was just deleted locally —
+      // would otherwise leak into the rendered page because EntityQuery
+      // doesn't know about that clause.
+      const hasVisibleName = (e: Entity): boolean => e.name != null && e.name !== '';
+
       // For id.in queries (COLLECTION sources), the where condition is fully
       // bounded by a known id list, so the local store is authoritative for
       // membership. Read directly from EntityQuery so newly-created entities
@@ -309,7 +317,8 @@ export function useQueryEntities({
           .where(where)
           .limit(first)
           .sortBy({ field: 'updatedAt', direction: 'desc' })
-          .execute();
+          .execute()
+          .filter(hasVisibleName);
       }
 
       // Cursor/offset paginated queries: materialize the page from the
@@ -317,7 +326,9 @@ export function useQueryEntities({
       // Reading each entity through the store still picks up local edits.
       // Falls back to a local EntityQuery only before the first fetch lands.
       if (data?.ids) {
-        return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+        return data.ids
+          .map(id => store.getEntity(id))
+          .filter((e): e is Entity => e != null && hasVisibleName(e));
       }
 
       const query = new EntityQuery(store.getEntities())
@@ -325,7 +336,7 @@ export function useQueryEntities({
         .limit(first)
         .sortBy({ field: 'updatedAt', direction: 'desc' });
 
-      return query.execute();
+      return query.execute().filter(hasVisibleName);
     },
     equal
   );
