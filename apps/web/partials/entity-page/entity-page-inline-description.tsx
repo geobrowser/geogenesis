@@ -126,7 +126,9 @@ function TruncatedDescription({ text }: { text: string }) {
   // ellipsis ("…") lands inline with the text and the More button sits in
   // the reserved padding to the right of it.
   const togglePadding = 'pr-12';
-  const buttonStyle = `cursor-pointer text-grey-04 hover:underline ${buttonFocus}`;
+  // text-body so the More button matches the inline Less button's size —
+  // buttons don't inherit font styles from their ancestors by default.
+  const buttonStyle = `cursor-pointer text-body text-grey-04 hover:underline ${buttonFocus}`;
 
   return (
     <div className="relative">
