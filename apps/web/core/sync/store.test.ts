@@ -929,20 +929,35 @@ describe('GeoStore', () => {
     describe('queryKeys', () => {
       it('should return query keys for entities query', () => {
         const where = { id: { equals: 'entity-1' } };
-        const keys = GeoStore.queryKeys(where, 10, 0);
+        const keys = GeoStore.queryKeys(where, 10);
 
         // Uses stableStringify for deterministic key order
-        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, 0]);
+        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, null, 0]);
       });
 
       it('should produce consistent keys regardless of object key order', () => {
         const where1 = { name: { equals: 'test' }, id: { equals: 'entity-1' } };
         const where2 = { id: { equals: 'entity-1' }, name: { equals: 'test' } };
 
-        const keys1 = GeoStore.queryKeys(where1, 10, 0);
-        const keys2 = GeoStore.queryKeys(where2, 10, 0);
+        const keys1 = GeoStore.queryKeys(where1, 10);
+        const keys2 = GeoStore.queryKeys(where2, 10);
 
         expect(keys1).toEqual(keys2);
+      });
+
+      it('threads cursor and offset through the key tail', () => {
+        const where = { id: { equals: 'entity-1' } };
+        const keys = GeoStore.queryKeys(where, 10, 'after-cursor', 5);
+
+        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, 'after-cursor', 5]);
+      });
+
+      it('distinguishes jumped-to pages from sequentially walked ones', () => {
+        const where = { id: { equals: 'entity-1' } };
+        const sequential = GeoStore.queryKeys(where, 10, 'cursor-page-3', 0);
+        const jumped = GeoStore.queryKeys(where, 10, 'cursor-page-3', 4);
+
+        expect(sequential).not.toEqual(jumped);
       });
     });
   });

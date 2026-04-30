@@ -170,98 +170,6 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entitiesOrderedByPropertyQuery = graphql(/* GraphQL */ `
-  query EntitiesOrderedByProperty(
-    $propertyId: UUID
-    $sortDirection: SortOrder
-    $dataType: String
-    $spaceId: UUID
-    $limit: Int
-    $offset: Int
-    $filter: EntityFilter
-  ) {
-    entitiesOrderedByProperty(
-      propertyId: $propertyId
-      sortDirection: $sortDirection
-      dataType: $dataType
-      spaceId: $spaceId
-      first: $limit
-      offset: $offset
-      filter: $filter
-    ) {
-      id
-      name
-      description
-      spaceIds
-      updatedAt
-
-      types {
-        id
-        name
-      }
-
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
-      }
-
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
-      }
-    }
-  }
-`);
 
 export const entitiesBatchQuery = graphql(/* GraphQL */ `
   query EntitiesBatch($filter: EntityFilter, $spaceId: UUID) {
@@ -351,6 +259,21 @@ export const entityQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relationsList below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
       }
 
       valuesList(filter: { spaceId: { is: $spaceId } }) {
@@ -500,6 +423,21 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relationsList below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
       }
 
       valuesList(filter: { spaceId: { is: $spaceId } }) {
@@ -893,6 +831,17 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
         types {
           id
           name
+        }
+
+        allValuesList: valuesList {
+          spaceId
+          property {
+            id
+          }
+        }
+
+        allRelationsList: relationsList {
+          spaceId
         }
 
         valuesList(filter: { spaceId: { is: $spaceId } }) {

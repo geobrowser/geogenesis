@@ -10,7 +10,7 @@ import { readTypes } from '../database/entities';
 import {
   getAllEntities,
   getBatchEntities,
-  getEntitiesOrderedByProperty,
+  getEntitiesOrderedByPropertyConnection,
   getEntity,
   getEntityNames,
   getRelation,
@@ -191,7 +191,8 @@ export class E {
     cache: QueryClient;
     where: WhereCondition;
     first: number;
-    skip: number;
+    after?: string;
+    offset?: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
   }): Promise<Entity[]> {
@@ -211,7 +212,8 @@ export class E {
     cache,
     where,
     first,
-    skip,
+    after,
+    offset,
     spaceId,
     sort,
     orderBy,
@@ -220,33 +222,36 @@ export class E {
     cache: QueryClient;
     where: WhereCondition;
     first: number;
-    skip: number;
+    after?: string;
+    offset?: number;
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
     orderBy?: EntitiesOrderBy[];
-  }): Promise<{ merged: Entity[]; remote: Entity[] }> {
+  }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
 
       if (sort) {
         const filter = convertWhereConditionToEntityFilter(where);
-        const remoteEntities = await Effect.runPromise(
-          getEntitiesOrderedByProperty({
+        const page = await Effect.runPromise(
+          getEntitiesOrderedByPropertyConnection({
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
             spaceId,
             limit: first,
-            offset: skip,
+            after,
+            offset,
             filter,
           })
         );
 
+        const remoteEntities = page.entities;
         const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
         const merged = remoteEntities
           .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
           .filter((e): e is Entity => e !== null);
-        return { merged, remote: remoteEntities };
+        return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
       const remoteEntities = await cache.fetchQuery({
@@ -268,32 +273,32 @@ export class E {
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
       if (hasAdditionalFilters) {
         const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return { merged: localQuery.execute(), remote: remoteEntities };
+        return { merged: localQuery.execute(), remote: remoteEntities, endCursor: null, hasNextPage: false };
       }
 
-      return { merged: nonNullEntities, remote: remoteEntities };
+      return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
     }
 
-    const limit = first;
-    const offset = skip;
     const filter = convertWhereConditionToEntityFilter(where);
     const typeIds = extractTypeIdsFromWhere(where);
 
-    const remoteEntities = sort
+    const page = sort
       ? await Effect.runPromise(
-          getEntitiesOrderedByProperty({
+          getEntitiesOrderedByPropertyConnection({
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
             spaceId,
-            limit,
+            limit: first,
+            after,
             offset,
             filter,
           })
         )
       : await Effect.runPromise(
           getAllEntities({
-            limit,
+            limit: first,
+            after,
             offset,
             filter,
             typeIds,
@@ -301,6 +306,7 @@ export class E {
           })
         );
 
+    const remoteEntities = page.entities;
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
     const remoteIds = remoteEntities.map(e => e.id);
@@ -315,7 +321,7 @@ export class E {
       .map(entityId => this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) }))
       .filter((e): e is Entity => e !== null);
 
-    return { merged, remote: remoteEntities };
+    return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
   }
 
   static async findFuzzy(args: {

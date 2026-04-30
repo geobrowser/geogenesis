@@ -9,6 +9,16 @@ export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 /** Integer score property used to rank entities; hidden from the entity properties panel. */
 export const SCORE_SYSTEM_PROPERTY = '85a4668a42fa4f488969c0a9de0c294b';
 
+/**
+ * Properties that should be treated as invisible: hidden from the entity
+ * properties panel and ignored when deciding which space an entity link
+ * routes to. A space whose only contribution to an entity is a hidden
+ * property is not a real "home" for that entity.
+ *
+ * Add new entries here when a property should be treated like score.
+ */
+export const HIDDEN_PROPERTIES: ReadonlySet<string> = new Set([SCORE_SYSTEM_PROPERTY]);
+
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
 // Bounty linking - relation type used to link proposals to bounties
