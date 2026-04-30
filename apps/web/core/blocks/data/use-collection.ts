@@ -89,7 +89,13 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   // for the current page. For unsorted/no-filter the slice above already
   // narrows the id-set to the active window so we just ask for all of those
   // rows in a single request.
-  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
+  const {
+    entities: collectionItems,
+    isLoading: isCollectionItemsLoading,
+    isPlaceholderData: isCollectionItemsPlaceholder,
+    endCursor,
+    hasNextPage,
+  } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
     first: sort ? pageSize : entityIdsToFetch.length || undefined,
@@ -149,5 +155,8 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
     filterSuggestionEntityIds,
+    endCursor,
+    hasNextPage,
+    isPlaceholderData: isCollectionItemsPlaceholder,
   };
 }

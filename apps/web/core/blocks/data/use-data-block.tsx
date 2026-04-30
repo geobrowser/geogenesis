@@ -136,6 +136,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading: isCollectionLoading,
     collectionLength,
     filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
+    endCursor: collectionEndCursor,
+    isPlaceholderData: isCollectionPlaceholder,
   } = useCollection({
     source,
     first: PAGE_SIZE,
@@ -195,6 +197,22 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     if (isQueryEntitiesPlaceholder) return;
     recordEndCursor(pageNumber, queriedEndCursor);
   }, [source.type, isQueryEntitiesFetched, isQueryEntitiesPlaceholder, queriedEndCursor, pageNumber, recordEndCursor]);
+
+  React.useEffect(() => {
+    if (source.type !== 'COLLECTION') return;
+    if (!serverSort) return;
+    if (!isCollectionFetched) return;
+    if (isCollectionPlaceholder) return;
+    recordEndCursor(pageNumber, collectionEndCursor);
+  }, [
+    source.type,
+    serverSort,
+    isCollectionFetched,
+    isCollectionPlaceholder,
+    collectionEndCursor,
+    pageNumber,
+    recordEndCursor,
+  ]);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
