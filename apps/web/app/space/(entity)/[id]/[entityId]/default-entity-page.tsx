@@ -51,19 +51,6 @@ export default async function DefaultEntityPage({
   const isEditing = searchParams?.edit === 'true';
   const props = await getData(params.id, params.entityId);
 
-  // Server-side redirect when the URL's space isn't a real home for this
-  // entity (e.g. only contributes a hidden property like score). Avoids the
-  // flash from the client-side SpaceRedirect. Editing is excluded because the
-  // user may have unpublished local content in this space.
-  if (
-    !isEditing &&
-    props.deterministicSpaceId &&
-    props.deterministicSpaceId !== props.spaceId &&
-    !props.serverSpaces.includes(props.spaceId)
-  ) {
-    redirect(NavUtils.toEntity(props.deterministicSpaceId, props.id));
-  }
-
   return (
     <SpaceRedirect
       entityId={props.id}

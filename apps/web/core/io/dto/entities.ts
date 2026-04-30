@@ -23,7 +23,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
 
   const spacesWithRealContent = new Set<string>();
   for (const v of valuesForRouting) {
-    if (!HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
+    if (v.property?.id && !HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
   }
   for (const r of relationsForRouting) {
     spacesWithRealContent.add(r.spaceId);

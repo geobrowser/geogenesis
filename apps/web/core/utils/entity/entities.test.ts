@@ -2,9 +2,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { describe, expect, it } from 'vitest';
 
-import { Value } from '~/core/types';
+import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { Relation, Value } from '~/core/types';
 
-import { description, descriptionTriple, name, nameValue } from './entities';
+import { description, descriptionTriple, name, nameValue, spaces } from './entities';
 
 const valuesWithSystemDescriptionAttribute: Value[] = [
   {
@@ -76,5 +77,49 @@ describe('Entity name helpers', () => {
 
   it('Entity.nameValue should return undefined if there is no Name value', () => {
     expect(nameValue([])).toBe(undefined);
+  });
+});
+
+describe('Entity space helpers', () => {
+  const hiddenPropertyId = [...HIDDEN_PROPERTIES][0];
+
+  const value = (propertyId: string, spaceId: string): Value =>
+    ({
+      id: `${propertyId}-${spaceId}`,
+      entity: {
+        id: 'entityId',
+        name: 'banana',
+      },
+      property: {
+        id: propertyId,
+        name: null,
+        dataType: 'TEXT',
+      },
+      value: 'banana',
+      spaceId,
+    }) as Value;
+
+  it('ignores spaces that only contribute hidden properties when real content exists elsewhere', () => {
+    expect(spaces([value(hiddenPropertyId, 'hidden-space'), value(SystemIds.NAME_PROPERTY, 'real-space')])).toEqual([
+      'real-space',
+    ]);
+  });
+
+  it('keeps hidden-only spaces when there is no real content anywhere', () => {
+    expect(
+      spaces([
+        value(hiddenPropertyId, 'hidden-space-b'),
+        value(hiddenPropertyId, 'hidden-space-a'),
+        value(hiddenPropertyId, 'hidden-space-b'),
+      ])
+    ).toEqual(['hidden-space-b', 'hidden-space-a']);
+  });
+
+  it('treats relations as real content for routing spaces', () => {
+    const relation = {
+      spaceId: 'relation-space',
+    } as Relation;
+
+    expect(spaces([value(hiddenPropertyId, 'hidden-space')], [relation])).toEqual(['relation-space']);
   });
 });

@@ -54,6 +54,17 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
+        allValuesList: valuesList {
+          spaceId
+          property {
+            id
+          }
+        }
+
+        allRelationsList: relationsList {
+          spaceId
+        }
+
         valuesList(filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {

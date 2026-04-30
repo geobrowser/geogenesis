@@ -107,6 +107,17 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         name
       }
 
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
+      }
+
       valuesList(filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
@@ -200,6 +211,17 @@ export const entitiesOrderedByPropertyQuery = graphql(/* GraphQL */ `
         name
       }
 
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
+      }
+
       valuesList(filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
@@ -274,6 +296,17 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
       }
 
       valuesList(filter: { spaceId: { is: $spaceId } }) {
@@ -923,6 +956,17 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
         types {
           id
           name
+        }
+
+        allValuesList: valuesList {
+          spaceId
+          property {
+            id
+          }
+        }
+
+        allRelationsList: relationsList {
+          spaceId
         }
 
         valuesList(filter: { spaceId: { is: $spaceId } }) {
