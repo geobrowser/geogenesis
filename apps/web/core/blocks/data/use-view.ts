@@ -68,13 +68,14 @@ export function useView() {
   const placeholder = getPlaceholder(blockEntity, view);
 
   /** Append new shown columns after existing ones (avoid `Position.generate()` random order). */
-  const nextPropertiesColumnPosition = React.useCallback((): string | null => {
+  const nextPropertiesColumnPosition = React.useCallback((): string | undefined => {
     const sorted = [...shownColumnRelations].sort((a, b) =>
       Position.compare(a.position ?? null, b.position ?? null)
     );
     const last = sorted[sorted.length - 1]?.position;
     const lastStr = typeof last === 'string' && last.length > 0 ? last : null;
-    return Position.generateBetween(lastStr, null);
+    const generated = Position.generateBetween(lastStr, null);
+    return generated ?? undefined;
   }, [shownColumnRelations]);
 
   const setView = async (newView: DataBlockViewDetails) => {
