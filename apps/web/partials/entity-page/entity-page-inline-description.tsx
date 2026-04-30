@@ -122,12 +122,18 @@ function TruncatedDescription({ text }: { text: string }) {
   const buttonFocus =
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
+  // Reserve room at the right of the last line so the auto line-clamp
+  // ellipsis ("…") lands inline with the text and the More button sits in
+  // the reserved padding to the right of it.
+  const togglePadding = 'pr-12';
+  const buttonStyle = `cursor-pointer text-grey-04 hover:underline ${buttonFocus}`;
+
   return (
     <div className="relative">
       <p
         className={[
           'text-body wrap-break-word text-text',
-          clamp ? CLAMP_CLASS : '',
+          clamp ? `${CLAMP_CLASS} ${togglePadding}` : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -140,32 +146,27 @@ function TruncatedDescription({ text }: { text: string }) {
               type="button"
               onClick={() => setExpanded(false)}
               aria-expanded={true}
-              className={`cursor-pointer underline ${buttonFocus}`}
+              className={buttonStyle}
             >
               Less
             </button>
           </>
         )}
-        {showToggle && !expanded && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            aria-expanded={false}
-            className={`absolute bottom-0 right-0 cursor-pointer bg-white pl-6 ${buttonFocus}`}
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, rgba(255,255,255,0), #fff 1.25rem)',
-            }}
-          >
-            <span aria-hidden="true">…&nbsp;</span>
-            <span className="underline">More</span>
-          </button>
-        )}
       </p>
+      {showToggle && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          className={`absolute bottom-0 right-0 ${buttonStyle}`}
+        >
+          More
+        </button>
+      )}
       <p
         ref={measureRef}
         aria-hidden="true"
-        className="pointer-events-none invisible absolute inset-x-0 top-0 text-body wrap-break-word"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 pr-12 text-body wrap-break-word"
       >
         {text}
       </p>
