@@ -7,7 +7,6 @@ export function ExplorePage({ initialSpaceOptions }: { initialSpaceOptions: Spac
     <EntityFeed
       apiEndpoint="/api/explore/feed"
       initialSpaceOptions={initialSpaceOptions}
-      initialSort="top"
       initialTime="month"
       showSortFilter
     />
