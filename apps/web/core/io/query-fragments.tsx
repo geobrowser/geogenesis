@@ -353,6 +353,21 @@ export const entityQuery = graphql(/* GraphQL */ `
         name
       }
 
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relationsList below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
+      }
+
       valuesList(filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
@@ -500,6 +515,21 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relationsList below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList {
+        spaceId
       }
 
       valuesList(filter: { spaceId: { is: $spaceId } }) {
@@ -893,6 +923,17 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
         types {
           id
           name
+        }
+
+        allValuesList: valuesList {
+          spaceId
+          property {
+            id
+          }
+        }
+
+        allRelationsList: relationsList {
+          spaceId
         }
 
         valuesList(filter: { spaceId: { is: $spaceId } }) {
