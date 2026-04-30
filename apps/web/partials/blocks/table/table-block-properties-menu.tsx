@@ -41,12 +41,15 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { Input } from '~/design-system/input';
 
 const panelClassName =
-  'z-1001 flex max-h-[min(480px,80vh)] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-lg';
+  'z-1001 flex w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-lg';
 
 const sectionHeaderClass = 'flex items-center justify-between px-2.5 py-1.5 text-footnoteMedium text-grey-04';
 
 const rowClass =
   'flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left text-sm text-text hover:bg-bg';
+
+/** ~5 rows at ~44px; matches scope/sort list viewport (header + search stay fixed above). */
+const propertiesListScrollClassName = 'max-h-[220px] min-h-0 overflow-y-auto overscroll-contain';
 
 const GEO_PROPERTY_SEARCH_LIMIT = 100;
 
@@ -289,7 +292,7 @@ export function TableBlockPropertiesMenu({
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={propertiesListScrollClassName}>
             <div className={sectionHeaderClass}>
               <span>Shown in table</span>
               <button
