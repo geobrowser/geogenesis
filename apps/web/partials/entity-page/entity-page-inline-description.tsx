@@ -65,7 +65,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
     };
 
     return (
-      <div className="-mt-3 mb-3 text-text">
+      <div className="-mt-3 mb-5 text-text">
         <PageStringField
           variant="body"
           placeholder="Add a description..."
@@ -82,7 +82,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
   }
 
   return (
-    <div className="-mt-3 mb-3">
+    <div className="-mt-3 mb-5">
       <TruncatedDescription text={description} />
     </div>
   );
@@ -122,12 +122,26 @@ function TruncatedDescription({ text }: { text: string }) {
   const buttonFocus =
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
+  // Reserve room at the right of the last line so the auto line-clamp
+  // ellipsis ("…") lands inline with the text and the More button sits in
+  // the reserved padding to the right of it.
+  const togglePadding = 'pr-11';
+  // text-body so the More button matches the inline Less button's size —
+  // buttons don't inherit font styles from their ancestors by default.
+  const buttonStyle = `cursor-pointer text-body text-grey-04 hover:underline ${buttonFocus}`;
+
+  // Only reserve the toggle gutter once we know the text actually
+  // overflows — otherwise short descriptions get unnecessarily narrowed,
+  // which can flip the overflow check itself.
+  const reserveToggle = showToggle && clamp;
+
   return (
     <div className="relative">
       <p
         className={[
           'text-body wrap-break-word text-text',
           clamp ? CLAMP_CLASS : '',
+          reserveToggle ? togglePadding : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -140,27 +154,23 @@ function TruncatedDescription({ text }: { text: string }) {
               type="button"
               onClick={() => setExpanded(false)}
               aria-expanded={true}
-              className={`cursor-pointer underline ${buttonFocus}`}
+              className={buttonStyle}
             >
               Less
             </button>
           </>
         )}
-        {showToggle && !expanded && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            aria-expanded={false}
-            className={`absolute bottom-0 right-0 cursor-pointer bg-white pl-6 underline ${buttonFocus}`}
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, rgba(255,255,255,0), #fff 1.25rem)',
-            }}
-          >
-            More
-          </button>
-        )}
       </p>
+      {showToggle && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          className={`absolute bottom-0 right-0 ${buttonStyle}`}
+        >
+          More
+        </button>
+      )}
       <p
         ref={measureRef}
         aria-hidden="true"
