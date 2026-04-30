@@ -65,7 +65,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
     };
 
     return (
-      <div className="-mt-3 mb-3 text-text">
+      <div className="-mt-3 mb-5 text-text">
         <PageStringField
           variant="body"
           placeholder="Add a description..."
@@ -82,7 +82,7 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
   }
 
   return (
-    <div className="-mt-3 mb-3">
+    <div className="-mt-3 mb-5">
       <TruncatedDescription text={description} />
     </div>
   );
@@ -151,13 +151,14 @@ function TruncatedDescription({ text }: { text: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             aria-expanded={false}
-            className={`absolute bottom-0 right-0 cursor-pointer bg-white pl-6 underline ${buttonFocus}`}
+            className={`absolute bottom-0 right-0 cursor-pointer bg-white pl-6 ${buttonFocus}`}
             style={{
               backgroundImage:
                 'linear-gradient(to right, rgba(255,255,255,0), #fff 1.25rem)',
             }}
           >
-            More
+            <span aria-hidden="true">…&nbsp;</span>
+            <span className="underline">More</span>
           </button>
         )}
       </p>
