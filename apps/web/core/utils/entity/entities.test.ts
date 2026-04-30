@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { describe, expect, it } from 'vitest';
 
-import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { HIDDEN_PROPERTIES, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/types';
 
 import { description, descriptionTriple, name, nameValue, spaces } from './entities';
@@ -81,7 +81,9 @@ describe('Entity name helpers', () => {
 });
 
 describe('Entity space helpers', () => {
-  const hiddenPropertyId = [...HIDDEN_PROPERTIES][0];
+  it('treats score as a hidden property', () => {
+    expect(HIDDEN_PROPERTIES.has(SCORE_SYSTEM_PROPERTY)).toBe(true);
+  });
 
   const value = (propertyId: string, spaceId: string): Value =>
     ({
@@ -100,17 +102,17 @@ describe('Entity space helpers', () => {
     }) as Value;
 
   it('ignores spaces that only contribute hidden properties when real content exists elsewhere', () => {
-    expect(spaces([value(hiddenPropertyId, 'hidden-space'), value(SystemIds.NAME_PROPERTY, 'real-space')])).toEqual([
-      'real-space',
-    ]);
+    expect(
+      spaces([value(SCORE_SYSTEM_PROPERTY, 'hidden-space'), value(SystemIds.NAME_PROPERTY, 'real-space')])
+    ).toEqual(['real-space']);
   });
 
   it('keeps hidden-only spaces when there is no real content anywhere', () => {
     expect(
       spaces([
-        value(hiddenPropertyId, 'hidden-space-b'),
-        value(hiddenPropertyId, 'hidden-space-a'),
-        value(hiddenPropertyId, 'hidden-space-b'),
+        value(SCORE_SYSTEM_PROPERTY, 'hidden-space-b'),
+        value(SCORE_SYSTEM_PROPERTY, 'hidden-space-a'),
+        value(SCORE_SYSTEM_PROPERTY, 'hidden-space-b'),
       ])
     ).toEqual(['hidden-space-b', 'hidden-space-a']);
   });
@@ -120,6 +122,6 @@ describe('Entity space helpers', () => {
       spaceId: 'relation-space',
     } as Relation;
 
-    expect(spaces([value(hiddenPropertyId, 'hidden-space')], [relation])).toEqual(['relation-space']);
+    expect(spaces([value(SCORE_SYSTEM_PROPERTY, 'hidden-space')], [relation])).toEqual(['relation-space']);
   });
 });

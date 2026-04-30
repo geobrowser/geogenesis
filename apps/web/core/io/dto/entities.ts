@@ -22,7 +22,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
   if (remoteEntity.allValuesList && remoteEntity.allRelationsList) {
     const spacesWithRealContent = new Set<string>();
     for (const v of remoteEntity.allValuesList) {
-      if (v.property?.id && !HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
+      if (!v.property?.id || !HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
     }
     for (const r of remoteEntity.allRelationsList) {
       spacesWithRealContent.add(r.spaceId);
