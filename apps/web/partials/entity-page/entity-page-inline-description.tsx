@@ -130,12 +130,18 @@ function TruncatedDescription({ text }: { text: string }) {
   // buttons don't inherit font styles from their ancestors by default.
   const buttonStyle = `cursor-pointer text-body text-grey-04 hover:underline ${buttonFocus}`;
 
+  // Only reserve the toggle gutter once we know the text actually
+  // overflows — otherwise short descriptions get unnecessarily narrowed,
+  // which can flip the overflow check itself.
+  const reserveToggle = showToggle && clamp;
+
   return (
     <div className="relative">
       <p
         className={[
           'text-body wrap-break-word text-text',
-          clamp ? `${CLAMP_CLASS} ${togglePadding}` : '',
+          clamp ? CLAMP_CLASS : '',
+          reserveToggle ? togglePadding : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -168,7 +174,7 @@ function TruncatedDescription({ text }: { text: string }) {
       <p
         ref={measureRef}
         aria-hidden="true"
-        className="pointer-events-none invisible absolute inset-x-0 top-0 pr-11 text-body wrap-break-word"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 text-body wrap-break-word"
       >
         {text}
       </p>
