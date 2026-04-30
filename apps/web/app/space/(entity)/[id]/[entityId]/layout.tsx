@@ -20,6 +20,7 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 
@@ -84,6 +85,7 @@ export default async function ProfileLayout(props: Props) {
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableHeading spaceId={spaceId} entityId={entityId} />
+            <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
             <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
           </div>
 
