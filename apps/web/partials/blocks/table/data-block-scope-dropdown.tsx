@@ -22,6 +22,12 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+
+const listScrollClassName =
+  'max-h-[198px] min-h-0 overflow-y-auto overscroll-contain scroll-smooth snap-y snap-mandatory';
+const listRowClassName = 'snap-start min-h-[44px] shrink-0';
 
 /** Match `SmallButton` / Filter trigger (secondary + small). */
 const pillClassName =
@@ -61,6 +67,7 @@ function SpaceDropdownRow({
       textValue={row.name}
       className={cx(
         'group relative flex w-full cursor-pointer items-center px-3 py-[10px] text-button text-text outline-none select-none',
+        listRowClassName,
         selected ? 'bg-grey-01' : 'bg-white data-highlighted:bg-grey-01'
       )}
       onSelect={e => {
@@ -102,7 +109,18 @@ const readOnlyScopeTriggerClassName =
   'inline-flex h-6 max-w-[220px] shrink-0 cursor-default items-center gap-1.5 rounded-md border-0 bg-grey-01 px-1.5 text-metadata leading-none text-text';
 
 export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing = true }: DataBlockScopeDropdownProps) {
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [open, setOpen] = React.useState(false);
+
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
+    isOpen: open,
+    preferredHeight: 380,
+    gap: 8,
+  });
+
+  const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    trapWheelToElement(e.currentTarget, e);
+  }, []);
   const [pendingSource, setPendingSource] = React.useState<Source | null>(null);
   const [search, setSearch] = React.useState('');
   const { spaceId } = useDataBlockInstance();
@@ -217,7 +235,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
   return (
     <Dropdown.Root open={open} onOpenChange={handleOpenChange}>
       <Dropdown.Trigger asChild disabled={triggerDisabled}>
-        <button type="button" className={isEditing ? pillClassName : readOnlyScopeTriggerClassName}>
+        <button ref={triggerRef} type="button" className={isEditing ? pillClassName : readOnlyScopeTriggerClassName}>
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           {isEditing && (
             <span className={cx('inline-flex shrink-0 transition-transform', open && 'rotate-180')}>
@@ -228,9 +246,12 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          side={side}
+          align={align}
           sideOffset={8}
+          avoidCollisions={true}
+          collisionPadding={8}
           className="z-1001 flex max-h-[min(420px,80vh)] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          align="start"
         >
           <div className="shrink-0 border-b border-grey-02 px-2.5 py-1.5">
             <p className="text-footnoteMedium text-grey-04">Query from</p>
@@ -268,7 +289,10 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
             </Dropdown.Item>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1">
+          <div
+            className={cx('px-0.5 pb-1', listScrollClassName)}
+            onWheel={onListWheel}
+          >
             {listLoading && (
               <div className="flex h-14 items-center justify-center">
                 <Dots />

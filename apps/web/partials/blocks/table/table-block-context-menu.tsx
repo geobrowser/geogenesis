@@ -15,8 +15,12 @@ import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
+const listScrollClassName =
+  'max-h-[198px] min-h-0 overflow-y-auto overscroll-contain scroll-smooth snap-y snap-mandatory';
+const listRowClassName = 'snap-start min-h-[44px] shrink-0';
+
 const CONTEXT_MENU_SURFACE =
-  'z-1001 block max-h-[min(400px,75vh)] min-w-0 w-52 overscroll-contain overflow-y-auto scroll-smooth rounded-lg border border-grey-02 bg-white shadow-lg';
+  'z-1001 min-w-0 w-52 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg';
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -42,7 +46,7 @@ export function TableBlockContextMenu() {
     setIsMenuOpen(open);
   };
 
-  const onContentWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+  const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);
   }, []);
 
@@ -67,26 +71,27 @@ export function TableBlockContextMenu() {
           avoidCollisions={true}
           collisionPadding={8}
           className={CONTEXT_MENU_SURFACE}
-          onWheel={onContentWheel}
         >
-          <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
-            <div className="flex w-full items-center justify-between gap-2">
-              <span>View config</span>
-              <Cog />
-            </div>
-          </MenuItem>
-          <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
-            <div className="flex w-full items-center justify-between gap-2">
-              <span>View block relation</span>
-              <Relation />
-            </div>
-          </MenuItem>
-          <MenuItem onClick={onCopyBlockId}>
-            <div className="flex w-full items-center justify-between gap-2">
-              <span>Copy block ID</span>
-              <Copy />
-            </div>
-          </MenuItem>
+          <div className={listScrollClassName} onWheel={onListWheel}>
+            <MenuItem className={listRowClassName} href={NavUtils.toEntity(spaceId, entityId)}>
+              <div className="flex w-full items-center justify-between gap-2">
+                <span>View config</span>
+                <Cog />
+              </div>
+            </MenuItem>
+            <MenuItem className={listRowClassName} href={NavUtils.toEntity(spaceId, relationId)}>
+              <div className="flex w-full items-center justify-between gap-2">
+                <span>View block relation</span>
+                <Relation />
+              </div>
+            </MenuItem>
+            <MenuItem className={listRowClassName} onClick={onCopyBlockId}>
+              <div className="flex w-full items-center justify-between gap-2">
+                <span>Copy block ID</span>
+                <Copy />
+              </div>
+            </MenuItem>
+          </div>
         </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>
