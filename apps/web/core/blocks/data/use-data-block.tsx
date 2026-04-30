@@ -137,6 +137,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     collectionLength,
     filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
     endCursor: collectionEndCursor,
+    hasNextPage: collectionHasNextPage,
     isPlaceholderData: isCollectionPlaceholder,
   } = useCollection({
     source,
@@ -389,11 +390,16 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
-  // For collections, check if there are more items beyond the current page.
+  // For COLLECTION with a server-side sort, the response is a single page so
+  // count math is misleading (totalCount caps at pageSize when filter+sort
+  // are combined) — read hasNextPage off the connection. For unsorted
+  // COLLECTION we fetched every matching id, so count math is accurate.
   // For SPACES/GEO we read the cursor signal directly off the GraphQL response.
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
+      ? serverSort
+        ? collectionHasNextPage
+        : (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
       : source.type === 'GEO' || source.type === 'SPACES'
         ? queriedHasNextPage
         : false;
