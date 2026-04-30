@@ -22,6 +22,13 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
+  const titlePlaceholder =
+    source.type === 'COLLECTION'
+      ? 'Collection name...'
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? 'Query name...'
+        : 'Enter a name for this table...';
+
   // Auto focus newly created data blocks
   const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200);
 
@@ -96,7 +103,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
             ref={inputRef}
             onBlur={e => setName(e.currentTarget.value)}
             defaultValue={name ?? undefined}
-            placeholder="Enter a name for this table..."
+            placeholder={titlePlaceholder}
             className="w-full shrink-0 grow appearance-none text-mediumTitle text-text outline-hidden placeholder:text-grey-03"
           />
         ) : (
