@@ -1,5 +1,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -71,15 +72,30 @@ export function cover(relations?: Relation[]): string | null {
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {
-  const spaces: string[] = [];
+  const realContent: string[] = [];
+  const scoreOnly: string[] = [];
 
+  // Score values alone shouldn't make a space count as a "real" home for this
+  // entity (the score property is hidden), so route around them when other
+  // content exists in the same set.
   for (const value of values ?? []) {
-    spaces.push(value.spaceId);
+    if (value.property.id === SCORE_SYSTEM_PROPERTY) {
+      scoreOnly.push(value.spaceId);
+    } else {
+      realContent.push(value.spaceId);
+    }
   }
 
   for (const relation of relations ?? []) {
-    spaces.push(relation.spaceId);
+    realContent.push(relation.spaceId);
   }
 
-  return sortSpaceIdsByRank([...new Set(spaces)]);
+  const realSet = new Set(realContent);
+  if (realSet.size > 0) {
+    return sortSpaceIdsByRank([...realSet]);
+  }
+
+  // Fallback: if there is no non-score content anywhere, keep the score-only
+  // spaces so the entity is still navigable.
+  return sortSpaceIdsByRank([...new Set(scoreOnly)]);
 }
