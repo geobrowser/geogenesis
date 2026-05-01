@@ -49,7 +49,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
-import { Toggle } from '~/design-system/toggle';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
@@ -385,6 +384,7 @@ type PromptAction =
     }
   | {
       type: 'reset';
+      payload?: { source?: Source; open?: boolean };
     };
 
 const emptyMulti = {
@@ -596,17 +596,13 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
         ...emptyMulti,
         columnDrafts: emptyDrafts(),
       };
-    case 'reset':
+    case 'reset': {
+      const next = getInitialState(action.payload?.source ?? { type: 'GEO' });
       return {
-        ...state,
-        selectedColumn: SystemIds.NAME_PROPERTY,
-        value: {
-          type: 'string',
-          value: '',
-        },
-        ...emptyMulti,
-        columnDrafts: emptyDrafts(),
+        ...next,
+        open: action.payload?.open ?? state.open,
       };
+    }
   }
 };
 
@@ -883,45 +879,6 @@ function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): boolean {
   return [...byColumn.values()].some(count => count >= 2);
 }
 
-interface ToggleQueryModeProps {
-  queryMode: 'ENTITIES' | 'RELATIONS';
-  setQueryMode: (value: 'ENTITIES' | 'RELATIONS') => void;
-  localSource: Source | null;
-}
-
-function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryModeProps) {
-  const { filterState, setFilterState } = useFilters();
-  const { setSource } = useSource({ filterState, setFilterState });
-
-  const onToggleQueryMode = () => {
-    const newQueryMode = queryMode === 'RELATIONS' ? 'ENTITIES' : 'RELATIONS';
-    setQueryMode(newQueryMode);
-
-    if (newQueryMode === 'RELATIONS' && localSource && localSource.type === 'RELATIONS') {
-      setSource({
-        type: 'RELATIONS',
-        name: localSource.name,
-        value: localSource.value,
-      });
-      return;
-    }
-
-    setSource({
-      type: 'GEO',
-    });
-  };
-
-  return (
-    <div className="z-1000 flex items-center gap-1 px-2 pt-2">
-      <p>Entities</p>
-      <button type="button" onClick={onToggleQueryMode}>
-        <Toggle checked={queryMode === 'RELATIONS'} />
-      </button>
-      <p>Relations</p>
-    </div>
-  );
-}
-
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true, }, ref) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
@@ -930,9 +887,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const { filterState, setFilterState, filterMode, setFilterMode } = useFilters();
     const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
-    const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
-      source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
-    );
+    const isRelationsMode = source.type === 'RELATIONS';
 
     const stateRef = React.useRef(state);
     stateRef.current = state;
@@ -972,7 +927,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
 
     React.useImperativeHandle(ref, () => ({
       openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
-        setQueryMode('ENTITIES');
         externalAnchorElRef.current = anchorEl ?? null;
         if (anchorEl) {
           const r = anchorEl.getBoundingClientRect();
@@ -1002,16 +956,21 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
 
-    const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
-      if (queryMode === 'RELATIONS') {
-        setFrom(null);
-        setRelationType(null);
+    React.useEffect(() => {
+      if (source.type === 'RELATIONS') {
+        setFrom(source);
       } else {
-        dispatch({ type: 'reset' });
+        setFrom({
+          type: 'RELATIONS',
+          name: fromName,
+          value: fromId,
+        });
       }
+    }, [fromId, fromName, source]);
 
-      setQueryMode(newQueryMode);
-    };
+    React.useEffect(() => {
+      setRelationType(filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null);
+    }, [filterState]);
 
     const onEntitiesDone = () => {
       const filters = collectAllPendingFilters(state, options);
@@ -1021,7 +980,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     };
 
     const filters =
-      queryMode === 'RELATIONS' ? (
+      isRelationsMode ? (
         <StaticRelationsFilters
           from={from}
           setFrom={setFrom}
@@ -1041,7 +1000,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       );
 
     const done =
-      queryMode !== 'RELATIONS' ? (
+      !isRelationsMode ? (
         <AnimatePresence>
           {hasPendingFilterSelections(state, options) && (
             <motion.span
@@ -1062,8 +1021,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       if (!open) {
         externalAnchorElRef.current = null;
         setExternalAnchorBox(null);
+        dispatch({ type: 'onOpenChange', payload: { open } });
+        return;
       }
-      dispatch({ type: 'onOpenChange', payload: { open } });
+
+      dispatch({ type: 'reset', payload: { source, open: true } });
     };
 
     return (
@@ -1107,10 +1069,6 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
                   {done}
                 </div>
                 <Divider type="horizontal" className="bg-grey-04" />
-                {source.type !== 'COLLECTION' && (
-                  <ToggleQueryMode queryMode={queryMode} setQueryMode={onToggleQueryMode} localSource={from} />
-                )}
-
                 <Spacer height={12} />
                 {filters}
               </Content>

@@ -9,9 +9,12 @@ import equal from 'fast-deep-equal';
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
+import { Toggle } from '~/design-system/toggle';
 
 import {
   TableBlockFilterPrompt,
@@ -106,22 +109,56 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     };
 
     return (
-      <TableBlockFilterPrompt
-        ref={ref}
-        options={sortedFilters}
-        filterSuggestionSpaceId={filterSuggestionSpaceId}
-        filterStateForSeed={effectiveFilterState}
-        onCreate={onCreateFilter}
-        isEditing={isEditing}
-        trigger={
-          <SmallButton icon={<CreateSmall />} variant="secondary">
-            Filter
-          </SmallButton>
-        }
-      />
+      <div className="flex min-w-[220px] flex-1 items-center gap-3">
+        <TableBlockFilterPrompt
+          ref={ref}
+          options={sortedFilters}
+          filterSuggestionSpaceId={filterSuggestionSpaceId}
+          filterStateForSeed={effectiveFilterState}
+          onCreate={onCreateFilter}
+          isEditing={isEditing}
+          trigger={
+            <SmallButton icon={<CreateSmall />} variant="secondary">
+              Filter
+            </SmallButton>
+          }
+        />
+        {source.type !== 'COLLECTION' && isEditing && <QueryModeToggle />}
+      </div>
     );
   }
 );
+
+function QueryModeToggle() {
+  const { id: fromId, spaceId } = useEntityStoreInstance();
+  const fromName = useName(fromId, spaceId);
+  const { filterState, setFilterState } = useFilters();
+  const { source, setSource } = useSource({ filterState, setFilterState });
+  const isRelations = source.type === 'RELATIONS';
+
+  const onToggleQueryMode = () => {
+    if (isRelations) {
+      setSource({ type: 'GEO' });
+      return;
+    }
+
+    setSource({
+      type: 'RELATIONS',
+      name: fromName,
+      value: fromId,
+    });
+  };
+
+  return (
+    <div className="ml-auto flex shrink-0 items-center gap-1 text-footnote text-grey-04">
+      <span>Entities</span>
+      <button type="button" onClick={onToggleQueryMode} aria-label="Toggle relation filters">
+        <Toggle checked={isRelations} />
+      </button>
+      <span>Relations</span>
+    </div>
+  );
+}
 
 function comparableFilterList(filters: Filter[]) {
   return [...filters]
