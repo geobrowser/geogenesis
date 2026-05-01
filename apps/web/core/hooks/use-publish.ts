@@ -1,14 +1,15 @@
 'use client';
 
-import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { Ipfs, personalSpace } from '@geoprotocol/geo-sdk';
 import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import { getSpaceAccess } from '~/core/access/space-access';
+import { getSpaceAccess, normalizeSpaceId } from '~/core/access/space-access';
 import { Relation, Value } from '~/core/types';
+import { buildDaoPublishEditProposalCalldata } from '~/core/utils/contracts/publish-proposal';
 
 import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
@@ -67,27 +68,35 @@ export function usePublish() {
       }
       if (valuesToPublish.length === 0 && relations.length === 0) return;
 
-      const space = await Effect.runPromise(getSpace(spaceId));
+      const normalizedSpaceId = normalizeSpaceId(spaceId);
+      const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+      const space = await Effect.runPromise(getSpace(normalizedSpaceId));
 
       if (!space) return;
 
       const publish = Effect.gen(function* () {
-        const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+        const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, normalizedSpaceId);
 
         if (ops.length === 0) {
           console.error('resulting ops are empty, cancelling publish', {
             values: valuesToPublish,
             relations,
-            spaceId,
+            spaceId: normalizedSpaceId,
           });
           return;
         }
 
-        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
+        const spaceAccess = yield* getSpaceAccess(space, normalizedPersonalSpaceId);
+
+        if (!spaceAccess.canEdit) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError('Unable to publish: you are not a member or editor of this space.')
+          );
+        }
 
         yield* makeProposal({
           name,
-          author: personalSpaceId,
+          author: normalizedPersonalSpaceId,
           proposalId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
@@ -97,7 +106,7 @@ export function usePublish() {
           ops,
           smartAccount,
           space: {
-            id: space.id,
+            id: normalizedSpaceId,
             type: space.type,
             address: space.address,
             isEditor: spaceAccess.isEditor,
@@ -166,17 +175,25 @@ export function useBulkPublish() {
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
       // All of our contract calls rely on knowing plugin metadata so this is probably
       // something we need for all of them.
-      const space = await Effect.runPromise(getSpace(spaceId));
+      const normalizedSpaceId = normalizeSpaceId(spaceId);
+      const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+      const space = await Effect.runPromise(getSpace(normalizedSpaceId));
 
       if (!space) return;
 
       const publish = Effect.gen(function* () {
-        const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
-        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
+        const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, normalizedSpaceId);
+        const spaceAccess = yield* getSpaceAccess(space, normalizedPersonalSpaceId);
+
+        if (!spaceAccess.canEdit) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError('Unable to publish: you are not a member or editor of this space.')
+          );
+        }
 
         yield* makeProposal({
           name,
-          author: personalSpaceId,
+          author: normalizedPersonalSpaceId,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -185,7 +202,7 @@ export function useBulkPublish() {
           ops,
           smartAccount,
           space: {
-            id: space.id,
+            id: normalizedSpaceId,
             type: space.type,
             address: space.address,
             isEditor: spaceAccess.isEditor,
@@ -294,22 +311,17 @@ function makeProposal(args: MakeProposalArgs) {
       // Members must use the slow path which requires a voting period.
       const votingMode = space.isEditor ? 'FAST' : 'SLOW';
 
-      const result = yield* Effect.retry(
+      const edit = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            daoSpace.proposeEdit({
+            Ipfs.publishEdit({
               name,
               ops,
               author,
-              daoSpaceAddress: space.address as `0x${string}`,
-              callerSpaceId: `0x${author}`,
-              daoSpaceId: `0x${space.id}`,
-              votingMode,
-              ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
               network: 'TESTNET',
             }),
           catch: error => {
-            console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
+            console.error('[PUBLISH] Ipfs.publishEdit failed:', error);
             return new TransactionWriteFailedError('IPFS upload failed', { cause: error });
           },
         }).pipe(
@@ -321,11 +333,20 @@ function makeProposal(args: MakeProposalArgs) {
             'governance.action': 'proposal_created',
           })
         ),
-        retrySchedule('proposeEdit', Duration.minutes(1))
+        retrySchedule('publishEdit', Duration.minutes(1))
       );
 
-      to = result.to as `0x${string}`;
-      calldata = result.calldata as `0x${string}`;
+      const proposal = buildDaoPublishEditProposalCalldata({
+        authorSpaceId: author,
+        daoSpaceId: space.id,
+        daoSpaceAddress: space.address as `0x${string}`,
+        proposalId: proposalId ?? edit.editId,
+        cid: edit.cid,
+        votingMode,
+      });
+
+      to = proposal.to;
+      calldata = proposal.calldata;
     } else {
       // Personal spaces: use personalSpace.publishEdit()
       const result = yield* Effect.retry(
@@ -362,11 +383,9 @@ function makeProposal(args: MakeProposalArgs) {
     const result = yield* Effect.retry(
       Effect.tryPromise({
         try: () =>
-          smartAccount.sendUserOperation({
-            calls: [{ to, value: 0n, data: calldata }],
-          }),
+          smartAccount.sendTransaction({ to, value: 0n, data: calldata }),
         catch: error => {
-          console.error('[PUBLISH] sendUserOperation failed:', error);
+          console.error('[PUBLISH] sendTransaction failed:', error);
           return new TransactionWriteFailedError('Publish failed', { cause: error });
         },
       }).pipe(

@@ -76,6 +76,17 @@ export const VOTING_MODE = {
  */
 export const DAOSpaceAbi = [
   {
+    inputs: [
+      { internalType: 'bytes32', name: '_topic', type: 'bytes32' },
+      { internalType: 'bytes', name: '_editsContentUri', type: 'bytes' },
+      { internalType: 'bytes', name: '_editsMetadata', type: 'bytes' },
+    ],
+    name: 'publish',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [{ internalType: 'bytes16', name: '_newMemberSpaceId', type: 'bytes16' }],
     name: 'addMember',
     outputs: [],
