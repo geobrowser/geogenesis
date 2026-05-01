@@ -714,6 +714,9 @@ const ConfiguredTableBlock = ({
 
   const isQueryDataBlock = source.type !== 'COLLECTION';
 
+  const showToolbarSort = isEditing || sortState !== null;
+  const showToolbarDividerAfterScope = showToolbarSort || isEditing;
+
   const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
 
   return (
@@ -785,18 +788,22 @@ const ConfiguredTableBlock = ({
                 {isQueryDataBlock && !querySetupPending && (
                   <>
                     <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
-                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    {showToolbarDividerAfterScope && (
+                      <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    )}
                   </>
                 )}
-                <DataBlockSortMenu
-                  triggerVariant="segment"
-                  disabled={querySetupPending}
-                  isEditing={isEditing}
-                  properties={mergedBlockProperties}
-                  shownColumnIds={shownColumnIds}
-                  sortState={sortState}
-                  onSort={handleSortChange}
-                />
+                {showToolbarSort && (
+                  <DataBlockSortMenu
+                    triggerVariant="segment"
+                    disabled={querySetupPending}
+                    isEditing={isEditing}
+                    properties={mergedBlockProperties}
+                    shownColumnIds={shownColumnIds}
+                    sortState={sortState}
+                    onSort={handleSortChange}
+                  />
+                )}
                 {isEditing && (
                   <>
                     <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
