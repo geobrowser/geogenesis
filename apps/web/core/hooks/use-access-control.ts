@@ -27,7 +27,9 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const normalizedSpaceId = normalizeSpaceId(spaceId);
   const normalizedPersonalSpaceId = personalSpaceId ? normalizeSpaceId(personalSpaceId) : undefined;
-  const shouldCheckDaoAccess = Boolean(hydrated && spaceId && normalizedPersonalSpaceId && space?.type !== 'PERSONAL');
+  const shouldCheckDaoAccess = Boolean(
+    hydrated && spaceId && normalizedPersonalSpaceId && !isLoadingSpace && space?.type === 'DAO'
+  );
 
   const { data: isMemberOfDao = false, isLoading: isLoadingMember } = useQuery({
     queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],

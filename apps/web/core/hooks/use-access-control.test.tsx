@@ -19,7 +19,7 @@ const hookState = {
     type: 'DAO',
     members: [] as string[],
     editors: [] as string[],
-  },
+  } as { id: string; type: 'DAO' | 'PERSONAL'; members: string[]; editors: string[] } | undefined,
   isLoadingSpace: false,
 };
 
@@ -116,5 +116,35 @@ describe('useAccessControl', () => {
 
     expect(accessChecks.isMember).not.toHaveBeenCalled();
     expect(accessChecks.isEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not run membership or editor checks before the space is resolved', () => {
+    hookState.space = undefined;
+    hookState.isLoadingSpace = true;
+
+    renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not run membership or editor checks for personal spaces', () => {
+    hookState.space = {
+      id: 'MEMBER-SPACE-ID',
+      type: 'PERSONAL',
+      members: [],
+      editors: [],
+    };
+
+    const { result } = renderHook(() => useAccessControl('member-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({
+      isMember: true,
+      isEditor: true,
+      canEdit: true,
+      isLoading: false,
+    });
   });
 });
