@@ -1700,12 +1700,20 @@ function TableBlockSpaceFilterInput({
     queryFn: ({ signal }) => Effect.runPromise(getSpacesWhereMember(memberSpaceId!, signal)),
   });
   const defaultSpaceSuggestions = React.useMemo(
-    () =>
-      memberSpaces.map(s => ({
-        id: s.id,
-        name: s.entity.name ?? null,
-        image: s.entity.image ?? null,
-      })),
+    () => {
+      const seen = new Set<string>();
+      return memberSpaces.flatMap(s => {
+        if (seen.has(s.id)) return [];
+        seen.add(s.id);
+        return [
+          {
+            id: s.id,
+            name: s.entity.name ?? null,
+            image: s.entity.image ?? null,
+          },
+        ];
+      });
+    },
     [memberSpaces]
   );
 
@@ -1889,19 +1897,20 @@ function TableBlockSpaceFilterInput({
               onScroll={handleSpaceResultsScroll}
               style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
             >
-              {visibleSpaceQueryRows.map((result, i) =>
-                renderSpaceRow(
+              {visibleSpaceQueryRows.map((result, i) => {
+                const image = typeof result.image === 'string' && result.image.length > 0 ? result.image : null;
+                return renderSpaceRow(
                   result.id,
                   result.name,
-                  result.image ?? PLACEHOLDER_SPACE_IMAGE,
+                  image ?? PLACEHOLDER_SPACE_IMAGE,
                   () =>
                     multi
                       ? onToggleSpace?.({ id: result.id, name: result.name })
                       : onSelect?.({ id: result.id, name: result.name }),
                   i,
                   Boolean(selectedSpaceIds?.has(result.id))
-                )
-              )}
+                );
+              })}
             </ResultsList>
           </ResizableContainer>
         </div>

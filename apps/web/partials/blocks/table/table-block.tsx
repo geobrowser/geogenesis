@@ -767,6 +767,7 @@ const ConfiguredTableBlock = ({
                   disabled={querySetupPending}
                   isEditing={isEditing}
                   properties={mergedBlockProperties}
+                  shownColumnIds={shownColumnIds}
                   sortState={sortState}
                   onSort={handleSortChange}
                 />

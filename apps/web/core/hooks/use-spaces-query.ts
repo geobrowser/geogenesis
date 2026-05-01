@@ -94,14 +94,22 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
   };
 
   const uniqueSpacesById = (arr: SpaceItem[]): SpaceItem[] => {
-    const seen = new Map<string, boolean>();
-    return arr.reduce<SpaceItem[]>((acc, item) => {
-      if (!seen.has(item.id)) {
-        seen.set(item.id, true);
-        acc.push(item);
+    const byId = new Map<string, SpaceItem>();
+    for (const item of arr) {
+      const existing = byId.get(item.id);
+      if (!existing) {
+        byId.set(item.id, item);
+        continue;
       }
-      return acc;
-    }, []);
+
+      byId.set(item.id, {
+        ...existing,
+        name: existing.name ?? item.name,
+        description: existing.description ?? item.description,
+        image: existing.image || item.image,
+      });
+    }
+    return [...byId.values()];
   };
 
   if (!fuzzyMatchedSpaces) {

@@ -25,6 +25,7 @@ const listRowClassName = 'snap-start min-h-[44px] shrink-0';
 
 type DataBlockSortMenuProps = {
   properties: Property[];
+  shownColumnIds?: string[];
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
   triggerVariant?: 'icon' | 'segment';
@@ -45,6 +46,7 @@ function sortColumnDisplayLabel(sortState: NonNullable<ColumnSortState>, propert
 
 export function DataBlockSortMenu({
   properties,
+  shownColumnIds = [],
   sortState,
   onSort,
   triggerVariant = 'icon',
@@ -65,10 +67,26 @@ export function DataBlockSortMenu({
     trapWheelToElement(e.currentTarget, e);
   }, []);
 
-  const sortableProperties = React.useMemo(
-    () => properties.filter(p => SORTABLE_DATA_TYPES.includes(p.dataType)),
-    [properties]
-  );
+  const sortableProperties = React.useMemo(() => {
+    const propertyById = new Map(properties.map(p => [p.id, p]));
+    const ordered: Property[] = [];
+    const seen = new Set<string>();
+
+    for (const id of shownColumnIds) {
+      const property = propertyById.get(id);
+      if (!property || seen.has(property.id)) continue;
+      seen.add(property.id);
+      ordered.push(property);
+    }
+
+    for (const property of properties) {
+      if (seen.has(property.id)) continue;
+      seen.add(property.id);
+      ordered.push(property);
+    }
+
+    return ordered.filter(p => SORTABLE_DATA_TYPES.includes(p.dataType));
+  }, [properties, shownColumnIds]);
 
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);

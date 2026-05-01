@@ -125,6 +125,15 @@ type DataBlockScopeDropdownProps = {
 const readOnlyScopeTriggerClassName =
   'inline-flex h-6 max-w-[220px] shrink-0 cursor-default items-center gap-1.5 rounded-md border-0 bg-grey-01 px-1.5 text-metadata leading-none text-text';
 
+function dedupeSpaceRows(rows: QueryFromSpaceRow[]): QueryFromSpaceRow[] {
+  const seen = new Set<string>();
+  return rows.filter(row => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+}
+
 export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing = true }: DataBlockScopeDropdownProps) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const sourceRef = React.useRef(source);
@@ -220,14 +229,14 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
       name: s.name?.trim() || 'Untitled space',
       image: typeof s.image === 'string' && s.image.length > 0 ? s.image : null,
     }));
-    if (!scopeOrdering) return mapped.map(row => ({ ...row, tier: 3 as const }));
-    return sortSpacesForDropdownSearch(mapped, scopeOrdering);
+    if (!scopeOrdering) return dedupeSpaceRows(mapped.map(row => ({ ...row, tier: 3 as const })));
+    return dedupeSpaceRows(sortSpacesForDropdownSearch(mapped, scopeOrdering));
   }, [searchMode, remoteSearchSpaces, scopeOrdering]);
 
   /** Flat list: editors → members → top spaces (no section headers). */
   const orderedScopeRows = React.useMemo(() => {
     if (!sections) return [];
-    return [...sections.editors, ...sections.members, ...sections.featured];
+    return dedupeSpaceRows([...sections.editors, ...sections.members, ...sections.featured]);
   }, [sections]);
 
   const listLoading = searchMode ? remoteSearchLoading : initialListLoading;

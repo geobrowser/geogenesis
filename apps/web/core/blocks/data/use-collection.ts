@@ -105,6 +105,17 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
     sort,
   });
 
+  const { entities: localCollectionItemsFallback } = useQueryEntities({
+    enabled: source.type === 'COLLECTION' && Boolean(sort) && !hasFilters && entityIdsToFetch.length > 0,
+    where: {
+      id: {
+        in: entityIdsToFetch,
+      },
+    },
+    first: entityIdsToFetch.length || undefined,
+    placeholderData: keepPreviousData,
+  });
+
   const filteredRelations = hasFilters
     ? deduplicateRelationsByEntityId(
         orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
@@ -135,10 +146,16 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
 
   const ssrItems = initialCollectionItems[entityId];
   const isFirstPage = skip === 0;
-  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters && !sort;
+  const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters;
   const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
+  const shouldFallbackToLocalCollectionItems =
+    Boolean(sort) && !hasFilters && orderedCollectionItems.length === 0 && localCollectionItemsFallback.length > 0;
 
-  const items = shouldFallbackToSSR ? ssrItems : orderedCollectionItems;
+  const items = shouldFallbackToSSR
+    ? ssrItems
+    : shouldFallbackToLocalCollectionItems
+      ? localCollectionItemsFallback
+      : orderedCollectionItems;
   const hasData = items.length > 0;
 
   const filterSuggestionEntityIds =
@@ -150,7 +167,8 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
 
   return {
     collectionItems: items,
-    collectionRelations: sortedRelations,
+    collectionRelations:
+      shouldFallbackToSSR || shouldFallbackToLocalCollectionItems ? paginatedRelations : sortedRelations,
     isLoading: hasData ? false : isCollectionItemsLoading,
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,

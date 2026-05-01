@@ -91,16 +91,16 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       if (filters.length === 0) return;
       const touchedColumnIds = new Set(filters.map(f => f.columnId));
       const base = effectiveFilterState.filter(f => !touchedColumnIds.has(f.columnId));
-      const next = [
-        ...base,
-        ...filters.map(f => ({
-          valueType: f.valueType,
-          columnId: f.columnId,
-          columnName: f.columnName,
-          value: f.value,
-          valueName: f.valueName,
-        })),
-      ];
+      const newFilters = filters.map(f => ({
+        valueType: f.valueType,
+        columnId: f.columnId,
+        columnName: f.columnName,
+        value: f.value,
+        valueName: f.valueName,
+      }));
+      const firstTouchedIndex = effectiveFilterState.findIndex(f => touchedColumnIds.has(f.columnId));
+      const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
+      const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
       if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
         return;
       }
