@@ -373,7 +373,7 @@ type PromptAction =
     }
   | {
       type: 'reset';
-      payload?: { source?: Source; open?: boolean };
+      payload?: { source?: Source; open?: boolean; seedDraft?: FilterColumnDraft };
     };
 
 const emptyMulti = {
@@ -418,7 +418,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
       if (prevCol === nextCol) return state;
 
       const savedPrev = snapshotColumnDraft(state);
-      const loaded = state.columnDrafts[nextCol] ?? action.payload.seedDraft ?? emptyColumnDraft();
+      const loaded = action.payload.seedDraft ?? state.columnDrafts[nextCol] ?? emptyColumnDraft();
       return {
         ...state,
         selectedColumn: nextCol,
@@ -587,8 +587,14 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
       };
     case 'reset': {
       const next = getInitialState(action.payload?.source ?? { type: 'GEO' });
+      const loaded = action.payload?.seedDraft ?? snapshotColumnDraft(next);
       return {
         ...next,
+        ...applyColumnDraft(loaded),
+        columnDrafts: {
+          ...next.columnDrafts,
+          [next.selectedColumn]: loaded,
+        },
         open: action.payload?.open ?? state.open,
       };
     }
@@ -1011,8 +1017,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const opts = optionsRef.current;
       const fs = seedFilterStateRef.current;
       const stored = s.columnDrafts[columnId];
+      const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
       const seedDraft =
-        stored === undefined ? seedColumnDraftFromCommittedFilters(columnId, fs, opts) : undefined;
+        stored === undefined || (!draftHasPending(stored, columnId, opts) && draftHasPending(committedDraft, columnId, opts))
+          ? committedDraft
+          : undefined;
       dispatch({ type: 'selectColumn', payload: { columnId, seedDraft } });
     }, []);
 
@@ -1064,7 +1073,13 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         return;
       }
 
-      dispatch({ type: 'reset', payload: { source, open: true } });
+      const initialColumn = getInitialState(source).selectedColumn;
+      const seedDraft = seedColumnDraftFromCommittedFilters(
+        initialColumn,
+        seedFilterStateRef.current,
+        optionsRef.current
+      );
+      dispatch({ type: 'reset', payload: { source, open: true, seedDraft } });
     };
 
     return (

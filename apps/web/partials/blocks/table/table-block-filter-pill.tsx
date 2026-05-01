@@ -3,6 +3,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Plus } from '~/design-system/icons/plus';
@@ -58,23 +59,33 @@ type TableBlockFilterGroupPillProps = {
 
 function FilterValueChip({
   label,
+  valueId,
+  valueType,
+  tone,
   onRemove,
   disabled,
   removable,
 }: {
   label: string;
+  valueId: string;
+  valueType: Filter['valueType'];
+  tone: 'white' | 'grey';
   onRemove: () => void;
   disabled: boolean;
   removable: boolean;
 }) {
+  const hydratedName = useName(valueType === 'RELATION' ? valueId : '');
+  const displayLabel = valueType === 'RELATION' && hydratedName ? hydratedName : label;
+
   return (
     <span
       className={cx(
         'inline-flex h-6 max-w-full items-center gap-0.5 rounded-[4px] pl-1.5 text-metadata leading-none text-text',
-        removable ? 'border border-grey-02 bg-white pr-0.5' : 'border border-grey-02 bg-white pr-1.5'
+        tone === 'white' ? 'bg-white' : 'bg-grey-01',
+        removable ? 'border border-grey-02 pr-0.5' : 'border border-grey-02 pr-1.5'
       )}
     >
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 truncate">{displayLabel}</span>
       {removable && (
         <button
           type="button"
@@ -147,11 +158,15 @@ export function TableBlockFilterGroupPill({
             filter.valueType === 'RELATION' ? (filter.valueName ?? filter.value) : filter.value;
           const canDelete = isEditing;
           const label = value ?? '';
+          const tone = filter.valueType === 'RELATION' ? 'white' : 'grey';
 
           return (
             <FilterValueChip
               key={`${filter.columnId}-${filter.value}-${originalIndex}`}
               label={label}
+              valueId={filter.value}
+              valueType={filter.valueType}
+              tone={tone}
               disabled={!canDelete}
               removable={isEditing && canDelete}
               onRemove={() => onDeleteValue(originalIndex)}

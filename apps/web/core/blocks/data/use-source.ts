@@ -2,6 +2,8 @@
 
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import * as React from 'react';
+
 import { produce } from 'immer';
 
 import { ID } from '~/core/id';
@@ -11,7 +13,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter } from './filters';
-import { Source, getSource, removeSourceType, upsertSourceType } from './source';
+import { Source, getSource, removeSourceType, sourceStableKey, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
 type UseSourceOptions = {
@@ -33,14 +35,27 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
 
   const dataEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
 
-  const source: Source = getSource({
+  const derivedSource: Source = getSource({
     blockId: EntityId(entityId),
     dataEntityRelations,
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
+  const [optimisticSource, setOptimisticSource] = React.useState<Source | null>(null);
+  const source: Source = optimisticSource ?? derivedSource;
+
+  React.useEffect(() => {
+    setOptimisticSource(prev =>
+      prev && sourceStableKey(prev) === sourceStableKey(derivedSource) ? null : prev
+    );
+  }, [derivedSource]);
+
+  React.useEffect(() => {
+    setOptimisticSource(null);
+  }, [entityId, spaceId]);
 
   const setSource = (newSource: Source) => {
+    setOptimisticSource(newSource);
     removeSourceType({
       blockId: EntityId(entityId),
     });
