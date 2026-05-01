@@ -53,6 +53,8 @@ export function useFilters(canEdit?: boolean) {
     [geoFilterString]
   );
 
+  const [optimisticFilterState, setOptimisticFilterState] = React.useState<Filter[] | null>(null);
+
   const { data: resolvedFilterState, isPlaceholderData } = useQuery({
     enabled: filterState.length > 0,
     placeholderData: keepPreviousData,
@@ -84,8 +86,21 @@ export function useFilters(canEdit?: boolean) {
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
   // Fall back to the freshly-parsed filterState until the new resolution completes.
   const freshResolvedState = isPlaceholderData ? undefined : resolvedFilterState;
+  const optimisticResolvedState = React.useMemo(
+    () =>
+      optimisticFilterState && areSameFilterSet(filterState, optimisticFilterState)
+        ? mergeFilterDisplayNames(filterState, optimisticFilterState)
+        : filterState,
+    [filterState, optimisticFilterState]
+  );
   const isFilterResolving = filterState.length > 0 && freshResolvedState === undefined;
-  const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? filterState);
+  const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? optimisticResolvedState);
+
+  React.useEffect(() => {
+    if (freshResolvedState !== undefined) {
+      setOptimisticFilterState(null);
+    }
+  }, [freshResolvedState]);
 
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
   const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
@@ -147,6 +162,7 @@ export function useFilters(canEdit?: boolean) {
 
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
+      setOptimisticFilterState(filters);
       writeFilterTriple(filters, filterModeRef.current);
     },
     [writeFilterTriple]
@@ -173,4 +189,33 @@ export function useFilters(canEdit?: boolean) {
     setTemporaryFilters,
     setTemporaryFilterMode,
   };
+}
+
+function filterIdentity(f: Filter): string {
+  return `${f.columnId}\0${f.valueType}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
+}
+
+function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
+  if (a.length !== b.length) return false;
+
+  const aKeys = a.map(filterIdentity).sort();
+  const bKeys = b.map(filterIdentity).sort();
+
+  return aKeys.every((key, index) => key === bKeys[index]);
+}
+
+function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
+  const namesByKey = new Map(displayNameSource.map(f => [filterIdentity(f), f]));
+
+  return filters.map(filter => {
+    const source = namesByKey.get(filterIdentity(filter));
+    if (!source) return filter;
+
+    return {
+      ...filter,
+      columnName: filter.columnName ?? source.columnName,
+      valueName: filter.valueName ?? source.valueName,
+      relationValueTypes: filter.relationValueTypes ?? source.relationValueTypes,
+    };
+  });
 }
