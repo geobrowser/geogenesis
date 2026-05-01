@@ -92,4 +92,29 @@ describe('useAccessControl', () => {
       canEdit: true,
     });
   });
+
+  it('uses server-filtered DAO editor status instead of the paginated space editor list', async () => {
+    accessChecks.isMember.mockReturnValue(Effect.succeed(false));
+    accessChecks.isEditor.mockReturnValue(Effect.succeed(true));
+
+    const { result } = renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(accessChecks.isEditor).toHaveBeenCalledWith('daospaceid', 'memberspaceid', expect.any(AbortSignal));
+    expect(result.current).toMatchObject({
+      isMember: false,
+      isEditor: true,
+      canEdit: true,
+    });
+  });
+
+  it('does not run membership or editor checks until access control is ready', () => {
+    hookState.hydrated = false;
+
+    renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+  });
 });

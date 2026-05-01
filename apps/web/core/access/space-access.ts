@@ -22,7 +22,7 @@ function toSpaceAccess(access: Pick<SpaceAccess, 'isEditor' | 'isMember'>): Spac
   };
 }
 
-function normalizeSpaceId(id: string): string {
+export function normalizeSpaceId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 

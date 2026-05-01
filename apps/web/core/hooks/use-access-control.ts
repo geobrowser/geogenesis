@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { getSpaceAccess, noSpaceAccess, type SpaceAccess } from '~/core/access/space-access';
+import { normalizeSpaceId, type SpaceAccess } from '~/core/access/space-access';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 
 import { useHydrated } from './use-hydrated';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -24,12 +25,19 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
   const { personalSpaceId, isLoading: isLoadingSpaceId } = usePersonalSpaceId();
 
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
-  const normalizedPersonalSpaceId = personalSpaceId?.toLowerCase();
+  const normalizedSpaceId = normalizeSpaceId(spaceId);
+  const normalizedPersonalSpaceId = personalSpaceId ? normalizeSpaceId(personalSpaceId) : undefined;
   const shouldCheckDaoAccess = Boolean(hydrated && spaceId && normalizedPersonalSpaceId && space?.type !== 'PERSONAL');
 
-  const { data: daoAccess = noSpaceAccess, isLoading: isLoadingDaoAccess } = useQuery({
-    queryKey: ['space-access-control', spaceId, normalizedPersonalSpaceId],
-    queryFn: ({ signal }) => Effect.runPromise(getSpaceAccess(space!, normalizedPersonalSpaceId!, signal)),
+  const { data: isMemberOfDao = false, isLoading: isLoadingMember } = useQuery({
+    queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],
+    queryFn: ({ signal }) => Effect.runPromise(getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
+    enabled: shouldCheckDaoAccess,
+  });
+
+  const { data: isEditorOfDao = false, isLoading: isLoadingEditor } = useQuery({
+    queryKey: ['space-access-control', 'editor', normalizedSpaceId, normalizedPersonalSpaceId],
+    queryFn: ({ signal }) => Effect.runPromise(getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
     enabled: shouldCheckDaoAccess,
   });
 
@@ -44,7 +52,7 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
 
   // For personal spaces, the owner is the editor
   if (space.type === 'PERSONAL') {
-    const isOwner = personalSpaceId.replace(/-/g, '').toLowerCase() === spaceId.replace(/-/g, '').toLowerCase();
+    const isOwner = normalizedPersonalSpaceId === normalizedSpaceId;
     return {
       isEditor: isOwner,
       isMember: isOwner,
@@ -53,8 +61,12 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
     };
   }
 
+  const canEdit = isMemberOfDao || isEditorOfDao;
+
   return {
-    ...daoAccess,
-    isLoading: isLoadingDaoAccess,
+    isMember: isMemberOfDao,
+    isEditor: isEditorOfDao,
+    canEdit,
+    isLoading: !canEdit && (isLoadingMember || isLoadingEditor),
   };
 }
