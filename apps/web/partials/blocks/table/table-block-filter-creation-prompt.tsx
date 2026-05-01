@@ -917,6 +917,17 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     React.useImperativeHandle(ref, () => ({
       openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
         if (!isEditing) return;
+        const currentState = stateRef.current;
+        if (
+          currentState.open &&
+          currentState.selectedColumn === columnId &&
+          externalAnchorElRef.current === (anchorEl ?? null)
+        ) {
+          externalAnchorElRef.current = null;
+          setExternalAnchorBox(null);
+          dispatch({ type: 'close' });
+          return;
+        }
         externalAnchorElRef.current = anchorEl ?? null;
         if (anchorEl) {
           const r = anchorEl.getBoundingClientRect();

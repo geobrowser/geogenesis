@@ -70,8 +70,8 @@ function FilterValueChip({
   return (
     <span
       className={cx(
-        'inline-flex max-w-full items-center gap-0.5 rounded-sm py-0.5 pl-1.5 text-[0.8125rem] text-text',
-        removable ? 'border border-grey-02 bg-grey-01 pr-0.5' : 'border-0 bg-grey-01 pr-1.5'
+        'inline-flex h-6 max-w-full items-center gap-0.5 rounded-[4px] pl-1.5 text-metadata leading-none text-text',
+        removable ? 'border border-grey-02 bg-white pr-0.5' : 'border border-grey-02 bg-white pr-1.5'
       )}
     >
       <span className="min-w-0 truncate">{label}</span>
@@ -112,17 +112,12 @@ export function TableBlockFilterGroupPill({
   const showGroupClearButton = isEditing;
 
   return (
-    <div
-      className={cx(
-        'inline-flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md px-2 py-1.5',
-        'border border-grey-02 bg-white'
-      )}
-    >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+    <div className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-[6px] border border-grey-02 bg-white p-1">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
         <span className="flex shrink-0 items-center text-black" aria-hidden>
           <FilterIconBlack />
         </span>
-        <span className="flex shrink-0 flex-wrap items-baseline gap-x-0.5 text-[0.8125rem] text-text">
+        <span className="flex h-6 shrink-0 flex-wrap items-center gap-x-0.5 px-0.5 text-metadata leading-none text-text">
           {onAddSimilar && isEditing ? (
             <button
               type="button"

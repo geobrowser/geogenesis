@@ -328,7 +328,7 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
 
       <div className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-lg bg-grey-01 px-4 py-5">
         <p className="max-w-md text-center text-metadata text-text">Where do you want to query data from?</p>
-        <div className="flex w-[360px] max-w-full items-center justify-start gap-2">
+        <div className="flex w-[132px] max-w-full items-center justify-start gap-2 overflow-visible">
           <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
           <button
             type="button"
@@ -797,15 +797,19 @@ const ConfiguredTableBlock = ({
                   sortState={sortState}
                   onSort={handleSortChange}
                 />
-                <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-                <TableBlockEditableFilters
-                  ref={filterPromptRef}
-                  filterState={activeFilters}
-                  setFilterState={setActiveFilters}
-                  filterSuggestionSpaceId={spaceId}
-                  orderedColumnIds={orderedFilterColumnIds}
-                  isEditing={isEditing}
-                />
+                {isEditing && (
+                  <>
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    <TableBlockEditableFilters
+                      ref={filterPromptRef}
+                      filterState={activeFilters}
+                      setFilterState={setActiveFilters}
+                      filterSuggestionSpaceId={spaceId}
+                      orderedColumnIds={orderedFilterColumnIds}
+                      isEditing={isEditing}
+                    />
+                  </>
+                )}
               </div>
 
               {filterGroupsForToolbarPills.length > 0 && (
@@ -826,7 +830,6 @@ const ConfiguredTableBlock = ({
                           setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
                         }}
                         onAddSimilar={anchorEl => {
-                          setIsFilterOpen(true);
                           requestAnimationFrame(() => {
                             requestAnimationFrame(() => {
                               filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
