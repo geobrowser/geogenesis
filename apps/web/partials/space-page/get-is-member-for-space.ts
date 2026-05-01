@@ -3,7 +3,7 @@ import { cache } from 'react';
 import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
-import { getIsMemberOfSpace } from '~/core/io/queries';
+import { getSpaceAccess } from '~/core/access/space-access';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
 import { Telemetry } from '~/app/api/telemetry';
@@ -28,7 +28,8 @@ export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddres
   }
 
   return Effect.runPromise(
-    getIsMemberOfSpace(spaceId, personalSpaceId.toLowerCase()).pipe(
+    getSpaceAccess(space, personalSpaceId.toLowerCase()).pipe(
+      Effect.map(access => access.isMember),
       Effect.withSpan('web.getIsMemberForSpace'),
       Effect.annotateSpans({ spaceId, personalSpaceId }),
       Effect.provide(Telemetry)

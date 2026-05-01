@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpace } from '~/core/hooks/use-space';
+import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -140,11 +140,8 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
-  const { space } = useSpace(spaceId);
-
-  const editorSpaceIds = React.useMemo(() => {
-    return new Set(space?.editors.map(e => e.toLowerCase()) ?? []);
-  }, [space?.editors]);
+  const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
+  const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
@@ -298,6 +295,23 @@ function filterEditorsOnly(comments: CommentWithReplies[], editorSpaceIds: Set<s
       ...c,
       replies: filterEditorsOnly(c.replies, editorSpaceIds),
     }));
+}
+
+function collectCommentAuthorSpaceIds(comments: CommentWithReplies[]): string[] {
+  const ids = new Set<string>();
+
+  function visit(comment: CommentWithReplies) {
+    ids.add(comment.spaceId);
+    for (const reply of comment.replies) {
+      visit(reply);
+    }
+  }
+
+  for (const comment of comments) {
+    visit(comment);
+  }
+
+  return [...ids];
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { cache } from 'react';
 
 import { Effect } from 'effect';
 
-import { getIsEditorOfSpace } from '~/core/io/queries';
+import { getSpaceAccess } from '~/core/access/space-access';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
 import { Telemetry } from '~/app/api/telemetry';
@@ -25,13 +25,9 @@ export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddres
     return false;
   }
 
-  // For personal spaces, the owner is the editor
-  if (space.type === 'PERSONAL') {
-    return personalSpaceId === spaceId;
-  }
-
   return Effect.runPromise(
-    getIsEditorOfSpace(spaceId, personalSpaceId.toLowerCase()).pipe(
+    getSpaceAccess(space, personalSpaceId.toLowerCase()).pipe(
+      Effect.map(access => access.isEditor),
       Effect.withSpan('web.getIsEditorForSpace'),
       Effect.annotateSpans({ spaceId, personalSpaceId }),
       Effect.provide(Telemetry)

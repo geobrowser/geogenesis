@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { getSpaceAccess } from '~/core/access/space-access';
 import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
@@ -82,6 +83,8 @@ export function usePublish() {
           return;
         }
 
+        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
+
         yield* makeProposal({
           name,
           author: personalSpaceId,
@@ -97,7 +100,7 @@ export function usePublish() {
             id: space.id,
             type: space.type,
             address: space.address,
-            editors: space.editors,
+            isEditor: spaceAccess.isEditor,
           },
         });
 
@@ -169,6 +172,7 @@ export function useBulkPublish() {
 
       const publish = Effect.gen(function* () {
         const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
+        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
 
         yield* makeProposal({
           name,
@@ -184,7 +188,7 @@ export function useBulkPublish() {
             id: space.id,
             type: space.type,
             address: space.address,
-            editors: space.editors,
+            isEditor: spaceAccess.isEditor,
           },
         });
       });
@@ -249,7 +253,7 @@ interface MakeProposalArgs {
     id: string;
     type: SpaceGovernanceType;
     address: string;
-    editors: string[];
+    isEditor: boolean;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -288,8 +292,7 @@ function makeProposal(args: MakeProposalArgs) {
 
       // Editors can use the fast path for immediate execution.
       // Members must use the slow path which requires a voting period.
-      const isEditor = space.editors.map(s => s.toLowerCase()).includes(author.toLowerCase());
-      const votingMode = isEditor ? 'FAST' : 'SLOW';
+      const votingMode = space.isEditor ? 'FAST' : 'SLOW';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({
