@@ -46,6 +46,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       isMember={isMember}
       hasRequestedSpaceMembership={hasRequestedSpaceMembership}
       connectedAddress={connectedAddress ?? null}
+      initialTotalMembers={space.totalMembers}
     />
   );
 
@@ -55,7 +56,9 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
         <SpaceMembersMenu
-          manageMembersComponent={<SpaceMembersDialogServerContainer spaceId={spaceId} />}
+          manageMembersComponent={
+            <SpaceMembersDialogServerContainer spaceId={spaceId} initialTotalMembers={space.totalMembers} />
+          }
           trigger={<ChevronDownSmall color="grey-04" />}
         />
       </div>
