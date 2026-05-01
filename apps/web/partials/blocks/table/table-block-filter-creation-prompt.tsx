@@ -279,17 +279,6 @@ function getFilterValue(interfaceFilterValue: InterfaceFilterValue) {
   }
 }
 
-function getFilterValueName(interfaceFilterValue: InterfaceFilterValue) {
-  switch (interfaceFilterValue.type) {
-    case 'string':
-      return interfaceFilterValue.value;
-    case 'entity':
-      return interfaceFilterValue.entityName;
-    case 'space':
-      return interfaceFilterValue.spaceName;
-  }
-}
-
 type FilterColumnDraft = {
   multiEntitySelections: { id: string; name: string | null }[];
   multiSpaceSelections: { id: string; name: string | null }[];

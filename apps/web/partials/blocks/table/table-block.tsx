@@ -13,6 +13,8 @@ import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { useFilters } from '~/core/blocks/data/use-filters';
+import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -286,7 +288,47 @@ function comparableFilterList(filters: Filter[]) {
     .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
 }
 
-export const TableBlock = ({
+export const TableBlock = (props: Props) => {
+  if (props.querySetupPending) {
+    return <TableBlockQuerySetup {...props} />;
+  }
+
+  return <ConfiguredTableBlock {...props} />;
+};
+
+function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
+  const { setEditable } = useEditable();
+  const canEdit = useCanUserEdit(spaceId);
+  const { filterState, setFilterState } = useFilters(canEdit);
+  const { source, setSource } = useSource({ filterState, setFilterState });
+
+  const handleConfirmQuerySetup = React.useCallback(() => {
+    setEditable(true);
+    onCompleteQuerySetup?.();
+  }, [onCompleteQuerySetup, setEditable]);
+
+  return (
+    <motion.div layout="position" transition={{ duration: 0.15 }}>
+      <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 rounded-lg bg-grey-01 px-4 py-8">
+        <p className="max-w-md text-center text-lg text-text">Where do you want to query data from?</p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} />
+          <button
+            type="button"
+            onClick={handleConfirmQuerySetup}
+            disabled={!canEdit}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-grey-02 bg-white shadow-button transition hover:border-text focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04 disabled:pointer-events-none disabled:opacity-50"
+            aria-label="Confirm query scope"
+          >
+            <Check color="grey-04" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+const ConfiguredTableBlock = ({
   spaceId,
   querySetupPending = false,
   onCompleteQuerySetup,
@@ -333,7 +375,6 @@ export const TableBlock = ({
     sortState,
     setSortState,
     filterableProperties,
-    filterSuggestionEntityIds,
     toggleProperty,
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,

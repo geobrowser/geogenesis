@@ -47,13 +47,13 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         ? [
             // @TODO(data blocks): We should add the default filters to the data model
             // itself instead of manually here.
-            // {
-            //   columnId: SystemIds.NAME_PROPERTY,
-            //   columnName: 'Name',
-            //   valueType: valueTypes[SystemIds.TEXT],
-            //   value: '',
-            //   valueName: null,
-            // },
+            {
+              columnId: SystemIds.NAME_PROPERTY,
+              columnName: 'Name',
+              valueType: 'TEXT',
+              value: '',
+              valueName: null,
+            },
             ...filterableProperties
               .map(c => {
                 return {
@@ -137,12 +137,12 @@ function QueryModeToggle() {
     <div className="ml-auto flex shrink-0 items-center gap-1 text-footnote text-grey-04">
       <span>Entities</span>
       <Tooltip
-        label="Relation data blocks coming soon"
+        label="Relation queries coming soon"
         position="top"
         trigger={
           <button
             type="button"
-            aria-label="Relation data blocks coming soon"
+            aria-label="Relation queries coming soon"
             className="cursor-not-allowed"
             onClick={e => e.preventDefault()}
           >
