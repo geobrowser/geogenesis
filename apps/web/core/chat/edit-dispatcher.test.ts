@@ -316,7 +316,7 @@ describe('setDataBlockFilters', () => {
   it('aborts when the block entity cannot be resolved (guards against stray FILTER writes)', async () => {
     findOne.mockImplementation(async () => null);
     await applyIntent(
-      { kind: 'setDataBlockFilters', blockId: 'block1', spaceId: 'space1', filters: [], mode: 'AND' },
+      { kind: 'setDataBlockFilters', blockId: 'block1', spaceId: 'space1', filters: [], modesByColumn: {} },
       ctx
     );
     expect(storage.values.set).not.toHaveBeenCalled();
@@ -325,7 +325,7 @@ describe('setDataBlockFilters', () => {
   it('writes the filter value when the block exists', async () => {
     findOne.mockResolvedValue(makeEntity({ id: 'block1' }));
     await applyIntent(
-      { kind: 'setDataBlockFilters', blockId: 'block1', spaceId: 'space1', filters: [], mode: 'AND' },
+      { kind: 'setDataBlockFilters', blockId: 'block1', spaceId: 'space1', filters: [], modesByColumn: {} },
       ctx
     );
     expect(storage.values.set).toHaveBeenCalledWith(

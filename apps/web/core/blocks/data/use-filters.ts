@@ -15,7 +15,14 @@ import { useValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
 import { mergeRelationValueTypesFromStore } from '~/core/utils/property/properties';
 
-import { Filter, FilterMode, parseFiltersSync, resolveFilterDisplayNames, toGeoFilterState } from './filters';
+import {
+  Filter,
+  FilterMode,
+  ModesByColumn,
+  parseFiltersSync,
+  resolveFilterDisplayNames,
+  toGeoFilterState,
+} from './filters';
 import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters(canEdit?: boolean) {
@@ -48,7 +55,7 @@ export function useFilters(canEdit?: boolean) {
     return null;
   }, [filterTriple]);
 
-  const { filters: filterState, mode: filterMode } = React.useMemo(
+  const { filters: filterState, modesByColumn } = React.useMemo(
     () => parseFiltersSync(geoFilterString),
     [geoFilterString]
   );
@@ -88,30 +95,30 @@ export function useFilters(canEdit?: boolean) {
   const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? filterState);
 
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
-  const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
+  const [temporaryModesOverride, setTemporaryModesOverride] = React.useState<ModesByColumn | null>(null);
 
   const temporaryFilters = temporaryFilterOverride ?? effectiveResolvedState;
-  const temporaryFilterMode: FilterMode = temporaryModeOverride ?? filterMode;
+  const temporaryModesByColumn: ModesByColumn = temporaryModesOverride ?? modesByColumn;
 
   const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
     setTemporaryFilterOverride(filters);
   }, []);
 
-  const setTemporaryFilterMode = React.useCallback((mode: FilterMode) => {
-    setTemporaryModeOverride(mode);
+  const setTemporaryGroupMode = React.useCallback((columnId: string, mode: FilterMode) => {
+    setTemporaryModesOverride(prev => ({ ...(prev ?? {}), [columnId]: mode }));
   }, []);
 
   React.useEffect(() => {
     if (canEdit === true) {
       setTemporaryFilterOverride(null);
-      setTemporaryModeOverride(null);
+      setTemporaryModesOverride(null);
     }
   }, [canEdit]);
 
-  const filterModeRef = React.useRef(filterMode);
+  const modesByColumnRef = React.useRef(modesByColumn);
   React.useEffect(() => {
-    filterModeRef.current = filterMode;
-  }, [filterMode]);
+    modesByColumnRef.current = modesByColumn;
+  }, [modesByColumn]);
 
   const filterStateRef = React.useRef(filterState);
   React.useEffect(() => {
@@ -119,8 +126,9 @@ export function useFilters(canEdit?: boolean) {
   }, [filterState]);
 
   const writeFilterTriple = React.useCallback(
-    (filters: Filter[], mode: FilterMode) => {
-      const newFiltersString = filters.length === 0 && mode === 'AND' ? '' : toGeoFilterState(filters, mode);
+    (filters: Filter[], modes: ModesByColumn) => {
+      const newFiltersString =
+        filters.length === 0 && Object.keys(modes).length === 0 ? '' : toGeoFilterState(filters, modes);
       const entityName = initialBlockEntity?.name ?? '';
 
       storage.values.set({
@@ -147,15 +155,26 @@ export function useFilters(canEdit?: boolean) {
 
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
-      writeFilterTriple(filters, filterModeRef.current);
+      // Drop any per-group mode entries for columns that no longer have filters,
+      // so removing a filter chip cleans up its mode entry too.
+      const presentColumns = new Set(filters.map(f => (f.isBacklink ? '_relation' : f.columnId)));
+      const trimmedModes: ModesByColumn = {};
+      for (const [columnId, mode] of Object.entries(modesByColumnRef.current)) {
+        if (presentColumns.has(columnId)) {
+          trimmedModes[columnId] = mode;
+        }
+      }
+      modesByColumnRef.current = trimmedModes;
+      writeFilterTriple(filters, trimmedModes);
     },
     [writeFilterTriple]
   );
 
-  const setFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      filterModeRef.current = mode;
-      writeFilterTriple(filterStateRef.current, mode);
+  const setGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      const next = { ...modesByColumnRef.current, [columnId]: mode };
+      modesByColumnRef.current = next;
+      writeFilterTriple(filterStateRef.current, next);
     },
     [writeFilterTriple]
   );
@@ -164,13 +183,13 @@ export function useFilters(canEdit?: boolean) {
     filterState,
     resolvedFilterState: effectiveResolvedState,
     isFilterResolving,
-    filterMode,
+    modesByColumn,
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     filterableProperties: filterableProperties ?? [],
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
   };
 }

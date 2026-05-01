@@ -76,9 +76,9 @@ describe('filters', () => {
       },
     };
 
-    const { filters: stringFilter, mode } = await fromGeoFilterString(JSON.stringify(filter));
+    const { filters: stringFilter, modesByColumn } = await fromGeoFilterString(JSON.stringify(filter));
 
-    expect(mode).toBe('AND');
+    expect(modesByColumn).toEqual({});
     expect(stringFilter).toEqual([
       {
         columnId: SystemIds.SPACE_FILTER,
@@ -167,7 +167,7 @@ describe('filters', () => {
     });
   });
 
-  it('round-trips OR mode through filter string', async () => {
+  it('round-trips per-property AND mode through filter string', async () => {
     const filters = [
       {
         columnId: SystemIds.TYPES_PROPERTY,
@@ -177,30 +177,49 @@ describe('filters', () => {
       },
     ];
 
-    const stringFilter = toGeoFilterState(filters, 'OR');
-    const parsedFilter = JSON.parse(stringFilter);
-    expect(parsedFilter.mode).toBe('OR');
-
-    const { mode } = await fromGeoFilterString(stringFilter);
-    expect(mode).toBe('OR');
-  });
-
-  it('omits mode from AND filter string for backward compatibility', () => {
-    const filters = [
-      {
-        columnId: SystemIds.TYPES_PROPERTY,
-        columnName: 'Types',
-        valueType: 'RELATION' as const,
-        value: SystemIds.SCHEMA_TYPE,
-      },
-    ];
-
-    const stringFilter = toGeoFilterState(filters, 'AND');
+    const stringFilter = toGeoFilterState(filters, { [SystemIds.TYPES_PROPERTY]: 'AND' });
     const parsedFilter = JSON.parse(stringFilter);
     expect(parsedFilter.mode).toBeUndefined();
+    expect(parsedFilter.modes).toEqual({ [SystemIds.TYPES_PROPERTY]: 'AND' });
+
+    const { modesByColumn } = await fromGeoFilterString(stringFilter);
+    expect(modesByColumn).toEqual({ [SystemIds.TYPES_PROPERTY]: 'AND' });
   });
 
-  it('defaults to AND mode when mode is absent in stored filter string', async () => {
+  it('omits modes when every group uses the OR default', () => {
+    const filters = [
+      {
+        columnId: SystemIds.TYPES_PROPERTY,
+        columnName: 'Types',
+        valueType: 'RELATION' as const,
+        value: SystemIds.SCHEMA_TYPE,
+      },
+    ];
+
+    // OR is the default — no need to persist it.
+    const stringFilter = toGeoFilterState(filters, { [SystemIds.TYPES_PROPERTY]: 'OR' });
+    const parsedFilter = JSON.parse(stringFilter);
+    expect(parsedFilter.mode).toBeUndefined();
+    expect(parsedFilter.modes).toBeUndefined();
+  });
+
+  it('legacy mode: OR fans out to every present property group on read', async () => {
+    const filter: FilterString = {
+      mode: 'OR',
+      filter: {
+        [SystemIds.TYPES_PROPERTY]: { is: SystemIds.SCHEMA_TYPE },
+        [SystemIds.NAME_PROPERTY]: { is: 'foo' },
+      },
+    };
+
+    const { modesByColumn } = await fromGeoFilterString(JSON.stringify(filter));
+    expect(modesByColumn).toEqual({
+      [SystemIds.TYPES_PROPERTY]: 'OR',
+      [SystemIds.NAME_PROPERTY]: 'OR',
+    });
+  });
+
+  it('legacy mode: AND or absent => empty modesByColumn (default OR per group)', async () => {
     const filter: FilterString = {
       filter: {
         [SystemIds.TYPES_PROPERTY]: {
@@ -209,30 +228,30 @@ describe('filters', () => {
       },
     };
 
-    const { mode } = await fromGeoFilterString(JSON.stringify(filter));
-    expect(mode).toBe('AND');
+    const { modesByColumn } = await fromGeoFilterString(JSON.stringify(filter));
+    expect(modesByColumn).toEqual({});
   });
 });
 
 describe('parseFiltersSync', () => {
   it('returns empty filters for null input', () => {
     const result = parseFiltersSync(null);
-    expect(result).toEqual({ filters: [], mode: 'AND' });
+    expect(result).toEqual({ filters: [], modesByColumn: {} });
   });
 
   it('returns empty filters for empty string', () => {
     const result = parseFiltersSync('');
-    expect(result).toEqual({ filters: [], mode: 'AND' });
+    expect(result).toEqual({ filters: [], modesByColumn: {} });
   });
 
   it('returns empty filters for invalid JSON', () => {
     const result = parseFiltersSync('not-json');
-    expect(result).toEqual({ filters: [], mode: 'AND' });
+    expect(result).toEqual({ filters: [], modesByColumn: {} });
   });
 
   it('returns empty filters for invalid schema', () => {
     const result = parseFiltersSync(JSON.stringify({ filter: 'bad' }));
-    expect(result).toEqual({ filters: [], mode: 'AND' });
+    expect(result).toEqual({ filters: [], modesByColumn: {} });
   });
 
   it('parses a simple property filter', () => {
@@ -242,8 +261,8 @@ describe('parseFiltersSync', () => {
       },
     };
 
-    const { filters, mode } = parseFiltersSync(JSON.stringify(input));
-    expect(mode).toBe('AND');
+    const { filters, modesByColumn } = parseFiltersSync(JSON.stringify(input));
+    expect(modesByColumn).toEqual({});
     expect(filters).toEqual([
       {
         columnId: SystemIds.TYPES_PROPERTY,
@@ -336,7 +355,7 @@ describe('parseFiltersSync', () => {
     expect(filters.every(f => f.columnId === SystemIds.TYPES_PROPERTY)).toBe(true);
   });
 
-  it('parses OR mode', () => {
+  it('legacy mode: OR fans out to every present property group', () => {
     const input: FilterString = {
       mode: 'OR',
       filter: {
@@ -344,19 +363,32 @@ describe('parseFiltersSync', () => {
       },
     };
 
-    const { mode } = parseFiltersSync(JSON.stringify(input));
-    expect(mode).toBe('OR');
+    const { modesByColumn } = parseFiltersSync(JSON.stringify(input));
+    expect(modesByColumn).toEqual({ [SystemIds.TYPES_PROPERTY]: 'OR' });
   });
 
-  it('defaults to AND mode when mode is absent', () => {
+  it('returns empty modesByColumn when no mode info is present', () => {
     const input: FilterString = {
       filter: {
         [SystemIds.TYPES_PROPERTY]: { is: SystemIds.SCHEMA_TYPE },
       },
     };
 
-    const { mode } = parseFiltersSync(JSON.stringify(input));
-    expect(mode).toBe('AND');
+    const { modesByColumn } = parseFiltersSync(JSON.stringify(input));
+    expect(modesByColumn).toEqual({});
+  });
+
+  it('reads new modes map verbatim, ignoring legacy mode field', () => {
+    const input: FilterString = {
+      mode: 'OR', // legacy — ignored when `modes` is present
+      modes: { [SystemIds.TYPES_PROPERTY]: 'AND' },
+      filter: {
+        [SystemIds.TYPES_PROPERTY]: { in: ['type-a', 'type-b'] },
+      },
+    };
+
+    const { modesByColumn } = parseFiltersSync(JSON.stringify(input));
+    expect(modesByColumn).toEqual({ [SystemIds.TYPES_PROPERTY]: 'AND' });
   });
 });
 

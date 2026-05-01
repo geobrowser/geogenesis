@@ -284,23 +284,23 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
     shownColumnIds,
     source,
     filterState: activeFilters,
-    filterMode: activeFilterMode,
+    modesByColumn: activeModesByColumn,
     dbFilterState,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
     sortState,
     setSortState,
     filterableProperties,
   } = useDataBlock({ canEdit });
 
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
   );
 
   const filterSpaceIds = React.useMemo(
@@ -540,24 +540,27 @@ export const TableBlock = ({ spaceId, blockId }: Props) => {
                 filterSuggestionSpaceId={spaceId}
               />
 
-              {filterGroups.map(group => (
-                <React.Fragment key={group.columnId}>
-                  <TableBlockFilterGroupPill
-                    group={group}
-                    mode={activeFilterMode}
-                    onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                    onDeleteValue={originalIndex => {
-                      const newFilterState = produce(activeFilters, draft => {
-                        draft.splice(originalIndex, 1);
-                      });
-                      setActiveFilters(newFilterState);
-                    }}
-                    onAddSimilar={() => filterPromptRef.current?.openWithColumn(group.columnId)}
-                    isEditing={isEditing}
-                    serverFilterKeys={serverFilterKeys}
-                  />
-                </React.Fragment>
-              ))}
+              {filterGroups.map(group => {
+                const groupMode: FilterMode = activeModesByColumn[group.columnId] ?? 'OR';
+                return (
+                  <React.Fragment key={group.columnId}>
+                    <TableBlockFilterGroupPill
+                      group={group}
+                      mode={groupMode}
+                      onToggleMode={() => setActiveGroupMode(group.columnId, groupMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        const newFilterState = produce(activeFilters, draft => {
+                          draft.splice(originalIndex, 1);
+                        });
+                        setActiveFilters(newFilterState);
+                      }}
+                      onAddSimilar={() => filterPromptRef.current?.openWithColumn(group.columnId)}
+                      isEditing={isEditing}
+                      serverFilterKeys={serverFilterKeys}
+                    />
+                  </React.Fragment>
+                );
+              })}
             </motion.div>
           </motion.div>
         </AnimatePresence>

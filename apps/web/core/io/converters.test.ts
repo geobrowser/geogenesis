@@ -107,3 +107,97 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
   });
 });
+
+describe('convertWhereConditionToEntityFilter scalar value routing', () => {
+  it('routes a multi-value text filter to text.inInsensitive', () => {
+    const result = convertWhereConditionToEntityFilter(
+      {
+        values: [
+          { propertyId: { equals: 'prop-1' }, value: { in: ['Foo', 'Bar'] }, dataType: 'TEXT' },
+        ],
+      },
+      { includeEmptyNames: true }
+    );
+
+    expect(result).toEqual({
+      values: { some: { propertyId: { is: 'prop-1' }, text: { inInsensitive: ['Foo', 'Bar'] } } },
+    });
+  });
+
+  it('routes an integer filter to integer.in (BigInt strings)', () => {
+    const result = convertWhereConditionToEntityFilter(
+      {
+        values: [
+          { propertyId: { equals: 'prop-int' }, value: { in: [1, 2, 3] }, dataType: 'INTEGER' },
+        ],
+      },
+      { includeEmptyNames: true }
+    );
+
+    expect(result).toEqual({
+      values: { some: { propertyId: { is: 'prop-int' }, integer: { in: ['1', '2', '3'] } } },
+    });
+  });
+
+  it('routes a float filter to float.in (numbers)', () => {
+    const result = convertWhereConditionToEntityFilter(
+      {
+        values: [
+          { propertyId: { equals: 'prop-f' }, value: { in: [1.5, 2.5] }, dataType: 'FLOAT' },
+        ],
+      },
+      { includeEmptyNames: true }
+    );
+
+    expect(result).toEqual({
+      values: { some: { propertyId: { is: 'prop-f' }, float: { in: [1.5, 2.5] } } },
+    });
+  });
+
+  it('routes a datetime filter to datetime field with inInsensitive (StringFilter)', () => {
+    const result = convertWhereConditionToEntityFilter(
+      {
+        values: [
+          {
+            propertyId: { equals: 'prop-dt' },
+            value: { in: ['2026-01-01', '2026-02-01'] },
+            dataType: 'DATETIME',
+          },
+        ],
+      },
+      { includeEmptyNames: true }
+    );
+
+    expect(result).toEqual({
+      values: {
+        some: {
+          propertyId: { is: 'prop-dt' },
+          datetime: { inInsensitive: ['2026-01-01', '2026-02-01'] },
+        },
+      },
+    });
+  });
+
+  it('routes a relation filter with multi-value to.id.in', () => {
+    const result = convertWhereConditionToEntityFilter(
+      {
+        relations: [
+          {
+            typeOf: { id: { equals: 'rel-type' } },
+            toEntity: { id: { in: ['a', 'b', 'c'] } },
+          },
+        ],
+      },
+      { includeEmptyNames: true }
+    );
+
+    expect(result).toEqual({
+      relations: {
+        some: {
+          typeId: { is: 'rel-type' },
+          toEntityId: { in: ['a', 'b', 'c'] },
+        },
+      },
+    });
+  });
+});

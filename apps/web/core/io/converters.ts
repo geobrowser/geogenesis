@@ -1,7 +1,11 @@
 import {
+  BigFloatFilter,
+  BigIntFilter,
+  BooleanFilter,
   EntityFilter,
   EntityToManyRelationFilter,
   EntityToManyValueFilter,
+  FloatFilter,
   RelationFilter,
   StringFilter,
   UuidFilter,
@@ -10,6 +14,7 @@ import {
 } from '~/core/gql/graphql';
 import {
   BacklinkCondition,
+  BooleanCondition,
   NumberCondition,
   RelationCondition,
   StringCondition,
@@ -88,7 +93,90 @@ function convertStringConditionToUuidFilter(condition: StringCondition | undefin
 }
 
 /**
- * Converts a ValueCondition to a ValueFilter for GraphQL
+ * Maps a StringCondition (text values) to a case-insensitive StringFilter
+ * suitable for the `text` / `date` / `datetime` / `time` fields on
+ * ValueFilter. Differs from `convertStringConditionToStringFilter` in two
+ * ways: it prefers `inInsensitive` for arrays so multi-value text filters
+ * collapse into one clause, and it routes equality through `isInsensitive`
+ * rather than `startsWithInsensitive`.
+ */
+function convertStringConditionToInsensitiveStringFilter(
+  condition: StringCondition | undefined
+): StringFilter | undefined {
+  if (!condition) return undefined;
+
+  if (typeof condition === 'string') {
+    return { isInsensitive: condition };
+  }
+
+  const filter: StringFilter = {};
+
+  if (condition.equals !== undefined) {
+    filter.isInsensitive = condition.equals;
+  }
+  if (condition.fuzzy !== undefined || condition.contains !== undefined) {
+    filter.includesInsensitive = condition.fuzzy ?? condition.contains;
+  }
+  if (condition.startsWith !== undefined) {
+    filter.startsWithInsensitive = condition.startsWith;
+  }
+  if (condition.endsWith !== undefined) {
+    filter.endsWithInsensitive = condition.endsWith;
+  }
+  if (condition.in !== undefined && condition.in.length > 0) {
+    filter.inInsensitive = condition.in;
+  }
+
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+function buildBigIntFilter(condition: NumberCondition): BigIntFilter | undefined {
+  const filter: BigIntFilter = {};
+  if (condition.equals !== undefined) filter.is = String(condition.equals);
+  if (condition.gt !== undefined) filter.greaterThan = String(condition.gt);
+  if (condition.gte !== undefined) filter.greaterThanOrEqualTo = String(condition.gte);
+  if (condition.lt !== undefined) filter.lessThan = String(condition.lt);
+  if (condition.lte !== undefined) filter.lessThanOrEqualTo = String(condition.lte);
+  if (condition.in !== undefined && condition.in.length > 0) filter.in = condition.in.map(String);
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+function buildFloatFilter(condition: NumberCondition): FloatFilter | undefined {
+  const filter: FloatFilter = {};
+  if (condition.equals !== undefined) filter.is = condition.equals;
+  if (condition.gt !== undefined) filter.greaterThan = condition.gt;
+  if (condition.gte !== undefined) filter.greaterThanOrEqualTo = condition.gte;
+  if (condition.lt !== undefined) filter.lessThan = condition.lt;
+  if (condition.lte !== undefined) filter.lessThanOrEqualTo = condition.lte;
+  if (condition.in !== undefined && condition.in.length > 0) filter.in = condition.in;
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+function buildBigFloatFilter(condition: NumberCondition): BigFloatFilter | undefined {
+  const filter: BigFloatFilter = {};
+  if (condition.equals !== undefined) filter.is = String(condition.equals);
+  if (condition.gt !== undefined) filter.greaterThan = String(condition.gt);
+  if (condition.gte !== undefined) filter.greaterThanOrEqualTo = String(condition.gte);
+  if (condition.lt !== undefined) filter.lessThan = String(condition.lt);
+  if (condition.lte !== undefined) filter.lessThanOrEqualTo = String(condition.lte);
+  if (condition.in !== undefined && condition.in.length > 0) filter.in = condition.in.map(String);
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+function buildBooleanFilter(condition: BooleanCondition): BooleanFilter {
+  return { is: condition.equals };
+}
+
+/**
+ * Converts a ValueCondition to a ValueFilter for GraphQL.
+ *
+ * Routes the value to the matching scalar field on `ValueFilter` (`text`,
+ * `integer`, `float`, `decimal`, `datetime`, `date`, `time`, `boolean`)
+ * based on `condition.dataType`. Without a `dataType` hint we fall back
+ * to populating `text`, which is the legacy behavior — fine for old
+ * persisted filters but every new filter the data block UI builds carries
+ * the correct dataType so multi-value selections end up in `text.inInsensitive`,
+ * `integer.in`, etc., as a single clause instead of a nested OR fan-out.
  */
 function convertValueConditionToValueFilter(condition: ValueCondition): ValueFilter {
   const filter: ValueFilter = {};
@@ -101,36 +189,80 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
     filter.spaceId = convertStringConditionToUuidFilter(condition.space);
   }
 
-  // Handle value based on type
-  if (condition.value) {
-    if (
-      typeof condition.value === 'object' &&
-      'equals' in condition.value &&
-      typeof condition.value.equals === 'boolean'
-    ) {
-      // Boolean condition - convert to string filter
-      filter.text = { is: String(condition.value.equals) };
-    } else if (
-      typeof condition.value === 'object' &&
-      ('gt' in condition.value ||
-        'gte' in condition.value ||
-        'lt' in condition.value ||
-        'lte' in condition.value ||
-        'between' in condition.value)
-    ) {
-      // Number condition - convert to string filter (GraphQL treats as string)
-      const numCondition = condition.value as NumberCondition;
-      if (numCondition.equals !== undefined) {
-        filter.text = { is: String(numCondition.equals) };
+  if (!condition.value) {
+    return filter;
+  }
+
+  // Boolean values are scalar; arrays are meaningless (only two possible values).
+  if (typeof condition.value === 'object' && 'equals' in condition.value && typeof condition.value.equals === 'boolean') {
+    filter.boolean = buildBooleanFilter(condition.value as BooleanCondition);
+    return filter;
+  }
+
+  // Numeric values: route by dataType. We can't tell INTEGER vs FLOAT vs DECIMAL
+  // from the JS value alone (5 could be any of the three), so the data block
+  // layer must supply `dataType` whenever it builds a numeric filter.
+  const isNumberCondition =
+    typeof condition.value === 'object' &&
+    ('gt' in condition.value ||
+      'gte' in condition.value ||
+      'lt' in condition.value ||
+      'lte' in condition.value ||
+      'between' in condition.value ||
+      ('in' in condition.value && Array.isArray(condition.value.in) && typeof condition.value.in[0] === 'number') ||
+      (typeof condition.value === 'object' &&
+        'equals' in condition.value &&
+        typeof condition.value.equals === 'number'));
+
+  if (isNumberCondition) {
+    const numCondition = condition.value as NumberCondition;
+    switch (condition.dataType) {
+      case 'INTEGER': {
+        const built = buildBigIntFilter(numCondition);
+        if (built) filter.integer = built;
+        return filter;
       }
-      // Note: GraphQL StringFilter doesn't support numeric comparisons directly
-      // You may need to handle this differently based on your GraphQL schema
-    } else {
-      // String condition
-      filter.text = convertStringConditionToStringFilter(condition.value as StringCondition);
+      case 'FLOAT': {
+        const built = buildFloatFilter(numCondition);
+        if (built) filter.float = built;
+        return filter;
+      }
+      case 'DECIMAL': {
+        const built = buildBigFloatFilter(numCondition);
+        if (built) filter.decimal = built;
+        return filter;
+      }
+      default: {
+        // No dataType hint — preserve legacy behavior of stringifying into `text`.
+        if (numCondition.equals !== undefined) {
+          filter.text = { is: String(numCondition.equals) };
+        }
+        return filter;
+      }
     }
   }
 
+  // String/string-like values. ValueFilter exposes `text`, `date`, `datetime`,
+  // `time`, `point` as StringFilters; pick by dataType (default to `text`).
+  const stringCondition = condition.value as StringCondition;
+  const stringFilter = convertStringConditionToInsensitiveStringFilter(stringCondition);
+  if (!stringFilter) return filter;
+
+  switch (condition.dataType) {
+    case 'DATETIME':
+      filter.datetime = stringFilter;
+      break;
+    case 'DATE':
+      filter.date = stringFilter;
+      break;
+    case 'TIME':
+      filter.time = stringFilter;
+      break;
+    case 'TEXT':
+    default:
+      filter.text = stringFilter;
+      break;
+  }
   return filter;
 }
 

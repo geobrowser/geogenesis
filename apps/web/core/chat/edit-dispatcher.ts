@@ -422,7 +422,7 @@ async function applySetDataBlockFilters(intent: Extract<EditIntent, { kind: 'set
     return;
   }
 
-  const encoded = intent.filters.length === 0 ? '' : toGeoFilterState(intent.filters, intent.mode);
+  const encoded = intent.filters.length === 0 ? '' : toGeoFilterState(intent.filters, intent.modesByColumn);
 
   storage.values.set({
     spaceId: intent.spaceId,

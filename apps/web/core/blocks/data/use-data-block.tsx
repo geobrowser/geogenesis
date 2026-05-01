@@ -14,7 +14,9 @@ import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
-import { Filter, FilterMode } from './filters';
+import { Filter, FilterMode, ModesByColumn } from './filters';
+import { FilterableValueType } from '~/core/value-types';
+import { ValueDataType } from '~/core/sync/experimental_query-layer';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
@@ -42,7 +44,7 @@ const queryKeys = {
 
 interface UseDataBlockOptions {
   filterState?: Filter[];
-  filterMode?: FilterMode;
+  modesByColumn?: ModesByColumn;
   canEdit?: boolean;
 }
 
@@ -71,23 +73,23 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     filterState: dbFilterState,
     resolvedFilterState: dbResolvedFilterState,
     isFilterResolving,
-    filterMode: dbFilterMode,
+    modesByColumn: dbModesByColumn,
     filterableProperties,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
   } = useFilters(options?.canEdit);
 
   const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
   const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
-  const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
+  const activeModesByColumn = options?.canEdit ? dbModesByColumn : temporaryModesByColumn;
   const effectiveFilterState = options?.filterState ?? activeFilterState;
-  const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
+  const effectiveModesByColumn = options?.modesByColumn ?? activeModesByColumn;
   const {
     shownColumnIds,
     mapping,
@@ -104,9 +106,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { sortState, setSortState } = useSort(options?.canEdit);
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
+  const modesByColumnKey = React.useMemo(() => stableStringify(effectiveModesByColumn), [effectiveModesByColumn]);
   const where = React.useMemo(
-    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
-    [filterStateKey, effectiveFilterMode]
+    () => filterStateToWhere(effectiveFilterState, effectiveModesByColumn),
+    [filterStateKey, modesByColumnKey, effectiveFilterState, effectiveModesByColumn]
   );
 
   // Use the mapping to get the potential renderable properties.
@@ -450,17 +453,17 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     // From useFilters
     filterState: effectiveFilterState,
     resolvedFilterState: dbResolvedFilterState,
-    filterMode: effectiveFilterMode,
+    modesByColumn: effectiveModesByColumn,
     dbFilterState,
-    dbFilterMode,
+    dbModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     filterableProperties,
 
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
 
     // From useSort
     sortState,
@@ -536,28 +539,41 @@ export function useDataBlockInstance() {
   return context;
 }
 
-export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AND'): WhereCondition {
+/** Per-group default mode. Multi-value RELATION/TEXT collapses cleanly to `in`. */
+const DEFAULT_GROUP_MODE: FilterMode = 'OR';
+
+/**
+ * Group key shared by all filter chips that combine into a single GraphQL
+ * clause. Backlinks bucket under `_relation` so multiple backlink chips on
+ * the same relation type collapse to a single `backlinks: [...]` clause
+ * (matching the persisted format).
+ */
+function groupKeyFor(f: Filter): string {
+  const isBacklink = f.isBacklink || f.columnName === 'Backlink';
+  return isBacklink ? `_relation:${f.columnId}` : f.columnId;
+}
+
+export function filterStateToWhere(filterState: Filter[], modesByColumn: ModesByColumn = {}): WhereCondition {
   if (filterState.length === 0) return {};
   if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
 
-  // Group filters by columnId so we can AND between groups and apply
-  // the user-chosen mode (AND/OR) only within each group.
+  // Bucket filters by column, then build one WhereCondition per group using
+  // that group's mode. Between groups is always AND (the global mode is gone).
   const groups = new Map<string, Filter[]>();
   for (const f of filterState) {
-    const key = f.columnId;
+    const key = groupKeyFor(f);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(f);
   }
 
   const groupConditions: WhereCondition[] = [];
-  for (const [, filters] of groups) {
-    if (filters.length === 1) {
-      groupConditions.push(buildSingleFilterWhere(filters[0]));
-    } else if (mode === 'OR') {
-      groupConditions.push(buildOrWhere(filters));
-    } else {
-      groupConditions.push(buildAndWhere(filters));
-    }
+  for (const [groupKey, filters] of groups) {
+    // The persisted modes map keys backlinks under their columnId, not the
+    // synthetic group key with the `_relation:` prefix. Strip the prefix when
+    // looking up the mode so a group of backlinks finds its mode.
+    const lookupKey = groupKey.startsWith('_relation:') ? groupKey.slice('_relation:'.length) : groupKey;
+    const groupMode = modesByColumn[lookupKey] ?? DEFAULT_GROUP_MODE;
+    groupConditions.push(buildGroupWhere(filters, groupMode));
   }
 
   if (groupConditions.length === 1) return groupConditions[0];
@@ -603,13 +619,29 @@ function mergeWhereConditions(conditions: WhereCondition[]): WhereCondition {
   return { AND: [merged, ...unmerged] };
 }
 
+function valueDataTypeFor(valueType: FilterableValueType): ValueDataType | undefined {
+  switch (valueType) {
+    case 'TEXT':
+    case 'INTEGER':
+    case 'FLOAT':
+    case 'DECIMAL':
+    case 'DATETIME':
+    case 'DATE':
+    case 'TIME':
+    case 'BOOLEAN':
+      return valueType;
+    default:
+      return undefined;
+  }
+}
+
 function buildSingleFilterWhere(f: Filter): WhereCondition {
   if (f.valueType === 'TEXT') {
     if (ID.equals(f.columnId, SystemIds.NAME_PROPERTY)) {
       return { name: { contains: f.value } };
     }
     return {
-      values: [{ propertyId: { equals: f.columnId }, value: { contains: f.value } }],
+      values: [{ propertyId: { equals: f.columnId }, value: { contains: f.value }, dataType: 'TEXT' }],
     };
   }
 
@@ -633,26 +665,72 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
   return {};
 }
 
-function buildOrWhere(filterState: Filter[]): WhereCondition {
-  if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
+/**
+ * Build a single WhereCondition for one property group (all filter chips
+ * sharing the same columnId, or all backlink chips of the same relation
+ * type). The returned shape depends on `groupMode`:
+ *
+ * - `'OR'` (default) collapses multi-value RELATION/TEXT groups to one
+ *   clause using the schema's `in` / `inInsensitive` operators — far less
+ *   verbose than `OR: [{...}, {...}, ...]` on the wire.
+ * - `'AND'` wraps each chip as a separate AND clause so "tagged with both
+ *   X and Y" stays expressible. Same shape as the prior `buildAndWhere`.
+ */
+function buildGroupWhere(filters: Filter[], groupMode: FilterMode): WhereCondition {
+  if (filters.length === 0) return {};
+  if (filters.length === 1) return buildSingleFilterWhere(filters[0]);
 
-  return {
-    OR: filterState.map(f => buildSingleFilterWhere(f)),
-  };
-}
+  if (groupMode === 'AND') {
+    // AND-of-singles. Each chip evaluated independently (matches the local
+    // query engine's matchesCondition expectations and lets the converter
+    // emit a real GraphQL `and: [...]`).
+    return { AND: filters.map(f => buildSingleFilterWhere(f)) };
+  }
 
-function buildAndWhere(filterState: Filter[]): WhereCondition {
-  if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
+  // OR mode → in-collapse where the schema supports it.
+  const head = filters[0];
+  const isBacklink = head.isBacklink || head.columnName === 'Backlink';
+  const values = filters.map(f => f.value);
 
-  // Wrap each filter in AND so ALL conditions must match.
-  // We use individual sub-conditions (via buildSingleFilterWhere) rather than
-  // merging into one flat object, because the local query engine's matchesCondition
-  // returns early when it sees AND/OR — mixing AND with other fields on the same
-  // object would skip those fields. Using AND: [...] also correctly handles types
-  // and spaces which need per-condition evaluation for true AND semantics.
-  return { AND: filterState.map(f => buildSingleFilterWhere(f)) };
+  if (head.valueType === 'RELATION') {
+    if (ID.equals(head.columnId, SystemIds.SPACE_FILTER)) {
+      // Top-level `spaces` already promotes to the fast `spaceIds` query param.
+      // Multiple values stay as multiple StringConditions; the converter
+      // collects them into a single UuidListFilter.
+      return { spaces: values.map(v => ({ equals: v })) };
+    }
+    if (ID.equals(head.columnId, SystemIds.TYPES_PROPERTY)) {
+      // Same story for `types` → `typeIds`.
+      return { types: values.map(v => ({ id: { equals: v } })) };
+    }
+    if (isBacklink) {
+      return {
+        backlinks: [{ typeOf: { id: { equals: head.columnId } }, fromEntity: { id: { in: values } } }],
+      };
+    }
+    return {
+      relations: [{ typeOf: { id: { equals: head.columnId } }, toEntity: { id: { in: values } } }],
+    };
+  }
+
+  if (head.valueType === 'TEXT') {
+    if (ID.equals(head.columnId, SystemIds.NAME_PROPERTY)) {
+      // Name multi-value is exact-match `in` (vs `contains` for single).
+      // Different semantics, but `inInsensitive` on a fuzzy multi-search
+      // would be surprising — users selecting from a list want exact matches.
+      return { name: { in: values } };
+    }
+    return {
+      values: [{ propertyId: { equals: head.columnId }, value: { in: values }, dataType: 'TEXT' }],
+    };
+  }
+
+  // Other scalar dataTypes (INTEGER/FLOAT/DECIMAL/DATETIME/DATE/TIME/BOOLEAN)
+  // aren't currently UI-surfaced as multi-chip filters. If we ever do, fall
+  // back to OR-of-singles — the converter routes each by dataType.
+  const _dataType = valueDataTypeFor(head.valueType);
+  void _dataType; // referenced for future UI; suppress unused warning today
+  return { OR: filters.map(f => buildSingleFilterWhere(f)) };
 }
 
 function stableStringify(value: unknown): string {

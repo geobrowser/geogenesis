@@ -24,6 +24,14 @@ function PublishedFilterIconFilled() {
 export type FilterGroup = {
   columnId: string;
   columnName: string | null;
+  /**
+   * True when every chip in the group resolves a relation (entity-id) value
+   * — including special properties like `Types`, `Space`, and backlinks. Only
+   * relation groups can meaningfully toggle between AND and OR within a
+   * single property; value-typed groups (text/number/date) always OR-collapse
+   * via `in`/`inInsensitive` so the pill hides its mode toggle for them.
+   */
+  isRelationGroup: boolean;
   filters: { filter: Filter; originalIndex: number }[];
 };
 
@@ -38,6 +46,7 @@ export function groupFilters(filters: Filter[]): FilterGroup[] {
       groups.set(f.columnId, {
         columnId: f.columnId,
         columnName: f.columnName,
+        isRelationGroup: f.valueType === 'RELATION',
         filters: [{ filter: f, originalIndex: index }],
       });
     }
@@ -71,6 +80,11 @@ export function TableBlockFilterGroupPill({
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
 
+  // The mode toggle is only meaningful for RELATION groups — value-typed
+  // groups (text/number/date) always OR-collapse via the GraphQL `in`
+  // operators, so AND would have no representation on the wire.
+  const showModeToggle = hasMultipleValues && group.isRelationGroup;
+
   // The mode toggle is only interactive when the user can actually modify
   // at least one value in the group (i.e. is editing, or has local filters).
   const hasAnyLocalFilter = group.filters.some(({ filter }) => !serverFilterKeys.has(filterKey(filter)));
@@ -89,7 +103,7 @@ export function TableBlockFilterGroupPill({
           ) : (
             <>{group.columnName} is</>
           )}
-          {hasMultipleValues && (
+          {showModeToggle && (
             <>
               {' '}
               {canToggleMode ? (

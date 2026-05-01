@@ -41,14 +41,24 @@ export type NumberCondition = {
   lt?: number;
   lte?: number;
   between?: [number, number];
+  in?: number[];
 };
 
 export type BooleanCondition = { equals: boolean };
+
+/**
+ * Scalar dataType hint used by the GraphQL converter to route a value-typed
+ * filter to the correct underlying field on `ValueFilter` (e.g. `text` vs
+ * `integer` vs `datetime`). Mirrors `Property.dataType` for the value-typed
+ * subset (relations are routed via `RelationCondition`, not here).
+ */
+export type ValueDataType = 'TEXT' | 'INTEGER' | 'FLOAT' | 'DECIMAL' | 'DATETIME' | 'DATE' | 'TIME' | 'BOOLEAN';
 
 export type ValueCondition = {
   propertyId?: StringCondition;
   value?: StringCondition | NumberCondition | BooleanCondition;
   space?: StringCondition;
+  dataType?: ValueDataType;
 };
 
 export type RelationCondition = {
