@@ -27,11 +27,12 @@ interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
   filterSuggestionSpaceId?: string;
+  shownColumnIds?: string[];
   isEditing?: boolean;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, isEditing = true, }, ref) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, shownColumnIds = [], isEditing = true, }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
@@ -85,7 +86,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             },
           ];
 
-    const sortedFilters = sortFilters(filterableColumns);
+    const sortedFilters = orderFiltersForPicker(filterableColumns, shownColumnIds);
 
     const onCreateFilter = (filters: TableBlockNewFilterRow[]) => {
       if (filters.length === 0) return;
@@ -163,6 +164,29 @@ function comparableFilterList(filters: Filter[]) {
       valueType: f.valueType,
     }))
     .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
+}
+
+function orderFiltersForPicker(filters: RenderableFilter[], shownColumnIds: string[]): RenderableFilter[] {
+  if (shownColumnIds.length === 0) return sortFilters(filters);
+
+  const filterById = new Map(filters.map(f => [f.columnId, f]));
+  const ordered: RenderableFilter[] = [];
+  const seen = new Set<string>();
+
+  for (const id of shownColumnIds) {
+    const filter = filterById.get(id);
+    if (!filter || seen.has(filter.columnId)) continue;
+    seen.add(filter.columnId);
+    ordered.push(filter);
+  }
+
+  for (const filter of filters) {
+    if (seen.has(filter.columnId)) continue;
+    seen.add(filter.columnId);
+    ordered.push(filter);
+  }
+
+  return ordered;
 }
 
 function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {

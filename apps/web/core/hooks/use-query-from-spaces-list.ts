@@ -12,9 +12,11 @@ import {
   type BrowseSidebarData,
   type BrowseSpaceRow,
 } from '~/core/browse/fetch-browse-sidebar-data';
+import { Environment } from '~/core/environment';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
+import { graphql } from '~/core/io/subgraph/graphql';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 export type QueryFromSpaceRow = {
@@ -44,6 +46,24 @@ export type QueryFromSpacesListData = {
   sections: ScopeDropdownSections;
   ordering: SpaceDropdownOrderingMeta;
 };
+
+type SpaceScoresResult = {
+  spaceScoresConnection: {
+    nodes: { spaceId: string }[];
+  };
+};
+
+const TOP_SPACES_LIMIT = 30;
+
+function topSpacesQuery(limit: number): string {
+  return `query QueryFromTopSpaces {
+    spaceScoresConnection(first: ${limit}, orderBy: SCORE_DESC) {
+      nodes {
+        spaceId
+      }
+    }
+  }`;
+}
 
 function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpaceRow {
   return {
@@ -163,14 +183,40 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     staleTime: 60_000,
   });
 
+  const topSpacesQueryResult = useQuery({
+    queryKey: ['query-from-spaces-top-spaces', TOP_SPACES_LIMIT],
+    enabled: enabled,
+    queryFn: async () => {
+      const scores = await Effect.runPromise(
+        graphql<SpaceScoresResult>({
+          endpoint: Environment.getConfig().api,
+          query: topSpacesQuery(TOP_SPACES_LIMIT),
+        })
+      );
+      const ids = [...new Set(scores.spaceScoresConnection.nodes.map(n => n.spaceId).filter(Boolean))];
+      const spaces = ids.length > 0 ? await Effect.runPromise(getSpaces({ spaceIds: ids, limit: ids.length })) : [];
+      const rowsById = new Map(spaces.map(space => [space.id, spaceToBrowseRow(space)]));
+      return ids.flatMap(id => {
+        const row = rowsById.get(id);
+        return row ? [row] : [];
+      });
+    },
+    staleTime: 60_000,
+  });
+
   const data = React.useMemo<QueryFromSpacesListData>(() => {
     const sidebar = sidebarQuery.data;
     const editorIds = new Set(editorIdsQuery.data ?? sidebar?.editorOf.map(r => r.id) ?? []);
     const memberSpaces = memberSpacesQuery.data ?? [];
+    const memberIds = new Set(sidebar?.memberOf.map(r => r.id) ?? memberSpaces.map(s => s.id));
+    const excludedFeaturedIds = new Set([...editorIds, ...memberIds]);
 
-    const featuredRows = sidebar?.featured.length
+    const sidebarFeaturedRows = sidebar?.featured.length
       ? sidebar.featured
       : FEATURED_BROWSE_SPACES.map(row => ({ ...row, image: null, unnamed: false }));
+    const featuredRows = [...sidebarFeaturedRows, ...(topSpacesQueryResult.data ?? [])].filter(
+      row => !excludedFeaturedIds.has(row.id)
+    );
 
     const editorRows = sidebar?.editorOf ?? editorRowsQuery.data ?? [];
     const memberRows =
@@ -199,7 +245,14 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
         createdAtMs,
       },
     };
-  }, [editorIdsQuery.data, editorRowsQuery.data, memberSpaceId, memberSpacesQuery.data, sidebarQuery.data]);
+  }, [
+    editorIdsQuery.data,
+    editorRowsQuery.data,
+    memberSpaceId,
+    memberSpacesQuery.data,
+    sidebarQuery.data,
+    topSpacesQueryResult.data,
+  ]);
 
   return {
     data,

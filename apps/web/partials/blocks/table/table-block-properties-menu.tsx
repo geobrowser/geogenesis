@@ -46,7 +46,7 @@ const panelClassName =
 const sectionHeaderClass = 'flex items-center justify-between px-2.5 py-1.5 text-footnoteMedium text-grey-04';
 
 const rowClass =
-  'flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left text-sm text-text hover:bg-bg';
+  'flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-left text-sm text-text hover:bg-bg';
 
 /** ~5 rows at ~44px; matches scope/sort list viewport (header + search stay fixed above). */
 const propertiesListScrollClassName = 'max-h-[220px] min-h-0 overflow-y-auto overscroll-contain';
@@ -101,12 +101,26 @@ function SortablePropertyRow({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className={rowClass}>
+    <div
+      ref={setNodeRef}
+      role="button"
+      tabIndex={0}
+      style={style}
+      className={rowClass}
+      onClick={onToggleVisibility}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggleVisibility();
+        }
+      }}
+    >
       <button
         type="button"
         className="inline-flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded p-0.5 text-grey-04 hover:bg-bg active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
         aria-label="Reorder"
         disabled={dragDisabled}
+        onClick={e => e.stopPropagation()}
         {...attributes}
         {...listeners}
       >
@@ -349,12 +363,27 @@ export function TableBlockPropertiesMenu({
               ) : (
                 <>
                   {hiddenProperties.map(p => (
-                    <div key={p.id} className={rowClass}>
+                    <div
+                      key={p.id}
+                      role="button"
+                      tabIndex={0}
+                      className={rowClass}
+                      onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleProperty({ id: p.id, name: p.name });
+                        }
+                      }}
+                    >
                       <span className="inline-flex w-5 shrink-0" aria-hidden />
                       <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
                       <button
                         type="button"
-                        onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleProperty({ id: p.id, name: p.name });
+                        }}
                         className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
                         aria-label="Show in table"
                       >
@@ -363,12 +392,27 @@ export function TableBlockPropertiesMenu({
                     </div>
                   ))}
                   {extraGeoProperties.map(p => (
-                    <div key={`geo:${p.id}`} className={rowClass}>
+                    <div
+                      key={`geo:${p.id}`}
+                      role="button"
+                      tabIndex={0}
+                      className={rowClass}
+                      onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleProperty({ id: p.id, name: p.name });
+                        }
+                      }}
+                    >
                       <span className="inline-flex w-5 shrink-0" aria-hidden />
                       <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
                       <button
                         type="button"
-                        onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleProperty({ id: p.id, name: p.name });
+                        }}
                         className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
                         aria-label="Show in table"
                       >

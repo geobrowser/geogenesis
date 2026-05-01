@@ -777,6 +777,7 @@ const ConfiguredTableBlock = ({
                   filterState={activeFilters}
                   setFilterState={setActiveFilters}
                   filterSuggestionSpaceId={spaceId}
+                  shownColumnIds={shownColumnIds}
                   isEditing={isEditing}
                 />
               </div>

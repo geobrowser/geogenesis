@@ -1,6 +1,8 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -136,6 +138,13 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
         .map(relation => collectionItemsMap.get(relation.toEntity.id))
         .filter(item => item !== undefined);
 
+  const lastVisibleCollectionItemsRef = React.useRef<typeof orderedCollectionItems>([]);
+  React.useEffect(() => {
+    if (orderedCollectionItems.length > 0) {
+      lastVisibleCollectionItemsRef.current = orderedCollectionItems;
+    }
+  }, [orderedCollectionItems]);
+
   // When sort is active, build relations matching the server-returned item order
   // so that downstream features (drag-and-drop, position tracking) still work.
   const sortedRelations = sort
@@ -150,11 +159,19 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
   const shouldFallbackToLocalCollectionItems =
     Boolean(sort) && !hasFilters && orderedCollectionItems.length === 0 && localCollectionItemsFallback.length > 0;
+  const shouldFallbackToLastVisibleCollectionItems =
+    Boolean(sort) &&
+    !hasFilters &&
+    orderedCollectionItems.length === 0 &&
+    localCollectionItemsFallback.length === 0 &&
+    lastVisibleCollectionItemsRef.current.length > 0;
 
   const items = shouldFallbackToSSR
     ? ssrItems
     : shouldFallbackToLocalCollectionItems
       ? localCollectionItemsFallback
+      : shouldFallbackToLastVisibleCollectionItems
+        ? lastVisibleCollectionItemsRef.current
       : orderedCollectionItems;
   const hasData = items.length > 0;
 
@@ -168,7 +185,9 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   return {
     collectionItems: items,
     collectionRelations:
-      shouldFallbackToSSR || shouldFallbackToLocalCollectionItems ? paginatedRelations : sortedRelations,
+      shouldFallbackToSSR || shouldFallbackToLocalCollectionItems || shouldFallbackToLastVisibleCollectionItems
+        ? paginatedRelations
+        : sortedRelations,
     isLoading: hasData ? false : isCollectionItemsLoading,
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
