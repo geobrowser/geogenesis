@@ -14,6 +14,7 @@ import {
   useQueryFromSpacesList,
   type QueryFromSpaceRow,
 } from '~/core/hooks/use-query-from-spaces-list';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 
@@ -158,6 +159,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
   const [pendingSource, setPendingSource] = React.useState<Source | null>(null);
   const [search, setSearch] = React.useState('');
   const { spaceId } = useDataBlockInstance();
+  const { personalSpaceId } = usePersonalSpaceId();
 
   const scopeDraftDirtyRef = React.useRef(false);
 
@@ -197,7 +199,10 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
   const spaceIdsForLabel = labelSource.type === 'SPACES' ? labelSource.value : [];
   const { spacesById } = useSpacesByIds(spaceIdsForLabel);
 
-  const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(spaceId, open);
+  const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(
+    personalSpaceId ?? spaceId,
+    open
+  );
   const sections = scopeData?.sections;
   const scopeOrdering = scopeData?.ordering;
 

@@ -56,10 +56,6 @@ type TableBlockFilterGroupPillProps = {
   serverFilterKeys: Set<string>;
 };
 
-function filterKey(f: Filter): string {
-  return `${f.columnId}:${f.value}`;
-}
-
 function FilterValueChip({
   label,
   onRemove,
@@ -108,12 +104,10 @@ export function TableBlockFilterGroupPill({
   onClearGroup,
   onAddSimilar,
   isEditing,
-  serverFilterKeys,
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
 
-  const hasAnyLocalFilter = group.filters.some(({ filter }) => !serverFilterKeys.has(filterKey(filter)));
-  const canToggleMode = isEditing || hasAnyLocalFilter;
+  const canToggleMode = isEditing;
   const showAddButton = Boolean(onAddSimilar) && isEditing;
   const showGroupClearButton = isEditing;
 
@@ -156,7 +150,7 @@ export function TableBlockFilterGroupPill({
         {group.filters.map(({ filter, originalIndex }) => {
           const value =
             filter.valueType === 'RELATION' ? (filter.valueName ?? filter.value) : filter.value;
-          const canDelete = isEditing || !serverFilterKeys.has(filterKey(filter));
+          const canDelete = isEditing;
           const label = value ?? '';
 
           return (

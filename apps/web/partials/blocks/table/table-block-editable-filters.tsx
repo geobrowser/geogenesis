@@ -118,7 +118,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           onCreate={onCreateFilter}
           isEditing={isEditing}
           trigger={
-            <SmallButton icon={<CreateSmall />} variant="secondary">
+            <SmallButton icon={<CreateSmall />} variant="secondary" disabled={!isEditing}>
               Filter
             </SmallButton>
           }

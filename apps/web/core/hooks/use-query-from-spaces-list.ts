@@ -12,11 +12,9 @@ import {
   type BrowseSidebarData,
   type BrowseSpaceRow,
 } from '~/core/browse/fetch-browse-sidebar-data';
-import { Environment } from '~/core/environment';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 export type QueryFromSpaceRow = {
@@ -46,32 +44,6 @@ export type QueryFromSpacesListData = {
   sections: ScopeDropdownSections;
   ordering: SpaceDropdownOrderingMeta;
 };
-
-type TopSpacesResult = {
-  scoringTopologyDistancesConnection: {
-    nodes: { spaceId: string }[];
-    pageInfo: {
-      endCursor: string | null;
-      hasNextPage: boolean;
-    };
-  };
-};
-
-const TOP_SPACES_LIMIT = 30;
-
-function topSpacesQuery(limit: number): string {
-  return `query QueryFromTopSpaces {
-    scoringTopologyDistancesConnection(first: ${limit}, orderBy: DISTANCE_ASC) {
-      nodes {
-        spaceId
-      }
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
-    }
-  }`;
-}
 
 function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpaceRow {
   return {
@@ -191,25 +163,13 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     staleTime: 60_000,
   });
 
-  const topSpacesQueryResult = useQuery({
-    queryKey: ['query-from-spaces-top-spaces', TOP_SPACES_LIMIT],
-    enabled: enabled,
+  const personalSpaceQuery = useQuery({
+    queryKey: ['query-from-spaces-personal-row', memberSpaceId],
+    enabled: canLoad,
     queryFn: async () => {
-      const scores = await Effect.runPromise(
-        graphql<TopSpacesResult>({
-          endpoint: Environment.getConfig().api,
-          query: topSpacesQuery(TOP_SPACES_LIMIT),
-        })
-      );
-      const ids = [
-        ...new Set(scores.scoringTopologyDistancesConnection.nodes.map(n => n.spaceId).filter(Boolean)),
-      ];
-      const spaces = ids.length > 0 ? await Effect.runPromise(getSpaces({ spaceIds: ids, limit: ids.length })) : [];
-      const rowsById = new Map(spaces.map(space => [space.id, spaceToBrowseRow(space)]));
-      return ids.flatMap(id => {
-        const row = rowsById.get(id);
-        return row ? [row] : [];
-      });
+      const spaces = await Effect.runPromise(getSpaces({ spaceIds: [memberSpaceId!], limit: 1 }));
+      const space = spaces.find(s => s.id === memberSpaceId);
+      return space ? spaceToBrowseRow(space) : null;
     },
     staleTime: 60_000,
   });
@@ -219,23 +179,29 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     const editorIds = new Set(editorIdsQuery.data ?? sidebar?.editorOf.map(r => r.id) ?? []);
     const memberSpaces = memberSpacesQuery.data ?? [];
     const memberIds = new Set(sidebar?.memberOf.map(r => r.id) ?? memberSpaces.map(s => s.id));
+    if (memberSpaceId) memberIds.add(memberSpaceId);
     const excludedFeaturedIds = new Set([...editorIds, ...memberIds]);
 
     const sidebarFeaturedRows = sidebar?.featured.length
       ? sidebar.featured
       : FEATURED_BROWSE_SPACES.map(row => ({ ...row, image: null, unnamed: false }));
-    const featuredRows = [...sidebarFeaturedRows, ...(topSpacesQueryResult.data ?? [])].filter(
-      row => !excludedFeaturedIds.has(row.id)
-    );
+    const featuredRows = sidebarFeaturedRows.filter(row => !excludedFeaturedIds.has(row.id));
 
     const editorRows = sidebar?.editorOf ?? editorRowsQuery.data ?? [];
-    const memberRows =
+    const personalRow =
+      personalSpaceQuery.data ?? (memberSpaceId ? memberSpaces.find(s => s.id === memberSpaceId) : undefined);
+    const personalBrowseRow =
+      personalRow && 'entity' in personalRow ? spaceToBrowseRow(personalRow) : (personalRow ?? null);
+
+    const memberRowsBase =
       sidebar?.memberOf ??
-      sortSpaceListByRankNameId(
-        memberSpaces
-          .filter(space => space.id !== memberSpaceId && !editorIds.has(space.id))
-          .map(spaceToBrowseRow)
-      );
+      sortSpaceListByRankNameId(memberSpaces.filter(space => !editorIds.has(space.id)).map(spaceToBrowseRow));
+    const memberRows =
+      personalBrowseRow &&
+      !editorRows.some(row => row.id === personalBrowseRow.id) &&
+      !memberRowsBase.some(row => row.id === personalBrowseRow.id)
+        ? [personalBrowseRow, ...memberRowsBase]
+        : memberRowsBase;
 
     const createdAtMs = new Map<string, number>();
     for (const s of memberSpaces) {
@@ -260,8 +226,8 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     editorRowsQuery.data,
     memberSpaceId,
     memberSpacesQuery.data,
+    personalSpaceQuery.data,
     sidebarQuery.data,
-    topSpacesQueryResult.data,
   ]);
 
   return {

@@ -84,7 +84,7 @@ const FILTER_DROPDOWN_PAGE_SIZE = 25;
 // applied by `useFourAndHalfRowsMaxHeight` below — otherwise the placement code
 // thinks the dropdown wants 180px, picks `bottom`, and the dropdown overflows
 // off the viewport when space-below is between 180 and the real cap.
-const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 220;
+const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 180;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);
@@ -344,7 +344,7 @@ type PromptAction =
     }
   | { type: 'close' }
   | { type: 'onOpenChange'; payload: { open: boolean } }
-  | { type: 'selectColumn'; payload: { columnId: string } }
+  | { type: 'selectColumn'; payload: { columnId: string; seedDraft?: FilterColumnDraft } }
   | { type: 'openWithColumn'; payload: { columnId: string; seedDraft?: FilterColumnDraft } }
   | {
       type: 'selectEntityValue' | 'selectSpaceValue';
@@ -418,7 +418,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
       if (prevCol === nextCol) return state;
 
       const savedPrev = snapshotColumnDraft(state);
-      const loaded = state.columnDrafts[nextCol] ?? emptyColumnDraft();
+      const loaded = state.columnDrafts[nextCol] ?? action.payload.seedDraft ?? emptyColumnDraft();
       return {
         ...state,
         selectedColumn: nextCol,
@@ -916,6 +916,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
 
     React.useImperativeHandle(ref, () => ({
       openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
+        if (!isEditing) return;
         externalAnchorElRef.current = anchorEl ?? null;
         if (anchorEl) {
           const r = anchorEl.getBoundingClientRect();
@@ -934,7 +935,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         const seedDraft = reuseStored ? undefined : committedDraft;
         dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
       },
-    }));
+    }), [isEditing]);
 
     const [from, setFrom] = React.useState<Source | null>({
       type: 'RELATIONS',
@@ -994,6 +995,16 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       dispatch({ type: 'done' });
     };
 
+    const onSelectColumnToFilter = React.useCallback((columnId: string) => {
+      const s = stateRef.current;
+      const opts = optionsRef.current;
+      const fs = seedFilterStateRef.current;
+      const stored = s.columnDrafts[columnId];
+      const seedDraft =
+        stored === undefined ? seedColumnDraftFromCommittedFilters(columnId, fs, opts) : undefined;
+      dispatch({ type: 'selectColumn', payload: { columnId, seedDraft } });
+    }, []);
+
     const filters =
       isRelationsMode ? (
         <StaticRelationsFilters
@@ -1010,6 +1021,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           filterSuggestionSpaceId={filterSuggestionSpaceId}
           filterMode={filterMode}
           onFilterModeChange={setFilterMode}
+          onSelectColumnToFilter={onSelectColumnToFilter}
           isEditing={isEditing}
         />
       );
@@ -1033,6 +1045,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       ) : null;
 
     const onOpenChange = (open: boolean) => {
+      if (open && !isEditing) return;
       if (!open) {
         externalAnchorElRef.current = null;
         setExternalAnchorBox(null);
@@ -1102,6 +1115,7 @@ interface DynamicFiltersProps {
   filterSuggestionSpaceId?: string;
   filterMode: FilterMode;
   onFilterModeChange: (mode: FilterMode) => void;
+  onSelectColumnToFilter: (columnId: string) => void;
   isEditing: boolean;
 }
 
@@ -1146,10 +1160,9 @@ function DynamicFilters({
   filterSuggestionSpaceId,
   filterMode,
   onFilterModeChange,
+  onSelectColumnToFilter,
   isEditing,
 }: DynamicFiltersProps) {
-  const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
-
   const selectedEntityIds = React.useMemo(
     () => new Set(state.multiEntitySelections.map(e => e.id)),
     [state.multiEntitySelections]
