@@ -42,6 +42,7 @@ export async function SpaceEditors({ spaceId }: Props) {
       isMember={isMember}
       hasRequestedSpaceEditorship={hasRequestedSpaceEditorship}
       connectedAddress={connectedAddress ?? null}
+      initialTotalEditors={space.totalEditors}
     />
   );
 
@@ -53,7 +54,9 @@ export async function SpaceEditors({ spaceId }: Props) {
 
         <SpaceMembersMenu
           trigger={<ChevronDownSmall color="grey-04" />}
-          manageMembersComponent={<SpaceEditorsDialogServerContainer spaceId={spaceId} />}
+          manageMembersComponent={
+            <SpaceEditorsDialogServerContainer spaceId={spaceId} initialTotalEditors={space.totalEditors} />
+          }
         />
       </div>
     );

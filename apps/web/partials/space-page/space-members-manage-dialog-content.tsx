@@ -17,11 +17,12 @@ import { MemberRow } from './space-member-row';
 
 interface Props {
   spaceId: string;
+  initialTotalMembers: number;
 }
 
-export function SpaceMembersManageDialogContent({ spaceId }: Props) {
+export function SpaceMembersManageDialogContent({ spaceId, initialTotalMembers }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useSpaceParticipantsInfinite({ spaceId, kind: 'members' });
+    useSpaceParticipantsInfinite({ spaceId, kind: 'members', initialTotalCount: initialTotalMembers });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 

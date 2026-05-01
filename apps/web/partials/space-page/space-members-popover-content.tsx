@@ -20,6 +20,7 @@ interface Props {
   isMember: boolean;
   hasRequestedSpaceMembership: boolean;
   connectedAddress: string | null;
+  initialTotalMembers: number;
 }
 
 export function SpaceMembersContent({
@@ -28,9 +29,10 @@ export function SpaceMembersContent({
   isMember,
   hasRequestedSpaceMembership,
   connectedAddress,
+  initialTotalMembers,
 }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useSpaceParticipantsInfinite({ spaceId, kind: 'members' });
+    useSpaceParticipantsInfinite({ spaceId, kind: 'members', initialTotalCount: initialTotalMembers });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 
