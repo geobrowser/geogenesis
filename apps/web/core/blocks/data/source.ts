@@ -25,6 +25,9 @@ type CollectionSource = {
 type MultipleSources = {
   type: 'SPACES'; // | 'collections';
   value: Array<string>;
+  /** Optional id → name hints supplied by the picker so the resulting filter
+   *  pill / trigger label can render without waiting for `resolveFilterDisplayNames`. */
+  nameById?: Record<string, string | null>;
 };
 
 type AllOfGeoSource = {

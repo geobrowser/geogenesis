@@ -179,7 +179,7 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
               columnName: 'Space',
               valueType: 'RELATION',
               value: spaceId,
-              valueName: null,
+              valueName: newSource.nameById?.[spaceId] ?? null,
             });
           }
           return next;

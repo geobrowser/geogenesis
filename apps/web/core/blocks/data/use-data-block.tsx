@@ -81,7 +81,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setTemporaryFilterMode,
   } = useFilters(options?.canEdit);
 
-  const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
+  // Feed the resolved (names-included) state in so `setSource`'s produce()
+  // round-trip preserves columnName/valueName on the OTHER filters while the
+  // new filter list is being re-resolved.
+  const { source, setSource } = useSource({ filterState: dbResolvedFilterState, setFilterState });
   const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;

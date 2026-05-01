@@ -33,7 +33,23 @@ const listRowClassName = 'snap-start min-h-[44px] shrink-0';
 const pillClassName =
   'inline-flex h-6 max-w-[220px] shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-1.5 text-metadata leading-none text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden disabled:pointer-events-none disabled:opacity-50';
 
-function scopeLabel(source: Source, spacesById: ReturnType<typeof useSpacesByIds>['spacesById']): string {
+function attachSpaceNames(source: Source, cache: Map<string, string | null>): Source {
+  if (source.type !== 'SPACES') return source;
+  const nameById: Record<string, string | null> = { ...(source.nameById ?? {}) };
+  for (const id of source.value) {
+    if (nameById[id] === undefined) {
+      const cached = cache.get(id);
+      if (cached !== undefined) nameById[id] = cached;
+    }
+  }
+  return { ...source, nameById };
+}
+
+function scopeLabel(
+  source: Source,
+  spacesById: ReturnType<typeof useSpacesByIds>['spacesById'],
+  fallbackNames: Map<string, string | null>
+): string {
   switch (source.type) {
     case 'COLLECTION':
       return 'Collection';
@@ -42,7 +58,8 @@ function scopeLabel(source: Source, spacesById: ReturnType<typeof useSpacesByIds
     case 'SPACES': {
       if (source.value.length === 0) return 'Spaces';
       if (source.value.length === 1) {
-        return spacesById.get(source.value[0])?.entity?.name ?? 'Space';
+        const id = source.value[0];
+        return spacesById.get(id)?.entity?.name ?? fallbackNames.get(id) ?? 'Space';
       }
       return `${source.value.length} spaces`;
     }
@@ -114,6 +131,11 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
   sourceRef.current = source;
   const sourceKey = sourceStableKey(source);
   const [open, setOpen] = React.useState(false);
+  // Cache of id → name for spaces the user has interacted with this session.
+  // Lets the trigger label and the new SPACE_FILTER's valueName render with
+  // the chosen name immediately, before useSpacesByIds /
+  // resolveFilterDisplayNames have fetched the canonical record.
+  const pickedSpaceNamesRef = React.useRef<Map<string, string | null>>(new Map());
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
@@ -138,7 +160,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
       } else {
         setPendingSource(prev => {
           if (prev !== null && scopeDraftDirtyRef.current) {
-            setSource(prev);
+            setSource(attachSpaceNames(prev, pickedSpaceNamesRef.current));
           }
           scopeDraftDirtyRef.current = false;
           return null;
@@ -210,11 +232,15 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
 
   const listLoading = searchMode ? remoteSearchLoading : initialListLoading;
 
-  const label = React.useMemo(() => scopeLabel(labelSource, spacesById), [labelSource, spacesById]);
+  const label = React.useMemo(
+    () => scopeLabel(labelSource, spacesById, pickedSpaceNamesRef.current),
+    [labelSource, spacesById]
+  );
   const isAllOfGeo = draft.type === 'GEO';
 
-  const toggleSpace = (id: string) => {
+  const toggleSpace = (id: string, name: string | null) => {
     scopeDraftDirtyRef.current = true;
+    pickedSpaceNamesRef.current.set(id, name);
     setPendingSource(prev => {
       const base = prev ?? source;
       if (base.type === 'GEO' || base.type === 'RELATIONS') {
@@ -315,7 +341,12 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
                 {filteredSearchRows.map(row => {
                   const selected = !isAllOfGeo && selectedSpaceIds.includes(row.id);
                   return (
-                    <SpaceDropdownRow key={row.id} row={row} selected={selected} onPick={() => toggleSpace(row.id)} />
+                    <SpaceDropdownRow
+                      key={row.id}
+                      row={row}
+                      selected={selected}
+                      onPick={() => toggleSpace(row.id, row.name)}
+                    />
                   );
                 })}
                 {filteredSearchRows.length === 0 && (
@@ -331,7 +362,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
                     key={row.id}
                     row={row}
                     selected={!isAllOfGeo && selectedSpaceIds.includes(row.id)}
-                    onPick={() => toggleSpace(row.id)}
+                    onPick={() => toggleSpace(row.id, row.name)}
                   />
                 ))}
               </>
