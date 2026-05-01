@@ -1,7 +1,11 @@
 import { cache } from 'react';
 
+import { Effect } from 'effect';
+
+import { getIsEditorOfSpace } from '~/core/io/queries';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
+import { Telemetry } from '~/app/api/telemetry';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
@@ -26,5 +30,11 @@ export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddres
     return personalSpaceId === spaceId;
   }
 
-  return space.editors.map(e => e.toLowerCase()).includes(personalSpaceId.toLowerCase());
+  return Effect.runPromise(
+    getIsEditorOfSpace(spaceId, personalSpaceId.toLowerCase()).pipe(
+      Effect.withSpan('web.getIsEditorForSpace'),
+      Effect.annotateSpans({ spaceId, personalSpaceId }),
+      Effect.provide(Telemetry)
+    )
+  );
 });

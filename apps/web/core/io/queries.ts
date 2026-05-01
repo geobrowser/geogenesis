@@ -38,6 +38,8 @@ import {
   entityVoteCountQuery,
   entityVotersQuery,
   importNameValuesQuery,
+  isEditorOfSpaceQuery,
+  isMemberOfSpaceQuery,
   propertiesBatchQuery,
   propertyQuery,
   relationEntityQuery,
@@ -498,6 +500,34 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
     query: spacesWhereMemberQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
     variables: { memberSpaceId },
+    signal,
+  });
+}
+
+// Filter server-side: `membersList` is paginated to 100 by the API, so a
+// client-side `includes()` against `FullSpace` misses members past page 1.
+export function getIsMemberOfSpace(
+  spaceId: string,
+  memberSpaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: isMemberOfSpaceQuery,
+    decoder: data => (data.space?.membersList?.length ?? 0) > 0,
+    variables: { spaceId, memberSpaceId },
+    signal,
+  });
+}
+
+export function getIsEditorOfSpace(
+  spaceId: string,
+  memberSpaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: isEditorOfSpaceQuery,
+    decoder: data => (data.space?.editorsList?.length ?? 0) > 0,
+    variables: { spaceId, memberSpaceId },
     signal,
   });
 }

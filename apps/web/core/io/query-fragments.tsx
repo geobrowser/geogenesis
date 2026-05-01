@@ -702,6 +702,30 @@ export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
   }
 `);
 
+// Targeted membership/editorship checks.
+// `membersList`/`editorsList` is paginated server-side (default 100), so a
+// client-side `includes()` against `space.membersList` misses members past
+// the first page. These queries filter server-side and ask for a single row.
+export const isMemberOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsMemberOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      membersList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
 export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on PropertyInfo {
     id
