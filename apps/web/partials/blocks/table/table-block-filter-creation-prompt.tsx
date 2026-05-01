@@ -14,7 +14,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import { Filter, type FilterMode } from '~/core/blocks/data/filters';
 import { ID } from '~/core/id';
-import { Source } from '~/core/blocks/data/source';
+import { Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -945,21 +945,47 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
     );
 
-    React.useEffect(() => {
-      if (source.type === 'RELATIONS') {
-        setFrom(source);
-      } else {
-        setFrom({
-          type: 'RELATIONS',
-          name: fromName,
-          value: fromId,
-        });
-      }
-    }, [fromId, fromName, source]);
+    const sourceKey = sourceStableKey(source);
+    const relationTypeRow = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
+    const relationTypeKey = relationTypeRow
+      ? `${relationTypeRow.columnId}:${relationTypeRow.value}:${relationTypeRow.valueType}:${relationTypeRow.valueName ?? ''}`
+      : '';
 
     React.useEffect(() => {
-      setRelationType(filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null);
-    }, [filterState]);
+      if (source.type === 'RELATIONS') {
+        const rel = source;
+        setFrom(prev => {
+          if (prev?.type === 'RELATIONS' && prev.value === rel.value && prev.name === rel.name) {
+            return prev;
+          }
+          return { type: 'RELATIONS', value: rel.value, name: rel.name };
+        });
+      } else {
+        setFrom(prev => {
+          if (prev?.type === 'RELATIONS' && prev.value === fromId && prev.name === fromName) {
+            return prev;
+          }
+          return { type: 'RELATIONS', name: fromName, value: fromId };
+        });
+      }
+    }, [fromId, fromName, sourceKey]);
+
+    React.useEffect(() => {
+      const next = filterStateRef.current.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null;
+      setRelationType(prev => {
+        if (!prev && !next) return prev;
+        if (!prev || !next) return next;
+        if (
+          prev.columnId === next.columnId &&
+          prev.value === next.value &&
+          prev.valueType === next.valueType &&
+          prev.valueName === next.valueName
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    }, [relationTypeKey]);
 
     const onEntitiesDone = () => {
       const filters = collectAllPendingFilters(state, options);

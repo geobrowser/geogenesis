@@ -39,6 +39,25 @@ type AllOfGeoSource = {
  */
 export type Source = CollectionSource | MultipleSources | AllOfGeoSource | EntitySource;
 
+/**
+ * Identity for React effect deps — {@link getSource} returns new object literals each render,
+ * so comparing `source` by reference loops effects that call setState.
+ */
+export function sourceStableKey(s: Source): string {
+  switch (s.type) {
+    case 'COLLECTION':
+      return `COL:${s.value}`;
+    case 'GEO':
+      return 'GEO';
+    case 'SPACES':
+      return `SPA:${[...s.value].slice().sort().join(',')}`;
+    case 'RELATIONS':
+      return `REL:${s.value}:${s.name ?? ''}`;
+    default:
+      return '';
+  }
+}
+
 type GetSourceArgs = {
   blockId: string;
   dataEntityRelations: Relation[];

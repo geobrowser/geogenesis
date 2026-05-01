@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { Source } from '~/core/blocks/data/source';
+import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
@@ -110,6 +110,9 @@ const readOnlyScopeTriggerClassName =
 
 export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing = true }: DataBlockScopeDropdownProps) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const sourceRef = React.useRef(source);
+  sourceRef.current = source;
+  const sourceKey = sourceStableKey(source);
   const [open, setOpen] = React.useState(false);
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
@@ -148,8 +151,14 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
 
   React.useEffect(() => {
     if (!open || scopeDraftDirtyRef.current) return;
-    setPendingSource(source);
-  }, [open, source]);
+    const latest = sourceRef.current;
+    setPendingSource(prev => {
+      if (prev != null && sourceStableKey(prev) === sourceStableKey(latest)) {
+        return prev;
+      }
+      return latest;
+    });
+  }, [open, sourceKey]);
 
   const draft = pendingSource ?? source;
   const selectedSpaceIds = draft.type === 'SPACES' ? draft.value : [];
