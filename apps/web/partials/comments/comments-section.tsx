@@ -6,9 +6,10 @@ import { useState } from 'react';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpace } from '~/core/hooks/use-space';
+import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { NavUtils } from '~/core/utils/utils';
+import { normalizeSpaceId } from '~/core/access/space-access';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
@@ -140,11 +141,8 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
-  const { space } = useSpace(spaceId);
-
-  const editorSpaceIds = React.useMemo(() => {
-    return new Set(space?.editors.map(e => e.toLowerCase()) ?? []);
-  }, [space?.editors]);
+  const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
+  const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
@@ -293,11 +291,31 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
 /** Recursively filter comments to only those authored by space editors. */
 function filterEditorsOnly(comments: CommentWithReplies[], editorSpaceIds: Set<string>): CommentWithReplies[] {
   return comments
-    .filter(c => editorSpaceIds.has(c.spaceId.toLowerCase()))
+    .filter(c => editorSpaceIds.has(normalizeSpaceId(c.spaceId)))
     .map(c => ({
       ...c,
       replies: filterEditorsOnly(c.replies, editorSpaceIds),
     }));
+}
+
+function collectCommentAuthorSpaceIds(comments: CommentWithReplies[]): string[] {
+  const ids = new Set<string>();
+
+  function visit(comment: CommentWithReplies) {
+    const spaceId = normalizeSpaceId(comment.spaceId);
+    if (spaceId) {
+      ids.add(spaceId);
+    }
+    for (const reply of comment.replies) {
+      visit(reply);
+    }
+  }
+
+  for (const comment of comments) {
+    visit(comment);
+  }
+
+  return [...ids];
 }
 
 // ---------------------------------------------------------------------------

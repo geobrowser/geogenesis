@@ -7,20 +7,20 @@ import { useHydrated } from './use-hydrated';
 export function useUserIsEditing(spaceId: string) {
   const { editable } = useEditable();
   const hydrated = useHydrated();
-  const { isEditor, isMember } = useAccessControl(spaceId);
+  const { canEdit, isLoading } = useAccessControl(spaceId);
 
   // Before hydration, access control returns false to avoid SSR mismatches.
   // If the editable atom is already true (user was editing before navigation),
   // trust it until access control has actually resolved.
-  if (editable && !hydrated) {
+  if (editable && (!hydrated || isLoading)) {
     return true;
   }
 
-  return editable && (isEditor || isMember);
+  return editable && canEdit;
 }
 
 export function useCanUserEdit(spaceId: string) {
-  const { isEditor, isMember } = useAccessControl(spaceId);
+  const { canEdit } = useAccessControl(spaceId);
 
-  return isEditor || isMember;
+  return canEdit;
 }

@@ -1,6 +1,7 @@
 import * as Effect from 'effect/Effect';
 
-import { getSpaceByAddress, getSpacesWhereMember } from '~/core/io/queries';
+import { getSpaceAccessById } from '~/core/access/space-access';
+import { getSpaceByAddress } from '~/core/io/queries';
 
 import { editBurstLimit, editHourlyLimit } from '../../rate-limit';
 
@@ -13,6 +14,7 @@ export type WriteContext =
       kind: 'guest';
       walletAddress: null;
       personalSpaceId: string | null;
+      /** Legacy name used by write tools; resolves true for any space the user can edit. */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
       /** Always empty for guests; present for type symmetry with the member arm. */
@@ -22,6 +24,7 @@ export type WriteContext =
       kind: 'member';
       walletAddress: string;
       personalSpaceId: () => Promise<string | null>;
+      /** Legacy name used by write tools; resolves true for any space the user can edit. */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
       // Tracks createBlock-minted ids so same-turn follow-ups skip the
@@ -33,7 +36,6 @@ const normalize = (id: string) => id.replace(/-/g, '').toLowerCase();
 
 type Membership = {
   personalSpaceId: string | null;
-  memberSpaceIds: Set<string>;
 };
 
 export function buildWriteContext({ walletAddress }: { walletAddress: string | null }): WriteContext {
@@ -58,33 +60,53 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         const personalSpaceId = personalSpace ? normalize(personalSpace.id) : null;
 
         if (!personalSpaceId) {
-          return { personalSpaceId: null, memberSpaceIds: new Set<string>() };
+          return { personalSpaceId: null };
         }
 
-        const memberSpaces = await Effect.runPromise(getSpacesWhereMember(personalSpaceId));
-        const memberSpaceIds = new Set<string>([personalSpaceId, ...memberSpaces.map(s => normalize(s.id))]);
-
-        return { personalSpaceId, memberSpaceIds };
+        return { personalSpaceId };
       } catch (err) {
         console.error('[chat/writeContext] membership lookup failed', err);
         // Clear unconditionally so the next call retries; an identity check
         // here was racy with concurrent first-callers.
         membershipPromise = null;
-        return { personalSpaceId: null, memberSpaceIds: new Set<string>() };
+        return { personalSpaceId: null };
       }
     })();
     membershipPromise = attempt;
     return attempt;
   };
 
+  const accessBySpaceId = new Map<string, Promise<boolean>>();
+
+  const canEditSpace = (spaceId: string): Promise<boolean> => {
+    const normalizedSpaceId = normalize(spaceId);
+    const cached = accessBySpaceId.get(normalizedSpaceId);
+
+    if (cached) return cached;
+
+    const accessPromise = (async () => {
+      const { personalSpaceId } = await resolveMembership();
+
+      if (!personalSpaceId) {
+        return false;
+      }
+
+      const access = await Effect.runPromise(getSpaceAccessById(normalizedSpaceId, personalSpaceId));
+      return access.canEdit;
+    })().catch(err => {
+      accessBySpaceId.delete(normalizedSpaceId);
+      throw err;
+    });
+
+    accessBySpaceId.set(normalizedSpaceId, accessPromise);
+    return accessPromise;
+  };
+
   return {
     kind: 'member',
     walletAddress,
     personalSpaceId: async () => (await resolveMembership()).personalSpaceId,
-    isMember: async spaceId => {
-      const { memberSpaceIds } = await resolveMembership();
-      return memberSpaceIds.has(normalize(spaceId));
-    },
+    isMember: canEditSpace,
     checkEditRateLimit: async () => {
       try {
         const [burst, hourly] = await Promise.all([
