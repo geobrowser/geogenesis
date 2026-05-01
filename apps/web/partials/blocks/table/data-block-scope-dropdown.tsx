@@ -121,6 +121,7 @@ type DataBlockScopeDropdownProps = {
   disabled?: boolean;
   /** When false, trigger is a grey read-only pill (no border); menu does not open. */
   isEditing?: boolean;
+  variant?: 'default' | 'setup';
 };
 
 const readOnlyScopeTriggerClassName =
@@ -135,7 +136,13 @@ function dedupeSpaceRows(rows: QueryFromSpaceRow[]): QueryFromSpaceRow[] {
   });
 }
 
-export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing = true }: DataBlockScopeDropdownProps) {
+export function DataBlockScopeDropdown({
+  source,
+  setSource,
+  disabled,
+  isEditing = true,
+  variant = 'default',
+}: DataBlockScopeDropdownProps) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const sourceRef = React.useRef(source);
   sourceRef.current = source;
@@ -149,7 +156,7 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
-    preferredHeight: 380,
+    preferredHeight: variant === 'setup' ? 300 : 340,
     gap: 8,
   });
 
@@ -171,7 +178,8 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
       } else {
         setPendingSource(prev => {
           if (prev !== null && scopeDraftDirtyRef.current) {
-            setSource(attachSpaceNames(prev, pickedSpaceNamesRef.current));
+            const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
+            setSource(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
           }
           scopeDraftDirtyRef.current = false;
           return null;
@@ -282,11 +290,17 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
   };
 
   const triggerDisabled = disabled || !isEditing;
+  const triggerClassName =
+    variant === 'setup'
+      ? cx(pillClassName, 'max-w-[280px]')
+      : isEditing
+        ? pillClassName
+        : readOnlyScopeTriggerClassName;
 
   return (
     <Dropdown.Root open={open} onOpenChange={handleOpenChange}>
       <Dropdown.Trigger asChild disabled={triggerDisabled}>
-        <button ref={triggerRef} type="button" className={isEditing ? pillClassName : readOnlyScopeTriggerClassName}>
+        <button ref={triggerRef} type="button" className={triggerClassName}>
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           {isEditing && (
             <span className={cx('inline-flex shrink-0 transition-transform', open && 'rotate-180')}>
@@ -298,11 +312,11 @@ export function DataBlockScopeDropdown({ source, setSource, disabled, isEditing 
       <Dropdown.Portal>
         <Dropdown.Content
           side={side}
-          align={align}
+          align={variant === 'setup' ? 'start' : align}
           sideOffset={8}
           avoidCollisions={true}
           collisionPadding={8}
-          className="z-1001 flex max-h-[min(420px,80vh)] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-1001 flex max-h-[min(360px,80vh)] w-[min(300px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <div className="shrink-0 border-b border-grey-02 px-2.5 py-1.5">
             <p className="text-footnoteMedium text-grey-04">Query from</p>

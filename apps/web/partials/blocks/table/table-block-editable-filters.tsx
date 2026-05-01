@@ -108,6 +108,17 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       effectiveSetFilterState(next);
     };
 
+    if (!isEditing) {
+      return (
+        <div className="inline-flex shrink-0 items-center gap-3">
+          <div className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-grey-02 bg-grey-01 px-1.5 text-metadata leading-none text-text">
+            <CreateSmall />
+            <span>Filter</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-w-[220px] flex-1 items-center gap-3">
         <TableBlockFilterPrompt
@@ -118,12 +129,12 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           onCreate={onCreateFilter}
           isEditing={isEditing}
           trigger={
-            <SmallButton icon={<CreateSmall />} variant="secondary" disabled={!isEditing}>
+            <SmallButton icon={<CreateSmall />} variant="secondary">
               Filter
             </SmallButton>
           }
         />
-        {source.type !== 'COLLECTION' && isEditing && <QueryModeToggle />}
+        {source.type !== 'COLLECTION' && <QueryModeToggle />}
       </div>
     );
   }

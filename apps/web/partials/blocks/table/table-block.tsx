@@ -297,6 +297,7 @@ export const TableBlock = (props: Props) => {
 };
 
 function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
+  const { entityId, relationId } = useDataBlockInstance();
   const { setEditable } = useEditable();
   const canEdit = useCanUserEdit(spaceId);
   const { filterState, setFilterState } = useFilters(canEdit);
@@ -309,10 +310,26 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
-      <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 rounded-lg bg-grey-01 px-4 py-8">
-        <p className="max-w-md text-center text-lg text-text">Where do you want to query data from?</p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} />
+      <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
+        <TableBlockEditableTitle spaceId={spaceId} />
+        <div className="pointer-events-none flex items-center gap-5 opacity-40">
+          <IconButton disabled icon={<FilterTable />} color="grey-04" />
+          <Link
+            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+            className="pointer-events-none inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04"
+            aria-label="Open fullscreen"
+          >
+            <Fullscreen color="grey-04" />
+          </Link>
+          <DataBlockViewMenu activeView="TABLE" isLoading={false} />
+          <TableBlockContextMenu sourceType={source.type} />
+        </div>
+      </div>
+
+      <div className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-lg bg-grey-01 px-4 py-5">
+        <p className="max-w-md text-center text-metadata text-text">Where do you want to query data from?</p>
+        <div className="flex w-[360px] max-w-full items-center justify-start gap-2">
+          <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
           <button
             type="button"
             onClick={handleConfirmQuerySetup}
@@ -754,7 +771,7 @@ const ConfiguredTableBlock = ({
             initial={{ opacity: 0 }}
             exit={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="overflow-hidden border-t border-divider py-4"
+            className={cx('overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
             onMouseDown={e => e.stopPropagation()}
           >
             <motion.div

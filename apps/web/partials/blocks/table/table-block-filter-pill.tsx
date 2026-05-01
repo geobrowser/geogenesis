@@ -115,7 +115,7 @@ export function TableBlockFilterGroupPill({
     <div
       className={cx(
         'inline-flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md px-2 py-1.5',
-        isEditing ? 'border border-grey-02 bg-white' : 'border-0 bg-grey-01'
+        'border border-grey-02 bg-white'
       )}
     >
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
