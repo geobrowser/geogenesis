@@ -1,7 +1,10 @@
 'use client';
 
-import { useDescription } from '~/core/state/entity-page-store/entity-store';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import { useValues } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -14,7 +17,17 @@ type PropertyNameLinkProps = {
 };
 
 export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
-  const description = useDescription(property.id, spaceId)?.trim();
+  const descriptionValues = useValues({
+    selector: v => v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.entity.id === property.id && Boolean(v.value),
+  });
+
+  // Prefer the current (to-)space's description if present, otherwise pick
+  // the value from the highest-ranked space the property is published in.
+  const description = (
+    descriptionValues.find(v => v.spaceId === spaceId)?.value ??
+    [...descriptionValues].sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0]?.value ??
+    ''
+  ).trim();
   const propertyName = property.name?.trim() || property.id;
 
   const link = (
