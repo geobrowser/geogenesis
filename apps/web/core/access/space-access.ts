@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { getIsEditorOfSpace, getIsMemberOfSpace, getSpace } from '~/core/io/queries';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 
 export type SpaceAccess = {
   isEditor: boolean;
@@ -22,11 +22,16 @@ function toSpaceAccess(access: Pick<SpaceAccess, 'isEditor' | 'isMember'>): Spac
   };
 }
 
+function normalizeSpaceId(id: string): string {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
 export function getSpaceAccess(space: Space, personalSpaceId: string, signal?: AbortController['signal']) {
-  const normalizedPersonalSpaceId = personalSpaceId.toLowerCase();
+  const normalizedSpaceId = normalizeSpaceId(space.id);
+  const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
 
   if (space.type === 'PERSONAL') {
-    const isOwner = normalizedPersonalSpaceId === space.id.toLowerCase();
+    const isOwner = normalizedPersonalSpaceId === normalizedSpaceId;
     return Effect.succeed(
       toSpaceAccess({
         isEditor: isOwner,
@@ -36,22 +41,35 @@ export function getSpaceAccess(space: Space, personalSpaceId: string, signal?: A
   }
 
   return Effect.gen(function* () {
-    const isMember = yield* getIsMemberOfSpace(space.id, normalizedPersonalSpaceId, signal);
-    const isEditor = yield* getIsEditorOfSpace(space.id, normalizedPersonalSpaceId, signal);
+    const [isMember, isEditor] = yield* Effect.all([
+      getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
+      getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
+    ]);
 
     return toSpaceAccess({ isEditor, isMember });
   });
 }
 
 export function getSpaceAccessById(spaceId: string, personalSpaceId: string, signal?: AbortController['signal']) {
+  const normalizedSpaceId = normalizeSpaceId(spaceId);
+  const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+
+  if (normalizedSpaceId === normalizedPersonalSpaceId) {
+    return Effect.succeed(
+      toSpaceAccess({
+        isEditor: true,
+        isMember: true,
+      })
+    );
+  }
+
   return Effect.gen(function* () {
-    const space = yield* getSpace(spaceId, signal);
+    const [isMember, isEditor] = yield* Effect.all([
+      getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
+      getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
+    ]);
 
-    if (!space) {
-      return noSpaceAccess;
-    }
-
-    return yield* getSpaceAccess(space, personalSpaceId, signal);
+    return toSpaceAccess({ isEditor, isMember });
   });
 }
 
@@ -60,21 +78,19 @@ export function getEditorSpaceIdsForSpace(
   memberSpaceIds: string[],
   signal?: AbortController['signal']
 ) {
-  const normalizedIds = [...new Set(memberSpaceIds.map(id => id.toLowerCase()))];
+  const normalizedSpaceId = normalizeSpaceId(spaceId);
+  const normalizedIds = [...new Set(memberSpaceIds.map(normalizeSpaceId))];
 
   return Effect.gen(function* () {
-    const space = yield* getSpace(spaceId, signal);
-
-    if (!space) {
-      return new Set<string>();
-    }
-
     const editorChecks = yield* Effect.forEach(
       normalizedIds,
       memberSpaceId =>
         Effect.gen(function* () {
-          const access = yield* getSpaceAccess(space, memberSpaceId, signal);
-          return { memberSpaceId, isEditor: access.isEditor };
+          const isEditor =
+            memberSpaceId === normalizedSpaceId
+              ? true
+              : yield* getIsEditorOfSpace(normalizedSpaceId, memberSpaceId, signal);
+          return { memberSpaceId, isEditor };
         }),
       { concurrency: 10 }
     );

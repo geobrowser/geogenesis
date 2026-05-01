@@ -93,7 +93,10 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
 
       const access = await Effect.runPromise(getSpaceAccessById(normalizedSpaceId, personalSpaceId));
       return access.canEdit;
-    })();
+    })().catch(err => {
+      accessBySpaceId.delete(normalizedSpaceId);
+      throw err;
+    });
 
     accessBySpaceId.set(normalizedSpaceId, accessPromise);
     return accessPromise;

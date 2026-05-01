@@ -85,7 +85,7 @@ describe('useAccessControl', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(accessChecks.isMember).toHaveBeenCalledWith('dao-space-id', 'member-space-id', expect.any(AbortSignal));
+    expect(accessChecks.isMember).toHaveBeenCalledWith('daospaceid', 'memberspaceid', expect.any(AbortSignal));
     expect(result.current).toMatchObject({
       isMember: true,
       isEditor: false,

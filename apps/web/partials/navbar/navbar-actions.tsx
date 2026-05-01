@@ -199,7 +199,7 @@ function ModeToggle() {
       return;
     }
 
-    if (isLoadingAccessControl) {
+    if (isLoadingAccessControl && !editable) {
       return;
     }
 

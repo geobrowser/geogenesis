@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const queries = {
   getIsMemberOfSpace: vi.fn(),
   getIsEditorOfSpace: vi.fn(),
-  getSpace: vi.fn(),
 };
 
 vi.mock('~/core/io/queries', () => queries);
@@ -15,7 +14,6 @@ describe('space-access', () => {
   beforeEach(() => {
     queries.getIsMemberOfSpace.mockReset();
     queries.getIsEditorOfSpace.mockReset();
-    queries.getSpace.mockReset();
   });
 
   it('treats the owner of a personal space as editor and member without participant-list queries', async () => {
@@ -38,8 +36,8 @@ describe('space-access', () => {
 
     const access = await Effect.runPromise(getSpaceAccess({ id: 'dao-space-id', type: 'DAO' } as any, 'member-space-id'));
 
-    expect(queries.getIsMemberOfSpace).toHaveBeenCalledWith('dao-space-id', 'member-space-id', undefined);
-    expect(queries.getIsEditorOfSpace).toHaveBeenCalledWith('dao-space-id', 'member-space-id', undefined);
+    expect(queries.getIsMemberOfSpace).toHaveBeenCalledWith('daospaceid', 'memberspaceid', undefined);
+    expect(queries.getIsEditorOfSpace).toHaveBeenCalledWith('daospaceid', 'memberspaceid', undefined);
     expect(access).toEqual({
       isEditor: false,
       isMember: true,
@@ -47,17 +45,33 @@ describe('space-access', () => {
     });
   });
 
-  it('resolves editor badges from server-filtered access checks', async () => {
-    queries.getSpace.mockReturnValue(Effect.succeed({ id: 'dao-space-id', type: 'DAO' }));
+  it('normalizes dashed and uppercase IDs before checking DAO access', async () => {
     queries.getIsMemberOfSpace.mockReturnValue(Effect.succeed(true));
+    queries.getIsEditorOfSpace.mockReturnValue(Effect.succeed(false));
+
+    await Effect.runPromise(
+      getSpaceAccess(
+        { id: 'C9F267DC-B0D2-7071-8C2A-3C45A64AFD32', type: 'DAO' } as any,
+        '68E800D1-D89E-8F0C-3293-82F4C3106D78'
+      )
+    );
+
+    expect(queries.getIsMemberOfSpace).toHaveBeenCalledWith(
+      'c9f267dcb0d270718c2a3c45a64afd32',
+      '68e800d1d89e8f0c329382f4c3106d78',
+      undefined
+    );
+  });
+
+  it('resolves editor badges from server-filtered access checks', async () => {
     queries.getIsEditorOfSpace.mockImplementation((_spaceId: string, memberSpaceId: string) =>
-      Effect.succeed(memberSpaceId === 'editor-space-id')
+      Effect.succeed(memberSpaceId === 'editorspaceid')
     );
 
     const editorIds = await Effect.runPromise(
       getEditorSpaceIdsForSpace('dao-space-id', ['editor-space-id', 'member-space-id'])
     );
 
-    expect(editorIds).toEqual(new Set(['editor-space-id']));
+    expect(editorIds).toEqual(new Set(['editorspaceid']));
   });
 });

@@ -44,7 +44,7 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
 
   // For personal spaces, the owner is the editor
   if (space.type === 'PERSONAL') {
-    const isOwner = personalSpaceId === spaceId;
+    const isOwner = personalSpaceId.replace(/-/g, '').toLowerCase() === spaceId.replace(/-/g, '').toLowerCase();
     return {
       isEditor: isOwner,
       isMember: isOwner,

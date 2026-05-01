@@ -33,4 +33,17 @@ describe('buildWriteContext', () => {
     await expect(context.isMember('dao-space-id')).resolves.toBe(true);
     expect(access.getSpaceAccessById).toHaveBeenCalledWith('daospaceid', 'personalspaceid');
   });
+
+  it('drops rejected access cache entries so later checks can retry', async () => {
+    queries.getSpaceByAddress.mockReturnValue(Effect.succeed({ id: 'personal-space-id' }));
+    access.getSpaceAccessById
+      .mockReturnValueOnce(Effect.fail(new Error('temporary failure')))
+      .mockReturnValueOnce(Effect.succeed({ isEditor: false, isMember: true, canEdit: true }));
+
+    const context = buildWriteContext({ walletAddress: '0xabc' });
+
+    await expect(context.isMember('dao-space-id')).rejects.toThrow('temporary failure');
+    await expect(context.isMember('dao-space-id')).resolves.toBe(true);
+    expect(access.getSpaceAccessById).toHaveBeenCalledTimes(2);
+  });
 });
