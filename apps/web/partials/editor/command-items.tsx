@@ -177,7 +177,7 @@ const queryDataBlockCommandItem: CommandSuggestionItem = {
       .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
-        attrs: { initialDataSource: 'QUERY', querySetupCompleted: false },
+        attrs: { initialDataSource: 'QUERY', querySetupCompleted: false, filtersOpenOnCreate: true },
       })
       .createParagraphNear()
       .blur()
