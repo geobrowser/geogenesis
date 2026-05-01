@@ -51,7 +51,15 @@ type SetDataBlockFiltersInput = {
   parentEntityId: string;
   spaceId: string;
   filters: FilterInput[];
-  mode?: FilterMode;
+  /**
+   * Per-property mode keyed by columnId. Default for any missing column is
+   * `'OR'` — multiple values for the same property collapse into one
+   * `in`/`inInsensitive` clause. Pass `'AND'` for a column when the user
+   * wants intersection semantics (e.g. "tagged with both Sports and
+   * Politics"). Only relation-typed properties really need AND; values OR
+   * by default.
+   */
+  modesByColumn?: Record<string, FilterMode>;
 };
 
 export function buildSetDataBlockFiltersTool(context: WriteContext) {
@@ -63,14 +71,17 @@ Each filter is \`{ columnId, valueType, value }\`. Special columnIds:
 - Types filter: columnId = "${SystemIds.TYPES_PROPERTY}", valueType = "RELATION", value = a type entity id.
 Otherwise columnId is a property id.
 
-For RELATION-typed values, pass the target entity id (dashless hex or dashed UUID — the tool normalizes). \`mode\` is AND (default) or OR.`,
+For RELATION-typed values, pass the target entity id (dashless hex or dashed UUID — the tool normalizes). \`modesByColumn\` is an optional map of \`columnId\` → \`'AND' | 'OR'\` (default per column is \`'OR'\`).`,
     inputSchema: jsonSchema<SetDataBlockFiltersInput>({
       type: 'object',
       properties: {
         blockId: { type: 'string', pattern: ENTITY_ID_PATTERN },
         parentEntityId: { type: 'string', pattern: ENTITY_ID_PATTERN },
         spaceId: { type: 'string', pattern: ENTITY_ID_PATTERN },
-        mode: { type: 'string', enum: ['AND', 'OR'] },
+        modesByColumn: {
+          type: 'object',
+          additionalProperties: { type: 'string', enum: ['AND', 'OR'] },
+        },
         filters: {
           type: 'array',
           items: {
@@ -143,7 +154,7 @@ For RELATION-typed values, pass the target entity id (dashless hex or dashed UUI
           blockId,
           spaceId,
           filters,
-          mode: input.mode ?? 'AND',
+          modesByColumn: input.modesByColumn ?? {},
         },
       };
     },

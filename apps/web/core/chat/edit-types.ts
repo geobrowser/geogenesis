@@ -1,5 +1,5 @@
 // Types only — safe to import across client/server boundary.
-import type { Filter, FilterMode } from '~/core/blocks/data/filters';
+import type { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import type { DataType } from '~/core/types';
 
 export type BlockKind = 'text' | 'code' | 'image' | 'video' | 'data';
@@ -92,7 +92,7 @@ export type EditIntent =
       blockId: string;
       spaceId: string;
       filters: Filter[];
-      mode: FilterMode;
+      modesByColumn: ModesByColumn;
     }
   | {
       kind: 'setDataBlockView';

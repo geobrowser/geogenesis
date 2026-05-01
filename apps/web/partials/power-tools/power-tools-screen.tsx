@@ -164,10 +164,10 @@ export function PowerToolsScreen() {
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
-    filterMode,
-    setFilterMode,
-    temporaryFilterMode,
-    setTemporaryFilterMode,
+    modesByColumn,
+    setGroupMode,
+    temporaryModesByColumn,
+    setTemporaryGroupMode,
   } = useFilters(canEdit);
   const { source } = useSource({ filterState, setFilterState });
 
@@ -175,13 +175,13 @@ export function PowerToolsScreen() {
   // This matches TableBlock's behavior and is independent of the edit mode toggle.
   const effectiveFilterState = canEdit ? resolvedFilterState : temporaryFilters;
   const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
-  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const activeModesByColumn = canEdit ? modesByColumn : temporaryModesByColumn;
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
   );
 
   const [extraColumnIds, setExtraColumnIds] = React.useState<string[]>([]);
@@ -195,7 +195,7 @@ export function PowerToolsScreen() {
 
   const data = usePowerToolsData({
     filterStateOverride: canEdit ? undefined : temporaryFilters,
-    filterModeOverride: canEdit ? undefined : temporaryFilterMode,
+    modesByColumnOverride: canEdit ? undefined : temporaryModesByColumn,
     extraColumnIds,
     excludedColumnIds,
     sort: serverSort,
@@ -959,18 +959,21 @@ export function PowerToolsScreen() {
       {hasActiveFilters && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            {filterGroups.map(group => (
-              <React.Fragment key={group.columnId}>
-                <TableBlockFilterGroupPill
-                  group={group}
-                  mode={activeFilterMode}
-                  onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                  onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
-                  isEditing={isEditing}
-                  serverFilterKeys={serverFilterKeys}
-                />
-              </React.Fragment>
-            ))}
+            {filterGroups.map(group => {
+              const groupMode: FilterMode = activeModesByColumn[group.columnId] ?? 'OR';
+              return (
+                <React.Fragment key={group.columnId}>
+                  <TableBlockFilterGroupPill
+                    group={group}
+                    mode={groupMode}
+                    onToggleMode={() => setActiveGroupMode(group.columnId, groupMode === 'AND' ? 'OR' : 'AND')}
+                    onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                    isEditing={isEditing}
+                    serverFilterKeys={serverFilterKeys}
+                  />
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       )}

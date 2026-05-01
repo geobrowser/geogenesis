@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { filterStateToWhere, useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -52,7 +52,7 @@ function buildRowMeta(
 export function usePowerToolsData(options?: {
   pageSize?: number;
   filterStateOverride?: Filter[];
-  filterModeOverride?: FilterMode;
+  modesByColumnOverride?: ModesByColumn;
   /** Extra column (property) IDs to always show, e.g. newly created properties. */
   extraColumnIds?: string[];
   /** Column (property) IDs to hide from the table, e.g. after "Remove Property". */
@@ -69,16 +69,16 @@ export function usePowerToolsData(options?: {
     [options?.excludedColumnIds]
   );
   const { spaceId } = useDataBlockInstance();
-  const { resolvedFilterState, isFilterResolving, filterMode, filterState, setFilterState } = useFilters();
+  const { resolvedFilterState, isFilterResolving, modesByColumn, filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
   const { blockEntity } = useDataBlock();
   const { shownColumnRelations } = useView();
 
   const effectiveFilterState = options?.filterStateOverride ?? resolvedFilterState;
-  const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
+  const effectiveModesByColumn = options?.modesByColumnOverride ?? modesByColumn;
   const where = React.useMemo(
-    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
-    [effectiveFilterState, effectiveFilterMode]
+    () => filterStateToWhere(effectiveFilterState, effectiveModesByColumn),
+    [effectiveFilterState, effectiveModesByColumn]
   );
 
   const queryEntitiesAsync = useQueryEntitiesAsync();

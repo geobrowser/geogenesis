@@ -176,7 +176,7 @@ describe('setDataBlockFilters', () => {
         kind: 'setDataBlockFilters',
         blockId: BLOCK,
         spaceId: SPACE,
-        mode: 'AND',
+        modesByColumn: {},
         filters: [
           expect.objectContaining({
             columnId: SystemIds.TYPES_PROPERTY,
