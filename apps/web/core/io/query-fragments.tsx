@@ -726,6 +726,35 @@ export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
   }
 `);
 
+// Paginated members/editors. `totalCount` is authoritative for the count
+// shown in the chip and footers; `membersList`/`editorsList` carry the
+// current page of memberSpaceIds.
+export const spaceMembersPageQuery = graphql(/* GraphQL */ `
+  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      members {
+        totalCount
+      }
+      membersList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const spaceEditorsPageQuery = graphql(/* GraphQL */ `
+  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      editors {
+        totalCount
+      }
+      editorsList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
 export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on PropertyInfo {
     id

@@ -34,6 +34,8 @@ type Documents = {
     "\n  query SpacesWhereMember($memberSpaceId: UUID!) {\n    spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesWhereMemberDocument,
     "\n  query IsMemberOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      membersList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n": typeof types.IsMemberOfSpaceDocument,
     "\n  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n": typeof types.IsEditorOfSpaceDocument,
+    "\n  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      members {\n        totalCount\n      }\n      membersList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n": typeof types.SpaceMembersPageDocument,
+    "\n  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      editors {\n        totalCount\n      }\n      editorsList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n": typeof types.SpaceEditorsPageDocument,
     "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeId\n    dataTypeName\n    renderableTypeId\n    renderableTypeName\n    format\n    isType\n  }\n": typeof types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertiesBatchDocument,
@@ -68,6 +70,8 @@ const documents: Documents = {
     "\n  query SpacesWhereMember($memberSpaceId: UUID!) {\n    spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {\n      ...FullSpace\n    }\n  }\n": types.SpacesWhereMemberDocument,
     "\n  query IsMemberOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      membersList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n": types.IsMemberOfSpaceDocument,
     "\n  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n": types.IsEditorOfSpaceDocument,
+    "\n  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      members {\n        totalCount\n      }\n      membersList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n": types.SpaceMembersPageDocument,
+    "\n  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      editors {\n        totalCount\n      }\n      editorsList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n": types.SpaceEditorsPageDocument,
     "\n  fragment PropertyFragment on PropertyInfo {\n    id\n    name\n    dataTypeId\n    dataTypeName\n    renderableTypeId\n    renderableTypeName\n    format\n    isType\n  }\n": types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertiesBatchDocument,
@@ -176,6 +180,14 @@ export function graphql(source: "\n  query IsMemberOfSpace($spaceId: UUID!, $mem
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n"): (typeof documents)["\n  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {\n    space(id: $spaceId) {\n      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {\n        memberSpaceId\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      members {\n        totalCount\n      }\n      membersList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n"): (typeof documents)["\n  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      members {\n        totalCount\n      }\n      membersList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      editors {\n        totalCount\n      }\n      editorsList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n"): (typeof documents)["\n  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {\n    space(id: $spaceId) {\n      editors {\n        totalCount\n      }\n      editorsList(first: $first, offset: $offset) {\n        memberSpaceId\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

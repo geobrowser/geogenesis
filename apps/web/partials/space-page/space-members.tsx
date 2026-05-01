@@ -39,24 +39,23 @@ export async function SpaceMembers({ spaceId }: Props) {
     return null;
   }
 
+  const popoverContent = (
+    <SpaceMembersContent
+      spaceId={spaceId}
+      isPublicSpace={isPublicSpace}
+      isMember={isMember}
+      hasRequestedSpaceMembership={hasRequestedSpaceMembership}
+      connectedAddress={connectedAddress ?? null}
+    />
+  );
+
   if (isMember) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-        <SpaceMembersPopover
-          trigger={<SpaceMembersChip spaceId={spaceId} />}
-          content={
-            <React.Suspense>
-              <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
-            </React.Suspense>
-          }
-        />
+        <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
         <SpaceMembersMenu
-          manageMembersComponent={
-            <React.Suspense>
-              <SpaceMembersDialogServerContainer spaceType={space.type} spaceId={spaceId} />
-            </React.Suspense>
-          }
+          manageMembersComponent={<SpaceMembersDialogServerContainer spaceId={spaceId} />}
           trigger={<ChevronDownSmall color="grey-04" />}
         />
       </div>
@@ -65,14 +64,7 @@ export async function SpaceMembers({ spaceId }: Props) {
 
   return (
     <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-      <SpaceMembersPopover
-        trigger={<SpaceMembersChip spaceId={spaceId} />}
-        content={
-          <React.Suspense>
-            <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
-          </React.Suspense>
-        }
-      />
+      <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
 
       {isPublicSpace ? (
         <SpaceMembersJoinButton spaceId={spaceId} hasRequestedSpaceMembership={hasRequestedSpaceMembership} />
