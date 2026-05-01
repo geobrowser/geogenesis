@@ -18,16 +18,24 @@ type PropertyNameLinkProps = {
 
 export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
   const descriptionValues = useValues({
-    selector: v => v.property.id === SystemIds.DESCRIPTION_PROPERTY && v.entity.id === property.id && Boolean(v.value),
+    selector: v =>
+      v.property.id === SystemIds.DESCRIPTION_PROPERTY &&
+      v.entity.id === property.id &&
+      typeof v.value === 'string' &&
+      v.value.trim().length > 0,
   });
 
   // Prefer the current (to-)space's description if present, otherwise pick
   // the value from the highest-ranked space the property is published in.
-  const description = (
-    descriptionValues.find(v => v.spaceId === spaceId)?.value ??
-    [...descriptionValues].sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0]?.value ??
-    ''
-  ).trim();
+  const description =
+    descriptionValues.find(v => v.spaceId === spaceId)?.value.trim() ??
+    descriptionValues
+      .reduce<(typeof descriptionValues)[number] | null>(
+        (best, v) => (best === null || getSpaceRank(v.spaceId) < getSpaceRank(best.spaceId) ? v : best),
+        null
+      )
+      ?.value.trim() ??
+    '';
   const propertyName = property.name?.trim() || property.id;
 
   const link = (
