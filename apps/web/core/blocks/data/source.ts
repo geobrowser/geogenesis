@@ -68,6 +68,24 @@ type GetSourceArgs = {
   filterState: Filter[];
 };
 
+function currentSourceTypeRelation(blockId: string, dataEntityRelations: Relation[] = []): Relation | undefined {
+  const relationById = new Map<string, Relation>();
+
+  for (const relation of dataEntityRelations) {
+    relationById.set(relation.id, relation);
+  }
+
+  for (const relation of store.getResolvedRelations(blockId, true)) {
+    relationById.set(relation.id, relation);
+  }
+
+  const sourceTypeRelations = [...relationById.values()].filter(
+    relation => relation.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !relation.isDeleted
+  );
+
+  return sourceTypeRelations[sourceTypeRelations.length - 1];
+}
+
 /**
  * Reads the relations on the data block to find the Data Source Type
  * and data source value and maps it to our local representation of the
@@ -85,18 +103,10 @@ type GetSourceArgs = {
  *                              as an array of {@link Relation}
  * @returns the source of the data block with the source type and entity id(s)
  * for the type of source as a {@link Source}. If no source is found, returns
- * a fallback source with a type of Spaces containing the current space id.
+ * the full Geo graph.
  */
-export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceTypeFromStore = store
-    .getResolvedRelations(blockId)
-    .find(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted)?.toEntity.id;
-
-  const sourceTypeFromArgs = dataEntityRelations.find(
-    r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
-  )?.toEntity.id;
-
-  const sourceType = sourceTypeFromStore ?? sourceTypeFromArgs;
+export function getSource({ blockId, dataEntityRelations, filterState }: GetSourceArgs): Source {
+  const sourceType = currentSourceTypeRelation(blockId, dataEntityRelations)?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
 
@@ -144,10 +154,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  return {
-    type: 'SPACES',
-    value: [currentSpaceId],
-  };
+  return { type: 'GEO' };
 }
 
 /**
@@ -159,9 +166,20 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
  *
  * @param blockId - The block entity id to remove source type relations from
  */
-export function removeSourceType({ blockId }: { blockId: string }) {
-  const relations = store.getResolvedRelations(blockId);
-  const sourceTypeRelations = relations.filter(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE);
+export function removeSourceType({ blockId, dataEntityRelations = [] }: { blockId: string; dataEntityRelations?: Relation[] }) {
+  const relationById = new Map<string, Relation>();
+
+  for (const relation of dataEntityRelations) {
+    relationById.set(relation.id, relation);
+  }
+
+  for (const relation of store.getResolvedRelations(blockId, true)) {
+    relationById.set(relation.id, relation);
+  }
+
+  const sourceTypeRelations = [...relationById.values()].filter(
+    r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
+  );
 
   for (const relation of sourceTypeRelations) {
     storage.relations.delete(relation);
@@ -240,11 +258,11 @@ function getSourceTypeName(
 ) {
   switch (sourceType) {
     case SystemIds.COLLECTION_DATA_SOURCE:
-      return 'Collection';
+      return 'Collection data source';
     case SystemIds.QUERY_DATA_SOURCE:
-      return 'Spaces';
+      return 'Query data source';
     case SystemIds.ALL_OF_GEO_DATA_SOURCE:
-      return 'All of Geo';
+      return 'Geo data source';
     default:
       return null;
   }

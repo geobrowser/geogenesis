@@ -58,6 +58,7 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     setOptimisticSource(newSource);
     removeSourceType({
       blockId: EntityId(entityId),
+      dataEntityRelations,
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 

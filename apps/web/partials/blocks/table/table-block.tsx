@@ -304,9 +304,10 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   const { source, setSource } = useSource({ filterState, setFilterState });
 
   const handleConfirmQuerySetup = React.useCallback(() => {
+    setSource(source);
     setEditable(true);
     onCompleteQuerySetup?.();
-  }, [onCompleteQuerySetup, setEditable]);
+  }, [onCompleteQuerySetup, setEditable, setSource, source]);
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
