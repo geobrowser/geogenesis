@@ -84,7 +84,7 @@ const FILTER_DROPDOWN_PAGE_SIZE = 25;
 // applied by `useFourAndHalfRowsMaxHeight` below — otherwise the placement code
 // thinks the dropdown wants 180px, picks `bottom`, and the dropdown overflows
 // off the viewport when space-below is between 180 and the real cap.
-const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 320;
+const FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX = 220;
 
 function useFilterValueInputFocus(filterInteractionRootRef?: React.RefObject<HTMLElement | null>) {
   const [focused, setFocused] = React.useState(false);

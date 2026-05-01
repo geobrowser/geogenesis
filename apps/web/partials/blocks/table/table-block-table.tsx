@@ -28,8 +28,8 @@ import { Text } from '~/design-system/text';
 
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { SortableColumnHeader } from './sortable-column-header';
@@ -39,14 +39,12 @@ const columnHelper = createColumnHelper<Row>();
 
 const ColumnHeader = ({
   column,
-  isEditMode,
   spaceId,
   isLastColumn,
   sort,
   onSort,
 }: {
   column: Property;
-  isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
   sort: ColumnSortState;
@@ -56,24 +54,19 @@ const ColumnHeader = ({
   const label = isNameColumn ? 'Name' : (column.name ?? column.id);
   const isSortable = SORTABLE_DATA_TYPES.includes(column.dataType);
 
-  const editableHeader =
-    isEditMode && !isNameColumn ? (
-      <EditableEntityTableColumnHeader
-        unpublishedColumns={[]}
-        column={column}
-        entityId={column.id}
-        spaceId={spaceId}
-        isLastColumn={isLastColumn}
-      />
-    ) : undefined;
+  const propertyHeader = !isNameColumn ? (
+    <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+      <PropertyNameLink property={column} spaceId={spaceId} />
+    </div>
+  ) : undefined;
 
   if (!isSortable) {
-    return editableHeader ?? <Text variant="smallTitle">{label}</Text>;
+    return propertyHeader ?? <Text variant="smallTitle">{label}</Text>;
   }
 
   return (
     <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
-      {editableHeader}
+      {propertyHeader}
     </SortableColumnHeader>
   );
 };
@@ -84,6 +77,9 @@ const formatColumns = (
   unpublishedColumns: { id: string }[],
   spaceId: string
 ) => {
+  void isEditMode;
+  void unpublishedColumns;
+
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -93,14 +89,10 @@ const formatColumns = (
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
 
-        return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumnHeader
-            unpublishedColumns={unpublishedColumns}
-            column={column}
-            entityId={column.id}
-            spaceId={spaceId}
-            isLastColumn={isLastColumn}
-          />
+        return !isNameColumn ? (
+          <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+            <PropertyNameLink property={column} spaceId={spaceId} />
+          </div>
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
@@ -321,7 +313,6 @@ export const TableBlockTable = ({
                       <ColumnHeader
                         key={column.id}
                         column={column}
-                        isEditMode={isEditing}
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
                         sort={sortState}

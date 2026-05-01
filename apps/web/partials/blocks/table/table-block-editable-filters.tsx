@@ -27,12 +27,12 @@ interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
   filterSuggestionSpaceId?: string;
-  shownColumnIds?: string[];
+  orderedColumnIds?: string[];
   isEditing?: boolean;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, shownColumnIds = [], isEditing = true, }, ref) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true, }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
@@ -86,7 +86,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             },
           ];
 
-    const sortedFilters = orderFiltersForPicker(filterableColumns, shownColumnIds);
+    const sortedFilters = orderFiltersForPicker(filterableColumns, orderedColumnIds);
 
     const onCreateFilter = (filters: TableBlockNewFilterRow[]) => {
       if (filters.length === 0) return;
@@ -166,14 +166,14 @@ function comparableFilterList(filters: Filter[]) {
     .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
 }
 
-function orderFiltersForPicker(filters: RenderableFilter[], shownColumnIds: string[]): RenderableFilter[] {
-  if (shownColumnIds.length === 0) return sortFilters(filters);
+function orderFiltersForPicker(filters: RenderableFilter[], orderedColumnIds: string[]): RenderableFilter[] {
+  if (orderedColumnIds.length === 0) return sortFilters(filters);
 
   const filterById = new Map(filters.map(f => [f.columnId, f]));
   const ordered: RenderableFilter[] = [];
   const seen = new Set<string>();
 
-  for (const id of shownColumnIds) {
+  for (const id of orderedColumnIds) {
     const filter = filterById.get(id);
     if (!filter || seen.has(filter.columnId)) continue;
     seen.add(filter.columnId);

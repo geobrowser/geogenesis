@@ -535,6 +535,15 @@ const ConfiguredTableBlock = ({
     [filterGroups]
   );
 
+  const orderedFilterColumnIds = React.useMemo(() => {
+    const relationPropertyId = (r: Relation) => {
+      const v = r.toEntity.value;
+      if (v && String(v).length > 0) return String(v);
+      return r.toEntity.id;
+    };
+    return [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(relationPropertyId)];
+  }, [orderedShownColumnRelations]);
+
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
     const out = [...filterableProperties];
@@ -777,7 +786,7 @@ const ConfiguredTableBlock = ({
                   filterState={activeFilters}
                   setFilterState={setActiveFilters}
                   filterSuggestionSpaceId={spaceId}
-                  shownColumnIds={shownColumnIds}
+                  orderedColumnIds={orderedFilterColumnIds}
                   isEditing={isEditing}
                 />
               </div>

@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 
 import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
@@ -138,6 +138,20 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
         .map(relation => collectionItemsMap.get(relation.toEntity.id))
         .filter(item => item !== undefined);
 
+  const relationFallbackItems: Entity[] = React.useMemo(
+    () =>
+      paginatedRelations.map(relation => ({
+        id: relation.toEntity.id,
+        name: relation.toEntity.name,
+        description: null,
+        spaces: relation.toSpaceId ? [relation.toSpaceId] : [],
+        types: [],
+        relations: [],
+        values: [],
+      })),
+    [paginatedRelations]
+  );
+
   const lastVisibleCollectionItemsRef = React.useRef<typeof orderedCollectionItems>([]);
   React.useEffect(() => {
     if (orderedCollectionItems.length > 0) {
@@ -165,14 +179,21 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
     orderedCollectionItems.length === 0 &&
     localCollectionItemsFallback.length === 0 &&
     lastVisibleCollectionItemsRef.current.length > 0;
+  const shouldFallbackToRelationItems =
+    Boolean(sort) &&
+    !hasFilters &&
+    orderedCollectionItems.length === 0 &&
+    localCollectionItemsFallback.length === 0 &&
+    lastVisibleCollectionItemsRef.current.length === 0 &&
+    relationFallbackItems.length > 0;
 
-  const items = shouldFallbackToSSR
-    ? ssrItems
-    : shouldFallbackToLocalCollectionItems
-      ? localCollectionItemsFallback
-      : shouldFallbackToLastVisibleCollectionItems
-        ? lastVisibleCollectionItemsRef.current
-      : orderedCollectionItems;
+  const items = (() => {
+    if (shouldFallbackToSSR) return ssrItems;
+    if (shouldFallbackToLocalCollectionItems) return localCollectionItemsFallback;
+    if (shouldFallbackToLastVisibleCollectionItems) return lastVisibleCollectionItemsRef.current;
+    if (shouldFallbackToRelationItems) return relationFallbackItems;
+    return orderedCollectionItems;
+  })();
   const hasData = items.length > 0;
 
   const filterSuggestionEntityIds =
@@ -185,7 +206,10 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   return {
     collectionItems: items,
     collectionRelations:
-      shouldFallbackToSSR || shouldFallbackToLocalCollectionItems || shouldFallbackToLastVisibleCollectionItems
+      shouldFallbackToSSR ||
+      shouldFallbackToLocalCollectionItems ||
+      shouldFallbackToLastVisibleCollectionItems ||
+      shouldFallbackToRelationItems
         ? paginatedRelations
         : sortedRelations,
     isLoading: hasData ? false : isCollectionItemsLoading,

@@ -47,9 +47,13 @@ export type QueryFromSpacesListData = {
   ordering: SpaceDropdownOrderingMeta;
 };
 
-type SpaceScoresResult = {
-  spaceScoresConnection: {
+type TopSpacesResult = {
+  scoringTopologyDistancesConnection: {
     nodes: { spaceId: string }[];
+    pageInfo: {
+      endCursor: string | null;
+      hasNextPage: boolean;
+    };
   };
 };
 
@@ -57,9 +61,13 @@ const TOP_SPACES_LIMIT = 30;
 
 function topSpacesQuery(limit: number): string {
   return `query QueryFromTopSpaces {
-    spaceScoresConnection(first: ${limit}, orderBy: SCORE_DESC) {
+    scoringTopologyDistancesConnection(first: ${limit}, orderBy: DISTANCE_ASC) {
       nodes {
         spaceId
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
       }
     }
   }`;
@@ -188,12 +196,14 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     enabled: enabled,
     queryFn: async () => {
       const scores = await Effect.runPromise(
-        graphql<SpaceScoresResult>({
+        graphql<TopSpacesResult>({
           endpoint: Environment.getConfig().api,
           query: topSpacesQuery(TOP_SPACES_LIMIT),
         })
       );
-      const ids = [...new Set(scores.spaceScoresConnection.nodes.map(n => n.spaceId).filter(Boolean))];
+      const ids = [
+        ...new Set(scores.scoringTopologyDistancesConnection.nodes.map(n => n.spaceId).filter(Boolean)),
+      ];
       const spaces = ids.length > 0 ? await Effect.runPromise(getSpaces({ spaceIds: ids, limit: ids.length })) : [];
       const rowsById = new Map(spaces.map(space => [space.id, spaceToBrowseRow(space)]));
       return ids.flatMap(id => {
