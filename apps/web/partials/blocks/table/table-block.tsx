@@ -689,7 +689,7 @@ export const TableBlock = ({
             <Fullscreen color="grey-04" />
           </Link>
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
-          <TableBlockContextMenu />
+          <TableBlockContextMenu sourceType={source.type} />
           {renderPlusButtonAsInline && (
             <button type="button" onClick={onAddPlaceholder}>
               <Create />

@@ -221,6 +221,10 @@ export function useView() {
         });
       }
 
+      if (shownColumnRelation) {
+        storage.relations.delete(shownColumnRelation);
+      }
+
       return;
     }
 

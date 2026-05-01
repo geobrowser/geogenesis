@@ -352,6 +352,34 @@ export function useEditorStore() {
         if (toEntity?.type === 'DATA') {
           sBlocks.push({ type: 'data' });
 
+          const dataSourceType = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.block.id &&
+              r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          })[0]?.toEntity.id;
+          const isQuerySource =
+            dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+          const configuredShownColumns = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+          const configuredFilters = getValues({
+            mergeWith: initialBlockValues,
+            selector: v =>
+              v.entity.id === block.block.id &&
+              v.property.id === SystemIds.FILTER &&
+              v.spaceId === spaceId &&
+              v.value.length > 0 &&
+              !v.isDeleted,
+          });
+
           return [
             {
               type: 'tableNode',
@@ -359,6 +387,10 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
+                initialDataSource: isQuerySource ? 'QUERY' : 'COLLECTION',
+                querySetupCompleted: isQuerySource
+                  ? configuredShownColumns.length > 0 || configuredFilters.length > 0
+                  : null,
               },
             },
           ];
