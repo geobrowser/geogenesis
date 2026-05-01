@@ -1,9 +1,12 @@
 import { cache } from 'react';
 
+import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
+import { getIsMemberOfSpace } from '~/core/io/queries';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
+import { Telemetry } from '~/app/api/telemetry';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
@@ -24,5 +27,11 @@ export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddres
     return false;
   }
 
-  return space.members.map(m => m.toLowerCase()).includes(personalSpaceId.toLowerCase());
+  return Effect.runPromise(
+    getIsMemberOfSpace(spaceId, personalSpaceId.toLowerCase()).pipe(
+      Effect.withSpan('web.getIsMemberForSpace'),
+      Effect.annotateSpans({ spaceId, personalSpaceId }),
+      Effect.provide(Telemetry)
+    )
+  );
 });
