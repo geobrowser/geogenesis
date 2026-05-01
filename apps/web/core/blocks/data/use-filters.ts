@@ -78,9 +78,14 @@ export function useFilters(canEdit?: boolean) {
 
   const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
 
+  // Strip NAME — both the filter picker and the properties menu render it
+  // explicitly, so leaving it in here would surface as duplicate-value items
+  // in Radix Select.
   const filterableProperties = React.useMemo(() => {
     const base = schemaProperties ?? [];
-    return base.map(p => mergeRelationValueTypesFromStore(p, store));
+    return base
+      .filter(p => !ID.equals(p.id, SystemIds.NAME_PROPERTY))
+      .map(p => mergeRelationValueTypesFromStore(p, store));
   }, [schemaProperties, relationsSnapshot]);
 
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
