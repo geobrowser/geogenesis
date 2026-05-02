@@ -728,9 +728,30 @@ const ConfiguredTableBlock = ({
                     />
                   </>
                 )}
+                {!isEditing &&
+                  filterGroupsForToolbarPills.length > 0 &&
+                  filterGroupsForToolbarPills.map(group => (
+                    <React.Fragment key={group.columnId}>
+                      <TableBlockFilterGroupPill
+                        group={group}
+                        mode={activeFilterMode}
+                        onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                        onDeleteValue={originalIndex => {
+                          const newFilterState = produce(activeFilters, draft => {
+                            draft.splice(originalIndex, 1);
+                          });
+                          setActiveFilters(newFilterState);
+                        }}
+                        onClearGroup={() => {
+                          setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                        }}
+                        isEditing={isEditing}
+                      />
+                    </React.Fragment>
+                  ))}
               </div>
 
-              {filterGroupsForToolbarPills.length > 0 && (
+              {isEditing && filterGroupsForToolbarPills.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   {filterGroupsForToolbarPills.map(group => (
                     <React.Fragment key={group.columnId}>
