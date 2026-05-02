@@ -347,16 +347,17 @@ function useInterceptEditorLinks(spaceId: string) {
           event.stopPropagation();
           event.preventDefault();
           const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
-          router.prefetch(NavUtils.toEntity(spaceId, entityId));
-          router.push(NavUtils.toEntity(spaceId, entityId));
+          const href = NavUtils.toEntity(spaceId, entityId);
+          router.prefetch(href);
+          router.push(href);
         }
       }
     }
 
-    document.addEventListener('click', handleClick);
+    document.addEventListener('click', handleClick, { capture: true });
 
     return () => {
-      document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleClick, { capture: true });
       observer.disconnect();
     };
   }, [router, spaceId]);
