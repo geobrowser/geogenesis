@@ -136,6 +136,24 @@ function dedupeSpaceRows(rows: QueryFromSpaceRow[]): QueryFromSpaceRow[] {
   });
 }
 
+function toggleSpaceSource(source: Source, id: string): Source {
+  if (source.type === 'GEO' || source.type === 'RELATIONS') {
+    return { type: 'SPACES', value: [id] };
+  }
+
+  if (source.type !== 'SPACES') return source;
+
+  const set = new Set(source.value);
+  if (set.has(id)) {
+    set.delete(id);
+    const next = [...set];
+    return next.length === 0 ? { type: 'GEO' } : { type: 'SPACES', value: next };
+  }
+
+  set.add(id);
+  return { type: 'SPACES', value: [...set] };
+}
+
 export function DataBlockScopeDropdown({
   source,
   setSource,
@@ -188,6 +206,16 @@ export function DataBlockScopeDropdown({
       setOpen(nextOpen);
     },
     [source, setSource]
+  );
+
+  const commitSource = React.useCallback(
+    (nextSource: Source) => {
+      const sourceWithNames = attachSpaceNames(nextSource, pickedSpaceNamesRef.current);
+      scopeDraftDirtyRef.current = false;
+      setPendingSource(sourceWithNames);
+      setSource(sourceWithNames);
+    },
+    [setSource]
   );
 
   React.useEffect(() => {
@@ -261,32 +289,12 @@ export function DataBlockScopeDropdown({
   const isAllOfGeo = draft.type === 'GEO';
 
   const toggleSpace = (id: string, name: string | null) => {
-    scopeDraftDirtyRef.current = true;
     pickedSpaceNamesRef.current.set(id, name);
-    setPendingSource(prev => {
-      const base = prev ?? source;
-      if (base.type === 'GEO' || base.type === 'RELATIONS') {
-        return { type: 'SPACES', value: [id] };
-      }
-      if (base.type !== 'SPACES') return base;
-
-      const set = new Set(base.value);
-      if (set.has(id)) {
-        set.delete(id);
-        const next = [...set];
-        if (next.length === 0) {
-          return { type: 'GEO' };
-        }
-        return { type: 'SPACES', value: next };
-      }
-      set.add(id);
-      return { type: 'SPACES', value: [...set] };
-    });
+    commitSource(toggleSpaceSource(draft, id));
   };
 
   const onPickAllOfGeo = () => {
-    scopeDraftDirtyRef.current = true;
-    setPendingSource({ type: 'GEO' });
+    commitSource({ type: 'GEO' });
   };
 
   const triggerDisabled = disabled || !isEditing;
