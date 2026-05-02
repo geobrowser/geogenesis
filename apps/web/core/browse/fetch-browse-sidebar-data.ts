@@ -3,6 +3,7 @@ import * as Either from 'effect/Either';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
+import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -116,24 +117,7 @@ function pendingSpaceIdsQuery(memberSpaceId: string, nowSec: string): string {
   }`;
 }
 
-export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
-  if (!memberSpaceId) {
-    const featuredOnly = await fetchSpaceRows([...FEATURED_BROWSE_SPACES.map(s => s.id), DOCUMENTATION_SPACE_ID]);
-    return {
-      featured: sortSpaceListByRankNameId(
-        FEATURED_BROWSE_SPACES.map(f => {
-          const row = featuredOnly.get(f.id);
-          const base = row ?? { id: f.id, name: f.name, image: null as string | null };
-          return { ...base, name: f.name, unnamed: false };
-        })
-      ),
-      editorOf: [],
-      memberOf: [],
-      documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
-      personalSpaceId: null,
-    };
-  }
-
+async function fetchBrowseSidebarSources(memberSpaceId: string) {
   const nowSec = String(Math.floor(Date.now() / 1000));
 
   const [editorIds, memberSpaces, pendingResult] = await Promise.all([
@@ -149,30 +133,37 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     ),
   ]);
 
-  const editorIdSet = new Set(editorIds);
-  const pendingMemberIds = new Set<string>();
-  const pendingEditorIds = new Set<string>();
+  const pendingMemberIds =
+    Either.isRight(pendingResult)
+      ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
+      : [];
+  const pendingEditorIds =
+    Either.isRight(pendingResult)
+      ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
+      : [];
 
-  if (Either.isRight(pendingResult)) {
-    for (const n of pendingResult.right.pendingMember?.nodes ?? []) {
-      pendingMemberIds.add(n.spaceId);
-    }
-    for (const n of pendingResult.right.pendingEditor?.nodes ?? []) {
-      pendingEditorIds.add(n.spaceId);
-    }
-  }
+  return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
+}
+
+async function buildBrowseSidebarDataFromSources(
+  memberSpaceId: string,
+  { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds }: BrowseSidebarSources
+): Promise<BrowseSidebarData> {
+  const editorIdSet = new Set(editorIds);
+  const pendingMemberIdSet = new Set(pendingMemberIds);
+  const pendingEditorIdSet = new Set(pendingEditorIds);
 
   const memberOnlyIdSet = new Set(
     memberSpaces.map(s => s.id).filter(id => id !== memberSpaceId && !editorIdSet.has(id))
   );
 
   const editorOfIds = [...editorIdSet];
-  for (const id of pendingEditorIds) {
+  for (const id of pendingEditorIdSet) {
     if (!editorIdSet.has(id)) editorOfIds.push(id);
   }
 
   const memberOfIdSet = new Set(memberOnlyIdSet);
-  for (const id of pendingMemberIds) {
+  for (const id of pendingMemberIdSet) {
     if (!editorIdSet.has(id)) memberOfIdSet.add(id);
   }
   const memberOfIds = [...memberOfIdSet];
@@ -180,8 +171,8 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
   const excludedFromFeatured = new Set<string>([
     ...editorIdSet,
     ...memberOnlyIdSet,
-    ...pendingMemberIds,
-    ...pendingEditorIds,
+    ...pendingMemberIdSet,
+    ...pendingEditorIdSet,
   ]);
 
   const featuredIds = FEATURED_BROWSE_SPACES.map(f => f.id).filter(id => !excludedFromFeatured.has(id));
@@ -203,7 +194,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
   const editorOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
     editorOfIds.map(id => {
       const base = rows.get(id)!;
-      return pendingEditorIds.has(id) && !editorIdSet.has(id)
+      return pendingEditorIdSet.has(id) && !editorIdSet.has(id)
         ? { ...base, pendingLabel: 'Editorship pending' as const }
         : base;
     })
@@ -212,7 +203,7 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
   const memberOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
     memberOfIds.map(id => {
       const base = rows.get(id)!;
-      return pendingMemberIds.has(id) && !memberOnlyIdSet.has(id)
+      return pendingMemberIdSet.has(id) && !memberOnlyIdSet.has(id)
         ? { ...base, pendingLabel: 'Membership pending' as const }
         : base;
     })
@@ -225,4 +216,44 @@ export async function fetchBrowseSidebarData(memberSpaceId: string | null | unde
     documentationImage: rows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
     personalSpaceId: memberSpaceId,
   };
+}
+
+type BrowseSidebarSources = {
+  editorIds: string[];
+  memberSpaces: Space[];
+  pendingMemberIds: string[];
+  pendingEditorIds: string[];
+};
+
+export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
+  if (!memberSpaceId) {
+    const featuredOnly = await fetchSpaceRows([
+      ...FEATURED_BROWSE_SPACES.map(s => s.id),
+      DOCUMENTATION_SPACE_ID,
+    ]);
+    return {
+      featured: sortSpaceListByRankNameId(
+        FEATURED_BROWSE_SPACES.map(f => {
+          const row = featuredOnly.get(f.id);
+          const base = row ?? { id: f.id, name: f.name, image: null as string | null };
+          return { ...base, name: f.name, unnamed: false };
+        })
+      ),
+      editorOf: [],
+      memberOf: [],
+      documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+      personalSpaceId: null,
+    };
+  }
+
+  const sources = await fetchBrowseSidebarSources(memberSpaceId);
+  return buildBrowseSidebarDataFromSources(memberSpaceId, sources);
+}
+
+export async function fetchBrowseSidebarDataWithMemberSpaces(
+  memberSpaceId: string
+): Promise<{ sidebar: BrowseSidebarData; memberSpaces: Space[] }> {
+  const sources = await fetchBrowseSidebarSources(memberSpaceId);
+  const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources);
+  return { sidebar, memberSpaces: sources.memberSpaces };
 }

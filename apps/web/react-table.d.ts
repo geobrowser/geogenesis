@@ -18,6 +18,7 @@ declare module '@tanstack/react-table' {
     propertiesSchema: Record<string, Property> | undefined;
     source: Source;
     shouldAutoFocusPlaceholder?: boolean;
+    placeholderFocusKey?: number;
     collectionTypeFilters?: { id: string; name: string | null }[];
   }
 }

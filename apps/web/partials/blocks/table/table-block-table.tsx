@@ -28,8 +28,8 @@ import { Text } from '~/design-system/text';
 
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { SortableColumnHeader } from './sortable-column-header';
@@ -39,14 +39,12 @@ const columnHelper = createColumnHelper<Row>();
 
 const ColumnHeader = ({
   column,
-  isEditMode,
   spaceId,
   isLastColumn,
   sort,
   onSort,
 }: {
   column: Property;
-  isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
   sort: ColumnSortState;
@@ -56,34 +54,24 @@ const ColumnHeader = ({
   const label = isNameColumn ? 'Name' : (column.name ?? column.id);
   const isSortable = SORTABLE_DATA_TYPES.includes(column.dataType);
 
-  const editableHeader =
-    isEditMode && !isNameColumn ? (
-      <EditableEntityTableColumnHeader
-        unpublishedColumns={[]}
-        column={column}
-        entityId={column.id}
-        spaceId={spaceId}
-        isLastColumn={isLastColumn}
-      />
-    ) : undefined;
+  const propertyHeader = !isNameColumn ? (
+    <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+      <PropertyNameLink property={column} spaceId={spaceId} />
+    </div>
+  ) : undefined;
 
   if (!isSortable) {
-    return editableHeader ?? <Text variant="smallTitle">{label}</Text>;
+    return propertyHeader ?? <Text variant="smallTitle">{label}</Text>;
   }
 
   return (
     <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
-      {editableHeader}
+      {propertyHeader}
     </SortableColumnHeader>
   );
 };
 
-const formatColumns = (
-  columns: { id: string; name: string | null }[] = [],
-  isEditMode: boolean,
-  unpublishedColumns: { id: string }[],
-  spaceId: string
-) => {
+const formatColumns = (columns: { id: string; name: string | null }[] = [], spaceId: string) => {
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -93,14 +81,10 @@ const formatColumns = (
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
 
-        return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumnHeader
-            unpublishedColumns={unpublishedColumns}
-            column={column}
-            entityId={column.id}
-            spaceId={spaceId}
-            isLastColumn={isLastColumn}
-          />
+        return !isNameColumn ? (
+          <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+            <PropertyNameLink property={column} spaceId={spaceId} />
+          </div>
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
@@ -120,6 +104,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
+    const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
 
     const cellData = getValue<Cell | undefined>();
@@ -169,6 +154,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
+          focusRequestKey={row.original.placeholder ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
         />
       );
@@ -208,6 +194,7 @@ type TableBlockTableProps = {
   onAddPlaceholder?: () => void;
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
@@ -227,6 +214,7 @@ export const TableBlockTable = ({
   onAddPlaceholder,
   source,
   shouldAutoFocusPlaceholder,
+  placeholderFocusKey = 0,
   collectionTypeFilters,
   sortState,
   onSort,
@@ -237,7 +225,7 @@ export const TableBlockTable = ({
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], space),
+    columns: formatColumns(properties, space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -258,13 +246,14 @@ export const TableBlockTable = ({
       propertiesSchema,
       source,
       shouldAutoFocusPlaceholder,
+      placeholderFocusKey,
       collectionTypeFilters,
     },
   });
 
   const isEmpty = rows.length === 0;
 
-  if (isEmpty && isFetched && !isLoading) {
+  if (isEmpty && isFetched && !isLoading && source.type !== 'COLLECTION') {
     return (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
@@ -304,7 +293,7 @@ export const TableBlockTable = ({
 
                 return (
                   <th
-                    key={column.id}
+                    key={`${column.id}-${i}`}
                     className={cx(
                       'group relative p-[10px] text-left',
                       headerClassNames,
@@ -316,7 +305,6 @@ export const TableBlockTable = ({
                       <ColumnHeader
                         key={column.id}
                         column={column}
-                        isEditMode={isEditing}
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
                         sort={sortState}
@@ -335,8 +323,8 @@ export const TableBlockTable = ({
 
               return (
                 <tr key={row.original.entityId ?? index} className="hover:bg-bg">
-                  {cells.map(cell => {
-                    const cellId = `${row.original.entityId}-${cell.column.id}`;
+                  {cells.map((cell, cellIndex) => {
+                    const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (

@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
+import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
+import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
@@ -253,18 +256,20 @@ export function BrowseSidebar() {
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
-  const [data, setData] = React.useState<BrowseSidebarData | null>(null);
+  const queryClient = useQueryClient();
+  const sidebarQueryKeyInput = personalSpaceIdFromHook ?? walletAddress ?? null;
+  const { data = null } = useQuery({
+    queryKey: browseSidebarDataQueryKey(sidebarQueryKeyInput),
+    queryFn: () =>
+      personalSpaceIdFromHook ? fetchBrowseSidebarData(personalSpaceIdFromHook) : loadBrowseSidebarData(walletAddress),
+    staleTime: 60_000,
+  });
   const personalSpaceId = data?.personalSpaceId ?? personalSpaceIdFromHook;
 
   React.useEffect(() => {
-    let cancelled = false;
-    void loadBrowseSidebarData(walletAddress).then(d => {
-      if (!cancelled) setData(d);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [walletAddress]);
+    if (!data?.personalSpaceId) return;
+    queryClient.setQueryData(browseSidebarDataQueryKey(data.personalSpaceId), data);
+  }, [data, queryClient]);
 
   React.useEffect(() => {
     if (!data) return;

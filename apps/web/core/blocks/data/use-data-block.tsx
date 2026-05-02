@@ -81,7 +81,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setTemporaryFilterMode,
   } = useFilters(options?.canEdit);
 
-  const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
+  // Feed the resolved (names-included) state in so `setSource`'s produce()
+  // round-trip preserves columnName/valueName on the OTHER filters while the
+  // new filter list is being re-resolved.
+  const { source, setSource } = useSource({ filterState: dbResolvedFilterState, setFilterState });
   const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
@@ -98,7 +101,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
   } = useView();
 
   const { sortState, setSortState } = useSort(options?.canEdit);
@@ -359,7 +365,12 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
     [rows, sortState]
   );
-  const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
+  const properties = React.useMemo(() => {
+    if (!propertiesSchema) return [];
+    return shownColumnIds
+      .map(id => propertiesSchema[id])
+      .filter((p): p is Property => Boolean(p));
+  }, [propertiesSchema, shownColumnIds]);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -441,7 +452,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
 
     // From useSource
     source,
@@ -553,6 +567,8 @@ export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AN
   for (const [, filters] of groups) {
     if (filters.length === 1) {
       groupConditions.push(buildSingleFilterWhere(filters[0]));
+    } else if (ID.equals(filters[0].columnId, SystemIds.SPACE_FILTER)) {
+      groupConditions.push(buildSpaceFiltersWhere(filters));
     } else if (mode === 'OR') {
       groupConditions.push(buildOrWhere(filters));
     } else {
@@ -631,6 +647,18 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
   }
 
   return {};
+}
+
+/** Multiple SPACE_FILTER */
+function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
+  const ids = [...new Set(filters.map(f => f.value).filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return {};
+  if (ids.length === 1) {
+    return buildSingleFilterWhere({ ...filters[0], value: ids[0] });
+  }
+  return {
+    spaces: ids.map(id => ({ equals: id })),
+  };
 }
 
 function buildOrWhere(filterState: Filter[]): WhereCondition {

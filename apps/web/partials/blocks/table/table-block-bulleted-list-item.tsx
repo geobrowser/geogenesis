@@ -29,6 +29,7 @@ type Props = {
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -43,6 +44,7 @@ export function TableBlockBulletedListItem({
   relationId,
   source,
   autoFocus = false,
+  focusRequestKey,
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
@@ -72,6 +74,7 @@ export function TableBlockBulletedListItem({
               }}
               spaceId={currentSpaceId}
               autoFocus={autoFocus}
+              focusRequestKey={focusRequestKey}
               relationValueTypes={collectionTypeFilters}
             />
           ) : (

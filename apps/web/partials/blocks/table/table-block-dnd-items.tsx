@@ -32,6 +32,8 @@ export type RenderItemProps = {
   source: Source;
   isPlaceholder: boolean;
   autoFocus?: boolean;
+  /** Bumps when user clicks "+" so Find or create refocuses even if the row already exists. */
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -62,6 +64,7 @@ export type TableBlockDndItemsProps = {
   pageNumber: number;
   pageSize: number;
   shouldAutoFocusPlaceholder?: boolean;
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
   config: DndItemsConfig;
 };
@@ -81,6 +84,7 @@ export const TableBlockDndItems = ({
   pageNumber,
   pageSize,
   shouldAutoFocusPlaceholder = false,
+  placeholderFocusKey = 0,
   collectionTypeFilters,
   config,
 }: TableBlockDndItemsProps) => {
@@ -193,6 +197,7 @@ export const TableBlockDndItems = ({
     properties: propertiesSchema,
     source,
     collectionTypeFilters,
+    placeholderFocusKey,
   };
 
   const resolvedOuterClassName =
@@ -209,6 +214,7 @@ export const TableBlockDndItems = ({
             row,
             isPlaceholder: true,
             autoFocus: shouldAutoFocusPlaceholder,
+            placeholderFocusKey,
           })}
         </React.Fragment>
       ))}

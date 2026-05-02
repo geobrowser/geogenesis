@@ -1,4 +1,5 @@
-import { Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
+import type { NodeViewProps } from '@tiptap/core';
+import { Node, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
 import * as React from 'react';
 
@@ -11,12 +12,28 @@ import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
+export type TableNodeInitialDataSource = 'COLLECTION' | 'QUERY';
+
 export const DataNode = Node.create({
   name: 'tableNode',
   group: 'block',
   atom: true,
   allowGapCursor: false,
   defining: true,
+
+  addAttributes() {
+    return {
+      initialDataSource: {
+        default: null as TableNodeInitialDataSource | null,
+      },
+      querySetupCompleted: {
+        default: null as boolean | null,
+      },
+      filtersOpenOnCreate: {
+        default: null as boolean | null,
+      },
+    };
+  },
 
   parseHTML() {
     return [
@@ -35,19 +52,58 @@ export const DataNode = Node.create({
   },
 });
 
-function DataNodeComponent({ node }: NodeViewRendererProps) {
+function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
 
+  const [querySetupCompletedOptimistic, setQuerySetupCompletedOptimistic] = React.useState(false);
+
+  React.useEffect(() => {
+    setQuerySetupCompletedOptimistic(false);
+  }, [id]);
+
+  React.useEffect(() => {
+    const persisted =
+      node.attrs.querySetupCompleted === true || node.attrs.querySetupCompleted === 'true';
+    if (persisted) {
+      setQuerySetupCompletedOptimistic(false);
+    }
+  }, [node.attrs.querySetupCompleted]);
+
+  const explicitQuerySetupIncomplete =
+    node.attrs.querySetupCompleted === false || node.attrs.querySetupCompleted === 'false';
+
+  const isQuerySetupDone =
+    querySetupCompletedOptimistic ||
+    node.attrs.querySetupCompleted === true ||
+    node.attrs.querySetupCompleted === 'true' ||
+    !explicitQuerySetupIncomplete;
+
+  const querySetupPending = node.attrs.initialDataSource === 'QUERY' && !isQuerySetupDone;
+
+  const onCompleteQuerySetup = () => {
+    setQuerySetupCompletedOptimistic(true);
+    updateAttributes({ querySetupCompleted: true });
+  };
+
   return (
     <NodeViewWrapper>
       <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
         <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
           <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
-            <TableBlock spaceId={spaceId} blockId={id} />
+            <TableBlock
+              spaceId={spaceId}
+              blockId={id}
+              querySetupPending={querySetupPending}
+              onCompleteQuerySetup={onCompleteQuerySetup}
+              initialFiltersOpen={
+                node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'
+              }
+              onConsumedInitialFiltersOpen={() => updateAttributes({ filtersOpenOnCreate: false })}
+            />
           </DataBlockProvider>
         </ErrorBoundary>
       </div>
