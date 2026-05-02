@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import {
   sortSpacesForDropdownSearch,
   useQueryFromSpacesList,
@@ -247,6 +248,8 @@ export function DataBlockScopeDropdown({
     { matchLimit: 1000 }
   );
 
+  const debouncedSearch = useDebouncedValue(search, 200);
+
   React.useEffect(() => {
     if (!open) {
       setSearch('');
@@ -256,9 +259,9 @@ export function DataBlockScopeDropdown({
 
   React.useEffect(() => {
     if (open) {
-      setRemoteSearchQuery(search);
+      setRemoteSearchQuery(debouncedSearch);
     }
-  }, [open, search, setRemoteSearchQuery]);
+  }, [open, debouncedSearch, setRemoteSearchQuery]);
 
   const searchTrim = search.trim();
   const searchMode = Boolean(searchTrim);

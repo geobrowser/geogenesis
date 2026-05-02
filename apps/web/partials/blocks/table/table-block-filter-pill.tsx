@@ -8,13 +8,13 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Plus } from '~/design-system/icons/plus';
 
-function FilterIconBlack() {
+function FilterIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
       <path
         d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
-        fill="#000000"
-        stroke="#000000"
+        fill="currentColor"
+        stroke="currentColor"
         strokeLinecap="round"
       />
     </svg>
@@ -54,29 +54,31 @@ type TableBlockFilterGroupPillProps = {
   onClearGroup: () => void;
   onAddSimilar?: (anchorEl: HTMLElement) => void;
   isEditing: boolean;
-  serverFilterKeys: Set<string>;
 };
 
-function FilterValueChip({
-  label,
-  valueId,
-  valueType,
+type FilterChipBaseProps = {
+  label: string;
+  tone: 'white' | 'grey';
+  onRemove: () => void;
+  disabled: boolean;
+  removable: boolean;
+};
+
+function FilterChipShell({
+  displayLabel,
+  removeLabel,
   tone,
   onRemove,
   disabled,
   removable,
 }: {
-  label: string;
-  valueId: string;
-  valueType: Filter['valueType'];
+  displayLabel: string;
+  removeLabel: string;
   tone: 'white' | 'grey';
   onRemove: () => void;
   disabled: boolean;
   removable: boolean;
 }) {
-  const hydratedName = useName(valueType === 'RELATION' ? valueId : '');
-  const displayLabel = valueType === 'RELATION' && hydratedName ? hydratedName : label;
-
   return (
     <span
       className={cx(
@@ -98,13 +100,23 @@ function FilterValueChip({
             e.stopPropagation();
             onRemove();
           }}
-          aria-label={`Remove ${label}`}
+          aria-label={`Remove ${removeLabel}`}
         >
           <CloseSmall color="grey-04" />
         </button>
       )}
     </span>
   );
+}
+
+function FilterRelationChip({ label, valueId, ...rest }: FilterChipBaseProps & { valueId: string }) {
+  const hydratedName = useName(valueId);
+  const displayLabel = hydratedName ?? label;
+  return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={label} />;
+}
+
+function FilterTextChip({ label, ...rest }: FilterChipBaseProps) {
+  return <FilterChipShell {...rest} displayLabel={label} removeLabel={label} />;
 }
 
 export function TableBlockFilterGroupPill({
@@ -117,6 +129,7 @@ export function TableBlockFilterGroupPill({
   isEditing,
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
+  const columnLabel = group.columnName ?? 'Property';
 
   const canToggleMode = isEditing;
   const showAddButton = Boolean(onAddSimilar) && isEditing;
@@ -126,7 +139,7 @@ export function TableBlockFilterGroupPill({
     <div className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-[6px] border border-grey-02 bg-white p-1">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
         <span className="flex shrink-0 items-center text-black" aria-hidden>
-          <FilterIconBlack />
+          <FilterIcon />
         </span>
         <span className="flex h-6 shrink-0 flex-wrap items-center gap-x-0.5 px-0.5 text-metadata leading-none text-text">
           {onAddSimilar && isEditing ? (
@@ -135,10 +148,10 @@ export function TableBlockFilterGroupPill({
               className="whitespace-nowrap transition-colors hover:text-ctaPrimary"
               onClick={e => onAddSimilar(e.currentTarget)}
             >
-              {group.columnName} is
+              {columnLabel} is
             </button>
           ) : (
-            <span className="whitespace-nowrap">{group.columnName} is</span>
+            <span className="whitespace-nowrap">{columnLabel} is</span>
           )}
           {hasMultipleValues && (
             <>
@@ -154,29 +167,42 @@ export function TableBlockFilterGroupPill({
           )}
         </span>
         {group.filters.map(({ filter, originalIndex }) => {
-          const value =
-            filter.valueType === 'RELATION' ? (filter.valueName ?? filter.value) : filter.value;
           const canDelete = isEditing;
-          const label = value ?? '';
-          const tone = filter.valueType === 'RELATION' ? 'white' : 'grey';
+          const removable = isEditing && canDelete;
+          const onRemove = () => onDeleteValue(originalIndex);
+          const key = `${filter.columnId}-${filter.value}-${originalIndex}`;
 
+          if (filter.valueType === 'RELATION') {
+            const label = filter.valueName ?? filter.value ?? '';
+            return (
+              <FilterRelationChip
+                key={key}
+                label={label}
+                valueId={filter.value}
+                tone="white"
+                disabled={!canDelete}
+                removable={removable}
+                onRemove={onRemove}
+              />
+            );
+          }
+
+          const label = filter.value ?? '';
           return (
-            <FilterValueChip
-              key={`${filter.columnId}-${filter.value}-${originalIndex}`}
+            <FilterTextChip
+              key={key}
               label={label}
-              valueId={filter.value}
-              valueType={filter.valueType}
-              tone={tone}
+              tone="grey"
               disabled={!canDelete}
-              removable={isEditing && canDelete}
-              onRemove={() => onDeleteValue(originalIndex)}
+              removable={removable}
+              onRemove={onRemove}
             />
           );
         })}
         {showAddButton && (
           <button
             type="button"
-            aria-label={`Add another ${group.columnName ?? 'filter'} value`}
+            aria-label={`Add another ${columnLabel} value`}
             title="Add filter value"
             onClick={e => {
               e.stopPropagation();
@@ -194,7 +220,7 @@ export function TableBlockFilterGroupPill({
         <button
           type="button"
           className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-grey-02 bg-grey-01 text-grey-04 transition hover:bg-grey-02 hover:text-text"
-          aria-label={`Clear all ${group.columnName ?? 'filter'} values`}
+          aria-label={`Clear all ${columnLabel} values`}
           title="Clear filter group"
           onClick={e => {
             e.stopPropagation();

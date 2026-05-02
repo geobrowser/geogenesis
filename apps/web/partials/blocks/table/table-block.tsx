@@ -279,13 +279,14 @@ function useEntries(
 }
 
 function comparableFilterList(filters: Filter[]) {
-  return [...filters]
-    .map(f => ({
-      columnId: f.columnId,
-      value: f.value,
-      valueType: f.valueType,
-    }))
-    .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
+  const projected = filters.map(f => ({
+    columnId: f.columnId,
+    value: f.value,
+    valueType: f.valueType,
+  }));
+  const keyed = projected.map(p => ({ p, key: JSON.stringify(p) }));
+  keyed.sort((a, b) => a.key.localeCompare(b.key));
+  return keyed.map(k => k.p);
 }
 
 export const TableBlock = (props: Props) => {
@@ -348,7 +349,6 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
 
 const ConfiguredTableBlock = ({
   spaceId,
-  querySetupPending = false,
   onCompleteQuerySetup,
   initialFiltersOpen = false,
   onConsumedInitialFiltersOpen,
@@ -385,7 +385,6 @@ const ConfiguredTableBlock = ({
     setSource,
     filterState: activeFilters,
     filterMode: activeFilterMode,
-    dbFilterState,
     setFilterState,
     setFilterMode,
     setTemporaryFilters,
@@ -398,56 +397,6 @@ const ConfiguredTableBlock = ({
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
   } = useDataBlock({ canEdit });
-
-  const querySetupColumnsRef = React.useRef({
-    shownColumnIds,
-    filterableProperties,
-  });
-  querySetupColumnsRef.current = { shownColumnIds, filterableProperties };
-
-  const togglePropertyRef = React.useRef(toggleProperty);
-  togglePropertyRef.current = toggleProperty;
-
-  const handleConfirmQuerySetup = React.useCallback(() => {
-    setEditable(true);
-    onCompleteQuerySetup?.();
-
-    if (!canEdit || source.type === 'COLLECTION') {
-      return;
-    }
-
-    setIsFilterOpen(true);
-
-    const extra = [SystemIds.TYPES_PROPERTY, SystemIds.DESCRIPTION_PROPERTY] as const;
-
-    const tryApplyColumn = (index: number, missRetries: number) => {
-      if (index >= extra.length) return;
-      if (missRetries > 60) return;
-
-      const columnId = extra[index];
-      const { shownColumnIds: ids, filterableProperties: schemaProps } = querySetupColumnsRef.current;
-
-      if (ids.includes(columnId)) {
-        window.setTimeout(() => tryApplyColumn(index + 1, 0), 0);
-        return;
-      }
-
-      const property = schemaProps.find(p => p.id === columnId);
-      if (!property) {
-        window.setTimeout(() => tryApplyColumn(index, missRetries + 1), 0);
-        return;
-      }
-
-      togglePropertyRef.current({ id: property.id, name: property.name });
-      window.setTimeout(() => tryApplyColumn(index + 1, 0), 0);
-    };
-
-    window.setTimeout(() => tryApplyColumn(0, 0), 0);
-  }, [canEdit, onCompleteQuerySetup, setEditable, source.type]);
-
-  React.useEffect(() => {
-    if (querySetupPending) setIsFilterOpen(false);
-  }, [querySetupPending]);
 
   const initialFiltersOpenConsumedRef = React.useRef(false);
   React.useEffect(() => {
@@ -573,16 +522,6 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
-  // Build a set of keys for server-persisted filters so we can hide
-  // the delete button on those pills when not in edit mode.
-  const serverFilterKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of dbFilterState) {
-      keys.add(`${f.columnId}:${f.value}`);
-    }
-    return keys;
-  }, [dbFilterState]);
-
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
@@ -692,25 +631,6 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (querySetupPending && isFetched && !isLoading) {
-    EntriesComponent = (
-      <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 rounded-lg bg-grey-01 px-4 py-8">
-        <p className="max-w-md text-center text-lg text-text">Where do you want to query data from?</p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <DataBlockScopeDropdown source={source} setSource={setSource} />
-          <button
-            type="button"
-            onClick={handleConfirmQuerySetup}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-grey-02 bg-white shadow-button transition hover:border-text focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
-            aria-label="Confirm query scope"
-          >
-            <Check color="grey-04" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
 
   const isQueryDataBlock = source.type !== 'COLLECTION';
@@ -725,13 +645,8 @@ const ConfiguredTableBlock = ({
       {/* Potentially stop highlight/click issues? */}
       <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
         <TableBlockEditableTitle spaceId={spaceId} />
-        <div
-          className={cx(
-            'flex items-center gap-5',
-            querySetupPending && 'pointer-events-none select-none opacity-40'
-          )}
-        >
-          {isEditing && !querySetupPending && (
+        <div className="flex items-center gap-5">
+          {isEditing && (
             <TableBlockPropertiesMenu
               sourceType={source.type}
               filterableProperties={mergedBlockProperties}
@@ -744,17 +659,13 @@ const ConfiguredTableBlock = ({
             />
           )}
           <IconButton
-            disabled={querySetupPending}
             onClick={toggleFilterHandler}
             icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
           <Link
             href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-            className={cx(
-              'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04',
-              querySetupPending && 'pointer-events-none opacity-40'
-            )}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
             aria-label="Open fullscreen"
           >
             <Fullscreen color="grey-04" />
@@ -786,7 +697,7 @@ const ConfiguredTableBlock = ({
               className="flex flex-col gap-2"
             >
               <div className="flex flex-wrap items-center gap-2">
-                {isQueryDataBlock && !querySetupPending && (
+                {isQueryDataBlock && (
                   <>
                     <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
                     {showToolbarDividerAfterScope && (
@@ -797,7 +708,6 @@ const ConfiguredTableBlock = ({
                 {showToolbarSort && (
                   <DataBlockSortMenu
                     triggerVariant="segment"
-                    disabled={querySetupPending}
                     isEditing={isEditing}
                     properties={mergedBlockProperties}
                     shownColumnIds={shownColumnIds}
@@ -845,7 +755,6 @@ const ConfiguredTableBlock = ({
                           });
                         }}
                         isEditing={isEditing}
-                        serverFilterKeys={serverFilterKeys}
                       />
                     </React.Fragment>
                   ))}
@@ -864,7 +773,7 @@ const ConfiguredTableBlock = ({
         ) : (
           EntriesComponent
         )}
-        {hasPagination && !querySetupPending && (
+        {hasPagination && (
           <>
             <Spacer height={12} />
             <PageNumberContainer>

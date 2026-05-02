@@ -71,15 +71,7 @@ const ColumnHeader = ({
   );
 };
 
-const formatColumns = (
-  columns: { id: string; name: string | null }[] = [],
-  isEditMode: boolean,
-  unpublishedColumns: { id: string }[],
-  spaceId: string
-) => {
-  void isEditMode;
-  void unpublishedColumns;
-
+const formatColumns = (columns: { id: string; name: string | null }[] = [], spaceId: string) => {
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -233,7 +225,7 @@ export const TableBlockTable = ({
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], space),
+    columns: formatColumns(properties, space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

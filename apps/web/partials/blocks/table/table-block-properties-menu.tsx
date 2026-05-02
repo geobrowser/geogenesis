@@ -168,9 +168,23 @@ export function TableBlockPropertiesMenu({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const showAllTimersRef = React.useRef<number[]>([]);
+
+  const cancelShowAllTimers = React.useCallback(() => {
+    for (const id of showAllTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    showAllTimersRef.current = [];
+  }, []);
+
+  React.useEffect(() => cancelShowAllTimers, [cancelShowAllTimers]);
+
   const onOpenChange = (next: boolean) => {
     setOpen(next);
-    if (!next) setSearch('');
+    if (!next) {
+      setSearch('');
+      cancelShowAllTimers();
+    }
   };
 
   const q = debouncedSearch.trim().toLowerCase();
@@ -279,8 +293,13 @@ export function TableBlockPropertiesMenu({
     const toAdd = filterableProperties.filter(
       p => !ID.equals(p.id, SystemIds.NAME_PROPERTY) && !isShown(p.id)
     );
+    cancelShowAllTimers();
     toAdd.forEach((col, i) => {
-      window.setTimeout(() => toggleProperty({ id: col.id, name: col.name }), i);
+      const timerId = window.setTimeout(() => {
+        toggleProperty({ id: col.id, name: col.name });
+        showAllTimersRef.current = showAllTimersRef.current.filter(t => t !== timerId);
+      }, i);
+      showAllTimersRef.current.push(timerId);
     });
   };
 

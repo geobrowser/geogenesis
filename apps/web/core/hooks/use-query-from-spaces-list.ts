@@ -230,8 +230,16 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     sidebarQuery.data,
   ]);
 
+  const isLoading =
+    canLoad &&
+    (sidebarQuery.isLoading ||
+      memberSpacesQuery.isLoading ||
+      editorIdsQuery.isLoading ||
+      editorRowsQuery.isLoading ||
+      personalSpaceQuery.isLoading);
+
   return {
     data,
-    isLoading: false,
+    isLoading,
   };
 }
