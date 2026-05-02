@@ -1,6 +1,5 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -340,13 +339,14 @@ function useInterceptEditorLinks(spaceId: string) {
 
       // Check if the clicked element is a link
       if (link.tagName === 'A') {
-        const originalUrl = link.href;
+        const originalUrl = link.getAttribute('href');
 
-        if (originalUrl.startsWith('graph://')) {
-          // Prevent the default link behavior
+        if (originalUrl?.startsWith('graph://')) {
+          const entityId = originalUrl.replace('graph://', '');
+          if (!entityId) return;
+
           event.stopPropagation();
           event.preventDefault();
-          const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
           const href = NavUtils.toEntity(spaceId, entityId);
           router.prefetch(href);
           router.push(href);
