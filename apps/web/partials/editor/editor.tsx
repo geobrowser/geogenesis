@@ -1,5 +1,6 @@
 'use client';
 
+import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -49,6 +50,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
   // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
@@ -74,7 +76,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     [spaceId, router]
   );
 
-  useInterceptEditorLinks(spaceId);
+  useEditorGraphLinks(spaceId, editable, editorWrapperRef);
 
   // Ref keeps the blur handler fresh without requiring editor recreation.
   const upsertEditorStateRef = React.useRef(upsertEditorState);
@@ -192,8 +194,6 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   // Keep editorRef in sync so the edit→view transition effect can persist state
   editorRef.current = editor;
 
-  const editorWrapperRef = React.useRef<HTMLDivElement>(null);
-
   React.useEffect(() => {
     if (!editor) return;
 
@@ -269,21 +269,48 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 }
 
 /**
- * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
- * appropriate entity based on the `graph://` URI.
- *
- * This is one of the most hacky ways to do it, but is the least amount of effort to implement
- * for now. Alternative approaches are to use Linkify, which tiptap uses internally, to render
- * the links using a custom React component which can handle the `graph://` protocol, or to
- * somehow render the links as a React component through tiptap itself.
+ * Keeps editor-rendered graph links clickable in browse mode without a global
+ * click interceptor. In edit mode, preserve the `graph://` href so TipTap's
+ * graph-link tooling owns the interaction.
  */
-function useInterceptEditorLinks(spaceId: string) {
-  const router = useRouter();
-
+function useEditorGraphLinks(
+  spaceId: string,
+  editable: boolean,
+  editorWrapperRef: React.RefObject<HTMLDivElement | null>
+) {
   React.useEffect(() => {
     if (typeof document === 'undefined') {
       return;
     }
+
+    const syncGraphLinkHrefs = () => {
+      const editorElement = editorWrapperRef.current?.querySelector('.ProseMirror');
+      if (!editorElement) return;
+
+      const links = editorElement.querySelectorAll<HTMLAnchorElement>('a[href^="graph://"], a[data-graph-href]');
+      links.forEach(link => {
+        const graphHref = link.dataset.graphHref ?? link.getAttribute('href');
+        if (!graphHref?.startsWith('graph://')) return;
+
+        if (link.dataset.graphHref !== graphHref) {
+          link.dataset.graphHref = graphHref;
+        }
+
+        if (editable) {
+          if (link.getAttribute('href') !== graphHref) {
+            link.setAttribute('href', graphHref);
+          }
+          return;
+        }
+
+        const entityId = GraphUrl.toEntityId(graphHref as `graph://${string}`);
+        const linkSpaceId = GraphUrl.toSpaceId(graphHref as `graph://${string}`) ?? spaceId;
+        const href = NavUtils.toEntity(linkSpaceId, entityId);
+        if (link.getAttribute('href') !== href) {
+          link.setAttribute('href', href);
+        }
+      });
+    };
 
     // Mutation observer to catch and prevent emoji conversion
     const observer = new MutationObserver(mutations => {
@@ -314,53 +341,27 @@ function useInterceptEditorLinks(spaceId: string) {
           }
         });
       });
+
+      syncGraphLinkHrefs();
     });
 
     // Observe the editor content
-    const editorElement = document.querySelector('.ProseMirror');
+    const editorElement = editorWrapperRef.current?.querySelector('.ProseMirror');
     if (editorElement) {
       observer.observe(editorElement, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ['href', 'data-graph-href'],
       });
     }
 
-    function handleClick(event: MouseEvent) {
-      const target = event.target as Element | null;
-      if (!target) {
-        return;
-      }
-
-      const link = target.closest('a');
-
-      if (!link) {
-        return;
-      }
-
-      // Check if the clicked element is a link
-      if (link.tagName === 'A') {
-        const originalUrl = link.getAttribute('href');
-
-        if (originalUrl?.startsWith('graph://')) {
-          const entityId = originalUrl.replace('graph://', '');
-          if (!entityId) return;
-
-          event.stopPropagation();
-          event.preventDefault();
-          const href = NavUtils.toEntity(spaceId, entityId);
-          router.prefetch(href);
-          router.push(href);
-        }
-      }
-    }
-
-    document.addEventListener('click', handleClick, { capture: true });
+    syncGraphLinkHrefs();
 
     return () => {
-      document.removeEventListener('click', handleClick, { capture: true });
       observer.disconnect();
     };
-  }, [router, spaceId]);
+  }, [editable, editorWrapperRef, spaceId]);
 }
 
 // ProseMirror calls flushSync during EditorContent mount — harmless but noisy in dev.
