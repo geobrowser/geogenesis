@@ -13,7 +13,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter } from './filters';
-import { Source, getSource, removeSourceType, sourceStableKey, upsertSourceType } from './source';
+import { Source, getSource, sourceStableKey, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
 type UseSourceOptions = {
@@ -56,11 +56,12 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
 
   const setSource = (newSource: Source) => {
     setOptimisticSource(newSource);
-    removeSourceType({
+    upsertSourceType({
+      source: newSource,
       blockId: EntityId(entityId),
+      spaceId: SpaceId(spaceId),
       dataEntityRelations,
     });
-    upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'COLLECTION') {
       setFilterState(
