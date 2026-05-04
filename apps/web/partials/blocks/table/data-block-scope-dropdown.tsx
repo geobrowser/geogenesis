@@ -165,6 +165,8 @@ export function DataBlockScopeDropdown({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const sourceRef = React.useRef(source);
   sourceRef.current = source;
+  const setSourceRef = React.useRef(setSource);
+  setSourceRef.current = setSource;
   const sourceKey = sourceStableKey(source);
   const [open, setOpen] = React.useState(false);
   // Cache of id → name for spaces the user has interacted with this session.
@@ -189,35 +191,29 @@ export function DataBlockScopeDropdown({
 
   const scopeDraftDirtyRef = React.useRef(false);
 
-  const handleOpenChange = React.useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen) {
-        scopeDraftDirtyRef.current = false;
-        setPendingSource(source);
-      } else {
-        setPendingSource(prev => {
-          if (prev !== null && scopeDraftDirtyRef.current) {
-            const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
-            setSource(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
-          }
-          scopeDraftDirtyRef.current = false;
-          return null;
-        });
-      }
-      setOpen(nextOpen);
-    },
-    [source, setSource]
-  );
-
-  const commitSource = React.useCallback(
-    (nextSource: Source) => {
-      const sourceWithNames = attachSpaceNames(nextSource, pickedSpaceNamesRef.current);
+  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
       scopeDraftDirtyRef.current = false;
-      setPendingSource(sourceWithNames);
-      setSource(sourceWithNames);
-    },
-    [setSource]
-  );
+      setPendingSource(sourceRef.current);
+    } else {
+      setPendingSource(prev => {
+        if (prev !== null && scopeDraftDirtyRef.current) {
+          const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
+          setSourceRef.current(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
+        }
+        scopeDraftDirtyRef.current = false;
+        return null;
+      });
+    }
+    setOpen(nextOpen);
+  }, []);
+
+  const commitSource = React.useCallback((nextSource: Source) => {
+    const sourceWithNames = attachSpaceNames(nextSource, pickedSpaceNamesRef.current);
+    scopeDraftDirtyRef.current = false;
+    setPendingSource(sourceWithNames);
+    setSourceRef.current(sourceWithNames);
+  }, []);
 
   React.useEffect(() => {
     if (!open || scopeDraftDirtyRef.current) return;

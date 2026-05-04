@@ -41,20 +41,21 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
+  const derivedSourceKey = sourceStableKey(derivedSource);
   const [optimisticSource, setOptimisticSource] = React.useState<Source | null>(null);
   const source: Source = optimisticSource ?? derivedSource;
 
   React.useEffect(() => {
     setOptimisticSource(prev =>
-      prev && sourceStableKey(prev) === sourceStableKey(derivedSource) ? null : prev
+      prev && sourceStableKey(prev) === derivedSourceKey ? null : prev
     );
-  }, [derivedSource]);
+  }, [derivedSourceKey]);
 
   React.useEffect(() => {
     setOptimisticSource(null);
   }, [entityId, spaceId]);
 
-  const setSource = (newSource: Source) => {
+  const setSource = React.useCallback((newSource: Source) => {
     setOptimisticSource(newSource);
     upsertSourceType({
       source: newSource,
@@ -211,7 +212,17 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
         )
       );
     }
-  };
+  }, [
+    entityId,
+    spaceId,
+    relationId,
+    dataEntityRelations,
+    filterState,
+    setFilterState,
+    storage,
+    blockRelations,
+    initialBlockEntities,
+  ]);
 
   return {
     source,
