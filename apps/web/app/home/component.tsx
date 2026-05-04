@@ -24,6 +24,7 @@ type Props = {
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
+  personalOnboarding?: { spaceId: string; entityId: string } | null;
   governanceTab: 'review' | 'my';
   governanceFilters: GovernanceFilters;
   editorSpaceOptions: { id: string; name: string; image: string | null }[];
@@ -37,6 +38,7 @@ export async function Component({
   proposalType,
   connectedAddress,
   connectedSpaceId,
+  personalOnboarding,
   governanceTab,
   governanceFilters,
   editorSpaceOptions,
@@ -52,6 +54,7 @@ export async function Component({
           governanceFilters={governanceFilters}
           editorSpaceOptions={editorSpaceOptions}
           myProposalSpaceOptions={myProposalSpaceOptions}
+          personalOnboarding={personalOnboarding}
           proposalsList={
             governanceTab === 'my' && !connectedSpaceId ? (
               <p className="text-body text-grey-04">Sign in to see your proposals.</p>

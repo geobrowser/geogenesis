@@ -19,6 +19,7 @@ import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
 import { VideoNode } from './video-node';
 import { Web2URLExtension } from './web2-url-extension';
+import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/profile-overview-tail-placeholder';
 
 export const tiptapExtensions = [
   Document,
@@ -64,6 +65,9 @@ export const tiptapExtensions = [
       if (node.type.name === 'heading') return 'Heading...';
       if (node.type.name === 'bulletList') return '';
       if (node.type.name === 'codeBlock') return '';
+      if (node.type.name === 'paragraph' && node.attrs?.tailPlaceholder) {
+        return PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT;
+      }
       return 'Add content...';
     },
   }),

@@ -1,3 +1,4 @@
+import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -34,7 +35,7 @@ export const ServerContent = ({ blocks }: ServerContentProps) => {
 const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
   switch (block.type) {
     case 'text': {
-      if (!block.markdown.trim()) {
+      if (!block.markdown.trim() || block.markdown.trim() === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) {
         return (
           <div className="react-renderer node-paragraph">
             <div className="whitespace-normal">
