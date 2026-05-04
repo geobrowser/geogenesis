@@ -3,9 +3,47 @@ import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
 
 import { parseGraphLinkHref } from '~/core/utils/graph-link';
 
-export function bracketMathPlugin(md: MarkdownIt) {
-  // Inline rule for \(...\) bracket math — must run BEFORE 'escape' so \( isn't consumed as escaped paren
-  md.inline.ruler.before('escape', 'bracket_math', (state: StateInline, silent: boolean) => {
+export function mathPlugin(md: MarkdownIt) {
+  // Primary inline rule: $$...$$ (Notion-style)
+  md.inline.ruler.before('escape', 'double_dollar_math', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x24 /* $ */) return false;
+    if (state.src.charCodeAt(state.pos + 1) !== 0x24 /* $ */) return false;
+
+    const start = state.pos + 2;
+    if (start >= state.posMax) return false;
+
+    let end = start;
+    while (end < state.posMax - 1) {
+      if (state.src.charCodeAt(end) === 0x24 /* $ */ && state.src.charCodeAt(end + 1) === 0x24 /* $ */) {
+        // Check if the first $ of the closing pair is escaped by an odd number of backslashes
+        let backslashes = 0;
+        let k = end - 1;
+        while (k >= start && state.src.charCodeAt(k) === 0x5c /* \ */) {
+          backslashes++;
+          k--;
+        }
+        if (backslashes % 2 === 0) break; // even (or zero) backslashes — real close
+        // Odd backslashes means the $ is escaped — skip past both dollars and keep scanning
+        end += 2;
+        continue;
+      }
+      end++;
+    }
+    if (end >= state.posMax - 1) return false;
+    if (end === start) return false; // reject empty $$$$
+
+    if (!silent) {
+      const token = state.push('inline_math', 'math', 0);
+      // Trim padding spaces added by the serializer to avoid delimiter ambiguity
+      token.content = state.src.slice(start, end).trim();
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+
+  // Legacy read support: \(...\) bracket math
+  md.inline.ruler.after('double_dollar_math', 'bracket_math', (state: StateInline, silent: boolean) => {
     if (state.src.charCodeAt(state.pos) !== 0x5c /* \ */) return false;
     if (state.src.charCodeAt(state.pos + 1) !== 0x28 /* ( */) return false;
 
@@ -70,7 +108,7 @@ export function bracketMathPlugin(md: MarkdownIt) {
 
 export function createMarkdownIt(): MarkdownIt {
   const md = new MarkdownIt({ html: false });
-  md.use(bracketMathPlugin);
+  md.use(mathPlugin);
   return md;
 }
 
