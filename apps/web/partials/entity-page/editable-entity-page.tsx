@@ -31,6 +31,7 @@ import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 
+import { propertyNameMatchesSkills } from '~/atoms/personal-profile-suggested';
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
@@ -209,7 +210,12 @@ function RelationPropertyWithDelete({
   });
 
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div
+      className="flex items-start justify-between gap-2"
+      {...(propertyNameMatchesSkills(property.name ?? '')
+        ? { 'data-personal-profile-focus': 'skills' as const }
+        : {})}
+    >
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>

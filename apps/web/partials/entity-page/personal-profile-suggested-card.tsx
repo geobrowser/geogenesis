@@ -2,11 +2,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
-import { useAtom } from 'jotai';
-import { useRouter } from 'next/navigation';
+import { useAtom, useSetAtom } from 'jotai';
+import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
@@ -21,6 +22,7 @@ import { Text } from '~/design-system/text';
 import {
   clearPersonalProfileSessionDismissStorage,
   PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
+  personalProfileSkillsRowIntentAtom,
   personalProfileSuggestedDismissAtom,
   personalProfileSuggestedTasksAtom,
 } from '~/atoms/personal-profile-suggested';
@@ -47,6 +49,9 @@ type Props = {
 
 export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const canEdit = useUserIsEditing(spaceId);
+  const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
   const { personalSpaceId, isFetched: personalSpaceFetched } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -147,6 +152,52 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   }, [entityId, router, spaceId]);
 
+  const onAddSkills = React.useCallback(() => {
+    const profilePath = NavUtils.toEntity(spaceId, entityId, false);
+    const spaceHomePath = NavUtils.toSpace(spaceId);
+
+    const onThisPersonSurface =
+      pathname === profilePath ||
+      pathname === `${profilePath}/` ||
+      pathname === spaceHomePath ||
+      pathname === `${spaceHomePath}/`;
+
+    if (!onThisPersonSurface) {
+      setSkillsRowIntent({
+        entityId,
+        spaceId,
+        focusFindCreateInput: false,
+        pendingEnableEdit: true,
+      });
+      try {
+        const nav = router.push(profilePath) as void | Promise<unknown>;
+        if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
+          void (nav as Promise<unknown>).catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    if (canEdit) {
+      setSkillsRowIntent({
+        entityId,
+        spaceId,
+        focusFindCreateInput: true,
+        pendingEnableEdit: false,
+      });
+      return;
+    }
+
+    setSkillsRowIntent({
+      entityId,
+      spaceId,
+      focusFindCreateInput: false,
+      pendingEnableEdit: true,
+    });
+  }, [canEdit, entityId, pathname, router, setSkillsRowIntent, spaceId]);
+
   const onAddBio = React.useCallback(() => {
     sessionStorage.setItem(
       PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY,
@@ -216,7 +267,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
               className={tasks.skills ? donePillClass : pillClass}
               icon={tasks.skills ? <CheckCircleSmall color="white" /> : undefined}
               disabled={tasks.skills}
-              onClick={tasks.skills ? undefined : onJumpProfileEdit}
+              onClick={tasks.skills ? undefined : onAddSkills}
             >
               {tasks.skills ? 'Add skills' : '+ Add skills'}
             </SmallButton>

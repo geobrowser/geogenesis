@@ -1,3 +1,4 @@
+import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
 /**
@@ -39,3 +40,16 @@ export const personalProfileSuggestedDismissAtom = atomWithStorage<PersonalProfi
   'personalProfileSuggestedDismissV3',
   { forever: false, softDismissCount: 0 }
 );
+
+export type PersonalProfileSkillsRowIntent = {
+  entityId: string;
+  spaceId: string;
+  focusFindCreateInput: boolean;
+  pendingEnableEdit: boolean;
+};
+
+export const personalProfileSkillsRowIntentAtom = atom<PersonalProfileSkillsRowIntent | null>(null);
+
+export function propertyNameMatchesSkills(name: string): boolean {
+  return /skill/i.test(name);
+}

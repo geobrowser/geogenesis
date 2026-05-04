@@ -21,6 +21,7 @@ import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
+import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
@@ -76,7 +77,10 @@ export default async function Layout(props0: LayoutProps) {
           <Spacer height={40} />
 
           {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-            <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} />
+            <>
+              <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+              <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} />
+            </>
           ) : null}
 
           <React.Suspense fallback={null}>

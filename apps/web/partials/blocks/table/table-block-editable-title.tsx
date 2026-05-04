@@ -7,6 +7,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { isPersonalProfileSkillsRelationFocusRegionActive } from '~/core/utils/personal-profile-skills-focus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
@@ -29,8 +30,9 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         ? 'Query name...'
         : 'Enter a name for this table...';
 
-  // Auto focus newly created data blocks
-  const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200);
+  const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200, {
+    shouldSkipFocus: isPersonalProfileSkillsRelationFocusRegionActive,
+  });
 
   return (
     <div className="table-block-editable-title flex grow items-center gap-2">
