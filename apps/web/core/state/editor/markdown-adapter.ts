@@ -290,6 +290,11 @@ function renderLinkTagOpen(token: Token): string {
     attrs.set('class', appendClassName(attrs.get('class') ?? null, className));
     attrs.set('href', safeHref);
 
+    if (!safeHref.startsWith('graph://')) {
+      attrs.set('target', '_blank');
+      attrs.set('rel', 'noopener noreferrer');
+    }
+
     const serializedAttributes = Array.from(attrs.entries())
       .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
       .join(' ');

@@ -246,10 +246,16 @@ function renderInlineTokenRange(
       case 'link_open': {
         const { className, isValid, safeHref } = getRenderedLinkState(token.attrGet('href'));
         const rendered = renderInlineTokenRange(tokens, index + 1, 'link_close', options);
+        const isGraph = !!safeHref && safeHref.startsWith('graph://');
 
         if (isValid && safeHref) {
           nodes.push(
-            <a key={`link-${index}`} href={safeHref} className={cx(className, options?.markClassName)}>
+            <a
+              key={`link-${index}`}
+              href={safeHref}
+              className={cx(className, options?.markClassName)}
+              {...(isGraph ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+            >
               {rendered.nodes}
             </a>
           );

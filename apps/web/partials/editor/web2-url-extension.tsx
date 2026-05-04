@@ -143,17 +143,17 @@ export const Web2URLMark = Mark.create({
         0,
       ];
     } else {
-      // VIEW MODE: Normal text
+      // VIEW MODE: clickable external link, opens in new tab
       return [
-        'span',
+        'a',
         {
           ...cleanHTMLAttributes,
-          // Keep data attributes for persistence and re-parsing
+          href: mark.attrs.url,
+          target: '_blank',
+          rel: 'noopener noreferrer',
           'data-web2-url': 'true',
           'data-url': mark.attrs.url,
-          // Explicitly clear class and style to ensure normal text appearance
-          class: '',
-          style: 'color: inherit; text-decoration: none; background-color: transparent; cursor: inherit;',
+          class: 'entity-link-valid',
         },
         0,
       ];
@@ -165,7 +165,6 @@ export const Web2URLMark = Mark.create({
 // Web2 URL Extension
 // ============================================================================
 
-// Links aren't clickable in browse mode but still appear in text; add external links in the properties panel.
 export const Web2URLExtension = Extension.create({
   name: 'web2URLHighlight',
 

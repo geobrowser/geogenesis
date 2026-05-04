@@ -22,18 +22,21 @@ describe('markdown-render', () => {
   });
 
   describe('renderMarkdownDocument', () => {
-    it('renders safe links as anchor tags', () => {
+    it('renders safe external links as anchor tags that open in a new tab', () => {
       const html = renderToStaticMarkup(<>{renderMarkdownDocument('[safe](https://example.com)')}</>);
       expect(html).toContain('<a');
       expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="https://example.com"');
+      expect(html).toContain('target="_blank"');
+      expect(html).toContain('rel="noopener noreferrer"');
     });
 
-    it('renders graph links as anchor tags', () => {
+    it('renders graph links as in-app anchor tags without target=_blank', () => {
       const html = renderToStaticMarkup(<>{renderMarkdownDocument('[entity](graph://foo)')}</>);
       expect(html).toContain('<a');
       expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="graph://foo"');
+      expect(html).not.toContain('target="_blank"');
     });
 
     it('marks unsafe links as invalid instead of keeping href', () => {

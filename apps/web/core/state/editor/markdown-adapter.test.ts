@@ -164,19 +164,22 @@ describe('markdown-adapter', () => {
       expect(html).toContain('katex');
     });
 
-    it('renders safe https links as anchor tags', () => {
+    it('renders safe https links as anchor tags that open in a new tab', () => {
       const html = markdownToRenderedHtml('[safe](https://example.com)');
       expect(html).toContain('<a ');
       expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="https://example.com"');
+      expect(html).toContain('target="_blank"');
+      expect(html).toContain('rel="noopener noreferrer"');
       expect(html).toContain('</a>');
     });
 
-    it('renders safe graph links as anchor tags', () => {
+    it('renders safe graph links as in-app anchor tags without target=_blank', () => {
       const html = markdownToRenderedHtml('[entity](graph://foo)');
       expect(html).toContain('<a ');
       expect(html).toContain('class="entity-link-valid"');
       expect(html).toContain('href="graph://foo"');
+      expect(html).not.toContain('target="_blank"');
       expect(html).toContain('</a>');
     });
 
