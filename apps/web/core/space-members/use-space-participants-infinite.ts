@@ -45,6 +45,12 @@ type UseSpaceParticipantsInfiniteArgs = {
   kind: ParticipantKind;
   enabled?: boolean;
   pageSize?: number;
+  /**
+   * Server-known total to display before the first page resolves. Avoids the
+   * "0 members → 231 members" flash on popover open. The chip already has
+   * this number from the SSR `space.totalMembers` / `space.totalEditors`.
+   */
+  initialTotalCount?: number;
 };
 
 export function useSpaceParticipantsInfinite({
@@ -52,6 +58,7 @@ export function useSpaceParticipantsInfinite({
   kind,
   enabled = true,
   pageSize = SPACE_PARTICIPANTS_PAGE_SIZE,
+  initialTotalCount,
 }: UseSpaceParticipantsInfiniteArgs) {
   const query = useInfiniteQuery({
     enabled,
@@ -70,9 +77,9 @@ export function useSpaceParticipantsInfinite({
     return flat;
   }, [query.data?.pages]);
 
-  // The chip and the popover/dialog footers all read this. It's authoritative
-  // because it comes from the GraphQL `totalCount`, not the loaded page length.
-  const totalCount = query.data?.pages[0]?.totalCount ?? 0;
+  // Prefer the live count from the API once available; fall back to the
+  // server-seeded count so the footer/header doesn't flash 0 on open.
+  const totalCount = query.data?.pages[0]?.totalCount ?? initialTotalCount ?? 0;
 
   return {
     participants,
