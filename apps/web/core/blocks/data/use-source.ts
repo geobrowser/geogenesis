@@ -2,6 +2,8 @@
 
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import * as React from 'react';
+
 import { produce } from 'immer';
 
 import { ID } from '~/core/id';
@@ -11,7 +13,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter } from './filters';
-import { Source, getSource, removeSourceType, upsertSourceType } from './source';
+import { Source, getSource, sourceStableKey, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
 type UseSourceOptions = {
@@ -33,18 +35,34 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
 
   const dataEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
 
-  const source: Source = getSource({
+  const derivedSource: Source = getSource({
     blockId: EntityId(entityId),
     dataEntityRelations,
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
+  const derivedSourceKey = sourceStableKey(derivedSource);
+  const [optimisticSource, setOptimisticSource] = React.useState<Source | null>(null);
+  const source: Source = optimisticSource ?? derivedSource;
 
-  const setSource = (newSource: Source) => {
-    removeSourceType({
+  React.useEffect(() => {
+    setOptimisticSource(prev =>
+      prev && sourceStableKey(prev) === derivedSourceKey ? null : prev
+    );
+  }, [derivedSourceKey]);
+
+  React.useEffect(() => {
+    setOptimisticSource(null);
+  }, [entityId, spaceId]);
+
+  const setSource = React.useCallback((newSource: Source) => {
+    setOptimisticSource(newSource);
+    upsertSourceType({
+      source: newSource,
       blockId: EntityId(entityId),
+      spaceId: SpaceId(spaceId),
+      dataEntityRelations,
     });
-    upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'COLLECTION') {
       setFilterState(
@@ -168,19 +186,20 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     }
 
     if (newSource.type === 'SPACES') {
-      // Remove any existing source-injected filters before adding the new space filter.
       setFilterState(
         produce(filterState, draft => {
           const next = draft.filter(
             f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY
           );
-          next.push({
-            columnId: SystemIds.SPACE_FILTER,
-            columnName: 'Space',
-            valueType: 'RELATION',
-            value: newSource.value[0],
-            valueName: null,
-          });
+          for (const spaceId of [...new Set(newSource.value)]) {
+            next.push({
+              columnId: SystemIds.SPACE_FILTER,
+              columnName: 'Space',
+              valueType: 'RELATION',
+              value: spaceId,
+              valueName: newSource.nameById?.[spaceId] ?? null,
+            });
+          }
           return next;
         })
       );
@@ -193,7 +212,17 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
         )
       );
     }
-  };
+  }, [
+    entityId,
+    spaceId,
+    relationId,
+    dataEntityRelations,
+    filterState,
+    setFilterState,
+    storage,
+    blockRelations,
+    initialBlockEntities,
+  ]);
 
   return {
     source,

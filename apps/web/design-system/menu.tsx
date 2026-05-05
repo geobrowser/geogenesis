@@ -105,7 +105,11 @@ export function MenuItem({ className = '', active = false, children, href, ...re
     return (
       <Link
         href={href}
-        className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
+        className={cx(
+          'group relative flex w-full items-center px-3 py-2.5 text-button text-text',
+          active ? 'bg-grey-01' : 'bg-white',
+          className
+        )}
         {...rest}
       >
         <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />
@@ -116,7 +120,11 @@ export function MenuItem({ className = '', active = false, children, href, ...re
 
   return (
     <button
-      className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
+      className={cx(
+        'group relative flex w-full items-center px-3 py-[10px] text-button text-text',
+        active ? 'bg-grey-01' : 'bg-white',
+        className
+      )}
       {...rest}
     >
       <div className={cx('absolute inset-1 z-0 rounded', active ? 'bg-grey-01' : 'group-hover:bg-grey-01')} />

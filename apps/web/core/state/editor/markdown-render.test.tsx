@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from './markdown-render';
 
+const VALID_ENTITY_ID = '11111111111111111111111111111111';
+const VALID_SPACE_ID = '22222222222222222222222222222222';
+
 describe('markdown-render', () => {
   describe('hasMarkdownSyntax', () => {
     it('detects inline math with normal parentheses', () => {
@@ -29,11 +32,22 @@ describe('markdown-render', () => {
       expect(html).toContain('href="https://example.com"');
     });
 
-    it('renders graph links as anchor tags', () => {
-      const html = renderToStaticMarkup(<>{renderMarkdownDocument('[entity](graph://foo)')}</>);
+    it('renders valid graph links as anchor tags', () => {
+      const html = renderToStaticMarkup(
+        <>{renderMarkdownDocument(`[entity](graph://${VALID_ENTITY_ID}?s=${VALID_SPACE_ID})`)}</>
+      );
       expect(html).toContain('<a');
       expect(html).toContain('class="entity-link-valid"');
-      expect(html).toContain('href="graph://foo"');
+      expect(html).toContain(`href="graph://${VALID_ENTITY_ID}?s=${VALID_SPACE_ID}"`);
+    });
+
+    it('marks malformed graph links as invalid', () => {
+      const html = renderToStaticMarkup(<>{renderMarkdownDocument('[entity](graph://foo)')}</>);
+      expect(html).toContain('<span');
+      expect(html).toContain('class="entity-link-invalid"');
+      expect(html).toContain('data-invalid-link="true"');
+      expect(html).not.toContain('href="graph://foo"');
+      expect(html).not.toContain('<a');
     });
 
     it('marks unsafe links as invalid instead of keeping href', () => {

@@ -3,7 +3,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useValues } from '~/core/sync/use-store';
-import { Property } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -12,7 +11,7 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 type PropertyNameLinkProps = {
-  property: Property;
+  property: { id: string; name: string | null };
   spaceId: string;
 };
 

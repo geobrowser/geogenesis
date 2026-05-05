@@ -1,27 +1,34 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { makeRelationForSourceType } from '~/core/blocks/data/source';
+import { makeRelationForSourceType, type Source } from '~/core/blocks/data/source';
 import { EntityId } from '~/core/io/substream-schema';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { Relation } from '~/core/types';
+
+export type InitialDataBlockSource = Extract<Source['type'], 'COLLECTION' | 'SPACES' | 'GEO'>;
 
 /**
  * Returns the relations to create a data entity. Data entities require a type,
  * source type, and source relations by default to be valid.
  *
- * This function returns all the relations needed to make a data entity, defaulting
- * to a source type of Collection. The initial source points to a new collection
- * created for the new data entity.
- *
  * @param blockId the id of the new data block as an {@link EntityId}
+ * @param initialSourceType collection vs query source (`SPACES`, `GEO`, etc.)
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: string): [Relation, Relation] {
-  return [
-    // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
-    makeRelationForSourceType('COLLECTION', blockId, spaceId),
+export function makeInitialDataEntityRelations(
+  blockId: EntityId,
+  spaceId: string,
+  initialSourceType: InitialDataBlockSource = 'COLLECTION'
+): [Relation, Relation] {
+  const sourceForRelation: Source['type'] =
+    initialSourceType === 'COLLECTION'
+      ? 'COLLECTION'
+      : initialSourceType === 'GEO'
+        ? 'GEO'
+        : 'SPACES';
 
-    // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
+  return [
+    makeRelationForSourceType(sourceForRelation, blockId, spaceId),
     getRelationForBlockType(blockId, SystemIds.DATA_BLOCK, spaceId),
   ];
 }

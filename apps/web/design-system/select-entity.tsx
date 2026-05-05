@@ -78,6 +78,8 @@ type SelectEntityProps = {
   initialQuery?: string;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
+  /** Increment (e.g. on "add row") to move focus into this input even when already mounted. */
+  focusRequestKey?: number;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -101,6 +103,7 @@ export const SelectEntity = ({
   showIDs = true,
   initialQuery,
   selectedEntityId,
+  focusRequestKey,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -286,6 +289,17 @@ export const SelectEntity = ({
     },
     [autoFocus]
   );
+
+  const lastFocusRequestKeyRef = useRef<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (focusRequestKey === undefined || focusRequestKey === 0) return;
+    if (lastFocusRequestKeyRef.current === focusRequestKey) return;
+    lastFocusRequestKeyRef.current = focusRequestKey;
+    const id = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusRequestKey]);
 
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
     isOpen: Boolean(query),
