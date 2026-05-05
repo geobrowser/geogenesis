@@ -17,6 +17,9 @@ import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
 import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';
 
+const VALID_ENTITY_ID = '11111111111111111111111111111111';
+const VALID_SPACE_ID = '22222222222222222222222222222222';
+
 // Minimal extensions for test — no React node views, no browser-only code
 const testExtensions = [
   Document,
@@ -172,12 +175,19 @@ describe('markdown-adapter', () => {
       expect(html).toContain('</a>');
     });
 
-    it('renders safe graph links as anchor tags', () => {
-      const html = markdownToRenderedHtml('[entity](graph://foo)');
+    it('renders valid graph links as anchor tags', () => {
+      const html = markdownToRenderedHtml(`[entity](graph://${VALID_ENTITY_ID}?s=${VALID_SPACE_ID})`);
       expect(html).toContain('<a ');
       expect(html).toContain('class="entity-link-valid"');
-      expect(html).toContain('href="graph://foo"');
+      expect(html).toContain(`href="graph://${VALID_ENTITY_ID}?s=${VALID_SPACE_ID}"`);
       expect(html).toContain('</a>');
+    });
+
+    it('marks malformed graph links as invalid', () => {
+      const html = markdownToRenderedHtml('[entity](graph://foo)');
+      expect(html).toContain('<span class="entity-link-invalid" data-invalid-link="true">');
+      expect(html).not.toContain('href="graph://foo"');
+      expect(html).not.toContain('<a ');
     });
 
     it('strips unsafe javascript links', () => {

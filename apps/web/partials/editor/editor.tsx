@@ -1,6 +1,5 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -12,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
-import { NavUtils } from '~/core/utils/utils';
+import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -340,23 +339,22 @@ function useInterceptEditorLinks(spaceId: string) {
 
       // Check if the clicked element is a link
       if (link.tagName === 'A') {
-        const originalUrl = link.href;
+        const resolved = resolveGraphLinkHref(link.getAttribute('href'), spaceId);
 
-        if (originalUrl.startsWith('graph://')) {
+        if (resolved) {
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();
-          const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
-          router.prefetch(NavUtils.toEntity(spaceId, entityId));
-          router.push(NavUtils.toEntity(spaceId, entityId));
+          router.prefetch(resolved.href);
+          router.push(resolved.href);
         }
       }
     }
 
-    document.addEventListener('click', handleClick);
+    document.addEventListener('click', handleClick, { capture: true });
 
     return () => {
-      document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleClick, { capture: true });
       observer.disconnect();
     };
   }, [router, spaceId]);
