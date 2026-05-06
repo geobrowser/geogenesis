@@ -102,7 +102,6 @@ export default async function ProfileLayout(props: Props) {
               spaceId={spaceId}
               initialTabRelations={profile.tabRelations}
               tabEntities={profile.tabEntities}
-              activityHref={NavUtils.toProfileActivity(spaceId, entityId)}
             />
           </React.Suspense>
 

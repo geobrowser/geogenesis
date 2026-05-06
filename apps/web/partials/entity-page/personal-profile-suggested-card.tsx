@@ -262,7 +262,24 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white via-white/95 to-emerald-50/80" />
 
-      <div className="relative z-10 flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="relative z-10 flex flex-col gap-3 p-4 pt-4 pr-14 sm:pr-16">
+        <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4">
+          <Menu
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            asChild
+            trigger={
+              <SquareButton
+                icon={<span className="text-[1.125rem] leading-none text-text">⋯</span>}
+                aria-label="Suggested card menu"
+              />
+            }
+          >
+            <MenuItem onClick={onDismissSession}>Dismiss</MenuItem>
+            {showDismissForeverInMenu ? <MenuItem onClick={onDismissForever}>Dismiss forever</MenuItem> : null}
+          </Menu>
+        </div>
+
         <div className="min-w-0 flex-1">
           <Text as="h2" variant="smallTitle" className="text-text">
             Suggested for you
@@ -317,23 +334,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
               {tasks.post ? 'Create post' : '+ Create post'}
             </SmallButton>
           </div>
-        </div>
-
-        <div className="flex shrink-0 justify-end self-start">
-          <Menu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            asChild
-            trigger={
-              <SquareButton
-                icon={<span className="text-[1.125rem] leading-none text-text">⋯</span>}
-                aria-label="Suggested card menu"
-              />
-            }
-          >
-            <MenuItem onClick={onDismissSession}>Dismiss</MenuItem>
-            {showDismissForeverInMenu ? <MenuItem onClick={onDismissForever}>Dismiss forever</MenuItem> : null}
-          </Menu>
         </div>
       </div>
     </div>
