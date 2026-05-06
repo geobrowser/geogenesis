@@ -1,4 +1,7 @@
-export const Web2LinkHoverCard = () => {
+export const Web2LinkHoverCard = ({ shouldRender }: { shouldRender: boolean }) => {
+  if (!shouldRender) {
+    return null;
+  }
   return (
     <div className="w-64 rounded-lg border border-grey-02 bg-white p-2 shadow-[0_4px_4px_0_rgba(0,0,0,0.07)]">
       <p className="text-gray-700 leading-5 text-grey-05">

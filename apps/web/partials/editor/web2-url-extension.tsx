@@ -129,16 +129,17 @@ export const Web2URLMark = Mark.create({
     const cleanHTMLAttributes = stripInternalWeb2HTMLAttributes(HTMLAttributes);
 
     // Mode-aware rendering
-    if (mark.attrs.editMode) {
-      // EDIT MODE: Subtle styling for markdown
+    if (!mark.attrs.editMode) {
       return [
-        'span',
+        'a',
         {
           ...cleanHTMLAttributes,
-          class: 'web2-url-edit-mode',
+          href: normalizeWeb2Url(mark.attrs.url),
           'data-web2-url': 'true',
           'data-url': mark.attrs.url,
-          style: 'color: #e57373; cursor: text;',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          style: 'color: #202020; text-decoration: underline; cursor: pointer;',
         },
         0,
       ];
@@ -261,7 +262,9 @@ export const Web2URLExtension = Extension.create({
 
               // Create ReactRenderer component
               component = new ReactRenderer(Web2LinkHoverCard, {
-                props: {},
+                props: {
+                  shouldRender: false, // disable warning
+                },
                 editor,
               });
 
