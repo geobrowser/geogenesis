@@ -12,7 +12,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { ensureProfilePageTab, runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
+
+import {
+  ENTITY_PAGE_SURFACE_POST_VALUE,
+  ENTITY_PAGE_SURFACE_QUERY_KEY,
+} from '~/partials/entity-page/entity-page-surface';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -49,6 +55,7 @@ type Props = {
 
 export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
+  const setSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const pathname = usePathname();
   const canEdit = useUserIsEditing(spaceId);
   const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
@@ -87,6 +94,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const [sessionDismissed, setSessionDismissed] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [createPostPending, setCreatePostPending] = React.useState(false);
 
   const sessionDismissStorageKey = React.useMemo(() => {
     if (!address) return null;
@@ -152,6 +160,16 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   }, [entityId, router, spaceId]);
 
+  const onAddEducation = React.useCallback(() => {
+    const tabId = ensureProfilePageTab(entityId, spaceId, 'Education');
+    setSuggestedTasks(t => ({ ...t, education: true }));
+    router.push(
+      NavUtils.toEntity(spaceId, entityId, true, undefined, {
+        tabId,
+      })
+    );
+  }, [entityId, router, setSuggestedTasks, spaceId]);
+
   const onAddSkills = React.useCallback(() => {
     const profilePath = NavUtils.toEntity(spaceId, entityId, false);
     const spaceHomePath = NavUtils.toSpace(spaceId);
@@ -211,9 +229,27 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   }, [displayName, entityId, router, spaceId]);
 
-  const onCreatePost = React.useCallback(() => {
-    router.push(NavUtils.toProfileActivity(spaceId, entityId));
-  }, [entityId, router, spaceId]);
+  const onCreatePost = React.useCallback(async () => {
+    if (createPostPending) return;
+    setCreatePostPending(true);
+    try {
+      const postEntityId = await runPersonalPostCreationFlow({
+        spaceId,
+        profileEntityId: entityId,
+        authorDisplayName: displayName,
+      });
+      setSuggestedTasks(t => ({ ...t, post: true }));
+      router.push(
+        NavUtils.toEntity(spaceId, postEntityId, true, undefined, {
+          [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE,
+        })
+      );
+    } catch (e) {
+      console.error('[PersonalProfileSuggestedCard] create post failed', e);
+    } finally {
+      setCreatePostPending(false);
+    }
+  }, [createPostPending, displayName, entityId, router, setSuggestedTasks, spaceId]);
 
   if (!visible) {
     return null;
@@ -258,7 +294,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
               className={tasks.education ? donePillClass : pillClass}
               icon={tasks.education ? <CheckCircleSmall color="white" /> : undefined}
               disabled={tasks.education}
-              onClick={tasks.education ? undefined : onJumpProfileEdit}
+              onClick={tasks.education ? undefined : onAddEducation}
             >
               {tasks.education ? 'Add education' : '+ Add education'}
             </SmallButton>
@@ -275,8 +311,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
               variant="secondary"
               className={tasks.post ? donePillClass : pillClass}
               icon={tasks.post ? <CheckCircleSmall color="white" /> : undefined}
-              disabled={tasks.post}
-              onClick={tasks.post ? undefined : onCreatePost}
+              disabled={tasks.post || createPostPending}
+              onClick={tasks.post || createPostPending ? undefined : () => void onCreatePost()}
             >
               {tasks.post ? 'Create post' : '+ Create post'}
             </SmallButton>

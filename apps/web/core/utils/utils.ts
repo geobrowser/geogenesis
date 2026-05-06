@@ -28,8 +28,29 @@ export const NavUtils = {
     }
     return `/space/${spaceId}/governance?${params.toString()}`;
   },
-  toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
-    return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
+  toEntity: (
+    spaceId: string,
+    newEntityId: string,
+    editParam?: boolean,
+    newEntityName?: string,
+    extraSearchParams?: Record<string, string | undefined>
+  ) => {
+    const params = new URLSearchParams();
+    if (editParam) {
+      params.set('edit', 'true');
+    }
+    if (editParam && newEntityName) {
+      params.set('entityName', newEntityName);
+    }
+    if (extraSearchParams) {
+      for (const [key, value] of Object.entries(extraSearchParams)) {
+        if (value != null && value !== '') {
+          params.set(key, value);
+        }
+      }
+    }
+    const qs = params.toString();
+    return `/space/${spaceId}/${newEntityId}${qs ? `?${qs}` : ''}`;
   },
   toImport: (spaceId: string, editParam = true) => {
     return `/space/${spaceId}/import${editParam ? '?edit=true' : ''}`;

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useQueryEntity, useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 import { NavUtils } from '~/core/utils/utils';
@@ -33,6 +33,8 @@ import {
 } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
+import { ENTITY_PAGE_SURFACE_POST_VALUE, ENTITY_PAGE_SURFACE_QUERY_KEY } from '~/partials/entity-page/entity-page-surface';
+
 type Props = {
   entityId: string;
   spaceId: string;
@@ -52,6 +54,7 @@ type Props = {
   autoFocus?: boolean;
   focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  navigateAsPostSurface?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -73,6 +76,7 @@ export function EditableEntityTableCell({
   autoFocus = false,
   focusRequestKey,
   collectionTypeFilters,
+  navigateAsPostSurface = false,
 }: Props) {
   const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
@@ -120,7 +124,11 @@ export function EditableEntityTableCell({
               }}
             />
             <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+              <NavigateButton
+                spaceId={currentSpaceId}
+                entityId={entityId}
+                navigateAsPostSurface={navigateAsPostSurface}
+              />
             </div>
           </div>
         ) : (
@@ -325,12 +333,32 @@ interface ValueGroupProps {
   spaceId: string;
 }
 
-function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+function NavigateButton({
+  spaceId,
+  entityId,
+  navigateAsPostSurface,
+}: {
+  spaceId: string;
+  entityId: string;
+  navigateAsPostSurface?: boolean;
+}) {
   const router = useRouter();
+  const { entity } = useQueryEntity({ id: entityId, spaceId });
+
+  const usePostSurface =
+    navigateAsPostSurface === true || Boolean(entity?.types?.some(t => t.id === SystemIds.POST_TYPE));
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation();
-    router.push(NavUtils.toEntity(spaceId, entityId, true));
+    router.push(
+      NavUtils.toEntity(
+        spaceId,
+        entityId,
+        true,
+        undefined,
+        usePostSurface ? { [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE } : undefined
+      )
+    );
   };
 
   return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
