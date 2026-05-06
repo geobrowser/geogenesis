@@ -134,11 +134,12 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   const showDismissForeverInMenu = dismiss.softDismissCount >= 1;
 
+  // Dark fills at rest; on hover only lighten the background so `secondary`’s `hover:text-text` stays readable.
   const pillClass =
-    'border-transparent !bg-text !text-white hover:!bg-text/90 focus-visible:!border-text [&]:shadow-none';
+    'border-transparent !bg-text !text-white hover:!bg-bg focus-visible:!border-text [&]:shadow-none';
 
   const donePillClass =
-    'border-transparent !bg-grey-03 !text-white hover:!bg-grey-03 focus-visible:!border-grey-03 [&]:shadow-none';
+    'border-transparent !bg-grey-03 !text-white hover:!bg-bg focus-visible:!border-grey-03 [&]:shadow-none';
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
