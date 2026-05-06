@@ -17,8 +17,6 @@ export type WriteContext =
       /** Legacy name used by write tools; resolves true for any space the user can edit. */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
-      /** Always empty for guests; present for type symmetry with the member arm. */
-      mintedBlockIds: Set<string>;
     }
   | {
       kind: 'member';
@@ -27,9 +25,6 @@ export type WriteContext =
       /** Legacy name used by write tools; resolves true for any space the user can edit. */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
-      // Tracks createBlock-minted ids so same-turn follow-ups skip the
-      // live-graph BLOCKS-edge check.
-      mintedBlockIds: Set<string>;
     };
 
 const normalize = (id: string) => id.replace(/-/g, '').toLowerCase();
@@ -46,7 +41,6 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
       personalSpaceId: null,
       isMember: async () => false,
       checkEditRateLimit: async () => ({ ok: true }),
-      mintedBlockIds: new Set<string>(),
     };
   }
 
@@ -130,6 +124,5 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         return { ok: true };
       }
     },
-    mintedBlockIds: new Set<string>(),
   };
 }

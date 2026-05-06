@@ -30,20 +30,15 @@ import {
   type ChatClientContext,
   GUEST_SYSTEM_PROMPT,
   MEMBER_SYSTEM_PROMPT,
+  type PreloadedEntityForPrompt,
   renderCurrentContextSection,
+  renderPreloadedEntitySection,
 } from './chat-system-prompt';
 import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
-import {
-  anonBurstLimit,
-  anonHourlyLimit,
-  ipCeilingBurstLimit,
-  ipCeilingHourlyLimit,
-  loggedInBurstLimit,
-  loggedInHourlyLimit,
-} from './rate-limit';
+import { anonHourlyLimit, ipCeilingHourlyLimit, loggedInHourlyLimit } from './rate-limit';
 import { buildNavTools } from './tools/nav';
 import { readTools } from './tools/read';
-import { buildWriteContext, buildWriteTools } from './tools/write';
+import { buildWriteContext, writeTools } from './tools/write';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
@@ -58,6 +53,40 @@ const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 // currentPath is interpolated into the system prompt inside backticks; reject
 // anything that could break out of the code span or smuggle control chars.
 const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
+
+// The preload is supplied by the client and only ever scopes the system turn
+// for *this user's* conversation, so we don't need the same anti-forgery
+// enforcement as the wallet cookie. We do however require entity + space ids
+// to match the validated currentContext — otherwise a stale or mismatched
+// preload would silently mislead the model.
+function validatePreloadedEntity(
+  input: unknown,
+  expectedEntityId: string | null,
+  expectedSpaceId: string | null
+): PreloadedEntityForPrompt | null {
+  if (input == null || typeof input !== 'object') return null;
+  if (!expectedEntityId) return null;
+  const raw = input as Record<string, unknown>;
+
+  const entityId = raw.entityId;
+  const spaceId = raw.spaceId;
+  const data = raw.data;
+
+  if (typeof entityId !== 'string' || !UUID_OR_DASHLESS.test(entityId)) return null;
+  if (entityId.toLowerCase() !== expectedEntityId.toLowerCase()) return null;
+  if (spaceId != null && (typeof spaceId !== 'string' || !UUID_OR_DASHLESS.test(spaceId))) return null;
+  if (data == null || typeof data !== 'object') return null;
+
+  if (expectedSpaceId && typeof spaceId === 'string' && spaceId.toLowerCase() !== expectedSpaceId.toLowerCase()) {
+    return null;
+  }
+
+  return {
+    entityId,
+    spaceId: typeof spaceId === 'string' ? spaceId : null,
+    data,
+  };
+}
 
 function validateClientContext(input: unknown): ChatClientContext | null {
   if (input == null || typeof input !== 'object') return null;
@@ -150,8 +179,8 @@ function rateLimitResponse(reset: number) {
 type LimitProbe = { success: boolean; reset: number };
 
 // Take `reset` only from the limiters that actually rejected — taking max
-// across all four would let an exhausted 10-second burst surface a 1-hour
-// Retry-After if the hourly window happens to reset later.
+// across both would let a tripped short window surface a longer Retry-After
+// from a different window that happens to reset later.
 function failedLimiterReset(probes: LimitProbe[]): number {
   let max = 0;
   for (const probe of probes) {
@@ -164,26 +193,69 @@ function failedLimiterReset(probes: LimitProbe[]): number {
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
 // Navigation turns: text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
+// Browser executes these against the merged store; the route returns no tool
+// result for them.
+const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces']);
 
-function classifyTurn(firstStreamMessages: ModelMessage[]): 'skip' | 'edit' | 'default' {
-  const lastAssistant = [...firstStreamMessages].reverse().find(m => m.role === 'assistant');
-  if (!lastAssistant) return 'default';
-  const content = lastAssistant.content;
-  if (typeof content === 'string') return content.trim().length === 0 ? 'skip' : 'default';
-  if (!Array.isArray(content)) return 'default';
-
-  let hasText = false;
-  let onlyNavLike = true;
-  let hasEditCall = false;
-  for (const part of content) {
-    if (part.type === 'text' && part.text.trim().length > 0) {
-      hasText = true;
-    } else if (part.type === 'tool-call') {
-      if (!NAV_LIKE_TOOL_NAMES.has(part.toolName)) onlyNavLike = false;
-      if (EDIT_TOOL_NAME_SET.has(part.toolName)) hasEditCall = true;
+// With client-executed tool flows the assistant turn that triggers 'edit'
+// framing isn't always the one that originally emitted the write call — the
+// same conversation may contain a resubmit cycle: assistant(call) →
+// tool(result) → assistant(text). Walk every message since the last user turn.
+function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' | 'client-pending' {
+  let userIdx = -1;
+  for (let i = allMessages.length - 1; i >= 0; i--) {
+    if (allMessages[i].role === 'user') {
+      userIdx = i;
+      break;
     }
   }
-  if (hasEditCall) return 'edit';
+  const turn = allMessages.slice(userIdx + 1);
+  if (turn.length === 0) return 'default';
+
+  // Pair tool-calls with tool-results across the turn so we know which client
+  // calls are still pending.
+  const callsByName = new Map<string, string>();
+  const resultIds = new Set<string>();
+  for (const message of turn) {
+    if (message.role === 'tool' && Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (part.type === 'tool-result' && part.toolCallId) resultIds.add(part.toolCallId);
+      }
+    } else if (message.role === 'assistant' && Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (part.type === 'tool-call') callsByName.set(part.toolCallId, part.toolName);
+      }
+    }
+  }
+
+  let hasPendingClientCall = false;
+  let hasEditCallInTurn = false;
+  for (const [toolCallId, toolName] of callsByName) {
+    if (CLIENT_READ_TOOL_NAMES.has(toolName) || EDIT_TOOL_NAME_SET.has(toolName)) {
+      if (!resultIds.has(toolCallId)) hasPendingClientCall = true;
+    }
+    if (EDIT_TOOL_NAME_SET.has(toolName)) hasEditCallInTurn = true;
+  }
+
+  if (hasPendingClientCall) return 'client-pending';
+
+  // Inspect the most recent assistant message for the skip / nav-only branch.
+  const lastAssistant = [...turn].reverse().find(m => m.role === 'assistant');
+  let hasText = false;
+  let onlyNavLike = true;
+  if (lastAssistant) {
+    const content = lastAssistant.content;
+    if (typeof content === 'string') {
+      if (content.trim().length > 0) hasText = true;
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === 'text' && part.text.trim().length > 0) hasText = true;
+        else if (part.type === 'tool-call' && !NAV_LIKE_TOOL_NAMES.has(part.toolName)) onlyNavLike = false;
+      }
+    }
+  }
+
+  if (hasEditCallInTurn) return 'edit';
   if (!hasText && onlyNavLike) return 'skip';
   return 'default';
 }
@@ -227,19 +299,13 @@ export async function POST(req: Request) {
   const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
   const identityKey = wallet ?? ip;
-  const identityBurst = isLoggedIn ? loggedInBurstLimit : anonBurstLimit;
   const identityHourly = isLoggedIn ? loggedInHourlyLimit : anonHourlyLimit;
 
   try {
-    const [burst, hourly, ipBurst, ipHourly] = await Promise.all([
-      identityBurst.limit(identityKey),
-      identityHourly.limit(identityKey),
-      ipCeilingBurstLimit.limit(ip),
-      ipCeilingHourlyLimit.limit(ip),
-    ]);
+    const [hourly, ipHourly] = await Promise.all([identityHourly.limit(identityKey), ipCeilingHourlyLimit.limit(ip)]);
 
-    if (!burst.success || !hourly.success || !ipBurst.success || !ipHourly.success) {
-      return rateLimitResponse(failedLimiterReset([burst, hourly, ipBurst, ipHourly]));
+    if (!hourly.success || !ipHourly.success) {
+      return rateLimitResponse(failedLimiterReset([hourly, ipHourly]));
     }
   } catch (err) {
     console.error('[chat] rate limiter unavailable', err);
@@ -250,6 +316,7 @@ export async function POST(req: Request) {
 
   let uiMessages: UIMessage[];
   let clientContext: ChatClientContext | null = null;
+  let preloadedEntity: PreloadedEntityForPrompt | null = null;
   try {
     const body = await req.json();
     const validated = validateUIMessages(body?.messages);
@@ -264,6 +331,14 @@ export async function POST(req: Request) {
         return jsonError(400, 'Invalid request body');
       }
       clientContext = parsedContext;
+    }
+
+    if (body?.preloadedEntity != null) {
+      preloadedEntity = validatePreloadedEntity(
+        body.preloadedEntity,
+        clientContext?.currentEntityId ?? null,
+        clientContext?.currentSpaceId ?? null
+      );
     }
   } catch {
     return jsonError(400, 'Invalid request body');
@@ -289,7 +364,8 @@ export async function POST(req: Request) {
 
   const basePrompt = isLoggedIn ? MEMBER_SYSTEM_PROMPT : GUEST_SYSTEM_PROMPT;
   const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId);
-  const systemContent = contextSection ? `${basePrompt}\n${contextSection}` : basePrompt;
+  const preloadSection = renderPreloadedEntitySection(preloadedEntity);
+  const systemContent = [basePrompt, contextSection, preloadSection].filter(Boolean).join('\n');
 
   const messages: ModelMessage[] = [
     {
@@ -334,7 +410,10 @@ export async function POST(req: Request) {
     },
     writeContext
   );
-  const writeTools: ToolSet = isLoggedIn ? buildWriteTools(writeContext) : {};
+  // Schema-only writes for members: authorization (member + edit rate limit)
+  // happens via /api/chat/authorize-write and graph-state validation runs in
+  // useEditDispatcher. Guests don't see the catalog at all.
+  const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -342,7 +421,7 @@ export async function POST(req: Request) {
         model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        tools: { ...readTools, ...navTools, ...writeTools },
+        tools: { ...readTools, ...navTools, ...memberWriteTools },
         toolChoice: 'auto',
         stopWhen: stepCountIs(MAX_TOOL_STEPS),
       });
@@ -350,9 +429,9 @@ export async function POST(req: Request) {
 
       const firstStreamMessages = (await textResult.response).messages;
 
-      const turnKind = classifyTurn(firstStreamMessages);
+      const turnKind = classifyTurn([...messages, ...firstStreamMessages]);
 
-      if (turnKind === 'skip') {
+      if (turnKind === 'skip' || turnKind === 'client-pending') {
         return;
       }
 

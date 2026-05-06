@@ -9,9 +9,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
+import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
 import { ENTITY_ID_REGEX, isHistoryFull, isHistoryFullError } from '~/core/chat/limits';
 import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
+import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
+import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useSpace } from '~/core/hooks/use-space';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { useDiff } from '~/core/state/diff-store';
@@ -90,18 +93,45 @@ export function ChatWidget() {
     isEditMode: editable,
   };
 
+  // Pre-fetch the current entity on panel open so the model can answer
+  // "this entity"-style questions on turn 1 without a getEntity round-trip.
+  const preloadedEntity = usePreloadedEntity(isOpen, currentEntityId, currentSpaceId);
+  const preloadedEntityRef = React.useRef<PreloadedEntity | null>(preloadedEntity);
+  preloadedEntityRef.current = preloadedEntity;
+
   const transport = React.useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/chat',
-        body: () => ({ context: contextRef.current }),
+        body: () => ({ context: contextRef.current, preloadedEntity: preloadedEntityRef.current }),
       }),
     []
   );
 
-  const { messages, sendMessage, status, error, regenerate, setMessages, stop } = useChat({
+  // The dispatcher needs `addToolResult` to write outputs back, but useChat
+  // returns it after construction. A ref breaks the cycle: the dispatcher
+  // captures the ref, the ref is filled in after useChat returns.
+  // Typing erased to `string` for `tool` because the dispatcher is shared
+  // with non-UI codepaths; the cast at the assignment site is safe — at
+  // runtime the function only looks at tool/toolCallId/output and forwards
+  // them.
+  const addToolResultRef = React.useRef<((args: { tool: string; toolCallId: string; output: unknown }) => void) | null>(
+    null
+  );
+
+  const { messages, sendMessage, status, error, regenerate, setMessages, stop, addToolResult } = useChat({
     transport,
+    // After the dispatcher writes a client-tool result, this returns true and
+    // the SDK fires a fresh request so the model can react to the data — same
+    // multi-step behavior server-executed tools get inside one stream.
+    sendAutomaticallyWhen: shouldResubmitAfterClientExecution,
   });
+
+  addToolResultRef.current = addToolResult as unknown as (args: {
+    tool: string;
+    toolCallId: string;
+    output: unknown;
+  }) => void;
 
   // Navigate only after the server-side `navigate` tool validates the target.
   // Acting on the raw tool call would fire before getSpace runs, which lets
@@ -142,7 +172,11 @@ export function ChatWidget() {
     }
   }, [messages, setIsReviewOpen, bumpReviewVersion]);
 
-  useEditDispatcher(messages);
+  // Order matters: edit-dispatcher's effect must enqueue apply tasks before
+  // read-dispatcher's effect enqueues read tasks, so reads in the same step
+  // observe the post-apply store.
+  useEditDispatcher(messages, addToolResultRef);
+  useReadDispatcher(messages, addToolResultRef);
 
   const isBusy = status === 'submitted' || status === 'streaming';
 
