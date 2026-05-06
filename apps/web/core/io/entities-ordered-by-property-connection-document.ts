@@ -56,7 +56,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             ...PropertyFragment
@@ -76,7 +76,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
           schedule
         }
 
-        relationsList(filter: { spaceId: { is: $spaceId } }) {
+        relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           id
           spaceId
           position

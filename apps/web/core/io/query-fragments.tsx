@@ -15,7 +15,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       name
     }
 
-    valuesList {
+    valuesList(first: 1000) {
       spaceId
       property {
         ...PropertyFragment
@@ -35,7 +35,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       schedule
     }
 
-    relationsList {
+    relationsList(first: 1000) {
       id
       spaceId
       position
@@ -109,7 +109,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -129,7 +129,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -186,7 +186,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -206,7 +206,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -267,18 +267,18 @@ export const entityQuery = graphql(/* GraphQL */ `
       # routes to. The main valuesList/relationsList below are space-scoped for
       # display, so we need an unscoped projection to know which spaces hold
       # real (non-hidden) content.
-      allValuesList: valuesList {
+      allValuesList: valuesList(first: 1000) {
         spaceId
         property {
           id
         }
       }
 
-      allRelationsList: relationsList {
+      allRelationsList: relationsList(first: 1000) {
         spaceId
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -298,7 +298,7 @@ export const entityQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -431,18 +431,18 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       # routes to. The main valuesList/relationsList below are space-scoped for
       # display, so we need an unscoped projection to know which spaces hold
       # real (non-hidden) content.
-      allValuesList: valuesList {
+      allValuesList: valuesList(first: 1000) {
         spaceId
         property {
           id
         }
       }
 
-      allRelationsList: relationsList {
+      allRelationsList: relationsList(first: 1000) {
         spaceId
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -462,7 +462,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -564,7 +564,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList {
+      valuesList(first: 1000) {
         spaceId
         property {
           ...PropertyFragment
@@ -584,7 +584,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList {
+      relationsList(first: 1000) {
         id
         spaceId
         position
@@ -888,18 +888,18 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           name
         }
 
-        allValuesList: valuesList {
+        allValuesList: valuesList(first: 1000) {
           spaceId
           property {
             id
           }
         }
 
-        allRelationsList: relationsList {
+        allRelationsList: relationsList(first: 1000) {
           spaceId
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             id
@@ -924,7 +924,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           bytes
           schedule
         }
-        relationsList {
+        relationsList(first: 1000) {
           verified
           toSpaceId
           position
