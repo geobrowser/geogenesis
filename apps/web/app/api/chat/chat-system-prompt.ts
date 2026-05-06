@@ -7,6 +7,38 @@ export type ChatClientContext = {
   isEditMode: boolean;
 };
 
+// Pre-fetched data for the user's current entity, captured client-side when
+// the chat panel opens. Embedded in the system turn so the model can answer
+// "this entity"-style questions on turn 1 without a getEntity round-trip.
+export type PreloadedEntityForPrompt = {
+  entityId: string;
+  spaceId: string | null;
+  data: unknown;
+};
+
+// Drop the preload entirely past this size — better to lose the optimization
+// than to bloat the prompt by tens of KB on a giant page.
+const MAX_PRELOAD_JSON_CHARS = 12_000;
+
+export function renderPreloadedEntitySection(preload: PreloadedEntityForPrompt | null): string | null {
+  if (!preload) return null;
+  let json: string;
+  try {
+    json = JSON.stringify(preload.data);
+  } catch {
+    return null;
+  }
+  if (json.length > MAX_PRELOAD_JSON_CHARS) return null;
+
+  const spaceArg = preload.spaceId ? `, spaceId: "${preload.spaceId}"` : '';
+  return `# Preloaded current entity
+A getEntity({ entityId: "${preload.entityId}"${spaceArg} }) call has already been made for you against the user's merged local + remote graph. Treat the JSON below as the equivalent tool result — when the user references "this entity", "this page", or this id, answer from this data directly. Only call \`getEntity\` again on this id if the data may have changed (e.g., after edits in this turn).
+
+\`\`\`json
+${json}
+\`\`\``;
+}
+
 export function renderCurrentContextSection(
   context: ChatClientContext | null,
   // Resolved server-side from the wallet's membership, not from the request
@@ -186,7 +218,7 @@ You can edit the graph on the user's behalf in spaces where they're a member.
 - **No mid-stream narration. Tools first, then ONE reply at the end.** Do not write any text before or between tool calls — no preambles ("Let me look that up…"), no progress updates ("Got the id, now I'll filter…"), no recaps. The user sees a thinking indicator while you work. Plan silently, run every tool the request needs, then emit a single short past-tense summary AFTER the last tool resolves ("Added a Title property with value 'My post'."). If a tool returns an error mid-chain, recover silently if possible; only break silence to surface a blocker you can't route around.
 - **Review panel.** If the user asks to "open review edits" / "show staged changes" / "publish", call \`openReviewPanel\` — they name and publish themselves. Don't open it automatically after an edit; never name a proposal or click Publish for them.
 - **Governance + scope limits.** Personal spaces publish immediately; public spaces queue proposals — say edits are "staged", not "live". You cannot sign transactions, publish, rename spaces, or invite editors; those are user-driven via the UI.
-- **Error recovery.** On \`{ ok: false }\`, stop and acknowledge. Common errors: \`not_authorized\` (not a member), \`not_found\` (id didn't resolve), \`wrong_type\` (dataType mismatch), \`already_exists\` (relation already set — confirm, don't retry).
+- **Error recovery.** On \`{ ok: false }\`, stop and acknowledge. Common errors: \`not_authorized\` (not a member), \`not_found\` (id didn't resolve), \`wrong_type\` (dataType mismatch), \`already_exists\` (relation already set — confirm, don't retry), \`apply_failed\` (the change couldn't land — the block, relation, or value the model addressed is not where it was assumed; re-read the entity via \`getEntity\` to see the current shape and try a different approach. Do NOT retry the same call blindly).
 
 ${CITATION_RULES}
 ${FOLLOW_UPS_INSTRUCTION}

@@ -6,6 +6,7 @@ import type { UIMessage } from 'ai';
 import { isTextUIPart, isToolUIPart } from 'ai';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 
+import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import type { EditToolFailure } from '~/core/chat/edit-types';
 import { isEditToolPartType } from '~/core/chat/edit-types';
 import { buildEntityCacheFromMessages } from '~/core/chat/entity-cache';
@@ -15,6 +16,8 @@ import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatMarkdown } from './chat-markdown';
 import { useSmoothStream } from './use-smooth-stream';
+
+const DEBUG = process.env.NODE_ENV !== 'production';
 
 function userText(message: UIMessage): string {
   return message.parts
@@ -57,6 +60,31 @@ function hasPendingMainTools(message: UIMessage): boolean {
   return false;
 }
 
+// True iff a non-followup tool already resolved in this turn. Used to skip
+// the leading-text grace period — once we're past the tools, the model
+// can't emit a preamble that retroactively forces the cover back up.
+function hasResolvedMainToolInTurn(messages: UIMessage[], lastUserIdx: number): boolean {
+  for (let i = lastUserIdx + 1; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role !== 'assistant') continue;
+    for (const p of m.parts) {
+      if (!isToolUIPart(p)) continue;
+      if (p.type === 'tool-suggestFollowUps') continue;
+      if (p.state === 'output-available' || p.state === 'output-error') return true;
+    }
+  }
+  return false;
+}
+
+// Last 'user' message index in O(messages.length); shared by the grace hook
+// and the main render so we don't scan twice.
+function findLastUserIndex(messages: UIMessage[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return i;
+  }
+  return -1;
+}
+
 // Silent edit failures: surface inline since the model may not narrate them.
 type EditFailureNote = { toolName: string; failure: EditToolFailure };
 
@@ -97,6 +125,146 @@ function describeEditFailure(note: EditFailureNote): string {
   }
 }
 
+// Cover stays on while we're truly thinking: a tool is mid-flight, the SDK
+// is about to resubmit a tool result, or no text has streamed yet. Once the
+// closing-summary text starts streaming and no main tool is pending, the
+// cover lifts and the user sees the answer live — same UX whether the turn
+// chained through tools first or was pure-text from the start.
+function computeIsThinking({
+  messages,
+  status,
+  willResubmit,
+  lastUserIdx,
+}: {
+  messages: UIMessage[];
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  willResubmit: boolean;
+  lastUserIdx: number;
+}): boolean {
+  if (status === 'error') return false;
+  if (lastUserIdx === -1) return false;
+
+  if (status === 'submitted') return true;
+
+  let lastAssistant: UIMessage | null = null;
+  for (let i = messages.length - 1; i > lastUserIdx; i--) {
+    if (messages[i].role === 'assistant') {
+      lastAssistant = messages[i];
+      break;
+    }
+  }
+  if (!lastAssistant) return true;
+
+  // A pending main tool or queued resubmit means more model work is coming;
+  // keep the cover up.
+  if (hasPendingMainTools(lastAssistant)) return true;
+  if (willResubmit) return true;
+
+  // No tools pending. Lift as soon as visible text starts streaming;
+  // otherwise wait for the first token (so we don't show an empty panel
+  // mid-stream before the model commits to text vs. another tool call).
+  const finalText = visibleAssistantText(lastAssistant);
+  if (finalText.length > 0) return false;
+  return status === 'streaming';
+}
+
+// Brief grace period after the cover would lift due to leading text — gives
+// the model a moment to commit to a tool call instead. If a tool appears
+// inside the window, `hasPendingMainTools` flips the raw value back to true
+// and the timer is cleared, so the leading text never flashes. Post-tool
+// text skips the grace entirely (we're already past the flash window).
+const LEADING_TEXT_GRACE_MS = 350;
+
+function useGracedIsThinking({
+  rawIsThinking,
+  hasResolvedTool,
+}: {
+  rawIsThinking: boolean;
+  hasResolvedTool: boolean;
+}): boolean {
+  const [debounced, setDebounced] = React.useState(rawIsThinking);
+
+  React.useEffect(() => {
+    if (rawIsThinking) {
+      setDebounced(true);
+      return;
+    }
+    if (hasResolvedTool) {
+      setDebounced(false);
+      return;
+    }
+    const handle = setTimeout(() => setDebounced(false), LEADING_TEXT_GRACE_MS);
+    return () => clearTimeout(handle);
+  }, [rawIsThinking, hasResolvedTool]);
+
+  return debounced;
+}
+
+// One-line digest of an assistant message's parts for the debug logger.
+// Format: "step|tool:setEntityValue=output-available|text(42)|tool:searchGraph=input-streaming"
+// Dev-only: gated through the DEBUG constant so prod bundles tree-shake it.
+function digestParts(message: UIMessage | undefined): string {
+  if (!message) return '<no-assistant>';
+  return message.parts
+    .map(p => {
+      if (p.type === 'step-start') return 'step';
+      if (isTextUIPart(p)) return `text(${p.text.length})`;
+      if (isToolUIPart(p)) {
+        const name = p.type.replace(/^tool-/, '');
+        return `tool:${name}=${p.state}`;
+      }
+      return p.type;
+    })
+    .join('|');
+}
+
+function useChatDebugLogger({
+  messages,
+  status,
+  willResubmit,
+  isThinking,
+  lastAssistant,
+}: {
+  messages: UIMessage[];
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  willResubmit: boolean;
+  isThinking: boolean;
+  lastAssistant: UIMessage | undefined;
+}) {
+  const prevRef = React.useRef<{ status: string; willResubmit: boolean; isThinking: boolean; digest: string } | null>(
+    null
+  );
+  const t0Ref = React.useRef<number | null>(null);
+  if (!DEBUG) return;
+  if (t0Ref.current == null) t0Ref.current = performance.now();
+
+  const digest = digestParts(lastAssistant);
+  const prev = prevRef.current;
+  const changed =
+    !prev ||
+    prev.status !== status ||
+    prev.willResubmit !== willResubmit ||
+    prev.isThinking !== isThinking ||
+    prev.digest !== digest;
+
+  if (changed) {
+    const t = Math.round(performance.now() - (t0Ref.current ?? 0));
+    const flips: string[] = [];
+    if (prev) {
+      if (prev.status !== status) flips.push(`status ${prev.status}→${status}`);
+      if (prev.willResubmit !== willResubmit) flips.push(`willResubmit ${prev.willResubmit}→${willResubmit}`);
+      if (prev.isThinking !== isThinking) flips.push(`isThinking ${prev.isThinking}→${isThinking}`);
+    }
+    console.log(
+      `[chat ${t}ms]`,
+      flips.length ? flips.join(', ') : 'init',
+      `| msgs=${messages.length} status=${status} willResubmit=${willResubmit} isThinking=${isThinking}`,
+      `| parts: ${digest}`
+    );
+    prevRef.current = { status, willResubmit, isThinking, digest };
+  }
+}
+
 function messageFollowUps(message: UIMessage): string[] {
   for (const part of message.parts) {
     if (!isToolUIPart(part)) continue;
@@ -128,14 +296,17 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   const lastAssistantId = lastAssistant?.id;
   const followUps = lastAssistant ? messageFollowUps(lastAssistant) : [];
 
-  const inFlightAssistant = status === 'streaming' || status === 'submitted' ? lastAssistant : null;
-  const isThinking =
-    status === 'submitted' ||
-    (status === 'streaming' &&
-      (inFlightAssistant === null ||
-        inFlightAssistant === undefined ||
-        hasPendingMainTools(inFlightAssistant) ||
-        visibleAssistantText(inFlightAssistant).length === 0));
+  // Cover lifts as soon as visible closing-summary text starts streaming. A
+  // small grace period (useGracedIsThinking) hides any leading preamble that
+  // the model might emit before its first tool call — if a tool lands inside
+  // the window, the cover never lifted in the first place.
+  const willResubmit = shouldResubmitAfterClientExecution({ messages });
+  const lastUserIdx = findLastUserIndex(messages);
+  const rawIsThinking = computeIsThinking({ messages, status, willResubmit, lastUserIdx });
+  const hasResolvedTool = hasResolvedMainToolInTurn(messages, lastUserIdx);
+  const isThinking = useGracedIsThinking({ rawIsThinking, hasResolvedTool });
+
+  useChatDebugLogger({ messages, status, willResubmit, isThinking, lastAssistant });
 
   const hiddenAssistantId = isThinking ? lastAssistantId : null;
 
@@ -150,19 +321,32 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
 
   const entityCache = React.useMemo(() => buildEntityCacheFromMessages(messages), [messages]);
 
-  // Ref flag distinguishes our own programmatic scrolls from user-initiated
-  // ones — otherwise clamping looks like a scroll-up and freezes auto-scroll.
+  // stuck-state is driven by scrollTop direction, not distance-from-bottom.
+  // Programmatic scrolls only ever move forward (`scrollForwardTo` enforces
+  // this), so a scrollTop *decrease* in onScroll is unambiguously a user
+  // gesture (wheel up, scrollbar drag up, keyboard PageUp, etc.). The old
+  // distance-based check was unreliable: with the iconLimit clamp leaving
+  // distance > NEAR_BOTTOM, any stray scroll event flipped stuck off and
+  // froze auto-follow mid-stream.
   const stuckToBottomRef = React.useRef(true);
-  const isAutoScrollingRef = React.useRef(false);
+  const lastScrollTopRef = React.useRef(0);
+  const NEAR_BOTTOM = 48;
 
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const NEAR_BOTTOM = 48;
     const onScroll = () => {
-      if (isAutoScrollingRef.current) return;
-      const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
-      stuckToBottomRef.current = distance <= NEAR_BOTTOM;
+      const newTop = el.scrollTop;
+      const oldTop = lastScrollTopRef.current;
+      lastScrollTopRef.current = newTop;
+      if (newTop < oldTop) {
+        // User pulled up. Stop auto-follow so we don't yank them back down.
+        stuckToBottomRef.current = false;
+        return;
+      }
+      // Scrolled (or back-scrolled) to near-bottom — resume auto-follow.
+      const distance = el.scrollHeight - (newTop + el.clientHeight);
+      if (distance <= NEAR_BOTTOM) stuckToBottomRef.current = true;
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
@@ -176,55 +360,76 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
     const last = messages[messages.length - 1];
     if (!last) return;
 
-    // Clear the auto-scroll flag once the scroll event we just caused has
-    // fired, so a user-initiated scroll that arrives a frame later isn't
-    // misread as our own programmatic one. Fallback rAFs handle the case
-    // where no scroll event fires (setting scrollTop to the current value).
-    const clearAutoScroll = () => {
-      if (!isAutoScrollingRef.current) return;
-      isAutoScrollingRef.current = false;
-      el.removeEventListener('scroll', clearAutoScroll);
-    };
-    const armClear = () => {
-      el.addEventListener('scroll', clearAutoScroll, { once: true, passive: true });
-      requestAnimationFrame(() => requestAnimationFrame(clearAutoScroll));
-    };
-
     // Auto-scroll only moves forward. If the user scrolls past our clamp to
     // follow streaming tokens themselves, we must not yank them back up.
     const scrollForwardTo = (top: number) => {
-      if (top <= el.scrollTop) return;
-      isAutoScrollingRef.current = true;
+      const before = el.scrollTop;
+      if (top <= before) {
+        if (DEBUG) {
+          console.log(
+            `[scroll] noop target=${Math.round(top)} <= scrollTop=${Math.round(before)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
+          );
+        }
+        return;
+      }
       el.scrollTop = top;
-      armClear();
+      lastScrollTopRef.current = el.scrollTop;
+      if (DEBUG) {
+        console.log(
+          `[scroll] move ${Math.round(before)}→${Math.round(top)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
+        );
+      }
     };
 
     if (last.role === 'user') {
       stuckToBottomRef.current = true;
-      isAutoScrollingRef.current = true;
+      const before = el.scrollTop;
       el.scrollTop = el.scrollHeight;
-      armClear();
+      lastScrollTopRef.current = el.scrollTop;
+      if (DEBUG) {
+        console.log(
+          `[scroll] user-submit force ${Math.round(before)}→${Math.round(el.scrollTop)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
+        );
+      }
       return;
     }
 
-    if (!stuckToBottomRef.current) return;
+    if (!stuckToBottomRef.current) {
+      if (DEBUG) {
+        console.log(`[scroll] skip (not stuck-bottom) scrollTop=${Math.round(el.scrollTop)} sH=${el.scrollHeight}`);
+      }
+      return;
+    }
 
     const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
     const node = el.querySelector<HTMLElement>(`[data-message-id="${last.id}"]`);
     if (!node) {
+      if (DEBUG) {
+        console.log(`[scroll] no node for last=${last.id} → bottom=${Math.round(bottom)}`);
+      }
       scrollForwardTo(bottom);
       return;
     }
 
+    // Clamp to keep the latest message's sparkle icon on screen — never let
+    // scrollTop push it above the top edge. For tall messages this means
+    // we stop scrolling at iconLimit and the bottom of the message extends
+    // below the viewport; the user can scroll the rest themselves. The
+    // stuck-state is robust against the resulting `distance > NEAR_BOTTOM`
+    // because onScroll uses scrollTop-decrease (not distance) to decide
+    // when auto-follow should stop.
     const elRect = el.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const nodeTop = nodeRect.top - elRect.top + el.scrollTop;
-
-    // Scroll to bottom; if that would push the icon above the top edge, clamp
-    // so the icon peeks in with a small breathing-room offset.
     const ICON_PEEK = 8;
     const iconLimit = Math.max(0, nodeTop - ICON_PEEK);
-    scrollForwardTo(Math.min(bottom, iconLimit));
+    const target = Math.min(bottom, iconLimit);
+    if (DEBUG) {
+      console.log(
+        `[scroll] target=${Math.round(target)} (bottom=${Math.round(bottom)} iconLimit=${Math.round(iconLimit)} scrollTop=${Math.round(el.scrollTop)} sH=${el.scrollHeight} cH=${el.clientHeight})`
+      );
+    }
+    scrollForwardTo(target);
   }, [messages]);
 
   React.useLayoutEffect(() => {
@@ -265,14 +470,17 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
             const text = visibleAssistantText(message);
             const editFailures = messageEditFailures(message);
             if (!text && editFailures.length === 0) return null;
-            const isStreamingThis = message.id === lastAssistantId && status === 'streaming';
+            // The latest assistant message animates: it mounts post-cover-lift
+            // with `text` already at the full final reply, and useSmoothStream
+            // drips it in from empty. Older messages render statically.
+            const isLatest = message.id === lastAssistantId;
             return (
               <AssistantMessage
                 key={message.id}
                 messageId={message.id}
                 text={text}
-                isStreaming={isStreamingThis}
-                isLandingFromThinking={isStreamingThis}
+                isStreaming={isLatest}
+                isLandingFromThinking={isLatest}
                 entityCache={entityCache}
                 editFailures={editFailures}
               />
@@ -377,6 +585,11 @@ function AssistantMessage({
   editFailures,
 }: AssistantMessageProps) {
   const displayed = useSmoothStream(text, isStreaming);
+  // Bottom-fade only while the drip is still catching up to target. Without
+  // this gate the mask sticks around forever on the latest message because
+  // `isStreaming` (= `isLatest`) doesn't clear once the reply has fully
+  // dripped in.
+  const isDripping = displayed !== text;
 
   return (
     <div data-message-id={messageId} className="flex flex-col items-start gap-2">
@@ -390,7 +603,7 @@ function AssistantMessage({
       <div
         className="prose-chat max-w-[90%] text-chat text-text"
         style={
-          isStreaming
+          isDripping
             ? {
                 WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
                 maskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
