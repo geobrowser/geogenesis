@@ -56,10 +56,14 @@ const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
 
 // The preload is supplied by the client and only ever scopes the system turn
 // for *this user's* conversation, so we don't need the same anti-forgery
-// enforcement as the wallet cookie. We do however require the entityId to
-// match the validated currentEntityId — otherwise a stale or mismatched
+// enforcement as the wallet cookie. We do however require entity + space ids
+// to match the validated currentContext — otherwise a stale or mismatched
 // preload would silently mislead the model.
-function validatePreloadedEntity(input: unknown, expectedEntityId: string | null): PreloadedEntityForPrompt | null {
+function validatePreloadedEntity(
+  input: unknown,
+  expectedEntityId: string | null,
+  expectedSpaceId: string | null
+): PreloadedEntityForPrompt | null {
   if (input == null || typeof input !== 'object') return null;
   if (!expectedEntityId) return null;
   const raw = input as Record<string, unknown>;
@@ -72,6 +76,10 @@ function validatePreloadedEntity(input: unknown, expectedEntityId: string | null
   if (entityId.toLowerCase() !== expectedEntityId.toLowerCase()) return null;
   if (spaceId != null && (typeof spaceId !== 'string' || !UUID_OR_DASHLESS.test(spaceId))) return null;
   if (data == null || typeof data !== 'object') return null;
+
+  if (expectedSpaceId && typeof spaceId === 'string' && spaceId.toLowerCase() !== expectedSpaceId.toLowerCase()) {
+    return null;
+  }
 
   return {
     entityId,
@@ -171,8 +179,8 @@ function rateLimitResponse(reset: number) {
 type LimitProbe = { success: boolean; reset: number };
 
 // Take `reset` only from the limiters that actually rejected — taking max
-// across all four would let an exhausted 10-second burst surface a 1-hour
-// Retry-After if the hourly window happens to reset later.
+// across both would let a tripped short window surface a longer Retry-After
+// from a different window that happens to reset later.
 function failedLimiterReset(probes: LimitProbe[]): number {
   let max = 0;
   for (const probe of probes) {
@@ -326,7 +334,11 @@ export async function POST(req: Request) {
     }
 
     if (body?.preloadedEntity != null) {
-      preloadedEntity = validatePreloadedEntity(body.preloadedEntity, clientContext?.currentEntityId ?? null);
+      preloadedEntity = validatePreloadedEntity(
+        body.preloadedEntity,
+        clientContext?.currentEntityId ?? null,
+        clientContext?.currentSpaceId ?? null
+      );
     }
   } catch {
     return jsonError(400, 'Invalid request body');

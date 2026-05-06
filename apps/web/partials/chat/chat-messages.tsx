@@ -120,6 +120,8 @@ function describeEditFailure(note: EditFailureNote): string {
       return `${toolName}: lookup failed. Retry in a moment.`;
     case 'already_exists':
       return `${toolName}: ${failure.message ?? 'already set.'}`;
+    case 'apply_failed':
+      return `${toolName}: ${failure.message ?? "couldn't apply that change."}`;
     default:
       return `${toolName}: failed.`;
   }

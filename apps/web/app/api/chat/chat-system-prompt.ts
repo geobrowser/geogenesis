@@ -30,12 +30,17 @@ export function renderPreloadedEntitySection(preload: PreloadedEntityForPrompt |
   }
   if (json.length > MAX_PRELOAD_JSON_CHARS) return null;
 
+  // Escape backticks so user-supplied entity content can't close the fence and
+  // inject prompt instructions. ` is still a backtick in JSON so the
+  // model sees the same data.
+  const safeJson = json.replace(/`/g, '\\u0060');
+
   const spaceArg = preload.spaceId ? `, spaceId: "${preload.spaceId}"` : '';
   return `# Preloaded current entity
 A getEntity({ entityId: "${preload.entityId}"${spaceArg} }) call has already been made for you against the user's merged local + remote graph. Treat the JSON below as the equivalent tool result — when the user references "this entity", "this page", or this id, answer from this data directly. Only call \`getEntity\` again on this id if the data may have changed (e.g., after edits in this turn).
 
 \`\`\`json
-${json}
+${safeJson}
 \`\`\``;
 }
 

@@ -260,7 +260,10 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
       // tell apart "agent looked up a draft" vs "agent looked up a published
       // entity that wasn't in cache".
       try {
-        const remote = await Effect.runPromise(getEntity(normalizedId, normalizedSpaceId));
+        const remote = await ctx.cache.fetchQuery({
+          queryKey: ['chat-read-dispatcher', 'getEntity', normalizedId, normalizedSpaceId ?? null],
+          queryFn: ({ signal }) => Effect.runPromise(getEntity(normalizedId, normalizedSpaceId, signal)),
+        });
         if (remote) {
           entity = remote;
           console.info('[chat/read-dispatcher] getEntity remote fallback', normalizedId);
