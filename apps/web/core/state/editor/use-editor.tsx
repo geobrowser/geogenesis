@@ -460,11 +460,16 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        const paragraphLooksLikePopulatedLine = (t: string) =>
+          !t.startsWith('/') || t.startsWith('//');
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
+          node.content.some(
+            child => child.type !== 'text' || (child.text && paragraphLooksLikePopulatedLine(child.text))
+          );
         const isTailPlaceholderParagraph =
           node.type === 'paragraph' &&
           Boolean(node.attrs && 'tailPlaceholder' in node.attrs && node.attrs.tailPlaceholder);

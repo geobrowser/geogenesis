@@ -16,14 +16,21 @@ import {
   personalProfileSuggestedTasksAtom,
   propertyNameMatchesSkills,
 } from '~/atoms/personal-profile-suggested';
-import { PERSONAL_PROFILE_BIO_STARTER_MARKER } from '~/partials/entity-page/personal-profile-bio-starter';
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from '~/core/state/editor/profile-overview-tail-placeholder';
 
-function propertyNameMatchesWork(name: string): boolean {
-  return /employ|work|role|career|position|company|job|employment/i.test(name);
-}
-
-function propertyNameMatchesEducation(name: string): boolean {
-  return /education|school|degree|university|study/i.test(name);
+function overviewMarkdownWithoutTailNoise(markdown: string): string {
+  const lines = markdown.split('\n').flatMap(line => {
+    const t = line.trim();
+    if (!t) return [];
+    if (t === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) return [];
+    if (t === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) return [];
+    if (/^Type \/ for commands or start writ/i.test(t)) return [];
+    return [line];
+  });
+  return lines.join('\n').trim();
 }
 
 export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entityId: string; spaceId: string }) {
@@ -114,17 +121,12 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
       .map(s => s.markdown)
       .join('\n');
 
-    const bioDone =
-      textMarkdown.trim().length > 0 && !textMarkdown.includes(PERSONAL_PROFILE_BIO_STARTER_MARKER);
+    const bioDone = overviewMarkdownWithoutTailNoise(textMarkdown).length > 0;
 
-    let workDone = tasks.work;
-    let educationDone = tasks.education;
     let skillsDone = tasks.skills;
 
     for (const prop of Object.values(rendered)) {
       const name = prop.name ?? '';
-      if (propertyNameMatchesWork(name)) workDone = true;
-      if (propertyNameMatchesEducation(name)) educationDone = true;
       if (propertyNameMatchesSkills(name)) skillsDone = true;
     }
 
@@ -134,20 +136,20 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
 
     const next = {
       bio: bioDone || tasks.bio,
-      work: workDone || tasks.work,
-      education: educationDone || tasks.education,
+      work: true,
+      education: true,
       skills: skillsDone || tasks.skills,
       post: postDone || tasks.post,
     };
 
-    const allDone = next.bio && next.work && next.education && next.skills && next.post;
+    const allDone = next.bio && next.skills && next.post;
 
     if (
       next.bio !== tasks.bio ||
-      next.work !== tasks.work ||
-      next.education !== tasks.education ||
       next.skills !== tasks.skills ||
-      next.post !== tasks.post
+      next.post !== tasks.post ||
+      next.work !== tasks.work ||
+      next.education !== tasks.education
     ) {
       setTasks(next);
     }
@@ -170,6 +172,7 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
     tasks.skills,
     tasks.work,
   ]);
+
 
   return null;
 }

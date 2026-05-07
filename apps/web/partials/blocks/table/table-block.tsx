@@ -462,8 +462,6 @@ const ConfiguredTableBlock = ({
     [activeFilters]
   );
 
-  const navigateAsPostSurface = collectionTypeFilters.some(f => f.id === SystemIds.POST_TYPE);
-
   // Track if unfiltered data has multiple pages
   React.useEffect(() => {
     if (activeFilters.length === 0 && totalPages > 1) {
@@ -547,7 +545,6 @@ const ConfiguredTableBlock = ({
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       placeholderFocusKey={placeholderFocusKey}
       collectionTypeFilters={collectionTypeFilters}
-      navigateAsPostSurface={navigateAsPostSurface}
       sortState={sortState}
       onSort={handleSortChange}
     />

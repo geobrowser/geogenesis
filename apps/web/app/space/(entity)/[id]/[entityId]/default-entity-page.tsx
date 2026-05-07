@@ -8,6 +8,7 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -78,18 +79,24 @@ export default async function DefaultEntityPage({
               serverRelations={props.relationEntityRelations}
             />
             <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <EntityTabs
-                entityId={props.id}
-                spaceId={props.spaceId}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-              />
-            </React.Suspense>
+            {!props.isPostEntity && (
+              <React.Suspense fallback={null}>
+                <EntityTabs
+                  entityId={props.id}
+                  spaceId={props.spaceId}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                />
+              </React.Suspense>
+            )}
             {notice}
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
-            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+            <Editor
+              spaceId={props.spaceId}
+              shouldHandleOwnSpacing
+              proseScopeClassName={props.isPersonEntity ? 'bio-prose-only' : undefined}
+            />
             <ToggleEntityPage {...props} />
             <AutomaticModeToggle />
             <Spacer height={40} />
@@ -182,6 +189,9 @@ const getData = async (spaceId: string, entityId: string) => {
     serverCoverUrl,
     serverSpaces: spaces,
     deterministicSpaceId: deterministicSpaceId ?? null,
+
+    isPostEntity: entityHasOnlyPostType(entity),
+    isPersonEntity: entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE) ?? false,
 
     tabs,
     tabEntities,

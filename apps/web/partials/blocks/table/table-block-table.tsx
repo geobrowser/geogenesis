@@ -28,10 +28,6 @@ import { Text } from '~/design-system/text';
 
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import {
-  ENTITY_PAGE_SURFACE_POST_VALUE,
-  ENTITY_PAGE_SURFACE_QUERY_KEY,
-} from '~/partials/entity-page/entity-page-surface';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
@@ -110,8 +106,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
     const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
-    const navigateAsPostSurface = table.options.meta!.navigateAsPostSurface ?? false;
-
     const cellData = getValue<Cell | undefined>();
 
     // Currently relations (rollup) blocks aren't editable.
@@ -129,13 +123,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
-    const href = NavUtils.toEntity(
-      nameCell.space ?? space,
-      entityId,
-      false,
-      undefined,
-      navigateAsPostSurface ? { [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE } : undefined
-    );
+    const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
@@ -167,7 +155,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           autoFocus={autofocus}
           focusRequestKey={row.original.placeholder ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
-          navigateAsPostSurface={navigateAsPostSurface}
         />
       );
     }
@@ -208,7 +195,6 @@ type TableBlockTableProps = {
   shouldAutoFocusPlaceholder: boolean;
   placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
-  navigateAsPostSurface?: boolean;
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
 };
@@ -229,7 +215,6 @@ export const TableBlockTable = ({
   shouldAutoFocusPlaceholder,
   placeholderFocusKey = 0,
   collectionTypeFilters,
-  navigateAsPostSurface = false,
   sortState,
   onSort,
 }: TableBlockTableProps) => {
@@ -262,7 +247,6 @@ export const TableBlockTable = ({
       shouldAutoFocusPlaceholder,
       placeholderFocusKey,
       collectionTypeFilters,
-      navigateAsPostSurface,
     },
   });
 

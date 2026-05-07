@@ -53,3 +53,5 @@ export const personalProfileSkillsRowIntentAtom = atom<PersonalProfileSkillsRowI
 export function propertyNameMatchesSkills(name: string): boolean {
   return /skill/i.test(name);
 }
+
+export const personalProfileBioStarterTriggerAtom = atom(0);

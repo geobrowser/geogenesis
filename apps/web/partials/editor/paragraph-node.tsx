@@ -4,15 +4,12 @@ import {
   NodeViewWrapper,
   ReactNodeViewRenderer,
   mergeAttributes,
-  useCurrentEditor,
 } from '@tiptap/react';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-
-import { collapseBioStarterTemplateOnTailInteraction } from '~/partials/entity-page/personal-profile-bio-starter';
 
 import { Content } from './node-view-content';
 
@@ -57,36 +54,13 @@ export const ParagraphNode = Paragraph.extend({
   },
 });
 
-function ParagraphNodeComponent({ node, editor: editorFromProps, getPos }: NodeViewRendererProps) {
+function ParagraphNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId } = useEditorInstance();
   const isEditable = useUserIsEditing(spaceId);
   const tailPlaceholder = Boolean(node.attrs.tailPlaceholder);
-  const { editor: editorFromContext } = useCurrentEditor();
-  const editor = editorFromProps ?? editorFromContext ?? null;
-
-  const onTailMouseDown = React.useCallback(
-    (e: React.MouseEvent) => {
-      if (!tailPlaceholder || !isEditable || !editor) return;
-      const clickedDocPos = getPos();
-      if (typeof clickedDocPos !== 'number') return;
-      if (
-        collapseBioStarterTemplateOnTailInteraction(editor, {
-          fromTailClick: true,
-          clickedDocPos,
-        })
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    },
-    [editor, getPos, isEditable, tailPlaceholder]
-  );
 
   return (
-    <NodeViewWrapper
-      className={tailPlaceholder ? 'paragraph-tail-placeholder' : undefined}
-      onMouseDownCapture={tailPlaceholder ? onTailMouseDown : undefined}
-    >
+    <NodeViewWrapper className={tailPlaceholder ? 'paragraph-tail-placeholder' : undefined}>
       <div className="paragraph-node">
         <Content as="p" contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
       </div>

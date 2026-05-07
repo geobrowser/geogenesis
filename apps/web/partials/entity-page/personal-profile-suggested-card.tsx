@@ -6,27 +6,24 @@ import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
+import { useEditable } from '~/core/state/editable-store';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { ensureProfilePageTab, runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
+import { runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
 
-import {
-  ENTITY_PAGE_SURFACE_POST_VALUE,
-  ENTITY_PAGE_SURFACE_QUERY_KEY,
-} from '~/partials/entity-page/entity-page-surface';
-
 import { SmallButton, SquareButton } from '~/design-system/button';
-import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
+import { Check } from '~/design-system/icons/check';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import {
   clearPersonalProfileSessionDismissStorage,
+  personalProfileBioStarterTriggerAtom,
   PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
   personalProfileSkillsRowIntentAtom,
   personalProfileSuggestedDismissAtom,
@@ -34,9 +31,6 @@ import {
 } from '~/atoms/personal-profile-suggested';
 import { PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY } from '~/partials/entity-page/personal-profile-bio-starter';
 
-/**
- * Same logical id across `0x` prefixes, casing, and hyphenation (space ids vs UUID entity ids).
- */
 export function personalSpaceIdsEqual(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
   const norm = (s: string) =>
@@ -55,6 +49,8 @@ type Props = {
 
 export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
+  const { setEditable } = useEditable();
+  const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
   const setSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const pathname = usePathname();
   const canEdit = useUserIsEditing(spaceId);
@@ -95,6 +91,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   const [createPostPending, setCreatePostPending] = React.useState(false);
+  const createPostLockedRef = React.useRef(false);
 
   const sessionDismissStorageKey = React.useMemo(() => {
     if (!address) return null;
@@ -120,8 +117,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     personalSpaceId && isMyPersonalSpaceRoute && resolvedPersonEntityId && isOwnPersonProfile
   );
 
-  const allTasksDone =
-    tasks.bio && tasks.work && tasks.education && tasks.skills && tasks.post;
+  const allTasksDone = tasks.bio && tasks.skills && tasks.post;
 
   const visible =
     mounted &&
@@ -134,12 +130,24 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   const showDismissForeverInMenu = dismiss.softDismissCount >= 1;
 
+  /** Space home or canonical profile entity URL — avoid `…/entity?edit=true` (SSR redirects to space home after edit strip). */
+  const onProfileOverviewSurface = React.useMemo(() => {
+    const profilePath = NavUtils.toEntity(spaceId, entityId, false);
+    const spaceHomePath = NavUtils.toSpace(spaceId);
+    return (
+      pathname === profilePath ||
+      pathname === `${profilePath}/` ||
+      pathname === spaceHomePath ||
+      pathname === `${spaceHomePath}/`
+    );
+  }, [pathname, spaceId, entityId]);
+
   // Dark fills at rest; on hover only lighten the background so `secondary`’s `hover:text-text` stays readable.
   const pillClass =
     'border-transparent !bg-text !text-white hover:!bg-bg focus-visible:!border-text [&]:shadow-none';
 
   const donePillClass =
-    'border-transparent !bg-grey-03 !text-white hover:!bg-bg focus-visible:!border-grey-03 [&]:shadow-none';
+    'border-transparent !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default';
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
@@ -157,31 +165,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     setMenuOpen(false);
   }, [setDismiss]);
 
-  const onJumpProfileEdit = React.useCallback(() => {
-    router.push(NavUtils.toEntity(spaceId, entityId, true));
-  }, [entityId, router, spaceId]);
-
-  const onAddEducation = React.useCallback(() => {
-    const tabId = ensureProfilePageTab(entityId, spaceId, 'Education');
-    setSuggestedTasks(t => ({ ...t, education: true }));
-    router.push(
-      NavUtils.toEntity(spaceId, entityId, true, undefined, {
-        tabId,
-      })
-    );
-  }, [entityId, router, setSuggestedTasks, spaceId]);
-
   const onAddSkills = React.useCallback(() => {
-    const profilePath = NavUtils.toEntity(spaceId, entityId, false);
-    const spaceHomePath = NavUtils.toSpace(spaceId);
-
-    const onThisPersonSurface =
-      pathname === profilePath ||
-      pathname === `${profilePath}/` ||
-      pathname === spaceHomePath ||
-      pathname === `${spaceHomePath}/`;
-
-    if (!onThisPersonSurface) {
+    if (!onProfileOverviewSurface) {
       setSkillsRowIntent({
         entityId,
         spaceId,
@@ -189,7 +174,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         pendingEnableEdit: true,
       });
       try {
-        const nav = router.push(profilePath) as void | Promise<unknown>;
+        const nav = router.push(NavUtils.toEntity(spaceId, entityId, false)) as void | Promise<unknown>;
         if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
           void (nav as Promise<unknown>).catch(() => {});
         }
@@ -215,7 +200,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
       focusFindCreateInput: false,
       pendingEnableEdit: true,
     });
-  }, [canEdit, entityId, pathname, router, setSkillsRowIntent, spaceId]);
+  }, [canEdit, entityId, onProfileOverviewSurface, router, setSkillsRowIntent, spaceId]);
 
   const onAddBio = React.useCallback(() => {
     sessionStorage.setItem(
@@ -227,11 +212,32 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         targetEntityId: entityId,
       })
     );
-    router.push(NavUtils.toEntity(spaceId, entityId, true));
-  }, [displayName, entityId, router, spaceId]);
+    if (onProfileOverviewSurface) {
+      setEditable(true);
+      bumpBioStarterMerge(n => n + 1);
+      return;
+    }
+    try {
+      const nav = router.push(NavUtils.toEntity(spaceId, entityId, true), { scroll: false }) as void | Promise<unknown>;
+      if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
+        void (nav as Promise<unknown>).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [
+    bumpBioStarterMerge,
+    displayName,
+    entityId,
+    onProfileOverviewSurface,
+    router,
+    setEditable,
+    spaceId,
+  ]);
 
   const onCreatePost = React.useCallback(async () => {
-    if (createPostPending) return;
+    if (createPostLockedRef.current) return;
+    createPostLockedRef.current = true;
     setCreatePostPending(true);
     try {
       const postEntityId = await runPersonalPostCreationFlow({
@@ -240,17 +246,14 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         authorDisplayName: displayName,
       });
       setSuggestedTasks(t => ({ ...t, post: true }));
-      router.push(
-        NavUtils.toEntity(spaceId, postEntityId, true, undefined, {
-          [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE,
-        })
-      );
+      router.push(NavUtils.toEntity(spaceId, postEntityId, true));
     } catch (e) {
       console.error('[PersonalProfileSuggestedCard] create post failed', e);
     } finally {
+      createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [createPostPending, displayName, entityId, router, setSuggestedTasks, spaceId]);
+  }, [displayName, entityId, router, setSuggestedTasks, spaceId]);
 
   if (!visible) {
     return null;
@@ -282,17 +285,17 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <Text as="h2" variant="smallTitle" className="text-text">
+          <Text as="h2" variant="smallTitle" className="text-text !text-[24px] !leading-[28px]">
             Suggested for you
           </Text>
-          <Text as="p" variant="metadata" className="mt-1 text-grey-04">
+          <Text as="p" variant="metadata" className="mt-1 text-grey-04 !text-[14px] !leading-[18px]">
             Kick things off with these quick setup actions.
           </Text>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-[98px] flex flex-wrap gap-2">
             <SmallButton
               variant="secondary"
               className={tasks.bio ? donePillClass : pillClass}
-              icon={tasks.bio ? <CheckCircleSmall color="white" /> : undefined}
+              icon={tasks.bio ? <Check color="white" className="size-3 shrink-0" /> : undefined}
               disabled={tasks.bio}
               onClick={tasks.bio ? undefined : onAddBio}
             >
@@ -300,26 +303,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             </SmallButton>
             <SmallButton
               variant="secondary"
-              className={tasks.work ? donePillClass : pillClass}
-              icon={tasks.work ? <CheckCircleSmall color="white" /> : undefined}
-              disabled={tasks.work}
-              onClick={tasks.work ? undefined : onJumpProfileEdit}
-            >
-              {tasks.work ? 'Add work history' : '+ Add work history'}
-            </SmallButton>
-            <SmallButton
-              variant="secondary"
-              className={tasks.education ? donePillClass : pillClass}
-              icon={tasks.education ? <CheckCircleSmall color="white" /> : undefined}
-              disabled={tasks.education}
-              onClick={tasks.education ? undefined : onAddEducation}
-            >
-              {tasks.education ? 'Add education' : '+ Add education'}
-            </SmallButton>
-            <SmallButton
-              variant="secondary"
               className={tasks.skills ? donePillClass : pillClass}
-              icon={tasks.skills ? <CheckCircleSmall color="white" /> : undefined}
+              icon={tasks.skills ? <Check color="white" className="size-3 shrink-0" /> : undefined}
               disabled={tasks.skills}
               onClick={tasks.skills ? undefined : onAddSkills}
             >
@@ -327,10 +312,11 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             </SmallButton>
             <SmallButton
               variant="secondary"
-              className={tasks.post ? donePillClass : pillClass}
-              icon={tasks.post ? <CheckCircleSmall color="white" /> : undefined}
-              disabled={tasks.post || createPostPending}
-              onClick={tasks.post || createPostPending ? undefined : () => void onCreatePost()}
+              className={`${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? '' : ''}`}
+              icon={tasks.post ? <Check color="white" className="size-3 shrink-0" /> : undefined}
+              aria-busy={createPostPending && !tasks.post}
+              disabled={tasks.post}
+              onClick={tasks.post ? undefined : () => void onCreatePost()}
             >
               {tasks.post ? 'Create post' : '+ Create post'}
             </SmallButton>

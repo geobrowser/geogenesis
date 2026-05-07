@@ -33,7 +33,7 @@ export const NavUtils = {
     newEntityId: string,
     editParam?: boolean,
     newEntityName?: string,
-    extraSearchParams?: Record<string, string | undefined>
+    options?: { tabId?: string }
   ) => {
     const params = new URLSearchParams();
     if (editParam) {
@@ -42,12 +42,8 @@ export const NavUtils = {
     if (editParam && newEntityName) {
       params.set('entityName', newEntityName);
     }
-    if (extraSearchParams) {
-      for (const [key, value] of Object.entries(extraSearchParams)) {
-        if (value != null && value !== '') {
-          params.set(key, value);
-        }
-      }
+    if (options?.tabId) {
+      params.set('tabId', options.tabId);
     }
     const qs = params.toString();
     return `/space/${spaceId}/${newEntityId}${qs ? `?${qs}` : ''}`;

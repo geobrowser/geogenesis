@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorStore, useTabId } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
 import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
@@ -42,14 +42,23 @@ interface Props {
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
   spacePage?: boolean;
+  proseScopeClassName?: string;
 }
 
-export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+export function Editor({
+  shouldHandleOwnSpacing,
+  spaceId,
+  placeholder = null,
+  spacePage = false,
+  proseScopeClassName,
+}: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const tabId = useTabId();
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const scopedProseClassName = tabId === null ? proseScopeClassName : undefined;
 
   // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
@@ -310,7 +319,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     <LayoutGroup id="editor">
       <div
         ref={editorWrapperRef}
-        className={editable ? 'editable' : 'not-editable'}
+        className={[editable ? 'editable' : 'not-editable', scopedProseClassName ?? ''].filter(Boolean).join(' ')}
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}
       >

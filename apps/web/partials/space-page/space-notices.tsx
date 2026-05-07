@@ -22,10 +22,6 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
-import {
-  ENTITY_PAGE_SURFACE_POST_VALUE,
-  ENTITY_PAGE_SURFACE_QUERY_KEY,
-} from '~/partials/entity-page/entity-page-surface';
 import { getTabSlug } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -95,9 +91,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
                     ],
                   })
                 }
-                href={NavUtils.toEntity(spaceId, nextEntityId, true, undefined, {
-                  [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE,
-                })}
+                href={NavUtils.toEntity(spaceId, nextEntityId, true)}
               >
                 Create post
               </SimpleButton>
@@ -179,9 +173,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
                       ],
                     })
                   }
-                  href={NavUtils.toEntity(spaceId, nextEntityId, true, undefined, {
-                    [ENTITY_PAGE_SURFACE_QUERY_KEY]: ENTITY_PAGE_SURFACE_POST_VALUE,
-                  })}
+                  href={NavUtils.toEntity(spaceId, nextEntityId, true)}
                 >
                   Create post
                 </SimpleButton>

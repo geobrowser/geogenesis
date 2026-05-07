@@ -1,12 +1,12 @@
 'use client';
 
 import type { JSONContent } from '@tiptap/core';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import * as React from 'react';
 
 import { useEditorStore } from '~/core/state/editor/use-editor';
 
-import { editorContentVersionAtom } from '~/atoms';
+import { editorContentVersionAtom, personalProfileBioStarterTriggerAtom } from '~/atoms';
 import {
   buildPersonalProfileBioStarterDocJson,
   PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY,
@@ -26,6 +26,7 @@ type StarterPayload = {
 export function PersonalProfileBioStarterMerge({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const { upsertEditorState, editorJson } = useEditorStore();
   const bump = useSetAtom(editorContentVersionAtom);
+  const bioStarterTrigger = useAtomValue(personalProfileBioStarterTriggerAtom);
   const editorJsonRef = React.useRef(editorJson);
   editorJsonRef.current = editorJson;
 
@@ -80,7 +81,7 @@ export function PersonalProfileBioStarterMerge({ entityId, spaceId }: { entityId
       cancelAnimationFrame(rafId);
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
-  }, [bump, entityId, spaceId, upsertEditorState]);
+  }, [bioStarterTrigger, bump, entityId, spaceId, upsertEditorState]);
 
   return null;
 }

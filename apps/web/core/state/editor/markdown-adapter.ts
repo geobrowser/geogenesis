@@ -220,7 +220,13 @@ function serializeInlineNode(node: JSONContent): string {
     let text = node.text ?? '';
     const marks = node.marks ?? [];
 
-    for (const mark of marks) {
+    const orderedMarks = [...marks].sort((a, z) => {
+      if (a.type === 'underline' && z.type !== 'underline') return 1;
+      if (z.type === 'underline' && a.type !== 'underline') return -1;
+      return 0;
+    });
+
+    for (const mark of orderedMarks) {
       switch (mark.type) {
         case 'code':
           return serializeInlineCode(text);
@@ -229,6 +235,9 @@ function serializeInlineNode(node: JSONContent): string {
           break;
         case 'italic':
           text = `*${text}*`;
+          break;
+        case 'underline':
+          text = `++${text}++`;
           break;
         case 'link': {
           // Handle graph:// links (entity mentions) and other standard links

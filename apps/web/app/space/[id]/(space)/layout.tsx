@@ -20,6 +20,7 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
+import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
@@ -78,6 +79,7 @@ export default async function Layout(props0: LayoutProps) {
 
           {typeIds.includes(SystemIds.PERSON_TYPE) ? (
             <>
+              <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
               <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
               <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} />
             </>
