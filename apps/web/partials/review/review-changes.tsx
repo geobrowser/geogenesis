@@ -556,11 +556,16 @@ export const ReviewChanges = () => {
         });
 
         if (bountyFailed) {
+          // usePublish clears the error atom on user-rejection (cancellation
+          // shouldn't surface as an error). If there's no underlying error,
+          // the user dismissed the wallet prompt — leave the status bar idle
+          // rather than wrapping a phantom "Unknown error" message.
+          const underlying = jotaiStore.get(statusBarStateAtom).error;
+          if (!underlying) return;
           const linked = Array.from(selectedBountyIds)
             .map(id => bountiesById.get(id)?.name)
             .filter(Boolean)
             .join(', ');
-          const underlying = jotaiStore.get(statusBarStateAtom).error ?? 'Unknown error';
           const wrapped = [
             `Bounty linking failed: your proposal "${proposalName}" was published successfully, but linking it to ${linked || 'the selected bounties'} did not.`,
             '',

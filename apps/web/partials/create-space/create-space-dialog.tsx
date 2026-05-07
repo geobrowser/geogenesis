@@ -84,8 +84,15 @@ export function CreateSpaceDialog() {
       setStep('completed');
     } catch (error) {
       console.error(error);
+      // Drop back to the form step so the user has a recovery path even if
+      // they dismiss the global error toast — StepHeader hides the close
+      // button while step is 'create-space' or 'completed'.
+      setStep('enter-profile');
       const message = describeError(error);
-      reportError(`Space creation failed: ${message}`, () => createSpaces(spaceType));
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('create-space');
+        createSpaces(spaceType);
+      });
     }
   }
 

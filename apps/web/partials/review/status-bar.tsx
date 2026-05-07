@@ -27,8 +27,9 @@ import { Spinner } from '~/design-system/spinner';
  * - Progress / success states (publishing-ipfs, signing-wallet,
  *   publishing-contract, publish-complete) render as a small pill at the top
  *   of the screen, vertically centered with the 44px navbar.
- * - Error state renders as a full-screen modal with a backdrop blur. The user
- *   must explicitly Copy / Retry / Dismiss — there's no clicking through it.
+ * - Error state renders as a full-screen modal with a backdrop blur. Users
+ *   can Copy / Retry / Dismiss (X), press ESC, or click the backdrop to
+ *   dismiss.
  *
  * Mounted independently in app/entry.tsx so it never collides with FlowBar
  * or the review panel. z-10001 keeps it above SlideUp's z-[10000].
@@ -54,7 +55,15 @@ export const StatusBar = () => {
       personalSpaceId,
     });
     const report = formatErrorReport(state.error || '', diagnostics);
-    await navigator.clipboard.writeText(report);
+    // Clipboard writes can reject on insecure origins, denied permissions, or
+    // when the document isn't focused. Surface the failure without crashing
+    // the toast — the user can re-screenshot or read the error directly.
+    try {
+      await navigator.clipboard.writeText(report);
+    } catch (err) {
+      console.error('[StatusBar] Clipboard write failed:', err);
+      return;
+    }
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };

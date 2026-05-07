@@ -159,8 +159,15 @@ export const OnboardingDialog = () => {
       setStep('completed');
     } catch (error) {
       console.error(error);
+      // Drop back to the form step so the user has a recovery path even if
+      // they dismiss the global error toast — there's no close affordance
+      // on the StepComplete ("Creating space...") screen.
+      setStep('enter-profile');
       const message = describeError(error);
-      reportError(`Space creation failed: ${message}`, () => createSpace(options));
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('create-space');
+        createSpace(options);
+      });
     }
   }
 
