@@ -830,14 +830,6 @@ export function PowerToolsScreen() {
 
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
-  const serverFilterKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of filterState) {
-      keys.add(`${f.columnId}:${f.value}`);
-    }
-    return keys;
-  }, [filterState]);
-
   return (
     <div
       className="fixed inset-0 z-50 bg-white"
@@ -966,8 +958,10 @@ export function PowerToolsScreen() {
                   mode={activeFilterMode}
                   onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
                   onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                  onClearGroup={() => {
+                    effectiveSetFilterState(effectiveFilterState.filter(f => f.columnId !== group.columnId));
+                  }}
                   isEditing={isEditing}
-                  serverFilterKeys={serverFilterKeys}
                 />
               </React.Fragment>
             ))}

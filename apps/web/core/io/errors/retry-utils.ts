@@ -100,7 +100,8 @@ export function isRetryableCategory(category: RetryCategory | undefined): boolea
     category === 'transport_timeout' ||
     category === 'transport_connection_reset' ||
     category === 'transport_connection_refused' ||
-    category === 'transport_dns'
+    category === 'transport_dns' ||
+    category === 'transport_unknown'
   );
 }
 

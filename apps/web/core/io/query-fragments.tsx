@@ -6,6 +6,8 @@ export const entityFragment = graphql(/* GraphQL */ `
     name
     description
     spaceIds
+    createdAt
+    createdAtBlock
     updatedAt
 
     types {
@@ -13,7 +15,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       name
     }
 
-    valuesList {
+    valuesList(first: 1000) {
       spaceId
       property {
         ...PropertyFragment
@@ -33,7 +35,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       schedule
     }
 
-    relationsList {
+    relationsList(first: 1000) {
       id
       spaceId
       position
@@ -107,7 +109,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -127,7 +129,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -184,7 +186,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -204,7 +206,7 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -265,18 +267,18 @@ export const entityQuery = graphql(/* GraphQL */ `
       # routes to. The main valuesList/relationsList below are space-scoped for
       # display, so we need an unscoped projection to know which spaces hold
       # real (non-hidden) content.
-      allValuesList: valuesList {
+      allValuesList: valuesList(first: 1000) {
         spaceId
         property {
           id
         }
       }
 
-      allRelationsList: relationsList {
+      allRelationsList: relationsList(first: 1000) {
         spaceId
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -296,7 +298,7 @@ export const entityQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -429,18 +431,18 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       # routes to. The main valuesList/relationsList below are space-scoped for
       # display, so we need an unscoped projection to know which spaces hold
       # real (non-hidden) content.
-      allValuesList: valuesList {
+      allValuesList: valuesList(first: 1000) {
         spaceId
         property {
           id
         }
       }
 
-      allRelationsList: relationsList {
+      allRelationsList: relationsList(first: 1000) {
         spaceId
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {
           ...PropertyFragment
@@ -460,7 +462,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         id
         spaceId
         position
@@ -562,7 +564,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList {
+      valuesList(first: 1000) {
         spaceId
         property {
           ...PropertyFragment
@@ -582,7 +584,7 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
         schedule
       }
 
-      relationsList {
+      relationsList(first: 1000) {
         id
         spaceId
         position
@@ -698,6 +700,59 @@ export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
   query SpacesWhereMember($memberSpaceId: UUID!) {
     spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {
       ...FullSpace
+    }
+  }
+`);
+
+// Targeted membership/editorship checks.
+// `membersList`/`editorsList` is paginated server-side (default 100), so a
+// client-side `includes()` against `space.membersList` misses members past
+// the first page. These queries filter server-side and ask for a single row.
+export const isMemberOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsMemberOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      membersList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+// Paginated members/editors. `totalCount` is authoritative for the count
+// shown in the chip and footers; `membersList`/`editorsList` carry the
+// current page of memberSpaceIds.
+export const spaceMembersPageQuery = graphql(/* GraphQL */ `
+  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      members {
+        totalCount
+      }
+      membersList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const spaceEditorsPageQuery = graphql(/* GraphQL */ `
+  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      editors {
+        totalCount
+      }
+      editorsList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
     }
   }
 `);
@@ -833,18 +888,18 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           name
         }
 
-        allValuesList: valuesList {
+        allValuesList: valuesList(first: 1000) {
           spaceId
           property {
             id
           }
         }
 
-        allRelationsList: relationsList {
+        allRelationsList: relationsList(first: 1000) {
           spaceId
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             id
@@ -869,7 +924,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           bytes
           schedule
         }
-        relationsList {
+        relationsList(first: 1000) {
           verified
           toSpaceId
           position

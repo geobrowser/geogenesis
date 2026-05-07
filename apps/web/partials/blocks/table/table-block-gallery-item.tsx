@@ -41,6 +41,7 @@ type Props = {
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -56,6 +57,7 @@ export function TableBlockGalleryItem({
   relationId,
   source,
   autoFocus = false,
+  focusRequestKey,
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
@@ -158,6 +160,7 @@ export function TableBlockGalleryItem({
                 }}
                 spaceId={currentSpaceId}
                 autoFocus={autoFocus}
+                focusRequestKey={focusRequestKey}
                 relationValueTypes={collectionTypeFilters}
               />
             ) : (

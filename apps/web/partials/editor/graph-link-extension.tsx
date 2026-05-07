@@ -2,15 +2,18 @@ import { ChainedCommands, Extension, InputRule, PasteRule, Range as TipTapRange,
 import Link from '@tiptap/extension-link';
 import { EditorState } from '@tiptap/pm/state';
 
+import { parseGraphLinkHref } from '~/core/utils/graph-link';
+
 import { insertGraphLink } from './insert-graph-link';
 
 function isGraphHref(href: unknown): href is `graph://${string}` {
-  return typeof href === 'string' && href.startsWith('graph://');
+  return typeof href === 'string' && parseGraphLinkHref(href) !== null;
 }
 
 function stripAnchorOnlyAttributes(attributes: Record<string, unknown>) {
-  const { href: _href, target: _target, rel: _rel, class: _className, ...rest } = attributes;
-  return rest;
+  return Object.fromEntries(
+    Object.entries(attributes).filter(([name]) => !['href', 'target', 'rel', 'class'].includes(name))
+  );
 }
 
 // Extend Link to add custom data attributes for entity caching
@@ -72,7 +75,7 @@ export const GraphLinkExtension = GraphLinkExtended.configure({
   openOnClick: false,
   validate: url => {
     // Only allow graph:// URLs, exclude web2 URLs (http/https/www)
-    return url.startsWith('graph://');
+    return parseGraphLinkHref(url) !== null;
   },
 });
 
@@ -96,7 +99,7 @@ export const MarkdownLinkExtension = Extension.create({
         }) => {
           const [fullMatch, linkText, url] = match;
 
-          if (url.startsWith('graph://')) {
+          if (parseGraphLinkHref(url)) {
             // Verify that the selected text matches the full match to avoid off-by-one errors
             const selectedText = state.doc.textBetween(range.from, range.to);
             const isRangeCorrect = selectedText === fullMatch;
@@ -130,7 +133,7 @@ export const MarkdownLinkExtension = Extension.create({
         }) => {
           const [, linkText, url] = match;
 
-          if (url.startsWith('graph://')) {
+          if (parseGraphLinkHref(url)) {
             // Use insertGraphLink for consistent link insertion
             insertGraphLink({
               chain,

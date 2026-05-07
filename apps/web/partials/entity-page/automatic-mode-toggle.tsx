@@ -18,12 +18,12 @@ export const AutomaticModeToggle = () => {
   const { editable, setEditable } = useEditable();
   const { storage } = useMutate();
   const hasProcessedRef = useRef(false);
+  const editableRef = useRef(editable);
+  editableRef.current = editable;
+
+  const shouldStartInEditMode = searchParams?.get('edit') === 'true';
 
   useEffect(() => {
-    const shouldStartInEditMode = searchParams?.get('edit') === 'true';
-    const newEntityName = searchParams?.get('entityName');
-    const entityType = searchParams?.get('type');
-
     if (!shouldStartInEditMode) {
       hasProcessedRef.current = false;
       return;
@@ -34,9 +34,15 @@ export const AutomaticModeToggle = () => {
 
     const spaceId = params?.['id'] as string | undefined;
     const entityId = params?.['entityId'] as string | undefined;
+    const newEntityName = searchParams?.get('entityName');
+    const entityType = searchParams?.get('type');
+    const queryStringSnapshot = searchParams?.toString() ?? '';
 
-    setTimeout(() => {
-      const newSearchParams = new URLSearchParams(searchParams?.toString());
+    let timeoutDidRun = false;
+
+    const id = window.setTimeout(() => {
+      timeoutDidRun = true;
+      const newSearchParams = new URLSearchParams(queryStringSnapshot);
       newSearchParams.delete('edit');
       newSearchParams.delete('entityName');
       newSearchParams.delete('type');
@@ -44,7 +50,7 @@ export const AutomaticModeToggle = () => {
       const queryString = newSearchString ? `?${newSearchString}` : '';
       window.history.replaceState(null, '', `${pathname}${queryString}`);
 
-      if (!editable) {
+      if (!editableRef.current) {
         setEditable(true);
       }
 
@@ -80,7 +86,14 @@ export const AutomaticModeToggle = () => {
         });
       }
     }, 500);
-  }, [editable, params, pathname, searchParams, setEditable, storage]);
+
+    return () => {
+      window.clearTimeout(id);
+      if (!timeoutDidRun) {
+        hasProcessedRef.current = false;
+      }
+    };
+  }, [shouldStartInEditMode, pathname, params?.['id'], params?.['entityId'], setEditable, storage]);
 
   return null;
 };

@@ -1,7 +1,9 @@
 'use client';
 
-import { useDescription } from '~/core/state/entity-page-store/entity-store';
-import { Property } from '~/core/types';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import { useValues } from '~/core/sync/use-store';
+import { getSpaceRank } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -9,12 +11,30 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 type PropertyNameLinkProps = {
-  property: Property;
+  property: { id: string; name: string | null };
   spaceId: string;
 };
 
 export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
-  const description = useDescription(property.id, spaceId)?.trim();
+  const descriptionValues = useValues({
+    selector: v =>
+      v.property.id === SystemIds.DESCRIPTION_PROPERTY &&
+      v.entity.id === property.id &&
+      typeof v.value === 'string' &&
+      v.value.trim().length > 0,
+  });
+
+  // Prefer the current (to-)space's description if present, otherwise pick
+  // the value from the highest-ranked space the property is published in.
+  const description =
+    descriptionValues.find(v => v.spaceId === spaceId)?.value.trim() ??
+    descriptionValues
+      .reduce<(typeof descriptionValues)[number] | null>(
+        (best, v) => (best === null || getSpaceRank(v.spaceId) < getSpaceRank(best.spaceId) ? v : best),
+        null
+      )
+      ?.value.trim() ??
+    '';
   const propertyName = property.name?.trim() || property.id;
 
   const link = (

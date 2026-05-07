@@ -4,12 +4,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import equal from 'fast-deep-equal';
+
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
+import { Tooltip } from '~/design-system/tooltip';
+import { Toggle } from '~/design-system/toggle';
 
 import {
   TableBlockFilterPrompt,
@@ -23,10 +27,12 @@ interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[]) => void;
   filterSuggestionSpaceId?: string;
+  orderedColumnIds?: string[];
+  isEditing?: boolean;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId }, ref) {
+  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true, }, ref) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 
@@ -42,13 +48,13 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         ? [
             // @TODO(data blocks): We should add the default filters to the data model
             // itself instead of manually here.
-            // {
-            //   columnId: SystemIds.NAME_PROPERTY,
-            //   columnName: 'Name',
-            //   valueType: valueTypes[SystemIds.TEXT],
-            //   value: '',
-            //   valueName: null,
-            // },
+            {
+              columnId: SystemIds.NAME_PROPERTY,
+              columnName: 'Name',
+              valueType: 'TEXT',
+              value: '',
+              valueName: null,
+            },
             ...filterableProperties
               .map(c => {
                 return {
@@ -80,37 +86,119 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             },
           ];
 
-    const sortedFilters = sortFilters(filterableColumns);
+    const sortedFilters = orderFiltersForPicker(filterableColumns, orderedColumnIds);
 
     const onCreateFilter = (filters: TableBlockNewFilterRow[]) => {
-      const newFilters = [
-        ...effectiveFilterState,
-        ...filters.map(f => ({
-          valueType: f.valueType,
-          columnId: f.columnId,
-          columnName: f.columnName,
-          value: f.value,
-          valueName: f.valueName,
-        })),
-      ];
-      effectiveSetFilterState(newFilters);
+      if (filters.length === 0) return;
+      const touchedColumnIds = new Set(filters.map(f => f.columnId));
+      const base = effectiveFilterState.filter(f => !touchedColumnIds.has(f.columnId));
+      const newFilters = filters.map(f => ({
+        valueType: f.valueType,
+        columnId: f.columnId,
+        columnName: f.columnName,
+        value: f.value,
+        valueName: f.valueName,
+      }));
+      const firstTouchedIndex = effectiveFilterState.findIndex(f => touchedColumnIds.has(f.columnId));
+      const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
+      const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
+      if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
+        return;
+      }
+      effectiveSetFilterState(next);
     };
 
+    if (!isEditing) {
+      return (
+        <div className="inline-flex shrink-0 items-center gap-3">
+          <div className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md border border-grey-02 bg-grey-01 px-1.5 text-metadata leading-none text-text">
+            <CreateSmall />
+            <span>Filter</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <TableBlockFilterPrompt
-        ref={ref}
-        options={sortedFilters}
-        filterSuggestionSpaceId={filterSuggestionSpaceId}
-        onCreate={onCreateFilter}
-        trigger={
-          <SmallButton icon={<CreateSmall />} variant="secondary">
-            Filter
-          </SmallButton>
-        }
-      />
+      <div className="flex min-w-[220px] flex-1 items-center gap-3">
+        <TableBlockFilterPrompt
+          ref={ref}
+          options={sortedFilters}
+          filterSuggestionSpaceId={filterSuggestionSpaceId}
+          filterStateForSeed={effectiveFilterState}
+          onCreate={onCreateFilter}
+          isEditing={isEditing}
+          trigger={
+            <SmallButton icon={<CreateSmall />} variant="secondary">
+              Filter
+            </SmallButton>
+          }
+        />
+        {source.type !== 'COLLECTION' && <QueryModeToggle />}
+      </div>
     );
   }
 );
+
+function QueryModeToggle() {
+  const { filterState, setFilterState } = useFilters();
+  const { source } = useSource({ filterState, setFilterState });
+  const isRelations = source.type === 'RELATIONS';
+
+  return (
+    <div className="ml-auto flex shrink-0 items-center gap-1 text-footnote text-grey-04">
+      <span>Entities</span>
+      <Tooltip
+        label="Relation queries coming soon"
+        position="top"
+        trigger={
+          <button
+            type="button"
+            aria-label="Relation queries coming soon"
+            className="cursor-not-allowed"
+            onClick={e => e.preventDefault()}
+          >
+            <Toggle checked={isRelations} />
+          </button>
+        }
+      />
+      <span>Relations</span>
+    </div>
+  );
+}
+
+function comparableFilterList(filters: Filter[]) {
+  return [...filters]
+    .map(f => ({
+      columnId: f.columnId,
+      value: f.value,
+      valueType: f.valueType,
+    }))
+    .sort((a, b) => `${a.columnId}\0${a.value}`.localeCompare(`${b.columnId}\0${b.value}`));
+}
+
+function orderFiltersForPicker(filters: RenderableFilter[], orderedColumnIds: string[]): RenderableFilter[] {
+  if (orderedColumnIds.length === 0) return sortFilters(filters);
+
+  const filterById = new Map(filters.map(f => [f.columnId, f]));
+  const ordered: RenderableFilter[] = [];
+  const seen = new Set<string>();
+
+  for (const id of orderedColumnIds) {
+    const filter = filterById.get(id);
+    if (!filter || seen.has(filter.columnId)) continue;
+    seen.add(filter.columnId);
+    ordered.push(filter);
+  }
+
+  for (const filter of filters) {
+    if (seen.has(filter.columnId)) continue;
+    seen.add(filter.columnId);
+    ordered.push(filter);
+  }
+
+  return ordered;
+}
 
 function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
   /* Visible triples includes both real triples and placeholder triples */

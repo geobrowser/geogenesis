@@ -1,6 +1,8 @@
 import MarkdownIt from 'markdown-it';
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
 
+import { parseGraphLinkHref } from '~/core/utils/graph-link';
+
 export function bracketMathPlugin(md: MarkdownIt) {
   // Inline rule for \(...\) bracket math — must run BEFORE 'escape' so \( isn't consumed as escaped paren
   md.inline.ruler.before('escape', 'bracket_math', (state: StateInline, silent: boolean) => {
@@ -94,7 +96,11 @@ export function sanitizeRenderedLinkUrl(href: string | null): string | null {
   }
 
   const scheme = schemeMatch[1].toLowerCase();
-  if (scheme === 'http' || scheme === 'https' || scheme === 'graph' || scheme === 'mailto' || scheme === 'tel') {
+  if (scheme === 'graph') {
+    return parseGraphLinkHref(trimmedHref) ? trimmedHref : null;
+  }
+
+  if (scheme === 'http' || scheme === 'https' || scheme === 'mailto' || scheme === 'tel') {
     return trimmedHref;
   }
 

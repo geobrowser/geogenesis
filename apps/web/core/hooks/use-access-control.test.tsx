@@ -1,0 +1,150 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+
+import { Effect } from 'effect';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const accessChecks = {
+  isMember: vi.fn(),
+  isEditor: vi.fn(),
+};
+
+const hookState = {
+  hydrated: true,
+  personalSpaceId: 'member-space-id',
+  isLoadingPersonalSpaceId: false,
+  space: {
+    id: 'dao-space-id',
+    type: 'DAO',
+    members: [] as string[],
+    editors: [] as string[],
+  } as { id: string; type: 'DAO' | 'PERSONAL'; members: string[]; editors: string[] } | undefined,
+  isLoadingSpace: false,
+};
+
+vi.mock('~/core/io/queries', () => ({
+  getIsMemberOfSpace: accessChecks.isMember,
+  getIsEditorOfSpace: accessChecks.isEditor,
+}));
+
+vi.mock('./use-hydrated', () => ({
+  useHydrated: () => hookState.hydrated,
+}));
+
+vi.mock('./use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({
+    personalSpaceId: hookState.personalSpaceId,
+    isLoading: hookState.isLoadingPersonalSpaceId,
+  }),
+}));
+
+vi.mock('./use-space', () => ({
+  useSpace: () => ({
+    space: hookState.space,
+    isLoading: hookState.isLoadingSpace,
+  }),
+}));
+
+const { useAccessControl } = await import('./use-access-control');
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  };
+}
+
+describe('useAccessControl', () => {
+  beforeEach(() => {
+    hookState.hydrated = true;
+    hookState.personalSpaceId = 'member-space-id';
+    hookState.isLoadingPersonalSpaceId = false;
+    hookState.space = {
+      id: 'dao-space-id',
+      type: 'DAO',
+      members: [],
+      editors: [],
+    };
+    hookState.isLoadingSpace = false;
+    accessChecks.isMember.mockReset();
+    accessChecks.isEditor.mockReset();
+    accessChecks.isMember.mockReturnValue(Effect.succeed(true));
+    accessChecks.isEditor.mockReturnValue(Effect.succeed(false));
+  });
+
+  it('uses server-filtered DAO membership instead of the paginated space member list', async () => {
+    const { result } = renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(accessChecks.isMember).toHaveBeenCalledWith('daospaceid', 'memberspaceid', expect.any(AbortSignal));
+    expect(result.current).toMatchObject({
+      isMember: true,
+      isEditor: false,
+      canEdit: true,
+    });
+  });
+
+  it('uses server-filtered DAO editor status instead of the paginated space editor list', async () => {
+    accessChecks.isMember.mockReturnValue(Effect.succeed(false));
+    accessChecks.isEditor.mockReturnValue(Effect.succeed(true));
+
+    const { result } = renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(accessChecks.isEditor).toHaveBeenCalledWith('daospaceid', 'memberspaceid', expect.any(AbortSignal));
+    expect(result.current).toMatchObject({
+      isMember: false,
+      isEditor: true,
+      canEdit: true,
+    });
+  });
+
+  it('does not run membership or editor checks until access control is ready', () => {
+    hookState.hydrated = false;
+
+    renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not run membership or editor checks before the space is resolved', () => {
+    hookState.space = undefined;
+    hookState.isLoadingSpace = true;
+
+    renderHook(() => useAccessControl('dao-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not run membership or editor checks for personal spaces', () => {
+    hookState.space = {
+      id: 'MEMBER-SPACE-ID',
+      type: 'PERSONAL',
+      members: [],
+      editors: [],
+    };
+
+    const { result } = renderHook(() => useAccessControl('member-space-id'), { wrapper: createWrapper() });
+
+    expect(accessChecks.isMember).not.toHaveBeenCalled();
+    expect(accessChecks.isEditor).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({
+      isMember: true,
+      isEditor: true,
+      canEdit: true,
+      isLoading: false,
+    });
+  });
+});

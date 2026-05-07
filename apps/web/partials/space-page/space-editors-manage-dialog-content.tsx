@@ -2,43 +2,62 @@
 
 import * as React from 'react';
 
-import { OmitStrict, Profile } from '~/core/types';
+import { useProposeRemoveEditor } from '~/core/hooks/use-propose-remove-editor';
+import {
+  type SpaceParticipantProfile,
+  useInfiniteScrollSentinel,
+  useSpaceParticipantsInfinite,
+} from '~/core/space-members/use-space-participants-infinite';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
+import { Skeleton } from '~/design-system/skeleton';
 
-import { useProposeRemoveEditor } from '../../core/hooks/use-propose-remove-editor';
 import { MemberRow } from './space-member-row';
-
-type Editor = OmitStrict<Profile, 'coverUrl'>;
 
 interface Props {
   spaceId: string;
-  editors: Editor[];
 }
 
-export function SpaceEditorsManageDialogContent({ spaceId, editors }: Props) {
-  const { setQuery, queriedEditors } = useQueriedEditors(editors);
+export function SpaceEditorsManageDialogContent({ spaceId }: Props) {
+  const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
+    useSpaceParticipantsInfinite({ spaceId, kind: 'editors' });
+
+  const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
+
+  const [query, setQuery] = React.useState('');
+
+  const queriedEditors = React.useMemo(() => {
+    if (!query) return participants;
+    const q = query.toLowerCase();
+    return participants.filter(p => (p.name ? p.name.toLowerCase().includes(q) : p.id.toLowerCase().includes(q)));
+  }, [participants, query]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-2">
-        <h2 className="text-metadataMedium">{editors.length} editors</h2>
+        <h2 className="text-metadataMedium">{totalCount} editors</h2>
 
         <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
-        <div className="divide-y divide-grey-02">
-          {queriedEditors.map(e => (
-            <CurrentEditor key={e.id} editor={e} spaceId={spaceId} />
-          ))}
-        </div>
+        {isLoading ? (
+          <ManageDialogSkeletons />
+        ) : (
+          <div className="divide-y divide-grey-02">
+            {queriedEditors.map(e => (
+              <CurrentEditor key={e.id} editor={e} spaceId={spaceId} />
+            ))}
+            {hasNextPage ? <div ref={sentinelRef} className="h-px" /> : null}
+            {isFetchingNextPage ? <ManageDialogSkeletons count={3} /> : null}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 interface CurrentEditorProps {
-  editor: Editor;
+  editor: SpaceParticipantProfile;
   spaceId: string;
 }
 
@@ -74,21 +93,18 @@ function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
   );
 }
 
-function useQueriedEditors(editors: Editor[]) {
-  const [query, setQuery] = React.useState('');
-
-  const queriedEditors = React.useMemo(() => {
-    return editors.filter(e => {
-      if (e.name) {
-        return e.name?.toLowerCase().includes(query.toLowerCase());
-      }
-
-      return e.id.toLowerCase().includes(query.toLowerCase());
-    });
-  }, [editors, query]);
-
-  return {
-    setQuery,
-    queriedEditors,
-  };
+function ManageDialogSkeletons({ count = 5 }: { count?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex items-center justify-between p-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <Skeleton className="h-7 w-28" />
+        </div>
+      ))}
+    </div>
+  );
 }

@@ -15,7 +15,7 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -178,17 +178,17 @@ function ModeToggle() {
   const { editable, setEditable } = useEditable();
 
   const spaceId = useSpaceId();
-  const canUserEdit = useCanUserEdit(spaceId ?? '');
+  const { canEdit: canUserEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
 
   React.useEffect(() => {
     // If a user doesn't have edit access on the page, make sure we set the toggle
     // state to false. This can happen if a user is in edit mode in a space they
     // have edit access in, then they navigate to a space they don't have edit
     // access in.
-    if (!canUserEdit) {
+    if (!isLoadingAccessControl && !canUserEdit) {
       setEditable(false);
     }
-  }, [canUserEdit, setEditable]);
+  }, [canUserEdit, isLoadingAccessControl, setEditable]);
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
@@ -196,6 +196,10 @@ function ModeToggle() {
   const onToggle = React.useCallback(() => {
     if (!spaceId) {
       setEditable(false);
+      return;
+    }
+
+    if (isLoadingAccessControl && !editable) {
       return;
     }
 
@@ -216,7 +220,7 @@ function ModeToggle() {
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
     } else setEditable(!editable);
-  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId]);
+  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl]);
 
   const memoizedShortcuts = React.useMemo(
     () => [

@@ -510,6 +510,36 @@ export class GeoStore {
   }
 
   /**
+   * Get all locally-tracked active values that use `propertyId`. Internal —
+   * used by the assistant's changePropertyDataType safety check (refuse-if-values).
+   * Linear scan; only fires on a destructive op so the cost is acceptable.
+   */
+  public getValuesByProperty(propertyId: string, includeDeleted = false): Value[] {
+    return reactiveValues.get().filter(v => {
+      if (v.property.id !== propertyId) return false;
+      if (!includeDeleted && v.isDeleted) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Get all relations whose toEntity points at `entityId` (i.e. backlinks).
+   * Optionally scope to a single space. Internal — used by deleteEntity's
+   * cascade so we can tombstone incoming references without exposing a
+   * backlinks read tool to the model. Linear scan over reactiveRelations;
+   * intentional, the cost is bounded by total local relation count and only
+   * fires during destructive ops.
+   */
+  public getRelationsToEntity(entityId: string, spaceId?: string, includeDeleted = false): Relation[] {
+    return reactiveRelations.get().filter(r => {
+      if (r.toEntity.id !== entityId) return false;
+      if (spaceId !== undefined && r.spaceId !== spaceId) return false;
+      if (!includeDeleted && r.isDeleted) return false;
+      return true;
+    });
+  }
+
+  /**
    * Add or update a value with optimistic updates
    */
   public setValue(value: Value): void {

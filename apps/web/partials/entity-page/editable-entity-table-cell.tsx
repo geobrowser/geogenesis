@@ -50,6 +50,7 @@ type Props = {
   source: Source;
   imageUploadingFor?: Set<string>;
   autoFocus?: boolean;
+  focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -70,6 +71,7 @@ export function EditableEntityTableCell({
   source,
   imageUploadingFor,
   autoFocus = false,
+  focusRequestKey,
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
@@ -98,6 +100,7 @@ export function EditableEntityTableCell({
           variant="tableCell"
           width="full"
           autoFocus={autoFocus}
+          focusRequestKey={focusRequestKey}
           relationValueTypes={collectionTypeFilters}
         />
       );

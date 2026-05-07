@@ -59,7 +59,7 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             ...PropertyFragment
@@ -79,7 +79,7 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           schedule
         }
 
-        relationsList(filter: { spaceId: { is: $spaceId } }) {
+        relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           id
           spaceId
           position

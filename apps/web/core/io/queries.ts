@@ -38,6 +38,8 @@ import {
   entityVoteCountQuery,
   entityVotersQuery,
   importNameValuesQuery,
+  isEditorOfSpaceQuery,
+  isMemberOfSpaceQuery,
   propertiesBatchQuery,
   propertyQuery,
   relationEntityQuery,
@@ -45,6 +47,8 @@ import {
   relationsByFromEntityIdQuery,
   relationsByToEntityIdsQuery,
   resultQuery,
+  spaceEditorsPageQuery,
+  spaceMembersPageQuery,
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
@@ -498,6 +502,71 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
     query: spacesWhereMemberQuery,
     decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
     variables: { memberSpaceId },
+    signal,
+  });
+}
+
+// Filter server-side: `membersList` is paginated to 100 by the API, so a
+// client-side `includes()` against `FullSpace` misses members past page 1.
+export function getIsMemberOfSpace(
+  spaceId: string,
+  memberSpaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: isMemberOfSpaceQuery,
+    decoder: data => (data.space?.membersList?.length ?? 0) > 0,
+    variables: { spaceId, memberSpaceId },
+    signal,
+  });
+}
+
+export function getIsEditorOfSpace(
+  spaceId: string,
+  memberSpaceId: string,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: isEditorOfSpaceQuery,
+    decoder: data => (data.space?.editorsList?.length ?? 0) > 0,
+    variables: { spaceId, memberSpaceId },
+    signal,
+  });
+}
+
+export type SpaceParticipantsPage = {
+  memberSpaceIds: string[];
+  totalCount: number;
+};
+
+export function getSpaceMembersPage(
+  spaceId: string,
+  { first, offset }: { first: number; offset: number },
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: spaceMembersPageQuery,
+    decoder: (data): SpaceParticipantsPage => ({
+      memberSpaceIds: data.space?.membersList?.map(m => m.memberSpaceId as string) ?? [],
+      totalCount: data.space?.members?.totalCount ?? 0,
+    }),
+    variables: { spaceId, first, offset },
+    signal,
+  });
+}
+
+export function getSpaceEditorsPage(
+  spaceId: string,
+  { first, offset }: { first: number; offset: number },
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: spaceEditorsPageQuery,
+    decoder: (data): SpaceParticipantsPage => ({
+      memberSpaceIds: data.space?.editorsList?.map(e => e.memberSpaceId as string) ?? [],
+      totalCount: data.space?.editors?.totalCount ?? 0,
+    }),
+    variables: { spaceId, first, offset },
     signal,
   });
 }
