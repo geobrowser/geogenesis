@@ -215,7 +215,11 @@ export function EditableTabGroup({
 
     const relationIds = new Set<string>();
     const allRelationsToDelete: typeof outgoingRelations = [];
+    // Always include tab.relation (the parent's TABS_PROPERTY edge). getRelations only sees the local
+    // reactive store, so a server-only relation would otherwise be missed and the tab would resurrect
+    // as "Untitled" after publish — its own values get cleared by the orphan cascade but the edge stays.
     for (const r of [
+      tab.relation,
       ...outgoingRelations,
       ...getRelations({ selector: r => r.toEntity.id === tabEntityId && r.spaceId === spaceId }),
     ]) {
