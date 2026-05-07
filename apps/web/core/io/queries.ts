@@ -601,6 +601,7 @@ interface ResultsArgs {
   query: string;
   spaceId?: string;
   typeIds?: string[];
+  excludeTypeIds?: string[];
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
@@ -772,6 +773,12 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
+  const excludedTypeIds = args.excludeTypeIds ?? getDefaultSearchExcludedTypeIds();
+  if (excludedTypeIds.length) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('exclude_type_ids', excludedTypeIds.map(toUuid).join(','));
+  }
+
   if (args.additionalSpaceIds?.length) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
@@ -937,6 +944,10 @@ const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
 };
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
+
+function getDefaultSearchExcludedTypeIds(): string[] {
+  return [...EXCLUDED_BLOCK_TYPE_IDS];
+}
 
 function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
   return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
