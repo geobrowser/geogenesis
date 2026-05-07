@@ -61,8 +61,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
+import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
-import { TYPE_ICONS, resolveRenderableTypeKey } from '~/partials/entity-page/type-icons';
 import { TypePropertyGroupsEditor } from '~/partials/entity-page/type-property-groups-editor';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
@@ -179,7 +179,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                   onClick={() => setTypePropertiesCollapsed(previous => !previous)}
                 >
                   <span>Type properties</span>
-                  <div className={typePropertiesCollapsed ? '-rotate-90 transition-transform' : 'transition-transform'}>
+                  <div className={`${typePropertiesCollapsed ? '-rotate-90' : ''} transition-transform`}>
                     <ChevronDownSmall color="grey-04" />
                   </div>
                 </button>
@@ -195,12 +195,14 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                 </div>
               )}
               {effectiveSections.map(section => {
-                const sectionCollapsed = section.groupId ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed) : false;
+                const collapsible = section.collapsible !== false;
+                const sectionCollapsed =
+                  collapsible && section.groupId ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed) : false;
                 const isCollapsed = isTypeEntity ? typePropertiesCollapsed : sectionCollapsed;
 
                 return (
                   <div key={section.id} className={isTypeEntity ? 'flex flex-col gap-2' : 'flex flex-col gap-4'}>
-                    {effectiveHasGroups && section.isGroup && (
+                    {effectiveHasGroups && section.isGroup && collapsible && (
                       <button
                         type="button"
                         className="flex w-full items-center justify-between text-left"
@@ -215,10 +217,15 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                         <Text as="p" variant="tableCell" className="font-medium">
                           {section.label}
                         </Text>
-                        <div className={sectionCollapsed ? '' : 'rotate-180'}>
+                        <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
                           <ChevronDownSmall color="grey-04" />
                         </div>
                       </button>
+                    )}
+                    {effectiveHasGroups && section.isGroup && !collapsible && section.label && (
+                      <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+                        {section.label}
+                      </Text>
                     )}
 
                     {!isCollapsed &&
@@ -372,29 +379,6 @@ function TypeEntityPropertyRow({
   );
 }
 
-function InlinePropertyTypeIcon({ dataType, renderableType }: { dataType: Property['dataType']; renderableType?: string | null }) {
-  const hasIconKey = (key: string): key is keyof typeof TYPE_ICONS => key in TYPE_ICONS;
-  const resolvedKey = resolveRenderableTypeKey(renderableType, renderableType);
-  const iconKey: keyof typeof TYPE_ICONS = resolvedKey ?? (hasIconKey(dataType) ? dataType : 'TEXT');
-  if (iconKey === 'RELATION') {
-    return (
-      <span className="inline-flex items-center p-0.5 text-text">
-        <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-          <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-        </svg>
-      </span>
-    );
-  }
-
-  const Icon = TYPE_ICONS[iconKey];
-  return (
-    <span className="inline-flex items-center text-text [&_svg]:size-4">
-      <Icon color="text" />
-    </span>
-  );
-}
-
 type RelationPropertyWithDeleteProps = {
   propertyId: string;
   entityId: string;
@@ -410,6 +394,7 @@ type VisiblePropertySection = {
   isGroup: boolean;
   label?: string;
   defaultCollapsed: boolean;
+  collapsible?: boolean;
   entries: [string, Property][];
 };
 
@@ -1354,7 +1339,7 @@ function useVisiblePropertySections(
       id: `group-${group.id}`,
       groupId: group.id,
       isGroup: true,
-      label: group.name?.trim() || 'Add name...',
+      label: group.name?.trim() || 'Untitled group',
       defaultCollapsed: group.collapsed,
       entries,
     };
@@ -1386,6 +1371,7 @@ function useVisiblePropertySections(
         groupId: 'ungrouped',
         label: 'Ungrouped properties',
         defaultCollapsed: false,
+        collapsible: false,
         entries: ungroupedEntries,
       },
     ],

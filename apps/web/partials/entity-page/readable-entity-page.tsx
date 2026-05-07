@@ -38,8 +38,8 @@ import { Map as GeoMap } from '~/design-system/map';
 import { Text } from '~/design-system/text';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
+import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
-import { TYPE_ICONS, resolveRenderableTypeKey } from '~/partials/entity-page/type-icons';
 
 interface Props {
   id: string;
@@ -91,7 +91,6 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   const entityTypes = useEntityTypes(entityId, spaceId);
   const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
-  const [ungroupedCollapsed, setUngroupedCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     const defaults: Record<string, boolean> = {};
@@ -134,7 +133,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
         });
         return {
           id: group.id,
-          label: group.name?.trim() || 'Add name...',
+          label: group.name?.trim() || 'Untitled group',
           propertyIds,
         };
       })
@@ -165,7 +164,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
     const groups = schemaWithGroups.propertyGroups
       .map(group => ({
         id: group.id,
-        label: group.name?.trim() || 'Add name...',
+        label: group.name?.trim() || 'Untitled group',
         propertyIds: group.propertyIds.filter(propertyId => schemaPropertyById.has(propertyId)),
       }))
       .filter(group => group.propertyIds.length > 0);
@@ -215,7 +214,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                 <Text as="p" variant="tableCell" className="font-medium">
                   {group.label}
                 </Text>
-                <div className={isCollapsed ? '' : 'rotate-180'}>
+                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
                   <ChevronDownSmall color="grey-04" />
                 </div>
               </button>
@@ -246,39 +245,28 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
         })}
         {typeSchemaSections.ungrouped.length > 0 && (
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between text-left"
-              onClick={() => setUngroupedCollapsed(previous => !previous)}
-            >
-              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-                Ungrouped properties
-              </Text>
-              <div className={ungroupedCollapsed ? '' : 'rotate-180'}>
-                <ChevronDownSmall color="grey-04" />
-              </div>
-            </button>
-            {!ungroupedCollapsed && (
-              <div className="flex flex-wrap gap-2">
-                {typeSchemaSections.ungrouped.map(propertyId => {
-                  const property = typeSchemaSections.schemaPropertyById.get(propertyId);
-                  if (!property) return null;
+            <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+              Ungrouped properties
+            </Text>
+            <div className="flex flex-wrap gap-2">
+              {typeSchemaSections.ungrouped.map(propertyId => {
+                const property = typeSchemaSections.schemaPropertyById.get(propertyId);
+                if (!property) return null;
 
-                  return (
-                    <LinkableRelationChip
-                      key={`type-ungrouped-${propertyId}`}
-                      isEditing={false}
-                      currentSpaceId={spaceId}
-                      entityId={propertyId}
-                      small
-                      truncateLabel
-                    >
-                      {property.name ?? propertyId}
-                    </LinkableRelationChip>
-                  );
-                })}
-              </div>
-            )}
+                return (
+                  <LinkableRelationChip
+                    key={`type-ungrouped-${propertyId}`}
+                    isEditing={false}
+                    currentSpaceId={spaceId}
+                    entityId={propertyId}
+                    small
+                    truncateLabel
+                  >
+                    {property.name ?? propertyId}
+                  </LinkableRelationChip>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -305,7 +293,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                 <Text as="p" variant="tableCell" className="font-medium">
                   {group.label}
                 </Text>
-                <div className={isCollapsed ? '' : 'rotate-180'}>
+                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
                   <ChevronDownSmall color="grey-04" />
                 </div>
               </button>
@@ -335,36 +323,25 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       {groupedSections.ungrouped.length > 0 && (
         <div className="flex flex-col gap-2">
           {groupedSections.hasGroups && (
-            <button
-              type="button"
-              className="flex w-full items-center justify-between text-left"
-              onClick={() => setUngroupedCollapsed(previous => !previous)}
-            >
-              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-                Ungrouped properties
-              </Text>
-              <div className={ungroupedCollapsed ? '' : 'rotate-180'}>
-                <ChevronDownSmall color="grey-04" />
-              </div>
-            </button>
+            <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+              Ungrouped properties
+            </Text>
           )}
-          {!ungroupedCollapsed && (
-            <div className="flex flex-col gap-2">
-              {groupedSections.ungrouped.map(propertyId => {
-                const property = renderedProperties[propertyId];
-                if (!property) return null;
-                return (
-                  <ReadablePropertyRow
-                    key={propertyId}
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    propertyId={propertyId}
-                    property={property}
-                  />
-                );
-              })}
-            </div>
-          )}
+          <div className="flex flex-col gap-2">
+            {groupedSections.ungrouped.map(propertyId => {
+              const property = renderedProperties[propertyId];
+              if (!property) return null;
+              return (
+                <ReadablePropertyRow
+                  key={propertyId}
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  propertyId={propertyId}
+                  property={property}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -396,29 +373,6 @@ function ReadablePropertyRow({
         <ValuesGroup entityId={entityId} propertyId={propertyId} spaceId={spaceId} hidePropertyName />
       )}
     </div>
-  );
-}
-
-function InlinePropertyTypeIcon({ dataType, renderableType }: { dataType: DataType; renderableType?: string | null }) {
-  const hasIconKey = (key: string): key is keyof typeof TYPE_ICONS => key in TYPE_ICONS;
-  const resolvedKey = resolveRenderableTypeKey(renderableType, renderableType);
-  const iconKey: keyof typeof TYPE_ICONS = resolvedKey ?? (hasIconKey(dataType) ? dataType : 'TEXT');
-  if (iconKey === 'RELATION') {
-    return (
-      <span className="inline-flex items-center p-0.5 text-text">
-        <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-          <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-        </svg>
-      </span>
-    );
-  }
-
-  const Icon = TYPE_ICONS[iconKey];
-  return (
-    <span className="inline-flex items-center text-text [&_svg]:size-4">
-      <Icon color="text" />
-    </span>
   );
 }
 

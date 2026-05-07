@@ -35,6 +35,8 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 import { LinkableRelationChip } from '~/design-system/chip';
 
+import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
+
 const UNGROUPED_CONTAINER_ID = 'container:ungrouped';
 
 type GroupContainer = {
@@ -545,7 +547,7 @@ function TypePropertyGroupCard({
     <div ref={sortable.setNodeRef} style={style} className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0">
       <button
         type="button"
-        className="absolute top-1/2 -left-8 z-10 -translate-y-1/2 cursor-grab text-grey-04 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        className="absolute top-4 -left-6 z-10 cursor-grab text-grey-04 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
         aria-label="Reorder group"
         {...sortable.attributes}
         {...sortable.listeners}
@@ -570,11 +572,11 @@ function TypePropertyGroupCard({
       />
 
       {!isCollapsed && (
-        <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-blue-50' : ''} rounded-md pr-2 py-2`}>
+        <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
           <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
               <div className="inline-flex items-center gap-2">
-                <RelationMarker />
+                <InlinePropertyTypeIcon dataType="RELATION" />
                 <span className="text-tableCell font-medium text-text">Properties</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -621,8 +623,8 @@ function GroupHeader({
 }) {
   return (
     <div className="mb-2 grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-      <div className="inline-flex items-center gap-1 text-tableCell font-medium text-text">
-        <span className="shrink-0">T|</span>
+      <div className="inline-flex items-center gap-2 text-tableCell font-medium text-text">
+        <InlinePropertyTypeIcon dataType="TEXT" />
         <span className="shrink-0">Group name</span>
       </div>
       <div className="flex min-w-0 items-center gap-2">
@@ -668,7 +670,6 @@ function UngroupedDropContainer({
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
-  const [ungroupedCollapsed, setUngroupedCollapsed] = React.useState(false);
 
   const ensureOnTypeUngrouped = (property: { id: string; name: string | null }) => {
     if (allTypePropertyIds.includes(property.id)) return;
@@ -689,60 +690,45 @@ function UngroupedDropContainer({
 
   return (
     <div className="border-t border-grey-02 px-4 py-3">
-      <div className="flex items-center justify-between">
-        <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-          Ungrouped properties
-        </Text>
-        <div className="inline-flex w-[150px] items-center justify-end gap-2">
-          <label className="flex items-center gap-1 text-tableCell font-normal tracking-[-0.35px] text-grey-04">
-            <Checkbox
-              checked={ungroupedCollapsed}
-              onChange={() => setUngroupedCollapsed(previous => !previous)}
-              className="!size-3 rounded-[3px] *:!size-2"
-            />
-            Collapsed
-          </label>
-          <span className="inline-flex h-6 w-6 opacity-0" aria-hidden />
-        </div>
-      </div>
-      {!ungroupedCollapsed && (
-        <div
-          ref={drop.setNodeRef}
-          className={`mt-2 rounded-md pr-2 py-2 ${drop.isOver ? 'bg-blue-50' : ''}`}
-        >
-          <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-              <div className="inline-flex items-center gap-2">
-                <RelationMarker />
-                <span className="text-tableCell font-medium text-text">Properties</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {relations.map(relation => (
-                  <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
-                ))}
-                <SelectEntityAsPopover
-                  trigger={
-                    <button
-                      type="button"
-                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
-                    >
-                      <Create />
-                    </button>
-                  }
-                  spaceId={spaceId}
-                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                  onDone={result => {
-                    ensureOnTypeUngrouped({ id: result.id, name: result.name });
-                  }}
-                  placeholder="Find property..."
-                  advanced={false}
-                  showIDs={false}
-                />
-              </div>
+      <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+        Ungrouped properties
+      </Text>
+      <div
+        ref={drop.setNodeRef}
+        className={`mt-2 rounded-md pr-2 py-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
+      >
+        <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
+            <div className="inline-flex items-center gap-2">
+              <InlinePropertyTypeIcon dataType="RELATION" />
+              <span className="text-tableCell font-medium text-text">Properties</span>
             </div>
-          </SortableContext>
-        </div>
-      )}
+            <div className="flex flex-wrap items-center gap-2">
+              {relations.map(relation => (
+                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+              ))}
+              <SelectEntityAsPopover
+                trigger={
+                  <button
+                    type="button"
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
+                  >
+                    <Create />
+                  </button>
+                }
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                onDone={result => {
+                  ensureOnTypeUngrouped({ id: result.id, name: result.name });
+                }}
+                placeholder="Find property..."
+                advanced={false}
+                showIDs={false}
+              />
+            </div>
+          </div>
+        </SortableContext>
+      </div>
     </div>
   );
 }
@@ -779,17 +765,6 @@ function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceI
         </LinkableRelationChip>
       </span>
     </div>
-  );
-}
-
-function RelationMarker() {
-  return (
-    <span className="inline-flex items-center p-0.5 text-text">
-      <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-        <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-      </svg>
-    </span>
   );
 }
 
