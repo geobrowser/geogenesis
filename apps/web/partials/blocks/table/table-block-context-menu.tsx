@@ -112,13 +112,13 @@ export function TableBlockContextMenu() {
               </MenuItem>
               <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
                 <div className="flex w-full items-center justify-between gap-2">
-                  <span>View config</span>
+                  <span>Go to block</span>
                   <Cog />
                 </div>
               </MenuItem>
               <MenuItem href={NavUtils.toEntity(spaceId, relationId)}>
                 <div className="flex w-full items-center justify-between gap-2">
-                  <span>View block relation</span>
+                  <span>Go to relation</span>
                   <Relation />
                 </div>
               </MenuItem>
