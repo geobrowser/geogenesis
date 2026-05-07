@@ -5,7 +5,7 @@ import { getImagePath } from '~/core/utils/utils';
 export const OG_IMAGE_SIZE = { width: 600, height: 315 };
 export const OG_IMAGE_CONTENT_TYPE = 'image/png';
 
-const DEFAULT_OG_IMAGE = 'https://www.geobrowser.io/static/geo-social-image-v2.png';
+const DEFAULT_OG_IMAGE = 'https://www.geobrowser.io/static/geo-social-image-v3.png';
 
 export function firstLine(text: string | null | undefined): string | undefined {
   if (!text) return undefined;
