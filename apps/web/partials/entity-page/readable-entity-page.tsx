@@ -39,6 +39,7 @@ import { Text } from '~/design-system/text';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
+import { TYPE_ICONS, resolveRenderableTypeKey } from '~/partials/entity-page/type-icons';
 
 interface Props {
   id: string;
@@ -90,6 +91,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   const entityTypes = useEntityTypes(entityId, spaceId);
   const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+  const [ungroupedCollapsed, setUngroupedCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     const defaults: Record<string, boolean> = {};
@@ -173,11 +175,21 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       propertyId => schemaPropertyById.has(propertyId) && !grouped.has(propertyId)
     );
 
-    return { groups, ungrouped, schemaPropertyById };
+    const fallbackUngrouped =
+      groups.length === 0 && ungrouped.length === 0
+        ? schemaWithGroups.schema
+            .map(property => property.id)
+            .filter(propertyId => !SKIPPED_PROPERTIES.includes(propertyId) && !grouped.has(propertyId))
+        : [];
+
+    return {
+      groups,
+      ungrouped: fallbackUngrouped.length > 0 ? fallbackUngrouped : ungrouped,
+      schemaPropertyById,
+    };
   }, [schemaWithGroups]);
 
-  const hasTypeSchemaDisplay =
-    isTypeEntity && schemaWithGroups.hasPropertyGroups && (typeSchemaSections.groups.length > 0 || typeSchemaSections.ungrouped.length > 0);
+  const hasTypeSchemaDisplay = isTypeEntity && (typeSchemaSections.groups.length > 0 || typeSchemaSections.ungrouped.length > 0);
 
   if (!hasTypeSchemaDisplay && countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
@@ -185,11 +197,11 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
 
   if (hasTypeSchemaDisplay) {
     return (
-      <div className="rounded-lg border border-grey-02 shadow-button">
+      <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
         {typeSchemaSections.groups.map(group => {
           const isCollapsed = collapsedGroups[group.id] ?? false;
           return (
-            <div key={group.id} className="border-b border-grey-02 px-4 py-3 last:border-b-0">
+            <div key={group.id} className="flex flex-col gap-2">
               <button
                 type="button"
                 className="flex w-full items-center justify-between text-left"
@@ -209,7 +221,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               </button>
 
               {!isCollapsed && (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
                   {group.propertyIds.map(propertyId => {
                     const property = typeSchemaSections.schemaPropertyById.get(propertyId);
                     if (!property) return null;
@@ -233,29 +245,40 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
           );
         })}
         {typeSchemaSections.ungrouped.length > 0 && (
-          <div className="px-4 py-3">
-            <Text as="p" variant="tableCell" color="grey-04" className="mb-2">
-              Ungrouped properties
-            </Text>
-            <div className="flex flex-wrap gap-2">
-              {typeSchemaSections.ungrouped.map(propertyId => {
-                const property = typeSchemaSections.schemaPropertyById.get(propertyId);
-                if (!property) return null;
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setUngroupedCollapsed(previous => !previous)}
+            >
+              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+                Ungrouped properties
+              </Text>
+              <div className={ungroupedCollapsed ? '' : 'rotate-180'}>
+                <ChevronDownSmall color="grey-04" />
+              </div>
+            </button>
+            {!ungroupedCollapsed && (
+              <div className="flex flex-wrap gap-2">
+                {typeSchemaSections.ungrouped.map(propertyId => {
+                  const property = typeSchemaSections.schemaPropertyById.get(propertyId);
+                  if (!property) return null;
 
-                return (
-                  <LinkableRelationChip
-                    key={`type-ungrouped-${propertyId}`}
-                    isEditing={false}
-                    currentSpaceId={spaceId}
-                    entityId={propertyId}
-                    small
-                    truncateLabel
-                  >
-                    {property.name ?? propertyId}
-                  </LinkableRelationChip>
-                );
-              })}
-            </div>
+                  return (
+                    <LinkableRelationChip
+                      key={`type-ungrouped-${propertyId}`}
+                      isEditing={false}
+                      currentSpaceId={spaceId}
+                      entityId={propertyId}
+                      small
+                      truncateLabel
+                    >
+                      {property.name ?? propertyId}
+                    </LinkableRelationChip>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -263,12 +286,12 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-grey-02 shadow-button">
+    <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
       {groupedSections.hasGroups &&
         groupedSections.groups.map(group => {
           const isCollapsed = collapsedGroups[group.id] ?? false;
           return (
-            <div key={group.id} className="border-b border-grey-02 px-4 py-3 last:border-b-0">
+            <div key={group.id} className="flex flex-col gap-2">
               <button
                 type="button"
                 className="flex w-full items-center justify-between text-left"
@@ -288,7 +311,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               </button>
 
               {!isCollapsed && (
-                <div className="mt-2 flex flex-col gap-2">
+                <div className="flex flex-col gap-2">
                   {group.propertyIds.map(propertyId => {
                     const property = renderedProperties[propertyId];
                     if (!property) return null;
@@ -310,27 +333,38 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
         })}
 
       {groupedSections.ungrouped.length > 0 && (
-        <div className="px-4 py-3">
+        <div className="flex flex-col gap-2">
           {groupedSections.hasGroups && (
-            <Text as="p" variant="tableCell" color="grey-04" className="mb-2">
-              Ungrouped properties
-            </Text>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setUngroupedCollapsed(previous => !previous)}
+            >
+              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+                Ungrouped properties
+              </Text>
+              <div className={ungroupedCollapsed ? '' : 'rotate-180'}>
+                <ChevronDownSmall color="grey-04" />
+              </div>
+            </button>
           )}
-          <div className="flex flex-col gap-2">
-            {groupedSections.ungrouped.map(propertyId => {
-              const property = renderedProperties[propertyId];
-              if (!property) return null;
-              return (
-                <ReadablePropertyRow
-                  key={propertyId}
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  propertyId={propertyId}
-                  property={property}
-                />
-              );
-            })}
-          </div>
+          {!ungroupedCollapsed && (
+            <div className="flex flex-col gap-2">
+              {groupedSections.ungrouped.map(propertyId => {
+                const property = renderedProperties[propertyId];
+                if (!property) return null;
+                return (
+                  <ReadablePropertyRow
+                    key={propertyId}
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    propertyId={propertyId}
+                    property={property}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -346,14 +380,14 @@ function ReadablePropertyRow({
   entityId: string;
   spaceId: string;
   propertyId: string;
-  property: { id: string; name: string | null; dataType: DataType };
+  property: { id: string; name: string | null; dataType: DataType; renderableTypeStrict?: string | null; renderableType?: string | null };
 }) {
   const isRelation = property.dataType === 'RELATION';
 
   return (
     <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
       <div className="inline-flex min-w-0 items-center gap-2 text-text">
-        <InlineRelationMarker />
+        <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
         <PropertyNameLink property={property} spaceId={spaceId} />
       </div>
       {isRelation ? (
@@ -365,13 +399,23 @@ function ReadablePropertyRow({
   );
 }
 
-function InlineRelationMarker() {
+function InlinePropertyTypeIcon({ dataType, renderableType }: { dataType: DataType; renderableType?: string | null }) {
+  const iconKey = resolveRenderableTypeKey(renderableType, renderableType) ?? (dataType in TYPE_ICONS ? dataType : 'TEXT');
+  if (iconKey === 'RELATION') {
+    return (
+      <span className="inline-flex items-center p-0.5 text-text">
+        <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
+          <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
+        </svg>
+      </span>
+    );
+  }
+
+  const Icon = TYPE_ICONS[iconKey];
   return (
-    <span className="inline-flex items-center text-text">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="3.9375" cy="6" r="2.9375" stroke="currentColor"></circle>
-        <circle cx="8.0625" cy="6" r="2.9375" stroke="currentColor"></circle>
-      </svg>
+    <span className="inline-flex items-center text-text [&_svg]:size-4">
+      <Icon color="text" />
     </span>
   );
 }

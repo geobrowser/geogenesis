@@ -80,11 +80,11 @@ export default async function SpacePage(props0: Props) {
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
-      <ToggleEntityPage id={props.id} spaceId={spaceId} />
-      <Spacer height={24} />
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       </React.Suspense>
+      <Spacer height={24} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} />
       <Spacer height={40} />
       {/*
         Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
@@ -116,11 +116,11 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         <React.Suspense fallback={<SubtopicGallerySkeleton />}>
           <SubtopicGalleryContainer spaceId={spaceId} />
         </React.Suspense>
-        <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
-        <Spacer height={24} />
         <React.Suspense fallback={null}>
           <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
         </React.Suspense>
+        <Spacer height={24} />
+        <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
         <Spacer height={40} />
         <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
           <React.Suspense fallback={<div />}>

@@ -1,16 +1,19 @@
 'use client';
 
 import {
+  closestCenter,
   DndContext,
   DragEndEvent,
+  DragOverlay,
   DragOverEvent,
+  DragStartEvent,
   PointerSensor,
   pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
@@ -80,6 +83,7 @@ type EditorProps = {
 export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
+  const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
   const lastOverIdRef = React.useRef<string | null>(null);
 
   const typePropertyRelations = sortRelations(
@@ -177,12 +181,26 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     }
     return map;
   }, [groupContainers, ungroupedRelations]);
+  const propertyNameById = React.useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const relation of typePropertyRelations) {
+      if (!map.has(relation.toEntity.id)) {
+        map.set(relation.toEntity.id, relation.toEntity.name ?? null);
+      }
+    }
+    return map;
+  }, [typePropertyRelations]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 5 },
     })
   );
+  const collisionDetection = React.useCallback<typeof pointerWithin>((args: Parameters<typeof pointerWithin>[0]) => {
+    const pointerHits = pointerWithin(args);
+    if (pointerHits.length > 0) return pointerHits;
+    return closestCenter(args);
+  }, []);
 
   const findContainerForOver = (overId: string | null): string | null => {
     if (!overId) return null;
@@ -297,8 +315,13 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const onDragOver = (event: DragOverEvent) => {
     lastOverIdRef.current = event.over ? String(event.over.id) : null;
   };
+  const onDragStart = (event: DragStartEvent) => {
+    const activeId = String(event.active.id);
+    setActivePropertyDragId(parsePropertyDragId(activeId));
+  };
 
   const onDragEnd = (event: DragEndEvent) => {
+    setActivePropertyDragId(null);
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : lastOverIdRef.current;
     lastOverIdRef.current = null;
@@ -440,7 +463,14 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
 
       {!sectionCollapsed && (
         <div className="rounded-lg border border-grey-02 shadow-button">
-          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisionDetection}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => setActivePropertyDragId(null)}
+          >
             <SortableContext
               items={propertyGroupRelations.map(groupRelation => groupDragId(groupRelation.id))}
               strategy={verticalListSortingStrategy}
@@ -465,6 +495,13 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
               relations={ungroupedRelations}
               allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
             />
+            <DragOverlay>
+              {activePropertyDragId ? (
+                <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-tableCell font-normal tracking-[-0.25px] text-text shadow-lg">
+                  <span className="truncate">{propertyNameById.get(activePropertyDragId) ?? activePropertyDragId}</span>
+                </div>
+              ) : null}
+            </DragOverlay>
           </DndContext>
         </div>
       )}
@@ -502,6 +539,7 @@ function TypePropertyGroupCard({
   });
 
   const drop = useDroppable({ id: containerIdForGroup(groupId) });
+  const isCollapsed = getChecked(collapsedValue?.value ?? '0') === true;
 
   return (
     <div ref={sortable.setNodeRef} style={style} className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0">
@@ -531,37 +569,39 @@ function TypePropertyGroupCard({
         onDeleteGroup={onDeleteGroup}
       />
 
-      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-blue-50' : ''} rounded-md pr-2 py-2`}>
-        <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={verticalListSortingStrategy}>
-          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-            <div className="inline-flex items-center gap-2">
-              <RelationMarker />
-              <span className="text-tableCell font-semibold text-text">Properties</span>
+      {!isCollapsed && (
+        <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-blue-50' : ''} rounded-md pr-2 py-2`}>
+          <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
+              <div className="inline-flex items-center gap-2">
+                <RelationMarker />
+                <span className="text-tableCell font-medium text-text">Properties</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {propertyRelations.map(relation => (
+                  <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+                ))}
+                <SelectEntityAsPopover
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
+                    >
+                      <Create />
+                    </button>
+                  }
+                  spaceId={spaceId}
+                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                  onDone={result => onAddProperty({ id: result.id, name: result.name })}
+                  placeholder="Find property..."
+                  advanced={false}
+                  showIDs={false}
+                />
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {propertyRelations.map(relation => (
-                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
-              ))}
-              <SelectEntityAsPopover
-                trigger={
-                  <button
-                    type="button"
-                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
-                  >
-                    <Create />
-                  </button>
-                }
-                spaceId={spaceId}
-                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onDone={result => onAddProperty({ id: result.id, name: result.name })}
-                placeholder="Find property..."
-                advanced={false}
-                showIDs={false}
-              />
-            </div>
-          </div>
-        </SortableContext>
-      </div>
+          </SortableContext>
+        </div>
+      )}
     </div>
   );
 }
@@ -581,7 +621,7 @@ function GroupHeader({
 }) {
   return (
     <div className="mb-2 grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-      <div className="inline-flex items-center gap-1 text-tableCell font-semibold text-text">
+      <div className="inline-flex items-center gap-1 text-tableCell font-medium text-text">
         <span className="shrink-0">T|</span>
         <span className="shrink-0">Group name</span>
       </div>
@@ -592,18 +632,24 @@ function GroupHeader({
           placeholder="Add name..."
           className="min-w-0 flex-1 bg-transparent text-tableCell font-normal outline-none placeholder:text-grey-03"
         />
-        <label className="flex items-center gap-1 text-footnote text-grey-04">
-          <Checkbox checked={getChecked(collapsedValue)} onChange={onToggleCollapsed} />
-          Collapsed
-        </label>
-        <button
-          type="button"
-          className="pointer-events-none inline-flex h-6 w-6 items-center justify-center text-grey-04 opacity-0 transition-colors transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 hover:text-text"
-          onClick={onDeleteGroup}
-          aria-label="Delete group"
-        >
-          <Trash />
-        </button>
+        <div className="ml-2 inline-flex w-[150px] items-center justify-end gap-2">
+          <label className="flex items-center gap-1 text-tableCell font-normal tracking-[-0.35px] text-grey-04">
+            <Checkbox
+              checked={getChecked(collapsedValue)}
+              onChange={onToggleCollapsed}
+              className="!size-3 rounded-[3px] *:!size-2"
+            />
+            Collapsed
+          </label>
+          <button
+            type="button"
+            className="pointer-events-none inline-flex h-6 w-6 items-center justify-center text-grey-04 opacity-0 transition-colors transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 hover:text-text"
+            onClick={onDeleteGroup}
+            aria-label="Delete group"
+          >
+            <Trash />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -622,6 +668,7 @@ function UngroupedDropContainer({
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
+  const [ungroupedCollapsed, setUngroupedCollapsed] = React.useState(false);
 
   const ensureOnTypeUngrouped = (property: { id: string; name: string | null }) => {
     if (allTypePropertyIds.includes(property.id)) return;
@@ -642,45 +689,60 @@ function UngroupedDropContainer({
 
   return (
     <div className="border-t border-grey-02 px-4 py-3">
-      <Text as="p" variant="tableCell" color="grey-04">
-        Ungrouped properties
-      </Text>
-      <div
-        ref={drop.setNodeRef}
-        className={`mt-2 rounded-md pr-2 py-2 ${drop.isOver ? 'bg-blue-50' : ''}`}
-      >
-        <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={verticalListSortingStrategy}>
-          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-            <div className="inline-flex items-center gap-2">
-              <RelationMarker />
-              <span className="text-tableCell text-text">Properties</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {relations.map(relation => (
-                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
-              ))}
-              <SelectEntityAsPopover
-                trigger={
-                  <button
-                    type="button"
-                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
-                  >
-                    <Create />
-                  </button>
-                }
-                spaceId={spaceId}
-                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onDone={result => {
-                  ensureOnTypeUngrouped({ id: result.id, name: result.name });
-                }}
-                placeholder="Find property..."
-                advanced={false}
-                showIDs={false}
-              />
-            </div>
-          </div>
-        </SortableContext>
+      <div className="flex items-center justify-between">
+        <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+          Ungrouped properties
+        </Text>
+        <div className="inline-flex w-[150px] items-center justify-end gap-2">
+          <label className="flex items-center gap-1 text-tableCell font-normal tracking-[-0.35px] text-grey-04">
+            <Checkbox
+              checked={ungroupedCollapsed}
+              onChange={() => setUngroupedCollapsed(previous => !previous)}
+              className="!size-3 rounded-[3px] *:!size-2"
+            />
+            Collapsed
+          </label>
+          <span className="inline-flex h-6 w-6 opacity-0" aria-hidden />
+        </div>
       </div>
+      {!ungroupedCollapsed && (
+        <div
+          ref={drop.setNodeRef}
+          className={`mt-2 rounded-md pr-2 py-2 ${drop.isOver ? 'bg-blue-50' : ''}`}
+        >
+          <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
+              <div className="inline-flex items-center gap-2">
+                <RelationMarker />
+                <span className="text-tableCell font-medium text-text">Properties</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {relations.map(relation => (
+                  <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+                ))}
+                <SelectEntityAsPopover
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
+                    >
+                      <Create />
+                    </button>
+                  }
+                  spaceId={spaceId}
+                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                  onDone={result => {
+                    ensureOnTypeUngrouped({ id: result.id, name: result.name });
+                  }}
+                  placeholder="Find property..."
+                  advanced={false}
+                  showIDs={false}
+                />
+              </div>
+            </div>
+          </SortableContext>
+        </div>
+      )}
     </div>
   );
 }
@@ -690,7 +752,7 @@ function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceI
   const style = {
     transform: CSS.Translate.toString(sortable.transform),
     transition: sortable.transition,
-    opacity: sortable.isDragging ? 0.5 : 1,
+    opacity: sortable.isDragging ? 0 : 1,
   };
 
   return (
@@ -705,7 +767,7 @@ function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceI
           isEditing={false}
           small
           truncateLabel
-          className="max-w-[220px] !cursor-grab hover:!cursor-grab focus:!cursor-grab active:!cursor-grabbing [&_*]:!cursor-grab [&>button]:!cursor-pointer [&>button_*]:!cursor-pointer"
+          className="max-w-[220px] !cursor-grab !text-tableCell !font-normal tracking-[-0.25px] hover:!cursor-grab focus:!cursor-grab active:!cursor-grabbing [&_*]:!cursor-grab [&>button]:!cursor-pointer [&>button_*]:!cursor-pointer"
           currentSpaceId={spaceId}
           entityId={relation.toEntity.id}
           relationId={relation.id}

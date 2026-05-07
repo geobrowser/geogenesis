@@ -62,6 +62,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
+import { TYPE_ICONS, resolveRenderableTypeKey } from '~/partials/entity-page/type-icons';
 import { TypePropertyGroupsEditor } from '~/partials/entity-page/type-property-groups-editor';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
@@ -348,9 +349,9 @@ function TypeEntityPropertyRow({
   isVideo: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[136px_minmax(0,1fr)] items-center gap-6">
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-4">
       <div className="inline-flex min-w-0 items-center gap-2 text-text">
-        <TypePropertyRelationMarker />
+        <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
         <span className="truncate text-tableCell font-medium">{property.name}</span>
       </div>
       <div className="min-w-0">
@@ -371,13 +372,23 @@ function TypeEntityPropertyRow({
   );
 }
 
-function TypePropertyRelationMarker() {
+function InlinePropertyTypeIcon({ dataType, renderableType }: { dataType: Property['dataType']; renderableType?: string | null }) {
+  const iconKey = resolveRenderableTypeKey(renderableType, renderableType) ?? (dataType in TYPE_ICONS ? dataType : 'TEXT');
+  if (iconKey === 'RELATION') {
+    return (
+      <span className="inline-flex items-center p-0.5 text-text">
+        <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
+          <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
+        </svg>
+      </span>
+    );
+  }
+
+  const Icon = TYPE_ICONS[iconKey];
   return (
-    <span className="inline-flex items-center p-0.5 text-text">
-      <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-        <circle cx="12" cy="9.5" r="5" stroke="currentColor" strokeWidth="1.5"></circle>
-      </svg>
+    <span className="inline-flex items-center text-text [&_svg]:size-4">
+      <Icon color="text" />
     </span>
   );
 }
