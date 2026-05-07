@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SpaceEntity } from '../types';
-import { resolveSearchSpaces } from './orm';
+import type { Entity, SpaceEntity } from '../types';
+import { applyKnownEntitySpaces, resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -34,5 +34,35 @@ describe('resolveSearchSpaces', () => {
 
   it('drops string-only spaces when hydration data is unavailable', () => {
     expect(resolveSearchSpaces(['space-1'], {})).toEqual([]);
+  });
+});
+
+describe('applyKnownEntitySpaces', () => {
+  it('uses the entity-wide known space list instead of the query-specific search row spaces', () => {
+    const result = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces: [makeSpaceEntity('returned-space', { name: 'Returned Space' })],
+    };
+    const knownEntity = {
+      spaces: ['top-ranked-space', 'returned-space'],
+    } as Entity;
+
+    expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual(['top-ranked-space', 'returned-space']);
+  });
+
+  it('keeps search row spaces when entity details are unavailable', () => {
+    const spaces = [makeSpaceEntity('returned-space', { name: 'Returned Space' })];
+    const result = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces,
+    };
+
+    expect(applyKnownEntitySpaces(result, null).spaces).toBe(spaces);
   });
 });

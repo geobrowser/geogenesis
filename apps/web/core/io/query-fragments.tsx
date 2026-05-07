@@ -109,6 +109,20 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         name
       }
 
+      # Lightweight cross-space view used to decide which spaces still hold
+      # real entity data. The main valuesList/relationsList below are scoped
+      # for display, so routing/search display needs this unscoped projection.
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        property {
+          id
+        }
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         spaceId
         property {

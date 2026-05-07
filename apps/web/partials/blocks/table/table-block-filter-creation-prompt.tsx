@@ -1726,9 +1726,9 @@ function TableBlockSpaceFilterInput({
   memberSpaceId,
   onToggleSpace,
 }: TableBlockSpaceFilterInputProps) {
-  const { query, setQuery, spaces: results } = useSpacesQuery();
   const interactionRootRef = React.useRef<HTMLDivElement>(null);
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
+  const { query, setQuery, spaces: results } = useSpacesQuery(focused);
 
   // Default suggestions shown on focus with empty query: the spaces the
   // current block's entity is a member of.

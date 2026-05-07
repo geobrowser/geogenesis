@@ -36,6 +36,7 @@ export const FindEntity = ({
 }: FindEntityProps) => {
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const [hasDismissedPopover, setHasDismissedPopover] = useState<boolean>(false);
+  const [focused, setFocused] = useState<boolean>(false);
   const [result, setResult] = useState<SearchResult | null>(null);
 
   useEffect(() => {
@@ -48,8 +49,18 @@ export const FindEntity = ({
     };
   }, []);
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes: allowedTypes,
+    enabled: focused,
   });
 
   if (query === '' && result !== null) {
@@ -58,28 +69,33 @@ export const FindEntity = ({
     });
   }
 
-  const [hasStoppedTyping, setHasStoppedTyping] = useState<boolean>(false);
+  const showPopover = focused && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
-  React.useEffect(() => {
-    setHasStoppedTyping(false);
-    const timeoutId = setTimeout(() => {
-      setHasStoppedTyping(true);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [query]);
-
-  const showPopover = hasStoppedTyping && results.length > 0 && !hasDismissedPopover;
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   return (
     <div className="relative">
-      <Popover.Root open={!!query} onOpenChange={() => {}}>
+      <Popover.Root open={focused} onOpenChange={setFocused}>
         <Popover.Anchor asChild>
           <input
             value={query}
             onChange={event => {
               onQueryChange(event.target.value);
               onCreateEntity({ id: '', name: event.target.value });
+              setHasDismissedPopover(false);
+            }}
+            onFocus={() => {
+              setFocused(true);
               setHasDismissedPopover(false);
             }}
             placeholder={placeholder}
@@ -94,6 +110,7 @@ export const FindEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onInteractOutside={() => setFocused(false)}
               className="z-9999 w-(--radix-popper-anchor-width) pt-2"
               forceMount
             >
@@ -108,6 +125,7 @@ export const FindEntity = ({
                 <ResizableContainer>
                   <div
                     className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
+                    onScroll={handleResultsScroll}
                     onWheel={e => trapWheelToElement(e.currentTarget, e)}
                   >
                     {!results?.length && isLoading && (
@@ -133,6 +151,7 @@ export const FindEntity = ({
                                     name: result.name,
                                   });
                                   onQueryChange('');
+                                  setFocused(false);
                                   setHasDismissedPopover(true);
                                 }}
                                 onKeyDown={event => {
@@ -143,6 +162,7 @@ export const FindEntity = ({
                                       name: result.name,
                                     });
                                     onQueryChange('');
+                                    setFocused(false);
                                     setHasDismissedPopover(true);
                                   }
                                 }}

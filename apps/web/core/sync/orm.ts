@@ -44,6 +44,20 @@ export function resolveSearchSpaces(
     .filter((space): space is SpaceEntity => space !== null);
 }
 
+type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
+
+export function applyKnownEntitySpaces(
+  result: SearchResult,
+  knownEntity: Pick<Entity, 'spaces'> | null | undefined
+): SearchResultWithResolvableSpaces {
+  if (!knownEntity?.spaces.length) return result;
+
+  return {
+    ...result,
+    spaces: knownEntity.spaces,
+  };
+}
+
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeleted = localRelations.filter(r => r.isDeleted);
   const deletedRelationIds = new Set(locallyDeleted.map(r => r.id));
@@ -399,7 +413,18 @@ export class E {
     const remoteIdSet = new Set(dedupedRemoteIds);
     const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
     const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
-    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+    const remoteEntityDetails =
+      dedupedRemoteIds.length > 0
+        ? await cache.fetchQuery({
+            queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
+            queryFn: ({ signal: innerSignal }) =>
+              Effect.runPromise(getBatchEntities(dedupedRemoteIds, undefined, signal ?? innerSignal)),
+          })
+        : [];
+    const remoteEntityDetailsById = new Map(remoteEntityDetails.map(e => [e.id, e]));
+    const remoteById = new Map(
+      remoteEntities.map(e => [e.id as string, applyKnownEntitySpaces(e, remoteEntityDetailsById.get(e.id))])
+    );
 
     const maybeEntities = mergedIds.map(entityId => {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
@@ -466,7 +491,7 @@ function mergeSearchResult({
 }: {
   id: string;
   store: GeoStore;
-  mergeWith?: SearchResult | null;
+  mergeWith?: SearchResultWithResolvableSpaces | null;
 }): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
