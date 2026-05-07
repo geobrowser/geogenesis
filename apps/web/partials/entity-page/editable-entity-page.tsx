@@ -131,7 +131,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const effectiveHasGroups = !isTypeEntity && visiblePropertySections.hasGroups;
   const effectiveTotalProperties = isTypeEntity ? visibleFlatPropertiesEntries.length : visiblePropertySections.totalProperties;
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
-  const [typePropertiesCollapsed, setTypePropertiesCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     const defaults: Record<string, boolean> = {};
@@ -172,18 +171,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
             className="relative rounded-lg border border-grey-02 shadow-button"
           >
             <div className={isTypeEntity ? 'flex flex-col gap-3 p-4' : 'flex flex-col gap-6 p-5'}>
-              {isTypeEntity && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-tableCell text-grey-04"
-                  onClick={() => setTypePropertiesCollapsed(previous => !previous)}
-                >
-                  <span>Type properties</span>
-                  <div className={`${typePropertiesCollapsed ? '-rotate-90' : ''} transition-transform`}>
-                    <ChevronDownSmall color="grey-04" />
-                  </div>
-                </button>
-              )}
               {effectiveTotalProperties === 0 && (
                 <div className="flex flex-col items-center justify-center text-center">
                   <Text as="p" variant="body" color="grey-04">
@@ -198,7 +185,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                 const collapsible = section.collapsible !== false;
                 const sectionCollapsed =
                   collapsible && section.groupId ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed) : false;
-                const isCollapsed = isTypeEntity ? typePropertiesCollapsed : sectionCollapsed;
+                const isCollapsed = sectionCollapsed;
 
                 return (
                   <div key={section.id} className={isTypeEntity ? 'flex flex-col gap-2' : 'flex flex-col gap-4'}>
