@@ -92,11 +92,7 @@ export default async function DefaultEntityPage({
             {notice}
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
-            <Editor
-              spaceId={props.spaceId}
-              shouldHandleOwnSpacing
-              proseScopeClassName={props.isPersonEntity ? 'bio-prose-only' : undefined}
-            />
+            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} />
             <AutomaticModeToggle />
             <Spacer height={40} />
@@ -191,7 +187,6 @@ const getData = async (spaceId: string, entityId: string) => {
     deterministicSpaceId: deterministicSpaceId ?? null,
 
     isPostEntity: entityHasOnlyPostType(entity),
-    isPersonEntity: entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE) ?? false,
 
     tabs,
     tabEntities,

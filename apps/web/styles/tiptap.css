@@ -129,42 +129,6 @@
   @apply text-body;
 }
 
-/* Bio-only typography scope for personal profile overview (opt-in via wrapper class). */
-.bio-prose-only .ProseMirror h2 {
-  font-size: 24px;
-  line-height: 1.167;
-  letter-spacing: -0.25px;
-  font-weight: 500;
-}
-
-.bio-prose-only .ProseMirror p {
-  font-size: 18px;
-  line-height: 26.1px;
-  letter-spacing: -0.08px;
-  font-weight: 400;
-}
-
-.bio-prose-only .ProseMirror .is-empty::before {
-  font-size: 18px;
-  line-height: 26.1px;
-  letter-spacing: -0.08px;
-  font-weight: 400;
-}
-
-.bio-prose-only .ProseMirror .is-empty:has(h2)::before {
-  font-size: 24px;
-  line-height: 1.167;
-  letter-spacing: -0.25px;
-  font-weight: 500;
-}
-
-.bio-prose-only .ProseMirror .paragraph-tail-placeholder.is-empty::before {
-  font-size: 18px;
-  line-height: 26.1px;
-  letter-spacing: -0.08px;
-  font-weight: 400;
-}
-
 .ProseMirror strong {
   @apply font-semibold;
 }

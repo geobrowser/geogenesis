@@ -123,11 +123,12 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
 
     const bioDone = overviewMarkdownWithoutTailNoise(textMarkdown).length > 0;
 
-    let skillsDone = tasks.skills;
-
+    let skillsDone = false;
     for (const prop of Object.values(rendered)) {
-      const name = prop.name ?? '';
-      if (propertyNameMatchesSkills(name)) skillsDone = true;
+      if (propertyNameMatchesSkills(prop.name ?? '')) {
+        skillsDone = true;
+        break;
+      }
     }
 
     const postDone =
@@ -138,7 +139,7 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
       bio: bioDone || tasks.bio,
       work: true,
       education: true,
-      skills: skillsDone || tasks.skills,
+      skills: skillsDone,
       post: postDone || tasks.post,
     };
 
