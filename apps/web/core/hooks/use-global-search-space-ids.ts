@@ -8,6 +8,7 @@ import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { ROOT_SPACE } from '~/core/constants';
 
+import { buildGlobalSearchSpaceIds } from './global-search-space-ids';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSpaceId } from './use-space-id';
 
@@ -27,7 +28,7 @@ export function useGlobalSearchSpaceIds(): string[] {
   const { data: browseSidebarData = null } = useQuery<BrowseSidebarData | null>({
     queryKey: sidebarQueryKey,
     enabled: false,
-    initialData: () => queryClient.getQueryData<BrowseSidebarData>(sidebarQueryKey) ?? null,
+    placeholderData: () => queryClient.getQueryData<BrowseSidebarData>(sidebarQueryKey) ?? null,
   });
 
   const memberAndEditorSpaceIds = React.useMemo(() => {
@@ -40,13 +41,12 @@ export function useGlobalSearchSpaceIds(): string[] {
 
   return React.useMemo(
     () =>
-      Array.from(
-        new Set(
-          [ROOT_SPACE, currentSpaceId, personalSpaceId, ...memberAndEditorSpaceIds].filter(
-            (id): id is string => Boolean(id)
-          )
-        )
-      ),
+      buildGlobalSearchSpaceIds({
+        rootSpaceId: ROOT_SPACE,
+        currentSpaceId,
+        personalSpaceId,
+        memberAndEditorSpaceIds,
+      }),
     [currentSpaceId, memberAndEditorSpaceIds, personalSpaceId]
   );
 }
