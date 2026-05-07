@@ -314,7 +314,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             </SmallButton>
             <SmallButton
               variant="secondary"
-              className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? ' cursor-wait' : ''}`}
+              className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? '' : ''}`}
               icon={tasks.post ? <Check color="white" /> : undefined}
               aria-busy={createPostPending && !tasks.post}
               disabled={tasks.post}
