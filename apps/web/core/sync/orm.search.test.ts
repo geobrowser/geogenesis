@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entity, SearchResult, SpaceEntity } from '../types';
-import { applyKnownEntitySpaces, resolveSearchSpaces } from './orm';
+import { applyKnownEntitySpaces, getSearchResultNameForTopSpace, resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -79,5 +79,36 @@ describe('applyKnownEntitySpaces', () => {
     } as Pick<Entity, 'spaces'>;
 
     expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual([]);
+  });
+});
+
+describe('getSearchResultNameForTopSpace', () => {
+  it('uses the name from the top displayed space', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '',
+          namesBySpace: {
+            'stale-space': '',
+            'top-space': 'Top Space Name',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Top Space Name');
+  });
+
+  it('falls back to the grouped result name when the top space name is blank', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: 'Grouped Name',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Grouped Name');
   });
 });

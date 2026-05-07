@@ -93,6 +93,10 @@ describe('groupRestResults', () => {
           aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: null }],
           cccccccccccccccccccccccccccccccc: [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Person' }],
         },
+        namesBySpace: {
+          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 'Valid result',
+          cccccccccccccccccccccccccccccccc: null,
+        },
         spaces: [
           {
             id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

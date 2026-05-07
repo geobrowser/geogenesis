@@ -47,6 +47,14 @@ export function resolveSearchSpaces(
 
 type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
 
+export function getSearchResultNameForTopSpace(
+  result: Pick<SearchResult, 'name' | 'namesBySpace'>,
+  spaces: SpaceEntity[]
+): string | null {
+  const topSpaceName = result.namesBySpace?.[spaces[0]?.spaceId ?? ''];
+  return hasName(topSpaceName) ? topSpaceName : result.name;
+}
+
 export function applyKnownEntitySpaces(
   result: SearchResult,
   knownEntity: Pick<Entity, 'spaces'> | null | undefined
@@ -502,6 +510,7 @@ export class E {
 
         return {
           ...e,
+          name: getSearchResultNameForTopSpace(e, resolvedSpaces),
           types: e.types.map(t => ({
             id: t.id,
             name: t.name ?? typeNamesById.get(t.id) ?? null,
@@ -560,6 +569,7 @@ function mergeSearchResult({
     name,
     description,
     types,
+    namesBySpace: remoteEntity.namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
     spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(localEntity)),
   };
