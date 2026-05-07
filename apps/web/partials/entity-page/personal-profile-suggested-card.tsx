@@ -142,12 +142,14 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     );
   }, [pathname, spaceId, entityId]);
 
+  const suggestedActionPillTypography = '!text-[16px] !leading-5';
+
   // Dark fills at rest; on hover only lighten the background so `secondary`’s `hover:text-text` stays readable.
   const pillClass =
-    'border-transparent !bg-text !text-white hover:!bg-bg focus-visible:!border-text [&]:shadow-none';
+    'border-transparent !rounded-[50px] !bg-text !text-white hover:!bg-bg focus-visible:!border-text [&]:shadow-none';
 
   const donePillClass =
-    'border-transparent !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default';
+    'border-transparent !rounded-[50px] !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default';
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
@@ -294,8 +296,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           <div className="mt-[98px] flex flex-wrap gap-2">
             <SmallButton
               variant="secondary"
-              className={tasks.bio ? donePillClass : pillClass}
-              icon={tasks.bio ? <Check color="white" className="size-3 shrink-0" /> : undefined}
+              className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
+              icon={tasks.bio ? <Check color="white" /> : undefined}
               disabled={tasks.bio}
               onClick={tasks.bio ? undefined : onAddBio}
             >
@@ -303,8 +305,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             </SmallButton>
             <SmallButton
               variant="secondary"
-              className={tasks.skills ? donePillClass : pillClass}
-              icon={tasks.skills ? <Check color="white" className="size-3 shrink-0" /> : undefined}
+              className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
+              icon={tasks.skills ? <Check color="white" /> : undefined}
               disabled={tasks.skills}
               onClick={tasks.skills ? undefined : onAddSkills}
             >
@@ -312,8 +314,8 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             </SmallButton>
             <SmallButton
               variant="secondary"
-              className={`${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? '' : ''}`}
-              icon={tasks.post ? <Check color="white" className="size-3 shrink-0" /> : undefined}
+              className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? ' cursor-wait' : ''}`}
+              icon={tasks.post ? <Check color="white" /> : undefined}
               aria-busy={createPostPending && !tasks.post}
               disabled={tasks.post}
               onClick={tasks.post ? undefined : () => void onCreatePost()}
