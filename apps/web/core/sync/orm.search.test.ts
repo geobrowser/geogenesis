@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Entity, SpaceEntity } from '../types';
+import type { Entity, SearchResult, SpaceEntity } from '../types';
 import { applyKnownEntitySpaces, resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
@@ -64,5 +64,20 @@ describe('applyKnownEntitySpaces', () => {
     };
 
     expect(applyKnownEntitySpaces(result, null).spaces).toBe(spaces);
+  });
+
+  it('uses an empty known space list to suppress stale search row spaces', () => {
+    const result: SearchResult = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces: [makeSpaceEntity('stale-space', { name: 'Stale Space' })],
+    };
+    const knownEntity = {
+      spaces: [],
+    } as Pick<Entity, 'spaces'>;
+
+    expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual([]);
   });
 });

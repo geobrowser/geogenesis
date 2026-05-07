@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
@@ -50,12 +51,43 @@ export function applyKnownEntitySpaces(
   result: SearchResult,
   knownEntity: Pick<Entity, 'spaces'> | null | undefined
 ): SearchResultWithResolvableSpaces {
-  if (!knownEntity?.spaces.length) return result;
+  if (!knownEntity) return result;
 
   return {
     ...result,
     spaces: knownEntity.spaces,
   };
+}
+
+function getLocalSearchResultSpaces(localEntity: Entity): string[] {
+  const spacesWithRealContent = new Set<string>();
+
+  for (const value of localEntity.values.filter(v => !v.isDeleted && !HIDDEN_PROPERTIES.has(v.property.id))) {
+    spacesWithRealContent.add(value.spaceId);
+  }
+
+  for (const relation of localEntity.relations.filter(r => !r.isDeleted)) {
+    spacesWithRealContent.add(relation.spaceId);
+  }
+
+  return [...spacesWithRealContent];
+}
+
+function mergeResolvableSpaces(
+  remoteSpaces: Array<string | SpaceEntity>,
+  localSpaces: string[]
+): Array<string | SpaceEntity> {
+  const seen = new Set(remoteSpaces.map(space => (typeof space === 'string' ? space : space.spaceId)));
+  const merged = [...remoteSpaces];
+
+  for (const space of localSpaces) {
+    if (!seen.has(space)) {
+      seen.add(space);
+      merged.push(space);
+    }
+  }
+
+  return merged;
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -529,6 +561,6 @@ function mergeSearchResult({
     description,
     types,
     typesBySpace: remoteEntity.typesBySpace,
-    spaces: localEntity.spaces,
+    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(localEntity)),
   };
 }
