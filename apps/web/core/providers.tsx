@@ -12,7 +12,6 @@ import { ReactQueryProvider } from './query-client';
 import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
-import { StatusBarContextProvider } from './state/status-bar-store';
 import { SyncEngineProvider } from './sync/use-sync-engine';
 
 const LazyPrivyProvider = dynamic(() => import('./wallet/privy').then(m => ({ default: m.PrivyProvider })), {
@@ -36,9 +35,7 @@ export function Providers({ children }: Props) {
             <SentryUserIdentifier />
             <JotaiProvider store={store}>
               <SyncEngineProvider>
-                <StatusBarContextProvider>
-                  <DiffProvider>{children}</DiffProvider>
-                </StatusBarContextProvider>
+                <DiffProvider>{children}</DiffProvider>
                 {process.env.NEXT_PUBLIC_DISABLE_RQ_DEVTOOLS !== '1' && <ReactQueryDevtools initialIsOpen={false} />}
               </SyncEngineProvider>
             </JotaiProvider>

@@ -20,6 +20,7 @@ import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
+import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 const OnboardingDialog = dynamic(
@@ -76,6 +77,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <Toast />
         <GovernanceReopenEditLoadingBar />
         <FlowBar />
+        <StatusBar />
         <ReviewChanges />
         <ChatWidget />
         <Persistence />

@@ -20,7 +20,9 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
@@ -54,6 +56,7 @@ export function useCreateComment(targetEntityId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
+  const reportError = useReportError();
 
   // Counter (not boolean) because several publishes can be in flight at once — rapid submits,
   // or concurrent create + edit. A plain boolean would flip false when the first finally runs
@@ -357,7 +360,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Publish failed:', err);
-          setToast(<span>Failed to publish comment</span>);
+          const message = describeError(err);
+          reportError(`Failed to publish comment: ${message}`);
           setError(err as Error);
           return null;
         }
@@ -451,14 +455,15 @@ export function useCreateComment(targetEntityId: string) {
         return commentEntityId;
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
-        setToast(<span>Failed to create comment</span>);
+        const message = describeError(err);
+        reportError(`Failed to create comment: ${message}`);
         setError(err as Error);
         return null;
       } finally {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]
+    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
@@ -580,7 +585,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Edit failed:', err);
-          setToast(<span>Failed to edit comment</span>);
+          const message = describeError(err);
+          reportError(`Failed to edit comment: ${message}`);
           setError(err as Error);
           return false;
         }
@@ -594,14 +600,15 @@ export function useCreateComment(targetEntityId: string) {
         return true;
       } catch (err) {
         console.error('[useCreateComment] Error editing comment:', err);
-        setToast(<span>Failed to edit comment</span>);
+        const message = describeError(err);
+        reportError(`Failed to edit comment: ${message}`);
         setError(err as Error);
         return false;
       } finally {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast]
+    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
   );
 
   return {

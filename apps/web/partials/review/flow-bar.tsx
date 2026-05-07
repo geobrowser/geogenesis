@@ -14,15 +14,9 @@ import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { syncedEntities } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
-import { Relation, ReviewState, Value } from '~/core/types';
+import { Relation, Value } from '~/core/types';
 
-import { SmallButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
-import { Close } from '~/design-system/icons/close';
-import { RetrySmall } from '~/design-system/icons/retry-small';
-import { TickSmall } from '~/design-system/icons/tick-small';
-import { Warning } from '~/design-system/icons/warning';
-import { Spinner } from '~/design-system/spinner';
 
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
@@ -116,136 +110,9 @@ export const FlowBar = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
     </>
   );
 };
-
-const StatusBar = () => {
-  const { state, dispatch } = useStatusBar();
-
-  const [isCopied, setIsCopied] = React.useState(false);
-
-  const onCopyError = async () => {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(state.error || '');
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    }
-  };
-
-  return (
-    <div
-      className={cx('fixed inset-x-0 bottom-0 z-1000 flex flex-col items-center', RemoveScroll.classNames.fullWidth)}
-    >
-      <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.2 }}>
-        <div className="m-8 h-10 overflow-hidden rounded bg-text px-3 py-2.5 text-button text-white">
-          <AnimatePresence mode="wait">
-            <div className="flex items-center justify-center gap-2">
-              {state.reviewState === 'publish-error' && state.error ? (
-                <>
-                  <Warning color="red-01" />
-                  <motion.span
-                    key={message[state.reviewState]}
-                    initial={{ opacity: 0, filter: 'blur(2px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(2px)' }}
-                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
-                    className="-mt-[2px]"
-                  >
-                    {message[state.reviewState]}
-                  </motion.span>
-                  {state?.retry ? (
-                    <SmallButton onClick={state.retry} variant="tertiary" icon={<RetrySmall />} className="-my-4">
-                      Retry
-                    </SmallButton>
-                  ) : (
-                    <motion.button
-                      initial={{ opacity: 0, filter: 'blur(2px)' }}
-                      animate={{ opacity: 1, filter: 'blur(0px)' }}
-                      exit={{ opacity: 0, filter: 'blur(2px)' }}
-                      transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
-                      className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
-                      onClick={onCopyError}
-                    >
-                      <AnimatePresence mode="popLayout">
-                        {isCopied ? (
-                          <motion.div
-                            key="status-bar-error"
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.95, opacity: 0 }}
-                          >
-                            <TickSmall />
-                          </motion.div>
-                        ) : (
-                          <motion.div
-                            key="status-bar-error"
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.95, opacity: 0 }}
-                          >
-                            Copy error
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.button>
-                  )}
-                  <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
-                    <Close />
-                  </button>
-                </>
-              ) : (
-                <>
-                  {state.reviewState === 'publish-complete' && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', bounce: 0.5, duration: 0.5, delay: 0.15 }}
-                    >
-                      🎉
-                    </motion.span>
-                  )}
-                  {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && (
-                    <Spinner />
-                  )}
-                  <motion.span
-                    key={message[state.reviewState]}
-                    initial={{ opacity: 0, filter: 'blur(2px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(2px)' }}
-                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
-                  >
-                    {message[state.reviewState]}
-                  </motion.span>
-                </>
-              )}
-            </div>
-          </AnimatePresence>
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
-const message: Record<ReviewState, string> = {
-  idle: '',
-  reviewing: '',
-  'publishing-ipfs': 'Uploading changes to IPFS',
-  'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to The Graph',
-  'publish-complete': 'Changes published!',
-  'publish-error': 'An error has occurred',
-};
-
-const publishingStates: Array<ReviewState> = [
-  'publishing-ipfs',
-  'signing-wallet',
-  'publishing-contract',
-  'publish-complete',
-  'publish-error',
-];
 
 /**
  * Filter values to only include net changes compared to the remote/synced state.
