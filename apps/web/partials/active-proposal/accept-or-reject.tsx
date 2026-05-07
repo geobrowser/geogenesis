@@ -10,6 +10,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
+import { useReportError } from '~/core/state/status-bar-store';
+import { describeError } from '~/core/utils/error-diagnostics';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -56,6 +58,7 @@ export function AcceptOrReject({
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
+  const reportError = useReportError();
 
   // Once the server-rendered userVote catches up after router.refresh, the
   // optimistic entry has done its job — drop it so the atom doesn't grow
@@ -70,20 +73,25 @@ export function AcceptOrReject({
     router.refresh();
   };
 
-  const onVoteError = () => {
+  const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
+    const message = describeError(error);
+    reportError(`Vote failed: ${message}`, () => {
+      addOptimisticVote(proposalId);
+      vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
+    });
   };
 
   const onApprove = () => {
     setHasApproved(true);
     addOptimisticVote(proposalId);
-    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError('ACCEPT') });
   };
 
   const onReject = () => {
     setHasRejected(true);
     addOptimisticVote(proposalId);
-    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError('REJECT') });
   };
 
   if (isProposalEnded) {

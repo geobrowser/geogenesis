@@ -8,6 +8,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
+import { useReportError } from '~/core/state/status-bar-store';
+import { describeError } from '~/core/utils/error-diagnostics';
 
 import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -43,6 +45,7 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
+  const reportError = useReportError();
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
@@ -57,20 +60,25 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
     router.refresh();
   };
 
-  const onVoteError = () => {
+  const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
+    const message = describeError(error);
+    reportError(`Vote failed: ${message}`, () => {
+      addOptimisticVote(proposalId);
+      vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
+    });
   };
 
   const onApprove = () => {
     setHasApproved(true);
     addOptimisticVote(proposalId);
-    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError('ACCEPT') });
   };
 
   const onReject = () => {
     setHasRejected(true);
     addOptimisticVote(proposalId);
-    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError('REJECT') });
   };
 
   // Terminal / post-vote states on the proposal must win over "You accepted" so we match space

@@ -13,9 +13,11 @@ import { useRouter } from 'next/navigation';
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { EntityId } from '~/core/io/substream-schema';
+import { useReportError } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -70,10 +72,9 @@ export function EntityToSpaceDialog({
   const { smartAccount } = useSmartAccount();
   const { deploy } = useDeploySpace();
   const { storage } = useMutate();
+  const reportError = useReportError();
 
   const [step, setStep] = useState<Step>('select-type');
-  const [showRetry, setShowRetry] = useState(false);
-  const [selectedType, setSelectedType] = useState<SpaceType | null>(null);
   const [newSpaceId, setNewSpaceId] = useState<string>('');
 
   const address = smartAccount?.account.address;
@@ -82,8 +83,6 @@ export function EntityToSpaceDialog({
 
   const resetState = () => {
     setStep('select-type');
-    setShowRetry(false);
-    setSelectedType(null);
     setNewSpaceId('');
   };
 
@@ -142,8 +141,6 @@ export function EntityToSpaceDialog({
     if (!address) return;
 
     try {
-      setShowRetry(false);
-
       const spaceId = await deploy({
         type: spaceType,
         spaceName: entityName,
@@ -166,21 +163,20 @@ export function EntityToSpaceDialog({
       setNewSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
-      setShowRetry(true);
       console.error(error);
+      const message = describeError(error);
+      // Send the user back to the type-selection step so they can pick again or retry.
+      setStep('select-type');
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('creating');
+        createSpace(spaceType);
+      });
     }
   };
 
   const onSelectType = (spaceType: SpaceType) => {
-    setSelectedType(spaceType);
     setStep('creating');
     createSpace(spaceType);
-  };
-
-  const onRetry = () => {
-    if (selectedType) {
-      createSpace(selectedType);
-    }
   };
 
   const hasCompleted = step === 'completed';
@@ -300,19 +296,7 @@ export function EntityToSpaceDialog({
                               ? 'Converting entity into a new space.'
                               : 'Duplicating entity into a new space.'}
                           </Text>
-                          {!hasCompleted && (
-                            <>
-                              <Spacer height={32} />
-                              {showRetry && (
-                                <p className="mt-4 text-center text-smallButton">
-                                  Space creation failed{' '}
-                                  <button onClick={onRetry} className="text-ctaPrimary">
-                                    Retry
-                                  </button>
-                                </p>
-                              )}
-                            </>
-                          )}
+                          {!hasCompleted && <Spacer height={32} />}
                         </div>
                       </motion.div>
                       <div className="absolute inset-x-4 bottom-4">

@@ -3,10 +3,11 @@
 import * as React from 'react';
 
 import { useExecuteProposal } from '~/core/hooks/use-execute-proposal';
+import { useReportError } from '~/core/state/status-bar-store';
+import { describeError } from '~/core/utils/error-diagnostics';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
-import { Tooltip } from '~/design-system/tooltip';
 
 interface Props {
   proposalId: string;
@@ -19,30 +20,21 @@ export function Execute({ proposalId, spaceId, variant = 'default' }: Props) {
     spaceId,
     proposalId,
   });
+  const reportError = useReportError();
 
   const isPending = status === 'pending';
   const isSuccess = status === 'success';
 
-  if (status === 'error') {
-    return (
-      <div className="flex items-center gap-2">
-        <Tooltip
-          trigger={<p className="text-smallButton text-red-01">Execute failed</p>}
-          label={error?.message ?? 'An unknown error occurred'}
-          position="bottom"
-        />
-        <SmallButton
-          variant="secondary"
-          onClick={() => {
-            reset();
-            execute();
-          }}
-        >
-          Retry
-        </SmallButton>
-      </div>
-    );
-  }
+  // Surface execution failures via the global error modal (with copy + retry).
+  // After dismiss the user lands back on the regular Execute button.
+  React.useEffect(() => {
+    if (status !== 'error') return;
+    const message = error ? describeError(error) : 'An unknown error occurred';
+    reportError(`Execute failed: ${message}`, () => {
+      reset();
+      execute();
+    });
+  }, [status, error, reportError, reset, execute]);
 
   if (isSuccess) {
     return (
@@ -55,7 +47,14 @@ export function Execute({ proposalId, spaceId, variant = 'default' }: Props) {
   const ButtonComponent = variant === 'small' ? SmallButton : Button;
 
   return (
-    <ButtonComponent variant="secondary" onClick={() => execute()} disabled={isPending}>
+    <ButtonComponent
+      variant="secondary"
+      onClick={() => {
+        reset();
+        execute();
+      }}
+      disabled={isPending}
+    >
       <Pending isPending={isPending}>Execute</Pending>
     </ButtonComponent>
   );
