@@ -14,7 +14,9 @@ import { useRouter } from 'next/navigation';
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useReportError } from '~/core/state/status-bar-store';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -50,6 +52,7 @@ export function CreateSpaceDialog() {
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
   const { deploy } = useDeploySpace();
+  const reportError = useReportError();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
@@ -58,9 +61,6 @@ export function CreateSpaceDialog() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
-
-  // Show retry immediately if workflow already started before initial render
-  const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
   if (!address) return null;
 
@@ -83,15 +83,14 @@ export function CreateSpaceDialog() {
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
-      setShowRetry(true);
       console.error(error);
+      const message = describeError(error);
+      reportError(`Space creation failed: ${message}`, () => createSpaces(spaceType));
     }
   }
 
   async function onRunOnboardingWorkflow() {
     if (!address || !smartAccount || !spaceType) return;
-
-    setShowRetry(false);
 
     switch (step) {
       case 'enter-profile':
@@ -150,13 +149,7 @@ export function CreateSpaceDialog() {
                   <StepHeader />
                   {step === 'select-type' && <StepSelectType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
-                  {workflowSteps.includes(step) && (
-                    <StepComplete
-                      onRetry={onRunOnboardingWorkflow}
-                      showRetry={showRetry}
-                      onDone={() => onOpenChange(false)}
-                    />
-                  )}
+                  {workflowSteps.includes(step) && <StepComplete onDone={() => onOpenChange(false)} />}
                 </ModalCard>
               </motion.div>
             </AnimatePresence>
@@ -474,12 +467,10 @@ const governanceLabel: Record<SpaceGovernanceType, string> = {
 };
 
 type StepCompleteProps = {
-  onRetry: () => void;
   onDone: () => void;
-  showRetry: boolean;
 };
 
-function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
+function StepComplete({ onDone }: StepCompleteProps) {
   const router = useRouter();
 
   const spaceId = useAtomValue(spaceIdAtom);
@@ -505,19 +496,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && (
-            <>
-              <Spacer height={32} />
-              {showRetry && (
-                <p className="mt-4 text-center text-smallButton">
-                  Space creation failed
-                  <button onClick={onRetry} className="text-ctaPrimary">
-                    Retry
-                  </button>
-                </p>
-              )}
-            </>
-          )}
+          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">

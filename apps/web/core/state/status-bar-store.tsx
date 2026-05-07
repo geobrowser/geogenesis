@@ -1,4 +1,6 @@
-import * as React from 'react';
+'use client';
+
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 
 import { ReviewState } from '~/core/types';
 
@@ -17,35 +19,55 @@ export type StatusBarActions =
     }
   | { type: 'ERROR'; payload: string | null; retry?: Retry };
 
-export const statusBarReducer = (_: StatusBarState, action: StatusBarActions): StatusBarState => {
+// Jotai-backed global state. Lives outside of React's reducer so any module
+// (hooks, helpers, even non-React code that grabs the default jotai store)
+// can dispatch into the toast pattern without needing context.
+const reviewStateAtom = atom<ReviewState>('idle');
+const errorAtom = atom<string | null>(null);
+const retryAtom = atom<Retry | undefined>(undefined);
+
+export const statusBarStateAtom = atom<StatusBarState>(get => ({
+  reviewState: get(reviewStateAtom),
+  error: get(errorAtom),
+  retry: get(retryAtom),
+}));
+
+export const statusBarDispatchAtom = atom(null, (_get, set, action: StatusBarActions) => {
   switch (action.type) {
     case 'SET_REVIEW_STATE':
-      return { reviewState: action.payload, error: null };
+      set(reviewStateAtom, action.payload);
+      set(errorAtom, null);
+      set(retryAtom, undefined);
+      return;
     case 'ERROR':
-      return { reviewState: 'publish-error', error: action.payload, retry: action?.retry };
+      set(reviewStateAtom, 'publish-error');
+      set(errorAtom, action.payload);
+      set(retryAtom, action.retry);
+      return;
   }
-};
+});
 
-export const StatusBarContext = React.createContext<{
-  state: StatusBarState;
-  dispatch: React.Dispatch<StatusBarActions>;
-} | null>(null);
-
-export const StatusBarContextProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, dispatch] = React.useReducer(statusBarReducer, {
-    reviewState: 'idle',
-    error: null,
-  });
-
-  return <StatusBarContext.Provider value={{ state, dispatch }}>{children}</StatusBarContext.Provider>;
-};
-
+/**
+ * Subscribe to the global status-bar state. Returns the same `{ state, dispatch }`
+ * shape the original reducer-backed hook returned, so existing call sites work
+ * unchanged.
+ */
 export function useStatusBar() {
-  const context = React.useContext(StatusBarContext);
+  const state = useAtomValue(statusBarStateAtom);
+  const dispatch = useSetAtom(statusBarDispatchAtom);
+  return { state, dispatch };
+}
 
-  if (!context) {
-    throw new Error('useStatusBar must be used within a StatusBarContextProvider');
-  }
-
-  return context;
+/**
+ * One-liner for raising an error into the global status bar.
+ *
+ * Use this anywhere you currently render an inline red error message — the
+ * global StatusBar pill will surface the message with a copy-to-clipboard
+ * affordance that includes diagnostics for the dev team.
+ */
+export function useReportError() {
+  const dispatch = useSetAtom(statusBarDispatchAtom);
+  return (message: string, retry?: Retry) => {
+    dispatch({ type: 'ERROR', payload: message, retry });
+  };
 }

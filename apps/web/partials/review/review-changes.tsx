@@ -8,7 +8,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useSetAtom } from 'jotai';
+import { useSetAtom, useStore } from 'jotai';
 
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
@@ -23,7 +23,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
-import { useStatusBar } from '~/core/state/status-bar-store';
+import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
@@ -67,7 +67,8 @@ export const ReviewChanges = () => {
     activeSpace: diffPreferredSpaceId,
     setActiveSpace: setDiffPreferredSpaceId,
   } = useDiff();
-  const { state: statusBarState } = useStatusBar();
+  const { state: statusBarState, dispatch: dispatchStatusBar } = useStatusBar();
+  const jotaiStore = useStore();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
@@ -412,7 +413,8 @@ export const ReviewChanges = () => {
   };
 
   const handleSubmit = React.useCallback(async () => {
-    if (!activeSpace || !isReadyToPublish) return;
+    if (!activeSpace) return;
+    if (!isReadyToPublish) return;
     setIsPublishing(true);
 
     const proposalEntityId = ID.createEntityId();
@@ -533,19 +535,42 @@ export const ReviewChanges = () => {
         }),
       ];
 
-      await makeProposal({
-        values: bountyLinkValues,
-        relations: bountyLinkRelations,
-        spaceId: personalSpaceId,
-        name: `Bounty links for: ${proposalName}`,
-        onSuccess: () => {
-          setSelectedBountyIds(new Set());
-        },
-        onError: () => {
-          // usePublish dispatches the error to the status bar internally.
-          // Keep selectedBountyIds so the user can retry.
-        },
-      });
+      // Bounty linking publishes a SECOND proposal into the user's personal space.
+      // If it fails, usePublish dispatches the underlying error — but the user
+      // would have no way to know it was the bounty-link step that broke (their
+      // primary edit already succeeded). Wrap the error with bounty-specific
+      // context and offer Retry that re-runs only the bounty-link publish.
+      const publishBountyLinks = async () => {
+        let bountyFailed = false;
+        await makeProposal({
+          values: bountyLinkValues,
+          relations: bountyLinkRelations,
+          spaceId: personalSpaceId,
+          name: `Bounty links for: ${proposalName}`,
+          onSuccess: () => {
+            setSelectedBountyIds(new Set());
+          },
+          onError: () => {
+            bountyFailed = true;
+          },
+        });
+
+        if (bountyFailed) {
+          const linked = Array.from(selectedBountyIds)
+            .map(id => bountiesById.get(id)?.name)
+            .filter(Boolean)
+            .join(', ');
+          const underlying = jotaiStore.get(statusBarStateAtom).error ?? 'Unknown error';
+          const wrapped = [
+            `Bounty linking failed: your proposal "${proposalName}" was published successfully, but linking it to ${linked || 'the selected bounties'} did not.`,
+            '',
+            underlying,
+          ].join('\n');
+          dispatchStatusBar({ type: 'ERROR', payload: wrapped, retry: publishBountyLinks });
+        }
+      };
+
+      await publishBountyLinks();
     }
 
     setIsPublishing(false);
@@ -559,6 +584,8 @@ export const ReviewChanges = () => {
     selectedBountyIds,
     personalSpaceId,
     bountiesById,
+    dispatchStatusBar,
+    jotaiStore,
   ]);
 
   useKeyboardShortcuts(
