@@ -400,7 +400,9 @@ function ReadablePropertyRow({
 }
 
 function InlinePropertyTypeIcon({ dataType, renderableType }: { dataType: DataType; renderableType?: string | null }) {
-  const iconKey = resolveRenderableTypeKey(renderableType, renderableType) ?? (dataType in TYPE_ICONS ? dataType : 'TEXT');
+  const hasIconKey = (key: string): key is keyof typeof TYPE_ICONS => key in TYPE_ICONS;
+  const resolvedKey = resolveRenderableTypeKey(renderableType, renderableType);
+  const iconKey: keyof typeof TYPE_ICONS = resolvedKey ?? (hasIconKey(dataType) ? dataType : 'TEXT');
   if (iconKey === 'RELATION') {
     return (
       <span className="inline-flex items-center p-0.5 text-text">
