@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entity, SearchResult, SpaceEntity } from '../types';
-import { applyKnownEntitySpaces, getSearchResultNameForTopSpace, resolveSearchSpaces } from './orm';
+import {
+  applyKnownEntitySpaces,
+  getSearchResultNameForTopSpace,
+  isDisplayableSearchResult,
+  resolveSearchSpaces,
+} from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -110,5 +115,16 @@ describe('getSearchResultNameForTopSpace', () => {
         [makeSpaceEntity('top-space')]
       )
     ).toBe('Grouped Name');
+  });
+});
+
+describe('isDisplayableSearchResult', () => {
+  it('requires a non-blank name and at least one resolved space', () => {
+    const space = makeSpaceEntity('space-1', { name: 'Space' });
+
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [space] })).toBe(true);
+    expect(isDisplayableSearchResult({ name: '   ', spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: null, spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [] })).toBe(false);
   });
 });

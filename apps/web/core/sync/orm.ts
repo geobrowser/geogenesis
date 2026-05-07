@@ -67,6 +67,10 @@ export function applyKnownEntitySpaces(
   };
 }
 
+export function isDisplayableSearchResult(result: Pick<SearchResult, 'name' | 'spaces'>): boolean {
+  return result.spaces.length > 0 && hasName(result.name);
+}
+
 function getLocalSearchResultSpaces(localEntity: Entity): string[] {
   const spacesWithRealContent = new Set<string>();
 
@@ -519,7 +523,7 @@ export class E {
           spaces: resolvedSpaces,
         };
       })
-      .filter(e => e.spaces.length > 0);
+      .filter(isDisplayableSearchResult);
 
     return { results, rawCount: page.rawCount, total: page.total };
   }
