@@ -8,6 +8,8 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
 import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+
 /**
  * An editable name field with an inline navigate arrow that appears on hover.
  * Used in edit mode for non-collection data block items (gallery, list, bulleted list).
@@ -20,16 +22,22 @@ export function EditModeNameField({
   name,
   entityId,
   spaceId,
+  entitySpaceIdForPanel,
   placeholder = 'Entity name...',
   onChange,
+  openedWithMainViewEditing = false,
 }: {
   name: string | null;
   entityId: string;
   spaceId: string;
+  entitySpaceIdForPanel?: string;
   placeholder?: string;
   onChange: (value: string) => void;
+  openedWithMainViewEditing?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
+  const resolvedPanelSpaceId = entitySpaceIdForPanel ?? spaceId;
+  const navigateHrefSpaceId = resolvedPanelSpaceId;
 
   return (
     <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
@@ -39,17 +47,26 @@ export function EditModeNameField({
           <PageStringField placeholder={placeholder} value={name ?? ''} onChange={onChange} />
         </div>
         <div className="pointer-events-none absolute inset-0 z-30">
-          <span className="inline text-body opacity-0">{name || placeholder}</span>
+          <span aria-hidden className="inline select-none text-body invisible">
+            {name || placeholder}
+          </span>
           {isHovered && (
-            <Link
-              href={NavUtils.toEntity(spaceId, entityId, true)}
-              entityId={entityId}
-              spaceId={spaceId}
-              aria-label="Navigate to entity"
-              className="pointer-events-auto ml-1 inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
-            >
-              <RightArrowLongChip />
-            </Link>
+            <span className="pointer-events-auto ml-1 inline-flex items-center gap-0.5">
+              <DataBlockOpenSidePanelButton
+                entityId={entityId}
+                entitySpaceId={resolvedPanelSpaceId}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+              <Link
+                href={NavUtils.toEntity(navigateHrefSpaceId, entityId, true)}
+                entityId={entityId}
+                spaceId={navigateHrefSpaceId}
+                aria-label="Navigate to entity"
+                className="inline-flex items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              >
+                <RightArrowLongChip />
+              </Link>
+            </span>
           )}
         </div>
       </div>

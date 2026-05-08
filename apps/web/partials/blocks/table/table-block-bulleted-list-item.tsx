@@ -15,6 +15,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 type Props = {
@@ -84,6 +85,8 @@ export function TableBlockBulletedListItem({
                   name={name}
                   entityId={rowEntityId}
                   spaceId={currentSpaceId}
+                  entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
+                  openedWithMainViewEditing={isEditing}
                   placeholder="Add name..."
                   onChange={value => {
                     onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
@@ -101,6 +104,8 @@ export function TableBlockBulletedListItem({
                   relationId={relationId}
                   verified={verified}
                   onLinkEntry={onLinkEntry}
+                  showSidePanel={!isPlaceholder}
+                  openedWithMainViewEditing={isEditing}
                 >
                   <PageStringField
                     placeholder="Add name..."
@@ -121,28 +126,43 @@ export function TableBlockBulletedListItem({
   return (
     <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
-      <div className="grow">
+      <div className="relative min-w-0 flex-1">
         {source.type !== 'COLLECTION' ? (
-          <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
-            {name}
-          </Link>
-        ) : (
-          <CollectionMetadata
-            view="BULLETED_LIST"
-            isEditing={false}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={rowEntityId}
-            spaceId={nameCell?.space}
-            collectionId={nameCell?.collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
+          <div className="relative pr-9">
             <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
               {name}
             </Link>
-          </CollectionMetadata>
+            {!isPlaceholder && (
+              <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
+                <DataBlockOpenSidePanelButton
+                  entityId={rowEntityId}
+                  entitySpaceId={nameCell?.space ?? currentSpaceId}
+                  openedWithMainViewEditing={isEditing}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="relative pr-9">
+            <CollectionMetadata
+              view="BULLETED_LIST"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
+              entityId={rowEntityId}
+              spaceId={nameCell?.space}
+              collectionId={nameCell?.collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              showSidePanel={!isPlaceholder}
+              openedWithMainViewEditing={isEditing}
+            >
+              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
+                {name}
+              </Link>
+            </CollectionMetadata>
+          </div>
         )}
       </div>
       <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />

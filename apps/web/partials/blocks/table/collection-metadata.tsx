@@ -25,6 +25,7 @@ import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type CollectionMetadataProps = {
   view: DataBlockView;
@@ -39,6 +40,9 @@ type CollectionMetadataProps = {
   verified?: boolean;
   onLinkEntry: onLinkEntryFn;
   children: ReactNode;
+  /** When false, the open-in-side-panel control is hidden (e.g. placeholder rows, Power Tools). */
+  showSidePanel?: boolean;
+  openedWithMainViewEditing?: boolean;
 };
 
 export const CollectionMetadata = ({
@@ -53,6 +57,8 @@ export const CollectionMetadata = ({
   verified,
   onLinkEntry,
   children,
+  showSidePanel = true,
+  openedWithMainViewEditing = false,
 }: CollectionMetadataProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
@@ -111,9 +117,10 @@ export const CollectionMetadata = ({
         <div className="relative z-20 w-full">{children}</div>
         <div className="pointer-events-none absolute inset-0 z-30">
           <span
+            aria-hidden
             className={cx(
-              'inline',
-              'opacity-0',
+              'inline select-none',
+              'invisible',
               view === 'GALLERY' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
               view === 'LIST' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
               view === 'TABLE' ? (isEditing ? 'text-tableCell' : 'text-tableCell text-ctaHover') : null,
@@ -208,6 +215,15 @@ export const CollectionMetadata = ({
                 </Popover.Portal>
               </Popover.Root>
             </div>
+          )}
+          {showSidePanel && isHovered && (
+            <span className="pointer-events-auto inline-block pl-2">
+              <DataBlockOpenSidePanelButton
+                entityId={entityId}
+                entitySpaceId={spaceId ?? currentSpaceId}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            </span>
           )}
           {isHovered && isEditing && (
             <span

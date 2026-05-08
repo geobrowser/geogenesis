@@ -23,6 +23,7 @@ import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
+import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
 import { SearchDialog } from '~/partials/search';
 
 const OnboardingDialog = dynamic(
@@ -76,6 +77,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <Main>{children}</Main>
         </div>
       </div>
+      <EntitySidePanel />
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <OnboardingDialog />

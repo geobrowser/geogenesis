@@ -177,6 +177,7 @@ function NameCell({
         relationId={row.relationId}
         verified={row.verified}
         onLinkEntry={onLinkEntry}
+        showSidePanel={false}
       >
         <Link
           entityId={row.entityId}
