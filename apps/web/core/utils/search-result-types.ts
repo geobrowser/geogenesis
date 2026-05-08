@@ -3,7 +3,7 @@ import type { SearchResult } from '~/core/types';
 type SearchResultType = SearchResult['types'][number];
 
 function normalizeTypeId(id: string): string {
-  return id.replace(/-/g, '');
+  return id.replace(/-/g, '').toLowerCase();
 }
 
 export function dedupeSearchResultTypes(types: SearchResultType[]): SearchResultType[] {

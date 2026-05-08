@@ -10,13 +10,13 @@ describe('dedupeSearchResultTypeTags', () => {
       description: null,
       spaces: [],
       types: [
-        { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: null },
+        { id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA', name: null },
         { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', name: 'Person' },
         { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Organization' },
       ],
       typesBySpace: {
         space1: [
-          { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: null },
+          { id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA', name: null },
           { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', name: 'Person' },
         ],
       },
