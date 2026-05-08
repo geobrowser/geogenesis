@@ -42,6 +42,20 @@ describe('extractSingleSpaceIdFromFilter', () => {
     const filter: EntityFilter = { spaceIds: { containedBy: ['space-abc'] } };
     expect(extractSingleSpaceIdFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds spaceIds inside a top-level and array (empty-name wrap shape)', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSingleSpaceIdFromFilter(filter)).toBe('space-abc');
+  });
+
+  it('finds spaceIds with anyEqualTo inside a top-level and array', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { anyEqualTo: 'space-abc' } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSingleSpaceIdFromFilter(filter)).toBe('space-abc');
+  });
 });
 
 describe('extractSpaceIdsFromFilter', () => {
@@ -87,6 +101,13 @@ describe('extractSpaceIdsFromFilter', () => {
     const filter: EntityFilter = { spaceIds: { in: [null, null] } };
     expect(extractSpaceIdsFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds multi-element spaceIds inside a top-level and array', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc', 'space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSpaceIdsFromFilter(filter)).toEqual({ in: ['space-abc', 'space-def'] });
+  });
 });
 
 describe('removeSpaceIdsFromFilter', () => {
@@ -121,5 +142,32 @@ describe('removeSpaceIdsFromFilter', () => {
     const result = removeSpaceIdsFromFilter(filter);
     expect(result).toEqual({ name: { is: 'test' }, id: { is: 'entity-123' } });
     expect(result).not.toHaveProperty('spaceIds');
+  });
+
+  it('removes spaceIds buried in a top-level and (empty-name wrap) and hoists the remaining sibling', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({ name: { isNull: false, isNot: '' } });
+  });
+
+  it('returns undefined when stripping spaceIds from an and leaves nothing', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toBeUndefined();
+  });
+
+  it('keeps the and-wrap when more than one sibling remains after stripping', () => {
+    const filter: EntityFilter = {
+      and: [
+        { spaceIds: { in: ['space-abc'] } },
+        { name: { isNull: false, isNot: '' } },
+        { id: { is: 'entity-123' } },
+      ],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
+    });
   });
 });

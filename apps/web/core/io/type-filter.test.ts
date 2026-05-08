@@ -42,6 +42,13 @@ describe('extractSingleTypeIdFromFilter', () => {
     const filter: EntityFilter = { typeIds: { containedBy: ['type-abc'] } };
     expect(extractSingleTypeIdFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds typeIds inside a top-level and array (empty-name wrap shape)', () => {
+    const filter: EntityFilter = {
+      and: [{ typeIds: { in: ['type-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSingleTypeIdFromFilter(filter)).toBe('type-abc');
+  });
 });
 
 describe('extractTypeIdsFromFilter', () => {
@@ -87,6 +94,13 @@ describe('extractTypeIdsFromFilter', () => {
     const filter: EntityFilter = { typeIds: { in: [null, null] } };
     expect(extractTypeIdsFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds multi-element typeIds inside a top-level and array', () => {
+    const filter: EntityFilter = {
+      and: [{ typeIds: { in: ['type-abc', 'type-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractTypeIdsFromFilter(filter)).toEqual({ in: ['type-abc', 'type-def'] });
+  });
 });
 
 describe('removeTypeIdsFromFilter', () => {
@@ -121,5 +135,30 @@ describe('removeTypeIdsFromFilter', () => {
     const result = removeTypeIdsFromFilter(filter);
     expect(result).toEqual({ name: { is: 'test' }, id: { is: 'entity-123' } });
     expect(result).not.toHaveProperty('typeIds');
+  });
+
+  it('removes typeIds buried in a top-level and (empty-name wrap) and hoists the remaining sibling', () => {
+    const filter: EntityFilter = {
+      and: [{ typeIds: { in: ['type-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeTypeIdsFromFilter(filter)).toEqual({ name: { isNull: false, isNot: '' } });
+  });
+
+  it('returns undefined when stripping typeIds from an and leaves nothing', () => {
+    const filter: EntityFilter = { and: [{ typeIds: { in: ['type-abc'] } }] };
+    expect(removeTypeIdsFromFilter(filter)).toBeUndefined();
+  });
+
+  it('keeps the and-wrap when more than one sibling remains after stripping', () => {
+    const filter: EntityFilter = {
+      and: [
+        { typeIds: { in: ['type-abc'] } },
+        { name: { isNull: false, isNot: '' } },
+        { id: { is: 'entity-123' } },
+      ],
+    };
+    expect(removeTypeIdsFromFilter(filter)).toEqual({
+      and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
+    });
   });
 });
