@@ -11,6 +11,7 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
@@ -332,17 +333,11 @@ export const SelectEntity = ({
   // disagrees with our placement hook during scroll.
   const popoverAbove = actualSide === 'top';
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   return (
     <div
@@ -896,17 +891,11 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
     isFetchingNextPage,
   } = useSpacesQuery(focused);
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   const onSelectSpace = (space: (typeof results)[number]) => {
     setQuery('');
@@ -1015,17 +1004,11 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
     enabled: focused,
   });
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   const close = React.useCallback(() => {
     onQueryChange('');

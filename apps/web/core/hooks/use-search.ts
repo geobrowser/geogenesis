@@ -30,6 +30,7 @@ interface SearchOptions {
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
+const EMPTY_PAGE_PUMP_LIMIT = 3;
 
 type SearchPage = {
   rows: SearchResult[];
@@ -210,10 +211,7 @@ export function useSearch({
     },
     getNextPageParam: lastPage => {
       const nextOffset = lastPage.offset + pageSize;
-      if (typeof lastPage.total === 'number') {
-        return nextOffset >= lastPage.total ? undefined : nextOffset;
-      }
-      return lastPage.rawCount < pageSize ? undefined : nextOffset;
+      return nextOffset >= lastPage.total ? undefined : nextOffset;
     },
     /**
      * We don't want to return stale search results. Instead we just
@@ -224,6 +222,28 @@ export function useSearch({
      */
     gcTime: Duration.toMillis(Duration.seconds(15)),
   });
+
+  const emptyPagePumpCountRef = React.useRef(0);
+
+  React.useEffect(() => {
+    const lastPage = resultPages?.pages.at(-1);
+    if (!lastPage) {
+      emptyPagePumpCountRef.current = 0;
+      return;
+    }
+
+    if (lastPage.rows.length > 0 || !hasNextPage) {
+      emptyPagePumpCountRef.current = 0;
+      return;
+    }
+
+    if (lastPage.rawCount < pageSize || isFetchingNextPage || emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT) {
+      return;
+    }
+
+    emptyPagePumpCountRef.current += 1;
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, pageSize, resultPages]);
 
   const results = React.useMemo(() => {
     const seen = new Set<string>();

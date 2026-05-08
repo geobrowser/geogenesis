@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { ID } from '~/core/id';
@@ -162,17 +163,11 @@ export function SelectEntityCompact({
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   const handleOpenChange = React.useCallback(
     (open: boolean) => {

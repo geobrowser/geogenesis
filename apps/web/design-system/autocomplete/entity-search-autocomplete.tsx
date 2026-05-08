@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 
 import { Dots } from '~/design-system/dots';
@@ -52,17 +53,11 @@ export function EntitySearchAutocomplete({
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLUListElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   const close = React.useCallback(() => {
     onQueryChange('');
