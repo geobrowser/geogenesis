@@ -178,7 +178,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                   }))
                 }
               >
-                <Text as="p" variant="tableCell" className="font-medium">
+                <Text as="p" variant="metadataMedium">
                   {group.label}
                 </Text>
                 <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
@@ -211,7 +211,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       {groupedSections.ungrouped.length > 0 && (
         <div className="flex flex-col gap-2">
           {groupedSections.hasGroups && (
-            <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+            <Text as="p" variant="metadataMedium" className="text-grey-04">
               Ungrouped properties
             </Text>
           )}

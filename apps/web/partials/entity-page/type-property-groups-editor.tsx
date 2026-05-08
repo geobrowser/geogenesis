@@ -529,7 +529,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
             />
             <DragOverlay>
               {activePropertyDragId ? (
-                <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-tableCell font-normal tracking-[-0.25px] text-text shadow-lg">
+                <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-metadata font-normal tracking-[-0.25px] text-text shadow-lg">
                   <span className="truncate">{propertyNameById.get(activePropertyDragId) ?? activePropertyDragId}</span>
                 </div>
               ) : activeGroupDragId ? (
@@ -598,7 +598,7 @@ function GroupDragOverlayPreview({
               isEditing={false}
               small
               truncateLabel
-              className="max-w-[220px] !text-tableCell !font-normal tracking-[-0.25px]"
+              className="max-w-[220px] tracking-[-0.25px]"
               currentSpaceId={spaceId}
               entityId={relation.toEntity.id}
               relationId={relation.id}
@@ -689,8 +689,8 @@ function TypePropertyGroupCard({
       {!isCollapsed && (
         <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
           <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-              <div className="inline-flex items-center gap-2">
+            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
+              <div className="inline-flex items-center gap-2 pt-[3px]">
                 <InlinePropertyTypeIcon dataType="RELATION" />
                 <span className="text-tableCell font-medium text-text">Properties</span>
               </div>
@@ -808,7 +808,7 @@ function UngroupedDropContainer({
   return (
     <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
       {hasGroupsAbove && (
-        <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+        <Text as="p" variant="metadataMedium" className="text-grey-04">
           Ungrouped properties
         </Text>
       )}
@@ -817,8 +817,8 @@ function UngroupedDropContainer({
         className={`${hasGroupsAbove ? 'mt-2' : ''} rounded-md pr-2 py-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
       >
         <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
-            <div className="inline-flex items-center gap-2">
+          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
+            <div className="inline-flex items-center gap-2 pt-[3px]">
               <InlinePropertyTypeIcon dataType="RELATION" />
               <span className="text-tableCell font-medium text-text">Properties</span>
             </div>
@@ -872,7 +872,7 @@ function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceI
           isEditing={false}
           small
           truncateLabel
-          className="max-w-[220px] !cursor-grab !text-tableCell !font-normal tracking-[-0.25px] hover:!cursor-grab focus:!cursor-grab active:!cursor-grabbing [&_*]:!cursor-grab [&>button]:!cursor-pointer [&>button_*]:!cursor-pointer"
+          className="max-w-[220px] cursor-grab! tracking-[-0.25px] hover:cursor-grab! focus:cursor-grab! active:cursor-grabbing! **:cursor-grab! [&>button]:cursor-pointer! [&>button_*]:cursor-pointer!"
           currentSpaceId={spaceId}
           entityId={relation.toEntity.id}
           relationId={relation.id}

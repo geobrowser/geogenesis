@@ -60,7 +60,6 @@ import { Text } from '~/design-system/text';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
-import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
@@ -197,7 +196,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                           }))
                         }
                       >
-                        <Text as="p" variant="tableCell" className="font-medium">
+                        <Text as="p" variant="metadataMedium">
                           {section.label}
                         </Text>
                         <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
@@ -206,7 +205,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                       </button>
                     )}
                     {effectiveHasGroups && section.isGroup && !collapsible && section.label && (
-                      <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+                      <Text as="p" variant="metadataMedium" className="text-grey-04">
                         {section.label}
                       </Text>
                     )}
@@ -388,7 +387,6 @@ function RelationPropertyWithDelete({
   propertyId,
   entityId,
   spaceId,
-  property,
   isSchemaProperty,
   hideActions = false,
 }: RelationPropertyWithDeleteProps) {
@@ -413,32 +411,19 @@ function RelationPropertyWithDelete({
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>
-      {!hideActions && (
-        <div className="flex shrink-0 items-center gap-1">
-          <DataTypePill
-            dataType={property.dataType}
-            renderableType={
-              property.renderableTypeStrict
-                ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
-                : null
-            }
-            spaceId={spaceId}
-            iconOnly={true}
+      {!hideActions && (!isSchemaProperty || propertyRelations.length > 0) && (
+        <div className="flex shrink-0 items-center">
+          <SquareButton
+            icon={<Trash />}
+            onClick={() => {
+              // Batch-delete all relations for this property in a single store update
+              storage.relations.deleteMany(propertyRelations);
+              // Also delete the value entry to fully remove the property from the entity
+              if (propertyValue) {
+                storage.values.delete(propertyValue);
+              }
+            }}
           />
-          {/* Show delete button if: not a schema property, OR schema property with content to clear */}
-          {(!isSchemaProperty || propertyRelations.length > 0) && (
-            <SquareButton
-              icon={<Trash />}
-              onClick={() => {
-                // Batch-delete all relations for this property in a single store update
-                storage.relations.deleteMany(propertyRelations);
-                // Also delete the value entry to fully remove the property from the entity
-                if (propertyValue) {
-                  storage.values.delete(propertyValue);
-                }
-              }}
-            />
-          )}
         </div>
       )}
     </div>
@@ -1197,19 +1182,9 @@ function RenderedValue({
   return (
     <div className="flex w-full items-start justify-between gap-2">
       <div className="min-w-0 flex-1">{renderField()}</div>
-      {!hideActions && (
-        <div className="flex shrink-0 items-center gap-1">
-          <DataTypePill
-            dataType={property.dataType}
-            renderableType={
-              property.renderableTypeStrict
-                ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
-                : null
-            }
-            spaceId={spaceId}
-            iconOnly={true}
-          />
-          {rawValue && <SquareButton icon={<Trash />} onClick={onDelete} />}
+      {!hideActions && rawValue && (
+        <div className="flex shrink-0 items-center">
+          <SquareButton icon={<Trash />} onClick={onDelete} />
         </div>
       )}
     </div>
