@@ -59,7 +59,16 @@ export function SelectEntityCompact({
   const [focused, setFocused] = React.useState(false);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
-  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    results,
+    isLoading,
+    isEmpty,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes,
     enabled: focused,
   });
@@ -153,6 +162,18 @@ export function SelectEntityCompact({
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
+
   const handleOpenChange = React.useCallback(
     (open: boolean) => {
       setFocused(open);
@@ -234,6 +255,7 @@ export function SelectEntityCompact({
         >
           <div
             className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
+            onScroll={handleResultsScroll}
             onWheel={e => trapWheelToElement(e.currentTarget, e)}
           >
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
@@ -291,6 +313,9 @@ export function SelectEntityCompact({
                     </div>
                   </button>
                 ))}
+                {isFetchingNextPage ? (
+                  <div className="px-3 py-2 text-resultTitle text-text">Loading more...</div>
+                ) : null}
               </div>
             )}
           </div>

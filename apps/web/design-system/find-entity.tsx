@@ -49,7 +49,16 @@ export const FindEntity = ({
     };
   }, []);
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes: allowedTypes,
   });
 
@@ -61,6 +70,18 @@ export const FindEntity = ({
 
   const showPopover =
     focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
+
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   return (
     <div className="relative">
@@ -104,6 +125,7 @@ export const FindEntity = ({
                 <ResizableContainer>
                   <div
                     className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
+                    onScroll={handleResultsScroll}
                     onWheel={e => trapWheelToElement(e.currentTarget, e)}
                   >
                     {!results?.length && isLoading && (

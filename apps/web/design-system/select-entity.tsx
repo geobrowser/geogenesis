@@ -148,7 +148,16 @@ export const SelectEntity = ({
       ? allowedTypes.map(r => r.id)
       : undefined;
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes,
     filterBySpace,
     initialQuery,
@@ -322,6 +331,18 @@ export const SelectEntity = ({
   // matches the visible position, even when Radix's collision middleware briefly
   // disagrees with our placement hook during scroll.
   const popoverAbove = actualSide === 'top';
+
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   return (
     <div
@@ -551,6 +572,7 @@ export const SelectEntity = ({
                           // the dropdown above the input.
                           minHeight: results.length > 0 ? '100px' : '2.5rem',
                         }}
+                        onScroll={handleResultsScroll}
                         onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {!results?.length && isLoading && (
@@ -684,6 +706,11 @@ export const SelectEntity = ({
                                 )}
                               </div>
                             ))}
+                            {isFetchingNextPage ? (
+                              <div className="w-full bg-white px-3 py-2">
+                                <div className="truncate text-resultTitle text-text">Loading more...</div>
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>
@@ -859,7 +886,27 @@ type SpaceFilterInputProps = {
 
 const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
   const [focused, setFocused] = React.useState(false);
-  const { query, setQuery, spaces: results, isLoading } = useSpacesQuery(focused);
+  const {
+    query,
+    setQuery,
+    spaces: results,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSpacesQuery(focused);
+
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   const onSelectSpace = (space: (typeof results)[number]) => {
     setQuery('');
@@ -905,7 +952,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList>
+                    <ResultsList onScroll={handleResultsScroll}>
                       {!results.length && isLoading && (
                         <div className="w-full border-b border-divider bg-white px-3 py-2">
                           <div className="truncate text-button text-text">Loading...</div>
@@ -931,6 +978,11 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                           </div>
                         </ResultItem>
                       ))}
+                      {isFetchingNextPage ? (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading more...</div>
+                        </div>
+                      ) : null}
                     </ResultsList>
                   </ResizableContainer>
                 </div>
@@ -949,10 +1001,31 @@ type TypeFilterInputProps = {
 
 const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
   const [focused, setFocused] = React.useState(false);
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes: [SystemIds.SCHEMA_TYPE],
     enabled: focused,
   });
+
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   const close = React.useCallback(() => {
     onQueryChange('');
@@ -988,7 +1061,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList>
+                    <ResultsList onScroll={handleResultsScroll}>
                       {!results?.length && isLoading && (
                         <div className="w-full border-b border-divider bg-white px-3 py-2">
                           <div className="truncate text-button text-text">Loading...</div>
@@ -1057,6 +1130,11 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                               </button>
                             </ResultItem>
                           ))}
+                          {isFetchingNextPage ? (
+                            <div className="w-full border-b border-divider bg-white px-3 py-2">
+                              <div className="truncate text-button text-text">Loading more...</div>
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </ResultsList>
