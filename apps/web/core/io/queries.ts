@@ -949,6 +949,10 @@ function getDefaultSearchExcludedTypeIds(): string[] {
   return [...EXCLUDED_BLOCK_TYPE_IDS];
 }
 
+export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): boolean {
+  return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+}
+
 function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+  return !hasDefaultSearchExcludedType(result.types ?? []);
 }
