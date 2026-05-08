@@ -525,6 +525,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
               spaceId={spaceId}
               relations={ungroupedRelations}
               allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
+              hasGroupsAbove={groupContainers.length > 0}
             />
             <DragOverlay>
               {activePropertyDragId ? (
@@ -776,11 +777,13 @@ function UngroupedDropContainer({
   spaceId,
   relations,
   allTypePropertyIds,
+  hasGroupsAbove,
 }: {
   entityId: string;
   spaceId: string;
   relations: Relation[];
   allTypePropertyIds: string[];
+  hasGroupsAbove: boolean;
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
@@ -803,7 +806,7 @@ function UngroupedDropContainer({
   };
 
   return (
-    <div className="border-t border-grey-02 px-4 py-3">
+    <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
       <Text as="p" variant="tableCell" className="font-normal text-grey-04">
         Ungrouped properties
       </Text>

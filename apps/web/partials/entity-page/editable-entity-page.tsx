@@ -63,7 +63,6 @@ import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
-import { TypePropertyGroupsEditor } from '~/partials/entity-page/type-property-groups-editor';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 type EditableEntityPageProps = {
@@ -161,8 +160,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
     <AnimatePresence initial={false}>
       {showPanel && (
         <div className="flex flex-col gap-6">
-          {isTypeEntity && <TypePropertyGroupsEditor entityId={id} spaceId={spaceId} />}
-
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

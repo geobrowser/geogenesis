@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import {
   ADDRESS_PROPERTY,
-  COLLAPSED_PROPERTY,
   DATA_TYPE_PROPERTY,
   PROPERTY_GROUPS_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
@@ -14,7 +13,7 @@ import {
   VENUE_PROPERTY,
 } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
-import { useEntitySchemaWithGroups, useEntityTypes } from '~/core/state/entity-page-store/entity-store';
+import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -89,53 +88,12 @@ export function ReadableEntityPage({ id, spaceId }: Props) {
 export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
   const schemaWithGroups = useEntitySchemaWithGroups(entityId, spaceId);
-  const entityTypes = useEntityTypes(entityId, spaceId);
-  const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
-  const [ungroupedCollapsed, setUngroupedCollapsed] = React.useState(false);
-  const localTypePropertyRelations = sortRelations(
-    useRelations({
-      selector: relation =>
-        relation.fromEntity.id === entityId && relation.spaceId === spaceId && relation.type.id === SystemIds.PROPERTIES,
-    })
-  );
-  const localTypePropertyIds = React.useMemo(
-    () => localTypePropertyRelations.map(relation => relation.toEntity.id),
-    [localTypePropertyRelations]
-  );
-  const localTypePropertyIdSet = React.useMemo(() => new Set(localTypePropertyIds), [localTypePropertyIds]);
-  const localGroupRelations = sortRelations(
-    useRelations({
-      selector: relation =>
-        relation.fromEntity.id === entityId && relation.spaceId === spaceId && relation.type.id === PROPERTY_GROUPS_PROPERTY,
-    })
-  );
-  const localGroupIds = React.useMemo(() => new Set(localGroupRelations.map(relation => relation.toEntity.id)), [localGroupRelations]);
-  const localGroupPropertyRelations = useRelations({
-    selector: relation =>
-      relation.spaceId === spaceId && relation.type.id === SystemIds.PROPERTIES && localGroupIds.has(relation.fromEntity.id),
-  });
-  const localGroupValues = useValues({
-    selector: value =>
-      value.spaceId === spaceId &&
-      localGroupIds.has(value.entity.id) &&
-      (value.property.id === SystemIds.NAME_PROPERTY || value.property.id === COLLAPSED_PROPERTY),
-  });
 
   React.useEffect(() => {
     const defaults: Record<string, boolean> = {};
-    if (isTypeEntity) {
-      for (const groupRelation of localGroupRelations) {
-        const groupId = groupRelation.toEntity.id;
-        const collapsedValue = localGroupValues.find(
-          value => value.entity.id === groupId && value.property.id === COLLAPSED_PROPERTY
-        )?.value;
-        defaults[groupId] = getChecked(collapsedValue ?? '0') === true;
-      }
-    } else {
-      for (const group of schemaWithGroups.propertyGroups) {
-        defaults[group.id] = group.collapsed;
-      }
+    for (const group of schemaWithGroups.propertyGroups) {
+      defaults[group.id] = group.collapsed;
     }
 
     setCollapsedGroups(previous => {
@@ -148,7 +106,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       const sameValues = Object.entries(next).every(([groupId, value]) => previous[groupId] === value);
       return sameKeys && sameValues ? previous : next;
     });
-  }, [isTypeEntity, localGroupRelations, localGroupValues, schemaWithGroups.propertyGroups]);
+  }, [schemaWithGroups.propertyGroups]);
 
   const groupedSections = React.useMemo(() => {
     const visiblePropertyIds = new Set(
@@ -199,142 +157,8 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
     };
   }, [renderedProperties, schemaWithGroups]);
 
-  const typeSchemaSections = React.useMemo(() => {
-    const schemaPropertyById = new Map(schemaWithGroups.schema.map(property => [property.id, property]));
-    const localPropertyNameById = new Map<string, string | null>();
-    for (const relation of localTypePropertyRelations) {
-      localPropertyNameById.set(relation.toEntity.id, relation.toEntity.name ?? null);
-    }
-    for (const relation of localGroupPropertyRelations) {
-      if (!localPropertyNameById.has(relation.toEntity.id)) {
-        localPropertyNameById.set(relation.toEntity.id, relation.toEntity.name ?? null);
-      }
-    }
-
-    const groupNameById = new Map<string, string | null>();
-    for (const value of localGroupValues) {
-      if (value.property.id === SystemIds.NAME_PROPERTY) {
-        groupNameById.set(value.entity.id, value.value);
-      }
-    }
-
-    const consumed = new Set<string>();
-    const groups = localGroupRelations.map(groupRelation => {
-      const groupId = groupRelation.toEntity.id;
-      const propertyIds = sortRelations(
-        localGroupPropertyRelations.filter(
-          relation => relation.fromEntity.id === groupId && localTypePropertyIdSet.has(relation.toEntity.id)
-        )
-      )
-        .map(relation => relation.toEntity.id)
-        .filter(propertyId => {
-          if (consumed.has(propertyId)) return false;
-          consumed.add(propertyId);
-          return true;
-        });
-
-      return {
-        id: groupId,
-        label: (groupNameById.get(groupId) ?? groupRelation.toEntity.name ?? '').trim() || 'Untitled group',
-        propertyIds,
-      };
-    });
-
-    const ungrouped = localTypePropertyIds
-      .filter(propertyId => !consumed.has(propertyId))
-      .filter(propertyId => !SKIPPED_PROPERTIES.includes(propertyId));
-
-    return { groups, ungrouped, schemaPropertyById, localPropertyNameById };
-  }, [localGroupPropertyRelations, localGroupRelations, localGroupValues, localTypePropertyIdSet, localTypePropertyIds, localTypePropertyRelations, schemaWithGroups.schema]);
-
-  const hasTypeSchemaDisplay = isTypeEntity && (typeSchemaSections.groups.length > 0 || typeSchemaSections.ungrouped.length > 0);
-
-  if (!hasTypeSchemaDisplay && countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
+  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
-  }
-
-  if (hasTypeSchemaDisplay) {
-    return (
-      <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
-        {typeSchemaSections.groups.map(group => {
-          const isCollapsed = collapsedGroups[group.id] ?? false;
-          return (
-            <div key={group.id} className="flex flex-col gap-2">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between text-left"
-                onClick={() =>
-                  setCollapsedGroups(previous => ({
-                    ...previous,
-                    [group.id]: !isCollapsed,
-                  }))
-                }
-              >
-                <Text as="p" variant="tableCell" className="font-medium">
-                  {group.label}
-                </Text>
-                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
-                  <ChevronDownSmall color="grey-04" />
-                </div>
-              </button>
-
-              {!isCollapsed && (
-                <div className="flex flex-wrap gap-2">
-                  {group.propertyIds.map(propertyId => {
-                    return (
-                      <LinkableRelationChip
-                        key={`type-group-${group.id}-${propertyId}`}
-                        isEditing={false}
-                        currentSpaceId={spaceId}
-                        entityId={propertyId}
-                        small
-                        truncateLabel
-                      >
-                        {typeSchemaSections.localPropertyNameById.get(propertyId) ?? propertyId}
-                      </LinkableRelationChip>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {typeSchemaSections.ungrouped.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between text-left"
-              onClick={() => setUngroupedCollapsed(previous => !previous)}
-            >
-              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-                Ungrouped properties
-              </Text>
-              <div className={`${ungroupedCollapsed ? '-rotate-90' : ''} transition-transform`}>
-                <ChevronDownSmall color="grey-04" />
-              </div>
-            </button>
-            {!ungroupedCollapsed && (
-              <div className="flex flex-wrap gap-2">
-                {typeSchemaSections.ungrouped.map(propertyId => {
-                  return (
-                    <LinkableRelationChip
-                      key={`type-ungrouped-${propertyId}`}
-                      isEditing={false}
-                      currentSpaceId={spaceId}
-                      entityId={propertyId}
-                      small
-                      truncateLabel
-                    >
-                      {typeSchemaSections.localPropertyNameById.get(propertyId) ?? propertyId}
-                    </LinkableRelationChip>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
   }
 
   return (
