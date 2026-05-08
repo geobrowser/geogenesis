@@ -33,7 +33,7 @@ export function EntitySearchAutocomplete({
   filterByTypes,
 }: Props) {
   const [focused, setFocused] = React.useState(false);
-  const { query, onQueryChange, isLoading, results } = useSearch({
+  const { query, onQueryChange, isLoading, results, hasNextPage, fetchNextPage, isFetchingNextPage } = useSearch({
     filterByTypes,
     enabled: focused,
   });
@@ -51,6 +51,18 @@ export function EntitySearchAutocomplete({
     document.addEventListener('click', handleQueryChange);
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
+
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   const close = React.useCallback(() => {
     onQueryChange('');
@@ -87,7 +99,7 @@ export function EntitySearchAutocomplete({
           )}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
+            <ResultsList onScroll={handleResultsScroll}>
               {results.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}
@@ -110,7 +122,7 @@ export function EntitySearchAutocomplete({
             </ResultsList>
             <div className="flex items-center justify-center py-2 text-smallButton">
               <AnimatePresence mode="wait">
-                {isLoading ? (
+                {isLoading || isFetchingNextPage ? (
                   <motion.span
                     key="dots"
                     initial={{ opacity: 0, scale: 0.95 }}

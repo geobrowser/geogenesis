@@ -42,6 +42,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const autocomplete = useSearch({ enabled: open });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -66,6 +67,17 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }
 
   const hasResults = autocomplete.results.length > 0;
+  const handleResultsScroll = React.useCallback(
+    (e: React.UIEvent<HTMLUListElement>) => {
+      const el = e.currentTarget;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 275) return;
+      if (hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
   useKey('Enter', () => {
     if (!hasResults) return;
@@ -161,7 +173,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   />
                 </div>
                 <ResizableContainer duration={0.15}>
-                  <ResultsList>
+                  <ResultsList onScroll={handleResultsScroll}>
                     {autocomplete.isEmpty ? (
                       isValidEntityId ? (
                         <div className="px-2 pb-1">
@@ -204,6 +216,11 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </div>
                       </motion.div>
                     ))}
+                    {autocomplete.isFetchingNextPage ? (
+                      <div className="flex items-center justify-center py-2 text-smallButton">
+                        <Dots />
+                      </div>
+                    ) : null}
                   </ResultsList>
                 </ResizableContainer>
               </>
