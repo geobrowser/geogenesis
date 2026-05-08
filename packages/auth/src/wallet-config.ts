@@ -17,8 +17,8 @@ export const createGeoWalletConfig = ({
   chain,
   rpcUrl: rpc,
   walletConnectProjectId,
-}: GeoWalletConfigParams): Config => {
-  return createConfig({
+}: GeoWalletConfigParams): Config =>
+  createConfig({
     chains: [chain],
     // This enables us to use a single injected connector but handle multiple wallet
     // extensions within the browser.
@@ -53,10 +53,7 @@ export const createGeoWalletConfig = ({
         shimDisconnect: true,
       }),
     ],
-  } as unknown as PrivyCreateConfigParams;
-
-  return createConfig(config);
-};
+  } as any) as Config;
 
 export const createMockConfig = (chain: Chain): Config =>
   createConfig({
@@ -69,7 +66,4 @@ export const createMockConfig = (chain: Chain): Config =>
         accounts: ['0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'],
       }),
     ],
-  } as unknown as PrivyCreateConfigParams;
-
-  return createConfig(config);
-};
+  } as any) as Config;
