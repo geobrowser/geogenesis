@@ -647,7 +647,6 @@ function TypePropertyGroupCard({
   });
 
   const drop = useDroppable({ id: containerIdForGroup(groupId) });
-  const isCollapsed = getChecked(collapsedValue?.value ?? '0') === true;
   const setMeasuredNodeRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       sortable.setNodeRef(node);
@@ -686,39 +685,37 @@ function TypePropertyGroupCard({
         onDeleteGroup={onDeleteGroup}
       />
 
-      {!isCollapsed && (
-        <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
-          <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
-              <div className="inline-flex items-center gap-2 pt-[3px]">
-                <InlinePropertyTypeIcon dataType="RELATION" />
-                <span className="text-tableCell font-medium text-text">Properties</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {propertyRelations.map(relation => (
-                  <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
-                ))}
-                <SelectEntityAsPopover
-                  trigger={
-                    <button
-                      type="button"
-                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
-                    >
-                      <Create />
-                    </button>
-                  }
-                  spaceId={spaceId}
-                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                  onDone={result => onAddProperty({ id: result.id, name: result.name })}
-                  placeholder="Find property..."
-                  advanced={false}
-                  showIDs={false}
-                />
-              </div>
+      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
+        <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
+            <div className="inline-flex items-center gap-2 pt-[3px]">
+              <InlinePropertyTypeIcon dataType="RELATION" />
+              <span className="text-tableCell font-medium text-text">Properties</span>
             </div>
-          </SortableContext>
-        </div>
-      )}
+            <div className="flex flex-wrap items-center gap-2">
+              {propertyRelations.map(relation => (
+                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+              ))}
+              <SelectEntityAsPopover
+                trigger={
+                  <button
+                    type="button"
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
+                  >
+                    <Create />
+                  </button>
+                }
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                onDone={result => onAddProperty({ id: result.id, name: result.name })}
+                placeholder="Find property..."
+                advanced={false}
+                showIDs={false}
+              />
+            </div>
+          </div>
+        </SortableContext>
+      </div>
     </div>
   );
 }
