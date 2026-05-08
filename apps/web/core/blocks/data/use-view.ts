@@ -109,22 +109,15 @@ export function useView() {
         return;
       }
 
-      // Delete the existing view relation and create a new one rather than
-      // updating in place. GRC-20 createRelation ops don't overwrite existing
-      // relations with the same id, so reusing the id would be a no-op on the server.
-      storage.relations.delete(viewRelation);
-
-      const newRelation: Relation = {
-        id: IdUtils.generate(),
-        entityId: IdUtils.generate(),
-        spaceId: spaceId,
-        position: Position.generate(),
-        renderableType: 'RELATION',
+      storage.relations.set({
+        ...viewRelation,
+        spaceId,
         type: {
           id: SystemIds.VIEW_PROPERTY,
           name: 'View',
         },
         fromEntity: {
+          ...viewRelation.fromEntity,
           id: newRelationId,
           name: blockEntity?.name ?? null,
         },
@@ -133,9 +126,7 @@ export function useView() {
           name: newView.name,
           value: newView.id,
         },
-      };
-
-      storage.relations.set(newRelation);
+      });
     }
   };
 
