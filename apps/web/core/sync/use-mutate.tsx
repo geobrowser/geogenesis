@@ -338,23 +338,37 @@ function createMutator(store: GeoStore): Mutator {
         store.deleteRelations(relations);
       },
       upsertByKey: newRelation => {
-        const existing = store
+        const matches = store
           .getResolvedRelations(newRelation.fromEntity.id, true)
-          .find(
+          .filter(
             r =>
               r.type.id === newRelation.type.id &&
               r.toEntity.id === newRelation.toEntity.id &&
               r.spaceId === newRelation.spaceId
           );
 
-        if (existing) {
+        const live = matches.filter(r => !r.isDeleted);
+        // Prefer a live match; otherwise resurrect the most recent tombstoned
+        // one so the relation id stays stable across remove-then-re-add cycles.
+        const target = live[0] ?? matches[matches.length - 1];
+
+        // Self-healing dedupe: if pre-existing buggy state left multiple live
+        // relations sharing this key, tombstone all but the canonical one. This
+        // is also a no-op in the steady state where there's at most one live.
+        for (const dup of live) {
+          if (dup.id !== target?.id) {
+            store.deleteRelation(dup);
+          }
+        }
+
+        if (target) {
           // Reuse id/entityId/position so the relation has a single stable
           // identity across toggle cycles; everything else takes the new value.
           const merged = {
             ...newRelation,
-            id: existing.id,
-            entityId: existing.entityId,
-            position: existing.position ?? newRelation.position,
+            id: target.id,
+            entityId: target.entityId,
+            position: target.position ?? newRelation.position,
           };
           store.setRelation(merged);
           return { id: merged.id, entityId: merged.entityId };

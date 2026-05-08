@@ -104,8 +104,14 @@ export function useView() {
   };
 
   const toggleProperty = (newColumn: Column, selector?: string) => {
-    const isShown = shownColumnRelations.map(relation => relation.toEntity.id).includes(EntityId(newColumn.id));
-    const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+    // All live relations for this column on the current block-relation. Usually
+    // 0 or 1, but can be >1 if pre-existing buggy state left duplicates — in
+    // which case toggle-off must tombstone every match to fully hide the
+    // column, and `shownColumnRelation` (the canonical one for in-place value
+    // updates in the selector branch) is just the first.
+    const matchingShownColumnRelations = shownColumnRelations.filter(r => r.toEntity.id === newColumn.id);
+    const isShown = matchingShownColumnRelations.length > 0;
+    const shownColumnRelation = matchingShownColumnRelations[0];
 
     const newRelationEntityId = shownColumnRelation?.entityId ?? IdUtils.generate();
 
@@ -118,8 +124,17 @@ export function useView() {
     //   so position/id survive show/hide cycles)
     if (selector) {
       if (selector === existingMapping) {
-        if (shownColumnRelation) storage.relations.delete(shownColumnRelation);
+        if (matchingShownColumnRelations.length > 0) {
+          storage.relations.deleteMany(matchingShownColumnRelations);
+        }
         return;
+      }
+
+      // If there are duplicate live relations for this column, tombstone all
+      // but the canonical one so the selector value we're about to write
+      // doesn't disagree with itself across duplicates.
+      if (matchingShownColumnRelations.length > 1) {
+        storage.relations.deleteMany(matchingShownColumnRelations.slice(1));
       }
 
       // Ensure the relation exists (resurrecting a tombstoned match if any)
@@ -171,7 +186,7 @@ export function useView() {
     }
 
     if (isShown) {
-      if (shownColumnRelation) storage.relations.delete(shownColumnRelation);
+      storage.relations.deleteMany(matchingShownColumnRelations);
       return;
     }
 
