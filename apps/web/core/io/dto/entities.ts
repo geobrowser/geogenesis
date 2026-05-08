@@ -27,8 +27,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     for (const r of remoteEntity.allRelationsList) {
       spacesWithRealContent.add(r.spaceId);
     }
-    const filteredSpaceIds = remoteEntity.spaceIds.filter(id => spacesWithRealContent.has(id));
-    spaceIdsForRouting = filteredSpaceIds.length > 0 ? filteredSpaceIds : [...remoteEntity.spaceIds];
+    spaceIdsForRouting = remoteEntity.spaceIds.filter(id => spacesWithRealContent.has(id));
   }
 
   return {
