@@ -174,4 +174,27 @@ describe('removeTypeIdsFromFilter', () => {
       and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
     });
   });
+
+  it('strips only the first and-child typeIds when multiple are present', () => {
+    const filter: EntityFilter = {
+      and: [
+        { typeIds: { in: ['type-abc'] } },
+        { typeIds: { in: ['type-def'] } },
+        { name: { isNull: false, isNot: '' } },
+      ],
+    };
+    expect(removeTypeIdsFromFilter(filter)).toEqual({
+      and: [{ typeIds: { in: ['type-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
+
+  it('leaves and-children intact when extraction took the top-level typeIds', () => {
+    const filter: EntityFilter = {
+      typeIds: { in: ['type-abc'] },
+      and: [{ typeIds: { in: ['type-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeTypeIdsFromFilter(filter)).toEqual({
+      and: [{ typeIds: { in: ['type-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
 });

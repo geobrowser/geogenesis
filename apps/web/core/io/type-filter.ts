@@ -51,31 +51,42 @@ export function extractTypeIdsFromFilter(filter?: EntityFilter): UuidFilter | un
   return undefined;
 }
 
+/**
+ * Remove only the `typeIds` clause that {@link findTypeIdsClause} would
+ * have promoted. See `space-filter.ts`'s `removeSpaceIdsFromFilter` for
+ * the full rationale — this mirrors that behavior for `typeIds`.
+ */
 export function removeTypeIdsFromFilter(filter?: EntityFilter): EntityFilter | undefined {
   if (!filter) return filter;
   if (!filter.typeIds && !filter.and) return filter;
 
-  const { typeIds: _typeIds, and, ...rest } = filter;
+  const { typeIds: topLevel, and, ...rest } = filter;
   let next: EntityFilter = { ...rest };
 
   if (and) {
-    const cleaned = and
-      .map(child => {
-        if (!child?.typeIds) return child;
-        const { typeIds: _t, ...childRest } = child;
-        return Object.keys(childRest).length > 0 ? (childRest as EntityFilter) : null;
-      })
-      .filter((child): child is EntityFilter => child !== null);
+    if (topLevel !== undefined) {
+      next = { ...next, and };
+    } else {
+      let stripped = false;
+      const cleaned = and
+        .map(child => {
+          if (stripped || !child?.typeIds) return child;
+          stripped = true;
+          const { typeIds: _t, ...childRest } = child;
+          return Object.keys(childRest).length > 0 ? (childRest as EntityFilter) : null;
+        })
+        .filter((child): child is EntityFilter => child !== null);
 
-    if (cleaned.length === 1) {
-      const collides = Object.keys(cleaned[0]).some(k => k in next);
-      if (!collides) {
-        next = { ...next, ...cleaned[0] };
-      } else {
+      if (cleaned.length === 1) {
+        const collides = Object.keys(cleaned[0]).some(k => k in next);
+        if (!collides) {
+          next = { ...next, ...cleaned[0] };
+        } else {
+          next = { ...next, and: cleaned };
+        }
+      } else if (cleaned.length > 1) {
         next = { ...next, and: cleaned };
       }
-    } else if (cleaned.length > 1) {
-      next = { ...next, and: cleaned };
     }
   }
 

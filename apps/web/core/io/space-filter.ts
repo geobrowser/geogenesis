@@ -79,41 +79,64 @@ export function extractSpaceIdsFromFilter(filter?: EntityFilter): UuidFilter | u
 }
 
 /**
- * Remove the `spaceIds` key from a filter after its constraints have been
- * promoted to top-level query args. Strips both top-level `spaceIds` and
- * any `spaceIds` carried inside a top-level `and` array, then collapses
- * trivially-empty shells (`and: []`, `and: [singleton]`) so the resulting
- * filter is the smallest equivalent expression. Returns undefined when
- * stripping leaves no remaining filter keys.
+ * Remove the `spaceIds` clause that {@link findSpaceIdsClause} would have
+ * promoted to a top-level query arg, and only that clause. Mirrors the
+ * extractor's first-wins semantics:
+ *
+ * - top-level `spaceIds` present → strip top-level only; any `and`-child
+ *   `spaceIds` clauses represent independent constraints and are left on
+ *   the residual filter so the server still enforces them.
+ * - top-level absent, `and` present → strip the first `and`-child that
+ *   carries `spaceIds`; later children with their own `spaceIds` survive.
+ *
+ * The previous implementation stripped every matching `and`-child, which
+ * silently broadened results when callers passed shapes like
+ * `{ and: [{ spaceIds: A }, { spaceIds: B }, ... ] }` — only A was promoted
+ * but both A and B were removed. Producers in this codebase don't construct
+ * those shapes today, but the helper shouldn't trust callers.
+ *
+ * After stripping, trivially-empty shells (`and: []`, `and: [singleton]`)
+ * are collapsed so the residual filter is the smallest equivalent
+ * expression. Returns undefined when stripping leaves no remaining keys.
  */
 export function removeSpaceIdsFromFilter(filter?: EntityFilter): EntityFilter | undefined {
   if (!filter) return filter;
   if (!filter.spaceIds && !filter.and) return filter;
 
-  const { spaceIds: _spaceIds, and, ...rest } = filter;
+  const { spaceIds: topLevel, and, ...rest } = filter;
   let next: EntityFilter = { ...rest };
 
   if (and) {
-    const cleaned = and
-      .map(child => {
-        if (!child?.spaceIds) return child;
-        const { spaceIds: _s, ...childRest } = child;
-        return Object.keys(childRest).length > 0 ? (childRest as EntityFilter) : null;
-      })
-      .filter((child): child is EntityFilter => child !== null);
+    if (topLevel !== undefined) {
+      // Top-level took priority during extraction; leave the and-array
+      // intact so any nested spaceIds clauses (independent constraints,
+      // not duplicates of the promoted one) survive untouched.
+      next = { ...next, and };
+    } else {
+      // Strip only the first and-child carrying spaceIds.
+      let stripped = false;
+      const cleaned = and
+        .map(child => {
+          if (stripped || !child?.spaceIds) return child;
+          stripped = true;
+          const { spaceIds: _s, ...childRest } = child;
+          return Object.keys(childRest).length > 0 ? (childRest as EntityFilter) : null;
+        })
+        .filter((child): child is EntityFilter => child !== null);
 
-    if (cleaned.length === 1) {
-      // Hoist the only remaining sibling out of the and-wrap. If a key
-      // collides with what's already on `next`, keep the and-wrap intact
-      // to preserve semantics.
-      const collides = Object.keys(cleaned[0]).some(k => k in next);
-      if (!collides) {
-        next = { ...next, ...cleaned[0] };
-      } else {
+      if (cleaned.length === 1) {
+        // Hoist the only remaining sibling out of the and-wrap. If a key
+        // collides with what's already on `next`, keep the and-wrap intact
+        // to preserve semantics.
+        const collides = Object.keys(cleaned[0]).some(k => k in next);
+        if (!collides) {
+          next = { ...next, ...cleaned[0] };
+        } else {
+          next = { ...next, and: cleaned };
+        }
+      } else if (cleaned.length > 1) {
         next = { ...next, and: cleaned };
       }
-    } else if (cleaned.length > 1) {
-      next = { ...next, and: cleaned };
     }
   }
 

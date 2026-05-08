@@ -183,4 +183,35 @@ describe('removeSpaceIdsFromFilter', () => {
       and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
     });
   });
+
+  it('strips only the first and-child spaceIds when multiple are present', () => {
+    // Mirrors extractor's first-wins semantics: only the clause that gets
+    // promoted is removed. Later spaceIds clauses represent independent
+    // constraints and must survive on the residual filter so the server
+    // still enforces them. A previous version stripped every match,
+    // silently broadening results.
+    const filter: EntityFilter = {
+      and: [
+        { spaceIds: { in: ['space-abc'] } },
+        { spaceIds: { in: ['space-def'] } },
+        { name: { isNull: false, isNot: '' } },
+      ],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
+
+  it('leaves and-children intact when extraction took the top-level spaceIds', () => {
+    // Top-level wins during extraction, so the and-array is left untouched
+    // — any nested spaceIds is an independent constraint, not a duplicate
+    // of the promoted clause.
+    const filter: EntityFilter = {
+      spaceIds: { in: ['space-abc'] },
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
 });
