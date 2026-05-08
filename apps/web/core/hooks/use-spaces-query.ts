@@ -74,7 +74,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
 
       return resultOrError.right;
     },
-    enabled: enabled && debouncedQuery.length > 0,
+    enabled,
   });
 
   const spaces = fuzzyMatchedSpaces.flatMap(entity => {
