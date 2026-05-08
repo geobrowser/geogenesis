@@ -22,7 +22,6 @@ import * as React from 'react';
 
 import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } from '~/core/constants';
 import { ID } from '~/core/id';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
@@ -86,7 +85,6 @@ type EditorProps = {
 
 export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
-  const { createProperty } = useCreateProperty(spaceId);
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
@@ -509,7 +507,6 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     spaceId={spaceId}
                     groupRelation={container.groupRelation}
                     propertyRelations={container.propertyRelations}
-                    createProperty={createProperty}
                     onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
                     onMeasureWidth={width =>
@@ -529,7 +526,6 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
               relations={ungroupedRelations}
               allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
               hasGroupsAbove={groupContainers.length > 0}
-              createProperty={createProperty}
             />
             <DragOverlay>
               {activePropertyDragId ? (
@@ -623,7 +619,6 @@ function TypePropertyGroupCard({
   spaceId,
   groupRelation,
   propertyRelations,
-  createProperty,
   onDeleteGroup,
   onAddProperty,
   onMeasureWidth,
@@ -631,7 +626,6 @@ function TypePropertyGroupCard({
   spaceId: string;
   groupRelation: Relation;
   propertyRelations: Relation[];
-  createProperty: ReturnType<typeof useCreateProperty>['createProperty'];
   onDeleteGroup: () => void;
   onAddProperty: (property: { id: string; name: string | null }) => void;
   onMeasureWidth: (width: number) => void;
@@ -713,19 +707,8 @@ function TypePropertyGroupCard({
                 }
                 spaceId={spaceId}
                 relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onCreateEntity={result => {
-                  const renderableType = result.renderableType || 'TEXT';
-                  const createdPropertyId = createProperty({
-                    name: result.name || '',
-                    propertyType: renderableType,
-                    verified: result.verified,
-                    space: result.space,
-                  });
-                  onAddProperty({ id: createdPropertyId, name: result.name || '' });
-                  return createdPropertyId;
-                }}
                 onDone={result => onAddProperty({ id: result.id, name: result.name })}
-                placeholder="Find or create property..."
+                placeholder="Find property..."
                 advanced={false}
                 showIDs={false}
               />
@@ -792,14 +775,12 @@ function UngroupedDropContainer({
   relations,
   allTypePropertyIds,
   hasGroupsAbove,
-  createProperty,
 }: {
   entityId: string;
   spaceId: string;
   relations: Relation[];
   allTypePropertyIds: string[];
   hasGroupsAbove: boolean;
-  createProperty: ReturnType<typeof useCreateProperty>['createProperty'];
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
@@ -853,21 +834,10 @@ function UngroupedDropContainer({
                 }
                 spaceId={spaceId}
                 relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onCreateEntity={result => {
-                  const renderableType = result.renderableType || 'TEXT';
-                  const createdPropertyId = createProperty({
-                    name: result.name || '',
-                    propertyType: renderableType,
-                    verified: result.verified,
-                    space: result.space,
-                  });
-                  ensureOnTypeUngrouped({ id: createdPropertyId, name: result.name || '' });
-                  return createdPropertyId;
-                }}
                 onDone={result => {
                   ensureOnTypeUngrouped({ id: result.id, name: result.name });
                 }}
-                placeholder="Find or create property..."
+                placeholder="Find property..."
                 advanced={false}
                 showIDs={false}
               />
