@@ -7,6 +7,7 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
+import { store } from '~/core/sync/use-sync-engine';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
@@ -220,6 +221,25 @@ export function useView() {
     }
 
     if (!isShown) {
+      // Look for a previously-tombstoned PROPERTIES relation pointing at the
+      // same column on this block-relation. Resurrecting it (same id, isDeleted
+      // flipped back to false by setRelation) keeps a single relation lifecycle
+      // across show/hide toggles instead of accumulating tombstones plus a
+      // fresh relation per re-toggle. Same pattern as the view-switch fix.
+      const existingTombstoned = store
+        .getResolvedRelations(newRelationId, true)
+        .find(
+          r =>
+            r.isDeleted &&
+            (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+            r.toEntity.id === newColumn.id
+        );
+
+      if (existingTombstoned) {
+        storage.relations.set(existingTombstoned);
+        return;
+      }
+
       storage.relations.set({
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
