@@ -91,10 +91,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
     },
     getNextPageParam: lastPage => {
       const nextOffset = lastPage.offset + matchLimit;
-      if (typeof lastPage.total === 'number') {
-        return nextOffset >= lastPage.total ? undefined : nextOffset;
-      }
-      return lastPage.rawCount < matchLimit ? undefined : nextOffset;
+      return nextOffset >= lastPage.total ? undefined : nextOffset;
     },
     enabled: enabled && (allowEmptyQuery || debouncedQuery.trim().length > 0),
   });

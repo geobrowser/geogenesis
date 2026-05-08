@@ -8,6 +8,7 @@ import { startTransition, useEffect, useState } from 'react';
 import pluralize from 'pluralize';
 
 import { ROOT_SPACE } from '~/core/constants';
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 import { SearchResult } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -71,17 +72,11 @@ export const FindEntity = ({
   const showPopover =
     focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
-  const handleResultsScroll = React.useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom > 275) return;
-      if (hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage]
-  );
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  });
 
   return (
     <div className="relative">
@@ -225,6 +220,11 @@ export const FindEntity = ({
                             </div>
                           </div>
                         ))}
+                        {isFetchingNextPage ? (
+                          <div className="w-full border-t border-divider bg-white px-3 py-2">
+                            <div className="truncate text-button text-text">Loading more...</div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>
