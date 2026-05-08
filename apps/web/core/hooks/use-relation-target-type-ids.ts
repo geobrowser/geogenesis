@@ -46,7 +46,7 @@ export function useRelationTargetTypeIds({
     isFetching: isFetchingNetworkTypes,
     isPending: isPendingNetworkTypes,
   } = useQuery({
-    enabled: Boolean(propertyId) && !fromStore?.length,
+    enabled: Boolean(propertyId) && !fromStore?.length && !relationValueTypes?.length,
     queryKey: ['relation-target-type-ids', propertyId, spaceId],
     queryFn: () => fetchRelationTargetTypeIdsForProperty(propertyId!, spaceId),
     staleTime: 60_000,
