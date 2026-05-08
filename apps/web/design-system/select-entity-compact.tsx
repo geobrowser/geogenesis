@@ -123,11 +123,13 @@ export function SelectEntityCompact({
   });
 
   useKey('Escape', () => {
+    if (!focused) return;
     onQueryChange('');
     setFocused(false);
   });
 
   useKey('Enter', () => {
+    if (!focused) return;
     if (!hasResults && canCreate) {
       handleCreate();
       return;
@@ -138,12 +140,14 @@ export function SelectEntityCompact({
   });
 
   useKey('ArrowUp', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i - 1 + results.length) % results.length);
   });
 
   useKey('ArrowDown', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i + 1) % results.length);
