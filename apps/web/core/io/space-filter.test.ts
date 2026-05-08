@@ -158,6 +158,19 @@ describe('removeSpaceIdsFromFilter', () => {
     expect(removeSpaceIdsFromFilter(filter)).toBeUndefined();
   });
 
+  it('keeps the and-wrap when the lone remaining sibling collides with a top-level key', () => {
+    // Both top-level and the post-strip singleton carry `name` — hoisting would
+    // silently drop one. The wrap must be preserved so both clauses survive.
+    const filter: EntityFilter = {
+      name: { is: 'top' },
+      and: [{ spaceIds: { in: ['space-abc'] }, name: { is: 'inner' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      name: { is: 'top' },
+      and: [{ name: { is: 'inner' } }],
+    });
+  });
+
   it('keeps the and-wrap when more than one sibling remains after stripping', () => {
     const filter: EntityFilter = {
       and: [
