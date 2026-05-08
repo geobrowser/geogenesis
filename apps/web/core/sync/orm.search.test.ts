@@ -48,7 +48,7 @@ describe('applyKnownEntitySpaces', () => {
     };
     const knownEntity = {
       spaces: ['top-ranked-space', 'returned-space'],
-    } as Entity;
+    } as Pick<Entity, 'spaces'>;
 
     expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual(['top-ranked-space', 'returned-space']);
   });

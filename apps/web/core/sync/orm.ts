@@ -4,13 +4,13 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
-import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
 import {
   getAllEntities,
   getBatchEntities,
+  getBatchEntitySpaces,
   getEntitiesOrderedByPropertyConnection,
   getEntity,
   getEntityNames,
@@ -60,17 +60,9 @@ export function applyKnownEntitySpaces(
 }
 
 function getLocalSearchResultSpaces(localEntity: Entity): string[] {
-  const spacesWithRealContent = new Set<string>();
-
-  for (const value of localEntity.values.filter(v => !v.isDeleted && !HIDDEN_PROPERTIES.has(v.property.id))) {
-    spacesWithRealContent.add(value.spaceId);
-  }
-
-  for (const relation of localEntity.relations.filter(r => !r.isDeleted)) {
-    spacesWithRealContent.add(relation.spaceId);
-  }
-
-  return [...spacesWithRealContent];
+  const values = localEntity.values.filter(value => !value.isDeleted);
+  const relations = localEntity.relations.filter(relation => !relation.isDeleted);
+  return Entities.spaces(values, relations);
 }
 
 function mergeResolvableSpaces(
@@ -450,7 +442,7 @@ export class E {
         ? await cache.fetchQuery({
             queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
             queryFn: ({ signal: innerSignal }) =>
-              Effect.runPromise(getBatchEntities(dedupedRemoteIds, undefined, signal ?? innerSignal)),
+              Effect.runPromise(getBatchEntitySpaces(dedupedRemoteIds, signal ?? innerSignal)),
           })
         : [];
     const remoteEntityDetailsById = new Map(remoteEntityDetails.map(e => [e.id, e]));

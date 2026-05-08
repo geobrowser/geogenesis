@@ -3,10 +3,12 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
   type EntitiesBatchForCommentsQuery,
+  type EntitySpacesBatchQuery,
   EntitiesOrderBy,
   EntityCommentReplyBacklinksPageDocument,
   type EntityCommentReplyBacklinksPageQuery,
@@ -29,6 +31,7 @@ import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
+  entitySpacesBatchQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -69,6 +72,56 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
+    signal,
+  });
+}
+
+function getRealContentSpaceIds({
+  spaceIds,
+  allValuesList,
+  allRelationsList,
+}: {
+  spaceIds: string[];
+  allValuesList: EntitySpacesBatchQuery['entities'] extends Array<infer T>
+    ? NonNullable<T>['allValuesList']
+    : never;
+  allRelationsList: EntitySpacesBatchQuery['entities'] extends Array<infer T>
+    ? NonNullable<T>['allRelationsList']
+    : never;
+}): string[] {
+  const spacesWithRealContent = new Set<string>();
+
+  for (const value of allValuesList) {
+    const propertyId = value.property?.id;
+    if (!propertyId || !HIDDEN_PROPERTIES.has(propertyId)) {
+      spacesWithRealContent.add(value.spaceId);
+    }
+  }
+
+  for (const relation of allRelationsList) {
+    spacesWithRealContent.add(relation.spaceId);
+  }
+
+  return spaceIds.filter(id => spacesWithRealContent.has(id));
+}
+
+export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: entitySpacesBatchQuery,
+    decoder: data =>
+      (data.entities ?? [])
+        .filter((entity): entity is NonNullable<NonNullable<EntitySpacesBatchQuery['entities']>[number]> =>
+          Boolean(entity?.id)
+        )
+        .map(entity => ({
+          id: entity.id as string,
+          spaces: getRealContentSpaceIds({
+            spaceIds: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
+            allValuesList: entity.allValuesList,
+            allRelationsList: entity.allRelationsList,
+          }),
+        })),
+    variables: { filter: { id: { in: entityIds } } },
     signal,
   });
 }
