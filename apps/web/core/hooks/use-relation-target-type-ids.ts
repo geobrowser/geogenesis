@@ -5,8 +5,6 @@ import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
-import equal from 'fast-deep-equal';
-
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Property } from '~/core/types';
@@ -31,7 +29,7 @@ export function useRelationTargetTypeIds({
   waitForFilterTypes: boolean;
 } {
   const { store } = useSyncEngine();
-  const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
+  const relationsSnapshot = useSelector(reactiveRelations, r => r);
 
   const fromStore = React.useMemo(() => {
     void relationsSnapshot;
