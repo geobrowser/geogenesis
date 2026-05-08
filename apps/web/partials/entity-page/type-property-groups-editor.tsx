@@ -22,7 +22,6 @@ import * as React from 'react';
 
 import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } from '~/core/constants';
 import { ID } from '~/core/id';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
@@ -632,7 +631,6 @@ function TypePropertyGroupCard({
   onMeasureWidth: (width: number) => void;
 }) {
   const { storage } = useMutate();
-  const { createProperty } = useCreateProperty(spaceId);
   const sortable = useSortable({ id: groupDragId(groupRelation.id) });
   const style = {
     transform: CSS.Translate.toString(sortable.transform),
@@ -649,6 +647,7 @@ function TypePropertyGroupCard({
   });
 
   const drop = useDroppable({ id: containerIdForGroup(groupId) });
+  const isCollapsed = getChecked(collapsedValue?.value ?? '0') === true;
   const setMeasuredNodeRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       sortable.setNodeRef(node);
@@ -687,48 +686,39 @@ function TypePropertyGroupCard({
         onDeleteGroup={onDeleteGroup}
       />
 
-      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
-        <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
-            <div className="inline-flex items-center gap-2 pt-[3px]">
-              <InlinePropertyTypeIcon dataType="RELATION" />
-              <span className="text-tableCell font-medium text-text">Properties</span>
+      {!isCollapsed && (
+        <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
+          <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
+              <div className="inline-flex items-center gap-2 pt-[3px]">
+                <InlinePropertyTypeIcon dataType="RELATION" />
+                <span className="text-tableCell font-medium text-text">Properties</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {propertyRelations.map(relation => (
+                  <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+                ))}
+                <SelectEntityAsPopover
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
+                    >
+                      <Create />
+                    </button>
+                  }
+                  spaceId={spaceId}
+                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                  onDone={result => onAddProperty({ id: result.id, name: result.name })}
+                  placeholder="Find property..."
+                  advanced={false}
+                  showIDs={false}
+                />
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {propertyRelations.map(relation => (
-                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
-              ))}
-              <SelectEntityAsPopover
-                trigger={
-                  <button
-                    type="button"
-                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-04 hover:text-text"
-                  >
-                    <Create />
-                  </button>
-                }
-                spaceId={spaceId}
-                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onCreateEntity={result => {
-                  const renderableType = result.renderableType || 'TEXT';
-                  const createdPropertyId = createProperty({
-                    name: result.name || '',
-                    propertyType: renderableType,
-                    verified: result.verified,
-                    space: result.space,
-                  });
-                  onAddProperty({ id: createdPropertyId, name: result.name || '' });
-                  return createdPropertyId;
-                }}
-                onDone={result => onAddProperty({ id: result.id, name: result.name })}
-                placeholder="Find or create property..."
-                advanced={false}
-                showIDs={false}
-              />
-            </div>
-          </div>
-        </SortableContext>
-      </div>
+          </SortableContext>
+        </div>
+      )}
     </div>
   );
 }
@@ -797,7 +787,6 @@ function UngroupedDropContainer({
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
-  const { createProperty } = useCreateProperty(spaceId);
 
   const ensureOnTypeUngrouped = (property: { id: string; name: string | null }) => {
     if (allTypePropertyIds.includes(property.id)) return;
@@ -848,21 +837,10 @@ function UngroupedDropContainer({
                 }
                 spaceId={spaceId}
                 relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onCreateEntity={result => {
-                  const renderableType = result.renderableType || 'TEXT';
-                  const createdPropertyId = createProperty({
-                    name: result.name || '',
-                    propertyType: renderableType,
-                    verified: result.verified,
-                    space: result.space,
-                  });
-                  ensureOnTypeUngrouped({ id: createdPropertyId, name: result.name || '' });
-                  return createdPropertyId;
-                }}
                 onDone={result => {
                   ensureOnTypeUngrouped({ id: result.id, name: result.name });
                 }}
-                placeholder="Find or create property..."
+                placeholder="Find property..."
                 advanced={false}
                 showIDs={false}
               />
