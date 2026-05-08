@@ -53,10 +53,12 @@ export function EntitySearchAutocomplete({
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
 
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   const close = React.useCallback(() => {
@@ -94,7 +96,7 @@ export function EntitySearchAutocomplete({
           )}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList onScroll={handleResultsScroll}>
+            <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
               {results.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}

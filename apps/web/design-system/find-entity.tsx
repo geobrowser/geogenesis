@@ -72,10 +72,12 @@ export const FindEntity = ({
   const showPopover =
     focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   return (
@@ -119,6 +121,7 @@ export const FindEntity = ({
                 </div>
                 <ResizableContainer>
                   <div
+                    ref={resultsScrollRef}
                     className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
                     onScroll={handleResultsScroll}
                     onWheel={e => trapWheelToElement(e.currentTarget, e)}

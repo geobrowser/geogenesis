@@ -9,6 +9,7 @@ type UseFetchNextPageOnScrollOptions = {
   isFetchingNextPage?: boolean;
   fetchNextPage: () => unknown;
   distanceFromBottom?: number;
+  scrollRef?: React.RefObject<HTMLElement | null>;
 };
 
 export function useFetchNextPageOnScroll<T extends HTMLElement>({
@@ -16,16 +17,30 @@ export function useFetchNextPageOnScroll<T extends HTMLElement>({
   isFetchingNextPage,
   fetchNextPage,
   distanceFromBottom = DEFAULT_FETCH_MORE_DISTANCE_PX,
+  scrollRef,
 }: UseFetchNextPageOnScrollOptions): React.UIEventHandler<T> {
-  return React.useCallback(
-    event => {
-      const element = event.currentTarget;
-      if (!isNearScrollBottom(element, distanceFromBottom)) return;
+  const fetchIfNeeded = React.useCallback(
+    (element: HTMLElement, includeNoOverflow = false) => {
+      const noOverflow = element.scrollHeight <= element.clientHeight + 2;
+      if (!isNearScrollBottom(element, distanceFromBottom) && !(includeNoOverflow && noOverflow)) return;
       if (hasNextPage && !isFetchingNextPage) {
         void fetchNextPage();
       }
     },
     [distanceFromBottom, fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
+
+  React.useLayoutEffect(() => {
+    const element = scrollRef?.current;
+    if (!element) return;
+    fetchIfNeeded(element, true);
+  }, [fetchIfNeeded, scrollRef]);
+
+  return React.useCallback(
+    event => {
+      fetchIfNeeded(event.currentTarget);
+    },
+    [fetchIfNeeded]
   );
 }
 

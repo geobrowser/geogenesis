@@ -68,10 +68,12 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }
 
   const hasResults = autocomplete.results.length > 0;
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   useKey('Enter', () => {
@@ -168,7 +170,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   />
                 </div>
                 <ResizableContainer duration={0.15}>
-                  <ResultsList onScroll={handleResultsScroll}>
+                  <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                     {autocomplete.isEmpty ? (
                       isValidEntityId ? (
                         <div className="px-2 pb-1">

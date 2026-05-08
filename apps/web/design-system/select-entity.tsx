@@ -333,10 +333,12 @@ export const SelectEntity = ({
   // disagrees with our placement hook during scroll.
   const popoverAbove = actualSide === 'top';
 
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   return (
@@ -557,6 +559,7 @@ export const SelectEntity = ({
                   {!result ? (
                     <ResizableContainer>
                       <div
+                        ref={resultsScrollRef}
                         className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
@@ -891,10 +894,12 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
     isFetchingNextPage,
   } = useSpacesQuery(focused);
 
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   const onSelectSpace = (space: (typeof results)[number]) => {
@@ -941,7 +946,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList onScroll={handleResultsScroll}>
+                    <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                       {!results.length && isLoading && (
                         <div className="w-full border-b border-divider bg-white px-3 py-2">
                           <div className="truncate text-button text-text">Loading...</div>
@@ -1004,10 +1009,12 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
     enabled: focused,
   });
 
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   const close = React.useCallback(() => {
@@ -1044,7 +1051,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList onScroll={handleResultsScroll}>
+                    <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                       {!results?.length && isLoading && (
                         <div className="w-full border-b border-divider bg-white px-3 py-2">
                           <div className="truncate text-button text-text">Loading...</div>
