@@ -1,9 +1,10 @@
+import { uuidToHex } from '~/core/id/normalize';
 import type { SearchResult } from '~/core/types';
 
 type SearchResultType = SearchResult['types'][number];
 
 function normalizeTypeId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
+  return uuidToHex(id);
 }
 
 export function dedupeSearchResultTypes(types: SearchResultType[]): SearchResultType[] {
