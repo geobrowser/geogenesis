@@ -6,29 +6,17 @@ describe('buildSearchPath', () => {
   const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
   const CURRENT = 'c9f267dcb0d270718c2a3c45a64afd32';
   const PERSONAL = 'f3dab79cb5a3d9d1759656dd5361d1c6';
-  const DEFAULT_EXCLUDE_TYPE_IDS =
-    '&exclude_type_ids=' +
-    [
-      '76474f2f-0089-4e77-a041-0b39fb17d0bf',
-      'e3817941-7409-4df1-b519-1f3f1a0721e8',
-      'b8803a86-65de-412b-bb35-7e0c84adf473',
-      'ba4e4146-0010-499d-a0a3-caaa7f579d0e',
-      'd7a4817c-9795-405b-93e2-12df759c43f8',
-      '809bc406-d0f3-4f3c-a8a1-aa265733c6ce',
-    ].join('%2C');
 
   it('builds a minimal global path with default limit/offset', () => {
-    expect(buildSearchPath({ query: 'football' })).toBe(
-      `/search?query=football&limit=10&offset=0${DEFAULT_EXCLUDE_TYPE_IDS}`
-    );
+    expect(buildSearchPath({ query: 'football' })).toBe('/search?query=football&limit=10&offset=0');
   });
 
   it('omits additional_space_ids when the array is empty or undefined', () => {
     expect(buildSearchPath({ query: 'football', additionalSpaceIds: [] })).toBe(
-      `/search?query=football&limit=10&offset=0${DEFAULT_EXCLUDE_TYPE_IDS}`
+      '/search?query=football&limit=10&offset=0'
     );
     expect(buildSearchPath({ query: 'football', additionalSpaceIds: undefined })).toBe(
-      `/search?query=football&limit=10&offset=0${DEFAULT_EXCLUDE_TYPE_IDS}`
+      '/search?query=football&limit=10&offset=0'
     );
   });
 
@@ -40,7 +28,7 @@ describe('buildSearchPath', () => {
 
     // URLSearchParams encodes commas as %2C.
     expect(path).toBe(
-      `/search?query=baseball&limit=10&offset=0${DEFAULT_EXCLUDE_TYPE_IDS}&additional_space_ids=` +
+      '/search?query=baseball&limit=10&offset=0&additional_space_ids=' +
         'a19c345a-b986-6679-b001-d7d2138d88a1%2Cc9f267dc-b0d2-7071-8c2a-3c45a64afd32%2Cf3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
     );
   });
@@ -65,14 +53,7 @@ describe('buildSearchPath', () => {
       '/search?query=q&limit=25&offset=50' +
         '&scope=SPACE_SINGLE&space_id=a19c345a-b986-6679-b001-d7d2138d88a1' +
         '&type_ids=c9f267dc-b0d2-7071-8c2a-3c45a64afd32' +
-        DEFAULT_EXCLUDE_TYPE_IDS +
         '&additional_space_ids=f3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
-    );
-  });
-
-  it('allows callers to override excluded type ids', () => {
-    expect(buildSearchPath({ query: 'q', excludeTypeIds: [CURRENT] })).toBe(
-      '/search?query=q&limit=10&offset=0&exclude_type_ids=c9f267dc-b0d2-7071-8c2a-3c45a64afd32'
     );
   });
 });
