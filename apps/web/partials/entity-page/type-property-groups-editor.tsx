@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type CollisionDetection,
   closestCenter,
   DndContext,
   DragEndEvent,
@@ -86,6 +87,8 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
+  const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
+  const [groupOverlayWidths, setGroupOverlayWidths] = React.useState<Record<string, number>>({});
   const lastOverIdRef = React.useRef<string | null>(null);
 
   const typePropertyRelations = sortRelations(
@@ -198,7 +201,22 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
       activationConstraint: { distance: 5 },
     })
   );
-  const collisionDetection = React.useCallback<typeof pointerWithin>((args: Parameters<typeof pointerWithin>[0]) => {
+  const collisionDetection = React.useCallback<CollisionDetection>(args => {
+    const activeId = String(args.active.id);
+    const draggedGroupRelationId = parseGroupDragId(activeId);
+
+    // When dragging whole groups, only collide against other group rows.
+    // Ignoring nested property droppables prevents jitter/glitchy snapping.
+    if (draggedGroupRelationId) {
+      const groupOnlyContainers = args.droppableContainers.filter(container =>
+        parseGroupDragId(String(container.id))
+      );
+      return closestCenter({
+        ...args,
+        droppableContainers: groupOnlyContainers,
+      });
+    }
+
     const pointerHits = pointerWithin(args);
     if (pointerHits.length > 0) return pointerHits;
     return closestCenter(args);
@@ -320,10 +338,12 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const onDragStart = (event: DragStartEvent) => {
     const activeId = String(event.active.id);
     setActivePropertyDragId(parsePropertyDragId(activeId));
+    setActiveGroupDragId(parseGroupDragId(activeId));
   };
 
   const onDragEnd = (event: DragEndEvent) => {
     setActivePropertyDragId(null);
+    setActiveGroupDragId(null);
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : lastOverIdRef.current;
     lastOverIdRef.current = null;
@@ -471,7 +491,10 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
             onDragStart={onDragStart}
             onDragOver={onDragOver}
             onDragEnd={onDragEnd}
-            onDragCancel={() => setActivePropertyDragId(null)}
+            onDragCancel={() => {
+              setActivePropertyDragId(null);
+              setActiveGroupDragId(null);
+            }}
           >
             <SortableContext
               items={propertyGroupRelations.map(groupRelation => groupDragId(groupRelation.id))}
@@ -486,6 +509,12 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     propertyRelations={container.propertyRelations}
                     onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
+                    onMeasureWidth={width =>
+                      setGroupOverlayWidths(previous => {
+                        if (previous[container.groupRelation.id] === width) return previous;
+                        return { ...previous, [container.groupRelation.id]: width };
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -502,11 +531,85 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                 <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-tableCell font-normal tracking-[-0.25px] text-text shadow-lg">
                   <span className="truncate">{propertyNameById.get(activePropertyDragId) ?? activePropertyDragId}</span>
                 </div>
+              ) : activeGroupDragId ? (
+                <GroupDragOverlayPreview
+                  groupRelation={propertyGroupRelations.find(relation => relation.id === activeGroupDragId) ?? null}
+                  groupContainer={groupContainers.find(container => container.groupRelation.id === activeGroupDragId) ?? null}
+                  spaceId={spaceId}
+                  width={activeGroupDragId ? groupOverlayWidths[activeGroupDragId] : undefined}
+                />
               ) : null}
             </DragOverlay>
           </DndContext>
         </div>
       )}
+    </div>
+  );
+}
+
+function GroupDragOverlayPreview({
+  groupRelation,
+  groupContainer,
+  spaceId,
+  width,
+}: {
+  groupRelation: Relation | null;
+  groupContainer: GroupContainer | null;
+  spaceId: string;
+  width?: number;
+}) {
+  const groupId = groupRelation?.toEntity.id ?? '';
+  const nameValue = useValue({
+    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === SystemIds.NAME_PROPERTY,
+  });
+  const collapsedValue = useValue({
+    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === COLLAPSED_PROPERTY,
+  });
+
+  if (!groupRelation || !groupContainer) return null;
+
+  return (
+    <div className="rounded-md border border-text bg-white px-4 py-3 shadow-lg" style={{ width: width ?? 720 }}>
+      <div className="mb-2 grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
+        <div className="inline-flex items-center gap-1 text-tableCell font-medium text-text">
+          <span className="shrink-0">T|</span>
+          <span className="shrink-0">Group name</span>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-tableCell font-normal text-text">
+            {nameValue?.value?.trim() || groupRelation.toEntity.name || 'Add name...'}
+          </span>
+          <label className="ml-auto flex items-center gap-1 text-tableCell font-normal tracking-[-0.35px] text-grey-04">
+            <Checkbox checked={getChecked(collapsedValue?.value ?? '0')} className="!size-3 rounded-[3px] *:!size-2" />
+            Collapsed
+          </label>
+        </div>
+      </div>
+      <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
+        <div className="inline-flex items-center gap-2">
+          <InlinePropertyTypeIcon dataType="RELATION" />
+          <span className="text-tableCell font-medium text-text">Properties</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {groupContainer.propertyRelations.map(relation => (
+            <LinkableRelationChip
+              key={`overlay-${relation.id}`}
+              isEditing={false}
+              small
+              truncateLabel
+              className="max-w-[220px] !text-tableCell !font-normal tracking-[-0.25px]"
+              currentSpaceId={spaceId}
+              entityId={relation.toEntity.id}
+              relationId={relation.id}
+              relationEntityId={relation.entityId}
+              spaceId={relation.toSpaceId}
+              verified={relation.verified}
+            >
+              {relation.toEntity.name ?? relation.toEntity.id}
+            </LinkableRelationChip>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -517,19 +620,21 @@ function TypePropertyGroupCard({
   propertyRelations,
   onDeleteGroup,
   onAddProperty,
+  onMeasureWidth,
 }: {
   spaceId: string;
   groupRelation: Relation;
   propertyRelations: Relation[];
   onDeleteGroup: () => void;
   onAddProperty: (property: { id: string; name: string | null }) => void;
+  onMeasureWidth: (width: number) => void;
 }) {
   const { storage } = useMutate();
   const sortable = useSortable({ id: groupDragId(groupRelation.id) });
   const style = {
     transform: CSS.Translate.toString(sortable.transform),
     transition: sortable.transition,
-    opacity: sortable.isDragging ? 0.7 : 1,
+    opacity: sortable.isDragging ? 0 : 1,
   };
 
   const groupId = groupRelation.toEntity.id;
@@ -542,9 +647,18 @@ function TypePropertyGroupCard({
 
   const drop = useDroppable({ id: containerIdForGroup(groupId) });
   const isCollapsed = getChecked(collapsedValue?.value ?? '0') === true;
+  const setMeasuredNodeRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      sortable.setNodeRef(node);
+      if (!node) return;
+      const measuredWidth = Math.round(node.getBoundingClientRect().width);
+      if (measuredWidth > 0) onMeasureWidth(measuredWidth);
+    },
+    [onMeasureWidth, sortable]
+  );
 
   return (
-    <div ref={sortable.setNodeRef} style={style} className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0">
+    <div ref={setMeasuredNodeRef} style={style} className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0">
       <button
         type="button"
         className="absolute top-4 -left-6 z-10 cursor-grab text-grey-04 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
