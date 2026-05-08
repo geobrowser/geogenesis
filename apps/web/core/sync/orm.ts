@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -86,6 +87,14 @@ export function mergeResolvableSpaces(
   }
 
   return merged;
+}
+
+function getLocalNamesBySpace(values: Entity['values']): Record<string, string | null> {
+  return Object.fromEntries(
+    values
+      .filter(value => value.property.id === SystemIds.NAME_PROPERTY)
+      .map(value => [value.spaceId, hasName(value.value) ? value.value : null])
+  );
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -553,13 +562,17 @@ function mergeSearchResult({
   const name = Entities.name(values) ?? remoteEntity.name;
   const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
+  const namesBySpace = {
+    ...remoteEntity.namesBySpace,
+    ...getLocalNamesBySpace(values),
+  };
 
   return {
     id: id,
     name,
     description,
     types,
-    namesBySpace: remoteEntity.namesBySpace,
+    namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
     spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
