@@ -65,7 +65,7 @@ export function SelectEntityCompact({
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType>(renderableTypeValue);
-  const hasResults = results.length > 0;
+  const hasResults = !isLoading && results.length > 0;
   const canCreate = Boolean(onCreateEntity) && query.trim().length > 0;
 
   React.useEffect(() => {

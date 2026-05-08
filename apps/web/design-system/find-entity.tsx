@@ -51,7 +51,6 @@ export const FindEntity = ({
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes: allowedTypes,
-    enabled: focused,
   });
 
   if (query === '' && result !== null) {
@@ -60,7 +59,8 @@ export const FindEntity = ({
     });
   }
 
-  const showPopover = focused && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
+  const showPopover =
+    focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
   return (
     <div className="relative">
