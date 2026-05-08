@@ -64,9 +64,7 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
         # for display, so routing/search display needs this unscoped projection.
         allValuesList: valuesList(first: 1000) {
           spaceId
-          property {
-            id
-          }
+          propertyId
         }
 
         allRelationsList: relationsList(first: 1000) {
