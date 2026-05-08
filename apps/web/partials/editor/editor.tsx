@@ -390,6 +390,10 @@ function useInterceptEditorLinks(spaceId: string) {
         return;
       }
 
+      if (target.closest('[data-entity-side-panel-opener]')) {
+        return;
+      }
+
       const link = target.closest('a');
 
       if (!link) {
