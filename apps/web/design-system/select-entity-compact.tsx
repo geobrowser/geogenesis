@@ -163,10 +163,12 @@ export function SelectEntityCompact({
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
 
   const handleOpenChange = React.useCallback(
@@ -249,6 +251,7 @@ export function SelectEntityCompact({
           onInteractOutside={() => setFocused(false)}
         >
           <div
+            ref={resultsScrollRef}
             className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
             onScroll={handleResultsScroll}
             onWheel={e => trapWheelToElement(e.currentTarget, e)}

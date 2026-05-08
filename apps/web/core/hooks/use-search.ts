@@ -82,6 +82,7 @@ export function useSearch({
   const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const maybeEntityId = debouncedQuery.trim();
+  const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
 
   const searchBlocked =
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
@@ -101,7 +102,7 @@ export function useSearch({
     queryKey: [
       'search',
       debouncedQuery,
-      filterByTypes?.join('-'),
+      filterTypeKey,
       filterBySpace,
       Boolean(waitForFilterTypes),
       Boolean(restrictToFilterTypes),
