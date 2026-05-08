@@ -1,5 +1,7 @@
 # Geo Genesis
 
+test
+
 The current systems we use for managing and sharing information are broken. They’re controlled by corporations, making it hard for individuals and communities to retain control over their work. The internet was supposed to decentralize power but that power’s been reconcentrated into platforms. We need better tools for processing, curating, and making sense of information using public means that we can depend on and trust. We need that work to be verifiable and composable so that knowledge can be shared and used across applications.
 
 It’s time to bring real world data onto The Graph and change how people cooperate and organize.
