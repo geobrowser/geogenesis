@@ -479,7 +479,9 @@ export class E {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
-    const entities = maybeEntities.filter(e => e !== null);
+    const entities = maybeEntities
+      .filter(e => e !== null)
+      .filter(entity => !hasDefaultSearchExcludedType(entity.types));
 
     const spaceIds = [
       ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
