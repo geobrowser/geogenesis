@@ -662,7 +662,7 @@ interface RestSearchResponse {
 }
 
 function stripHyphens(uuid: string): string {
-  return uuid.replace(/-/g, '');
+  return uuid.replace(/-/g, '').toLowerCase();
 }
 
 /**
