@@ -18,6 +18,7 @@ import {
   getRelation,
   getResultsPage,
   getSpaces,
+  hasDefaultSearchExcludedType,
 } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
@@ -67,6 +68,14 @@ export function applyKnownEntitySpaces(
     ...result,
     spaces: knownEntity.spaces,
   };
+}
+
+export function isDisplayableSearchResult(result: Pick<SearchResult, 'name' | 'spaces'>): boolean {
+  return result.spaces.length > 0 && hasName(result.name);
+}
+
+export function isIncludedSearchResult(result: Pick<SearchResult, 'name' | 'spaces' | 'types'>): boolean {
+  return isDisplayableSearchResult(result) && !hasDefaultSearchExcludedType(result.types);
 }
 
 function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
@@ -519,7 +528,7 @@ export class E {
           spaces: resolvedSpaces,
         };
       })
-      .filter(e => e.spaces.length > 0);
+      .filter(isIncludedSearchResult);
 
     return { results, rawCount: page.rawCount, total: page.total };
   }
