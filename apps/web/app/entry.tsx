@@ -15,6 +15,7 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
+import { PageViewTracker } from '~/app/page-view-tracker';
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
@@ -61,6 +62,9 @@ export function App({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-[100dvh] items-stretch">
+      <React.Suspense fallback={null}>
+        <PageViewTracker />
+      </React.Suspense>
       <div className="sm:hidden">
         <BrowseSidebar />
       </div>
