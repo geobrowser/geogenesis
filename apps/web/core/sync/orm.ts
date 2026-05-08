@@ -53,7 +53,8 @@ export function getSearchResultNameForTopSpace(
   spaces: SpaceEntity[]
 ): string | null {
   const topSpaceName = result.namesBySpace?.[spaces[0]?.spaceId ?? ''];
-  return hasName(topSpaceName) ? (topSpaceName ?? null) : result.name;
+  if (hasName(topSpaceName)) return topSpaceName ?? null;
+  return hasName(result.name) ? result.name : null;
 }
 
 export function applyKnownEntitySpaces(
