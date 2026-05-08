@@ -62,7 +62,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
-import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 type EditableEntityPageProps = {
@@ -217,44 +216,18 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                         const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
                         const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
-                        if (isTypeEntity) {
-                          return (
-                            <TypeEntityPropertyRow
-                              key={`${id}-${propertyId}`}
-                              entityId={id}
-                              propertyId={propertyId}
-                              spaceId={spaceId}
-                              property={property}
-                              isSchemaProperty={schemaPropertyIds.has(propertyId)}
-                              isRelation={isRelation}
-                              isVideo={isVideo}
-                            />
-                          );
-                        }
-
                         return (
-                          <div key={`${id}-${propertyId}`} className="w-full max-w-full min-w-0 break-words">
-                            <RenderedProperty spaceId={spaceId} property={property} />
-
-                            {isRelation || isVideo ? (
-                              <RelationPropertyWithDelete
-                                key={propertyId}
-                                propertyId={propertyId}
-                                entityId={id}
-                                spaceId={spaceId}
-                                property={property}
-                                isSchemaProperty={schemaPropertyIds.has(propertyId)}
-                              />
-                            ) : (
-                              <RenderedValue
-                                key={propertyId}
-                                propertyId={propertyId}
-                                entityId={id}
-                                spaceId={spaceId}
-                                property={property}
-                              />
-                            )}
-                          </div>
+                          <InlinePropertyRow
+                            key={`${id}-${propertyId}`}
+                            entityId={id}
+                            propertyId={propertyId}
+                            spaceId={spaceId}
+                            property={property}
+                            isSchemaProperty={schemaPropertyIds.has(propertyId)}
+                            isRelation={isRelation}
+                            isVideo={isVideo}
+                            hideActions={isTypeEntity}
+                          />
                         );
                       })}
                   </div>
@@ -317,12 +290,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
 }
 
 export const EditableEntityProperties = EditableEntityPage;
-
-function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
-  return <PropertyNameLink property={property} spaceId={spaceId} />;
-}
-
-function TypeEntityPropertyRow({
+function InlinePropertyRow({
   entityId,
   propertyId,
   spaceId,
@@ -330,6 +298,7 @@ function TypeEntityPropertyRow({
   isSchemaProperty,
   isRelation,
   isVideo,
+  hideActions = false,
 }: {
   entityId: string;
   propertyId: string;
@@ -338,10 +307,11 @@ function TypeEntityPropertyRow({
   isSchemaProperty: boolean;
   isRelation: boolean;
   isVideo: boolean;
+  hideActions?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-4">
-      <div className="inline-flex min-w-0 items-center gap-2 text-text">
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
+      <div className="inline-flex min-w-0 items-center gap-2 pt-[3px] text-text">
         <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
         <span className="truncate text-tableCell font-medium">{property.name}</span>
       </div>
@@ -353,10 +323,16 @@ function TypeEntityPropertyRow({
             spaceId={spaceId}
             property={property}
             isSchemaProperty={isSchemaProperty}
-            hideActions
+            hideActions={hideActions}
           />
         ) : (
-          <RenderedValue propertyId={propertyId} entityId={entityId} spaceId={spaceId} property={property} hideActions />
+          <RenderedValue
+            propertyId={propertyId}
+            entityId={entityId}
+            spaceId={spaceId}
+            property={property}
+            hideActions={hideActions}
+          />
         )}
       </div>
     </div>

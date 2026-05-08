@@ -468,7 +468,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
           className="inline-flex items-center gap-1 text-tableCell text-grey-04"
           onClick={() => setSectionCollapsed(previous => !previous)}
         >
-          <span>Properties</span>
+          <span>Property groups</span>
           <div className={`${sectionCollapsed ? '-rotate-90' : ''} scale-110 transition-transform`}>
             <ChevronDownSmall color="grey-04" />
           </div>
@@ -807,12 +807,14 @@ function UngroupedDropContainer({
 
   return (
     <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
-      <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-        Ungrouped properties
-      </Text>
+      {hasGroupsAbove && (
+        <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+          Ungrouped properties
+        </Text>
+      )}
       <div
         ref={drop.setNodeRef}
-        className={`mt-2 rounded-md pr-2 py-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
+        className={`${hasGroupsAbove ? 'mt-2' : ''} rounded-md pr-2 py-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
       >
         <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">

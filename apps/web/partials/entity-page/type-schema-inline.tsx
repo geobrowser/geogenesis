@@ -117,7 +117,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <Text as="p" variant="tableCell" className="text-grey-04">
-        Properties
+        Property groups
       </Text>
       <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
         {sections.groups.map(group => (
@@ -144,9 +144,11 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
 
         {sections.ungrouped.length > 0 && (
           <div className="flex flex-col gap-2">
-            <Text as="p" variant="tableCell" className="font-normal text-grey-04">
-              Ungrouped properties
-            </Text>
+            {sections.groups.length > 0 && (
+              <Text as="p" variant="tableCell" className="font-normal text-grey-04">
+                Ungrouped properties
+              </Text>
+            )}
             <div className="flex flex-wrap gap-2">
               {sections.ungrouped.map(propertyId => (
                 <LinkableRelationChip
