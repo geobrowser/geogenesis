@@ -1,7 +1,10 @@
 import * as Sentry from '@sentry/nextjs';
 
+import { initAnalytics } from '~/core/analytics';
 import { Environment } from '~/core/environment';
 import { isTelemetryEnabled, telemetryDsn } from '~/core/telemetry/config';
+
+initAnalytics();
 
 const tracePropagationTargets = [
   /^\/api\//,
