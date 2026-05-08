@@ -114,9 +114,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       # for display, so routing/search display needs this unscoped projection.
       allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          id
-        }
+        propertyId
       }
 
       allRelationsList: relationsList(first: 1000) {
@@ -283,9 +281,7 @@ export const entityQuery = graphql(/* GraphQL */ `
       # real (non-hidden) content.
       allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          id
-        }
+        propertyId
       }
 
       allRelationsList: relationsList(first: 1000) {
@@ -447,9 +443,7 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       # real (non-hidden) content.
       allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          id
-        }
+        propertyId
       }
 
       allRelationsList: relationsList(first: 1000) {
@@ -904,9 +898,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
 
         allValuesList: valuesList(first: 1000) {
           spaceId
-          property {
-            id
-          }
+          propertyId
         }
 
         allRelationsList: relationsList(first: 1000) {

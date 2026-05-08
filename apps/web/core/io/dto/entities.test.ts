@@ -33,19 +33,15 @@ describe('EntityDtoLive', () => {
       allValuesList: [
         {
           spaceId: hiddenSpaceId,
-          property: {
-            id: SCORE_SYSTEM_PROPERTY,
-          },
+          propertyId: SCORE_SYSTEM_PROPERTY,
         },
         {
           spaceId: nullPropertySpaceId,
-          property: null,
+          propertyId: null,
         },
         {
           spaceId: nullPropertyIdSpaceId,
-          property: {
-            id: null,
-          },
+          propertyId: null,
         },
       ],
       allRelationsList: [],
@@ -60,9 +56,7 @@ describe('EntityDtoLive', () => {
       allValuesList: [
         {
           spaceId: hiddenSpaceId,
-          property: {
-            id: SCORE_SYSTEM_PROPERTY,
-          },
+          propertyId: SCORE_SYSTEM_PROPERTY,
         },
       ],
       allRelationsList: [],
