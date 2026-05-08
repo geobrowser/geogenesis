@@ -123,4 +123,18 @@ describe('getSearchResultNameForTopSpace', () => {
       )
     ).toBe('Grouped Name');
   });
+
+  it('returns null when neither the top space nor grouped result has a real name', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '   ',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBeNull();
+  });
 });

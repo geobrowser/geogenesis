@@ -723,9 +723,10 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
       if (existing.typesBySpace) {
         existing.typesBySpace[spaceId] = spaceTypes;
       }
-      if (existing.namesBySpace) {
-        existing.namesBySpace[spaceId] = r.name ?? null;
-      }
+      existing.namesBySpace = {
+        ...(existing.namesBySpace ?? {}),
+        [spaceId]: r.name ?? null,
+      };
     } else {
       byEntity.set(entityId, {
         id: entityId,
