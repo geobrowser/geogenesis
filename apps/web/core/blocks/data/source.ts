@@ -200,42 +200,15 @@ export function upsertSourceType({
   source,
   blockId,
   spaceId,
-  dataEntityRelations = [],
 }: {
   source: Source;
   blockId: string;
   spaceId: string;
+  /** @deprecated retained for call-site compatibility; replaceSingleton reads
+   *  from the store directly. */
   dataEntityRelations?: Relation[];
 }) {
-  const existingSourceTypeRelations = sourceTypeRelations(blockId, dataEntityRelations);
-  const existingSourceType = existingSourceTypeRelations[existingSourceTypeRelations.length - 1];
-
-  for (const relation of existingSourceTypeRelations) {
-    if (relation.id !== existingSourceType?.id) {
-      storage.relations.delete(relation);
-    }
-  }
-
-  const sourceTypeEntity = getSourceTypeEntity(source.type);
-
-  if (existingSourceType) {
-    storage.relations.set({
-      ...existingSourceType,
-      spaceId,
-      type: {
-        id: SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE,
-        name: 'Data Source Type',
-      },
-      fromEntity: {
-        ...existingSourceType.fromEntity,
-        id: blockId,
-      },
-      toEntity: sourceTypeEntity,
-    });
-    return;
-  }
-
-  storage.relations.set(makeRelationForSourceType(source.type, blockId, spaceId));
+  storage.relations.replaceSingleton(makeRelationForSourceType(source.type, blockId, spaceId));
 }
 
 /**
