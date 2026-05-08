@@ -808,7 +808,7 @@ function UngroupedDropContainer({
   return (
     <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
       {hasGroupsAbove && (
-        <Text as="p" variant="metadataMedium" className="text-grey-04">
+        <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
           Ungrouped properties
         </Text>
       )}

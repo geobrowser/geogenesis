@@ -196,7 +196,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                           }))
                         }
                       >
-                        <Text as="p" variant="metadataMedium">
+                        <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
                           {section.label}
                         </Text>
                         <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
@@ -205,7 +205,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                       </button>
                     )}
                     {effectiveHasGroups && section.isGroup && !collapsible && section.label && (
-                      <Text as="p" variant="metadataMedium" className="text-grey-04">
+                      <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
                         {section.label}
                       </Text>
                     )}

@@ -122,7 +122,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
       <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
         {sections.groups.map(group => (
           <div key={group.id} className="flex flex-col gap-2">
-            <Text as="p" variant="metadataMedium" className="text-grey-04">
+            <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
               {group.label}
             </Text>
             <div className="flex flex-wrap gap-2">
@@ -145,7 +145,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
         {sections.ungrouped.length > 0 && (
           <div className="flex flex-col gap-2">
             {sections.groups.length > 0 && (
-              <Text as="p" variant="metadataMedium" className="text-grey-04">
+              <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
                 Ungrouped properties
               </Text>
             )}
