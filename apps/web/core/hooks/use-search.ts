@@ -197,7 +197,7 @@ export function useSearch({
   const shouldSuspend = isQuerySyncing || isLoading || isWaitingForFilterTypes;
 
   return {
-    isEmpty: isArrayEmpty(dedupedResults) && !isStringEmpty(query) && !shouldSuspend,
+    isEmpty: isArrayEmpty(dedupedResults) && !isStringEmpty(query) && !shouldSuspend && !isWaitingForFilterTypes,
     isLoading: shouldSuspend,
     results: dedupedResults,
     query,
