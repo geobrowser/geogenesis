@@ -104,9 +104,9 @@ export function spacesFromRoutingProjections({
   values,
   relations,
 }: {
-  spaceIds: string[];
-  values?: Array<{ spaceId: string; propertyId?: string | null; property?: { id?: string | null } | null }>;
-  relations?: Array<{ spaceId: string }>;
+  spaceIds: readonly string[];
+  values?: ReadonlyArray<{ spaceId: string; propertyId?: string | null; property?: { id?: string | null } | null }>;
+  relations?: ReadonlyArray<{ spaceId: string }>;
 }): string[] {
   const spacesWithRealContent = new Set<string>();
 
