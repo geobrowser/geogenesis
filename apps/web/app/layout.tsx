@@ -4,6 +4,7 @@ import { Metadata } from 'next';
 
 import 'katex/dist/katex.min.css';
 import localFont from 'next/font/local';
+import Script from 'next/script';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import { Providers } from '~/core/providers';
@@ -38,6 +39,8 @@ const calibre = localFont({
   ],
   variable: '--font-calibre',
 });
+
+const xPixelId = process.env.NEXT_PUBLIC_X_PIXEL_ID;
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
@@ -91,6 +94,20 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${calibre.variable}`} suppressHydrationWarning>
       <body>
+        {xPixelId && (
+          <Script
+            id="x-conversion-tracking-base"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `
+                !function(e,t,n,s,u,a){e.twq||(s=e.twq=function(){s.exe?s.exe.apply(s,arguments):s.queue.push(arguments);
+                },s.version='1.1',s.queue=[],u=t.createElement(n),u.async=!0,u.src='https://static.ads-twitter.com/uwt.js',
+                a=t.getElementsByTagName(n)[0],a.parentNode.insertBefore(u,a))}(window,document,'script');
+                twq('config', ${JSON.stringify(xPixelId)});
+              `,
+            }}
+          />
+        )}
         <div className="relative">
           <Providers>
             <App>{children}</App>
