@@ -3,7 +3,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -19,6 +18,7 @@ import {
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
+import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
@@ -76,35 +76,6 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
   });
 }
 
-function getRealContentSpaceIds({
-  spaceIds,
-  allValuesList,
-  allRelationsList,
-}: {
-  spaceIds: string[];
-  allValuesList: EntitySpacesBatchQuery['entities'] extends Array<infer T>
-    ? NonNullable<T>['allValuesList']
-    : never;
-  allRelationsList: EntitySpacesBatchQuery['entities'] extends Array<infer T>
-    ? NonNullable<T>['allRelationsList']
-    : never;
-}): string[] {
-  const spacesWithRealContent = new Set<string>();
-
-  for (const value of allValuesList) {
-    const propertyId = value.property?.id;
-    if (!propertyId || !HIDDEN_PROPERTIES.has(propertyId)) {
-      spacesWithRealContent.add(value.spaceId);
-    }
-  }
-
-  for (const relation of allRelationsList) {
-    spacesWithRealContent.add(relation.spaceId);
-  }
-
-  return spaceIds.filter(id => spacesWithRealContent.has(id));
-}
-
 export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({
     query: entitySpacesBatchQuery,
@@ -115,10 +86,10 @@ export function getBatchEntitySpaces(entityIds: string[], signal?: AbortControll
         )
         .map(entity => ({
           id: entity.id as string,
-          spaces: getRealContentSpaceIds({
+          spaces: spacesFromRoutingProjections({
             spaceIds: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
-            allValuesList: entity.allValuesList,
-            allRelationsList: entity.allRelationsList,
+            values: entity.allValuesList,
+            relations: entity.allRelationsList,
           }),
         })),
     variables: { filter: { id: { in: entityIds } } },

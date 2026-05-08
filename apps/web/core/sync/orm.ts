@@ -59,13 +59,11 @@ export function applyKnownEntitySpaces(
   };
 }
 
-function getLocalSearchResultSpaces(localEntity: Entity): string[] {
-  const values = localEntity.values.filter(value => !value.isDeleted);
-  const relations = localEntity.relations.filter(relation => !relation.isDeleted);
+function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
   return Entities.spaces(values, relations);
 }
 
-function mergeResolvableSpaces(
+export function mergeResolvableSpaces(
   remoteSpaces: Array<string | SpaceEntity>,
   localSpaces: string[]
 ): Array<string | SpaceEntity> {
@@ -553,6 +551,6 @@ function mergeSearchResult({
     description,
     types,
     typesBySpace: remoteEntity.typesBySpace,
-    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(localEntity)),
+    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
 }

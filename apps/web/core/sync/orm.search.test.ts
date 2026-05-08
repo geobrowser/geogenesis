@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entity, SearchResult, SpaceEntity } from '../types';
-import { applyKnownEntitySpaces, resolveSearchSpaces } from './orm';
+import { applyKnownEntitySpaces, mergeResolvableSpaces, resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -79,5 +79,17 @@ describe('applyKnownEntitySpaces', () => {
     } as Pick<Entity, 'spaces'>;
 
     expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual([]);
+  });
+});
+
+describe('mergeResolvableSpaces', () => {
+  it('preserves remote spaces and appends deduped local-only spaces', () => {
+    const remoteSpace = makeSpaceEntity('space-1', { name: 'Remote Space' });
+
+    expect(mergeResolvableSpaces([remoteSpace, 'space-2'], ['space-2', 'space-3'])).toEqual([
+      remoteSpace,
+      'space-2',
+      'space-3',
+    ]);
   });
 });
