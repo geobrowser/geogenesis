@@ -44,7 +44,7 @@ describe('analytics', () => {
     expect(analyticsEnvironment('www.geobrowser.io')).toBe('production');
   });
 
-  it('tracks new Privy users as signups without raw Privy account data', async () => {
+  it('tracks new Privy users as signups with reviewed email only', async () => {
     const signedUp = vi.fn();
     window.lytics = {
       capture: vi.fn(),
@@ -98,12 +98,12 @@ describe('analytics', () => {
     expect(properties).toMatchObject({
       source: 'privy',
       auth_provider: 'privy',
+      email: 'person@example.com',
       is_new_user: true,
       was_already_authenticated: false,
       login_method: 'email',
       login_account_type: 'email',
     });
-    expect(properties).not.toHaveProperty('email');
     expect(properties).not.toHaveProperty('wallet');
   });
 
@@ -138,6 +138,7 @@ describe('analytics', () => {
       was_already_authenticated: false,
       login_method: 'email',
     });
+    expect(loggedIn.mock.calls[0][1]).not.toHaveProperty('email');
   });
 
   it('tracks already-authenticated Privy completions as restored sessions', async () => {
