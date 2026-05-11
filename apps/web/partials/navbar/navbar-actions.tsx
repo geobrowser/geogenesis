@@ -9,13 +9,14 @@ import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
+import { loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -66,6 +67,9 @@ export function NavbarActions() {
 
   const { logout } = useLogout({
     onSuccess: async () => {
+      loggedOut({
+        personal_space_id: personalSpaceId ?? undefined,
+      });
       console.log('disconnecting');
       await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
