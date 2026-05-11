@@ -1,6 +1,6 @@
-import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { RelationDtoLive } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
+import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { RemoteEntity } from '../schema';
@@ -20,15 +20,11 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
   // often scoped for display, so using them here can incorrectly narrow
   // routing to the currently queried subset of spaces.
   if (remoteEntity.allValuesList && remoteEntity.allRelationsList) {
-    const spacesWithRealContent = new Set<string>();
-    for (const v of remoteEntity.allValuesList) {
-      if (!v.property?.id || !HIDDEN_PROPERTIES.has(v.property.id)) spacesWithRealContent.add(v.spaceId);
-    }
-    for (const r of remoteEntity.allRelationsList) {
-      spacesWithRealContent.add(r.spaceId);
-    }
-    const filteredSpaceIds = remoteEntity.spaceIds.filter(id => spacesWithRealContent.has(id));
-    spaceIdsForRouting = filteredSpaceIds.length > 0 ? filteredSpaceIds : [...remoteEntity.spaceIds];
+    spaceIdsForRouting = spacesFromRoutingProjections({
+      spaceIds: remoteEntity.spaceIds,
+      values: remoteEntity.allValuesList,
+      relations: remoteEntity.allRelationsList,
+    });
   }
 
   return {
