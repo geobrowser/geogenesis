@@ -24,6 +24,7 @@ interface SearchOptions {
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
+  enabled?: boolean;
 }
 
 function normalizeTypeId(id: string): string {
@@ -56,6 +57,7 @@ export function useSearch({
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
+  enabled,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -70,8 +72,10 @@ export function useSearch({
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
     (Boolean(restrictToFilterTypes) && !filterByTypes?.length);
 
+  const shouldSearch = (enabled ?? debouncedQuery !== '') && !searchBlocked;
+
   const { data: results, isLoading } = useQuery({
-    enabled: debouncedQuery !== '' && !searchBlocked,
+    enabled: shouldSearch,
     queryKey: [
       'search',
       debouncedQuery,
@@ -82,8 +86,6 @@ export function useSearch({
       additionalSpaceIds,
     ],
     queryFn: async () => {
-      if (query.length === 0) return [];
-
       const isValidEntityId = validateEntityId(maybeEntityId);
 
       if (isValidEntityId) {
@@ -193,11 +195,12 @@ export function useSearch({
   );
 
   const isQuerySyncing = query !== debouncedQuery;
-  const isWaitingForFilterTypes = searchBlocked && !isStringEmpty(query);
-  const shouldSuspend = isQuerySyncing || isLoading || isWaitingForFilterTypes;
+  const isWaitingForFilterTypes = shouldSearch === false && searchBlocked && (enabled ?? debouncedQuery !== '');
+  const shouldSuspend = isWaitingForFilterTypes || isQuerySyncing || isLoading;
 
   return {
-    isEmpty: isArrayEmpty(dedupedResults) && !isStringEmpty(query) && !shouldSuspend,
+    isEmpty:
+      isArrayEmpty(dedupedResults) && (Boolean(enabled) || !isStringEmpty(query)) && !shouldSuspend,
     isLoading: shouldSuspend,
     results: dedupedResults,
     query,

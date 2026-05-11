@@ -36,6 +36,7 @@ export const FindEntity = ({
 }: FindEntityProps) => {
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const [hasDismissedPopover, setHasDismissedPopover] = useState<boolean>(false);
+  const [focused, setFocused] = useState<boolean>(false);
   const [result, setResult] = useState<SearchResult | null>(null);
 
   useEffect(() => {
@@ -58,28 +59,22 @@ export const FindEntity = ({
     });
   }
 
-  const [hasStoppedTyping, setHasStoppedTyping] = useState<boolean>(false);
-
-  React.useEffect(() => {
-    setHasStoppedTyping(false);
-    const timeoutId = setTimeout(() => {
-      setHasStoppedTyping(true);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [query]);
-
-  const showPopover = hasStoppedTyping && results.length > 0 && !hasDismissedPopover;
+  const showPopover =
+    focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
   return (
     <div className="relative">
-      <Popover.Root open={!!query} onOpenChange={() => {}}>
+      <Popover.Root open={focused} onOpenChange={setFocused}>
         <Popover.Anchor asChild>
           <input
             value={query}
             onChange={event => {
               onQueryChange(event.target.value);
               onCreateEntity({ id: '', name: event.target.value });
+              setHasDismissedPopover(false);
+            }}
+            onFocus={() => {
+              setFocused(true);
               setHasDismissedPopover(false);
             }}
             placeholder={placeholder}
@@ -94,6 +89,7 @@ export const FindEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onInteractOutside={() => setFocused(false)}
               className="z-9999 w-(--radix-popper-anchor-width) pt-2"
               forceMount
             >
@@ -133,6 +129,7 @@ export const FindEntity = ({
                                     name: result.name,
                                   });
                                   onQueryChange('');
+                                  setFocused(false);
                                   setHasDismissedPopover(true);
                                 }}
                                 onKeyDown={event => {
@@ -143,6 +140,7 @@ export const FindEntity = ({
                                       name: result.name,
                                     });
                                     onQueryChange('');
+                                    setFocused(false);
                                     setHasDismissedPopover(true);
                                   }
                                 }}

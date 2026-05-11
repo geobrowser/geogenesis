@@ -32,7 +32,11 @@ export function EntitySearchAutocomplete({
   dropdownClassName = '',
   filterByTypes,
 }: Props) {
-  const { query, onQueryChange, isLoading, results } = useSearch({ filterByTypes });
+  const [focused, setFocused] = React.useState(false);
+  const { query, onQueryChange, isLoading, results } = useSearch({
+    filterByTypes,
+    enabled: focused,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 
@@ -40,6 +44,7 @@ export function EntitySearchAutocomplete({
     const handleQueryChange = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         onQueryChange('');
+        setFocused(false);
       }
     };
 
@@ -47,20 +52,35 @@ export function EntitySearchAutocomplete({
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
 
+  const close = React.useCallback(() => {
+    onQueryChange('');
+    setFocused(false);
+  }, [onQueryChange]);
+
   return (
-    <div className="relative w-full">
+    <div
+      ref={containerRef}
+      className="relative w-full"
+      onBlurCapture={event => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        close();
+      }}
+    >
       <input
         value={query}
-        onChange={e => onQueryChange(e.target.value)}
+        onChange={e => {
+          onQueryChange(e.target.value);
+          setFocused(true);
+        }}
+        onFocus={() => setFocused(true)}
         placeholder={placeholder}
         className={cx(
           'inline-flex w-48 items-center justify-between rounded px-3 py-2 text-button whitespace-nowrap shadow-inner-grey-02 placeholder:text-text! focus:outline-hidden',
           className
         )}
       />
-      {query && (
+      {focused && (
         <div
-          ref={containerRef}
           className={cx(
             'absolute top-full left-0 z-10 mt-2 max-h-[400px] w-[384px] rounded border border-grey-02 bg-white shadow-lg',
             dropdownClassName
@@ -80,6 +100,7 @@ export function EntitySearchAutocomplete({
                     onClick={() => {
                       onDone(result);
                       onQueryChange('');
+                      setFocused(false);
                     }}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}

@@ -41,7 +41,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
-  const autocomplete = useSearch();
+  const autocomplete = useSearch({ enabled: open });
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -65,7 +65,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  const hasResults = autocomplete.query && autocomplete.results.length > 0;
+  const hasResults = autocomplete.results.length > 0;
 
   useKey('Enter', () => {
     if (!hasResults) return;
