@@ -249,7 +249,7 @@ function serializeInlineNode(node: JSONContent): string {
 
   if (node.type === 'inlineMath') {
     const latex = node.attrs?.latex ?? '';
-    // Space-pad when content starts/ends with $ to avoid ambiguity with the delimiters
+    // Space-pad when content starts or ends with $ to avoid ambiguity with the delimiters
     const needsPad = latex.startsWith('$') || latex.endsWith('$');
     return needsPad ? `$$ ${latex} $$` : `$$${latex}$$`;
   }

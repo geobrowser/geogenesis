@@ -13,6 +13,7 @@ import Text from '@tiptap/extension-text';
 
 import { describe, expect, it } from 'vitest';
 
+import { MATH_DELIMITERS } from '~/partials/editor/math-node';
 import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
 import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';
@@ -34,7 +35,7 @@ const testExtensions = [
   HardBreak,
   BulletList,
   ListItem,
-  MathExtension.configure({ evaluation: false, delimiters: { inlineStart: '$$', inlineEnd: '$$', inlineRegex: '\\$\\$(?!\\s)(.*?(?<!\\\\))\\$\\$' }, katexOptions: { throwOnError: false } }),
+  MathExtension.configure({ evaluation: false, delimiters: MATH_DELIMITERS, katexOptions: { throwOnError: false } }),
   Web2URLMark,
 ];
 
@@ -107,6 +108,12 @@ describe('markdown-adapter', () => {
   // Safety tests
   // ---------------------------------------------------------------------------
   describe('safety', () => {
+    it('whitespace-only $$ $$ is not parsed as math', () => {
+      const json = markdownToEditorJson('Value is $$ $$ here', testExtensions);
+      const hasInlineMath = JSON.stringify(json).includes('"type":"inlineMath"');
+      expect(hasInlineMath).toBe(false);
+    });
+
     it('dollar amounts are not parsed as math', () => {
       const json = markdownToEditorJson('Price is $5 and $10 today', testExtensions);
       // Should produce a single paragraph with plain text (no inlineMath nodes)

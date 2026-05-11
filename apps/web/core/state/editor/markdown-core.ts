@@ -32,10 +32,13 @@ export function mathPlugin(md: MarkdownIt) {
     if (end >= state.posMax - 1) return false;
     if (end === start) return false; // reject empty $$$$
 
+    // Trim padding spaces added by the serializer to avoid delimiter ambiguity
+    const content = state.src.slice(start, end).trim();
+    if (content.length === 0) return false; // reject whitespace-only like $$ $$
+
     if (!silent) {
       const token = state.push('inline_math', 'math', 0);
-      // Trim padding spaces added by the serializer to avoid delimiter ambiguity
-      token.content = state.src.slice(start, end).trim();
+      token.content = content;
     }
 
     state.pos = end + 2;
