@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSearchPath, groupRestResults } from './queries';
+import { buildSearchPath, groupRestResults, hasDefaultSearchExcludedType } from './queries';
 
 describe('buildSearchPath', () => {
   const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
@@ -123,5 +123,16 @@ describe('groupRestResults', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('hasDefaultSearchExcludedType', () => {
+  it('matches excluded type ids in hyphenated and non-hyphenated forms', () => {
+    expect(hasDefaultSearchExcludedType([{ id: 'b8803a86-65de-412b-bb35-7e0c84adf473' }])).toBe(true);
+    expect(hasDefaultSearchExcludedType([{ id: 'B8803A8665DE412BBB357E0C84ADF473' }])).toBe(true);
+  });
+
+  it('does not match non-excluded type ids', () => {
+    expect(hasDefaultSearchExcludedType([{ id: '11111111-1111-1111-1111-111111111111' }])).toBe(false);
   });
 });
