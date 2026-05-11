@@ -8,6 +8,7 @@ import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -79,6 +80,57 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   // Ref keeps the blur handler fresh without requiring editor recreation.
   const upsertEditorStateRef = React.useRef(upsertEditorState);
   upsertEditorStateRef.current = upsertEditorState;
+  const knownDataBlockIdsRef = React.useRef<Set<string>>(new Set(blockIds));
+  const lastTrackedEditorSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    lastTrackedEditorSnapshotRef.current = JSON.stringify(normalizeEditorContent(editorJson));
+
+    for (const blockId of blockIds) {
+      knownDataBlockIdsRef.current.add(blockId);
+    }
+  }, [activeEntityId, blockIds, editorContentVersion, editorJson]);
+
+  const trackEditorDocument = React.useCallback(
+    (json: JSONContent) => {
+      const snapshot = JSON.stringify(normalizeEditorContent(json));
+
+      if (snapshot === lastTrackedEditorSnapshotRef.current) {
+        return;
+      }
+
+      lastTrackedEditorSnapshotRef.current = snapshot;
+
+      const editorContent = json.content ?? [];
+
+      capture('content_created', {
+        content_id: activeEntityId,
+        content_type: 'editor_content_edit',
+        edit_surface: 'editor',
+        entity_id: activeEntityId,
+        space_id: spaceId,
+        block_count: editorContent.length,
+      });
+
+      for (const node of editorContent) {
+        if (node.type !== 'tableNode') continue;
+        const blockId = typeof node.attrs?.id === 'string' ? node.attrs.id : null;
+        if (!blockId || knownDataBlockIdsRef.current.has(blockId)) continue;
+
+        knownDataBlockIdsRef.current.add(blockId);
+        capture('content_created', {
+          content_id: blockId,
+          content_type: 'data_block',
+          edit_action: 'block_created',
+          creation_surface: 'editor',
+          data_source_type: node.attrs?.initialDataSource === 'QUERY' ? 'QUERY' : 'COLLECTION',
+          entity_id: activeEntityId,
+          space_id: spaceId,
+        });
+      }
+    },
+    [activeEntityId, spaceId]
+  );
 
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
@@ -93,7 +145,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       // the editor is potentially destroyed (e.g. on edit → view mode switch).
       // The content sync effect's `if (editable) return` guard prevents this
       // store write from triggering a setContent call back into the editor.
-      upsertEditorStateRef.current(params.editor.getJSON());
+      const json = params.editor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
     }
   };
 
@@ -112,9 +166,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     prevEditableRef.current = editable;
 
     if (wasEditable && !editable && editorRef.current) {
-      upsertEditorStateRef.current(editorRef.current.getJSON());
+      const json = editorRef.current.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
     }
-  }, [editable]);
+  }, [editable, trackEditorDocument]);
 
   const editor = useEditor(
     {
@@ -170,12 +226,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
+          const editorContent = editor.getJSON().content ?? [];
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor
-              .getJSON()
-              .content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ??
-              false);
+            editorContent.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock');
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);

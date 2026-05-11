@@ -5,7 +5,7 @@ import * as React from 'react';
 import type { UIMessage } from 'ai';
 import { isTextUIPart } from 'ai';
 import { motion } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom } from 'jotai';
 
 import {
   DEFAULT_CHAT_SIZE,
@@ -13,7 +13,6 @@ import {
   MIN_CHAT_HEIGHT,
   MIN_CHAT_WIDTH,
   chatSizeAtom,
-  isChatOpenAtom,
 } from '~/core/state/chat-store';
 
 import { ChevronDown } from '~/design-system/icons/chevron-down';
@@ -32,9 +31,10 @@ type Props = {
   input: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
-  onSuggestion: (text: string) => void;
+  onSuggestion: (text: string, source: 'welcome' | 'follow_up') => void;
   onRetry: () => void;
   onNewChat: () => void;
+  onClose: () => void;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -50,8 +50,8 @@ export function ChatPanel({
   onSuggestion,
   onRetry,
   onNewChat,
+  onClose,
 }: Props) {
-  const setIsOpen = useSetAtom(isChatOpenAtom);
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
@@ -187,7 +187,7 @@ export function ChatPanel({
           </Menu>
           <button
             type="button"
-            onClick={() => setIsOpen(false)}
+            onClick={onClose}
             aria-label="Close assistant"
             className="flex size-4 items-center justify-center text-text transition-colors hover:text-grey-04"
           >
@@ -203,11 +203,11 @@ export function ChatPanel({
           error={error}
           isFull={isFull}
           onRetry={onRetry}
-          onSuggestion={onSuggestion}
+          onSuggestion={text => onSuggestion(text, 'follow_up')}
           disabled={isBusy || isFull}
         />
       ) : (
-        <ChatWelcome onSuggestion={onSuggestion} disabled={isBusy || isFull} />
+        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isFull} />
       )}
 
       {isFull ? (

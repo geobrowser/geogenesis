@@ -168,4 +168,72 @@ describe('analytics', () => {
       was_already_authenticated: true,
     });
   });
+
+  it('tracks explicit login completions as logins even when Privy reports an existing session', async () => {
+    const loggedIn = vi.fn();
+    const sessionRestored = vi.fn();
+    window.lytics = {
+      capture: vi.fn(),
+      loggedIn,
+      sessionRestored,
+    };
+
+    const { trackPrivyAuth } = await import('./analytics');
+
+    trackPrivyAuth(
+      {
+        user: {
+          id: 'did:privy:user-4',
+        },
+        isNewUser: false,
+        wasAlreadyAuthenticated: true,
+        loginMethod: null,
+        loginAccount: null,
+      },
+      { auth_flow: 'manual_login' }
+    );
+
+    expect(loggedIn).toHaveBeenCalledTimes(1);
+    expect(sessionRestored).not.toHaveBeenCalled();
+    expect(loggedIn.mock.calls[0][1]).toMatchObject({
+      auth_flow: 'manual_login',
+      was_already_authenticated: true,
+    });
+  });
+
+  it('tracks Genesis product actions with semantic helpers', async () => {
+    const upvoted = vi.fn();
+    const voteCast = vi.fn();
+    const editModeToggled = vi.fn();
+    const browseModeToggled = vi.fn();
+    const graphEntityViewed = vi.fn();
+    window.lytics = {
+      capture: vi.fn(),
+      upvoted,
+      voteCast,
+      editModeToggled,
+      browseModeToggled,
+      graphEntityViewed,
+    };
+
+    const { browseModeToggled: browse, editModeToggled: edit, personalSpaceViewed, upvoted: up, voteCast: vote } =
+      await import('./analytics');
+
+    up({ entity_id: 'entity-1' });
+    vote('none', { entity_id: 'entity-1' });
+    edit({ space_id: 'space-1' });
+    browse({ space_id: 'space-1' });
+    personalSpaceViewed('personal-space-1');
+
+    expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
+    expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
+    expect(editModeToggled).toHaveBeenCalledWith({ space_id: 'space-1' });
+    expect(browseModeToggled).toHaveBeenCalledWith({ space_id: 'space-1' });
+    expect(graphEntityViewed).toHaveBeenCalledWith({
+      source: 'browse_sidebar',
+      graph_entity_type: 'personal_space',
+      space_id: 'personal-space-1',
+      entity_id: 'personal-space-1',
+    });
+  });
 });

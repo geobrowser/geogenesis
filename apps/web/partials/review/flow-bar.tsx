@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { capture } from '~/core/analytics';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
@@ -99,6 +100,17 @@ export const FlowBar = () => {
               </div>
               <button
                 onClick={() => {
+                  capture('content_created', {
+                    content_id: `review_changes:${Date.now()}`,
+                    content_type: 'review_changes',
+                    review_action: 'opened',
+                    source: 'flow_bar',
+                    value_count: values.length,
+                    relation_count: relations.length,
+                    op_count: opsCount,
+                    entity_count: entitiesCount,
+                    space_count: spacesCount,
+                  });
                   bumpReviewVersion();
                   setIsReviewOpen(true);
                 }}

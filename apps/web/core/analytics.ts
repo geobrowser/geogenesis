@@ -9,6 +9,13 @@ type GeoAnalyticsRuntime = {
   identify?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   identifyUser?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   pageViewed?: (properties?: AnalyticsProperties) => void;
+  voteCast?: (direction: string, properties?: AnalyticsProperties) => void;
+  upvoted?: (properties?: AnalyticsProperties) => void;
+  downvoted?: (properties?: AnalyticsProperties) => void;
+  modeToggled?: (mode: string, properties?: AnalyticsProperties) => void;
+  editModeToggled?: (properties?: AnalyticsProperties) => void;
+  browseModeToggled?: (properties?: AnalyticsProperties) => void;
+  graphEntityViewed?: (properties?: AnalyticsProperties) => void;
   signedUp?: (user: AnalyticsIdentity, properties?: AnalyticsProperties) => void;
   loggedIn?: (user: AnalyticsIdentity, properties?: AnalyticsProperties) => void;
   signedIn?: (user: AnalyticsIdentity, properties?: AnalyticsProperties) => void;
@@ -27,6 +34,20 @@ type PendingCall =
     }
   | {
       method: 'pageViewed';
+      properties: AnalyticsProperties;
+    }
+  | {
+      method: 'voteCast';
+      direction: string;
+      properties: AnalyticsProperties;
+    }
+  | {
+      method: 'modeToggled';
+      mode: string;
+      properties: AnalyticsProperties;
+    }
+  | {
+      method: 'graphEntityViewed';
       properties: AnalyticsProperties;
     }
   | {
@@ -187,6 +208,55 @@ export function identify(user: AnalyticsIdentity, traits: AnalyticsProperties = 
   });
 }
 
+export function voteCast(direction: 'up' | 'down' | 'none', properties: AnalyticsProperties = {}) {
+  callOrQueue({
+    method: 'voteCast',
+    direction,
+    properties: cleanProperties(properties),
+  });
+}
+
+export function upvoted(properties: AnalyticsProperties = {}) {
+  voteCast('up', properties);
+}
+
+export function downvoted(properties: AnalyticsProperties = {}) {
+  voteCast('down', properties);
+}
+
+export function modeToggled(mode: 'edit' | 'browse', properties: AnalyticsProperties = {}) {
+  callOrQueue({
+    method: 'modeToggled',
+    mode,
+    properties: cleanProperties(properties),
+  });
+}
+
+export function editModeToggled(properties: AnalyticsProperties = {}) {
+  modeToggled('edit', properties);
+}
+
+export function browseModeToggled(properties: AnalyticsProperties = {}) {
+  modeToggled('browse', properties);
+}
+
+export function graphEntityViewed(properties: AnalyticsProperties = {}) {
+  callOrQueue({
+    method: 'graphEntityViewed',
+    properties: cleanProperties(properties),
+  });
+}
+
+export function personalSpaceViewed(personalSpaceId: string, properties: AnalyticsProperties = {}) {
+  graphEntityViewed({
+    source: 'browse_sidebar',
+    graph_entity_type: 'personal_space',
+    space_id: personalSpaceId,
+    entity_id: personalSpaceId,
+    ...properties,
+  });
+}
+
 export function signedUp(user: AnalyticsIdentity, properties: AnalyticsProperties = {}) {
   callOrQueue({
     method: 'signedUp',
@@ -251,10 +321,13 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
   }
 
   const loginAccount = params.loginAccount;
+  const authFlow = properties.auth_flow;
+  const isManualLoginFlow = authFlow === 'manual_login';
   const authProperties = cleanProperties({
     ...identity,
     source: 'privy',
     auth_provider: 'privy',
+    auth_flow: isManualLoginFlow ? 'manual_login' : 'session_restore',
     is_new_user: params.isNewUser,
     was_already_authenticated: params.wasAlreadyAuthenticated,
     login_method: params.loginMethod,
@@ -265,7 +338,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     ...properties,
   });
 
-  if (params.wasAlreadyAuthenticated) {
+  if (params.wasAlreadyAuthenticated && !isManualLoginFlow) {
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
@@ -319,6 +392,73 @@ function invokeRuntime(call: PendingCall) {
   if (call.method === 'pageViewed' && analytics.pageViewed) {
     analytics.pageViewed(call.properties);
     return true;
+  }
+
+  if (call.method === 'voteCast') {
+    if (call.direction === 'up' && analytics.upvoted) {
+      analytics.upvoted(call.properties);
+      return true;
+    }
+
+    if (call.direction === 'down' && analytics.downvoted) {
+      analytics.downvoted(call.properties);
+      return true;
+    }
+
+    if (analytics.voteCast) {
+      analytics.voteCast(call.direction, call.properties);
+      return true;
+    }
+
+    if (analytics.capture) {
+      analytics.capture('vote_cast', {
+        source: 'voting',
+        vote_direction: call.direction,
+        ...call.properties,
+      });
+      return true;
+    }
+  }
+
+  if (call.method === 'modeToggled') {
+    if (call.mode === 'edit' && analytics.editModeToggled) {
+      analytics.editModeToggled(call.properties);
+      return true;
+    }
+
+    if (call.mode === 'browse' && analytics.browseModeToggled) {
+      analytics.browseModeToggled(call.properties);
+      return true;
+    }
+
+    if (analytics.modeToggled) {
+      analytics.modeToggled(call.mode, call.properties);
+      return true;
+    }
+
+    if (analytics.capture) {
+      analytics.capture('mode_toggled', {
+        source: 'mode_toggle',
+        mode: call.mode,
+        ...call.properties,
+      });
+      return true;
+    }
+  }
+
+  if (call.method === 'graphEntityViewed') {
+    if (analytics.graphEntityViewed) {
+      analytics.graphEntityViewed(call.properties);
+      return true;
+    }
+
+    if (analytics.capture) {
+      analytics.capture('graph_entity_viewed', {
+        source: 'graph',
+        ...call.properties,
+      });
+      return true;
+    }
   }
 
   if (call.method === 'identifyUser') {

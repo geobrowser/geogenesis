@@ -57,7 +57,7 @@ export function GeoConnectButton() {
   // onComplete on session restoration (e.g. when opening a new tab), which
   // then syncs the cleared atoms back to the original tab via localStorage.
   const { login } = useGeoLogin({
-    onComplete: trackPrivyAuth,
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
   });
 
   const onLogin = () => {
