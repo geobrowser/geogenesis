@@ -9,6 +9,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { Subgraph } from '~/core/io';
+import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
@@ -186,13 +187,18 @@ export function useSearch({
     gcTime: Duration.toMillis(Duration.seconds(15)),
   });
 
+  const dedupedResults = React.useMemo(
+    () => (results ?? []).map(result => dedupeSearchResultTypeTags(result)),
+    [results]
+  );
+
   const isQuerySyncing = query !== debouncedQuery;
   const shouldSuspend = isQuerySyncing || isLoading;
 
   return {
-    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,
+    isEmpty: isArrayEmpty(dedupedResults) && !isStringEmpty(query) && !shouldSuspend,
     isLoading: shouldSuspend,
-    results: results ?? [],
+    results: dedupedResults,
     query,
     onQueryChange: setQuery,
   };
