@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entity, SearchResult, SpaceEntity } from '../types';
-import { applyKnownEntitySpaces, getSearchResultNameForTopSpace, mergeResolvableSpaces, resolveSearchSpaces } from './orm';
+import {
+  applyKnownEntitySpaces,
+  getSearchResultNameForTopSpace,
+  isDisplayableSearchResult,
+  isIncludedSearchResult,
+  mergeResolvableSpaces,
+  resolveSearchSpaces,
+} from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -136,5 +143,38 @@ describe('getSearchResultNameForTopSpace', () => {
         [makeSpaceEntity('top-space')]
       )
     ).toBeNull();
+  });
+});
+
+describe('isDisplayableSearchResult', () => {
+  it('requires a non-blank name and at least one resolved space', () => {
+    const space = makeSpaceEntity('space-1', { name: 'Space' });
+
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [space] })).toBe(true);
+    expect(isDisplayableSearchResult({ name: '   ', spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: null, spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [] })).toBe(false);
+  });
+});
+
+describe('isIncludedSearchResult', () => {
+  it('filters out results with default excluded block/media types', () => {
+    const space = makeSpaceEntity('space-1', { name: 'Space' });
+
+    expect(
+      isIncludedSearchResult({
+        name: 'Latest',
+        spaces: [space],
+        types: [{ id: 'b8803a8665de412bbb357e0c84adf473', name: 'Data Block' }],
+      })
+    ).toBe(false);
+
+    expect(
+      isIncludedSearchResult({
+        name: 'Latest',
+        spaces: [space],
+        types: [{ id: '11111111111111111111111111111111', name: 'Article' }],
+      })
+    ).toBe(true);
   });
 });
