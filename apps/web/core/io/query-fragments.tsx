@@ -261,6 +261,24 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entitySpacesBatchQuery = graphql(/* GraphQL */ `
+  query EntitySpacesBatch($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      spaceIds
+
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        propertyId
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+    }
+  }
+`);
+
 export const entityQuery = graphql(/* GraphQL */ `
   query Entity($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
