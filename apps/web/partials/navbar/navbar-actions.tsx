@@ -9,7 +9,7 @@ import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
-import { loggedOut } from '~/core/analytics';
+import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -213,6 +213,7 @@ function ModeToggle() {
       if (editable) {
         // Make sure they can always escape edit mode
         setEditable(false);
+        browseModeToggled(modeToggleProperties(spaceId, 'no_edit_access'));
         return;
       }
 
@@ -223,7 +224,15 @@ function ModeToggle() {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
-    } else setEditable(!editable);
+    } else {
+      const nextEditable = !editable;
+      setEditable(nextEditable);
+      if (nextEditable) {
+        editModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      } else {
+        browseModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      }
+    }
   }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl]);
 
   const memoizedShortcuts = React.useMemo(
@@ -300,6 +309,13 @@ function ModeToggle() {
       </div>
     </button>
   );
+}
+
+function modeToggleProperties(spaceId: string, trigger: string) {
+  return {
+    space_id: spaceId,
+    toggle_trigger: trigger,
+  };
 }
 
 function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {

@@ -12,6 +12,7 @@ import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
+import { personalSpaceViewed } from '~/core/analytics';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -138,7 +139,16 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         <span>Explore</span>
       </Link>
       {personalSpaceId && personalHref ? (
-        <Link href={personalHref} className={isPersonal ? navLinkActive : navLinkIdle}>
+        <Link
+          href={personalHref}
+          className={isPersonal ? navLinkActive : navLinkIdle}
+          onClick={() =>
+            personalSpaceViewed(personalSpaceId, {
+              navigation_source: 'browse_sidebar_primary',
+              page_path: pathname,
+            })
+          }
+        >
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
             {profile?.avatarUrl ? (
               <FallbackImage value={profile.avatarUrl} sizes="32px" className="object-cover" />

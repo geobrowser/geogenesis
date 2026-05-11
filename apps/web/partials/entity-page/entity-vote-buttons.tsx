@@ -8,6 +8,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
+import { downvoted, upvoted, voteCast } from '~/core/analytics';
 import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
@@ -82,6 +83,9 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       setOptimisticVote('none');
       setOptimisticScore(base - 1n);
       unvote(undefined, {
+        onSuccess: () => {
+          voteCast('none', voteProperties('remove', 'up'));
+        },
         onError: () => {
           setOptimisticVote(0);
           setOptimisticScore(null);
@@ -93,6 +97,9 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       setOptimisticVote(0);
       setOptimisticScore(base + delta);
       upvote(undefined, {
+        onSuccess: () => {
+          upvoted(voteProperties(prevVote === 1 ? 'switch' : 'cast', prevVote === 1 ? 'down' : undefined));
+        },
         onError: () => {
           setOptimisticVote(prevVote === 1 ? 1 : null);
           setOptimisticScore(null);
@@ -108,6 +115,9 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       setOptimisticVote('none');
       setOptimisticScore(base + 1n);
       unvote(undefined, {
+        onSuccess: () => {
+          voteCast('none', voteProperties('remove', 'down'));
+        },
         onError: () => {
           setOptimisticVote(1);
           setOptimisticScore(null);
@@ -119,12 +129,25 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       setOptimisticVote(1);
       setOptimisticScore(base - delta);
       downvote(undefined, {
+        onSuccess: () => {
+          downvoted(voteProperties(prevVote === 0 ? 'switch' : 'cast', prevVote === 0 ? 'up' : undefined));
+        },
         onError: () => {
           setOptimisticVote(prevVote === 0 ? 0 : null);
           setOptimisticScore(null);
         },
       });
     }
+  }
+
+  function voteProperties(action: 'cast' | 'switch' | 'remove', previousDirection?: 'up' | 'down') {
+    return {
+      vote_action: action,
+      previous_vote_direction: previousDirection,
+      entity_id: entityId,
+      space_id: spaceId,
+      object_type: objectType,
+    };
   }
 
   const scoreLabel = formatScore(displayScore);

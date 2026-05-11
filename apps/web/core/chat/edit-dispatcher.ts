@@ -20,6 +20,7 @@ import { E } from '~/core/sync/orm';
 import { storage } from '~/core/sync/use-mutate';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Entity, Relation } from '~/core/types';
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
 
 import { enqueue } from './apply-queue';
 import {
@@ -72,6 +73,11 @@ const EDITOR_REFRESHING_INTENTS = new Set<EditIntent['kind']>([
 
 function applyToggleEditMode(intent: Extract<EditIntent, { kind: 'toggleEditMode' }>, ctx: ApplyCtx): ApplyResult {
   ctx.setEditable(intent.mode === 'edit');
+  if (intent.mode === 'edit') {
+    editModeToggled({ toggle_trigger: 'assistant_tool' });
+  } else {
+    browseModeToggled({ toggle_trigger: 'assistant_tool' });
+  }
   return { ok: true };
 }
 
