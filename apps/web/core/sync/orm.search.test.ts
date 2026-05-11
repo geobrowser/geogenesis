@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entity, SearchResult, SpaceEntity } from '../types';
-import { applyKnownEntitySpaces, mergeResolvableSpaces, resolveSearchSpaces } from './orm';
+import { applyKnownEntitySpaces, getSearchResultNameForTopSpace, mergeResolvableSpaces, resolveSearchSpaces } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -91,5 +91,50 @@ describe('mergeResolvableSpaces', () => {
       'space-2',
       'space-3',
     ]);
+  });
+});
+
+describe('getSearchResultNameForTopSpace', () => {
+  it('uses the name from the top displayed space', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '',
+          namesBySpace: {
+            'stale-space': '',
+            'top-space': 'Top Space Name',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Top Space Name');
+  });
+
+  it('falls back to the grouped result name when the top space name is blank', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: 'Grouped Name',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Grouped Name');
+  });
+
+  it('returns null when neither the top space nor grouped result has a real name', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '   ',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBeNull();
   });
 });
