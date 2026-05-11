@@ -11,6 +11,7 @@ import { Button } from '~/design-system/button';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
+import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
 
 const CHAIN = getGeoChain('TESTNET');
@@ -24,7 +25,9 @@ const realWalletConfig = createGeoWalletConfig({
 const mockConfig = createMockConfig(CHAIN);
 
 const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
-const config = isTestEnv ? mockConfig : realWalletConfig;
+const config = (isTestEnv ? mockConfig : realWalletConfig) as unknown as React.ComponentProps<
+  typeof WagmiProvider
+>['config'];
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -53,7 +56,9 @@ export function GeoConnectButton() {
   // would wipe the user's in-progress onboarding state if Privy fires
   // onComplete on session restoration (e.g. when opening a new tab), which
   // then syncs the cleared atoms back to the original tab via localStorage.
-  const { login } = useGeoLogin({});
+  const { login } = useGeoLogin({
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+  });
 
   const onLogin = () => {
     resetOnboarding();
