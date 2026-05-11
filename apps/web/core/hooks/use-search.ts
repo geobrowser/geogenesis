@@ -193,7 +193,8 @@ export function useSearch({
   );
 
   const isQuerySyncing = query !== debouncedQuery;
-  const shouldSuspend = isQuerySyncing || isLoading;
+  const isWaitingForFilterTypes = searchBlocked && !isStringEmpty(query);
+  const shouldSuspend = isQuerySyncing || isLoading || isWaitingForFilterTypes;
 
   return {
     isEmpty: isArrayEmpty(dedupedResults) && !isStringEmpty(query) && !shouldSuspend,

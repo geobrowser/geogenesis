@@ -76,6 +76,8 @@ type SelectEntityProps = {
   autoFocus?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
+  waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
   /** Increment (e.g. on "add row") to move focus into this input even when already mounted. */
@@ -102,6 +104,8 @@ export const SelectEntity = ({
   advanced = true,
   showIDs = true,
   initialQuery,
+  waitForFilterTypes,
+  restrictToFilterTypes,
   selectedEntityId,
   focusRequestKey,
 }: SelectEntityProps) => {
@@ -147,6 +151,8 @@ export const SelectEntity = ({
     filterByTypes,
     filterBySpace,
     initialQuery,
+    waitForFilterTypes,
+    restrictToFilterTypes,
   });
 
   // Auto focus input when component mounts
