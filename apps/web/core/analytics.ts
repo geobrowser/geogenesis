@@ -98,7 +98,7 @@ export function initAnalytics() {
   }
 
   const hostname = window.location.hostname.toLowerCase();
-  const shouldUseCollector = isGeoBrowserHost(hostname) && hostname !== 'www.geobrowser.io';
+  const shouldUseCollector = shouldUseAnalyticsCollector(hostname);
 
   window.lyticsConfig = {
     ...window.GeoAnalyticsConfig,
@@ -415,7 +415,7 @@ function formatDate(value: Date | string | null | undefined) {
   return value;
 }
 
-function analyticsEnvironment(hostname: string) {
+export function analyticsEnvironment(hostname: string) {
   if (isProductionGenesisHost(hostname)) {
     return 'production';
   }
@@ -431,9 +431,14 @@ function isGeoBrowserHost(hostname: string) {
   return hostname === 'geobrowser.io' || hostname.endsWith('.geobrowser.io');
 }
 
-function isProductionGenesisHost(hostname: string) {
+export function shouldUseAnalyticsCollector(hostname: string) {
+  return isGeoBrowserHost(hostname);
+}
+
+export function isProductionGenesisHost(hostname: string) {
   return (
     hostname === 'geobrowser.io' ||
+    hostname === 'www.geobrowser.io' ||
     hostname === 'app.geobrowser.io' ||
     hostname === 'genesis.geobrowser.io' ||
     hostname === 'geogenesis.geobrowser.io'
