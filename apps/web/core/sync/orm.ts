@@ -10,6 +10,7 @@ import { readTypes } from '../database/entities';
 import {
   getAllEntities,
   getBatchEntities,
+  getBatchEntitySpaces,
   getEntitiesOrderedByPropertyConnection,
   getEntity,
   getEntityNames,
@@ -42,6 +43,41 @@ export function resolveSearchSpaces(
       return spacesById[spaceId] ?? (typeof space === 'string' ? null : space);
     })
     .filter((space): space is SpaceEntity => space !== null);
+}
+
+type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
+
+export function applyKnownEntitySpaces(
+  result: SearchResult,
+  knownEntity: Pick<Entity, 'spaces'> | null | undefined
+): SearchResultWithResolvableSpaces {
+  if (!knownEntity) return result;
+
+  return {
+    ...result,
+    spaces: knownEntity.spaces,
+  };
+}
+
+function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
+  return Entities.spaces(values, relations);
+}
+
+export function mergeResolvableSpaces(
+  remoteSpaces: Array<string | SpaceEntity>,
+  localSpaces: string[]
+): Array<string | SpaceEntity> {
+  const seen = new Set(remoteSpaces.map(space => (typeof space === 'string' ? space : space.spaceId)));
+  const merged = [...remoteSpaces];
+
+  for (const space of localSpaces) {
+    if (!seen.has(space)) {
+      seen.add(space);
+      merged.push(space);
+    }
+  }
+
+  return merged;
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -399,7 +435,18 @@ export class E {
     const remoteIdSet = new Set(dedupedRemoteIds);
     const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
     const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
-    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+    const remoteEntityDetails =
+      dedupedRemoteIds.length > 0
+        ? await cache.fetchQuery({
+            queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
+            queryFn: ({ signal: innerSignal }) =>
+              Effect.runPromise(getBatchEntitySpaces(dedupedRemoteIds, signal ?? innerSignal)),
+          })
+        : [];
+    const remoteEntityDetailsById = new Map(remoteEntityDetails.map(e => [e.id, e]));
+    const remoteById = new Map(
+      remoteEntities.map(e => [e.id as string, applyKnownEntitySpaces(e, remoteEntityDetailsById.get(e.id))])
+    );
 
     const maybeEntities = mergedIds.map(entityId => {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
@@ -466,7 +513,7 @@ function mergeSearchResult({
 }: {
   id: string;
   store: GeoStore;
-  mergeWith?: SearchResult | null;
+  mergeWith?: SearchResultWithResolvableSpaces | null;
 }): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
@@ -504,6 +551,6 @@ function mergeSearchResult({
     description,
     types,
     typesBySpace: remoteEntity.typesBySpace,
-    spaces: localEntity.spaces,
+    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
 }
