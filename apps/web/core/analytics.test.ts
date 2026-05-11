@@ -36,6 +36,14 @@ describe('analytics', () => {
     expect(script?.src).toBe(analyticsScriptSrc);
   });
 
+  it('enables production collection for Genesis app routes on www.geobrowser.io', async () => {
+    const { analyticsEnvironment, isProductionGenesisHost, shouldUseAnalyticsCollector } = await import('./analytics');
+
+    expect(shouldUseAnalyticsCollector('www.geobrowser.io')).toBe(true);
+    expect(isProductionGenesisHost('www.geobrowser.io')).toBe(true);
+    expect(analyticsEnvironment('www.geobrowser.io')).toBe('production');
+  });
+
   it('tracks new Privy users as signups without raw Privy account data', async () => {
     const signedUp = vi.fn();
     window.lytics = {
