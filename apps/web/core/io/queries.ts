@@ -662,7 +662,7 @@ interface RestSearchResponse {
 }
 
 function stripHyphens(uuid: string): string {
-  return uuid.replace(/-/g, '').toLowerCase();
+  return uuid.replace(/-/g, '');
 }
 
 /**
@@ -963,10 +963,6 @@ const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
 
-export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): boolean {
-  return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
-}
-
 function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !hasDefaultSearchExcludedType(result.types ?? []);
+  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
 }

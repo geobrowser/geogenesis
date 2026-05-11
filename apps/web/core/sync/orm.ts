@@ -18,7 +18,6 @@ import {
   getRelation,
   getResultsPage,
   getSpaces,
-  hasDefaultSearchExcludedType,
 } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
@@ -68,14 +67,6 @@ export function applyKnownEntitySpaces(
     ...result,
     spaces: knownEntity.spaces,
   };
-}
-
-export function isDisplayableSearchResult(result: Pick<SearchResult, 'name' | 'spaces'>): boolean {
-  return result.spaces.length > 0 && hasName(result.name);
-}
-
-export function isIncludedSearchResult(result: Pick<SearchResult, 'name' | 'spaces' | 'types'>): boolean {
-  return isDisplayableSearchResult(result) && !hasDefaultSearchExcludedType(result.types);
 }
 
 function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
@@ -479,9 +470,7 @@ export class E {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
-    const entities = maybeEntities
-      .filter(e => e !== null)
-      .filter(entity => !hasDefaultSearchExcludedType(entity.types));
+    const entities = maybeEntities.filter(e => e !== null);
 
     const spaceIds = [
       ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
@@ -530,7 +519,7 @@ export class E {
           spaces: resolvedSpaces,
         };
       })
-      .filter(isIncludedSearchResult);
+      .filter(e => e.spaces.length > 0);
 
     return { results, rawCount: page.rawCount, total: page.total };
   }
