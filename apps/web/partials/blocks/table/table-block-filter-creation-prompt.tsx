@@ -18,6 +18,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { isNearScrollBottom } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
@@ -1492,11 +1493,8 @@ function TableBlockEntityFilterInput({
   const handleEntityResultsScroll = React.useCallback(
     (e: React.UIEvent<HTMLUListElement>) => {
       const el = e.currentTarget;
-      // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 275;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
+      const nearBottom = isNearScrollBottom(el);
       if (!nearBottom && !noOverflow) return;
       if (entityVisibleCount < rowsToRender.length) {
         setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
@@ -1743,11 +1741,8 @@ function TableBlockSpaceFilterInput({
 
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
-      // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 275;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
+      const nearBottom = isNearScrollBottom(el);
       if (!nearBottom && !noOverflow) return;
       if (spaceVisibleCount < spaceFullRowCount) {
         setSpaceVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, spaceFullRowCount));

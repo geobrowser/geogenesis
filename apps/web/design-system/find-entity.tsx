@@ -8,6 +8,7 @@ import { startTransition, useEffect, useState } from 'react';
 import pluralize from 'pluralize';
 
 import { ROOT_SPACE } from '~/core/constants';
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 import { SearchResult } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -49,7 +50,16 @@ export const FindEntity = ({
     };
   }, []);
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes: allowedTypes,
   });
 
@@ -61,6 +71,14 @@ export const FindEntity = ({
 
   const showPopover =
     focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
+
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   return (
     <div className="relative">
@@ -103,7 +121,9 @@ export const FindEntity = ({
                 </div>
                 <ResizableContainer>
                   <div
+                    ref={resultsScrollRef}
                     className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
+                    onScroll={handleResultsScroll}
                     onWheel={e => trapWheelToElement(e.currentTarget, e)}
                   >
                     {!results?.length && isLoading && (
@@ -203,6 +223,11 @@ export const FindEntity = ({
                             </div>
                           </div>
                         ))}
+                        {isFetchingNextPage ? (
+                          <div className="w-full border-t border-divider bg-white px-3 py-2">
+                            <div className="truncate text-button text-text">Loading more...</div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>

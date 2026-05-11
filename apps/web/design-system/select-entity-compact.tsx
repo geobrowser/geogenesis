@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { ID } from '~/core/id';
@@ -59,7 +60,16 @@ export function SelectEntityCompact({
   const [focused, setFocused] = React.useState(false);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
-  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    results,
+    isLoading,
+    isEmpty,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes,
     enabled: focused,
   });
@@ -153,6 +163,14 @@ export function SelectEntityCompact({
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
+
   const handleOpenChange = React.useCallback(
     (open: boolean) => {
       setFocused(open);
@@ -233,7 +251,9 @@ export function SelectEntityCompact({
           onInteractOutside={() => setFocused(false)}
         >
           <div
+            ref={resultsScrollRef}
             className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
+            onScroll={handleResultsScroll}
             onWheel={e => trapWheelToElement(e.currentTarget, e)}
           >
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
@@ -291,6 +311,9 @@ export function SelectEntityCompact({
                     </div>
                   </button>
                 ))}
+                {isFetchingNextPage ? (
+                  <div className="px-3 py-2 text-resultTitle text-text">Loading more...</div>
+                ) : null}
               </div>
             )}
           </div>

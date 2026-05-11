@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 
 import { Dots } from '~/design-system/dots';
@@ -33,7 +34,7 @@ export function EntitySearchAutocomplete({
   filterByTypes,
 }: Props) {
   const [focused, setFocused] = React.useState(false);
-  const { query, onQueryChange, isLoading, results } = useSearch({
+  const { query, onQueryChange, isLoading, results, hasNextPage, fetchNextPage, isFetchingNextPage } = useSearch({
     filterByTypes,
     enabled: focused,
   });
@@ -51,6 +52,14 @@ export function EntitySearchAutocomplete({
     document.addEventListener('click', handleQueryChange);
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
+
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   const close = React.useCallback(() => {
     onQueryChange('');
@@ -87,7 +96,7 @@ export function EntitySearchAutocomplete({
           )}
         >
           <ResizableContainer duration={0.125}>
-            <ResultsList>
+            <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
               {results.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}
@@ -110,7 +119,7 @@ export function EntitySearchAutocomplete({
             </ResultsList>
             <div className="flex items-center justify-center py-2 text-smallButton">
               <AnimatePresence mode="wait">
-                {isLoading ? (
+                {isLoading || isFetchingNextPage ? (
                   <motion.span
                     key="dots"
                     initial={{ opacity: 0, scale: 0.95 }}
