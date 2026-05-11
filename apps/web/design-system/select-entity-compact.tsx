@@ -56,14 +56,16 @@ export function SelectEntityCompact({
   onRenderableTypeChange,
 }: SelectEntityCompactProps) {
   const anchorWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const [focused, setFocused] = React.useState(false);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
     filterByTypes,
+    enabled: focused,
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType>(renderableTypeValue);
-  const hasResults = query.trim() && results.length > 0;
+  const hasResults = !isLoading && results.length > 0;
   const canCreate = Boolean(onCreateEntity) && query.trim().length > 0;
 
   React.useEffect(() => {
@@ -81,6 +83,7 @@ export function SelectEntityCompact({
         primarySpaceName: space?.name,
       });
       onQueryChange('');
+      setFocused(false);
     },
     [onDone, onQueryChange]
   );
@@ -97,6 +100,7 @@ export function SelectEntityCompact({
     storage.entities.name.set(newEntityId, spaceId, query);
     onDone({ id: newEntityId, name: query });
     onQueryChange('');
+    setFocused(false);
   }, [onCreateEntity, onDone, onQueryChange, query, renderableType, spaceId, storage.entities.name]);
 
   const handleRenderableTypeChange = React.useCallback(
@@ -113,16 +117,19 @@ export function SelectEntityCompact({
   }, [query, results.length]);
 
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
-    isOpen: query.trim().length > 0,
+    isOpen: focused,
     preferredHeight: 320,
     gap: 12,
   });
 
   useKey('Escape', () => {
+    if (!focused) return;
     onQueryChange('');
+    setFocused(false);
   });
 
   useKey('Enter', () => {
+    if (!focused) return;
     if (!hasResults && canCreate) {
       handleCreate();
       return;
@@ -133,19 +140,31 @@ export function SelectEntityCompact({
   });
 
   useKey('ArrowUp', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i - 1 + results.length) % results.length);
   });
 
   useKey('ArrowDown', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
+  const handleOpenChange = React.useCallback(
+    (open: boolean) => {
+      setFocused(open);
+      if (!open) {
+        onQueryChange('');
+      }
+    },
+    [onQueryChange]
+  );
+
   return (
-    <Popover.Root open={query.trim().length > 0}>
+    <Popover.Root open={focused} onOpenChange={handleOpenChange}>
       <Popover.Anchor asChild>
         <div ref={anchorWrapperRef} className="w-full space-y-2">
           <div className="relative w-full">
@@ -157,8 +176,10 @@ export function SelectEntityCompact({
               value={query}
               onChange={e => {
                 onQueryChange(e.target.value);
+                setFocused(true);
                 setSelectedIndex(0);
               }}
+              onFocus={() => setFocused(true)}
               aria-label="Search"
               placeholder={placeholder}
               className="w-full rounded-md border border-grey-02 bg-white py-2 pr-3 pl-9 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
@@ -209,6 +230,7 @@ export function SelectEntityCompact({
           collisionPadding={16}
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
+          onInteractOutside={() => setFocused(false)}
         >
           <div
             className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"

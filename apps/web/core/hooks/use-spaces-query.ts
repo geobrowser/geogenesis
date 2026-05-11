@@ -16,10 +16,12 @@ const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space
 
 export type UseSpacesQueryOptions = {
   matchLimit?: number;
+  allowEmptyQuery?: boolean;
 };
 
 export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) {
   const matchLimit = options?.matchLimit ?? 10;
+  const allowEmptyQuery = options?.allowEmptyQuery ?? false;
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
@@ -74,7 +76,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
 
       return resultOrError.right;
     },
-    enabled: enabled && debouncedQuery.length > 0,
+    enabled: enabled && (allowEmptyQuery || debouncedQuery.trim().length > 0),
   });
 
   const spaces = fuzzyMatchedSpaces.flatMap(entity => {
