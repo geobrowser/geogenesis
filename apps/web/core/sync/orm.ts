@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -47,6 +48,15 @@ export function resolveSearchSpaces(
 
 type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
 
+export function getSearchResultNameForTopSpace(
+  result: Pick<SearchResult, 'name' | 'namesBySpace'>,
+  spaces: SpaceEntity[]
+): string | null {
+  const topSpaceName = result.namesBySpace?.[spaces[0]?.spaceId ?? ''];
+  if (hasName(topSpaceName)) return topSpaceName ?? null;
+  return hasName(result.name) ? result.name : null;
+}
+
 export function applyKnownEntitySpaces(
   result: SearchResult,
   knownEntity: Pick<Entity, 'spaces'> | null | undefined
@@ -78,6 +88,14 @@ export function mergeResolvableSpaces(
   }
 
   return merged;
+}
+
+function getLocalNamesBySpace(values: Entity['values']): Record<string, string | null> {
+  return Object.fromEntries(
+    values
+      .filter(value => value.property.id === SystemIds.NAME_PROPERTY)
+      .map(value => [value.spaceId, hasName(value.value) ? value.value : null])
+  );
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -492,6 +510,7 @@ export class E {
 
         return {
           ...e,
+          name: getSearchResultNameForTopSpace(e, resolvedSpaces),
           types: e.types.map(t => ({
             id: t.id,
             name: t.name ?? typeNamesById.get(t.id) ?? null,
@@ -544,12 +563,17 @@ function mergeSearchResult({
   const name = Entities.name(values) ?? remoteEntity.name;
   const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
+  const namesBySpace = {
+    ...remoteEntity.namesBySpace,
+    ...getLocalNamesBySpace(values),
+  };
 
   return {
     id: id,
     name,
     description,
     types,
+    namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
     spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
