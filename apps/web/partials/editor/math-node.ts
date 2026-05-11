@@ -1,10 +1,6 @@
 import { MathExtension } from '@aarkue/tiptap-math-extension';
 
-export const MATH_DELIMITERS = {
-  inlineStart: '$$',
-  inlineEnd: '$$',
-  inlineRegex: '\\$\\$(.*?)\\$\\$',
-};
+import { MATH_DELIMITERS } from '~/core/state/editor/math-delimiters';
 
 export const MathNode = MathExtension.configure({
   evaluation: false,

@@ -3,6 +3,8 @@ import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
 
 import { parseGraphLinkHref } from '~/core/utils/graph-link';
 
+import { isEscaped } from './math-delimiters';
+
 export function mathPlugin(md: MarkdownIt) {
   // Primary inline rule: $$...$$ (Notion-style)
   md.inline.ruler.before('escape', 'double_dollar_math', (state: StateInline, silent: boolean) => {
@@ -15,16 +17,10 @@ export function mathPlugin(md: MarkdownIt) {
     let end = start;
     while (end < state.posMax - 1) {
       if (state.src.charCodeAt(end) === 0x24 /* $ */ && state.src.charCodeAt(end + 1) === 0x24 /* $ */) {
-        // Check if the first $ of the closing pair is escaped by an odd number of backslashes
-        let backslashes = 0;
-        let k = end - 1;
-        while (k >= start && state.src.charCodeAt(k) === 0x5c /* \ */) {
-          backslashes++;
-          k--;
-        }
-        if (backslashes % 2 === 0) break; // even (or zero) backslashes — real close
-        // Odd backslashes means the $ is escaped — skip past both dollars and keep scanning
-        end += 2;
+        if (!isEscaped(state.src, end, start)) break; // real close
+        // Escaped $ — advance by 1 so the next iteration can find
+        // an overlapping closing $$ (e.g. $$cost\$$$)
+        end += 1;
         continue;
       }
       end++;

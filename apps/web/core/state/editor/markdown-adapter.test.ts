@@ -13,7 +13,7 @@ import Text from '@tiptap/extension-text';
 
 import { describe, expect, it } from 'vitest';
 
-import { MATH_DELIMITERS } from '~/partials/editor/math-node';
+import { MATH_DELIMITERS } from '~/core/state/editor/math-delimiters';
 import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
 import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';
@@ -157,6 +157,14 @@ describe('markdown-adapter', () => {
       const result = parts.join('\n').trimEnd();
       // Re-serializes with padding since content ends with $
       expect(result).toBe('Price $$ cost \\$ $$ rest');
+    });
+
+    it('escaped dollar without space padding parses via overlapping close', () => {
+      // $$cost\$$$ — the closing $$ overlaps with the escaped \$
+      const input = 'A $$cost\\$$$ B';
+      const json = markdownToEditorJson(input, testExtensions);
+      const flat = JSON.stringify(json);
+      expect(flat).toContain('"type":"inlineMath"');
     });
   });
 
