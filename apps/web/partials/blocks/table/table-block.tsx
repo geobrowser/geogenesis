@@ -42,6 +42,7 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
+import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -116,6 +117,10 @@ function useEntries(
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [placeholderFocusKey, setPlaceholderFocusKey] = React.useState(0);
+  // Space that newly-created entities (from the placeholder row) should be written to.
+  // For query data blocks the user picks this when clicking "+". For collections and
+  // when no override is provided we fall back to the block's space.
+  const [placeholderTargetSpaceId, setPlaceholderTargetSpaceId] = React.useState<string | null>(null);
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -170,10 +175,15 @@ function useEntries(
     console.assert(entityId.length > 0, 'onChangeEntry: entityId must be non-empty');
     console.assert(actionSpaceId.length > 0, 'onChangeEntry: actionSpaceId must be non-empty');
 
+    // For placeholder rows, prefer the target space picked from the "+" dropdown
+    // so the new entity's data is written there instead of the block's space.
+    const effectiveSpaceId =
+      entityId === nextEntityId ? (placeholderTargetSpaceId ?? actionSpaceId) : actionSpaceId;
+
     // Step 1: Handle data writes
     switch (action.type) {
       case 'SET_NAME':
-        storage.entities.name.set(entityId, actionSpaceId, action.name);
+        storage.entities.name.set(entityId, effectiveSpaceId, action.name);
         break;
 
       case 'SET_VALUE': {
@@ -181,12 +191,12 @@ function useEntries(
           ID.createValueId({
             entityId,
             propertyId: action.property.id,
-            spaceId: actionSpaceId,
+            spaceId: effectiveSpaceId,
           }),
           entityId
         );
 
-        writeValue(storage, entityId, actionSpaceId, action.property, action.value, existingValue);
+        writeValue(storage, entityId, effectiveSpaceId, action.property, action.value, existingValue);
         break;
       }
 
@@ -207,7 +217,7 @@ function useEntries(
             : action.type === 'CREATE_ENTITY'
               ? { id: nextEntityId, name: action.name }
               : // SET_NAME or SET_VALUE on a placeholder in a collection
-                { id: entityId, name: null, space: actionSpaceId, verified: false };
+                { id: entityId, name: null, space: effectiveSpaceId, verified: false };
 
         upsertCollectionItemRelation({
           relationId: ID.createEntityId(),
@@ -235,8 +245,12 @@ function useEntries(
         createEntityWithTypes({
           name: maybeName,
           filters: filterState,
+          spaceId: placeholderTargetSpaceId,
         });
       }
+
+      // Keep `placeholderTargetSpaceId` so the next placeholder added via Enter
+      // stays in the same space. Clicking "+" reopens the dropdown explicitly.
     }
   };
 
@@ -261,10 +275,13 @@ function useEntries(
     }
   };
 
-  const onAddPlaceholder = () => {
+  const onAddPlaceholder = (targetSpaceId?: string | null) => {
     setEditable(true);
     setHasPlaceholderRow(true);
     setPlaceholderFocusKey(k => k + 1);
+    if (targetSpaceId !== undefined) {
+      setPlaceholderTargetSpaceId(targetSpaceId);
+    }
   };
 
   return {
@@ -275,6 +292,7 @@ function useEntries(
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    placeholderTargetSpaceId,
   };
 }
 
@@ -635,6 +653,20 @@ const ConfiguredTableBlock = ({
 
   const isQueryDataBlock = source.type !== 'COLLECTION';
 
+  // Query data blocks let the user pick which space the new entity lives in:
+  // - SPACES with >1 spaces: dropdown of those spaces.
+  // - GEO: dropdown with search across all spaces.
+  // For a single-space SPACES query the dropdown is skipped (auto-pick that one).
+  const usesCreateEntitySpaceDropdown =
+    (source.type === 'SPACES' && source.value.length > 1) || source.type === 'GEO';
+
+  const singleSpaceTarget =
+    source.type === 'SPACES' && source.value.length === 1 ? source.value[0] : null;
+
+  const onAddPlaceholderClick = React.useCallback(() => {
+    onAddPlaceholder(singleSpaceTarget ?? null);
+  }, [onAddPlaceholder, singleSpaceTarget]);
+
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
 
@@ -672,11 +704,17 @@ const ConfiguredTableBlock = ({
           </Link>
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
-          {renderPlusButtonAsInline && (
-            <button type="button" onClick={onAddPlaceholder}>
-              <Create />
-            </button>
-          )}
+          {renderPlusButtonAsInline &&
+            (usesCreateEntitySpaceDropdown ? (
+              <DataBlockCreateEntitySpaceDropdown
+                source={source}
+                onPick={(targetSpaceId) => onAddPlaceholder(targetSpaceId)}
+              />
+            ) : (
+              <button type="button" onClick={onAddPlaceholderClick}>
+                <Create />
+              </button>
+            ))}
         </div>
       </div>
 

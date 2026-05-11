@@ -9,14 +9,24 @@ import { writeValue } from '~/partials/blocks/table/change-entry';
 import { Filter } from '../blocks/data/filters';
 import { useMutate } from '../sync/use-mutate';
 
-export function useCreateEntityWithFilters(spaceId: string) {
+export function useCreateEntityWithFilters(defaultSpaceId: string) {
   const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
   const { storage } = useMutate();
 
   const onClick = React.useCallback(
-    ({ name, filters }: { name?: string | null; filters?: Filter[] }) => {
+    ({
+      name,
+      filters,
+      spaceId: overrideSpaceId,
+    }: {
+      name?: string | null;
+      filters?: Filter[];
+      spaceId?: string | null;
+    }) => {
+      const targetSpaceId = overrideSpaceId ?? defaultSpaceId;
+
       if (name) {
-        storage.entities.name.set(nextEntityId, spaceId, name);
+        storage.entities.name.set(nextEntityId, targetSpaceId, name);
       }
 
       /**
@@ -30,7 +40,7 @@ export function useCreateEntityWithFilters(spaceId: string) {
           storage.relations.set({
             id: IdUtils.generate(),
             entityId: IdUtils.generate(),
-            spaceId,
+            spaceId: targetSpaceId,
             renderableType: 'RELATION',
             fromEntity: {
               id: nextEntityId,
@@ -50,7 +60,7 @@ export function useCreateEntityWithFilters(spaceId: string) {
           writeValue(
             storage,
             nextEntityId,
-            spaceId,
+            targetSpaceId,
             {
               id: filter.columnId,
               name: filter.columnName,
@@ -64,7 +74,7 @@ export function useCreateEntityWithFilters(spaceId: string) {
 
       setNextEntityId(IdUtils.generate());
     },
-    [nextEntityId, spaceId, storage]
+    [nextEntityId, defaultSpaceId, storage]
   );
 
   return {
