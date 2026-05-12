@@ -7,7 +7,6 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import { capture } from '~/core/analytics';
 import { getSpaceAccess } from '~/core/access/space-access';
 import { Relation, Value } from '~/core/types';
 
@@ -148,16 +147,6 @@ export function usePublish() {
         return;
       }
 
-      capture('content_created', {
-        content_id: proposalId ?? `publish:${spaceId}:${Date.now()}`,
-        content_type: 'publish',
-        publish_result: 'succeeded',
-        publish_flow: 'review_changes',
-        space_id: spaceId,
-        value_count: valuesToPublish.length,
-        relation_count: relations.length,
-      });
-
       dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
 
       // want to show the "complete" state for 3s if it succeeds
@@ -263,15 +252,6 @@ export function useBulkPublish() {
         triples.map(v => v.id),
         relations.map(r => r.id)
       );
-      capture('content_created', {
-        content_id: `bulk_publish:${spaceId}:${Date.now()}`,
-        content_type: 'publish',
-        publish_result: 'succeeded',
-        publish_flow: 'bulk',
-        space_id: spaceId,
-        value_count: triples.length,
-        relation_count: relations.length,
-      });
       dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
       onSuccess?.();
 

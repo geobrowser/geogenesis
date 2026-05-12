@@ -203,13 +203,14 @@ describe('analytics', () => {
   });
 
   it('tracks Genesis product actions with semantic helpers', async () => {
+    const capture = vi.fn();
     const upvoted = vi.fn();
     const voteCast = vi.fn();
     const editModeToggled = vi.fn();
     const browseModeToggled = vi.fn();
     const graphEntityViewed = vi.fn();
     window.lytics = {
-      capture: vi.fn(),
+      capture,
       upvoted,
       voteCast,
       editModeToggled,
@@ -217,14 +218,23 @@ describe('analytics', () => {
       graphEntityViewed,
     };
 
-    const { browseModeToggled: browse, editModeToggled: edit, personalSpaceViewed, upvoted: up, voteCast: vote } =
-      await import('./analytics');
+    const {
+      browseModeToggled: browse,
+      editModeToggled: edit,
+      personalSpaceViewed,
+      publishedEdit,
+      reviewChangesOpened,
+      upvoted: up,
+      voteCast: vote,
+    } = await import('./analytics');
 
     up({ entity_id: 'entity-1' });
     vote('none', { entity_id: 'entity-1' });
     edit({ space_id: 'space-1' });
     browse({ space_id: 'space-1' });
     personalSpaceViewed('personal-space-1');
+    reviewChangesOpened({ space_id: 'space-1' });
+    publishedEdit({ space_id: 'space-1' });
 
     expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
     expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
@@ -235,6 +245,16 @@ describe('analytics', () => {
       graph_entity_type: 'personal_space',
       space_id: 'personal-space-1',
       entity_id: 'personal-space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('review_changes_opened', {
+      app: 'genesis',
+      source: 'review_changes',
+      space_id: 'space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('published_edit', {
+      app: 'genesis',
+      source: 'publishing',
+      space_id: 'space-1',
     });
   });
 });

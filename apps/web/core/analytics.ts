@@ -257,6 +257,20 @@ export function personalSpaceViewed(personalSpaceId: string, properties: Analyti
   });
 }
 
+export function reviewChangesOpened(properties: AnalyticsProperties = {}) {
+  capture('review_changes_opened', {
+    source: 'review_changes',
+    ...properties,
+  });
+}
+
+export function publishedEdit(properties: AnalyticsProperties = {}) {
+  capture('published_edit', {
+    source: 'publishing',
+    ...properties,
+  });
+}
+
 export function signedUp(user: AnalyticsIdentity, properties: AnalyticsProperties = {}) {
   callOrQueue({
     method: 'signedUp',
@@ -311,6 +325,27 @@ export function identifyPrivyUser(user: PrivyAnalyticsUser, properties: Analytic
   }
 
   identify(identity);
+}
+
+export function restorePrivySession(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
+  const identity = privyIdentityProperties(user, properties);
+
+  if (!identity.user_id) {
+    return;
+  }
+
+  sessionRestored(
+    identity,
+    cleanProperties({
+      ...identity,
+      source: 'privy',
+      auth_provider: 'privy',
+      auth_flow: 'session_restore',
+      is_new_user: false,
+      was_already_authenticated: true,
+      ...properties,
+    })
+  );
 }
 
 export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsProperties = {}) {
