@@ -29,6 +29,8 @@ type SelectEntityAsPopoverProps = {
   advanced?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
+  waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
   selectedEntityId?: string;
 };
 
@@ -42,6 +44,8 @@ export function SelectEntityAsPopover({
   advanced = true,
   showIDs = true,
   initialQuery,
+  waitForFilterTypes,
+  restrictToFilterTypes,
   selectedEntityId,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
@@ -70,6 +74,8 @@ export function SelectEntityAsPopover({
             advanced={advanced}
             showIDs={showIDs}
             initialQuery={initialQuery}
+            waitForFilterTypes={waitForFilterTypes}
+            restrictToFilterTypes={restrictToFilterTypes}
             selectedEntityId={selectedEntityId}
           />
         </Popover.Content>

@@ -296,6 +296,8 @@ export type SearchResult = {
   description: string | null;
   spaces: SpaceEntity[];
   types: { id: string; name: string | null }[];
+  /** Entity names keyed by spaceId, so search can show the name for the displayed top-ranked space. */
+  namesBySpace?: Record<string, string | null>;
   /** Types keyed by spaceId, so the UI can show only the types relevant to the displayed space */
   typesBySpace?: Record<string, { id: string; name: string | null }[]>;
 };

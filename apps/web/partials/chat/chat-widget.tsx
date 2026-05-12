@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
 import { ENTITY_ID_REGEX, isHistoryFull, isHistoryFullError } from '~/core/chat/limits';
@@ -24,6 +25,10 @@ import { NavUtils } from '~/core/utils/utils';
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatPanel } from './chat-panel';
+
+type AssistantSuggestionSource = 'welcome' | 'follow_up';
+type AssistantPanelAction = 'opened' | 'closed';
+type AssistantMessageSource = 'typed' | 'option_click';
 
 // The model can hallucinate id shapes. Guard router.push so a bad tool call
 // can't shove us onto a malformed URL.
@@ -55,6 +60,15 @@ function resolveNavigateHref(output: NavigateOutput): string | null {
   }
 }
 
+function createTrackingId(prefix: string) {
+  const random =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return `${prefix}:${random}`;
+}
+
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useAtom(isChatOpenAtom);
   const [input, setInput] = React.useState('');
@@ -64,6 +78,7 @@ export function ChatWidget() {
   const router = useRouter();
   const { editable } = useEditable();
   const { setIsReviewOpen, bumpReviewVersion } = useDiff();
+  const conversationIdRef = React.useRef(createTrackingId('conversation'));
 
   const currentSpaceId = typeof params?.['id'] === 'string' ? params['id'] : null;
   const routeEntityId = typeof params?.['entityId'] === 'string' ? params['entityId'] : null;
@@ -183,16 +198,71 @@ export function ChatWidget() {
   // "Full" = locally over the threshold OR server returned a 413 history-full error.
   const isFull = React.useMemo(() => isHistoryFull(messages) || isHistoryFullError(error), [messages, error]);
 
+  const assistantContextProperties = React.useCallback(
+    () => ({
+      conversation_id: conversationIdRef.current,
+      page_path: pathname,
+      space_id: currentSpaceId,
+      entity_id: currentEntityId,
+      is_edit_mode: editable,
+    }),
+    [currentEntityId, currentSpaceId, editable, pathname]
+  );
+
+  const trackAssistantPanel = React.useCallback(
+    (action: AssistantPanelAction, trigger: string) => {
+      capture('element_clicked', {
+        ...assistantContextProperties(),
+        source: 'assistant',
+        element_action: action,
+        interaction_trigger: trigger,
+      });
+    },
+    [assistantContextProperties]
+  );
+
+  const openAssistant = React.useCallback(
+    (trigger: string) => {
+      trackAssistantPanel('opened', trigger);
+      setIsOpen(true);
+    },
+    [setIsOpen, trackAssistantPanel]
+  );
+
+  const closeAssistant = React.useCallback(
+    (trigger: string) => {
+      trackAssistantPanel('closed', trigger);
+      setIsOpen(false);
+    },
+    [setIsOpen, trackAssistantPanel]
+  );
+
+  const trackAssistantMessage = React.useCallback(
+    (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
+      capture('ai_assistant_message_sent', {
+        ...assistantContextProperties(),
+        message_id: createTrackingId('message'),
+        message_source: source,
+        option_source: suggestionSource,
+        option_label: source === 'option_click' ? text : undefined,
+        user_message: text,
+        query_length: text.length,
+      });
+    },
+    [assistantContextProperties]
+  );
+
   const handleNewChat = () => {
     if (isBusy) stop();
     setMessages([]);
     setInput('');
+    conversationIdRef.current = createTrackingId('conversation');
   };
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isOpen && event.key === 'Escape') {
-        setIsOpen(false);
+        closeAssistant('escape_key');
         return;
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
@@ -201,22 +271,28 @@ export function ChatWidget() {
         // the commit.
         if (event.isComposing) return;
         event.preventDefault();
-        setIsOpen(prev => !prev);
+        if (isOpen) {
+          closeAssistant('keyboard_shortcut');
+        } else {
+          openAssistant('keyboard_shortcut');
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, setIsOpen]);
+  }, [closeAssistant, isOpen, openAssistant]);
 
   const handleSend = () => {
     const text = input.trim();
     if (!text || isBusy || isFull) return;
+    trackAssistantMessage(text, 'typed');
     sendMessage({ text });
     setInput('');
   };
 
-  const handleSuggestion = (text: string) => {
+  const handleSuggestion = (text: string, source: AssistantSuggestionSource) => {
     if (isBusy || isFull) return;
+    trackAssistantMessage(text, 'option_click', source);
     sendMessage({ text });
   };
 
@@ -236,6 +312,7 @@ export function ChatWidget() {
             onSuggestion={handleSuggestion}
             onRetry={() => regenerate()}
             onNewChat={handleNewChat}
+            onClose={() => closeAssistant('header_button')}
           />
         ) : (
           <motion.button
@@ -245,7 +322,7 @@ export function ChatWidget() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.15 }}
-            onClick={() => setIsOpen(true)}
+            onClick={() => openAssistant('fab')}
             aria-label="Open assistant"
             className="fixed right-4 bottom-4 z-100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
           >

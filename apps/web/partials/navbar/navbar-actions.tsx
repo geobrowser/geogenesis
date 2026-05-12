@@ -9,13 +9,14 @@ import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
+import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -66,6 +67,9 @@ export function NavbarActions() {
 
   const { logout } = useLogout({
     onSuccess: async () => {
+      loggedOut({
+        personal_space_id: personalSpaceId ?? undefined,
+      });
       console.log('disconnecting');
       await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
@@ -209,6 +213,7 @@ function ModeToggle() {
       if (editable) {
         // Make sure they can always escape edit mode
         setEditable(false);
+        browseModeToggled(modeToggleProperties(spaceId, 'no_edit_access'));
         return;
       }
 
@@ -219,7 +224,15 @@ function ModeToggle() {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
-    } else setEditable(!editable);
+    } else {
+      const nextEditable = !editable;
+      setEditable(nextEditable);
+      if (nextEditable) {
+        editModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      } else {
+        browseModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      }
+    }
   }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl]);
 
   const memoizedShortcuts = React.useMemo(
@@ -296,6 +309,13 @@ function ModeToggle() {
       </div>
     </button>
   );
+}
+
+function modeToggleProperties(spaceId: string, trigger: string) {
+  return {
+    space_id: spaceId,
+    toggle_trigger: trigger,
+  };
 }
 
 function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {

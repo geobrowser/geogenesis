@@ -5,6 +5,7 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
@@ -182,8 +183,13 @@ function EditableRelationsGroup({
   const { storage } = useMutate();
 
   const typeOfId = property.id;
-  const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
-  const firstRelationValueType = property?.relationValueTypes?.[0];
+  const { relationValueTypes, waitForFilterTypes } = useRelationTargetTypeIds({
+    propertyId: property.id,
+    spaceId,
+    relationValueTypes: property.relationValueTypes,
+  });
+  const filterSearchByTypes = relationValueTypes ?? [];
+  const firstRelationValueType = relationValueTypes?.[0];
 
   // We don't filter by space id as we want to render data from all spaces.
   const relations = useRelations({
@@ -215,6 +221,8 @@ function EditableRelationsGroup({
         <SelectEntity
           spaceId={spaceId}
           relationValueTypes={filterSearchByTypes}
+          waitForFilterTypes={waitForFilterTypes}
+          restrictToFilterTypes={Boolean(filterSearchByTypes.length)}
           onCreateEntity={result => {
             if (firstRelationValueType) {
               createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
@@ -268,6 +276,8 @@ function EditableRelationsGroup({
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
             relationValueTypes={filterSearchByTypes}
+            waitForFilterTypes={waitForFilterTypes}
+            restrictToFilterTypes={Boolean(filterSearchByTypes.length)}
             onCreateEntity={result => {
               if (firstRelationValueType) {
                 createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);

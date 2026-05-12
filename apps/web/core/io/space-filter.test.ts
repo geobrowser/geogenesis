@@ -42,6 +42,20 @@ describe('extractSingleSpaceIdFromFilter', () => {
     const filter: EntityFilter = { spaceIds: { containedBy: ['space-abc'] } };
     expect(extractSingleSpaceIdFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds spaceIds inside a top-level and array (empty-name wrap shape)', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSingleSpaceIdFromFilter(filter)).toBe('space-abc');
+  });
+
+  it('finds spaceIds with anyEqualTo inside a top-level and array', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { anyEqualTo: 'space-abc' } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSingleSpaceIdFromFilter(filter)).toBe('space-abc');
+  });
 });
 
 describe('extractSpaceIdsFromFilter', () => {
@@ -87,6 +101,13 @@ describe('extractSpaceIdsFromFilter', () => {
     const filter: EntityFilter = { spaceIds: { in: [null, null] } };
     expect(extractSpaceIdsFromFilter(filter)).toBeUndefined();
   });
+
+  it('finds multi-element spaceIds inside a top-level and array', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc', 'space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(extractSpaceIdsFromFilter(filter)).toEqual({ in: ['space-abc', 'space-def'] });
+  });
 });
 
 describe('removeSpaceIdsFromFilter', () => {
@@ -121,5 +142,76 @@ describe('removeSpaceIdsFromFilter', () => {
     const result = removeSpaceIdsFromFilter(filter);
     expect(result).toEqual({ name: { is: 'test' }, id: { is: 'entity-123' } });
     expect(result).not.toHaveProperty('spaceIds');
+  });
+
+  it('removes spaceIds buried in a top-level and (empty-name wrap) and hoists the remaining sibling', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({ name: { isNull: false, isNot: '' } });
+  });
+
+  it('returns undefined when stripping spaceIds from an and leaves nothing', () => {
+    const filter: EntityFilter = {
+      and: [{ spaceIds: { in: ['space-abc'] } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toBeUndefined();
+  });
+
+  it('keeps the and-wrap when the lone remaining sibling collides with a top-level key', () => {
+    // Both top-level and the post-strip singleton carry `name` — hoisting would
+    // silently drop one. The wrap must be preserved so both clauses survive.
+    const filter: EntityFilter = {
+      name: { is: 'top' },
+      and: [{ spaceIds: { in: ['space-abc'] }, name: { is: 'inner' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      name: { is: 'top' },
+      and: [{ name: { is: 'inner' } }],
+    });
+  });
+
+  it('keeps the and-wrap when more than one sibling remains after stripping', () => {
+    const filter: EntityFilter = {
+      and: [
+        { spaceIds: { in: ['space-abc'] } },
+        { name: { isNull: false, isNot: '' } },
+        { id: { is: 'entity-123' } },
+      ],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
+    });
+  });
+
+  it('strips only the first and-child spaceIds when multiple are present', () => {
+    // Mirrors extractor's first-wins semantics: only the clause that gets
+    // promoted is removed. Later spaceIds clauses represent independent
+    // constraints and must survive on the residual filter so the server
+    // still enforces them. A previous version stripped every match,
+    // silently broadening results.
+    const filter: EntityFilter = {
+      and: [
+        { spaceIds: { in: ['space-abc'] } },
+        { spaceIds: { in: ['space-def'] } },
+        { name: { isNull: false, isNot: '' } },
+      ],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
+
+  it('leaves and-children intact when extraction took the top-level spaceIds', () => {
+    // Top-level wins during extraction, so the and-array is left untouched
+    // — any nested spaceIds is an independent constraint, not a duplicate
+    // of the promoted clause.
+    const filter: EntityFilter = {
+      spaceIds: { in: ['space-abc'] },
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+    expect(removeSpaceIdsFromFilter(filter)).toEqual({
+      and: [{ spaceIds: { in: ['space-def'] } }, { name: { isNull: false, isNot: '' } }],
+    });
   });
 });

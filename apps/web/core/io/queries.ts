@@ -7,6 +7,7 @@ import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
   type EntitiesBatchForCommentsQuery,
+  type EntitySpacesBatchQuery,
   EntitiesOrderBy,
   EntityCommentReplyBacklinksPageDocument,
   type EntityCommentReplyBacklinksPageQuery,
@@ -17,6 +18,7 @@ import {
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
+import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
@@ -29,6 +31,7 @@ import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
+  entitySpacesBatchQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -69,6 +72,27 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
+    signal,
+  });
+}
+
+export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: entitySpacesBatchQuery,
+    decoder: data =>
+      (data.entities ?? [])
+        .filter((entity): entity is NonNullable<NonNullable<EntitySpacesBatchQuery['entities']>[number]> =>
+          Boolean(entity?.id)
+        )
+        .map(entity => ({
+          id: entity.id as string,
+          spaces: spacesFromRoutingProjections({
+            spaceIds: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
+            values: entity.allValuesList,
+            relations: entity.allRelationsList,
+          }),
+        })),
+    variables: { filter: { id: { in: entityIds } } },
     signal,
   });
 }
@@ -638,7 +662,7 @@ interface RestSearchResponse {
 }
 
 function stripHyphens(uuid: string): string {
-  return uuid.replace(/-/g, '');
+  return uuid.replace(/-/g, '').toLowerCase();
 }
 
 /**
@@ -699,12 +723,17 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
       if (existing.typesBySpace) {
         existing.typesBySpace[spaceId] = spaceTypes;
       }
+      existing.namesBySpace = {
+        ...(existing.namesBySpace ?? {}),
+        [spaceId]: r.name ?? null,
+      };
     } else {
       byEntity.set(entityId, {
         id: entityId,
         name: r.name ?? null,
         description: r.description ?? null,
         types: (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null })),
+        namesBySpace: { [spaceId]: r.name ?? null },
         typesBySpace: { [spaceId]: spaceTypes },
         spaces: [
           {
@@ -934,6 +963,10 @@ const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
 
+export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): boolean {
+  return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+}
+
 function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+  return !hasDefaultSearchExcludedType(result.types ?? []);
 }

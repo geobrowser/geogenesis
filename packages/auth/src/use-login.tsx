@@ -34,9 +34,9 @@ export function useGeoLogin(params: UseLoginParams): ReturnType<typeof usePrivyL
         if (wallet) {
           await setActiveWallet(wallet);
         }
-
-        params?.onComplete?.(args);
       }
+
+      await params?.onComplete?.(args);
     },
   });
 }

@@ -3,14 +3,21 @@ import type { Chain } from 'viem';
 import { http } from 'viem';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
+type PrivyWagmiConfig = ReturnType<typeof createConfig>;
+type PrivyCreateConfigParams = Parameters<typeof createConfig>[0];
+
 export type GeoWalletConfigParams = {
   chain: Chain;
   rpcUrl: string;
   walletConnectProjectId: string;
 };
 
-export const createGeoWalletConfig = ({ chain, rpcUrl: rpc, walletConnectProjectId }: GeoWalletConfigParams) => {
-  return createConfig({
+export const createGeoWalletConfig = ({
+  chain,
+  rpcUrl: rpc,
+  walletConnectProjectId,
+}: GeoWalletConfigParams): PrivyWagmiConfig => {
+  const config = {
     chains: [chain],
     // This enables us to use a single injected connector but handle multiple wallet
     // extensions within the browser.
@@ -45,11 +52,13 @@ export const createGeoWalletConfig = ({ chain, rpcUrl: rpc, walletConnectProject
         shimDisconnect: true,
       }),
     ],
-  });
+  } as unknown as PrivyCreateConfigParams;
+
+  return createConfig(config);
 };
 
-export const createMockConfig = (chain: Chain) =>
-  createConfig({
+export const createMockConfig = (chain: Chain): PrivyWagmiConfig => {
+  const config = {
     chains: [chain],
     transports: {
       [chain.id]: http(),
@@ -59,4 +68,7 @@ export const createMockConfig = (chain: Chain) =>
         accounts: ['0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'],
       }),
     ],
-  });
+  } as unknown as PrivyCreateConfigParams;
+
+  return createConfig(config);
+};
