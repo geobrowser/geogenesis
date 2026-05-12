@@ -83,6 +83,7 @@ type EditorProps = {
   entityId: string;
   spaceId: string;
 };
+type CreatePropertyFn = ReturnType<typeof useCreateProperty>['createProperty'];
 
 export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
@@ -511,6 +512,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     propertyRelations={container.propertyRelations}
                     onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
+                    createProperty={createProperty}
                     onMeasureWidth={width =>
                       setGroupOverlayWidths(previous => {
                         if (previous[container.groupRelation.id] === width) return previous;
@@ -528,6 +530,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
               relations={ungroupedRelations}
               allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
               hasGroupsAbove={groupContainers.length > 0}
+              createProperty={createProperty}
             />
             <DragOverlay>
               {activePropertyDragId ? (
@@ -623,6 +626,7 @@ function TypePropertyGroupCard({
   propertyRelations,
   onDeleteGroup,
   onAddProperty,
+  createProperty,
   onMeasureWidth,
 }: {
   spaceId: string;
@@ -630,6 +634,7 @@ function TypePropertyGroupCard({
   propertyRelations: Relation[];
   onDeleteGroup: () => void;
   onAddProperty: (property: { id: string; name: string | null }) => void;
+  createProperty: CreatePropertyFn;
   onMeasureWidth: (width: number) => void;
 }) {
   const { storage } = useMutate();
@@ -786,12 +791,14 @@ function UngroupedDropContainer({
   relations,
   allTypePropertyIds,
   hasGroupsAbove,
+  createProperty,
 }: {
   entityId: string;
   spaceId: string;
   relations: Relation[];
   allTypePropertyIds: string[];
   hasGroupsAbove: boolean;
+  createProperty: CreatePropertyFn;
 }) {
   const drop = useDroppable({ id: UNGROUPED_CONTAINER_ID });
   const { storage } = useMutate();
