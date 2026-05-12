@@ -21,6 +21,7 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } from '~/core/constants';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValue } from '~/core/sync/use-store';
@@ -85,6 +86,7 @@ type EditorProps = {
 
 export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
+  const { createProperty } = useCreateProperty(spaceId);
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
@@ -707,6 +709,15 @@ function TypePropertyGroupCard({
                 }
                 spaceId={spaceId}
                 relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                onCreateEntity={result => {
+                  const createdPropertyId = createProperty({
+                    name: result.name || '',
+                    propertyType: result.renderableType || 'TEXT',
+                    verified: result.verified,
+                    space: result.space,
+                  });
+                  return createdPropertyId;
+                }}
                 onDone={result => onAddProperty({ id: result.id, name: result.name })}
                 placeholder="Find property..."
                 advanced={false}
@@ -834,6 +845,15 @@ function UngroupedDropContainer({
                 }
                 spaceId={spaceId}
                 relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                onCreateEntity={result => {
+                  const createdPropertyId = createProperty({
+                    name: result.name || '',
+                    propertyType: result.renderableType || 'TEXT',
+                    verified: result.verified,
+                    space: result.space,
+                  });
+                  return createdPropertyId;
+                }}
                 onDone={result => {
                   ensureOnTypeUngrouped({ id: result.id, name: result.name });
                 }}
