@@ -1,4 +1,4 @@
-import { reactiveRelations, reactiveValues } from '../sync/store';
+import { reactiveRelations, reactiveValues, relationKey } from '../sync/store';
 import { GeoEventStream } from '../sync/stream';
 import { Relation, Value } from '../types';
 import { db } from './indexeddb';
@@ -42,6 +42,26 @@ export class PersistenceEngine {
     stream.on(GeoEventStream.LOCAL_CHANGES_CLEARED, event => {
       this.onCleared(event.spaceId);
     });
+
+    // Flush pending changes when the page is hidden / unloaded so a quick
+    // refresh after editing doesn't drop the in-flight debounce window. The
+    // pagehide event covers tab close + navigate-away on both desktop and
+    // mobile; visibilitychange covers backgrounded tabs.
+    if (typeof window !== 'undefined') {
+      const flushNow = () => {
+        if (this.flushTimer) {
+          clearTimeout(this.flushTimer);
+          this.flushTimer = null;
+        }
+        if (this.pendingValues.size > 0 || this.pendingRelations.size > 0) {
+          void this.flush();
+        }
+      };
+      window.addEventListener('pagehide', flushNow);
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushNow();
+      });
+    }
   }
 
   private enqueue(kind: 'value', item: Value): void;
@@ -137,7 +157,26 @@ export class PersistenceEngine {
       if (localRelations.length > 0) {
         reactiveRelations.set(prev => {
           const localById = new Map(localRelations.map(r => [r.id, r]));
-          const merged = prev.map(r => localById.get(r.id) ?? r);
+          // Keys of locally-tombstoned relations. Any prev (server-hydrated)
+          // relation matching these keys but with a different id is a stale
+          // duplicate the user has already removed — tombstone it too so the
+          // delete persists across the hydrate-vs-restore race. Mirrors the
+          // filter in hydrateReactiveState, but here we apply it retroactively
+          // to relations that already landed in prev before restore ran.
+          const locallyDeletedKeys = new Set(
+            localRelations.filter(r => r.isDeleted).map(r => relationKey(r))
+          );
+          const localIds = new Set(localRelations.map(r => r.id));
+
+          const merged = prev.map(r => {
+            const local = localById.get(r.id);
+            if (local) return local;
+            if (locallyDeletedKeys.has(relationKey(r)) && !localIds.has(r.id)) {
+              return { ...r, isDeleted: true, isLocal: true, hasBeenPublished: false };
+            }
+            return r;
+          });
+
           const prevIds = new Set(prev.map(r => r.id));
           for (const r of localRelations) {
             if (!prevIds.has(r.id)) {
