@@ -388,14 +388,17 @@ function EntitySidePanelBody({
         initialTabs={initialTabs}
         initialCollectionItems={initialCollectionItems}
       >
-        {/* Side panel: never use md:px-0 — viewport `md` strips padding even inside this narrow column */}
-        <div className="px-4 pb-12 sm:px-5">
-          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+        <div className="px-4 pt-6 pb-12 sm:px-5">
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage />
           <EntityPageContentContainer>
             <div>
               <div className="space-y-2">
-                <EditableHeading spaceId={entitySpaceId} entityId={entityId} />
-                {!isRelationPage && <EntityPageInlineDescription entityId={entityId} spaceId={entitySpaceId} />}
+                <div className="[&_.line-clamp-1]:!line-clamp-none [&_.line-clamp-2]:!line-clamp-none [&_.line-clamp-3]:!line-clamp-none [&_.line-clamp-4]:!line-clamp-none [&_.line-clamp-5]:!line-clamp-none [&_.line-clamp-6]:!line-clamp-none">
+                  <EditableHeading spaceId={entitySpaceId} entityId={entityId} />
+                </div>
+                {!isRelationPage && (
+                  <EntityPageInlineDescription entityId={entityId} spaceId={entitySpaceId} truncate={false} />
+                )}
                 {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={entitySpaceId} isVoteable />}
               </div>
               <Spacer height={40} />
