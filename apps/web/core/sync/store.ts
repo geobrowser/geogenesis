@@ -20,7 +20,7 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
-export function relationKey(r: Relation): string {
+function relationKey(r: Relation): string {
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
 }
 

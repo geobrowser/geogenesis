@@ -78,29 +78,6 @@ export interface Mutator {
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
     deleteMany: (relations: Relation[]) => void;
-    /**
-     * Upsert by relation key (fromEntity + type + toEntity + spaceId). Reuses
-     * the id/entityId of any existing matching relation — including a
-     * tombstoned one, which it resurrects via setRelation. Use for "multi"
-     * relation types where many distinct relations of the same type may exist
-     * on the same fromEntity, but each (fromEntity, type, toEntity, spaceId)
-     * tuple should round-trip a single relation lifecycle (e.g. PROPERTIES,
-     * COLLECTION_ITEM). Without this, a remove-then-re-add cycle leaves a
-     * tombstoned relation plus a freshly-id'd live one with the same key,
-     * bloating ops and causing "stuck" UI states on subsequent toggles.
-     *
-     * Returns the {id, entityId} actually written, so callers that also need
-     * to write a Value keyed on the relation's entityId (e.g. selector values)
-     * can target the correct entity even when an existing relation was reused.
-     */
-    upsertByKey: (relation: Relation) => { id: string; entityId: string };
-    /**
-     * Update the unique relation matching (fromEntity, type) in place, swapping
-     * its toEntity. Tombstones any duplicate live matches. Use for "singleton"
-     * relation types where exactly one relation of a given type should exist
-     * on a fromEntity (e.g. VIEW_PROPERTY, DATA_SOURCE_TYPE_RELATION_TYPE).
-     */
-    replaceSingleton: (relation: Relation) => { id: string; entityId: string };
   };
   images: {
     createAndLink: (params: {
@@ -336,76 +313,6 @@ function createMutator(store: GeoStore): Mutator {
       },
       deleteMany: relations => {
         store.deleteRelations(relations);
-      },
-      upsertByKey: newRelation => {
-        const matches = store
-          .getResolvedRelations(newRelation.fromEntity.id, true)
-          .filter(
-            r =>
-              r.type.id === newRelation.type.id &&
-              r.toEntity.id === newRelation.toEntity.id &&
-              r.spaceId === newRelation.spaceId
-          );
-
-        const live = matches.filter(r => !r.isDeleted);
-        // Prefer a live match; otherwise resurrect the most recent tombstoned
-        // one so the relation id stays stable across remove-then-re-add cycles.
-        const target = live[0] ?? matches[matches.length - 1];
-
-        // Self-healing dedupe: if pre-existing buggy state left multiple live
-        // relations sharing this key, tombstone all but the canonical one. This
-        // is also a no-op in the steady state where there's at most one live.
-        for (const dup of live) {
-          if (dup.id !== target?.id) {
-            store.deleteRelation(dup);
-          }
-        }
-
-        if (target) {
-          // Reuse id/entityId/position so the relation has a single stable
-          // identity across toggle cycles; everything else takes the new value.
-          const merged = {
-            ...newRelation,
-            id: target.id,
-            entityId: target.entityId,
-            position: target.position ?? newRelation.position,
-          };
-          store.setRelation(merged);
-          return { id: merged.id, entityId: merged.entityId };
-        }
-
-        store.setRelation(newRelation);
-        return { id: newRelation.id, entityId: newRelation.entityId };
-      },
-      replaceSingleton: newRelation => {
-        const matches = store
-          .getResolvedRelations(newRelation.fromEntity.id, true)
-          .filter(r => r.type.id === newRelation.type.id);
-
-        const live = matches.filter(r => !r.isDeleted);
-        // Prefer a live match; otherwise resurrect the most recent tombstoned
-        // one so the relation id stays stable across remove-then-re-set cycles.
-        const target = live[0] ?? matches[matches.length - 1];
-
-        for (const dup of live) {
-          if (dup.id !== target?.id) {
-            store.deleteRelation(dup);
-          }
-        }
-
-        if (target) {
-          const merged = {
-            ...newRelation,
-            id: target.id,
-            entityId: target.entityId,
-            position: target.position ?? newRelation.position,
-          };
-          store.setRelation(merged);
-          return { id: merged.id, entityId: merged.entityId };
-        }
-
-        store.setRelation(newRelation);
-        return { id: newRelation.id, entityId: newRelation.entityId };
       },
     },
     images: {

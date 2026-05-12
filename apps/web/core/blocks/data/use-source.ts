@@ -140,11 +140,31 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
           value: selectorValue,
         });
       } else {
-        // Resurrects any tombstoned PROPERTIES→Name relation on this block-relation
-        // so a re-switch to RELATIONS source doesn't accumulate duplicates.
-        const { entityId: shownColumnEntityId } = storage.relations.upsertByKey({
-          id: ID.createEntityId(),
-          entityId: IdUtils.generate(),
+        const newShownColumnId = ID.createEntityId();
+        const newShownColumnEntityId = IdUtils.generate();
+
+        storage.values.set({
+          id: ID.createValueId({
+            entityId: newShownColumnEntityId,
+            propertyId: SystemIds.SELECTOR_PROPERTY,
+            spaceId,
+          }),
+          spaceId,
+          entity: {
+            id: newShownColumnEntityId,
+            name: null,
+          },
+          property: {
+            id: SystemIds.SELECTOR_PROPERTY,
+            name: 'Selector',
+            dataType: 'TEXT',
+          },
+          value: selectorValue,
+        });
+
+        storage.relations.set({
+          id: newShownColumnId,
+          entityId: newShownColumnEntityId,
           spaceId,
           position: Position.generate(),
           renderableType: 'RELATION',
@@ -161,25 +181,6 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
             name: 'Name',
             value: SystemIds.NAME_PROPERTY,
           },
-        });
-
-        storage.values.set({
-          id: ID.createValueId({
-            entityId: shownColumnEntityId,
-            propertyId: SystemIds.SELECTOR_PROPERTY,
-            spaceId,
-          }),
-          spaceId,
-          entity: {
-            id: shownColumnEntityId,
-            name: null,
-          },
-          property: {
-            id: SystemIds.SELECTOR_PROPERTY,
-            name: 'Selector',
-            dataType: 'TEXT',
-          },
-          value: selectorValue,
         });
       }
     }

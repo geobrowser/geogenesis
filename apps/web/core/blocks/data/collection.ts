@@ -31,12 +31,8 @@ export function upsertCollectionItemRelation({
   toSpaceId,
   verified,
 }: CreateCollectionItemRelationArgs) {
-  // upsertByKey resurrects any tombstoned (collectionId, COLLECTION_ITEM, toEntity)
-  // relation so re-adding a previously-removed item reuses its original id,
-  // instead of leaving a deleted relation alongside a freshly-id'd live one.
-  // Callers may still pass an explicit relationId (e.g. when stitching to an
-  // existing entity); upsertByKey honors it only if no key match is found.
-  storage.relations.upsertByKey({
+  // Create a relation for the Collection Item pointing from the collection to the new entity
+  storage.relations.set({
     ...(relationId ? { id: relationId } : {}),
     ...makeRelationForCollectionItem({
       collectionId,

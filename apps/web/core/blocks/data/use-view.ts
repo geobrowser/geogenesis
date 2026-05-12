@@ -7,6 +7,7 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
+import { store } from '~/core/sync/use-sync-engine';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
@@ -79,137 +80,191 @@ export function useView() {
   }, [shownColumnRelations]);
 
   const setView = async (newView: DataBlockViewDetails) => {
-    if (newView.value === view) return;
+    const isCurrentView = newView.value === view;
 
-    storage.relations.replaceSingleton({
-      id: IdUtils.generate(),
-      entityId: IdUtils.generate(),
-      spaceId,
-      position: Position.generate(),
-      renderableType: 'RELATION',
-      type: {
-        id: SystemIds.VIEW_PROPERTY,
-        name: 'View',
-      },
-      fromEntity: {
-        id: newRelationId,
-        name: blockEntity?.name ?? null,
-      },
-      toEntity: {
-        id: newView.id,
-        name: newView.name,
-        value: newView.id,
-      },
-    });
-  };
+    if (!isCurrentView) {
+      if (!viewRelation) {
+        const newRelation: Relation = {
+          id: IdUtils.generate(),
+          // @TODO(migration): Reuse existing entity?
+          entityId: IdUtils.generate(),
+          spaceId: spaceId,
+          position: Position.generate(),
+          renderableType: 'RELATION',
+          type: {
+            id: SystemIds.VIEW_PROPERTY,
+            name: 'View',
+          },
+          fromEntity: {
+            id: newRelationId,
+            name: blockEntity?.name ?? null,
+          },
+          toEntity: {
+            id: newView.id,
+            name: newView.name,
+            value: newView.id,
+          },
+        };
 
-  const toggleProperty = (newColumn: Column, selector?: string) => {
-    // All live relations for this column on the current block-relation. Usually
-    // 0 or 1, but can be >1 if pre-existing buggy state left duplicates — in
-    // which case toggle-off must tombstone every match to fully hide the
-    // column, and `shownColumnRelation` (the canonical one for in-place value
-    // updates in the selector branch) is just the first.
-    const matchingShownColumnRelations = shownColumnRelations.filter(r => r.toEntity.id === newColumn.id);
-    const isShown = matchingShownColumnRelations.length > 0;
-    const shownColumnRelation = matchingShownColumnRelations[0];
-
-    const newRelationEntityId = shownColumnRelation?.entityId ?? IdUtils.generate();
-
-    const existingMapping = mapping[newColumn.id];
-
-    // RELATIONS queries pass a selector. Behavior:
-    // - clicking the active selector → toggle the column off
-    // - clicking a different selector → keep the column, swap its selector value
-    // - clicking with no live column → upsert (resurrects any tombstoned match
-    //   so position/id survive show/hide cycles)
-    if (selector) {
-      if (selector === existingMapping) {
-        if (matchingShownColumnRelations.length > 0) {
-          storage.relations.deleteMany(matchingShownColumnRelations);
-        }
+        storage.relations.set(newRelation);
         return;
       }
 
-      // If there are duplicate live relations for this column, tombstone all
-      // but the canonical one so the selector value we're about to write
-      // doesn't disagree with itself across duplicates.
-      if (matchingShownColumnRelations.length > 1) {
-        storage.relations.deleteMany(matchingShownColumnRelations.slice(1));
+      storage.relations.set({
+        ...viewRelation,
+        spaceId,
+        type: {
+          id: SystemIds.VIEW_PROPERTY,
+          name: 'View',
+        },
+        fromEntity: {
+          ...viewRelation.fromEntity,
+          id: newRelationId,
+          name: blockEntity?.name ?? null,
+        },
+        toEntity: {
+          id: newView.id,
+          name: newView.name,
+          value: newView.id,
+        },
+      });
+    }
+  };
+
+  const toggleProperty = (newColumn: Column, selector?: string) => {
+    const isShown = shownColumnRelations.map(relation => relation.toEntity.id).includes(EntityId(newColumn.id));
+    const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+
+    const newId = selector ? ID.createEntityId() : undefined;
+    const newRelationEntityId = IdUtils.generate();
+
+    const existingMapping = mapping[newColumn.id];
+
+    // We run a separate branch of logic for RELATIONS queries where a selector may get passed through.
+    //
+    // If the selector is already active, when toggling the property it removes the shown property.
+    // If the selector is not active, is deletes any existing shown property for the property id and
+    // creates a new one with the new selector.
+    //
+    // Yes this looks janky
+    if (selector && newId) {
+      if (selector !== existingMapping) {
+        if (shownColumnRelation) {
+          storage.values.set({
+            id: ID.createValueId({
+              entityId: shownColumnRelation.entityId,
+              propertyId: SystemIds.SELECTOR_PROPERTY,
+              spaceId,
+            }),
+            spaceId,
+            entity: {
+              id: shownColumnRelation.entityId,
+              name: null,
+            },
+            property: {
+              id: SystemIds.SELECTOR_PROPERTY,
+              name: 'Selector',
+              dataType: 'TEXT',
+            },
+            value: selector,
+          });
+
+          return;
+        }
+
+        storage.values.set({
+          id: ID.createValueId({
+            entityId: newRelationEntityId,
+            propertyId: SystemIds.SELECTOR_PROPERTY,
+            spaceId,
+          }),
+          spaceId,
+          entity: {
+            id: newRelationEntityId,
+            name: null,
+          },
+          property: {
+            id: SystemIds.SELECTOR_PROPERTY,
+            name: 'Selector',
+            dataType: 'TEXT',
+          },
+          value: selector,
+        });
+
+        storage.relations.set({
+          id: newId,
+          entityId: newRelationEntityId,
+          spaceId: spaceId,
+          position: nextPropertiesColumnPosition(),
+          renderableType: 'RELATION',
+          type: {
+            id: SystemIds.PROPERTIES,
+            name: 'Properties',
+          },
+          fromEntity: {
+            id: relationId,
+            name: blockRelationName,
+          },
+          toEntity: {
+            id: newColumn.id,
+            name: newColumn.name,
+            value: newColumn.id,
+          },
+        });
       }
 
-      // Ensure the relation exists (resurrecting a tombstoned match if any)
-      // before writing the selector value, so the value lands on whichever
-      // entityId the upsert actually used.
-      const targetEntityId = shownColumnRelation
-        ? shownColumnRelation.entityId
-        : storage.relations.upsertByKey({
-            id: ID.createEntityId(),
-            entityId: newRelationEntityId,
-            spaceId,
-            position: nextPropertiesColumnPosition(),
-            renderableType: 'RELATION',
-            type: {
-              id: SystemIds.PROPERTIES,
-              name: 'Properties',
-            },
-            fromEntity: {
-              id: relationId,
-              name: blockRelationName,
-            },
-            toEntity: {
-              id: newColumn.id,
-              name: newColumn.name,
-              value: newColumn.id,
-            },
-          }).entityId;
+      if (shownColumnRelation) {
+        storage.relations.delete(shownColumnRelation);
+      }
 
-      storage.values.set({
-        id: ID.createValueId({
-          entityId: targetEntityId,
-          propertyId: SystemIds.SELECTOR_PROPERTY,
-          spaceId,
-        }),
-        spaceId,
-        entity: {
-          id: targetEntityId,
-          name: null,
+      return;
+    }
+
+    if (!isShown) {
+      // Look for a previously-tombstoned PROPERTIES relation pointing at the
+      // same column on this block-relation. Resurrecting it (same id, isDeleted
+      // flipped back to false by setRelation) keeps a single relation lifecycle
+      // across show/hide toggles instead of accumulating tombstones plus a
+      // fresh relation per re-toggle. Same pattern as the view-switch fix.
+      const existingTombstoned = store
+        .getResolvedRelations(newRelationId, true)
+        .find(
+          r =>
+            r.isDeleted &&
+            (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+            r.toEntity.id === newColumn.id
+        );
+
+      if (existingTombstoned) {
+        storage.relations.set(existingTombstoned);
+        return;
+      }
+
+      storage.relations.set({
+        id: IdUtils.generate(),
+        entityId: newRelationEntityId,
+        spaceId: spaceId,
+        position: nextPropertiesColumnPosition(),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.PROPERTIES,
+          name: 'Properties',
         },
-        property: {
-          id: SystemIds.SELECTOR_PROPERTY,
-          name: 'Selector',
-          dataType: 'TEXT',
+        fromEntity: {
+          id: newRelationId,
+          name: blockRelationName,
         },
-        value: selector,
+        toEntity: {
+          id: newColumn.id,
+          name: newColumn.name,
+          value: newColumn.id,
+        },
       });
-
-      return;
+    } else {
+      if (shownColumnRelation) {
+        storage.relations.delete(shownColumnRelation);
+      }
     }
-
-    if (isShown) {
-      storage.relations.deleteMany(matchingShownColumnRelations);
-      return;
-    }
-
-    storage.relations.upsertByKey({
-      id: IdUtils.generate(),
-      entityId: newRelationEntityId,
-      spaceId,
-      position: nextPropertiesColumnPosition(),
-      renderableType: 'RELATION',
-      type: {
-        id: SystemIds.PROPERTIES,
-        name: 'Properties',
-      },
-      fromEntity: {
-        id: newRelationId,
-        name: blockRelationName,
-      },
-      toEntity: {
-        id: newColumn.id,
-        name: newColumn.name,
-        value: newColumn.id,
-      },
-    });
   };
 
   const hideAllShownPropertyColumns = React.useCallback(() => {
