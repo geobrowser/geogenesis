@@ -65,5 +65,5 @@ export function GeoConnectButton() {
     login();
   };
 
-  return <Button onClick={onLogin}>Sign in</Button>;
+  return <Button onClick={onLogin}>Log in</Button>;
 }
