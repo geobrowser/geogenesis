@@ -3,7 +3,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Anchor, Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
@@ -19,19 +18,16 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { isNearScrollBottom } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
-import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import {
-  fetchRelationTargetTypeIdsForProperty,
-  mergeRelationValueTypesFromStore,
-} from '~/core/utils/property/properties';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -216,39 +212,11 @@ function useRelationColumnTargetTypeIds(
   blockSpaceId: string | undefined,
   relationValueTypesFromOptions: { id: string; name: string | null }[] | undefined
 ): { typeIds: string[] | undefined; waitForFilterTypes: boolean } {
-  const { store } = useSyncEngine();
-  const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
-
-  const fromStore = React.useMemo(() => {
-    void relationsSnapshot;
-    if (!propertyId) return undefined;
-    const merged = mergeRelationValueTypesFromStore({ id: propertyId, name: null, dataType: 'RELATION' }, store);
-    return merged.relationValueTypes?.length ? merged.relationValueTypes.map(t => t.id) : undefined;
-  }, [propertyId, relationsSnapshot, store]);
-
-  const {
-    data: fromNetwork,
-    isFetching: isFetchingNetworkTypes,
-    isPending: isPendingNetworkTypes,
-  } = useQuery({
-    enabled: Boolean(propertyId) && !fromStore?.length,
-    queryKey: ['table-block-filter-relation-target-type-ids', propertyId, blockSpaceId],
-    queryFn: () => fetchRelationTargetTypeIdsForProperty(propertyId!, blockSpaceId),
-    staleTime: 60_000,
+  const { typeIds, waitForFilterTypes } = useRelationTargetTypeIds({
+    propertyId,
+    spaceId: blockSpaceId,
+    relationValueTypes: relationValueTypesFromOptions,
   });
-
-  const typeIds = React.useMemo(() => {
-    const fromOptions = relationValueTypesFromOptions?.length
-      ? relationValueTypesFromOptions.map(t => t.id)
-      : undefined;
-    if (fromStore?.length) return fromStore;
-    if (fromNetwork?.length) return fromNetwork;
-    return fromOptions;
-  }, [fromStore, fromNetwork, relationValueTypesFromOptions]);
-
-  /** Until we have target type ids, do not show unfiltered relation suggestions or run unscoped search. */
-  const waitForFilterTypes =
-    Boolean(propertyId) && !typeIds?.length && (isFetchingNetworkTypes || isPendingNetworkTypes);
 
   return { typeIds, waitForFilterTypes };
 }
@@ -1525,11 +1493,8 @@ function TableBlockEntityFilterInput({
   const handleEntityResultsScroll = React.useCallback(
     (e: React.UIEvent<HTMLUListElement>) => {
       const el = e.currentTarget;
-      // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 275;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
+      const nearBottom = isNearScrollBottom(el);
       if (!nearBottom && !noOverflow) return;
       if (entityVisibleCount < rowsToRender.length) {
         setEntityVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, rowsToRender.length));
@@ -1726,9 +1691,9 @@ function TableBlockSpaceFilterInput({
   memberSpaceId,
   onToggleSpace,
 }: TableBlockSpaceFilterInputProps) {
-  const { query, setQuery, spaces: results } = useSpacesQuery();
   const interactionRootRef = React.useRef<HTMLDivElement>(null);
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
+  const { query, setQuery, spaces: results } = useSpacesQuery(focused);
 
   // Default suggestions shown on focus with empty query: the spaces the
   // current block's entity is a member of.
@@ -1776,11 +1741,8 @@ function TableBlockSpaceFilterInput({
 
   const applySpaceListPagination = React.useCallback(
     (el: HTMLUListElement) => {
-      // ~2 result-row heights of early prefetch on top of the baseline.
-      const threshold = 275;
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const noOverflow = el.scrollHeight <= el.clientHeight + 2;
-      const nearBottom = distanceFromBottom <= threshold;
+      const nearBottom = isNearScrollBottom(el);
       if (!nearBottom && !noOverflow) return;
       if (spaceVisibleCount < spaceFullRowCount) {
         setSpaceVisibleCount(c => Math.min(c + FILTER_DROPDOWN_PAGE_SIZE, spaceFullRowCount));

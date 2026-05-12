@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useState } from 'react';
 
@@ -16,23 +16,32 @@ const filterByTypes = ['362c1dbddc6444bba3c4652f38a642d7']; // Filter only space
 
 export type UseSpacesQueryOptions = {
   matchLimit?: number;
+  allowEmptyQuery?: boolean;
 };
 
 export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) {
   const matchLimit = options?.matchLimit ?? 10;
+  const allowEmptyQuery = options?.allowEmptyQuery ?? false;
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
   const { store } = useSyncEngine();
   const cache = useQueryClient();
 
-  const { data: fuzzyMatchedSpaces = [], isLoading } = useQuery({
+  const {
+    data: fuzzyMatchedSpacePages,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ['spaces-by-name', debouncedQuery, matchLimit],
-    queryFn: async () => {
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
-            await E.findFuzzy({
+            await E.findFuzzyPage({
               store,
               cache,
               where: {
@@ -48,7 +57,8 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
                 }),
               },
               first: matchLimit,
-              skip: 0,
+              skip: pageParam,
+              signal,
             }),
           catch: error => {
             console.error('error', error);
@@ -65,17 +75,28 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
         switch (error._tag) {
           case 'AbortError':
             console.log(`abort error`);
-            return [];
+            return { rows: [], offset: pageParam, rawCount: 0, total: 0 };
           default:
             console.error('useSearch error:', String(error));
             throw error;
         }
       }
 
-      return resultOrError.right;
+      return {
+        rows: resultOrError.right.results,
+        offset: pageParam,
+        rawCount: resultOrError.right.rawCount,
+        total: resultOrError.right.total,
+      };
     },
-    enabled: enabled && debouncedQuery.length > 0,
+    getNextPageParam: lastPage => {
+      const nextOffset = lastPage.offset + matchLimit;
+      return nextOffset >= lastPage.total ? undefined : nextOffset;
+    },
+    enabled: enabled && (allowEmptyQuery || debouncedQuery.trim().length > 0),
   });
+
+  const fuzzyMatchedSpaces = fuzzyMatchedSpacePages?.pages.flatMap(page => page.rows) ?? [];
 
   const spaces = fuzzyMatchedSpaces.flatMap(entity => {
     return entity.spaces.map(space => ({
@@ -112,19 +133,13 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
     return [...byId.values()];
   };
 
-  if (!fuzzyMatchedSpaces) {
-    return {
-      query,
-      setQuery,
-      spaces: [],
-      isLoading,
-    };
-  }
-
   return {
     query,
     setQuery,
     spaces: uniqueSpacesById(spaces),
     isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
   };
 }

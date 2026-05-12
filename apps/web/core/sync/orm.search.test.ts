@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SpaceEntity } from '../types';
-import { resolveSearchSpaces } from './orm';
+import type { Entity, SearchResult, SpaceEntity } from '../types';
+import {
+  applyKnownEntitySpaces,
+  getSearchResultNameForTopSpace,
+  isDisplayableSearchResult,
+  isIncludedSearchResult,
+  mergeResolvableSpaces,
+  resolveSearchSpaces,
+} from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
   return {
@@ -34,5 +41,140 @@ describe('resolveSearchSpaces', () => {
 
   it('drops string-only spaces when hydration data is unavailable', () => {
     expect(resolveSearchSpaces(['space-1'], {})).toEqual([]);
+  });
+});
+
+describe('applyKnownEntitySpaces', () => {
+  it('uses the entity-wide known space list instead of the query-specific search row spaces', () => {
+    const result = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces: [makeSpaceEntity('returned-space', { name: 'Returned Space' })],
+    };
+    const knownEntity = {
+      spaces: ['top-ranked-space', 'returned-space'],
+    } as Pick<Entity, 'spaces'>;
+
+    expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual(['top-ranked-space', 'returned-space']);
+  });
+
+  it('keeps search row spaces when entity details are unavailable', () => {
+    const spaces = [makeSpaceEntity('returned-space', { name: 'Returned Space' })];
+    const result = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces,
+    };
+
+    expect(applyKnownEntitySpaces(result, null).spaces).toBe(spaces);
+  });
+
+  it('uses an empty known space list to suppress stale search row spaces', () => {
+    const result: SearchResult = {
+      id: 'entity-1',
+      name: 'Entity',
+      description: null,
+      types: [],
+      spaces: [makeSpaceEntity('stale-space', { name: 'Stale Space' })],
+    };
+    const knownEntity = {
+      spaces: [],
+    } as Pick<Entity, 'spaces'>;
+
+    expect(applyKnownEntitySpaces(result, knownEntity).spaces).toEqual([]);
+  });
+});
+
+describe('mergeResolvableSpaces', () => {
+  it('preserves remote spaces and appends deduped local-only spaces', () => {
+    const remoteSpace = makeSpaceEntity('space-1', { name: 'Remote Space' });
+
+    expect(mergeResolvableSpaces([remoteSpace, 'space-2'], ['space-2', 'space-3'])).toEqual([
+      remoteSpace,
+      'space-2',
+      'space-3',
+    ]);
+  });
+});
+
+describe('getSearchResultNameForTopSpace', () => {
+  it('uses the name from the top displayed space', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '',
+          namesBySpace: {
+            'stale-space': '',
+            'top-space': 'Top Space Name',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Top Space Name');
+  });
+
+  it('falls back to the grouped result name when the top space name is blank', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: 'Grouped Name',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBe('Grouped Name');
+  });
+
+  it('returns null when neither the top space nor grouped result has a real name', () => {
+    expect(
+      getSearchResultNameForTopSpace(
+        {
+          name: '   ',
+          namesBySpace: {
+            'top-space': '',
+          },
+        },
+        [makeSpaceEntity('top-space')]
+      )
+    ).toBeNull();
+  });
+});
+
+describe('isDisplayableSearchResult', () => {
+  it('requires a non-blank name and at least one resolved space', () => {
+    const space = makeSpaceEntity('space-1', { name: 'Space' });
+
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [space] })).toBe(true);
+    expect(isDisplayableSearchResult({ name: '   ', spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: null, spaces: [space] })).toBe(false);
+    expect(isDisplayableSearchResult({ name: 'Named Entity', spaces: [] })).toBe(false);
+  });
+});
+
+describe('isIncludedSearchResult', () => {
+  it('filters out results with default excluded block/media types', () => {
+    const space = makeSpaceEntity('space-1', { name: 'Space' });
+
+    expect(
+      isIncludedSearchResult({
+        name: 'Latest',
+        spaces: [space],
+        types: [{ id: 'b8803a8665de412bbb357e0c84adf473', name: 'Data Block' }],
+      })
+    ).toBe(false);
+
+    expect(
+      isIncludedSearchResult({
+        name: 'Latest',
+        spaces: [space],
+        types: [{ id: '11111111111111111111111111111111', name: 'Article' }],
+      })
+    ).toBe(true);
   });
 });

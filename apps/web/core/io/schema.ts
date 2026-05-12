@@ -110,11 +110,7 @@ export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
  */
 export const RoutingValueProjection = Schema.Struct({
   spaceId: HexId,
-  property: Schema.NullOr(
-    Schema.Struct({
-      id: Schema.NullOr(HexId),
-    })
-  ),
+  propertyId: Schema.NullOr(HexId),
 });
 
 export const RoutingRelationProjection = Schema.Struct({

@@ -8,6 +8,7 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
@@ -41,7 +42,8 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
-  const autocomplete = useSearch();
+  const autocomplete = useSearch({ enabled: open });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -65,7 +67,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  const hasResults = autocomplete.query && autocomplete.results.length > 0;
+  const hasResults = autocomplete.results.length > 0;
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   useKey('Enter', () => {
     if (!hasResults) return;
@@ -161,7 +170,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   />
                 </div>
                 <ResizableContainer duration={0.15}>
-                  <ResultsList>
+                  <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                     {autocomplete.isEmpty ? (
                       isValidEntityId ? (
                         <div className="px-2 pb-1">
@@ -204,6 +213,11 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </div>
                       </motion.div>
                     ))}
+                    {autocomplete.isFetchingNextPage ? (
+                      <div className="flex items-center justify-center py-2 text-smallButton">
+                        <Dots />
+                      </div>
+                    ) : null}
                   </ResultsList>
                 </ResizableContainer>
               </>

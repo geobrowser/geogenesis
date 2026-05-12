@@ -44,7 +44,7 @@ describe('analytics', () => {
     expect(analyticsEnvironment('www.geobrowser.io')).toBe('production');
   });
 
-  it('tracks new Privy users as signups with reviewed email only', async () => {
+  it('tracks new Privy users as signups with reviewed email and no raw account data', async () => {
     const signedUp = vi.fn();
     window.lytics = {
       capture: vi.fn(),
