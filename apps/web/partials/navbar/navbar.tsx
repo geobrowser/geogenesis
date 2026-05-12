@@ -14,7 +14,7 @@ interface Props {
 
 export function Navbar({ onSearchClick, hideLogo = false }: Props) {
   return (
-    <nav className="sticky top-0 z-100 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1">
+    <nav className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1">
       <div className="flex items-center gap-8 md:gap-4">
         {hideLogo ? null : (
           <Link href={NavUtils.toRoot()}>
