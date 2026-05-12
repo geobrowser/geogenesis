@@ -11,6 +11,7 @@ import { Effect } from 'effect';
 import { useSetAtom, useStore } from 'jotai';
 
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
+import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -395,6 +396,45 @@ export const ReviewChanges = () => {
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+  const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isReviewOpen) {
+      lastReviewOpenAnalyticsKey.current = null;
+      return;
+    }
+
+    if (isLoadingChanges || !activeSpace) {
+      return;
+    }
+
+    const analyticsKey = `${reviewVersion}:${activeSpace}`;
+
+    if (lastReviewOpenAnalyticsKey.current === analyticsKey) {
+      return;
+    }
+
+    lastReviewOpenAnalyticsKey.current = analyticsKey;
+    reviewChangesOpened({
+      content_id: `review_changes:${reviewVersion}:${activeSpace}`,
+      content_type: 'review_changes',
+      source: 'review_panel',
+      space_id: activeSpace,
+      value_count: valuesFromSpace.length,
+      relation_count: relationsFromSpace.length,
+      entity_count: visibleEntities.length,
+      space_count: dedupedSpacesWithActions.length,
+    });
+  }, [
+    activeSpace,
+    dedupedSpacesWithActions.length,
+    isLoadingChanges,
+    isReviewOpen,
+    relationsFromSpace.length,
+    reviewVersion,
+    valuesFromSpace.length,
+    visibleEntities.length,
+  ]);
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -416,8 +456,17 @@ export const ReviewChanges = () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
     setIsPublishing(true);
-
     const proposalEntityId = ID.createEntityId();
+
+    publishedEdit({
+      content_id: proposalEntityId,
+      content_type: 'publish',
+      publish_flow: 'review_changes',
+      publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
+      space_id: activeSpace,
+      value_count: valuesFromSpace.length,
+      relation_count: relationsFromSpace.length,
+    });
 
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
@@ -586,6 +635,7 @@ export const ReviewChanges = () => {
     valuesFromSpace,
     relationsFromSpace,
     proposalName,
+    activeSpaceMetadata?.type,
     selectedBountyIds,
     personalSpaceId,
     bountiesById,

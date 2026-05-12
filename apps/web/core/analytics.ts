@@ -257,6 +257,20 @@ export function personalSpaceViewed(personalSpaceId: string, properties: Analyti
   });
 }
 
+export function reviewChangesOpened(properties: AnalyticsProperties = {}) {
+  capture('review_changes_opened', {
+    source: 'review_changes',
+    ...properties,
+  });
+}
+
+export function publishedEdit(properties: AnalyticsProperties = {}) {
+  capture('published_edit', {
+    source: 'publishing',
+    ...properties,
+  });
+}
+
 export function signedUp(user: AnalyticsIdentity, properties: AnalyticsProperties = {}) {
   callOrQueue({
     method: 'signedUp',
@@ -313,6 +327,27 @@ export function identifyPrivyUser(user: PrivyAnalyticsUser, properties: Analytic
   identify(identity);
 }
 
+export function restorePrivySession(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
+  const identity = privyIdentityProperties(user, properties);
+
+  if (!identity.user_id) {
+    return;
+  }
+
+  sessionRestored(
+    identity,
+    cleanProperties({
+      ...identity,
+      source: 'privy',
+      auth_provider: 'privy',
+      auth_flow: 'session_restore',
+      is_new_user: false,
+      was_already_authenticated: true,
+      ...properties,
+    })
+  );
+}
+
 export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsProperties = {}) {
   const identity = privyIdentityProperties(params.user);
 
@@ -325,6 +360,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
   const isManualLoginFlow = authFlow === 'manual_login';
   const authProperties = cleanProperties({
     ...identity,
+    ...(params.isNewUser ? privySignupProperties(params.user) : {}),
     source: 'privy',
     auth_provider: 'privy',
     auth_flow: isManualLoginFlow ? 'manual_login' : 'session_restore',
@@ -537,6 +573,66 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     privy_wallet_delegated: wallet?.delegated,
     ...properties,
   });
+}
+
+function privySignupProperties(user: PrivyAnalyticsUser): AnalyticsProperties {
+  const email = privyEmail(user);
+
+  return email ? { email } : {};
+}
+
+function privyEmail(user: PrivyAnalyticsUser) {
+  return emailFromUnknown(user.email) ?? linkedAccountEmail(user.linkedAccounts);
+}
+
+function linkedAccountEmail(accounts: unknown[] | null | undefined) {
+  if (!Array.isArray(accounts)) {
+    return undefined;
+  }
+
+  for (const account of accounts) {
+    const email = emailFromUnknown(account);
+
+    if (email) {
+      return email;
+    }
+  }
+
+  return undefined;
+}
+
+function emailFromUnknown(value: unknown) {
+  if (typeof value === 'string') {
+    return normalizeEmail(value);
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  for (const key of ['address', 'email', 'emailAddress']) {
+    const email = normalizeEmail(value[key]);
+
+    if (email) {
+      return email;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const email = value.trim().toLowerCase();
+
+  return email.includes('@') ? email : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function cleanProperties(properties: AnalyticsProperties) {
