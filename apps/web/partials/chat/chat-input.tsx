@@ -22,7 +22,9 @@ export function ChatInput({ value, onChange, onSubmit, disabled, placeholder = '
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.nativeEvent.isComposing) return;
       event.preventDefault();
+      event.stopPropagation();
       if (canSend) onSubmit();
     }
   };
@@ -42,8 +44,13 @@ export function ChatInput({ value, onChange, onSubmit, disabled, placeholder = '
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         minRows={2}
-        maxRows={4}
-        className="flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
+        // No maxRows — the textarea auto-resizes with content. Height is
+        // bounded by the chat panel via `max-h-[60cqh]` (60% of the panel,
+        // which sets `container-type: size`). Capping by row count alone
+        // caused an inner scrollbar to appear after ~4 lines even when the
+        // panel had room; container-relative max keeps the bar invisible for
+        // any realistic message length on any panel size.
+        className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
       />
       <button
         type="submit"

@@ -3,7 +3,7 @@ import * as Effect from 'effect/Effect';
 import { getSpaceAccessById } from '~/core/access/space-access';
 import { getSpaceByAddress } from '~/core/io/queries';
 
-import { editBurstLimit, editHourlyLimit } from '../../rate-limit';
+import { editHourlyLimit } from '../../rate-limit';
 
 // Membership is resolved once per request and memoized; read-only turns
 // never pay the GraphQL cost.
@@ -103,13 +103,9 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
     isMember: canEditSpace,
     checkEditRateLimit: async () => {
       try {
-        const [burst, hourly] = await Promise.all([
-          editBurstLimit.limit(walletAddress),
-          editHourlyLimit.limit(walletAddress),
-        ]);
-        if (!burst.success || !hourly.success) {
-          const reset = Math.max(burst.reset, hourly.reset);
-          const retryAfter = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+        const hourly = await editHourlyLimit.limit(walletAddress);
+        if (!hourly.success) {
+          const retryAfter = Math.max(1, Math.ceil((hourly.reset - Date.now()) / 1000));
           return { ok: false, retryAfter };
         }
         return { ok: true };

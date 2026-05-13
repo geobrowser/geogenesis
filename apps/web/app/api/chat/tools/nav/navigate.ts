@@ -66,10 +66,15 @@ export function buildNavigateTool(context: NavigateToolContext) {
         return { ok: true, target: 'personalSpace', spaceId: normalizeId(resolved) };
       }
 
-      if (input.target === 'space' && spaceId) {
+      // Validate space existence for both 'space' and 'entity' targets so a
+      // hallucinated spaceId paired with a real-looking entityId can't 404
+      // the user. Entity-existence is verified client-side at navigation time
+      // (the route renders 404 if missing) — checking it server-side would
+      // require an additional GraphQL hop on every nav call.
+      if ((input.target === 'space' || input.target === 'entity') && spaceId) {
         const result = await Effect.runPromise(Effect.either(getSpace(spaceId)));
         if (Either.isLeft(result) || result.right === null) {
-          return { ok: false, error: 'space_not_found', target: 'space', attemptedSpaceId: spaceId };
+          return { ok: false, error: 'space_not_found', target: input.target, attemptedSpaceId: spaceId };
         }
       }
 

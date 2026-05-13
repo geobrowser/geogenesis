@@ -4,17 +4,16 @@ import * as React from 'react';
 
 import type { UIMessage } from 'ai';
 import { isTextUIPart, isToolUIPart } from 'ai';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
-import type { EditToolFailure } from '~/core/chat/edit-types';
-import { isEditToolPartType } from '~/core/chat/edit-types';
 import { buildEntityCacheFromMessages } from '~/core/chat/entity-cache';
 import type { EntityCache } from '~/core/chat/entity-cache';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatMarkdown } from './chat-markdown';
+import { ChatSourceLink } from './chat-source-pill';
 import { useSmoothStream } from './use-smooth-stream';
 
 const DEBUG = process.env.NODE_ENV !== 'production';
@@ -26,29 +25,46 @@ function userText(message: UIMessage): string {
     .join('');
 }
 
-// Only text after the last main tool call — drops any preamble the model
-// emits before/between tools.
+// Step-aware text filter — the deterministic guardrail. Group parts by step
+// (between step-start markers); for each step, count its non-followup tool
+// calls. Drop text from any step that contains a tool call. Keep text only
+// from "pure-text" steps — by construction the model's final-answer step is
+// pure-text, so this returns the closing summary regardless of any
+// mid-turn narration the model emitted.
 function visibleAssistantText(message: UIMessage): string {
-  let lastMainToolIndex = -1;
-  message.parts.forEach((part, i) => {
-    if (!isToolUIPart(part)) return;
-    if (part.type === 'tool-suggestFollowUps') return;
-    lastMainToolIndex = i;
-  });
-
-  const texts: string[] = [];
-  for (let i = lastMainToolIndex + 1; i < message.parts.length; i++) {
-    const part = message.parts[i];
-    if (!isTextUIPart(part)) continue;
-    if (part.text.length === 0) continue;
-    const trimmed = part.text.trim();
-    const prior = (texts[texts.length - 1] ?? '').trim();
-    // Equality-on-trimmed dedup. An endsWith heuristic would swallow
-    // legitimate short trailing parts like "." that follow a longer text.
-    if (prior === trimmed) continue;
-    texts.push(part.text);
+  type StepGroup = { tools: number; texts: string[] };
+  const groups: StepGroup[] = [{ tools: 0, texts: [] }];
+  for (const part of message.parts) {
+    if (part.type === 'step-start') {
+      groups.push({ tools: 0, texts: [] });
+      continue;
+    }
+    const current = groups[groups.length - 1];
+    if (isToolUIPart(part)) {
+      if (part.type === 'tool-suggestFollowUps') continue;
+      current.tools += 1;
+      continue;
+    }
+    if (isTextUIPart(part)) {
+      if (part.text.length === 0) continue;
+      current.texts.push(part.text);
+    }
   }
-  return texts.join('\n\n');
+  const out: string[] = [];
+  let prevTrimmed = '';
+  for (const group of groups) {
+    if (group.tools > 0) continue;
+    for (const text of group.texts) {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) continue;
+      // Equality-on-trimmed dedup. The SDK occasionally emits adjacent
+      // identical text-deltas during step transitions.
+      if (trimmed === prevTrimmed) continue;
+      prevTrimmed = trimmed;
+      out.push(text);
+    }
+  }
+  return out.join('\n\n');
 }
 
 function hasPendingMainTools(message: UIMessage): boolean {
@@ -60,24 +76,34 @@ function hasPendingMainTools(message: UIMessage): boolean {
   return false;
 }
 
-// True iff a non-followup tool already resolved in this turn. Used to skip
-// the leading-text grace period — once we're past the tools, the model
-// can't emit a preamble that retroactively forces the cover back up.
-function hasResolvedMainToolInTurn(messages: UIMessage[], lastUserIdx: number): boolean {
-  for (let i = lastUserIdx + 1; i < messages.length; i++) {
-    const m = messages[i];
-    if (m.role !== 'assistant') continue;
-    for (const p of m.parts) {
-      if (!isToolUIPart(p)) continue;
-      if (p.type === 'tool-suggestFollowUps') continue;
-      if (p.state === 'output-available' || p.state === 'output-error') return true;
-    }
+// In the 3-stage pipeline (Haiku opener → Sonnet executor → Haiku closer), the
+// opener emits text BEFORE any tools run. Without this check, `computeIsThinking`
+// would return false the moment the opener finishes (visible text exists, no
+// pending tools yet), leaving the UI looking frozen until the executor's first
+// tool call lands. Returns true when the message contains at least one main
+// tool call AND no text appears after it — i.e., we're between opener-end and
+// closer-start (or mid-tool-chain between two tool calls).
+function isWaitingForCloser(message: UIMessage): boolean {
+  let lastMainToolIdx = -1;
+  for (let i = 0; i < message.parts.length; i++) {
+    const part = message.parts[i];
+    if (!isToolUIPart(part)) continue;
+    if (part.type === 'tool-suggestFollowUps') continue;
+    lastMainToolIdx = i;
   }
-  return false;
+  if (lastMainToolIdx === -1) {
+    // No main tools yet. If there's already text (the opener), the closer
+    // might still be coming if the executor hasn't started; we can't tell
+    // from parts alone, so leave this case to the streaming-status branch.
+    return false;
+  }
+  for (let i = lastMainToolIdx + 1; i < message.parts.length; i++) {
+    const part = message.parts[i];
+    if (isTextUIPart(part) && part.text.length > 0) return false;
+  }
+  return true;
 }
 
-// Last 'user' message index in O(messages.length); shared by the grace hook
-// and the main render so we don't scan twice.
 function findLastUserIndex(messages: UIMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') return i;
@@ -85,53 +111,9 @@ function findLastUserIndex(messages: UIMessage[]): number {
   return -1;
 }
 
-// Silent edit failures: surface inline since the model may not narrate them.
-type EditFailureNote = { toolName: string; failure: EditToolFailure };
-
-function messageEditFailures(message: UIMessage): EditFailureNote[] {
-  const failures: EditFailureNote[] = [];
-  for (const part of message.parts) {
-    if (!isToolUIPart(part)) continue;
-    if (!isEditToolPartType(part.type)) continue;
-    if (part.state !== 'output-available') continue;
-    const output = part.output as { ok?: boolean } | undefined;
-    if (!output || output.ok !== false) continue;
-    failures.push({ toolName: part.type.replace(/^tool-/, ''), failure: output as EditToolFailure });
-  }
-  return failures;
-}
-
-function describeEditFailure(note: EditFailureNote): string {
-  const { toolName, failure } = note;
-  switch (failure.error) {
-    case 'not_signed_in':
-      return `${toolName}: sign in to make this change.`;
-    case 'not_authorized':
-      return `${toolName}: you're not a member of that space.`;
-    case 'invalid_input':
-      return `${toolName}: invalid input.${failure.message ? ` ${failure.message}` : ''}`;
-    case 'not_found':
-      return `${toolName}: ${failure.message ?? "couldn't find that."}`;
-    case 'wrong_type':
-      return `${toolName}: ${failure.message ?? 'wrong property type.'}`;
-    case 'rate_limited':
-      return `${toolName}: too many edits — try again in ${failure.retryAfter ?? '...'}s.`;
-    case 'lookup_failed':
-      return `${toolName}: lookup failed. Retry in a moment.`;
-    case 'already_exists':
-      return `${toolName}: ${failure.message ?? 'already set.'}`;
-    case 'apply_failed':
-      return `${toolName}: ${failure.message ?? "couldn't apply that change."}`;
-    default:
-      return `${toolName}: failed.`;
-  }
-}
-
-// Cover stays on while we're truly thinking: a tool is mid-flight, the SDK
-// is about to resubmit a tool result, or no text has streamed yet. Once the
-// closing-summary text starts streaming and no main tool is pending, the
-// cover lifts and the user sees the answer live — same UX whether the turn
-// chained through tools first or was pure-text from the start.
+// True when a tool is mid-flight, the SDK is about to resubmit a tool result,
+// or no closing-summary text has streamed yet. Lifts the moment the
+// final-step text starts arriving.
 function computeIsThinking({
   messages,
   status,
@@ -145,7 +127,6 @@ function computeIsThinking({
 }): boolean {
   if (status === 'error') return false;
   if (lastUserIdx === -1) return false;
-
   if (status === 'submitted') return true;
 
   let lastAssistant: UIMessage | null = null;
@@ -157,54 +138,20 @@ function computeIsThinking({
   }
   if (!lastAssistant) return true;
 
-  // A pending main tool or queued resubmit means more model work is coming;
-  // keep the cover up.
   if (hasPendingMainTools(lastAssistant)) return true;
   if (willResubmit) return true;
 
-  // No tools pending. Lift as soon as visible text starts streaming;
-  // otherwise wait for the first token (so we don't show an empty panel
-  // mid-stream before the model commits to text vs. another tool call).
+  // Bridge the gap between the opener finishing and the closer starting (or
+  // between two tool calls mid-chain). Without this, the user sees just the
+  // opener text and a frozen UI while Sonnet runs the tool chain.
+  if (status === 'streaming' && isWaitingForCloser(lastAssistant)) return true;
+
   const finalText = visibleAssistantText(lastAssistant);
   if (finalText.length > 0) return false;
   return status === 'streaming';
 }
 
-// Brief grace period after the cover would lift due to leading text — gives
-// the model a moment to commit to a tool call instead. If a tool appears
-// inside the window, `hasPendingMainTools` flips the raw value back to true
-// and the timer is cleared, so the leading text never flashes. Post-tool
-// text skips the grace entirely (we're already past the flash window).
-const LEADING_TEXT_GRACE_MS = 350;
-
-function useGracedIsThinking({
-  rawIsThinking,
-  hasResolvedTool,
-}: {
-  rawIsThinking: boolean;
-  hasResolvedTool: boolean;
-}): boolean {
-  const [debounced, setDebounced] = React.useState(rawIsThinking);
-
-  React.useEffect(() => {
-    if (rawIsThinking) {
-      setDebounced(true);
-      return;
-    }
-    if (hasResolvedTool) {
-      setDebounced(false);
-      return;
-    }
-    const handle = setTimeout(() => setDebounced(false), LEADING_TEXT_GRACE_MS);
-    return () => clearTimeout(handle);
-  }, [rawIsThinking, hasResolvedTool]);
-
-  return debounced;
-}
-
 // One-line digest of an assistant message's parts for the debug logger.
-// Format: "step|tool:setEntityValue=output-available|text(42)|tool:searchGraph=input-streaming"
-// Dev-only: gated through the DEBUG constant so prod bundles tree-shake it.
 function digestParts(message: UIMessage | undefined): string {
   if (!message) return '<no-assistant>';
   return message.parts
@@ -212,12 +159,35 @@ function digestParts(message: UIMessage | undefined): string {
       if (p.type === 'step-start') return 'step';
       if (isTextUIPart(p)) return `text(${p.text.length})`;
       if (isToolUIPart(p)) {
-        const name = p.type.replace(/^tool-/, '');
-        return `tool:${name}=${p.state}`;
+        const isDynamic = p.type === 'dynamic-tool';
+        const name = isDynamic
+          ? `${(p as { toolName?: string }).toolName ?? '?'}@dynamic`
+          : p.type.replace(/^tool-/, '');
+        const providerExec = (p as { providerExecuted?: boolean }).providerExecuted ? '!srv' : '';
+        const hasErr = 'errorText' in p && p.errorText ? '!err' : '';
+        return `tool:${name}=${p.state}${providerExec}${hasErr}`;
       }
       return p.type;
     })
     .join('|');
+}
+
+function dumpDeepParts(message: UIMessage | undefined) {
+  if (!DEBUG || !message) return;
+  for (const p of message.parts) {
+    if (!isToolUIPart(p)) continue;
+    const anyP = p as Record<string, unknown>;
+    console.log(`[chat:part] ${p.type} state=${p.state}`, {
+      toolCallId: anyP.toolCallId,
+      toolName: anyP.toolName,
+      providerExecuted: anyP.providerExecuted,
+      input: anyP.input,
+      output: anyP.output,
+      errorText: anyP.errorText,
+      callProviderMetadata: anyP.callProviderMetadata,
+      resultProviderMetadata: anyP.resultProviderMetadata,
+    });
+  }
 }
 
 function useChatDebugLogger({
@@ -263,8 +233,54 @@ function useChatDebugLogger({
       `| msgs=${messages.length} status=${status} willResubmit=${willResubmit} isThinking=${isThinking}`,
       `| parts: ${digest}`
     );
+    if (prev?.digest !== digest) dumpDeepParts(lastAssistant);
     prevRef.current = { status, willResubmit, isThinking, digest };
   }
+}
+
+// `tool-research` parts carry `{ summary, sources: [{ url, title }] }`. We
+// surface every research call's sources in a deduped pill row capped at 5 so
+// the row stays scannable even on multi-research turns.
+type WebSource = { url: string; title: string | null; hostname: string };
+
+const MAX_WEB_SOURCES = 5;
+
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+function messageWebSources(message: UIMessage): WebSource[] {
+  const seen = new Set<string>();
+  const sources: WebSource[] = [];
+  for (const part of message.parts) {
+    if (!isToolUIPart(part)) continue;
+    if (part.type !== 'tool-research') continue;
+    if (part.state !== 'output-available') continue;
+    const output = (part as { output?: unknown }).output;
+    if (!output || typeof output !== 'object') continue;
+    const sourcesField = (output as { sources?: unknown }).sources;
+    if (!Array.isArray(sourcesField)) continue;
+    for (const raw of sourcesField) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      if (typeof r.url !== 'string') continue;
+      if (seen.has(r.url)) continue;
+      const hostname = hostnameOf(r.url);
+      if (!hostname) continue;
+      seen.add(r.url);
+      sources.push({
+        url: r.url,
+        title: typeof r.title === 'string' && r.title.length > 0 ? r.title : null,
+        hostname,
+      });
+      if (sources.length >= MAX_WEB_SOURCES) return sources;
+    }
+  }
+  return sources;
 }
 
 function messageFollowUps(message: UIMessage): string[] {
@@ -298,19 +314,18 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   const lastAssistantId = lastAssistant?.id;
   const followUps = lastAssistant ? messageFollowUps(lastAssistant) : [];
 
-  // Cover lifts as soon as visible closing-summary text starts streaming. A
-  // small grace period (useGracedIsThinking) hides any leading preamble that
-  // the model might emit before its first tool call — if a tool lands inside
-  // the window, the cover never lifted in the first place.
   const willResubmit = shouldResubmitAfterClientExecution({ messages });
   const lastUserIdx = findLastUserIndex(messages);
-  const rawIsThinking = computeIsThinking({ messages, status, willResubmit, lastUserIdx });
-  const hasResolvedTool = hasResolvedMainToolInTurn(messages, lastUserIdx);
-  const isThinking = useGracedIsThinking({ rawIsThinking, hasResolvedTool });
+  const isThinking = computeIsThinking({ messages, status, willResubmit, lastUserIdx });
 
   useChatDebugLogger({ messages, status, willResubmit, isThinking, lastAssistant });
 
-  const hiddenAssistantId = isThinking ? lastAssistantId : null;
+  // Synthetic thinking row: when we've just submitted but the SDK hasn't
+  // mounted an assistant message yet, render a placeholder so the user gets
+  // immediate feedback. Once the assistant message arrives, this disappears
+  // and the inline thinking indicator on the assistant message takes over.
+  const lastAssistantIdx = lastAssistant ? messages.lastIndexOf(lastAssistant) : -1;
+  const showStandaloneThinking = isThinking && (lastAssistantIdx === -1 || lastAssistantIdx < lastUserIdx);
 
   // Gate on `ready` so a previous turn's pills aren't keyboard-reachable
   // while the next turn is in flight (Tab+Enter would still fire onSuggestion).
@@ -324,12 +339,8 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   const entityCache = React.useMemo(() => buildEntityCacheFromMessages(messages), [messages]);
 
   // stuck-state is driven by scrollTop direction, not distance-from-bottom.
-  // Programmatic scrolls only ever move forward (`scrollForwardTo` enforces
-  // this), so a scrollTop *decrease* in onScroll is unambiguously a user
-  // gesture (wheel up, scrollbar drag up, keyboard PageUp, etc.). The old
-  // distance-based check was unreliable: with the iconLimit clamp leaving
-  // distance > NEAR_BOTTOM, any stray scroll event flipped stuck off and
-  // froze auto-follow mid-stream.
+  // Programmatic scrolls only ever move forward, so a scrollTop *decrease* in
+  // onScroll is unambiguously a user gesture.
   const stuckToBottomRef = React.useRef(true);
   const lastScrollTopRef = React.useRef(0);
   const NEAR_BOTTOM = 48;
@@ -342,11 +353,9 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
       const oldTop = lastScrollTopRef.current;
       lastScrollTopRef.current = newTop;
       if (newTop < oldTop) {
-        // User pulled up. Stop auto-follow so we don't yank them back down.
         stuckToBottomRef.current = false;
         return;
       }
-      // Scrolled (or back-scrolled) to near-bottom — resume auto-follow.
       const distance = el.scrollHeight - (newTop + el.clientHeight);
       if (distance <= NEAR_BOTTOM) stuckToBottomRef.current = true;
     };
@@ -354,93 +363,48 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
-  // useLayoutEffect so we commit the new scroll position before the browser
-  // paints the new content — prevents a one-frame flash of unscrolled text.
   const runAutoScroll = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const last = messages[messages.length - 1];
     if (!last) return;
 
-    // Auto-scroll only moves forward. If the user scrolls past our clamp to
-    // follow streaming tokens themselves, we must not yank them back up.
     const scrollForwardTo = (top: number) => {
       const before = el.scrollTop;
-      if (top <= before) {
-        if (DEBUG) {
-          console.log(
-            `[scroll] noop target=${Math.round(top)} <= scrollTop=${Math.round(before)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
-          );
-        }
-        return;
-      }
+      if (top <= before) return;
       el.scrollTop = top;
       lastScrollTopRef.current = el.scrollTop;
-      if (DEBUG) {
-        console.log(
-          `[scroll] move ${Math.round(before)}→${Math.round(top)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
-        );
-      }
     };
 
     if (last.role === 'user') {
       stuckToBottomRef.current = true;
-      const before = el.scrollTop;
       el.scrollTop = el.scrollHeight;
       lastScrollTopRef.current = el.scrollTop;
-      if (DEBUG) {
-        console.log(
-          `[scroll] user-submit force ${Math.round(before)}→${Math.round(el.scrollTop)} (sH=${el.scrollHeight} cH=${el.clientHeight})`
-        );
-      }
       return;
     }
 
-    if (!stuckToBottomRef.current) {
-      if (DEBUG) {
-        console.log(`[scroll] skip (not stuck-bottom) scrollTop=${Math.round(el.scrollTop)} sH=${el.scrollHeight}`);
-      }
-      return;
-    }
+    if (!stuckToBottomRef.current) return;
 
     const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
     const node = el.querySelector<HTMLElement>(`[data-message-id="${last.id}"]`);
     if (!node) {
-      if (DEBUG) {
-        console.log(`[scroll] no node for last=${last.id} → bottom=${Math.round(bottom)}`);
-      }
       scrollForwardTo(bottom);
       return;
     }
 
-    // Clamp to keep the latest message's sparkle icon on screen — never let
-    // scrollTop push it above the top edge. For tall messages this means
-    // we stop scrolling at iconLimit and the bottom of the message extends
-    // below the viewport; the user can scroll the rest themselves. The
-    // stuck-state is robust against the resulting `distance > NEAR_BOTTOM`
-    // because onScroll uses scrollTop-decrease (not distance) to decide
-    // when auto-follow should stop.
     const elRect = el.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const nodeTop = nodeRect.top - elRect.top + el.scrollTop;
     const ICON_PEEK = 8;
     const iconLimit = Math.max(0, nodeTop - ICON_PEEK);
     const target = Math.min(bottom, iconLimit);
-    if (DEBUG) {
-      console.log(
-        `[scroll] target=${Math.round(target)} (bottom=${Math.round(bottom)} iconLimit=${Math.round(iconLimit)} scrollTop=${Math.round(el.scrollTop)} sH=${el.scrollHeight} cH=${el.clientHeight})`
-      );
-    }
     scrollForwardTo(target);
   }, [messages]);
 
   React.useLayoutEffect(() => {
     runAutoScroll();
-  }, [runAutoScroll, status]);
+  }, [runAutoScroll, status, isThinking]);
 
-  // ResizeObserver catches height growth (e.g. smooth-stream drip-feeding
-  // chars) that doesn't trigger the layout effect. Re-runs on messages.length
-  // change so new children get observed.
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -453,116 +417,138 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   }, [runAutoScroll, messages.length]);
 
   return (
-    <LayoutGroup>
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto px-3 py-3">
-          {messages.map(message => {
-            if (message.id === hiddenAssistantId) return null;
-
-            if (message.role === 'user') {
-              const text = userText(message);
-              if (!text) return null;
-              return (
-                <div key={message.id} data-message-id={message.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-md bg-grey-01 px-2 py-1.5 text-chat text-text">{text}</div>
-                </div>
-              );
-            }
-
-            const text = visibleAssistantText(message);
-            const editFailures = messageEditFailures(message);
-            if (!text && editFailures.length === 0) return null;
-            // The latest assistant message animates: it mounts post-cover-lift
-            // with `text` already at the full final reply, and useSmoothStream
-            // drips it in from empty. Older messages render statically.
-            const isLatest = message.id === lastAssistantId;
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto px-3 py-3">
+        {messages.map(message => {
+          if (message.role === 'user') {
+            const text = userText(message);
+            if (!text) return null;
             return (
+              <div key={message.id} data-message-id={message.id} className="flex justify-end">
+                <div className="max-w-[80%] rounded-md bg-grey-01 px-2 py-1.5 text-chat text-text">{text}</div>
+              </div>
+            );
+          }
+
+          const text = visibleAssistantText(message);
+          const isLatest = message.id === lastAssistantId;
+          const showInlineThinking = isLatest && isThinking;
+          if (!text && !showInlineThinking) return null;
+
+          const sources = messageWebSources(message);
+          // Show pills only once the message is fully settled. For the latest
+          // message that's `status === 'ready'` AND `!isThinking` — the second
+          // condition closes the gap where the SDK briefly flips status to
+          // 'ready' between a resolved research tool-call and the auto-
+          // resubmit, which would otherwise flash References under the still-
+          // active thinking shimmer (willResubmit / pending-tool cases are
+          // both encompassed by isThinking). For prior messages we always
+          // render their sources so they persist when the next turn begins —
+          // without this carryover, sending a follow-up question wipes the
+          // references on the prior answer.
+          const showSources = sources.length > 0 && (!isLatest || (status === 'ready' && !error && !isThinking));
+
+          return (
+            <div key={message.id} className="flex flex-col items-start gap-2">
               <AssistantMessage
-                key={message.id}
                 messageId={message.id}
                 text={text}
-                isStreaming={isLatest}
-                isLandingFromThinking={isLatest}
+                isStreaming={isLatest && status === 'streaming'}
+                showThinking={showInlineThinking}
                 entityCache={entityCache}
-                editFailures={editFailures}
               />
-            );
-          })}
-
-          {showFollowUps ? (
-            <div className="flex flex-col items-start gap-1 pt-1">
-              {followUps.map(suggestion => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onSuggestion(suggestion)}
-                  className="flex items-center justify-center rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-left text-[16px] leading-4 tracking-[-0.35px] text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          ) : showSkeletonFollowUps ? (
-            <div className="invisible flex flex-col items-start gap-1 pt-1" aria-hidden="true">
-              {[0, 1, 2].map(i => (
-                <div
-                  key={i}
-                  className="flex items-center justify-center rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-[16px] leading-4 tracking-[-0.35px] text-text"
-                >
-                  Loading…
+              {showSources ? (
+                <div className="flex flex-col gap-0.5 pt-1" aria-label="References">
+                  <div className="text-footnote text-grey-04">References</div>
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                    {sources.map(source => (
+                      <ChatSourceLink
+                        key={source.url}
+                        url={source.url}
+                        hostname={source.hostname}
+                        title={source.title}
+                      />
+                    ))}
+                  </div>
                 </div>
-              ))}
+              ) : null}
             </div>
-          ) : null}
+          );
+        })}
 
-          {error && !isFull && (
-            <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-md border border-red-01 px-2 py-1.5 text-chat text-red-01">
-                Something went wrong.{' '}
-                <button type="button" onClick={onRetry} className="underline">
-                  Try again
-                </button>
+        {showStandaloneThinking ? <ThinkingRow /> : null}
+
+        {showFollowUps ? (
+          <div className="flex flex-col items-start gap-1 pt-1">
+            {followUps.map(suggestion => (
+              <button
+                key={suggestion}
+                type="button"
+                disabled={disabled}
+                onClick={() => onSuggestion(suggestion)}
+                className="flex items-center justify-center rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-left text-[16px] leading-4 tracking-[-0.35px] text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        ) : showSkeletonFollowUps ? (
+          <div className="invisible flex flex-col items-start gap-1 pt-1" aria-hidden="true">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="flex items-center justify-center rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-[16px] leading-4 tracking-[-0.35px] text-text"
+              >
+                Loading…
               </div>
+            ))}
+          </div>
+        ) : null}
+
+        {error && !isFull && (
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-md border border-red-01 px-2 py-1.5 text-chat text-red-01">
+              Something went wrong.{' '}
+              <button type="button" onClick={onRetry} className="underline">
+                Try again
+              </button>
             </div>
-          )}
-        </div>
-        <AnimatePresence>{isThinking && <ThinkingOverlay key="thinking" />}</AnimatePresence>
+          </div>
+        )}
       </div>
-    </LayoutGroup>
+    </div>
   );
 }
 
-const SPARKLE_LAYOUT_ID = 'thinking-sparkle';
-
-function ThinkingOverlay() {
+function ThinkingRow() {
   return (
-    // Opaque cover hides layout reflow during tool execution;
-    // pointer-events-auto blocks scroll through the overlay.
+    <div className="flex flex-col items-start gap-2">
+      <AssistantSparkle />
+      <ThinkingShimmer />
+    </div>
+  );
+}
+
+// Shimmer sweeps a darker band across light-grey text (background-clip: text
+// + animated background-position). The whole "Thinking…" reads as alive,
+// not just a punctuation flicker.
+function ThinkingShimmer() {
+  return (
     <motion.div
-      className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-white"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
+      className="text-chat"
+      style={{
+        backgroundImage: 'linear-gradient(90deg, #B6B6B6 0%, #B6B6B6 35%, #202020 50%, #B6B6B6 65%, #B6B6B6 100%)',
+        backgroundSize: '200% 100%',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        color: 'transparent',
+      }}
+      animate={{ backgroundPosition: ['200% 0%', '-200% 0%'] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
       aria-live="polite"
       aria-label="Assistant thinking"
     >
-      {/* Inner div carries the pulsing keyframe so the layoutId child can
-          handle pure position/size interpolation without fighting it. */}
-      <motion.div
-        animate={{
-          opacity: [0.65, 1, 0.65],
-          scale: [1, 1.12, 1],
-          rotate: [0, 10, 0],
-        }}
-        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-        className="text-text"
-      >
-        <motion.div layoutId={SPARKLE_LAYOUT_ID} className="flex items-center justify-center">
-          <AssistantSparkle size={26} />
-        </motion.div>
-      </motion.div>
+      Thinking…
     </motion.div>
   );
 }
@@ -571,62 +557,35 @@ type AssistantMessageProps = {
   messageId: string;
   text: string;
   isStreaming: boolean;
-  // Only for the message just emerging from the overlay — sparkle uses
-  // layoutId to animate from the thinking indicator.
-  isLandingFromThinking: boolean;
+  showThinking: boolean;
   entityCache: EntityCache;
-  editFailures: EditFailureNote[];
 };
 
-function AssistantMessage({
-  messageId,
-  text,
-  isStreaming,
-  isLandingFromThinking,
-  entityCache,
-  editFailures,
-}: AssistantMessageProps) {
+function AssistantMessage({ messageId, text, isStreaming, showThinking, entityCache }: AssistantMessageProps) {
+  // Drip-feed only while text is actively streaming. Settled (older) messages
+  // render in full.
   const displayed = useSmoothStream(text, isStreaming);
-  // Bottom-fade only while the drip is still catching up to target. Without
-  // this gate the mask sticks around forever on the latest message because
-  // `isStreaming` (= `isLatest`) doesn't clear once the reply has fully
-  // dripped in.
   const isDripping = displayed !== text;
 
   return (
     <div data-message-id={messageId} className="flex flex-col items-start gap-2">
-      {isLandingFromThinking ? (
-        <motion.div layoutId={SPARKLE_LAYOUT_ID} className="flex items-center justify-center">
-          <AssistantSparkle />
-        </motion.div>
-      ) : (
-        <AssistantSparkle />
-      )}
-      <div
-        className="prose-chat max-w-[90%] text-chat text-text"
-        style={
-          isDripping
-            ? {
-                WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
-                maskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
-              }
-            : undefined
-        }
-      >
-        <ChatMarkdown text={displayed} cache={entityCache} />
-      </div>
-      {editFailures.length > 0 ? (
-        <div className="flex max-w-[90%] flex-col gap-1" role="status" aria-label="Edit failures">
-          {editFailures.map((note, i) => (
-            <div
-              key={`${note.toolName}-${i}`}
-              className="rounded-md border border-red-01 bg-red-03/40 px-2 py-1 text-chat text-red-01"
-            >
-              {describeEditFailure(note)}
-            </div>
-          ))}
+      <AssistantSparkle />
+      {text ? (
+        <div
+          className="prose-chat max-w-[90%] text-chat text-text"
+          style={
+            isDripping
+              ? {
+                  WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
+                  maskImage: 'linear-gradient(to bottom, black calc(100% - 1.25em), rgba(0,0,0,0.4) 100%)',
+                }
+              : undefined
+          }
+        >
+          <ChatMarkdown text={displayed} cache={entityCache} />
         </div>
       ) : null}
+      {showThinking && !isDripping ? <ThinkingShimmer /> : null}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import {
   type ModelMessage,
+  type StreamTextTransform,
+  type TextStreamPart,
   type ToolSet,
   type UIMessage,
   convertToModelMessages,
@@ -27,26 +29,31 @@ import {
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import {
+  CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
   GUEST_SYSTEM_PROMPT,
   MEMBER_SYSTEM_PROMPT,
+  OPENER_SYSTEM_PROMPT,
   type PreloadedEntityForPrompt,
   renderCurrentContextSection,
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
-import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
+import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonHourlyLimit, ipCeilingHourlyLimit, loggedInHourlyLimit } from './rate-limit';
 import { buildNavTools } from './tools/nav';
-import { readTools } from './tools/read';
+import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// Tool calls consume output tokens; a chained edit turn can exceed 2k. 6k leaves headroom.
-const MAX_OUTPUT_TOKENS = 6_000;
-const MAX_TOOL_STEPS = 6;
+// Tool calls consume output tokens; a chained edit turn can exceed 2k. 8k leaves
+// headroom for chained writes plus the closing-summary reply.
+const MAX_OUTPUT_TOKENS = 8_000;
+// 10 covers the worst-case ingestion turn: searchGraph -> research -> createEntity
+// -> setEntityValue (x several props) -> text reply.
+const MAX_TOOL_STEPS = 10;
 
 const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 
@@ -190,12 +197,35 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
+// Suppress ALL text output from the executor stage. In the three-stage
+// pipeline (Haiku opener → Sonnet executor → Haiku closer), the executor must
+// never emit user-facing text — the opener already acknowledged the turn and
+// the closer writes the final summary from the executor's tool results. Text
+// the executor's model produces is still preserved in the response.messages
+// payload (so the closer can read Sonnet's analysis), it just doesn't reach
+// the client stream.
+function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
+  return () =>
+    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+      transform(chunk, controller) {
+        switch (chunk.type) {
+          case 'text-start':
+          case 'text-delta':
+          case 'text-end':
+            return;
+          default:
+            controller.enqueue(chunk);
+        }
+      },
+    });
+}
+
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
 // Navigation turns: text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
 // Browser executes these against the merged store; the route returns no tool
 // result for them.
-const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces']);
+const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research', 'searchImages']);
 
 // With client-executed tool flows the assistant turn that triggers 'edit'
 // framing isn't always the one that originally emitted the write call — the
@@ -356,7 +386,77 @@ export async function POST(req: Request) {
     return jsonError(413, HISTORY_FULL_MESSAGE);
   }
 
-  const converted = await convertToModelMessages(uiMessages);
+  const rawConverted = await convertToModelMessages(uiMessages);
+
+  // Defense against duplicate tool-call / tool-result blocks in the converted
+  // history. Anthropic enforces unique `tool_use_id`s per conversation and
+  // rejects the request once any id repeats. We've observed long multi-step
+  // turns producing a "triangular" duplication where a tool-call from an
+  // earlier step also appears in every later step's assistant slice — same
+  // toolCallId, same payload, just replayed. The root cause is somewhere in
+  // the AI SDK's UIMessage parts accumulation during multi-step + resubmit;
+  // dedup here is the cheap, safe truncation that keeps the conversation
+  // valid regardless. Keep the *first* occurrence (it's the original step
+  // that produced the result).
+  // Dedup tool-calls and tool-results separately. They share an id but live
+  // in different blocks (assistant.content has tool-call, tool.content has
+  // tool-result). A single shared `seen` set was wrong: the first tool-call
+  // adds id X, then the first tool-result's `seen.has(X)` returns true and
+  // we drop the matching result — leaving a tool-call with no result, which
+  // Anthropic rejects.
+  // Track kept tool-calls so we can drop orphan tool-results whose call we
+  // dedup'd away. Without this, when a duplicate tool-call is removed and its
+  // matching tool-result appears in a later `tool` message, Anthropic 400s
+  // on the orphan result.
+  const keptToolCalls = new Set<string>();
+  const seenToolResults = new Set<string>();
+  const droppedToolCallIds: string[] = [];
+  const converted: ModelMessage[] = [];
+  for (const m of rawConverted) {
+    if (!Array.isArray(m.content)) {
+      converted.push(m);
+      continue;
+    }
+    const filtered = m.content.filter(part => {
+      if (part.type === 'tool-call') {
+        const id = (part as { toolCallId?: unknown }).toolCallId;
+        if (typeof id !== 'string') return true;
+        if (keptToolCalls.has(id)) {
+          droppedToolCallIds.push(`tool-call#${id}`);
+          return false;
+        }
+        keptToolCalls.add(id);
+        return true;
+      }
+      if (part.type === 'tool-result') {
+        const id = (part as { toolCallId?: unknown }).toolCallId;
+        if (typeof id !== 'string') return true;
+        if (!keptToolCalls.has(id)) {
+          droppedToolCallIds.push(`tool-result#${id}-orphan`);
+          return false;
+        }
+        if (seenToolResults.has(id)) {
+          droppedToolCallIds.push(`tool-result#${id}-dup`);
+          return false;
+        }
+        seenToolResults.add(id);
+        return true;
+      }
+      return true;
+    });
+    if (filtered.length === 0) continue;
+    if (filtered.length === m.content.length) {
+      converted.push(m);
+    } else {
+      converted.push({ ...m, content: filtered } as ModelMessage);
+    }
+  }
+  if (droppedToolCallIds.length > 0) {
+    console.warn(
+      `[chat:srv] dropped ${droppedToolCallIds.length} duplicate tool-call/result blocks from converted history`,
+      droppedToolCallIds.slice(0, 12)
+    );
+  }
 
   const writeContext = buildWriteContext({ walletAddress: wallet });
 
@@ -414,27 +514,227 @@ export async function POST(req: Request) {
   // happens via /api/chat/authorize-write and graph-state validation runs in
   // useEditDispatcher. Guests don't see the catalog at all.
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
+  // Members-only research tool (delegates to /api/chat/research). Schema-only
+  // here — the dispatcher hits the sub-agent, which is the only place
+  // Anthropic's hosted webSearch runs. Guests stay read-only against Geo with
+  // no live-web access.
+  const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
+
+  const debug = process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1';
+  const debugLog = (event: string, data?: unknown) => {
+    if (!debug) return;
+    if (data === undefined) {
+      console.log(`[chat:srv] ${event}`);
+    } else {
+      try {
+        console.log(`[chat:srv] ${event}`, JSON.stringify(data, null, 2));
+      } catch {
+        console.log(`[chat:srv] ${event}`, data);
+      }
+    }
+  };
+  debugLog('begin', {
+    isLoggedIn,
+    messageCount: uiMessages.length,
+    toolKeys: [
+      ...Object.keys(readTools),
+      ...Object.keys(navTools),
+      ...Object.keys(memberWriteTools),
+      ...Object.keys(memberResearchTools),
+    ],
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    maxToolSteps: MAX_TOOL_STEPS,
+  });
+  if (debug) {
+    const summary = converted.map((m, idx) => {
+      let blocks: unknown;
+      if (typeof m.content === 'string') {
+        blocks = `text(${m.content.length})`;
+      } else if (Array.isArray(m.content)) {
+        blocks = m.content.map((c: { type?: unknown; toolCallId?: unknown; toolName?: unknown }) => {
+          const t = typeof c.type === 'string' ? c.type : '?';
+          const id = typeof c.toolCallId === 'string' ? c.toolCallId.slice(0, 24) : undefined;
+          const name = typeof c.toolName === 'string' ? c.toolName : undefined;
+          return name ? `${t}(${name}#${id ?? ''})` : t;
+        });
+      }
+      return { idx, role: m.role, blocks };
+    });
+    debugLog('converted-messages', summary);
+  }
+
+  // Three-stage pipeline: Haiku opener → Sonnet executor → Haiku closer.
+  // - Opener fires once per turn (first request only) with its own small system
+  //   prompt; streams a 1-sentence acknowledgment so the user sees text within
+  //   ~500ms-1s even when the executor is about to run a long tool chain.
+  // - Executor runs the full tool chain with `suppressAllText`. Its model still
+  //   produces text (preserved in `response.messages`), but none of it streams
+  //   to the client — the closer is the source of truth for user-facing text.
+  // - Closer reads the executor's tool results and writes the past-tense
+  //   summary. Skipped on `skip` / `client-pending` turns (no answer needed
+  //   yet) so the SDK can resubmit after the client dispatcher resolves
+  //   pending tools.
+  //
+  // `isFirstRequestOfTurn`: the AI SDK wraps tool-result blocks in a `user`-
+  // role ModelMessage on continuation requests, so a naive last-role check
+  // misfires. Walk backwards: the last assistant message means we've already
+  // had at least one server response this turn (continuation); the last user
+  // message with NO tool-result blocks means this is a fresh user turn.
+  const isFirstRequestOfTurn = ((): boolean => {
+    for (let i = converted.length - 1; i >= 0; i--) {
+      const m = converted[i];
+      if (m.role === 'assistant') return false;
+      if (m.role === 'user') {
+        if (typeof m.content === 'string') return true;
+        if (Array.isArray(m.content)) {
+          const hasToolResult = m.content.some(part => (part as { type?: string }).type === 'tool-result');
+          return !hasToolResult;
+        }
+      }
+    }
+    return true;
+  })();
 
   const stream = createUIMessageStream({
+    // Persistence mode: on continuation requests (after a client-tool resolves
+    // and the SDK resubmits), reuse the assistant message id from the prior
+    // round-trip so useChat merges this stream's parts into the same UIMessage
+    // instead of creating a new one. Without this, every round-trip created a
+    // fresh assistant message containing the FULL turn-to-date, and the
+    // renderer rendered each — visibly duplicating the opener text.
+    originalMessages: uiMessages,
     execute: async ({ writer }) => {
-      const textResult = streamText({
+      // --- Stage A: opener (Haiku) -------------------------------------
+      // Fires once per turn. On continuation requests (after a client tool
+      // resolves and the SDK resubmits) the opener already streamed; skip it.
+      if (isFirstRequestOfTurn) {
+        const openerResult = streamText({
+          model: anthropic(OPENER_MODEL),
+          system: OPENER_SYSTEM_PROMPT,
+          // Just the converted turn — no main system prompt, no preload. The
+          // opener doesn't need full context; it's a 1-sentence ack.
+          messages: converted,
+          // ~15 words + buffer. Lower cap = faster finish-step.
+          maxOutputTokens: 80,
+          onError: err => {
+            console.error('[chat:srv] opener stream error', err);
+          },
+        });
+        writer.merge(
+          openerResult.toUIMessageStream({
+            sendReasoning: false,
+            sendFinish: false,
+          })
+        );
+        // Block until the opener fully drains before kicking off the executor
+        // so its parts land in order. Without this the executor can start
+        // emitting tool calls into the same UIMessage before the opener's
+        // text-end / finish-step chunks arrive.
+        await openerResult.response;
+      }
+
+      // --- Stage B: executor (Sonnet) ----------------------------------
+      const execResult = streamText({
         model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        tools: { ...readTools, ...navTools, ...memberWriteTools },
+        tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
         toolChoice: 'auto',
+        // Serial tool use matches the system prompt's "searchGraph first, then
+        // research / writes" sequencing and avoids races between client-tool
+        // resolutions and the SDK's multi-step continuation.
+        providerOptions: {
+          anthropic: { disableParallelToolUse: true },
+        },
         stopWhen: stepCountIs(MAX_TOOL_STEPS),
+        experimental_transform: suppressAllText(),
+        onChunk: debug
+          ? ({ chunk }) => {
+              const summary: Record<string, unknown> = { type: chunk.type };
+              if ('toolName' in chunk) summary.toolName = chunk.toolName;
+              if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
+              if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
+              if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
+              debugLog('chunk', summary);
+            }
+          : undefined,
+        onStepFinish: debug
+          ? step => {
+              debugLog('step-finish', {
+                finishReason: step.finishReason,
+                toolCalls: step.toolCalls?.map(tc => ({
+                  toolName: tc.toolName,
+                  toolCallId: tc.toolCallId,
+                  providerExecuted: tc.providerExecuted,
+                  dynamic: tc.dynamic,
+                })),
+                toolResults: step.toolResults?.map(tr => ({
+                  toolName: tr.toolName,
+                  toolCallId: tr.toolCallId,
+                  providerExecuted: tr.providerExecuted,
+                })),
+                hasText: (step.text?.length ?? 0) > 0,
+              });
+            }
+          : undefined,
+        onError: err => {
+          console.error('[chat:srv] executor stream error', err);
+        },
       });
-      writer.merge(textResult.toUIMessageStream({ sendReasoning: false, sendFinish: false }));
+      writer.merge(
+        execResult.toUIMessageStream({
+          sendReasoning: false,
+          // The opener (when present) already emitted the message-start chunk;
+          // don't duplicate it.
+          sendStart: !isFirstRequestOfTurn,
+          sendFinish: false,
+        })
+      );
 
-      const firstStreamMessages = (await textResult.response).messages;
+      const execMessages = (await execResult.response).messages;
 
-      const turnKind = classifyTurn([...messages, ...firstStreamMessages]);
+      const turnKind = classifyTurn([...messages, ...execMessages]);
+      debugLog('executor-finished', {
+        turnKind,
+        execMessages: execMessages.map(m => ({
+          role: m.role,
+          contentTypes: Array.isArray(m.content)
+            ? m.content.map(c => (typeof c === 'string' ? 'string' : c.type))
+            : typeof m.content,
+        })),
+      });
 
       if (turnKind === 'skip' || turnKind === 'client-pending') {
         return;
       }
 
+      // --- Stage C: closer (Haiku) -------------------------------------
+      // Reads the executor's tool calls + results from the transcript and
+      // writes the user-facing summary. The executor's text — if any — is in
+      // execMessages too, so the closer sees Sonnet's analysis as additional
+      // context, but its system prompt directs it to summarize from tool
+      // results, not paraphrase the executor.
+      const closerResult = streamText({
+        model: anthropic(CLOSER_MODEL),
+        system: CLOSER_SYSTEM_PROMPT,
+        messages: [...converted, ...execMessages],
+        // 1-3 sentences or 3-5 bullets — 400 tokens is plenty.
+        maxOutputTokens: 400,
+        onError: err => {
+          console.error('[chat:srv] closer stream error', err);
+        },
+      });
+      writer.merge(
+        closerResult.toUIMessageStream({
+          sendReasoning: false,
+          sendStart: false,
+          sendFinish: false,
+        })
+      );
+
+      const closerMessages = (await closerResult.response).messages;
+
+      // --- Stage D: follow-ups (Haiku, forced tool) --------------------
       const followUpInstruction =
         turnKind === 'edit'
           ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
@@ -444,7 +744,8 @@ export async function POST(req: Request) {
         model: anthropic(FOLLOW_UPS_MODEL),
         messages: [
           ...messages,
-          ...firstStreamMessages,
+          ...execMessages,
+          ...closerMessages,
           {
             role: 'user',
             content: followUpInstruction,

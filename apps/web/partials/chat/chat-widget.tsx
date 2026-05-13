@@ -16,6 +16,7 @@ import { ENTITY_ID_REGEX, isHistoryFull, isHistoryFullError } from '~/core/chat/
 import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
 import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
+import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSpace } from '~/core/hooks/use-space';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { useDiff } from '~/core/state/diff-store';
@@ -152,6 +153,12 @@ export function ChatWidget() {
   // Acting on the raw tool call would fire before getSpace runs, which lets
   // hallucinated / topic-entity ids slip through to router.push and 404.
   const navigatedToolCallIds = React.useRef(new Set<string>());
+  // Auto-navigate to the newly minted entity after a successful createEntity
+  // so the user can see what was staged. Same dedup pattern as the navigate /
+  // review-panel watchers — toolCallId tracks "we've already routed for this
+  // call" across re-renders.
+  const navigatedCreatedEntityToolCallIds = React.useRef(new Set<string>());
+
   React.useEffect(() => {
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
@@ -166,6 +173,73 @@ export function ChatWidget() {
       }
     }
   }, [messages, router]);
+
+  // After createEntity stages a new entity, route the user to its page so
+  // they can see what was made — UNLESS the same turn also feeds that entity
+  // into a data block via `addCollectionItem`, in which case the user is
+  // populating a block on the current page and shouldn't be thrashed away
+  // from it. Defer the decision until the turn settles (status === 'ready',
+  // no client-tool resubmit pending, AND no client tool still in-flight on
+  // the dispatcher), then check the latest assistant message for matching
+  // `tool-addCollectionItem` calls. Last non-block-bound creation wins.
+  React.useEffect(() => {
+    if (status !== 'ready') return;
+    if (shouldResubmitAfterClientExecution({ messages })) return;
+
+    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistant) return;
+
+    // Status briefly hits 'ready' between steps before the SDK resubmits, and
+    // the client dispatcher may still be processing an `input-available` tool
+    // call (e.g. addCollectionItem queued behind a resolved createEntity).
+    // shouldResubmitAfterClientExecution returns false in that window because
+    // not every tool in the *last step* is resolved yet — but acting now
+    // would navigate before the upcoming addCollectionItem can mark the new
+    // entity as block-bound.
+    const hasPendingTool = lastAssistant.parts.some(p => {
+      if (!isToolUIPart(p)) return false;
+      return p.state === 'input-streaming' || p.state === 'input-available';
+    });
+    if (hasPendingTool) return;
+
+    const blockBoundEntityIds = new Set<string>();
+    for (const part of lastAssistant.parts) {
+      if (!isToolUIPart(part)) continue;
+      if (part.type !== 'tool-addCollectionItem') continue;
+      if (part.state !== 'output-available') continue;
+      const input = (part as { input?: { entityId?: unknown } }).input;
+      if (input && typeof input.entityId === 'string') blockBoundEntityIds.add(input.entityId);
+    }
+
+    let navigateTarget: { entityId: string; spaceId: string } | null = null;
+    for (const part of lastAssistant.parts) {
+      if (!isToolUIPart(part)) continue;
+      if (part.type !== 'tool-createEntity') continue;
+      if (part.state !== 'output-available') continue;
+      if (navigatedCreatedEntityToolCallIds.current.has(part.toolCallId)) continue;
+      const output = part.output as {
+        ok?: unknown;
+        intent?: { kind?: unknown; entityId?: unknown; spaceId?: unknown };
+      };
+      if (output?.ok !== true) continue;
+      const intent = output.intent;
+      if (!intent || intent.kind !== 'createEntity') continue;
+      const entityId = intent.entityId;
+      const spaceId = intent.spaceId;
+      if (typeof entityId !== 'string' || typeof spaceId !== 'string') continue;
+      if (!validId(entityId) || !validId(spaceId)) continue;
+      // Mark only after every guard passes — keeps the dedup set semantically
+      // "tool calls we considered AND would navigate for", so a non-create or
+      // invalid create can't poison the ref.
+      navigatedCreatedEntityToolCallIds.current.add(part.toolCallId);
+      if (blockBoundEntityIds.has(entityId)) continue;
+      navigateTarget = { entityId, spaceId };
+    }
+
+    if (navigateTarget) {
+      router.push(NavUtils.toEntity(navigateTarget.spaceId, navigateTarget.entityId));
+    }
+  }, [messages, status, router]);
 
   // Dedup by toolCallId so re-renders don't re-open after user dismisses.
   // bumpReviewVersion recomputes the diff from current staged state.
@@ -192,6 +266,7 @@ export function ChatWidget() {
   // observe the post-apply store.
   useEditDispatcher(messages, addToolResultRef);
   useReadDispatcher(messages, addToolResultRef);
+  useResearchDispatcher(messages, addToolResultRef);
 
   const isBusy = status === 'submitted' || status === 'streaming';
 
@@ -324,7 +399,7 @@ export function ChatWidget() {
             transition={{ duration: 0.15 }}
             onClick={() => openAssistant('fab')}
             aria-label="Open assistant"
-            className="fixed right-4 bottom-4 z-100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
+            className="fixed right-4 bottom-4 z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
           >
             <AssistantSparkle size={20} />
           </motion.button>

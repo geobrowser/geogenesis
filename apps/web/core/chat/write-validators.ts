@@ -110,6 +110,13 @@ export async function resolveProperty(propertyId: string, ctx: WriteCtx): Promis
   try {
     const merged = await E.findOne({ id: propertyId, store: ctx.store, cache: ctx.cache });
     if (merged) {
+      // Re-check via getProperty after the merge — same-turn property
+      // creations propagate to the entity index AFTER the dataType lands in
+      // pendingDataTypes, so an earlier `getProperty` miss can flip to a hit
+      // here. Fall through to the remote query only if both local lookups
+      // miss AND there's no stableDataType for the published-only path.
+      const reLocal = ctx.store.getProperty(propertyId);
+      if (reLocal) return reLocal;
       const dataType = ctx.store.getStableDataType(propertyId);
       if (dataType) {
         return { id: propertyId, name: merged.name, dataType };
@@ -201,12 +208,16 @@ export async function resolveBlocksEdge(
   if (!block) return null;
   if (!parent) return notFound('entity', parentEntityId);
 
+  // Compare ids in their normalized (dashless, lowercase) form — remote graph
+  // can return dashed UUIDs while the planner has already dashless-normalized
+  // every input, so a raw `===` produces false negatives that surface as
+  // "block not found" on real edges.
   const edge = (parent.relations ?? []).find(
     r =>
-      r.fromEntity.id === parentEntityId &&
-      r.type.id === SystemIds.BLOCKS &&
-      r.toEntity.id === blockId &&
-      r.spaceId === spaceId &&
+      normalizeEntityId(r.fromEntity.id) === parentEntityId &&
+      normalizeEntityId(r.type.id) === SystemIds.BLOCKS &&
+      normalizeEntityId(r.toEntity.id) === blockId &&
+      normalizeEntityId(r.spaceId) === spaceId &&
       !r.isDeleted
   );
   if (!edge) {
@@ -255,8 +266,15 @@ export function checkRelationDedup(
   toEntityId: string,
   spaceId: string
 ): 'ok' | 'duplicate' {
+  // Normalize stored ids before comparison — remote-derived relations can
+  // carry dashed UUIDs while the inputs have been dashless-normalized; a raw
+  // `===` would miss a duplicate and let two identical relations stack.
   const hasExisting = fromEntity.relations.some(
-    r => r.type.id === typeId && r.toEntity.id === toEntityId && r.spaceId === spaceId && !r.isDeleted
+    r =>
+      normalizeEntityId(r.type.id) === typeId &&
+      normalizeEntityId(r.toEntity.id) === toEntityId &&
+      normalizeEntityId(r.spaceId) === spaceId &&
+      !r.isDeleted
   );
   return hasExisting ? 'duplicate' : 'ok';
 }

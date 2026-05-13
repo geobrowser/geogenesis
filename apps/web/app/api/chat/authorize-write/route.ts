@@ -2,7 +2,6 @@
 //
 // Auth gate the client-side write dispatcher hits before applying any write
 // intent: guest rejection, membership check, per-wallet edit rate limit.
-// `toggleEditMode` skips the rate limit because it's a UI-only mutation.
 //
 // Graph-state validation (does the property/entity exist? what's its dataType?
 // is the relation already there?) lives in core/chat/write-validators.ts —
@@ -102,12 +101,9 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  if (toolName === 'toggleEditMode') {
-    // UI toggle bypasses the edit rate-limit axis (matches the carve-out
-    // previously inside tools/write/toggle-edit-mode.ts).
-    return jsonResponse(200, { ok: true } satisfies AuthorizeOutput);
-  }
-
+  // Apply the edit rate limit to every write tool, including toggleEditMode.
+  // Skipping it on the UI toggle let any caller with a valid-shape wallet
+  // cookie spam the endpoint as a heartbeat.
   const limit = await context.checkEditRateLimit();
   if (!limit.ok) return jsonResponse(200, rateLimited(limit.retryAfter) satisfies AuthorizeOutput);
 

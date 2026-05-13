@@ -7,6 +7,7 @@ import * as React from 'react';
 import { type UIMessage, isToolUIPart } from 'ai';
 import { useSetAtom } from 'jotai';
 
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { toGeoFilterState } from '~/core/blocks/data/filters';
 import { makeInitialDataEntityRelations } from '~/core/blocks/data/initialize';
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
@@ -20,7 +21,6 @@ import { E } from '~/core/sync/orm';
 import { storage } from '~/core/sync/use-mutate';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Entity, Relation } from '~/core/types';
-import { browseModeToggled, editModeToggled } from '~/core/analytics';
 
 import { enqueue } from './apply-queue';
 import {
@@ -69,6 +69,14 @@ const EDITOR_REFRESHING_INTENTS = new Set<EditIntent['kind']>([
   // deleteEntity may cascade-tombstone child blocks; if the user is on the
   // deleted entity's page, the editor needs to refresh to drop them.
   'deleteEntity',
+  // Cross-space moves cascade-tombstone in source and write into target;
+  // either side may be open in the editor.
+  'moveEntityToSpace',
+  'cloneEntityToSpace',
+  // Tab structure changes alter the entity-page nav surface, which the
+  // editor renders alongside block content.
+  'createTab',
+  'renameTab',
 ]);
 
 function applyToggleEditMode(intent: Extract<EditIntent, { kind: 'toggleEditMode' }>, ctx: ApplyCtx): ApplyResult {
@@ -622,7 +630,11 @@ async function applyDeleteEntityRecursive(
   // other-space backlinks are intentionally preserved.
   scopeBacklinksToSpace = false
 ): Promise<ApplyResult> {
-  if (depth > DELETE_ENTITY_MAX_DEPTH) return { ok: true };
+  if (depth > DELETE_ENTITY_MAX_DEPTH) {
+    // Surface the bail rather than report success — half-cascaded state would
+    // otherwise look like a clean delete to the model.
+    return applyFailed(`delete cascade exceeded max depth ${DELETE_ENTITY_MAX_DEPTH} starting at ${entityId}`);
+  }
   // Cycle guard — re-visiting an id within the same cascade is always a no-op.
   if (visited.has(entityId)) return { ok: true };
   visited.add(entityId);
@@ -702,12 +714,22 @@ async function applyDeleteProperty(intent: Extract<EditIntent, { kind: 'deletePr
 // Mirror the editor's cloneEntityIntoSpace: copy values + outgoing relations
 // from source to target, deduping against any data already in target. Used by
 // both move (with source delete) and clone (without).
-function copyEntityIntoSpace(entityId: string, sourceSpaceId: string, targetSpaceId: string, sourceEntity: Entity) {
+async function copyEntityIntoSpace(
+  entityId: string,
+  sourceSpaceId: string,
+  targetSpaceId: string,
+  sourceEntity: Entity
+) {
+  // E.findOne with the source spaceId scopes the entity view to source-space
+  // data only, so `sourceEntity.values` won't include anything that already
+  // lives in target. Resolve the target view separately so dedup actually has
+  // something to compare against.
+  const targetEntity = await resolveEntity(entityId, targetSpaceId);
   const existingTargetValueIds = new Set(
-    (sourceEntity.values ?? []).filter(v => v.spaceId === targetSpaceId && !v.isDeleted).map(v => v.id)
+    (targetEntity?.values ?? []).filter(v => v.spaceId === targetSpaceId && !v.isDeleted).map(v => v.id)
   );
   const existingTargetRelationSignatures = new Set(
-    (sourceEntity.relations ?? [])
+    (targetEntity?.relations ?? [])
       .filter(r => r.fromEntity.id === entityId && r.spaceId === targetSpaceId && !r.isDeleted)
       .map(r => `${r.type.id}|${r.fromEntity.id}|${r.toEntity.id}|${r.toSpaceId ?? ''}|${r.renderableType}`)
   );
@@ -754,7 +776,7 @@ async function applyCloneEntityToSpace(
   if (!sourceEntity) {
     return applyFailed(`entity ${intent.entityId} not found in space ${intent.spaceId}`);
   }
-  copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
+  await copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
   return { ok: true };
 }
 
@@ -769,7 +791,7 @@ async function applyMoveEntityToSpace(
   if (!sourceEntity) {
     return applyFailed(`entity ${intent.entityId} not found in space ${intent.spaceId}`);
   }
-  copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
+  await copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
   // Re-use the same recursive cascade that powers deleteEntity — by passing
   // the source space + scopeBacklinksToSpace, only that space's data is
   // tombstoned. Backlinks in OTHER spaces are intentionally left alone
@@ -1213,7 +1235,10 @@ export function useEditDispatcher(
             addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
             return;
           }
-          if (cancelledRef.current) return;
+          // No cancellation gate after a successful apply — the mutation has
+          // already landed in storage, so the model must hear about it; if we
+          // bailed here the tool call would be permanently in dispatchedRef
+          // with no result, hanging the turn.
           if (!applyResult.ok) {
             // Forward apply_failed verbatim — the planner verified the inputs;
             // failure here means the live graph doesn't match what the model

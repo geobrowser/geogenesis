@@ -230,13 +230,20 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
   try {
     // E.findOne merges the local store with a cached remote `getEntity`, so
     // unpublished values/relations the user just made surface here exactly as
-    // they do in the page UI.
-    let entity: Entity | null = await E.findOne({
-      id: normalizedId,
-      spaceId: normalizedSpaceId,
-      store: ctx.store,
-      cache: ctx.cache,
-    });
+    // they do in the page UI. Wrap each merge attempt in its own try/catch so
+    // a transient throw on the scoped path doesn't skip the unscoped + remote
+    // fallback chain.
+    let entity: Entity | null = null;
+    try {
+      entity = await E.findOne({
+        id: normalizedId,
+        spaceId: normalizedSpaceId,
+        store: ctx.store,
+        cache: ctx.cache,
+      });
+    } catch (err) {
+      console.error('[chat/read-dispatcher] getEntity scoped findOne failed', normalizedId, err);
+    }
 
     let isDraft = false;
 
