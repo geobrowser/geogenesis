@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -34,32 +34,73 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
 
-const spaceTypeAtom = atom<SpaceType | null>(null);
-const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
-const nameAtom = atom<string>('');
-const topicIdAtom = atom<string>('');
-const imageAtom = atom<string>('');
+export const spaceTypeAtom = atom<SpaceType | null>(null);
+export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
+export const nameAtom = atom<string>('');
+export const topicIdAtom = atom<string>('');
+export const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
 type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
-const stepAtom = atom<Step>('select-type');
+export const stepAtom = atom<Step>('select-type');
+
+/** Externally controllable open state so non-trigger callers (e.g. the entity-page
+ * "Claim topic" button) can preset the atoms above and open the dialog. */
+export const createSpaceDialogOpenAtom = atom<boolean>(false);
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
+
+type OpenDialogPreset = {
+  name?: string;
+  image?: string;
+  topicId?: string;
+  governanceType?: SpaceGovernanceType | null;
+  spaceType?: SpaceType | null;
+  step?: Step;
+};
+
+/**
+ * Opens the (globally-mounted) CreateSpaceDialog with optional preset values.
+ * Without a preset, resets to the original "New space" entry — same behavior the
+ * navbar dropdown trigger had before this was hoisted to a global mount.
+ */
+export function useOpenCreateSpaceDialog() {
+  const setName = useSetAtom(nameAtom);
+  const setImage = useSetAtom(imageAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
+  const setGovernanceType = useSetAtom(governanceTypeAtom);
+  const setSpaceType = useSetAtom(spaceTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+  const setOpen = useSetAtom(createSpaceDialogOpenAtom);
+
+  return useCallback(
+    (preset?: OpenDialogPreset) => {
+      setName(preset?.name ?? '');
+      setImage(preset?.image ?? '');
+      setTopicId(preset?.topicId ?? '');
+      setGovernanceType(preset?.governanceType ?? null);
+      setSpaceType(preset?.spaceType ?? null);
+      setStep(preset?.step ?? 'select-type');
+      setOpen(true);
+    },
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen]
+  );
+}
 
 export function CreateSpaceDialog() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
-  const [open, onOpenChange] = useState(false);
+  const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
   const { deploy } = useDeploySpace();
   const reportError = useReportError();
 
   const spaceType = useAtomValue(spaceTypeAtom);
-  const [name, setName] = useAtom(nameAtom);
-  const [topicId, setTopicId] = useAtom(topicIdAtom);
-  const [image, setImage] = useAtom(imageAtom);
+  const name = useAtomValue(nameAtom);
+  const topicId = useAtomValue(topicIdAtom);
+  const image = useAtomValue(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
-  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
+  const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
 
   if (!address) return null;
@@ -113,20 +154,6 @@ export function CreateSpaceDialog() {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger asChild>
-        <span
-          role="button"
-          onClick={() => {
-            setName('');
-            setImage('');
-            setTopicId('');
-            setGovernanceType(null);
-            setStep('select-type');
-          }}
-        >
-          New space
-        </span>
-      </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Content
           // Only allow closing the dialog by clicking the close button

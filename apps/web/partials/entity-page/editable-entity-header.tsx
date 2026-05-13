@@ -29,7 +29,16 @@ import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 
-export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+export function EditableHeading({
+  spaceId,
+  entityId,
+  topRightSlot,
+}: {
+  spaceId: string;
+  entityId: string;
+  /** Optional action that stacks above the history/context-menu cluster on the right. */
+  topRightSlot?: React.ReactNode;
+}) {
   const { values } = useSyncEngine();
 
   const name = useSelector(values, v => {
@@ -86,16 +95,18 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
           </div>
         )}
 
-        <div className="flex shrink-0 items-center gap-5">
-          {isEditing && (
-            <Link
-              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-            >
-              <Create />
-            </Link>
-          )}
-          <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <div className="flex shrink-0 flex-col items-end gap-3">
+          {topRightSlot}
+          <div className="flex items-center gap-5">
+            {isEditing && (
+              <Link
+                href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+              >
+                <Create />
+              </Link>
+            )}
+            <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
             {allVersions.map((v, index) => (
               <EntityVersionItem
@@ -127,7 +138,8 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
               </div>
             )}
           </HistoryPanel>
-          <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+            <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+          </div>
         </div>
       </div>
 
