@@ -51,7 +51,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
-  const setSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const pathname = usePathname();
   const canEdit = useUserIsEditing(spaceId);
   const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
@@ -247,7 +246,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         profileEntityId: entityId,
         authorDisplayName: displayName,
       });
-      setSuggestedTasks(t => ({ ...t, post: true }));
       router.push(NavUtils.toEntity(spaceId, postEntityId, true));
     } catch (e) {
       console.error('[PersonalProfileSuggestedCard] create post failed', e);
@@ -255,7 +253,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
       createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [displayName, entityId, router, setSuggestedTasks, spaceId]);
+  }, [displayName, entityId, router, spaceId]);
 
   if (!visible) {
     return null;

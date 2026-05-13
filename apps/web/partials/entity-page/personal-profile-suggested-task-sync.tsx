@@ -1,13 +1,15 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useAtom } from 'jotai';
 import * as React from 'react';
 
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import { useBlocks, relationWithBlockIsMarkdownTextBody } from '~/core/state/editor/use-blocks';
 import { useEditable } from '~/core/state/editable-store';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { getPersonalProfileSkillsRelationFocusRoot } from '~/core/utils/personal-profile-skills-focus';
 
 import {
@@ -17,28 +19,80 @@ import {
   propertyIsSkillsProperty,
 } from '~/atoms/personal-profile-suggested';
 import {
-  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
-  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+  profileOverviewTextBlockMarkdownForContentCheck,
+  stripProfileOverviewMarkdownNoise,
 } from '~/core/state/editor/profile-overview-tail-placeholder';
 
-function overviewMarkdownWithoutTailNoise(markdown: string): string {
-  const lines = markdown.split('\n').flatMap(line => {
-    const t = line.trim();
-    if (!t) return [];
-    if (t === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) return [];
-    if (t === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) return [];
-    if (/^Type \/ for commands or start writ/i.test(t)) return [];
-    return [line];
-  });
-  return lines.join('\n').trim();
-}
-
 export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entityId: string; spaceId: string }) {
-  const { serverBlocks } = useEditorStore();
+  const { id: pageEntityId, spaceId: editorSpaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
+  const overviewBlockRelations = useBlocks(pageEntityId, editorSpaceId, initialBlockRelations);
+
+  const blockEntityById = React.useMemo(() => new Map(initialBlocks.map(b => [b.id, b])), [initialBlocks]);
+
+  const overviewTextBlockIdSet = React.useMemo(
+    () =>
+      new Set(
+        overviewBlockRelations
+          .filter(r => relationWithBlockIsMarkdownTextBody(r, blockEntityById.get(r.block.id)))
+          .map(r => r.block.id)
+      ),
+    [overviewBlockRelations, blockEntityById]
+  );
+
+  const initialOverviewMarkdownValues = React.useMemo(() => {
+    return initialBlocks
+      .filter(b => overviewTextBlockIdSet.has(b.id))
+      .flatMap(b => b.values.filter(v => v.property.id === SystemIds.MARKDOWN_CONTENT));
+  }, [initialBlocks, overviewTextBlockIdSet]);
+
+  const overviewMarkdownValues = useValues({
+    mergeWith: initialOverviewMarkdownValues,
+    selector: v =>
+      v.spaceId === editorSpaceId &&
+      v.property.id === SystemIds.MARKDOWN_CONTENT &&
+      !v.isDeleted &&
+      overviewTextBlockIdSet.has(v.entity.id),
+  });
+
+  const overviewTextMarkdownJoined = React.useMemo(() => {
+    return overviewBlockRelations
+      .filter(r => relationWithBlockIsMarkdownTextBody(r, blockEntityById.get(r.block.id)))
+      .map(r => {
+        const live = overviewMarkdownValues.find(v => v.entity.id === r.block.id);
+        const markdown = live?.value ?? '';
+        return profileOverviewTextBlockMarkdownForContentCheck(markdown);
+      })
+      .join('\n');
+  }, [overviewBlockRelations, overviewMarkdownValues, blockEntityById]);
   const rendered = useRenderedPropertiesWithContent(entityId, spaceId);
-  const pathname = usePathname();
   const [tasks, setTasks] = useAtom(personalProfileSuggestedTasksAtom);
-  const [{ forever: dismissForever }, setDismiss] = useAtom(personalProfileSuggestedDismissAtom);
+  const [{ forever: dismissForever }] = useAtom(personalProfileSuggestedDismissAtom);
+
+  const postTypeRelations = useRelations({
+    selector: r =>
+      r.spaceId === spaceId &&
+      !r.isDeleted &&
+      r.type.id === SystemIds.TYPES_PROPERTY &&
+      r.toEntity.id === SystemIds.POST_TYPE,
+  });
+
+  const relationsTargetingProfile = useRelations({
+    selector: r =>
+      r.spaceId === spaceId &&
+      !r.isDeleted &&
+      r.toEntity.id === entityId &&
+      r.fromEntity.id !== entityId,
+  });
+
+  const postEntityIds = React.useMemo(
+    () => new Set(postTypeRelations.map(r => r.fromEntity.id)),
+    [postTypeRelations]
+  );
+
+  const hasPostAuthoredByProfile = React.useMemo(
+    () => relationsTargetingProfile.some(r => postEntityIds.has(r.fromEntity.id)),
+    [relationsTargetingProfile, postEntityIds]
+  );
   const [skillsIntent, setSkillsIntent] = useAtom(personalProfileSkillsRowIntentAtom);
   const canEdit = useUserIsEditing(spaceId);
   const { setEditable } = useEditable();
@@ -116,12 +170,7 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
   React.useEffect(() => {
     if (dismissForever) return;
 
-    const textMarkdown = serverBlocks
-      .filter(s => s.type === 'text')
-      .map(s => s.markdown)
-      .join('\n');
-
-    const bioDone = overviewMarkdownWithoutTailNoise(textMarkdown).length > 0;
+    const bioDone = stripProfileOverviewMarkdownNoise(overviewTextMarkdownJoined).length > 0;
 
     let skillsDone = false;
     for (const prop of Object.values(rendered)) {
@@ -131,19 +180,13 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
       }
     }
 
-    const postDone =
-      tasks.post ||
-      (typeof pathname === 'string' && pathname.includes(`/${entityId}/activity`));
-
     const next = {
-      bio: bioDone || tasks.bio,
+      bio: bioDone,
       work: true,
       education: true,
       skills: skillsDone,
-      post: postDone || tasks.post,
+      post: hasPostAuthoredByProfile,
     };
-
-    const allDone = next.bio && next.skills && next.post;
 
     if (
       next.bio !== tasks.bio ||
@@ -154,17 +197,12 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
     ) {
       setTasks(next);
     }
-
-    if (allDone) {
-      setDismiss(d => ({ ...d, forever: true }));
-    }
   }, [
     dismissForever,
     entityId,
-    pathname,
+    hasPostAuthoredByProfile,
     rendered,
-    serverBlocks,
-    setDismiss,
+    overviewTextMarkdownJoined,
     setTasks,
     spaceId,
     tasks.bio,
