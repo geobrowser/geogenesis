@@ -439,8 +439,8 @@ function EntitySidePanelSurface({
 
   return (
     <EntitySidePanelEditModeProvider entitySpaceId={effectiveSpaceId} openedWithMainViewEditing={openedWithMainViewEditing}>
-      <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} />
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} />
         <EntitySidePanelBody
           key={`${effectiveSpaceId}:${entityId}`}
           entityId={entityId}
