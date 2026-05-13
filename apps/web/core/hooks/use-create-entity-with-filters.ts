@@ -23,7 +23,7 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
       filters?: Filter[];
       spaceId?: string | null;
     }) => {
-      const targetSpaceId = overrideSpaceId ?? defaultSpaceId;
+      const targetSpaceId = overrideSpaceId ? overrideSpaceId : defaultSpaceId;
 
       if (name) {
         storage.entities.name.set(nextEntityId, targetSpaceId, name);

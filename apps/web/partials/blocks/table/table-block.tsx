@@ -121,6 +121,7 @@ function useEntries(
   // For query data blocks the user picks this when clicking "+". For collections and
   // when no override is provided we fall back to the block's space.
   const [placeholderTargetSpaceId, setPlaceholderTargetSpaceId] = React.useState<string | null>(null);
+  const placeholderCreateSpaceRef = React.useRef<string | null>(null);
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -177,8 +178,10 @@ function useEntries(
 
     // For placeholder rows, prefer the target space picked from the "+" dropdown
     // so the new entity's data is written there instead of the block's space.
-    const effectiveSpaceId =
-      entityId === nextEntityId ? (placeholderTargetSpaceId ?? actionSpaceId) : actionSpaceId;
+    const isActiveQueryPlaceholderEntity = entityId === nextEntityId || (pendingEntityId !== null && entityId === pendingEntityId);
+    const effectiveSpaceId = isActiveQueryPlaceholderEntity
+      ? (placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId ?? actionSpaceId)
+      : actionSpaceId;
 
     // Step 1: Handle data writes
     switch (action.type) {
@@ -245,7 +248,7 @@ function useEntries(
         createEntityWithTypes({
           name: maybeName,
           filters: filterState,
-          spaceId: placeholderTargetSpaceId,
+          spaceId: placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId,
         });
       }
 
@@ -280,6 +283,7 @@ function useEntries(
     setHasPlaceholderRow(true);
     setPlaceholderFocusKey(k => k + 1);
     if (targetSpaceId !== undefined) {
+      placeholderCreateSpaceRef.current = targetSpaceId;
       setPlaceholderTargetSpaceId(targetSpaceId);
     }
   };
