@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type Source, sourceStableKey } from '~/core/blocks/data/source';
+import type { Filter } from '~/core/blocks/data/filters';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
@@ -116,7 +117,7 @@ function SpaceDropdownRow({
 
 type DataBlockScopeDropdownProps = {
   source: Source;
-  setSource: (source: Source) => void;
+  setSource: (source: Source, options?: { filterStateOverride?: Filter[] }) => void;
   disabled?: boolean;
   /** When false, trigger is a grey read-only pill (no border); menu does not open. */
   isEditing?: boolean;

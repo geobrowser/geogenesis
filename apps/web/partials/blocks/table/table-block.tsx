@@ -44,6 +44,8 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
+import { TableBlockQuerySetupTypeFilters } from './table-block-query-setup-type-filters';
+import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
@@ -54,7 +56,6 @@ import type { TableBlockFilterPromptHandle } from './table-block-filter-creation
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
-import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
@@ -325,12 +326,22 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const { filterState, setFilterState } = useFilters(canEdit);
   const { source, setSource } = useSource({ filterState, setFilterState });
+  const [setupTypePicks, setSetupTypePicks] = React.useState<{ id: string; name: string | null }[]>([]);
 
   const handleConfirmQuerySetup = React.useCallback(() => {
-    setSource(source);
+    const withoutTypes = filterState.filter(f => f.columnId !== SystemIds.TYPES_PROPERTY);
+    const typeFilters: Filter[] = setupTypePicks.map(t => ({
+      columnId: SystemIds.TYPES_PROPERTY,
+      columnName: 'Types',
+      valueType: 'RELATION',
+      value: t.id,
+      valueName: t.name,
+    }));
+    const mergedFilters = [...withoutTypes, ...typeFilters];
+    setSource(source, { filterStateOverride: mergedFilters });
     setEditable(true);
     onCompleteQuerySetup?.();
-  }, [onCompleteQuerySetup, setEditable, setSource, source]);
+  }, [filterState, onCompleteQuerySetup, setEditable, setSource, setupTypePicks, source]);
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -364,6 +375,12 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
             <Check color="grey-04" />
           </button>
         </div>
+        <TableBlockQuerySetupTypeFilters
+          spaceId={spaceId}
+          selectedTypes={setupTypePicks}
+          onChangeSelectedTypes={setSetupTypePicks}
+          disabled={!canEdit}
+        />
       </div>
     </motion.div>
   );
