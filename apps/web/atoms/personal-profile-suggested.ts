@@ -1,3 +1,4 @@
+import { ContentIds } from '@geoprotocol/geo-sdk/lite';
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
@@ -50,8 +51,8 @@ export type PersonalProfileSkillsRowIntent = {
 
 export const personalProfileSkillsRowIntentAtom = atom<PersonalProfileSkillsRowIntent | null>(null);
 
-export function propertyNameMatchesSkills(name: string): boolean {
-  return /skill/i.test(name);
+export function propertyIsSkillsProperty(propertyId: string): boolean {
+  return propertyId === ContentIds.SKILLS_PROPERTY;
 }
 
 export const personalProfileBioStarterTriggerAtom = atom(0);

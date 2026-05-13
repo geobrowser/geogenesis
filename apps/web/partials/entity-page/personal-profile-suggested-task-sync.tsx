@@ -14,7 +14,7 @@ import {
   personalProfileSkillsRowIntentAtom,
   personalProfileSuggestedDismissAtom,
   personalProfileSuggestedTasksAtom,
-  propertyNameMatchesSkills,
+  propertyIsSkillsProperty,
 } from '~/atoms/personal-profile-suggested';
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
@@ -125,7 +125,7 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
 
     let skillsDone = false;
     for (const prop of Object.values(rendered)) {
-      if (propertyNameMatchesSkills(prop.name ?? '')) {
+      if (propertyIsSkillsProperty(prop.id)) {
         skillsDone = true;
         break;
       }

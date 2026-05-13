@@ -1,4 +1,4 @@
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { toGeoFilterState, type Filter } from '~/core/blocks/data/filters';
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
@@ -20,12 +20,7 @@ type PersonalPostFlowArgs = {
 };
 
 function pickPublishDateProperty(schema: Property[]): Property | null {
-  const match = schema.find(p => {
-    const n = p.name?.toLowerCase() ?? '';
-    if (!/publish/.test(n)) return false;
-    return p.dataType === 'DATE' || p.dataType === 'TIME' || p.dataType === 'DATETIME' || p.dataType === 'SCHEDULE';
-  });
-  return match ?? null;
+  return schema.find(p => p.id === ContentIds.PUBLISH_DATE_PROPERTY) ?? null;
 }
 
 function initialPublishDateValue(dataType: string): string {
@@ -41,13 +36,7 @@ function initialPublishDateValue(dataType: string): string {
 }
 
 function pickAuthorsProperty(schema: Property[]): Property | null {
-  const byName = schema.find(p => p.dataType === 'RELATION' && (p.name?.trim().toLowerCase() ?? '') === 'authors');
-
-  if (byName) {
-    return byName;
-  }
-
-  return schema.find(p => p.dataType === 'RELATION' && (p.name?.toLowerCase() ?? '').includes('author')) ?? null;
+  return schema.find(p => p.id === ContentIds.AUTHORS_PROPERTY) ?? null;
 }
 
 function tabEntityName(tabEntityId: string, spaceId: string): string | null {
