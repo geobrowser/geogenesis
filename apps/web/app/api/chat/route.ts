@@ -39,7 +39,7 @@ import {
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
-import { anonHourlyLimit, ipCeilingHourlyLimit, loggedInHourlyLimit } from './rate-limit';
+import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -225,7 +225,7 @@ const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
 // Browser executes these against the merged store; the route returns no tool
 // result for them.
-const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research', 'searchImages']);
+const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research']);
 
 // With client-executed tool flows the assistant turn that triggers 'edit'
 // framing isn't always the one that originally emitted the write call — the
@@ -329,13 +329,13 @@ export async function POST(req: Request) {
   const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
   const identityKey = wallet ?? ip;
-  const identityHourly = isLoggedIn ? loggedInHourlyLimit : anonHourlyLimit;
+  const identityLimiter = isLoggedIn ? loggedInLimit : anonLimit;
 
   try {
-    const [hourly, ipHourly] = await Promise.all([identityHourly.limit(identityKey), ipCeilingHourlyLimit.limit(ip)]);
+    const [identity, ipCeiling] = await Promise.all([identityLimiter.limit(identityKey), ipCeilingLimit.limit(ip)]);
 
-    if (!hourly.success || !ipHourly.success) {
-      return rateLimitResponse(failedLimiterReset([hourly, ipHourly]));
+    if (!identity.success || !ipCeiling.success) {
+      return rateLimitResponse(failedLimiterReset([identity, ipCeiling]));
     }
   } catch (err) {
     console.error('[chat] rate limiter unavailable', err);

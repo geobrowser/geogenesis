@@ -46,11 +46,12 @@ async function fetchResearch(input: ResearchInput, signal: AbortSignal): Promise
     return { summary: body.summary, sources };
   } catch (err) {
     if ((err as { name?: string })?.name === 'AbortError') {
-      // Re-throw so the caller can skip addToolResult — the dispatcher
-      // tasks are gated on cancelledRef, so reporting a fake failure to
-      // a torn-down chat would just emit a phantom tool result on the
-      // next mount.
-      throw err;
+      // Expected on unmount/navigation — return a regular error result
+      // instead of throwing. The dispatcher's `cancelledRef` check after
+      // `await fetchResearch` suppresses the addToolResult call on a
+      // torn-down chat, so no phantom tool result lands. Throwing here
+      // would surface as `[chat/apply-queue] task threw` console noise.
+      return { error: 'lookup_failed' };
     }
     console.error('[chat/research-dispatcher] fetch threw', err);
     return { error: 'lookup_failed' };

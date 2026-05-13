@@ -13,7 +13,7 @@ import { cookies } from 'next/headers';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { RESEARCH_MODEL } from '../models';
-import { ipCeilingHourlyLimit, loggedInHourlyLimit } from '../rate-limit';
+import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
@@ -143,9 +143,9 @@ export async function POST(req: Request) {
   const ip = getClientIp(req);
 
   try {
-    const [hourly, ipHourly] = await Promise.all([loggedInHourlyLimit.limit(wallet), ipCeilingHourlyLimit.limit(ip)]);
-    if (!hourly.success || !ipHourly.success) {
-      const reset = Math.max(hourly.success ? 0 : hourly.reset, ipHourly.success ? 0 : ipHourly.reset);
+    const [identity, ipCeiling] = await Promise.all([loggedInLimit.limit(wallet), ipCeilingLimit.limit(ip)]);
+    if (!identity.success || !ipCeiling.success) {
+      const reset = Math.max(identity.success ? 0 : identity.reset, ipCeiling.success ? 0 : ipCeiling.reset);
       return rateLimitResponse(reset);
     }
   } catch (err) {

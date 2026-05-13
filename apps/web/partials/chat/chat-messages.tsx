@@ -247,7 +247,13 @@ const MAX_WEB_SOURCES = 5;
 
 function hostnameOf(url: string): string | null {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    const parsed = new URL(url);
+    // Source URLs ultimately render as clickable hrefs; restrict to http(s)
+    // so a tool-controlled `ftp:`, `file:`, or other scheme never reaches
+    // the DOM. (`javascript:` etc. already fall out because their parsed
+    // hostname is empty, but be explicit.)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.hostname.replace(/^www\./, '');
   } catch {
     return null;
   }
@@ -453,13 +459,19 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
               <AssistantMessage
                 messageId={message.id}
                 text={text}
-                isStreaming={isLatest && status === 'streaming'}
+                // Keep the drip alive until useSmoothStream catches up — it
+                // self-stops once displayed === target. Gating on status
+                // would snap to full text mid-drip when the closer's stream
+                // ends, defeating the smoothing and producing a visible pop.
+                isStreaming={isLatest}
                 showThinking={showInlineThinking}
                 entityCache={entityCache}
               />
               {showSources ? (
-                <div className="flex flex-col gap-0.5 pt-1" aria-label="References">
-                  <div className="text-footnote text-grey-04">References</div>
+                <section className="flex flex-col gap-0.5 pt-1" aria-labelledby={`references-${message.id}`}>
+                  <div id={`references-${message.id}`} className="text-footnote text-grey-04">
+                    References
+                  </div>
                   <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                     {sources.map(source => (
                       <ChatSourceLink
@@ -470,7 +482,7 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
                       />
                     ))}
                   </div>
-                </div>
+                </section>
               ) : null}
             </div>
           );

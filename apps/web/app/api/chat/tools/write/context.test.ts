@@ -12,7 +12,7 @@ const access = {
 vi.mock('~/core/io/queries', () => queries);
 vi.mock('~/core/access/space-access', () => access);
 vi.mock('../../rate-limit', () => ({
-  editHourlyLimit: { limit: vi.fn(async () => ({ success: true, reset: Date.now() })) },
+  editLimit: { limit: vi.fn(async () => ({ success: true, reset: Date.now() })) },
 }));
 
 const { buildWriteContext } = await import('./context');
