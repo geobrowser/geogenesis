@@ -5,8 +5,7 @@ import { getSpaceByAddress } from '~/core/io/queries';
 
 import { editLimit } from '../../rate-limit';
 
-// Membership is resolved once per request and memoized; read-only turns
-// never pay the GraphQL cost.
+// Membership resolves once per request; read-only turns skip the lookup.
 export type RateLimitResult = { ok: true } | { ok: false; retryAfter: number };
 
 export type WriteContext =
@@ -14,7 +13,7 @@ export type WriteContext =
       kind: 'guest';
       walletAddress: null;
       personalSpaceId: string | null;
-      /** Legacy name used by write tools; resolves true for any space the user can edit. */
+      /** True for any space the user can edit (legacy name kept for write tools). */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
     }
@@ -22,7 +21,7 @@ export type WriteContext =
       kind: 'member';
       walletAddress: string;
       personalSpaceId: () => Promise<string | null>;
-      /** Legacy name used by write tools; resolves true for any space the user can edit. */
+      /** True for any space the user can edit (legacy name kept for write tools). */
       isMember: (spaceId: string) => Promise<boolean>;
       checkEditRateLimit: () => Promise<RateLimitResult>;
     };
@@ -60,8 +59,8 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         return { personalSpaceId };
       } catch (err) {
         console.error('[chat/writeContext] membership lookup failed', err);
-        // Clear unconditionally so the next call retries; an identity check
-        // here was racy with concurrent first-callers.
+        // Clear unconditionally so the next call retries — an identity check
+        // here would race concurrent first-callers.
         membershipPromise = null;
         return { personalSpaceId: null };
       }
@@ -110,9 +109,7 @@ export function buildWriteContext({ walletAddress }: { walletAddress: string | n
         }
         return { ok: true };
       } catch (err) {
-        // Upstash unreachable: dev passes through (don't block local work),
-        // prod fails closed so partial Redis degradation can't bypass the
-        // per-wallet edit cap.
+        // Upstash unreachable: dev passes through; prod fails closed.
         console.error('[chat/editRateLimit] unavailable', err);
         if (process.env.NODE_ENV === 'production') {
           return { ok: false, retryAfter: 5 };

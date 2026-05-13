@@ -44,12 +44,8 @@ export function ChatInput({ value, onChange, onSubmit, disabled, placeholder = '
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         minRows={2}
-        // No maxRows — the textarea auto-resizes with content. Height is
-        // bounded by the chat panel via `max-h-[60cqh]` (60% of the panel,
-        // which sets `container-type: size`). Capping by row count alone
-        // caused an inner scrollbar to appear after ~4 lines even when the
-        // panel had room; container-relative max keeps the bar invisible for
-        // any realistic message length on any panel size.
+        // Height capped by the panel (which sets container-type: size) so
+        // we never get an inner scrollbar at any panel size.
         className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
       />
       <button

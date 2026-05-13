@@ -100,9 +100,7 @@ export type WriteCtx = {
   cache: QueryClient;
 };
 
-// Lookup order matches read-dispatcher.ts: local store first (covers
-// user-minted properties whose dataType lives only in pendingDataTypes),
-// merged ORM read second, raw remote query last.
+// Local store → merged → remote, mirroring read-dispatcher.
 export async function resolveProperty(propertyId: string, ctx: WriteCtx): Promise<Property | EditToolFailure> {
   const local = ctx.store.getProperty(propertyId);
   if (local) return local;
@@ -110,11 +108,8 @@ export async function resolveProperty(propertyId: string, ctx: WriteCtx): Promis
   try {
     const merged = await E.findOne({ id: propertyId, store: ctx.store, cache: ctx.cache });
     if (merged) {
-      // Re-check via getProperty after the merge — same-turn property
-      // creations propagate to the entity index AFTER the dataType lands in
-      // pendingDataTypes, so an earlier `getProperty` miss can flip to a hit
-      // here. Fall through to the remote query only if both local lookups
-      // miss AND there's no stableDataType for the published-only path.
+      // Re-check getProperty post-merge: same-turn property creations populate
+      // the entity index AFTER the dataType lands in pendingDataTypes.
       const reLocal = ctx.store.getProperty(propertyId);
       if (reLocal) return reLocal;
       const dataType = ctx.store.getStableDataType(propertyId);
@@ -208,10 +203,8 @@ export async function resolveBlocksEdge(
   if (!block) return null;
   if (!parent) return notFound('entity', parentEntityId);
 
-  // Compare ids in their normalized (dashless, lowercase) form — remote graph
-  // can return dashed UUIDs while the planner has already dashless-normalized
-  // every input, so a raw `===` produces false negatives that surface as
-  // "block not found" on real edges.
+  // Compare normalized ids — remote can return dashed UUIDs while inputs are
+  // already dashless, so a raw `===` produces false negatives.
   const edge = (parent.relations ?? []).find(
     r =>
       normalizeEntityId(r.fromEntity.id) === parentEntityId &&
@@ -266,9 +259,7 @@ export function checkRelationDedup(
   toEntityId: string,
   spaceId: string
 ): 'ok' | 'duplicate' {
-  // Normalize stored ids before comparison — remote-derived relations can
-  // carry dashed UUIDs while the inputs have been dashless-normalized; a raw
-  // `===` would miss a duplicate and let two identical relations stack.
+  // Normalize before comparing — same dashed-vs-dashless mismatch as above.
   const hasExisting = fromEntity.relations.some(
     r =>
       normalizeEntityId(r.type.id) === typeId &&

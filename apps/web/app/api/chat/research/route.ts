@@ -1,10 +1,6 @@
-// POST /api/chat/research
-//
-// Researcher sub-agent. The main assistant calls this via the `research`
-// client tool with a focused query; this endpoint runs Anthropic's hosted
-// `webSearch` + a Haiku summarizer and returns ONLY a tight summary plus the
-// list of source URLs. The orchestrator never sees Anthropic's encrypted_content,
-// which is what was blowing up the main turn's context budget.
+// POST /api/chat/research — sub-agent that runs Anthropic's hosted webSearch +
+// a Haiku summarizer and returns a tight summary plus source URLs. Isolating
+// it keeps Anthropic's encrypted_content out of the main turn's context.
 import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateText, stepCountIs } from 'ai';
@@ -88,11 +84,8 @@ function clampSummary(text: string): string {
   return `${trimmed.slice(0, MAX_SUMMARY_CHARS - 1).trimEnd()}…`;
 }
 
-// Anthropic's hosted webSearch results land via two paths in the SDK depending
-// on version: as a tool-result entry on the step (older shape) and as a
-// top-level `sources` array of `{ type: 'source', sourceType: 'url', url, title }`
-// entries (newer provider shape). Walk both so source pills don't silently
-// disappear after a provider SDK bump.
+// Walk both the older tool-result shape and the newer `sources` shape so pills
+// don't silently disappear after a provider SDK bump.
 type StepLike = {
   toolResults?: ReadonlyArray<{ toolName?: string; output?: unknown }>;
   sources?: ReadonlyArray<{ sourceType?: string; url?: unknown; title?: unknown }>;
@@ -135,9 +128,8 @@ export async function POST(req: Request) {
 
   const cookieStore = await cookies();
   const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  // Members only.
   if (!wallet) {
-    // Members only — guests don't get web research (matches the prior
-    // members-only webSearch policy).
     return jsonError(401, 'Sign in to use research.');
   }
   const ip = getClientIp(req);

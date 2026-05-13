@@ -6,14 +6,13 @@ import { ENTITY_ID_REGEX } from '~/core/chat/limits';
 import type { NavigateInput, NavigateOutput } from '~/core/chat/nav-types';
 import { getSpace } from '~/core/io/queries';
 
-// JSON Schema patterns have no `i` flag, so spell the case range out — model
-// can emit uppercase hex and we don't want pre-runtime schema rejection.
+// JSON Schema has no `i` flag — spell the case range out so uppercase hex
+// from the model doesn't get pre-runtime rejected.
 const ENTITY_ID_PATTERN =
   '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$';
 
 export type NavigateToolContext = {
-  // Resolved server-side from membership so a forged client context can't
-  // redirect personalSpace.
+  // Resolved server-side from membership; client value would be forgeable.
   resolvePersonalSpaceId: () => Promise<string | null>;
 };
 
@@ -44,8 +43,7 @@ export function buildNavigateTool(context: NavigateToolContext) {
       required: ['target'],
       additionalProperties: false,
     }),
-    // router.push only fires client-side on ok: true, so this validation
-    // gates hallucinated ids.
+    // router.push only fires on ok:true, so this gates hallucinated ids.
     execute: async (input: NavigateInput): Promise<NavigateOutput> => {
       if ((input.target === 'space' || input.target === 'entity') && !isValidId(input.spaceId)) {
         return { ok: false, error: 'invalid_input', target: input.target };
@@ -62,15 +60,13 @@ export function buildNavigateTool(context: NavigateToolContext) {
         if (!resolved) {
           return { ok: false, error: 'no_personal_space', target: 'personalSpace' };
         }
-        // Echo the resolved id so the client doesn't have to re-read context.
+        // Echo the id so the client doesn't have to re-read context.
         return { ok: true, target: 'personalSpace', spaceId: normalizeId(resolved) };
       }
 
-      // Validate space existence for both 'space' and 'entity' targets so a
-      // hallucinated spaceId paired with a real-looking entityId can't 404
-      // the user. Entity-existence is verified client-side at navigation time
-      // (the route renders 404 if missing) — checking it server-side would
-      // require an additional GraphQL hop on every nav call.
+      // Check space existence so a hallucinated spaceId can't 404 the user.
+      // Entity-existence falls through to the route's own 404 — cheaper than
+      // a second GraphQL hop per nav.
       if ((input.target === 'space' || input.target === 'entity') && spaceId) {
         const result = await Effect.runPromise(Effect.either(getSpace(spaceId)));
         if (Either.isLeft(result) || result.right === null) {

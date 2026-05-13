@@ -91,7 +91,7 @@ describe('authorize-write', () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it('toggleEditMode is space-agnostic but still rate-limited', async () => {
+  it('toggleEditMode is space-agnostic but still consults the edit limiter', async () => {
     let limiterChecked = false;
     mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
     buildWriteContextMock.mockReturnValue({

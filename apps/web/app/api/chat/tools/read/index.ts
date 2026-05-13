@@ -11,8 +11,7 @@ export const readTools = {
   getSpaceTypes,
 };
 
-// Members only — research delegates to a sub-agent route that runs Anthropic's
-// hosted webSearch. Guests stay read-only against Geo with no live-web access.
+// Members only — research delegates to the webSearch sub-agent.
 export const memberReadTools = {
   research,
 };

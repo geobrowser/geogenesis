@@ -25,12 +25,8 @@ function userText(message: UIMessage): string {
     .join('');
 }
 
-// Step-aware text filter — the deterministic guardrail. Group parts by step
-// (between step-start markers); for each step, count its non-followup tool
-// calls. Drop text from any step that contains a tool call. Keep text only
-// from "pure-text" steps — by construction the model's final-answer step is
-// pure-text, so this returns the closing summary regardless of any
-// mid-turn narration the model emitted.
+// Keep text only from pure-text step groups — drops any tool-step text and
+// returns the opener + closer prose the user should see.
 function visibleAssistantText(message: UIMessage): string {
   type StepGroup = { tools: number; texts: string[] };
   const groups: StepGroup[] = [{ tools: 0, texts: [] }];
@@ -57,8 +53,7 @@ function visibleAssistantText(message: UIMessage): string {
     for (const text of group.texts) {
       const trimmed = text.trim();
       if (trimmed.length === 0) continue;
-      // Equality-on-trimmed dedup. The SDK occasionally emits adjacent
-      // identical text-deltas during step transitions.
+      // Dedup adjacent identical deltas the SDK emits at step transitions.
       if (trimmed === prevTrimmed) continue;
       prevTrimmed = trimmed;
       out.push(text);
@@ -76,13 +71,8 @@ function hasPendingMainTools(message: UIMessage): boolean {
   return false;
 }
 
-// In the 3-stage pipeline (Haiku opener → Sonnet executor → Haiku closer), the
-// opener emits text BEFORE any tools run. Without this check, `computeIsThinking`
-// would return false the moment the opener finishes (visible text exists, no
-// pending tools yet), leaving the UI looking frozen until the executor's first
-// tool call lands. Returns true when the message contains at least one main
-// tool call AND no text appears after it — i.e., we're between opener-end and
-// closer-start (or mid-tool-chain between two tool calls).
+// True between mid-chain tool calls: at least one main tool exists and no
+// text appears after the last one.
 function isWaitingForCloser(message: UIMessage): boolean {
   let lastMainToolIdx = -1;
   for (let i = 0; i < message.parts.length; i++) {
@@ -91,17 +81,28 @@ function isWaitingForCloser(message: UIMessage): boolean {
     if (part.type === 'tool-suggestFollowUps') continue;
     lastMainToolIdx = i;
   }
-  if (lastMainToolIdx === -1) {
-    // No main tools yet. If there's already text (the opener), the closer
-    // might still be coming if the executor hasn't started; we can't tell
-    // from parts alone, so leave this case to the streaming-status branch.
-    return false;
-  }
+  // No tools yet — opener / closer-only cases handled by the caller's
+  // streaming branch.
+  if (lastMainToolIdx === -1) return false;
   for (let i = lastMainToolIdx + 1; i < message.parts.length; i++) {
     const part = message.parts[i];
     if (isTextUIPart(part) && part.text.length > 0) return false;
   }
   return true;
+}
+
+// True once text exists after a main tool — the signal that the closer has
+// started. Opener-only text doesn't qualify.
+function hasPostToolText(message: UIMessage): boolean {
+  let sawMainTool = false;
+  for (const part of message.parts) {
+    if (isToolUIPart(part)) {
+      if (part.type !== 'tool-suggestFollowUps') sawMainTool = true;
+      continue;
+    }
+    if (sawMainTool && isTextUIPart(part) && part.text.length > 0) return true;
+  }
+  return false;
 }
 
 function findLastUserIndex(messages: UIMessage[]): number {
@@ -111,9 +112,8 @@ function findLastUserIndex(messages: UIMessage[]): number {
   return -1;
 }
 
-// True when a tool is mid-flight, the SDK is about to resubmit a tool result,
-// or no closing-summary text has streamed yet. Lifts the moment the
-// final-step text starts arriving.
+// True while a tool is mid-flight, the SDK is about to resubmit, or the
+// closer hasn't started streaming yet.
 function computeIsThinking({
   messages,
   status,
@@ -141,14 +141,15 @@ function computeIsThinking({
   if (hasPendingMainTools(lastAssistant)) return true;
   if (willResubmit) return true;
 
-  // Bridge the gap between the opener finishing and the closer starting (or
-  // between two tool calls mid-chain). Without this, the user sees just the
-  // opener text and a frozen UI while Sonnet runs the tool chain.
+  // Mid-tool-chain — keep the indicator alive while Sonnet runs.
   if (status === 'streaming' && isWaitingForCloser(lastAssistant)) return true;
 
-  const finalText = visibleAssistantText(lastAssistant);
-  if (finalText.length > 0) return false;
-  return status === 'streaming';
+  // While streaming, only dismiss once the closer has started — opener-only
+  // text doesn't count, so the indicator stays up during the opener→executor
+  // handoff and tool-less turns linger until `status` flips to `ready`.
+  if (status === 'streaming') return !hasPostToolText(lastAssistant);
+
+  return false;
 }
 
 // One-line digest of an assistant message's parts for the debug logger.
@@ -238,9 +239,7 @@ function useChatDebugLogger({
   }
 }
 
-// `tool-research` parts carry `{ summary, sources: [{ url, title }] }`. We
-// surface every research call's sources in a deduped pill row capped at 5 so
-// the row stays scannable even on multi-research turns.
+// Deduped pill row across every `tool-research` call this turn, capped at 5.
 type WebSource = { url: string; title: string | null; hostname: string };
 
 const MAX_WEB_SOURCES = 5;
@@ -248,10 +247,8 @@ const MAX_WEB_SOURCES = 5;
 function hostnameOf(url: string): string | null {
   try {
     const parsed = new URL(url);
-    // Source URLs ultimately render as clickable hrefs; restrict to http(s)
-    // so a tool-controlled `ftp:`, `file:`, or other scheme never reaches
-    // the DOM. (`javascript:` etc. already fall out because their parsed
-    // hostname is empty, but be explicit.)
+    // Restrict to http(s) so tool-controlled `javascript:`/`file:` URLs can't
+    // reach the DOM.
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     return parsed.hostname.replace(/^www\./, '');
   } catch {
@@ -326,27 +323,21 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
 
   useChatDebugLogger({ messages, status, willResubmit, isThinking, lastAssistant });
 
-  // Synthetic thinking row: when we've just submitted but the SDK hasn't
-  // mounted an assistant message yet, render a placeholder so the user gets
-  // immediate feedback. Once the assistant message arrives, this disappears
-  // and the inline thinking indicator on the assistant message takes over.
+  // Placeholder row while we've submitted but no assistant message exists yet.
   const lastAssistantIdx = lastAssistant ? messages.lastIndexOf(lastAssistant) : -1;
   const showStandaloneThinking = isThinking && (lastAssistantIdx === -1 || lastAssistantIdx < lastUserIdx);
 
-  // Gate on `ready` so a previous turn's pills aren't keyboard-reachable
-  // while the next turn is in flight (Tab+Enter would still fire onSuggestion).
+  // Gate on `ready` so prior pills aren't Tab+Enter-reachable mid-turn.
   const showFollowUps = status === 'ready' && !error && followUps.length > 0;
-  // Skeleton pills bridge the gap between main reply finish and the
-  // sequential follow-up stream landing.
+  // Skeleton bridges the gap between closer finish and follow-ups landing.
   const hasVisibleAssistantText = lastAssistant !== undefined && visibleAssistantText(lastAssistant).length > 0;
   const showSkeletonFollowUps =
     !error && !showFollowUps && status === 'streaming' && !isThinking && hasVisibleAssistantText;
 
   const entityCache = React.useMemo(() => buildEntityCacheFromMessages(messages), [messages]);
 
-  // stuck-state is driven by scrollTop direction, not distance-from-bottom.
-  // Programmatic scrolls only ever move forward, so a scrollTop *decrease* in
-  // onScroll is unambiguously a user gesture.
+  // stuck-state tracks scroll direction: programmatic scrolls only move
+  // forward, so any scrollTop decrease is a user gesture.
   const stuckToBottomRef = React.useRef(true);
   const lastScrollTopRef = React.useRef(0);
   const NEAR_BOTTOM = 48;
@@ -442,16 +433,10 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
           if (!text && !showInlineThinking) return null;
 
           const sources = messageWebSources(message);
-          // Show pills only once the message is fully settled. For the latest
-          // message that's `status === 'ready'` AND `!isThinking` — the second
-          // condition closes the gap where the SDK briefly flips status to
-          // 'ready' between a resolved research tool-call and the auto-
-          // resubmit, which would otherwise flash References under the still-
-          // active thinking shimmer (willResubmit / pending-tool cases are
-          // both encompassed by isThinking). For prior messages we always
-          // render their sources so they persist when the next turn begins —
-          // without this carryover, sending a follow-up question wipes the
-          // references on the prior answer.
+          // Pills appear only once the message is fully settled. The
+          // `!isThinking` gate covers the moments the SDK briefly flips to
+          // `ready` between a resolved tool and an auto-resubmit. Prior
+          // messages keep their pills so a follow-up turn doesn't wipe them.
           const showSources = sources.length > 0 && (!isLatest || (status === 'ready' && !error && !isThinking));
 
           return (
@@ -459,10 +444,8 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
               <AssistantMessage
                 messageId={message.id}
                 text={text}
-                // Keep the drip alive until useSmoothStream catches up — it
-                // self-stops once displayed === target. Gating on status
-                // would snap to full text mid-drip when the closer's stream
-                // ends, defeating the smoothing and producing a visible pop.
+                // Stay streaming-driven so useSmoothStream isn't cut short
+                // when the closer's stream ends (otherwise the text pops).
                 isStreaming={isLatest}
                 showThinking={showInlineThinking}
                 entityCache={entityCache}
@@ -541,9 +524,6 @@ function ThinkingRow() {
   );
 }
 
-// Shimmer sweeps a darker band across light-grey text (background-clip: text
-// + animated background-position). The whole "Thinking…" reads as alive,
-// not just a punctuation flicker.
 function ThinkingShimmer() {
   return (
     <motion.div
@@ -574,8 +554,6 @@ type AssistantMessageProps = {
 };
 
 function AssistantMessage({ messageId, text, isStreaming, showThinking, entityCache }: AssistantMessageProps) {
-  // Drip-feed only while text is actively streaming. Settled (older) messages
-  // render in full.
   const displayed = useSmoothStream(text, isStreaming);
   const isDripping = displayed !== text;
 

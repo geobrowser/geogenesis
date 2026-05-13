@@ -9,8 +9,7 @@ import type { ResearchInput, ResearchOutput } from './read-types';
 
 const RESEARCH_TOOL_PART = 'tool-research';
 
-// Mirrors AddToolResultFn shapes from the read/edit dispatchers — typed wide
-// so the same useChat addToolResult ref can be shared across all three.
+// Widened so the same useChat addToolResult ref can be shared with reads + writes.
 export type AddResearchResultFn = (args: { tool: string; toolCallId: string; output: unknown }) => void;
 
 async function fetchResearch(input: ResearchInput, signal: AbortSignal): Promise<ResearchOutput> {
@@ -46,11 +45,9 @@ async function fetchResearch(input: ResearchInput, signal: AbortSignal): Promise
     return { summary: body.summary, sources };
   } catch (err) {
     if ((err as { name?: string })?.name === 'AbortError') {
-      // Expected on unmount/navigation — return a regular error result
-      // instead of throwing. The dispatcher's `cancelledRef` check after
-      // `await fetchResearch` suppresses the addToolResult call on a
-      // torn-down chat, so no phantom tool result lands. Throwing here
-      // would surface as `[chat/apply-queue] task threw` console noise.
+      // Expected on unmount/navigation — return an error instead of throwing
+      // so apply-queue doesn't log it. The cancelledRef check downstream
+      // suppresses the phantom tool result.
       return { error: 'lookup_failed' };
     }
     console.error('[chat/research-dispatcher] fetch threw', err);
@@ -58,10 +55,8 @@ async function fetchResearch(input: ResearchInput, signal: AbortSignal): Promise
   }
 }
 
-// Watches assistant messages for `tool-research` parts the model has finished
-// streaming arguments for, hits the sub-agent endpoint, and forwards the
-// result back to useChat. Same shape as useReadDispatcher / useEditDispatcher
-// so the widget can hand it the same addToolResult ref.
+// Forwards `tool-research` parts to the sub-agent endpoint. Same shape as the
+// read / edit dispatchers; shares the same addToolResult ref.
 export function useResearchDispatcher(
   messages: UIMessage[],
   addToolResultRef: React.RefObject<AddResearchResultFn | null>

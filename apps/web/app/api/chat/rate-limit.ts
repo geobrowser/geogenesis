@@ -3,10 +3,9 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// All limiters use a 5h sliding window. The wider window absorbs the multi-
-// call shape of a single user turn (opener + executor with up to ~5 research
-// sub-calls + closer + follow-ups) so a research-heavy turn doesn't burn an
-// hourly bucket in one shot.
+// 5h sliding window across the board — a research-heavy turn (opener +
+// executor + up to ~5 research sub-calls + closer + follow-ups) shouldn't
+// burn an hourly bucket in one shot.
 export const loggedInLimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(3_600, '5 h'),

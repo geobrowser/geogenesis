@@ -57,24 +57,17 @@ export type ApplyCtx = {
   bumpEditorVersion: () => void;
 };
 
-// Block structure changes need the Tiptap editor to reset — in edit mode it
-// treats itself as the source of truth and ignores store changes unless the
-// version atom is bumped.
+// Intents that need the Tiptap editor to reset — in edit mode it ignores
+// store changes unless the version atom is bumped.
 const EDITOR_REFRESHING_INTENTS = new Set<EditIntent['kind']>([
   'createBlock',
   'createBlocks',
   'updateBlock',
   'deleteBlock',
   'moveBlock',
-  // deleteEntity may cascade-tombstone child blocks; if the user is on the
-  // deleted entity's page, the editor needs to refresh to drop them.
   'deleteEntity',
-  // Cross-space moves cascade-tombstone in source and write into target;
-  // either side may be open in the editor.
   'moveEntityToSpace',
   'cloneEntityToSpace',
-  // Tab structure changes alter the entity-page nav surface, which the
-  // editor renders alongside block content.
   'createTab',
   'renameTab',
 ]);
@@ -99,8 +92,6 @@ function applySetValue(intent: Extract<EditIntent, { kind: 'setValue' }>): Apply
   return { ok: true };
 }
 
-// E.findOne merges local + remote — the local store only holds values the
-// user has modified this session.
 async function resolveEntity(entityId: string, spaceId: string | undefined): Promise<Entity | null> {
   try {
     return await E.findOne({ id: entityId, spaceId, store, cache: queryClient });
@@ -110,8 +101,7 @@ async function resolveEntity(entityId: string, spaceId: string | undefined): Pro
   }
 }
 
-// Deletes are intentionally idempotent: a missing target is a no-op success.
-// "Already deleted" is the goal state, not a failure mode.
+// Deletes are idempotent: a missing target is a no-op success.
 async function applyDeleteValue(intent: Extract<EditIntent, { kind: 'deleteValue' }>): Promise<ApplyResult> {
   const entity = await resolveEntity(intent.entityId, intent.spaceId);
   const match = entity?.values.find(
@@ -164,8 +154,7 @@ function applyCreateProperty(intent: Extract<EditIntent, { kind: 'createProperty
 }
 
 async function nextBlockPosition(parentEntityId: string, spaceId: string): Promise<string> {
-  // Merged local+remote view so we don't jam new blocks above untouched
-  // published siblings.
+  // Merged view so new blocks land after untouched published siblings too.
   const parent = await resolveEntity(parentEntityId, spaceId);
   const existing = (parent?.relations ?? []).filter(
     r => r.fromEntity.id === parentEntityId && r.type.id === SystemIds.BLOCKS && !r.isDeleted
@@ -242,7 +231,6 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
         storage.relations.set(makeRelationForSourceType(sourceKind, blockId, spaceId));
         storage.relations.set(getRelationForBlockType(blockId, SystemIds.DATA_BLOCK, spaceId));
       }
-      // Mirror in-UI default: blocks publish with a blank header if title is omitted.
       const dataTitle = content.title && content.title.trim().length > 0 ? content.title.trim() : 'New data';
       storage.entities.name.set(blockId, spaceId, dataTitle);
       break;
@@ -303,9 +291,8 @@ async function applyCreateBlock(intent: Extract<EditIntent, { kind: 'createBlock
 }
 
 async function applyCreateBlocks(intent: Extract<EditIntent, { kind: 'createBlocks' }>): Promise<ApplyResult> {
-  // Sequential — each iteration must observe the prior block's BLOCKS edge
-  // so nextBlockPosition keeps appending instead of stacking on the same key.
-  // Bail on first failure so we don't keep stacking blocks past a broken one.
+  // Sequential: each iteration must see the prior block's BLOCKS edge so
+  // nextBlockPosition keeps appending. Bail on first failure.
   for (const { blockId, content } of intent.blocks) {
     const result = await applyCreateBlock({
       kind: 'createBlock',
@@ -356,13 +343,13 @@ async function applyUpdateBlock(intent: Extract<EditIntent, { kind: 'updateBlock
       return { ok: true };
     }
     case 'data': {
-      // Gate on source !== undefined: a title-only update would otherwise
-      // clobber the existing source (e.g. GEO → COLLECTION).
+      // Gate on source !== undefined so a title-only update doesn't clobber
+      // the existing source.
       if (content.source !== undefined) {
         const blockEntity = await resolveEntity(blockId, spaceId);
         if (!blockEntity) {
-          // Surface as apply_failed rather than write a new source: without
-          // tombstoning the old edge we'd leave two competing source relations.
+          // Bail rather than write — leaving the old edge plus a new one
+          // would produce two competing source relations.
           return applyFailed(`block ${blockId} not found in space ${spaceId} — cannot change source`);
         }
         for (const relation of blockEntity.relations ?? []) {
@@ -389,16 +376,13 @@ async function applyUpdateBlock(intent: Extract<EditIntent, { kind: 'updateBlock
 async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock' }>): Promise<ApplyResult> {
   const { blockId, parentEntityId, spaceId } = intent;
 
-  // E.findOne (not local store) — published blocks aren't in local state
-  // until something reads them in.
   const [blockEntity, parentEntity] = await Promise.all([
     resolveEntity(blockId, spaceId),
     resolveEntity(parentEntityId, spaceId),
   ]);
 
-  // CRITICAL: find the BLOCKS edge before mutating anything. If it's missing
-  // and we tombstone the block's values anyway, the parent's BLOCKS edge
-  // points at an empty block — a broken stub on the published page.
+  // Resolve the BLOCKS edge before mutating: missing edge + tombstoned
+  // block values would leave the parent pointing at an empty block.
   let blocksEdge = (parentEntity?.relations ?? []).find(
     relation =>
       relation.fromEntity.id === parentEntityId &&
@@ -407,8 +391,7 @@ async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock
       relation.spaceId === spaceId &&
       !relation.isDeleted
   );
-  // Fallback: scan the relation index directly. Catches edges that are in
-  // local store but whose parent record didn't get pulled into E.findOne.
+  // Fallback to the relation index for edges the merged parent record missed.
   if (!blocksEdge) {
     const direct = store
       .getResolvedRelations(parentEntityId, true)
@@ -440,8 +423,8 @@ async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock
     }
   }
 
-  // The block-relation entity holds VIEW_PROPERTY and FILTER for data blocks;
-  // tombstone its edges/values too or they linger pointing at a dead block.
+  // The block-relation entity carries VIEW_PROPERTY / FILTER for data blocks;
+  // tombstone those too or they linger pointing at a dead block.
   const blockRelationEntity = await resolveEntity(blocksEdge.entityId, spaceId);
   for (const value of blockRelationEntity?.values ?? []) {
     if (value.spaceId === spaceId && !value.isDeleted) {
@@ -461,8 +444,8 @@ async function applyDeleteBlock(intent: Extract<EditIntent, { kind: 'deleteBlock
 async function applySetDataBlockFilters(
   intent: Extract<EditIntent, { kind: 'setDataBlockFilters' }>
 ): Promise<ApplyResult> {
-  // Resolve the block first: a hallucinated blockId would otherwise write a
-  // FILTER onto an unrelated entity.
+  // Resolve first — a hallucinated blockId would otherwise write a FILTER
+  // onto an unrelated entity.
   const block = await resolveEntity(intent.blockId, intent.spaceId);
   if (!block) {
     return applyFailed(`block ${intent.blockId} not found in space ${intent.spaceId}`);
@@ -480,7 +463,7 @@ async function applySetDataBlockFilters(
 }
 
 async function applySetDataBlockView(intent: Extract<EditIntent, { kind: 'setDataBlockView' }>): Promise<ApplyResult> {
-  // VIEW_PROPERTY hangs off the BLOCKS-relation entity, not the block itself.
+  // VIEW_PROPERTY lives on the BLOCKS-relation entity, not the block itself.
   const { blockId, parentEntityId, spaceId, view } = intent;
 
   const parent = await resolveEntity(parentEntityId, spaceId);
@@ -512,8 +495,8 @@ async function applySetDataBlockView(intent: Extract<EditIntent, { kind: 'setDat
 
   const relationEntity = await resolveEntity(blockRelationEntityId, spaceId);
   if (!relationEntity) {
-    // Bail rather than write: without tombstoning the current VIEW edge we'd
-    // leave two conflicting VIEW relations.
+    // Bail — without tombstoning the current VIEW edge we'd leave two
+    // conflicting relations.
     return applyFailed(`block-relation entity ${blockRelationEntityId} not found — cannot swap view safely`);
   }
   for (const relation of relationEntity.relations ?? []) {
@@ -546,8 +529,7 @@ async function applySetDataBlockView(intent: Extract<EditIntent, { kind: 'setDat
 async function applySetDataBlockShownColumns(
   intent: Extract<EditIntent, { kind: 'setDataBlockShownColumns' }>
 ): Promise<ApplyResult> {
-  // SHOWN_COLUMNS / PROPERTIES relations live on the BLOCKS-relation entity
-  // (the entity carried by the parent's BLOCKS edge), not on the block itself.
+  // SHOWN_COLUMNS / PROPERTIES live on the BLOCKS-relation entity, not the block.
   const { blockId, parentEntityId, spaceId, propertyIds } = intent;
 
   const parent = await resolveEntity(parentEntityId, spaceId);
@@ -581,9 +563,7 @@ async function applySetDataBlockShownColumns(
   if (!relationEntity) {
     return applyFailed(`block-relation entity ${blockRelationEntityId} not found — cannot swap columns safely`);
   }
-  // Tombstone existing SHOWN_COLUMNS / PROPERTIES edges on the block-relation
-  // entity so the new list is the source of truth (mirrors setDataBlockFilters
-  // semantics — full replacement, not merge).
+  // Full replacement, not merge — same semantics as setDataBlockFilters.
   for (const relation of relationEntity.relations ?? []) {
     if (
       relation.fromEntity.id === blockRelationEntityId &&
@@ -595,8 +575,7 @@ async function applySetDataBlockShownColumns(
     }
   }
 
-  // Re-emit in array order. Position.generateBetween chains keep the order
-  // stable across publish.
+  // Position.generateBetween chains keep the array order stable on publish.
   let prevPosition: string | null = null;
   for (const propertyId of propertyIds) {
     const position = Position.generateBetween(prevPosition, null);
@@ -615,9 +594,7 @@ async function applySetDataBlockShownColumns(
   return { ok: true };
 }
 
-// Cap on cascade depth to defend against pathological cycles (entity A's block
-// is B; B's block is A — shouldn't happen but defensive). Five levels is well
-// past any organic page nesting.
+// Defensive cap against pathological cycles; well past organic nesting.
 const DELETE_ENTITY_MAX_DEPTH = 5;
 
 async function applyDeleteEntityRecursive(
@@ -625,37 +602,29 @@ async function applyDeleteEntityRecursive(
   spaceId: string,
   depth: number,
   visited: Set<string>,
-  // For deleteEntity we tombstone backlinks across every space (editor parity).
-  // For move-from-source, the cascade must only touch the source space —
-  // other-space backlinks are intentionally preserved.
+  // Default cascades backlinks across every space (editor parity for delete).
+  // Move-from-source scopes them to the source space.
   scopeBacklinksToSpace = false
 ): Promise<ApplyResult> {
   if (depth > DELETE_ENTITY_MAX_DEPTH) {
-    // Surface the bail rather than report success — half-cascaded state would
-    // otherwise look like a clean delete to the model.
     return applyFailed(`delete cascade exceeded max depth ${DELETE_ENTITY_MAX_DEPTH} starting at ${entityId}`);
   }
-  // Cycle guard — re-visiting an id within the same cascade is always a no-op.
   if (visited.has(entityId)) return { ok: true };
   visited.add(entityId);
 
   const entity = await resolveEntity(entityId, spaceId);
   if (!entity) {
-    // No record found locally or remotely. Top of the cascade should fail loudly;
-    // recursive children are fine to no-op (the orphan check upstream filtered
-    // already-gone targets).
+    // Top of cascade fails loudly; recursive children no-op.
     if (depth === 0) return applyFailed(`entity ${entityId} not found in space ${spaceId}`);
     return { ok: true };
   }
 
-  // 1. Tombstone all values where entity = self in this space.
   for (const value of entity.values ?? []) {
     if (value.spaceId === spaceId && !value.isDeleted) {
       storage.values.delete(value);
     }
   }
 
-  // 2. Tombstone all outgoing relations in this space.
   const outgoingRelations = (entity.relations ?? []).filter(
     r => r.fromEntity.id === entityId && r.spaceId === spaceId && !r.isDeleted
   );
@@ -663,9 +632,6 @@ async function applyDeleteEntityRecursive(
     storage.relations.delete(relation);
   }
 
-  // 3. Tombstone backlinks. Default: cross-space included — match editor
-  // behavior for delete. Move-from-source passes scopeBacklinksToSpace so only
-  // source-space backlinks tombstone (the editor's move scopes them too).
   const backlinks = store.getRelationsToEntity(entityId, scopeBacklinksToSpace ? spaceId : undefined);
   const seenBacklinks = new Set(outgoingRelations.map(r => r.id));
   for (const relation of backlinks) {
@@ -674,8 +640,7 @@ async function applyDeleteEntityRecursive(
     storage.relations.delete(relation);
   }
 
-  // 4. Cascade to orphaned BLOCKS children — only blocks no other relation
-  // points at. Shared blocks (referenced from another page) survive.
+  // Cascade to orphaned BLOCKS children only — shared blocks survive.
   const blockEdges = outgoingRelations.filter(r => r.type.id === SystemIds.BLOCKS);
   const childBlockIds = [...new Set(blockEdges.map(e => e.toEntity.id))];
   for (const blockId of childBlockIds) {
@@ -696,34 +661,23 @@ async function applyDeleteEntity(intent: Extract<EditIntent, { kind: 'deleteEnti
   return applyDeleteEntityRecursive(intent.entityId, intent.spaceId, 0, new Set());
 }
 
-// Properties are entities themselves — delete shares the same cascade. The
-// planner already guarded that the target really is a property; here we just
-// run the same tombstone path. Backlinks include every value/relation that
-// USES the property elsewhere — those get tombstoned too, matching the
-// editor's "delete entity" semantics applied to a property entity.
-//
-// Cold-cache caveat: if the property is purely published (never staged
-// locally) and `resolveEntity` here misses (the dispatcher's resolver hits
-// E.findOne without the remote-getEntity fallback the planner uses), this
-// returns apply_failed even though the planner verified existence. Rare in
-// practice — the planner's lookup typically warms the cache.
+// Properties are entities — same cascade. Backlinks (every value/relation
+// that uses the property) tombstone too, matching editor semantics.
 async function applyDeleteProperty(intent: Extract<EditIntent, { kind: 'deleteProperty' }>): Promise<ApplyResult> {
   return applyDeleteEntityRecursive(intent.propertyId, intent.spaceId, 0, new Set());
 }
 
-// Mirror the editor's cloneEntityIntoSpace: copy values + outgoing relations
-// from source to target, deduping against any data already in target. Used by
-// both move (with source delete) and clone (without).
+// Copies values + outgoing relations from source to target, deduping against
+// existing target data. Mirrors the editor's cloneEntityIntoSpace; used by
+// both move and clone.
 async function copyEntityIntoSpace(
   entityId: string,
   sourceSpaceId: string,
   targetSpaceId: string,
   sourceEntity: Entity
 ) {
-  // E.findOne with the source spaceId scopes the entity view to source-space
-  // data only, so `sourceEntity.values` won't include anything that already
-  // lives in target. Resolve the target view separately so dedup actually has
-  // something to compare against.
+  // Resolve target separately so dedup has something to compare against;
+  // the source view is space-scoped and won't include target-space data.
   const targetEntity = await resolveEntity(entityId, targetSpaceId);
   const existingTargetValueIds = new Set(
     (targetEntity?.values ?? []).filter(v => v.spaceId === targetSpaceId && !v.isDeleted).map(v => v.id)
@@ -783,19 +737,14 @@ async function applyCloneEntityToSpace(
 async function applyMoveEntityToSpace(
   intent: Extract<EditIntent, { kind: 'moveEntityToSpace' }>
 ): Promise<ApplyResult> {
-  // Match the editor's flow: clone first, then tombstone in source (including
-  // orphan-block cascade). Child blocks are NOT cloned — the user is warned in
-  // the tool description that the moved page will look empty in target until
-  // they re-add blocks.
+  // Editor parity: clone, then tombstone in source (orphan-block cascade
+  // included). Child blocks are intentionally NOT cloned.
   const sourceEntity = await resolveEntity(intent.entityId, intent.spaceId);
   if (!sourceEntity) {
     return applyFailed(`entity ${intent.entityId} not found in space ${intent.spaceId}`);
   }
   await copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
-  // Re-use the same recursive cascade that powers deleteEntity — by passing
-  // the source space + scopeBacklinksToSpace, only that space's data is
-  // tombstoned. Backlinks in OTHER spaces are intentionally left alone
-  // (matches editor parity).
+  // scopeBacklinksToSpace=true so only source-space backlinks tombstone.
   return applyDeleteEntityRecursive(intent.entityId, intent.spaceId, 0, new Set(), true);
 }
 
@@ -809,7 +758,6 @@ async function applyChangePropertyDataType(
     return applyFailed(`property ${propertyId} not found in space ${spaceId}`);
   }
 
-  // Tombstone existing DATA_TYPE_PROPERTY edges from this property.
   for (const relation of propertyEntity.relations ?? []) {
     if (
       relation.fromEntity.id === propertyId &&
@@ -821,8 +769,7 @@ async function applyChangePropertyDataType(
     }
   }
 
-  // Tombstone existing RENDERABLE_TYPE_PROPERTY too — the new dataType may
-  // require a different renderable, and leaving the old one would conflict.
+  // The new dataType may need a different renderable; clear the old one.
   for (const relation of propertyEntity.relations ?? []) {
     if (
       relation.fromEntity.id === propertyId &&
@@ -834,11 +781,9 @@ async function applyChangePropertyDataType(
     }
   }
 
-  // Register the new dataType in the store so getProperty / getStableDataType
-  // reflect the change immediately.
+  // Register in the store so getProperty / getStableDataType see it now.
   storage.properties.setDataType(propertyId, dataType);
 
-  // Set the new DATA_TYPE_PROPERTY relation pointing at the data type entity.
   const dataTypeEntityId = DATA_TYPE_ENTITY_IDS[dataType];
   if (!dataTypeEntityId) {
     return applyFailed(`unknown dataType ${dataType} — no entity id mapping`);
@@ -854,7 +799,6 @@ async function applyChangePropertyDataType(
     toEntity: { id: dataTypeEntityId, name: dataType, value: dataTypeEntityId },
   });
 
-  // Optional renderable type relation (URL, IMAGE, GEO_LOCATION, etc).
   if (renderableTypeId) {
     storage.relations.set({
       id: IdUtils.generate(),
@@ -874,9 +818,8 @@ async function applyChangePropertyDataType(
 async function applyCreateTab(intent: Extract<EditIntent, { kind: 'createTab' }>): Promise<ApplyResult> {
   const { parentEntityId, spaceId, tabId, name } = intent;
 
-  // Append after the last existing tab so the new one shows up at the right.
-  // Falls back to merged + relation-index views so a freshly-created tab in
-  // the same turn is still ordered correctly.
+  // Append after the last existing tab. Falls back to the relation index so a
+  // freshly-created sibling in the same turn is ordered correctly.
   const parent = await resolveEntity(parentEntityId, spaceId);
   const tabsRelations = (parent?.relations ?? []).filter(
     r =>
@@ -961,8 +904,8 @@ function applyCreateEntity(intent: Extract<EditIntent, { kind: 'createEntity' }>
   return { ok: true };
 }
 
-// Excludes moving relation by object identity, not position — legacy data
-// can have two siblings sharing the same fractional-index.
+// Excludes the moving relation by object identity — legacy data can have
+// two siblings sharing the same fractional-index.
 function computeRelativePosition<T extends { position?: string | null }>(
   siblings: T[],
   moving: T,
@@ -988,7 +931,6 @@ function computeRelativePosition<T extends { position?: string | null }>(
     const prev = index > 0 ? sorted[index - 1] : null;
     return Position.generateBetween(prev ?? null, refPos);
   }
-  // after
   const next = index < sorted.length - 1 ? sorted[index + 1] : null;
   return Position.generateBetween(refPos, next ?? null);
 }
@@ -1000,8 +942,7 @@ async function applyMoveBlock(intent: Extract<EditIntent, { kind: 'moveBlock' }>
   let blocksRelations = (parent?.relations ?? []).filter(
     r => r.fromEntity.id === parentEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted
   );
-  // Fallback: if E.findOne missed locally-staged siblings, the relation index
-  // still has them. Better to over-include via merge than under-include.
+  // Merge in locally-staged siblings the parent record may have missed.
   if (!blocksRelations.some(r => r.toEntity.id === blockId)) {
     const direct = store
       .getResolvedRelations(parentEntityId, false)
@@ -1028,8 +969,8 @@ async function applyMoveBlock(intent: Extract<EditIntent, { kind: 'moveBlock' }>
     return applyFailed(`could not compute new position relative to ${ref}`);
   }
 
-  // Upsert by relation.id so block-relation entity id (and VIEW_PROPERTY /
-  // filter relations hanging off it) survive the move.
+  // Upsert by relation.id so VIEW_PROPERTY / filter relations on the same
+  // block-relation entity survive the move.
   storage.relations.set({ ...moving, position: newPosition });
   return { ok: true };
 }
@@ -1111,7 +1052,6 @@ export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<Ap
   }
 }
 
-// Edit tool name extracted from a UI part type like `tool-setEntityValue`.
 function writeToolNameFromPartType(type: string): string | null {
   if (!type.startsWith('tool-')) return null;
   const name = type.slice('tool-'.length);
@@ -1124,8 +1064,7 @@ async function authorizeWrite(
   spaceId: string | undefined,
   toolName: string,
   signal: AbortSignal,
-  // Cross-space tools (moveEntityToSpace / cloneEntityToSpace) need membership
-  // in BOTH spaces; the endpoint validates the target separately.
+  // Cross-space tools need both spaces validated.
   targetSpaceId?: string
 ): Promise<AuthorizeOutput> {
   try {
@@ -1135,9 +1074,8 @@ async function authorizeWrite(
       body: JSON.stringify({ spaceId, toolName, ...(targetSpaceId ? { targetSpaceId } : {}) }),
       signal,
     });
-    // Any non-2xx surfaces as lookup_failed. Trust only well-formed 200
-    // responses (the endpoint always returns 200 + EditToolFailure for the
-    // expected denial paths; non-200 means a transport / build / server fault).
+    // Endpoint returns 200 + EditToolFailure for expected denials; non-200
+    // is transport/server fault — surface as lookup_failed.
     if (!res.ok) {
       console.error('[chat/edit-dispatcher] authorize-write non-ok', res.status);
       return lookupFailed();
@@ -1152,15 +1090,12 @@ async function authorizeWrite(
   }
 }
 
-// AddToolResult signature mirrors the one in read-dispatcher.ts: we erase the
-// SDK's tool-name-to-output union typing because the dispatcher is shared with
-// non-UI codepaths. Caller (the widget) casts useChat's typed addToolResult.
+// Widened from useChat's typed addToolResult so the same ref serves reads + writes.
 export type AddEditToolResultFn = (args: { tool: string; toolCallId: string; output: unknown }) => void;
 
-// Plans + applies edit intents exactly once (deduped by toolCallId). Each
-// pending write enqueues onto the shared module-scoped queue (see
-// apply-queue.ts), so concurrent writes within a turn — and reads in the same
-// turn — observe one another's applied state.
+// Plans + applies edit intents exactly once per toolCallId. Pending writes
+// enqueue onto the shared apply-queue so concurrent writes (and reads in the
+// same turn) observe each other's applied state.
 export function useEditDispatcher(
   messages: UIMessage[],
   addToolResultRef: React.RefObject<AddEditToolResultFn | null>
@@ -1169,14 +1104,13 @@ export function useEditDispatcher(
   const setEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const dispatchedRef = React.useRef(new Set<string>());
   const cancelledRef = React.useRef(false);
-  // Single controller per mount. Aborted on unmount so any pending
-  // authorize-write fetch is dropped instead of resolving against a torn-down
+  // Aborted on unmount so pending fetches don't resolve against a torn-down
   // dispatcher.
   const abortRef = React.useRef<AbortController | null>(null);
 
   React.useEffect(() => {
-    // Reset on remount so StrictMode double-mount or a kept-mounted New Chat
-    // resumes processing. The dispatchedRef Set guards against double-apply.
+    // Reset on remount so StrictMode double-mount resumes processing;
+    // dispatchedRef still guards against double-apply.
     cancelledRef.current = false;
     abortRef.current = new AbortController();
     return () => {
@@ -1194,9 +1128,7 @@ export function useEditDispatcher(
         if (!isToolUIPart(part)) continue;
         const toolName = writeToolNameFromPartType(part.type);
         if (!toolName) continue;
-        // input-available means the model finished streaming arguments and
-        // the SDK is waiting for our result. The server registers write tools
-        // schema-only, so the SDK never auto-fills an output for them.
+        // input-available = args fully streamed, SDK waiting for our output.
         if (part.state !== 'input-available') continue;
         if (dispatchedRef.current.has(part.toolCallId)) continue;
         dispatchedRef.current.add(part.toolCallId);
@@ -1209,8 +1141,7 @@ export function useEditDispatcher(
         enqueue(async () => {
           if (cancelledRef.current) return;
 
-          // Lazy controller fallback in case the mount-effect hasn't run yet
-          // (StrictMode double-invoke ordering edge case).
+          // Lazy controller for the StrictMode pre-mount-effect window.
           const signal = (abortRef.current ??= new AbortController()).signal;
           const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
           if (cancelledRef.current) return;
@@ -1235,14 +1166,9 @@ export function useEditDispatcher(
             addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
             return;
           }
-          // No cancellation gate after a successful apply — the mutation has
-          // already landed in storage, so the model must hear about it; if we
-          // bailed here the tool call would be permanently in dispatchedRef
-          // with no result, hanging the turn.
+          // No cancellation gate past this point — the mutation has landed,
+          // so the model has to hear about it or the turn hangs forever.
           if (!applyResult.ok) {
-            // Forward apply_failed verbatim — the planner verified the inputs;
-            // failure here means the live graph doesn't match what the model
-            // assumed (a hallucinated id, or a mid-turn graph change).
             addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
             return;
           }

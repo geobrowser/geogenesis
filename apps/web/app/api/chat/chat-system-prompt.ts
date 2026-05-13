@@ -7,17 +7,15 @@ export type ChatClientContext = {
   isEditMode: boolean;
 };
 
-// Pre-fetched data for the user's current entity, captured client-side when
-// the chat panel opens. Embedded in the system turn so the model can answer
-// "this entity"-style questions on turn 1 without a getEntity round-trip.
+// Pre-fetched current entity, embedded so turn 1 can answer "this entity"
+// questions without a getEntity round-trip.
 export type PreloadedEntityForPrompt = {
   entityId: string;
   spaceId: string | null;
   data: unknown;
 };
 
-// Drop the preload entirely past this size — better to lose the optimization
-// than to bloat the prompt by tens of KB on a giant page.
+// Bail past this size rather than bloat the prompt on a giant page.
 const MAX_PRELOAD_JSON_CHARS = 12_000;
 
 export function renderPreloadedEntitySection(preload: PreloadedEntityForPrompt | null): string | null {
@@ -30,9 +28,8 @@ export function renderPreloadedEntitySection(preload: PreloadedEntityForPrompt |
   }
   if (json.length > MAX_PRELOAD_JSON_CHARS) return null;
 
-  // Escape backticks so user-supplied entity content can't close the fence and
-  // inject prompt instructions. ` is still a backtick in JSON so the
-  // model sees the same data.
+  // Escape backticks so user content can't close the fence and inject prompt
+  // instructions. ` is still a backtick to the model.
   const safeJson = json.replace(/`/g, '\\u0060');
 
   const spaceArg = preload.spaceId ? `, spaceId: "${preload.spaceId}"` : '';
@@ -46,16 +43,14 @@ ${safeJson}
 
 export function renderCurrentContextSection(
   context: ChatClientContext | null,
-  // Resolved server-side from the wallet's membership, not from the request
-  // body — a forged client context cannot redirect navigation here.
+  // Resolved server-side from membership; client value would be forgeable.
   serverPersonalSpaceId: string | null
 ): string | null {
   if (!context && !serverPersonalSpaceId) return null;
   const lines: string[] = [];
   if (context) {
     if (context.currentPath) {
-      // Strip query/hash — the model doesn't need search state, and keeping the
-      // prefix stable helps the cached system prompt reuse across turns.
+      // Strip query/hash so the cached system prompt reuses across turns.
       const pathname = context.currentPath.split(/[?#]/, 1)[0];
       lines.push(`- Current page: \`${pathname}\``);
     }

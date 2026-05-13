@@ -31,8 +31,7 @@ type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
 
-// The model can hallucinate id shapes. Guard router.push so a bad tool call
-// can't shove us onto a malformed URL.
+// Guard router.push against hallucinated id shapes.
 function validId(value: string | undefined): value is string {
   return typeof value === 'string' && ENTITY_ID_REGEX.test(value);
 }
@@ -47,8 +46,6 @@ function resolveNavigateHref(output: NavigateOutput): string | null {
     case 'personalHome':
       return NavUtils.toHome();
     case 'personalSpace':
-      // The server-side tool resolves personalSpaceId from its context and
-      // echoes it back as output.spaceId; no need to re-read client context.
       return validId(output.spaceId) ? NavUtils.toSpace(output.spaceId) : null;
     case 'space':
       return validId(output.spaceId) ? NavUtils.toSpace(output.spaceId) : null;
@@ -84,18 +81,14 @@ export function ChatWidget() {
   const currentSpaceId = typeof params?.['id'] === 'string' ? params['id'] : null;
   const routeEntityId = typeof params?.['entityId'] === 'string' ? params['entityId'] : null;
 
-  // On a space home page (`/space/{id}`) there's no `entityId` route param, but
-  // the page renders the space's home entity (either `space.entity.id` or
-  // `space.topicId` for topic spaces). Without this, the assistant's
-  // `getEntity(spaceId)` call looks up the governance space, not the entity
-  // whose blocks / values are on screen.
+  // Space home page has no `entityId` route param; resolve to the home
+  // entity (or topicId for topic spaces) so "this entity" works there.
   const { space } = useSpace(routeEntityId === null ? (currentSpaceId ?? undefined) : undefined);
   const spaceHomeEntityId = space?.topicId || space?.entity?.id || null;
   const currentEntityId =
     routeEntityId ?? (spaceHomeEntityId && ENTITY_ID_REGEX.test(spaceHomeEntityId) ? spaceHomeEntityId : null);
 
-  // Ref keeps context current without re-creating the transport instance on
-  // every render.
+  // Keep transport stable across renders; context flows through a ref.
   const contextRef = React.useRef({
     currentSpaceId,
     currentEntityId,
@@ -109,8 +102,7 @@ export function ChatWidget() {
     isEditMode: editable,
   };
 
-  // Pre-fetch the current entity on panel open so the model can answer
-  // "this entity"-style questions on turn 1 without a getEntity round-trip.
+  // Pre-fetch on open so turn 1 can answer "this entity" without a round-trip.
   const preloadedEntity = usePreloadedEntity(isOpen, currentEntityId, currentSpaceId);
   const preloadedEntityRef = React.useRef<PreloadedEntity | null>(preloadedEntity);
   preloadedEntityRef.current = preloadedEntity;
@@ -124,22 +116,15 @@ export function ChatWidget() {
     []
   );
 
-  // The dispatcher needs `addToolResult` to write outputs back, but useChat
-  // returns it after construction. A ref breaks the cycle: the dispatcher
-  // captures the ref, the ref is filled in after useChat returns.
-  // Typing erased to `string` for `tool` because the dispatcher is shared
-  // with non-UI codepaths; the cast at the assignment site is safe — at
-  // runtime the function only looks at tool/toolCallId/output and forwards
-  // them.
+  // Ref breaks the construction cycle: dispatchers capture it, useChat fills
+  // it in. Typing erased for shared-codepath compatibility.
   const addToolResultRef = React.useRef<((args: { tool: string; toolCallId: string; output: unknown }) => void) | null>(
     null
   );
 
   const { messages, sendMessage, status, error, regenerate, setMessages, stop, addToolResult } = useChat({
     transport,
-    // After the dispatcher writes a client-tool result, this returns true and
-    // the SDK fires a fresh request so the model can react to the data — same
-    // multi-step behavior server-executed tools get inside one stream.
+    // Resubmit after a client-tool result so the model reacts to its output.
     sendAutomaticallyWhen: shouldResubmitAfterClientExecution,
   });
 
@@ -149,14 +134,10 @@ export function ChatWidget() {
     output: unknown;
   }) => void;
 
-  // Navigate only after the server-side `navigate` tool validates the target.
-  // Acting on the raw tool call would fire before getSpace runs, which lets
-  // hallucinated / topic-entity ids slip through to router.push and 404.
+  // Wait for the server-side `navigate` tool to validate the target so
+  // hallucinated ids don't slip through to router.push.
   const navigatedToolCallIds = React.useRef(new Set<string>());
-  // Auto-navigate to the newly minted entity after a successful createEntity
-  // so the user can see what was staged. Same dedup pattern as the navigate /
-  // review-panel watchers — toolCallId tracks "we've already routed for this
-  // call" across re-renders.
+  // Auto-navigate after a successful createEntity. Dedup by toolCallId.
   const navigatedCreatedEntityToolCallIds = React.useRef(new Set<string>());
 
   React.useEffect(() => {
@@ -174,14 +155,10 @@ export function ChatWidget() {
     }
   }, [messages, router]);
 
-  // After createEntity stages a new entity, route the user to its page so
-  // they can see what was made — UNLESS the same turn also feeds that entity
-  // into a data block via `addCollectionItem`, in which case the user is
-  // populating a block on the current page and shouldn't be thrashed away
-  // from it. Defer the decision until the turn settles (status === 'ready',
-  // no client-tool resubmit pending, AND no client tool still in-flight on
-  // the dispatcher), then check the latest assistant message for matching
-  // `tool-addCollectionItem` calls. Last non-block-bound creation wins.
+  // Route to the newly created entity once the turn settles — unless the same
+  // turn also adds it to a data block via `addCollectionItem`, in which case
+  // the user is populating a block on the current page and shouldn't navigate
+  // away. Last non-block-bound creation wins.
   React.useEffect(() => {
     if (status !== 'ready') return;
     if (shouldResubmitAfterClientExecution({ messages })) return;
@@ -189,13 +166,9 @@ export function ChatWidget() {
     const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
     if (!lastAssistant) return;
 
-    // Status briefly hits 'ready' between steps before the SDK resubmits, and
-    // the client dispatcher may still be processing an `input-available` tool
-    // call (e.g. addCollectionItem queued behind a resolved createEntity).
-    // shouldResubmitAfterClientExecution returns false in that window because
-    // not every tool in the *last step* is resolved yet — but acting now
-    // would navigate before the upcoming addCollectionItem can mark the new
-    // entity as block-bound.
+    // Status briefly hits 'ready' between steps; wait for the dispatcher's
+    // pending tools so we don't navigate before addCollectionItem marks the
+    // new entity as block-bound.
     const hasPendingTool = lastAssistant.parts.some(p => {
       if (!isToolUIPart(p)) return false;
       return p.state === 'input-streaming' || p.state === 'input-available';
@@ -228,9 +201,8 @@ export function ChatWidget() {
       const spaceId = intent.spaceId;
       if (typeof entityId !== 'string' || typeof spaceId !== 'string') continue;
       if (!validId(entityId) || !validId(spaceId)) continue;
-      // Mark only after every guard passes — keeps the dedup set semantically
-      // "tool calls we considered AND would navigate for", so a non-create or
-      // invalid create can't poison the ref.
+      // Mark only after every guard passes so a malformed create can't
+      // poison the dedup set.
       navigatedCreatedEntityToolCallIds.current.add(part.toolCallId);
       if (blockBoundEntityIds.has(entityId)) continue;
       navigateTarget = { entityId, spaceId };
@@ -241,8 +213,7 @@ export function ChatWidget() {
     }
   }, [messages, status, router]);
 
-  // Dedup by toolCallId so re-renders don't re-open after user dismisses.
-  // bumpReviewVersion recomputes the diff from current staged state.
+  // Dedup so re-renders don't re-open after the user dismisses.
   const openedReviewPanelToolCallIds = React.useRef(new Set<string>());
   React.useEffect(() => {
     for (const message of messages) {
@@ -261,16 +232,14 @@ export function ChatWidget() {
     }
   }, [messages, setIsReviewOpen, bumpReviewVersion]);
 
-  // Order matters: edit-dispatcher's effect must enqueue apply tasks before
-  // read-dispatcher's effect enqueues read tasks, so reads in the same step
-  // observe the post-apply store.
+  // Order matters: edits must enqueue before reads so same-step reads see
+  // post-apply state.
   useEditDispatcher(messages, addToolResultRef);
   useReadDispatcher(messages, addToolResultRef);
   useResearchDispatcher(messages, addToolResultRef);
 
   const isBusy = status === 'submitted' || status === 'streaming';
 
-  // "Full" = locally over the threshold OR server returned a 413 history-full error.
   const isFull = React.useMemo(() => isHistoryFull(messages) || isHistoryFullError(error), [messages, error]);
 
   const assistantContextProperties = React.useCallback(
@@ -341,9 +310,7 @@ export function ChatWidget() {
         return;
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-        // Don't hijack the shortcut mid-IME composition — the user is typing a
-        // character, not firing a command, and preventDefault would swallow
-        // the commit.
+        // Don't hijack the shortcut mid-IME composition.
         if (event.isComposing) return;
         event.preventDefault();
         if (isOpen) {

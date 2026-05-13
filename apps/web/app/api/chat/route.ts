@@ -48,11 +48,7 @@ const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// Tool calls consume output tokens; a chained edit turn can exceed 2k. 8k leaves
-// headroom for chained writes plus the closing-summary reply.
 const MAX_OUTPUT_TOKENS = 8_000;
-// 10 covers the worst-case ingestion turn: searchGraph -> research -> createEntity
-// -> setEntityValue (x several props) -> text reply.
 const MAX_TOOL_STEPS = 10;
 
 const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
@@ -61,11 +57,8 @@ const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 // anything that could break out of the code span or smuggle control chars.
 const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
 
-// The preload is supplied by the client and only ever scopes the system turn
-// for *this user's* conversation, so we don't need the same anti-forgery
-// enforcement as the wallet cookie. We do however require entity + space ids
-// to match the validated currentContext — otherwise a stale or mismatched
-// preload would silently mislead the model.
+// Preload must match validated currentContext or a stale entity could silently
+// mislead the model.
 function validatePreloadedEntity(
   input: unknown,
   expectedEntityId: string | null,
@@ -119,9 +112,7 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (isEditMode != null && typeof isEditMode !== 'boolean') {
     return null;
   }
-  // personalSpaceId is ignored here; resolved server-side from membership so a
-  // forged context can't redirect navigation.
-
+  // personalSpaceId resolved server-side from membership; ignore client value.
   return {
     currentSpaceId: typeof currentSpaceId === 'string' ? currentSpaceId : null,
     currentEntityId: typeof currentEntityId === 'string' ? currentEntityId : null,
@@ -137,14 +128,10 @@ function getClientIp(req: Request): string {
   }
   const real = req.headers.get('x-real-ip');
   if (real) return real;
-  // No proxy headers — random key per request avoids false-positive 429s from
-  // a shared `unknown` bucket. Vercel always sets x-forwarded-for so this is
-  // unreachable in prod.
+  // No proxy headers (only hit in local dev); random key avoids a shared bucket.
   return `noip:${crypto.randomUUID()}`;
 }
 
-// httpOnly + sameSite=lax means script can't forge this cookie, but we still
-// validate shape to fall back to the guest prompt on a malformed value.
 function parseWalletCookie(raw: string | undefined): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase();
@@ -185,9 +172,8 @@ function rateLimitResponse(reset: number) {
 
 type LimitProbe = { success: boolean; reset: number };
 
-// Take `reset` only from the limiters that actually rejected — taking max
-// across both would let a tripped short window surface a longer Retry-After
-// from a different window that happens to reset later.
+// Only consider limiters that actually rejected; taking max across all of them
+// would surface a longer Retry-After from a window that didn't trip.
 function failedLimiterReset(probes: LimitProbe[]): number {
   let max = 0;
   for (const probe of probes) {
@@ -197,13 +183,9 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
-// Suppress ALL text output from the executor stage. In the three-stage
-// pipeline (Haiku opener → Sonnet executor → Haiku closer), the executor must
-// never emit user-facing text — the opener already acknowledged the turn and
-// the closer writes the final summary from the executor's tool results. Text
-// the executor's model produces is still preserved in the response.messages
-// payload (so the closer can read Sonnet's analysis), it just doesn't reach
-// the client stream.
+// Strip text deltas from the executor's stream. Its text is still present in
+// response.messages so the closer can read Sonnet's analysis, just not user-
+// facing — the opener and closer own all visible text.
 function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
   return () =>
     new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
@@ -221,16 +203,14 @@ function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
 }
 
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
-// Navigation turns: text-empty turns containing only these skip follow-up generation.
+// Text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
-// Browser executes these against the merged store; the route returns no tool
-// result for them.
+// Client-executed read tools; the server registers them schema-only.
 const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research']);
 
-// With client-executed tool flows the assistant turn that triggers 'edit'
-// framing isn't always the one that originally emitted the write call — the
-// same conversation may contain a resubmit cycle: assistant(call) →
-// tool(result) → assistant(text). Walk every message since the last user turn.
+// Edit/client tools resolve via resubmit, so the assistant turn that triggers
+// 'edit' framing isn't always the one that emitted the call. Walk every
+// message since the last user turn.
 function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' | 'client-pending' {
   let userIdx = -1;
   for (let i = allMessages.length - 1; i >= 0; i--) {
@@ -242,8 +222,7 @@ function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' 
   const turn = allMessages.slice(userIdx + 1);
   if (turn.length === 0) return 'default';
 
-  // Pair tool-calls with tool-results across the turn so we know which client
-  // calls are still pending.
+  // Pair tool-calls with tool-results so we know which client calls are pending.
   const callsByName = new Map<string, string>();
   const resultIds = new Set<string>();
   for (const message of turn) {
@@ -269,7 +248,6 @@ function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' 
 
   if (hasPendingClientCall) return 'client-pending';
 
-  // Inspect the most recent assistant message for the skip / nav-only branch.
   const lastAssistant = [...turn].reverse().find(m => m.role === 'assistant');
   let hasText = false;
   let onlyNavLike = true;
@@ -299,8 +277,8 @@ function lastUserMessageLength(uiMessages: UIMessage[]): number {
   return 0;
 }
 
-// Reject any role other than user/assistant so a caller can't smuggle a
-// second `system` turn in after the real prompt.
+// Reject any role other than user/assistant so a caller can't smuggle in a
+// second `system` turn after the real prompt.
 function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   for (const msg of input) {
@@ -309,7 +287,6 @@ function validateUIMessages(input: unknown): UIMessage[] | null {
     if (role !== 'user' && role !== 'assistant') return null;
     const parts = (msg as { parts?: unknown }).parts;
     if (!Array.isArray(parts)) return null;
-    // Shallow check: null or shape-bogus parts would crash convertToModelMessages.
     for (const part of parts) {
       if (!part || typeof part !== 'object') return null;
       if (typeof (part as { type?: unknown }).type !== 'string') return null;
@@ -388,26 +365,12 @@ export async function POST(req: Request) {
 
   const rawConverted = await convertToModelMessages(uiMessages);
 
-  // Defense against duplicate tool-call / tool-result blocks in the converted
-  // history. Anthropic enforces unique `tool_use_id`s per conversation and
-  // rejects the request once any id repeats. We've observed long multi-step
-  // turns producing a "triangular" duplication where a tool-call from an
-  // earlier step also appears in every later step's assistant slice — same
-  // toolCallId, same payload, just replayed. The root cause is somewhere in
-  // the AI SDK's UIMessage parts accumulation during multi-step + resubmit;
-  // dedup here is the cheap, safe truncation that keeps the conversation
-  // valid regardless. Keep the *first* occurrence (it's the original step
-  // that produced the result).
-  // Dedup tool-calls and tool-results separately. They share an id but live
-  // in different blocks (assistant.content has tool-call, tool.content has
-  // tool-result). A single shared `seen` set was wrong: the first tool-call
-  // adds id X, then the first tool-result's `seen.has(X)` returns true and
-  // we drop the matching result — leaving a tool-call with no result, which
-  // Anthropic rejects.
-  // Track kept tool-calls so we can drop orphan tool-results whose call we
-  // dedup'd away. Without this, when a duplicate tool-call is removed and its
-  // matching tool-result appears in a later `tool` message, Anthropic 400s
-  // on the orphan result.
+  // Dedup tool-call / tool-result blocks: Anthropic 400s on repeated
+  // `tool_use_id`s, and the SDK's multi-step + resubmit accumulation can
+  // replay an earlier step's call in every later slice. Keep the first
+  // occurrence; track kept calls so we can drop orphan results whose
+  // matching call we deduped away. Calls and results need separate `seen`
+  // sets because they share ids across different block kinds.
   const keptToolCalls = new Set<string>();
   const seenToolResults = new Set<string>();
   const droppedToolCallIds: string[] = [];
@@ -499,10 +462,6 @@ export async function POST(req: Request) {
     }),
   };
 
-  // The AI SDK's multi-step loop only continues when a step has tool calls to
-  // respond to, so a single streamText with forced toolChoice either skips
-  // the text or skips the tool. Chain two streamTexts manually: (1) text
-  // reply, then (2) forced suggestFollowUps that sees the completed turn.
   const navTools = buildNavTools(
     {
       resolvePersonalSpaceId: () =>
@@ -510,14 +469,8 @@ export async function POST(req: Request) {
     },
     writeContext
   );
-  // Schema-only writes for members: authorization (member + edit rate limit)
-  // happens via /api/chat/authorize-write and graph-state validation runs in
-  // useEditDispatcher. Guests don't see the catalog at all.
+  // Members-only, schema-only here; dispatchers handle auth + execution.
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
-  // Members-only research tool (delegates to /api/chat/research). Schema-only
-  // here — the dispatcher hits the sub-agent, which is the only place
-  // Anthropic's hosted webSearch runs. Guests stay read-only against Geo with
-  // no live-web access.
   const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
 
   const debug = process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1';
@@ -563,23 +516,13 @@ export async function POST(req: Request) {
     debugLog('converted-messages', summary);
   }
 
-  // Three-stage pipeline: Haiku opener → Sonnet executor → Haiku closer.
-  // - Opener fires once per turn (first request only) with its own small system
-  //   prompt; streams a 1-sentence acknowledgment so the user sees text within
-  //   ~500ms-1s even when the executor is about to run a long tool chain.
-  // - Executor runs the full tool chain with `suppressAllText`. Its model still
-  //   produces text (preserved in `response.messages`), but none of it streams
-  //   to the client — the closer is the source of truth for user-facing text.
-  // - Closer reads the executor's tool results and writes the past-tense
-  //   summary. Skipped on `skip` / `client-pending` turns (no answer needed
-  //   yet) so the SDK can resubmit after the client dispatcher resolves
-  //   pending tools.
+  // Three-stage pipeline: Haiku opener → Sonnet executor (text-suppressed) →
+  // Haiku closer. Closer is skipped on `skip` / `client-pending` so the SDK can
+  // resubmit after a client dispatcher resolves pending tools.
   //
-  // `isFirstRequestOfTurn`: the AI SDK wraps tool-result blocks in a `user`-
-  // role ModelMessage on continuation requests, so a naive last-role check
-  // misfires. Walk backwards: the last assistant message means we've already
-  // had at least one server response this turn (continuation); the last user
-  // message with NO tool-result blocks means this is a fresh user turn.
+  // The SDK wraps tool-result blocks in a `user`-role message on continuation
+  // requests, so a naive last-role check misfires. A trailing user message
+  // with no tool-result block means this is a fresh user turn.
   const isFirstRequestOfTurn = ((): boolean => {
     for (let i = converted.length - 1; i >= 0; i--) {
       const m = converted[i];
@@ -596,25 +539,17 @@ export async function POST(req: Request) {
   })();
 
   const stream = createUIMessageStream({
-    // Persistence mode: on continuation requests (after a client-tool resolves
-    // and the SDK resubmits), reuse the assistant message id from the prior
-    // round-trip so useChat merges this stream's parts into the same UIMessage
-    // instead of creating a new one. Without this, every round-trip created a
-    // fresh assistant message containing the FULL turn-to-date, and the
-    // renderer rendered each — visibly duplicating the opener text.
+    // Reuse the assistant message id on continuation requests so the SDK
+    // merges new parts into the same UIMessage instead of rendering a fresh
+    // one per resubmit (which duplicates the opener text).
     originalMessages: uiMessages,
     execute: async ({ writer }) => {
-      // --- Stage A: opener (Haiku) -------------------------------------
-      // Fires once per turn. On continuation requests (after a client tool
-      // resolves and the SDK resubmits) the opener already streamed; skip it.
+      // Stage A: opener (Haiku). One-sentence ack; skipped on continuation.
       if (isFirstRequestOfTurn) {
         const openerResult = streamText({
           model: anthropic(OPENER_MODEL),
           system: OPENER_SYSTEM_PROMPT,
-          // Just the converted turn — no main system prompt, no preload. The
-          // opener doesn't need full context; it's a 1-sentence ack.
           messages: converted,
-          // ~15 words + buffer. Lower cap = faster finish-step.
           maxOutputTokens: 80,
           onError: err => {
             console.error('[chat:srv] opener stream error', err);
@@ -626,23 +561,20 @@ export async function POST(req: Request) {
             sendFinish: false,
           })
         );
-        // Block until the opener fully drains before kicking off the executor
-        // so its parts land in order. Without this the executor can start
-        // emitting tool calls into the same UIMessage before the opener's
-        // text-end / finish-step chunks arrive.
+        // Drain before starting the executor so the executor's tool parts
+        // don't interleave with the opener's text-end chunk.
         await openerResult.response;
       }
 
-      // --- Stage B: executor (Sonnet) ----------------------------------
+      // Stage B: executor (Sonnet).
       const execResult = streamText({
         model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
         toolChoice: 'auto',
-        // Serial tool use matches the system prompt's "searchGraph first, then
-        // research / writes" sequencing and avoids races between client-tool
-        // resolutions and the SDK's multi-step continuation.
+        // Serial tool use matches the prompt's "searchGraph first, then
+        // research / writes" ordering and avoids client-tool resubmit races.
         providerOptions: {
           anthropic: { disableParallelToolUse: true },
         },
@@ -684,8 +616,7 @@ export async function POST(req: Request) {
       writer.merge(
         execResult.toUIMessageStream({
           sendReasoning: false,
-          // The opener (when present) already emitted the message-start chunk;
-          // don't duplicate it.
+          // Opener already emitted message-start; don't duplicate it.
           sendStart: !isFirstRequestOfTurn,
           sendFinish: false,
         })
@@ -708,17 +639,12 @@ export async function POST(req: Request) {
         return;
       }
 
-      // --- Stage C: closer (Haiku) -------------------------------------
-      // Reads the executor's tool calls + results from the transcript and
-      // writes the user-facing summary. The executor's text — if any — is in
-      // execMessages too, so the closer sees Sonnet's analysis as additional
-      // context, but its system prompt directs it to summarize from tool
-      // results, not paraphrase the executor.
+      // Stage C: closer (Haiku). Writes the user-facing summary from the
+      // executor's tool calls + results.
       const closerResult = streamText({
         model: anthropic(CLOSER_MODEL),
         system: CLOSER_SYSTEM_PROMPT,
         messages: [...converted, ...execMessages],
-        // 1-3 sentences or 3-5 bullets — 400 tokens is plenty.
         maxOutputTokens: 400,
         onError: err => {
           console.error('[chat:srv] closer stream error', err);
@@ -734,7 +660,7 @@ export async function POST(req: Request) {
 
       const closerMessages = (await closerResult.response).messages;
 
-      // --- Stage D: follow-ups (Haiku, forced tool) --------------------
+      // Stage D: follow-ups (Haiku, forced tool).
       const followUpInstruction =
         turnKind === 'edit'
           ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
@@ -753,14 +679,13 @@ export async function POST(req: Request) {
         ],
         tools: followUpTools,
         toolChoice: { type: 'tool', toolName: 'suggestFollowUps' },
-        // 100 tokens is plenty for 3 short strings; lower cap = faster finish.
         maxOutputTokens: 100,
       });
       writer.merge(followUpResult.toUIMessageStream({ sendReasoning: false, sendStart: false }));
     },
     onError: err => {
       console.error('[chat] stream error', err);
-      // Coarse classification lets the client show a sharper error message.
+      // Coarse classification so the client can show a sharper message.
       const message = err instanceof Error ? err.message : '';
       if (message.toLowerCase().includes('rate')) return 'rate_limited';
       if (message.toLowerCase().includes('overload') || message.toLowerCase().includes('timeout')) {
