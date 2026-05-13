@@ -120,8 +120,8 @@ export function ChatPanel({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 16, scale: 0.96 }}
       transition={{ duration: 0.15 }}
-      style={{ transformOrigin: 'bottom right', width: size.width, height: size.height }}
-      className="fixed right-4 bottom-4 z-100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]"
+      style={{ transformOrigin: 'bottom right', width: size.width, height: size.height, containerType: 'size' }}
+      className="fixed right-4 bottom-4 z-1100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]"
     >
       <ResizeHandle
         className="absolute inset-y-2 left-0 w-1 cursor-ew-resize"

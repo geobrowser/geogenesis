@@ -91,7 +91,7 @@ describe('authorize-write', () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it('toggleEditMode skips the edit rate limiter', async () => {
+  it('toggleEditMode is space-agnostic but still consults the edit limiter', async () => {
     let limiterChecked = false;
     mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
     buildWriteContextMock.mockReturnValue({
@@ -99,18 +99,15 @@ describe('authorize-write', () => {
       walletAddress: '0x' + '1'.repeat(40),
       personalSpaceId: async () => null,
       isMember: async () => true,
-      // Returns rate-limited; if we don't see this short-circuit, the response
-      // should be `rate_limited` and the test will fail.
       checkEditRateLimit: async () => {
         limiterChecked = true;
-        return { ok: false, retryAfter: 99 };
+        return { ok: true };
       },
     });
-    // toggleEditMode is space-agnostic — endpoint must accept missing spaceId.
     const res = await POST(makeRequest({ toolName: 'toggleEditMode' }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(limiterChecked).toBe(false);
+    expect(limiterChecked).toBe(true);
   });
 
   it('rejects unknown toolName', async () => {

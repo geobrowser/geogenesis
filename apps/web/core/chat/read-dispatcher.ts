@@ -81,7 +81,6 @@ function sortRelationsByPosition(relations: Relation[]): Relation[] {
   return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
 
-// Inlined rather than imported so the dispatcher stays self-contained.
 function dedupeTypes<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
@@ -93,11 +92,8 @@ function dedupeTypes<T extends { id: string }>(items: T[]): T[] {
   return out;
 }
 
-// Walks the entity's TYPES_PROPERTY relations, looks up each type entity via
-// the merged store (so locally-modified types are seen), and reads its
-// PROPERTIES relations to assemble the schema. Property metadata (name,
-// dataType) comes from the local property store first, falling back to the
-// remote `property` query for published-only properties.
+// Assembles the schema from the entity's TYPES_PROPERTY → PROPERTIES edges.
+// Property metadata prefers the local store, falling back to remote.
 async function fetchEntitySchema(
   entityRelations: Relation[],
   filledPropertyIds: Set<string>,
@@ -118,9 +114,8 @@ async function fetchEntitySchema(
       const dedupedTypes = dedupeTypes(typesWithSpace);
       const seenProps = new Set<string>();
 
-      // Two-pass to mirror the server-side resolver: first try the type's
-      // referenced space, and if that yields no PROPERTIES (filtered out by
-      // space scope), retry against the type entity's own top-ranked space.
+      // Two-pass: try the type's referenced space, then fall back to the
+      // type entity's own top-ranked space if PROPERTIES is space-filtered.
       const typeEntities = await Promise.all(
         dedupedTypes.map(async t => {
           const scoped = await E.findOne({
@@ -154,9 +149,8 @@ async function fetchEntitySchema(
 
     const allIds = [...new Set([...DEFAULT_ENTITY_SCHEMA.map(p => p.id as string), ...propertyIds])];
 
-    // Property metadata per id: prefer the local store (covers user-minted
-    // properties whose dataType lives only in pendingDataTypes), fall back to
-    // the merged ORM read for published-only properties.
+    // Local store first (covers user-minted properties whose dataType lives
+    // only in pendingDataTypes), remote fallback for published-only ones.
     const fetchedById = new Map<string, Property>();
     await Promise.all(
       propertyIds.map(async id => {
@@ -203,9 +197,7 @@ async function fetchEntitySchema(
   }
 }
 
-// Looks up a space by id, preferring the local store (so a locally-renamed
-// space surfaces under its new name) and falling back to a cached remote
-// fetch. Returns just the displayable name for now.
+// Local store first so a locally-renamed space surfaces under its new name.
 async function resolveSpaceName(spaceId: string, ctx: ReadCtx): Promise<string | null> {
   const localSpaceEntity = ctx.store.getEntity(spaceId);
   if (localSpaceEntity?.name) return localSpaceEntity.name;
@@ -228,22 +220,24 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
   const normalizedSpaceId = input.spaceId && isEntityId(input.spaceId) ? normalizeEntityId(input.spaceId) : undefined;
 
   try {
-    // E.findOne merges the local store with a cached remote `getEntity`, so
-    // unpublished values/relations the user just made surface here exactly as
-    // they do in the page UI.
-    let entity: Entity | null = await E.findOne({
-      id: normalizedId,
-      spaceId: normalizedSpaceId,
-      store: ctx.store,
-      cache: ctx.cache,
-    });
+    // Scoped merge first; wrapped per-attempt so a transient throw doesn't
+    // skip the unscoped + remote fallback below.
+    let entity: Entity | null = null;
+    try {
+      entity = await E.findOne({
+        id: normalizedId,
+        spaceId: normalizedSpaceId,
+        store: ctx.store,
+        cache: ctx.cache,
+      });
+    } catch (err) {
+      console.error('[chat/read-dispatcher] getEntity scoped findOne failed', normalizedId, err);
+    }
 
     let isDraft = false;
 
     if (!entity) {
-      // Retry without a space scope before giving up: a draft entity might
-      // not have its spaceId resolved yet, and the caller's spaceId may not
-      // match any value the entity actually has locally.
+      // Retry unscoped — a draft may not have its spaceId resolved yet.
       try {
         entity = await E.findOne({
           id: normalizedId,
@@ -256,9 +250,8 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
     }
 
     if (!entity) {
-      // Final fallback: direct remote query with no merge. Logged so we can
-      // tell apart "agent looked up a draft" vs "agent looked up a published
-      // entity that wasn't in cache".
+      // Direct remote query; logged so we can distinguish draft lookups from
+      // cache-miss lookups on published entities.
       try {
         const remote = await ctx.cache.fetchQuery({
           queryKey: ['chat-read-dispatcher', 'getEntity', normalizedId, normalizedSpaceId ?? null],
@@ -275,9 +268,7 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
 
     if (!entity) return { error: 'not_found' };
 
-    // An entity is "draft" if it has no synced baseline — i.e., the local
-    // store is the only source. We approximate by checking if any of its
-    // values/relations are local-only.
+    // Approximation of "draft": every value/relation is local-only.
     const allLocal =
       entity.values.length + entity.relations.length > 0 &&
       entity.values.every(v => v.isLocal) &&
@@ -294,8 +285,7 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
       dataType: value.property?.dataType ?? 'TEXT',
     }));
 
-    // Exclude BLOCKS and TABS from the capped general relations list so
-    // they're always fully enumerated (matches server behavior).
+    // BLOCKS / TABS are enumerated separately so they're never truncated.
     const blockRelations = entity.relations.filter(r => r.type.id === SystemIds.BLOCKS);
     const tabRelations = entity.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY);
     const otherRelations = entity.relations.filter(
@@ -345,10 +335,7 @@ export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Pro
   }
 }
 
-// Scans the local store for entities whose names match the query. Naive
-// case-insensitive substring match — adequate for the typical store size
-// (hundreds of entities). Handles both startsWith and contains; startsWith
-// matches sort first, then contains matches.
+// Naive substring scan; startsWith matches first, then contains.
 function localSearch(query: string, store: GeoStore, scopedSpaceId?: string, scopedTypeId?: string): Entity[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return [];
@@ -405,8 +392,6 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
   const scopedTypeId = input.typeId && isEntityId(input.typeId) ? normalizeEntityId(input.typeId) : undefined;
 
   try {
-    // Run both lookups concurrently — local is sync-ish but kept async for
-    // symmetry with the remote call.
     const [localMatches, remoteRaw] = await Promise.all([
       Promise.resolve(localSearch(input.query, ctx.store, scopedSpaceId, scopedTypeId)),
       ctx.cache
@@ -461,9 +446,8 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
   }
 }
 
-// Locally-created spaces are rare, but if any exist we surface them above the
-// remote list so the agent can reference a space the user just spun up. Match
-// is name-based (case-insensitive) when a query is provided.
+// Locally-created spaces surface above the remote list so the agent can
+// reference a space the user just spun up.
 function localSpaceMatches(query: string | undefined, store: GeoStore): Entity[] {
   const matches: Entity[] = [];
   for (const entity of store.getEntities()) {
@@ -488,9 +472,7 @@ export async function executeListSpaces(input: ListSpacesInput, ctx: ReadCtx): P
 
     let remote: ListSpaceEntry[] = [];
     if (trimmedQuery) {
-      // Search the published space topic entities, then resolve to actual
-      // space containers — same flow as the previous server-side
-      // implementation, just hosted on the client now.
+      // Search published space topic entities, then resolve to containers.
       const searchResults = await ctx.cache
         .fetchQuery({
           queryKey: ['chat', 'listSpaces', 'search', trimmedQuery, effectiveLimit],
@@ -616,11 +598,7 @@ export async function executeReadTool(call: ReadToolCall, ctx: ReadCtx): Promise
   }
 }
 
-// The widget passes a ref to `addToolResult` from useChat; we only call it
-// with the read-tool output shapes, but typing it `unknown` here avoids
-// fighting the SDK's `InferUIMessageTools` generic at the boundary. `tool`
-// is widened to `string` so the same ref can be reused by useEditDispatcher
-// (which calls addToolResult with write tool names too).
+// Widened from useChat's typed addToolResult so the same ref serves reads + writes.
 export type AddToolResultFn = (args: { tool: string; toolCallId: string; output: unknown }) => void;
 
 const READ_TOOL_PART_PREFIX = 'tool-';
@@ -631,17 +609,10 @@ function readToolNameFromPart(type: string): ReadToolName | null {
   return isReadToolName(name) ? name : null;
 }
 
-// Effect-based dispatch (mirrors `useEditDispatcher`): runs after each render
-// commit, finds read tool calls awaiting input, and enqueues their execution
-// onto the shared apply-queue. Because edits and reads enqueue from effects
-// in the same render — and `useEditDispatcher` is called first in the
-// widget — any edit emitted in the same step lands in the queue *before* the
-// read, so the read sees the post-apply store.
-//
-// Why not `onToolCall`? That callback fires synchronously while the SDK
-// processes the stream, before React has a chance to commit the message
-// updates that the edit-dispatcher's effect needs to dispatch the edits.
-// The result was a race where reads ran against pre-edit state.
+// Effect-based dispatch. The widget calls useEditDispatcher before this hook,
+// so any edit emitted in the same render lands in the apply-queue first and
+// the read observes post-apply state. `onToolCall` runs before React commits,
+// so reads would race ahead of edits — that's why we wait for the effect.
 export function useReadDispatcher(messages: UIMessage[], addToolResultRef: React.RefObject<AddToolResultFn | null>) {
   const dispatchedRef = React.useRef(new Set<string>());
   const cancelledRef = React.useRef(false);
@@ -660,9 +631,7 @@ export function useReadDispatcher(messages: UIMessage[], addToolResultRef: React
         if (!isToolUIPart(part)) continue;
         const toolName = readToolNameFromPart(part.type);
         if (!toolName) continue;
-        // input-available means the model finished streaming arguments and
-        // the SDK is waiting for our result. output-available / output-error
-        // mean we (or a prior render) already responded.
+        // input-available = args fully streamed, SDK waiting for our output.
         if (part.state !== 'input-available') continue;
         if (dispatchedRef.current.has(part.toolCallId)) continue;
         dispatchedRef.current.add(part.toolCallId);
