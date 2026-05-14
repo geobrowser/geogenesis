@@ -18,6 +18,7 @@ import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-head
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
+import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
@@ -84,7 +85,9 @@ export default async function Layout(props0: LayoutProps) {
               <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} />
             </>
           ) : null}
-
+          <Spacer height={24} />
+          <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+          <Spacer height={16} />
           <React.Suspense fallback={null}>
             <SpaceTabs
               spaceId={spaceId}

@@ -5,7 +5,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useMemo } from 'react';
 
-import { DEFAULT_ENTITY_SCHEMA, getSchemaFromTypeIdsAndRelations } from '~/core/database/entities';
+import {
+  DEFAULT_ENTITY_SCHEMA,
+  getSchemaFromTypeIdsAndRelations,
+  getSchemaWithGroupsFromTypeIdsAndRelations,
+} from '~/core/database/entities';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -108,6 +112,49 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
   }
 
   return schema ?? DEFAULT_ENTITY_SCHEMA;
+}
+
+export function useEntitySchemaWithGroups(entityId: string, spaceId?: string) {
+  const types = useEntityTypes(entityId, spaceId);
+  const stableTypeKey = useMemo(() => types.map(t => `${t.id}:${t.toSpaceId ?? ''}`).join('|'), [types]);
+  const hasTypes = types.length > 0;
+
+  const allRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && (spaceId ? r.spaceId === spaceId : true),
+  });
+  const stableRelationKey = useMemo(
+    () => [...new Set(allRelations.map(r => `${r.type.id}:${r.toEntity.id}:${r.toSpaceId ?? ''}`))].sort(),
+    [allRelations]
+  );
+
+  const { data } = useQuery({
+    enabled: hasTypes || allRelations.length > 0,
+    placeholderData: keepPreviousData,
+    queryKey: ['entity-schema-with-groups', entityId, spaceId, stableTypeKey, stableRelationKey],
+    queryFn: async () =>
+      await getSchemaWithGroupsFromTypeIdsAndRelations(
+        types.map(t => ({ id: t.id, spaceId: t.toSpaceId })),
+        allRelations
+      ),
+  });
+
+  if (!hasTypes && allRelations.length === 0) {
+    return {
+      schema: DEFAULT_ENTITY_SCHEMA,
+      propertyGroups: [],
+      ungroupedPropertyIds: [] as string[],
+      hasPropertyGroups: false,
+    };
+  }
+
+  return (
+    data ?? {
+      schema: DEFAULT_ENTITY_SCHEMA,
+      propertyGroups: [],
+      ungroupedPropertyIds: [] as string[],
+      hasPropertyGroups: false,
+    }
+  );
 }
 
 export function useRelationEntityRelations(entityId: string, spaceId?: string) {
