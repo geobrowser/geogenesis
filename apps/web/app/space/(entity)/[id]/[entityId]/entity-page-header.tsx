@@ -1,6 +1,5 @@
 'use client';
 
-import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import type { Relation } from '~/core/types';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
@@ -23,15 +22,12 @@ export function EntityPageHeader({
   spaceId,
   serverRelations,
 }: EntityPageHeaderProps) {
-  const relations = useRelationEntityRelations(entityId, spaceId);
-  const isRelationPage = relations.length > 0;
-
   return (
     <div className="space-y-2">
       <EntityPageRelations entityId={entityId} spaceId={spaceId} serverRelations={serverRelations} />
       {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
       {showHeading && <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />}
-      {showHeader && !isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
+      {showHeader && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
     </div>
   );
 }
