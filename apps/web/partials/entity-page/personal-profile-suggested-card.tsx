@@ -147,10 +147,10 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const pillSizing = '!h-7 !px-2.5 !gap-1.5 !rounded-full';
 
   const pillClass =
-    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white hover:!bg-white hover:!text-text hover:!border-text focus-visible:!border-text [&]:shadow-none`;
+    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white hover:!bg-[#151515] focus-visible:!border-text [&]:shadow-none`;
 
   const donePillClass =
-    `border-transparent ${pillSizing} !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
+    `${pillSizing} !border-transparent !bg-[#8A8A8A] !text-white hover:!bg-[#8A8A8A] hover:!text-white hover:!border-transparent active:!bg-[#8A8A8A] focus-visible:!border-transparent focus-visible:!bg-[#8A8A8A] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
