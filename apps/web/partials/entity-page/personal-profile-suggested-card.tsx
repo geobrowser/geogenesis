@@ -238,21 +238,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     spaceId,
   ]);
 
-  const enterProfileEditMode = React.useCallback(() => {
-    if (onProfileOverviewSurface) {
-      setEditable(true);
-      return;
-    }
-    try {
-      const nav = router.push(NavUtils.toEntity(spaceId, entityId, true), { scroll: false }) as void | Promise<unknown>;
-      if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
-        void (nav as Promise<unknown>).catch(() => {});
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [entityId, onProfileOverviewSurface, router, setEditable, spaceId]);
-
   const onCreatePost = React.useCallback(async () => {
     if (createPostLockedRef.current) return;
     createPostLockedRef.current = true;
@@ -317,22 +302,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
             onClick={tasks.bio ? undefined : onAddBio}
           >
             Add bio
-          </SmallButton>
-          <SmallButton
-            variant="secondary"
-            className={`${suggestedActionPillTypography} ${pillClass}`}
-            icon={<CreateSmall color="white" />}
-            onClick={enterProfileEditMode}
-          >
-            Add work history
-          </SmallButton>
-          <SmallButton
-            variant="secondary"
-            className={`${suggestedActionPillTypography} ${pillClass}`}
-            icon={<CreateSmall color="white" />}
-            onClick={enterProfileEditMode}
-          >
-            Add education
           </SmallButton>
           <SmallButton
             variant="secondary"
