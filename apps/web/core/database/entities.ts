@@ -8,7 +8,7 @@ import { useMemo } from 'react';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { DATA_TYPE_PROPERTY } from '../constants';
+import { COLLAPSED_PROPERTY, DATA_TYPE_PROPERTY, PROPERTY_GROUPS_PROPERTY } from '../constants';
 import { getProperties } from '../io/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
@@ -51,6 +51,40 @@ type UseEntityOptions = {
   spaceId?: string;
   id: string;
 };
+
+export type SchemaPropertyGroup = {
+  id: string;
+  name: string | null;
+  collapsed: boolean;
+  propertyIds: string[];
+  source: 'type' | 'isType';
+};
+
+export type EntitySchemaWithGroups = {
+  schema: Property[];
+  propertyGroups: SchemaPropertyGroup[];
+  ungroupedPropertyIds: string[];
+  hasPropertyGroups: boolean;
+};
+
+function readEntityValue(entity: Entity, propertyId: string, preferredSpaceId?: string): string | null {
+  const inPreferredSpace = preferredSpaceId
+    ? entity.values.find(v => v.property.id === propertyId && v.spaceId === preferredSpaceId)
+    : null;
+
+  if (inPreferredSpace?.value != null) return inPreferredSpace.value;
+
+  const anyValue = entity.values.find(v => v.property.id === propertyId);
+  return anyValue?.value ?? null;
+}
+
+function readBooleanEntityValue(entity: Entity, propertyId: string, preferredSpaceId?: string): boolean {
+  const value = readEntityValue(entity, propertyId, preferredSpaceId);
+  if (!value) return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema & { isLoading: boolean } {
   const { spaceId, id } = options;
@@ -368,4 +402,209 @@ export async function getSchemaFromTypeIdsAndRelations(
   const additionalOrdered = orderPropertiesByIdList(additionalIdsUnique, fetchedAdditional);
 
   return dedupeWith([...baseSchema, ...additionalOrdered], (a, b) => a.id === b.id);
+}
+
+export async function getSchemaWithGroupsFromTypeIdsAndRelations(
+  types: { id: string; spaceId?: string }[],
+  relations: Relation[]
+): Promise<EntitySchemaWithGroups> {
+  const schema = await getSchemaFromTypeIdsAndRelations(types, relations);
+  const defaultSchemaIds = new Set(DEFAULT_ENTITY_SCHEMA.map(p => p.id));
+
+  const dedupedTypes = dedupeTypesPreserveOrder(types);
+  const dedupedTypeIds = dedupedTypes.map(t => t.id);
+  const spaceByType = new Map(dedupedTypes.map(t => [t.id, t.spaceId]));
+
+  const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
+  const typeEntitiesOrdered = orderEntitiesByIdList(dedupedTypeIds, typeEntities);
+
+  const propertyGroupRefs: { id: string; spaceId?: string }[] = [];
+  for (const entity of typeEntitiesOrdered) {
+    const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
+    const groupRelations = entity.relations.filter(
+      r => r.type.id === PROPERTY_GROUPS_PROPERTY && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+    );
+    for (const relation of sortRelations(groupRelations)) {
+      propertyGroupRefs.push({
+        id: relation.toEntity.id,
+        spaceId: relation.toSpaceId ?? relation.spaceId,
+      });
+    }
+  }
+
+  const dedupedGroupRefs = dedupeWith(propertyGroupRefs, (a, b) => a.id === b.id);
+  const groupSpaceByEntity = new Map(dedupedGroupRefs.map(g => [g.id, g.spaceId]));
+  const groupEntities = await fetchEntitiesWithRelations(
+    dedupedGroupRefs.map(g => g.id),
+    groupSpaceByEntity
+  );
+  const groupEntitiesById = new Map(groupEntities.map(entity => [entity.id, entity]));
+
+  const propertyGroups: SchemaPropertyGroup[] = [];
+  const globalSeenPropertyIds = new Set<string>();
+  const ungroupedPropertyIds: string[] = [];
+
+  for (const typeEntity of typeEntitiesOrdered) {
+    const typeSpaceId = spaceByType.get(typeEntity.id) ?? typeEntity.spaces[0];
+    const typePropertyRelations = typeEntity.relations.filter(
+      r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+    );
+    const typePropertyIds = sortRelations(typePropertyRelations).map(r => r.toEntity.id);
+    const typePropertyIdSet = new Set(typePropertyIds);
+
+    const groupedInType = new Set<string>();
+    const typePropertyGroupRelations = sortRelations(
+      typeEntity.relations.filter(
+        r => r.type.id === PROPERTY_GROUPS_PROPERTY && (typeSpaceId ? r.spaceId === typeSpaceId : true)
+      )
+    );
+
+    for (const groupRelation of typePropertyGroupRelations) {
+      const groupId = groupRelation.toEntity.id;
+      const groupEntity = groupEntitiesById.get(groupId);
+      if (!groupEntity) continue;
+
+      const groupSpaceId = groupRelation.toSpaceId ?? groupRelation.spaceId;
+      const groupPropertyRelations = groupEntity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (groupSpaceId ? r.spaceId === groupSpaceId : true)
+      );
+
+      const rawGroupPropertyIds = sortRelations(groupPropertyRelations)
+        .map(r => r.toEntity.id)
+        .filter(propertyId => typePropertyIdSet.has(propertyId));
+
+      const groupPropertyIds = rawGroupPropertyIds.filter(propertyId => {
+        if (groupedInType.has(propertyId)) return false;
+        groupedInType.add(propertyId);
+        return true;
+      });
+
+      const uniqueGroupPropertyIds = groupPropertyIds.filter(propertyId => {
+        if (globalSeenPropertyIds.has(propertyId)) return false;
+        globalSeenPropertyIds.add(propertyId);
+        return true;
+      });
+
+      propertyGroups.push({
+        id: groupId,
+        name: readEntityValue(groupEntity, SystemIds.NAME_PROPERTY, groupSpaceId) ?? groupEntity.name,
+        collapsed: readBooleanEntityValue(groupEntity, COLLAPSED_PROPERTY, groupSpaceId),
+        propertyIds: uniqueGroupPropertyIds,
+        source: 'type',
+      });
+    }
+
+    for (const propertyId of typePropertyIds) {
+      if (groupedInType.has(propertyId) || globalSeenPropertyIds.has(propertyId)) continue;
+      globalSeenPropertyIds.add(propertyId);
+      ungroupedPropertyIds.push(propertyId);
+    }
+  }
+
+  const relationTypeIds = [...new Set(relations.map(r => r.type.id))];
+  if (relationTypeIds.length > 0) {
+    const relationProperties = await Effect.runPromise(getProperties(relationTypeIds));
+    const isTypePropertyIds = new Set(relationProperties.filter(p => p.isType).map(p => p.id));
+    const orderedIsTypeRelations = sortRelations(relations.filter(r => isTypePropertyIds.has(r.type.id)));
+    const uniqueIsTypeRefs = dedupeWith(
+      orderedIsTypeRelations.map(r => ({
+        relationId: r.id,
+        targetId: r.toEntity.id,
+        targetName: r.toEntity.name,
+        spaceId: r.toSpaceId ?? r.spaceId,
+      })),
+      (a, b) => a.targetId === b.targetId && a.spaceId === b.spaceId
+    );
+
+    const isTypeSpaceByTarget = new Map(uniqueIsTypeRefs.map(r => [r.targetId, r.spaceId]));
+    const isTypeEntities = await fetchEntitiesWithRelations(
+      uniqueIsTypeRefs.map(r => r.targetId),
+      isTypeSpaceByTarget
+    );
+    const isTypeEntitiesById = new Map(isTypeEntities.map(entity => [entity.id, entity]));
+
+    for (const relation of uniqueIsTypeRefs) {
+      const targetEntity = isTypeEntitiesById.get(relation.targetId);
+      if (!targetEntity) continue;
+
+      const targetSpaceId = relation.spaceId ?? targetEntity.spaces[0];
+      const targetPropertyRelations = targetEntity.relations.filter(
+        r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
+      );
+      const targetPropertyIds = sortRelations(targetPropertyRelations).map(r => r.toEntity.id);
+      const uniqueTargetPropertyIds = targetPropertyIds.filter(propertyId => {
+        if (globalSeenPropertyIds.has(propertyId)) return false;
+        globalSeenPropertyIds.add(propertyId);
+        return true;
+      });
+
+      propertyGroups.push({
+        id: `is-type-${relation.relationId}`,
+        name: relation.targetName ?? readEntityValue(targetEntity, SystemIds.NAME_PROPERTY, targetSpaceId),
+        collapsed: false,
+        propertyIds: uniqueTargetPropertyIds,
+        source: 'isType',
+      });
+    }
+  }
+
+  // Synthetic isType groups are only meaningful as a layout hint when at least one
+  // real (user-defined) group exists. Otherwise, fold their properties into the
+  // ungrouped list so the entity panel renders flat.
+  const hasRealGroups = propertyGroups.some(group => group.source === 'type');
+  let effectivePropertyGroups = propertyGroups;
+  if (!hasRealGroups) {
+    const syntheticPropertyIds = propertyGroups
+      .filter(group => group.source === 'isType')
+      .flatMap(group => group.propertyIds);
+    const ungroupedSeen = new Set(ungroupedPropertyIds);
+    for (const propertyId of syntheticPropertyIds) {
+      if (ungroupedSeen.has(propertyId)) continue;
+      ungroupedSeen.add(propertyId);
+      ungroupedPropertyIds.push(propertyId);
+    }
+    effectivePropertyGroups = [];
+  }
+
+  const groupedPropertyIds = effectivePropertyGroups.flatMap(group => group.propertyIds);
+  const groupedPropertyIdSet = new Set(groupedPropertyIds);
+  const ungroupedSet = new Set(ungroupedPropertyIds);
+
+  for (const property of schema) {
+    if (defaultSchemaIds.has(property.id)) continue;
+    if (groupedPropertyIdSet.has(property.id)) continue;
+    if (ungroupedSet.has(property.id)) continue;
+    ungroupedSet.add(property.id);
+    ungroupedPropertyIds.push(property.id);
+  }
+
+  const schemaById = new Map(schema.map(property => [property.id, property]));
+  const orderedSchema: Property[] = [];
+  const seenSchemaIds = new Set<string>();
+
+  for (const defaultProperty of DEFAULT_ENTITY_SCHEMA) {
+    orderedSchema.push(defaultProperty);
+    seenSchemaIds.add(defaultProperty.id);
+  }
+
+  for (const propertyId of [...groupedPropertyIds, ...ungroupedPropertyIds]) {
+    if (seenSchemaIds.has(propertyId)) continue;
+    const property = schemaById.get(propertyId);
+    if (!property) continue;
+    orderedSchema.push(property);
+    seenSchemaIds.add(propertyId);
+  }
+
+  for (const property of schema) {
+    if (seenSchemaIds.has(property.id)) continue;
+    orderedSchema.push(property);
+    seenSchemaIds.add(property.id);
+  }
+
+  return {
+    schema: orderedSchema,
+    propertyGroups: effectivePropertyGroups,
+    ungroupedPropertyIds,
+    hasPropertyGroups: effectivePropertyGroups.length > 0,
+  };
 }

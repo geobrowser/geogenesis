@@ -7,11 +7,13 @@ import * as React from 'react';
 import {
   ADDRESS_PROPERTY,
   DATA_TYPE_PROPERTY,
+  PROPERTY_GROUPS_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
   SCORE_SYSTEM_PROPERTY,
   VENUE_PROPERTY,
 } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
+import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -32,9 +34,11 @@ import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fiel
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { Map } from '~/design-system/map';
+import { Map as GeoMap } from '~/design-system/map';
 import { Text } from '~/design-system/text';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
+import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 interface Props {
@@ -43,6 +47,8 @@ interface Props {
 }
 
 const SKIPPED_PROPERTIES: string[] = [
+  SystemIds.PROPERTIES,
+  PROPERTY_GROUPS_PROPERTY,
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
   SystemIds.DESCRIPTION_PROPERTY,
@@ -69,26 +75,6 @@ export function useReadableEntityHasContent(entityId: string, spaceId: string): 
   return countRenderableProperty(Object.keys(renderedProperties)) > 0;
 }
 
-export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
-  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
-
-  return (
-    <>
-      {Object.entries(renderedProperties)
-        .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
-        .map(([propertyId, property]) => {
-          const isRelation = property.dataType === 'RELATION';
-
-          if (isRelation) {
-            return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
-          }
-
-          return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
-        })}
-    </>
-  );
-}
-
 export function ReadableEntityPage({ id, spaceId }: Props) {
   const hasContent = useReadableEntityHasContent(id, spaceId);
 
@@ -96,9 +82,184 @@ export function ReadableEntityPage({ id, spaceId }: Props) {
     return null;
   }
 
+  return <ReadableEntityProperties id={id} spaceId={spaceId} />;
+}
+
+export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
+  const schemaWithGroups = useEntitySchemaWithGroups(entityId, spaceId);
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    const defaults: Record<string, boolean> = {};
+    for (const group of schemaWithGroups.propertyGroups) {
+      defaults[group.id] = group.collapsed;
+    }
+
+    setCollapsedGroups(previous => {
+      const next: Record<string, boolean> = {};
+      for (const [groupId, defaultCollapsed] of Object.entries(defaults)) {
+        next[groupId] = previous[groupId] ?? defaultCollapsed;
+      }
+
+      const sameKeys = Object.keys(previous).length === Object.keys(next).length;
+      const sameValues = Object.entries(next).every(([groupId, value]) => previous[groupId] === value);
+      return sameKeys && sameValues ? previous : next;
+    });
+  }, [schemaWithGroups.propertyGroups]);
+
+  const groupedSections = React.useMemo(() => {
+    const visiblePropertyIds = new Set(
+      Object.keys(renderedProperties).filter(propertyId => !SKIPPED_PROPERTIES.includes(propertyId))
+    );
+
+    if (!schemaWithGroups.hasPropertyGroups) {
+      return {
+        hasGroups: false,
+        groups: [] as { id: string; label: string; propertyIds: string[] }[],
+        ungrouped: [...visiblePropertyIds.values()],
+      };
+    }
+
+    const consumed = new Set<string>();
+    const groups = schemaWithGroups.propertyGroups
+      .map(group => {
+        const propertyIds = group.propertyIds.filter(propertyId => {
+          if (!visiblePropertyIds.has(propertyId) || consumed.has(propertyId)) return false;
+          consumed.add(propertyId);
+          return true;
+        });
+        return {
+          id: group.id,
+          label: group.name?.trim() || 'Untitled group',
+          propertyIds,
+        };
+      })
+      .filter(group => group.propertyIds.length > 0);
+
+    const orderedUngrouped: string[] = [];
+    for (const propertyId of schemaWithGroups.ungroupedPropertyIds) {
+      if (!visiblePropertyIds.has(propertyId) || consumed.has(propertyId)) continue;
+      consumed.add(propertyId);
+      orderedUngrouped.push(propertyId);
+    }
+
+    for (const propertyId of visiblePropertyIds) {
+      if (consumed.has(propertyId)) continue;
+      consumed.add(propertyId);
+      orderedUngrouped.push(propertyId);
+    }
+
+    return {
+      hasGroups: true,
+      groups,
+      ungrouped: orderedUngrouped,
+    };
+  }, [renderedProperties, schemaWithGroups]);
+
+  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      <ReadableEntityProperties id={id} spaceId={spaceId} />
+    <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
+      {groupedSections.hasGroups &&
+        groupedSections.groups.map(group => {
+          const isCollapsed = collapsedGroups[group.id] ?? false;
+          return (
+            <div key={group.id} className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() =>
+                  setCollapsedGroups(previous => ({
+                    ...previous,
+                    [group.id]: !isCollapsed,
+                  }))
+                }
+              >
+                <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+                  {group.label}
+                </Text>
+                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                  <ChevronDownSmall color="grey-04" />
+                </div>
+              </button>
+
+              {!isCollapsed && (
+                <div className="flex flex-col gap-2">
+                  {group.propertyIds.map(propertyId => {
+                    const property = renderedProperties[propertyId];
+                    if (!property) return null;
+
+                    return (
+                      <ReadablePropertyRow
+                        key={propertyId}
+                        entityId={entityId}
+                        spaceId={spaceId}
+                        propertyId={propertyId}
+                        property={property}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+      {groupedSections.ungrouped.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {groupedSections.hasGroups && (
+            <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+              Ungrouped properties
+            </Text>
+          )}
+          <div className="flex flex-col gap-2">
+            {groupedSections.ungrouped.map(propertyId => {
+              const property = renderedProperties[propertyId];
+              if (!property) return null;
+              return (
+                <ReadablePropertyRow
+                  key={propertyId}
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  propertyId={propertyId}
+                  property={property}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReadablePropertyRow({
+  entityId,
+  spaceId,
+  propertyId,
+  property,
+}: {
+  entityId: string;
+  spaceId: string;
+  propertyId: string;
+  property: { id: string; name: string | null; dataType: DataType; renderableTypeStrict?: string | null; renderableType?: string | null };
+}) {
+  const isRelation = property.dataType === 'RELATION';
+
+  return (
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
+      <div className="inline-flex min-w-0 items-center gap-2 text-text">
+        <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
+        <PropertyNameLink property={property} spaceId={spaceId} />
+      </div>
+      {isRelation ? (
+        <RelationsGroup entityId={entityId} spaceId={spaceId} propertyId={propertyId} hidePropertyName />
+      ) : (
+        <ValuesGroup entityId={entityId} propertyId={propertyId} spaceId={spaceId} hidePropertyName />
+      )}
     </div>
   );
 }
@@ -122,7 +283,17 @@ const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; uni
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
 
-function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spaceId: string; propertyId: string }) {
+function ValuesGroup({
+  entityId,
+  spaceId,
+  propertyId,
+  hidePropertyName,
+}: {
+  entityId: string;
+  spaceId: string;
+  propertyId: string;
+  hidePropertyName?: boolean;
+}) {
   // @TODO: This should be prefetched with _all_ the properties
   const { property } = useQueryProperty({ id: propertyId });
 
@@ -151,7 +322,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
         }
         return (
           <div key={`${entityId}-${propertyId}-${index}`} className="max-w-full min-w-0 break-words">
-            <PropertyNameLink property={property} spaceId={spaceId} />
+            {!hidePropertyName && <PropertyNameLink property={property} spaceId={spaceId} />}
             <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
               <RenderedValue
                 propertyId={propertyId}
@@ -173,11 +344,13 @@ export function RelationsGroup({
   spaceId,
   propertyId,
   isMetadataHeader,
+  hidePropertyName,
 }: {
   entityId: string;
   propertyId: string;
   spaceId: string;
   isMetadataHeader?: boolean;
+  hidePropertyName?: boolean;
 }) {
   const { property } = useQueryProperty({ id: propertyId });
 
@@ -220,7 +393,7 @@ export function RelationsGroup({
   return (
     <>
       <div key={`${propertyId}-${property.name}`} className="max-w-full min-w-0 break-words">
-        {propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
+        {!hidePropertyName && propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
 
         <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
           {relations.map(r => {
@@ -387,7 +560,7 @@ function RenderedValue({
       return (
         <div key={`string-${propertyId}-${value}`} className="flex w-full flex-col gap-2">
           <Text as="p">({value})</Text>
-          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+          <GeoMap latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
         </div>
       );
     }

@@ -76,6 +76,9 @@ export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
 };
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+export const PROPERTY_GROUPS_PROPERTY = '1bb88a7a6b29406496503992a3009e7a';
+export const PROPERTY_GROUP_TYPE = '3964d13c6e444b7d887fbd0812a3dd43';
+export const COLLAPSED_PROPERTY = 'c4e252d805144840b5bca58d89731e22';
 
 // Like RELATION_VALUE_RELATIONSHIP_TYPE but for the edge entity (relation.entityId)
 export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';
