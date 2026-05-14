@@ -251,8 +251,10 @@ function ReadablePropertyRow({
 
   return (
     <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
-      <div className="inline-flex min-w-0 items-center gap-2 text-text">
-        <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
+      <div className="inline-flex min-w-0 items-start gap-2 text-text">
+        <span className="flex h-[1.5rem] shrink-0 items-center">
+          <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
+        </span>
         <PropertyNameLink property={property} spaceId={spaceId} />
       </div>
       {isRelation ? (

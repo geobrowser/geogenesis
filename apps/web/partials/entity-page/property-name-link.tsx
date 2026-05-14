@@ -47,7 +47,7 @@ export function PropertyNameLink({ property, spaceId }: PropertyNameLinkProps) {
       <Text
         as="span"
         variant="bodySemibold"
-        className="min-w-0 break-words underline-offset-2 group-hover:underline group-focus-visible:underline"
+        className="min-w-0 leading-tight break-words underline-offset-2 group-hover:underline group-focus-visible:underline"
       >
         {propertyName}
       </Text>
