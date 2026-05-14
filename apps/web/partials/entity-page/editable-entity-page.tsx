@@ -4,7 +4,7 @@ import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/l
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -18,12 +18,7 @@ import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
-import {
-  useEntitySchema,
-  useEntityTypes,
-  useName,
-  useRelationEntityRelations,
-} from '~/core/state/entity-page-store/entity-store';
+import { useEntitySchema, useName } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
@@ -31,6 +26,7 @@ import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 
+import { propertyIsSkillsProperty } from '~/atoms/personal-profile-suggested';
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
@@ -64,117 +60,114 @@ type EditableEntityPageProps = {
   spaceId: string;
 };
 
-export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
+export function EditableEntityProperties({ id, spaceId }: EditableEntityPageProps) {
   const { createProperty, addPropertyToEntity } = useCreateProperty(spaceId);
 
   const name = useName(id, spaceId);
-  const shouldShowPanel = useShouldShowPropertiesPanel(id, spaceId);
   const visiblePropertiesEntries = useVisiblePropertiesEntries(id, spaceId);
-
-  const relationEntityRelations = useRelationEntityRelations(id, spaceId);
-  const isRelationPage = relationEntityRelations.length > 0;
 
   // Get schema properties from the entity's types - these are placeholders that can't be deleted
   const schemaProperties = useEntitySchema(id, spaceId);
   const schemaPropertyIds = React.useMemo(() => new Set(schemaProperties.map(p => p.id)), [schemaProperties]);
 
-  const showPanel = shouldShowPanel || isRelationPage;
-
   return (
-    <AnimatePresence initial={false}>
-      {showPanel && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="relative rounded-lg border border-grey-02 shadow-button"
-        >
-          <div className="flex flex-col gap-6 p-5">
-            {visiblePropertiesEntries.length === 0 && (
-              <div className="flex flex-col items-center justify-center text-center">
-                <Text as="p" variant="body" color="grey-04">
-                  No properties added yet
-                </Text>
-                <Text as="p" variant="footnote" color="grey-03" className="mt-1">
-                  Click the + button below to add properties
-                </Text>
-              </div>
-            )}
-            {visiblePropertiesEntries.map(([propertyId, property]) => {
-              const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
-
-              const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
-
-              return (
-                <div key={`${id}-${propertyId}`} className="w-full max-w-full min-w-0 break-words">
-                  <RenderedProperty spaceId={spaceId} property={property} />
-
-                  {isRelation || isVideo ? (
-                    <RelationPropertyWithDelete
-                      key={propertyId}
-                      propertyId={propertyId}
-                      entityId={id}
-                      spaceId={spaceId}
-                      property={property}
-                      isSchemaProperty={schemaPropertyIds.has(propertyId)}
-                    />
-                  ) : (
-                    <RenderedValue
-                      key={propertyId}
-                      propertyId={propertyId}
-                      entityId={id}
-                      spaceId={spaceId}
-                      property={property}
-                    />
-                  )}
-                </div>
-              );
-            })}
+    <>
+      <div className="flex flex-col gap-6 p-5">
+        {visiblePropertiesEntries.length === 0 && (
+          <div className="flex flex-col items-center justify-center text-center">
+            <Text as="p" variant="body" color="grey-04">
+              No properties added yet
+            </Text>
+            <Text as="p" variant="footnote" color="grey-03" className="mt-1">
+              Click the + button below to add properties
+            </Text>
           </div>
-          <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
-            <SelectEntityAsPopover
-              trigger={<SquareButton icon={<Create />} />}
-              spaceId={spaceId}
-              relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-              onCreateEntity={result => {
-                const renderableType = result.renderableType || 'TEXT';
+        )}
+        {visiblePropertiesEntries.map(([propertyId, property]) => {
+          const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
 
-                const createdPropertyId = createProperty({
-                  name: result.name || '',
-                  propertyType: renderableType,
-                  verified: result.verified,
-                  space: result.space,
-                });
+          const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
-                // Immediately add the property to the entity
-                addPropertyToEntity({
-                  entityId: id,
-                  propertyId: createdPropertyId,
-                  propertyName: result.name || '',
-                  entityName: name || undefined,
-                });
+          return (
+            <div key={`${id}-${propertyId}`} className="w-full max-w-full min-w-0 break-words">
+              <RenderedProperty spaceId={spaceId} property={property} />
 
-                return createdPropertyId;
-              }}
-              onDone={result => {
-                if (result) {
-                  addPropertyToEntity({
-                    entityId: id,
-                    propertyId: result.id,
-                    propertyName: result.name || '',
-                    entityName: name || undefined,
-                  });
-                }
-              }}
-              placeholder="Find or create property..."
-              advanced={false}
-              showIDs={false}
-            />
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+              {isRelation || isVideo ? (
+                <RelationPropertyWithDelete
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                  isSchemaProperty={schemaPropertyIds.has(propertyId)}
+                />
+              ) : (
+                <RenderedValue
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
+        <SelectEntityAsPopover
+          trigger={<SquareButton icon={<Create />} />}
+          spaceId={spaceId}
+          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+          onCreateEntity={result => {
+            const renderableType = result.renderableType || 'TEXT';
+
+            const createdPropertyId = createProperty({
+              name: result.name || '',
+              propertyType: renderableType,
+              verified: result.verified,
+              space: result.space,
+            });
+
+            // Immediately add the property to the entity
+            addPropertyToEntity({
+              entityId: id,
+              propertyId: createdPropertyId,
+              propertyName: result.name || '',
+              entityName: name || undefined,
+            });
+
+            return createdPropertyId;
+          }}
+          onDone={result => {
+            if (result) {
+              addPropertyToEntity({
+                entityId: id,
+                propertyId: result.id,
+                propertyName: result.name || '',
+                entityName: name || undefined,
+              });
+            }
+          }}
+          placeholder="Find or create property..."
+          advanced={false}
+          showIDs={false}
+        />
+      </div>
+    </>
+  );
+}
+
+export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="relative rounded-lg border border-grey-02 shadow-button"
+    >
+      <EditableEntityProperties id={id} spaceId={spaceId} />
+    </motion.div>
   );
 }
 
@@ -209,7 +202,12 @@ function RelationPropertyWithDelete({
   });
 
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div
+      className="flex items-start justify-between gap-2"
+      {...(propertyIsSkillsProperty(property.id)
+        ? { 'data-personal-profile-focus': 'skills' as const }
+        : {})}
+    >
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>
@@ -1078,16 +1076,4 @@ function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string
   });
 
   return visibleEntries;
-}
-
-/**
- * Returns true if the properties panel should be visible.
- *
- * Always returns true — this function is only called from EditableEntityPage,
- * which only renders when the user is in edit mode. In edit mode, the panel
- * must always be visible so users can add properties to new (empty) entities
- * via the "+" button at the bottom of the panel.
- */
-function useShouldShowPropertiesPanel(_entityId: string, _spaceId: string): boolean {
-  return true;
 }

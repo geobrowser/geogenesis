@@ -22,6 +22,10 @@ import { getRelationForBlockType } from './block-types';
 import { useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import { markdownToEditorJson } from './markdown-adapter';
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from './profile-overview-tail-placeholder';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock } from './use-blocks';
@@ -396,7 +400,16 @@ export function useEditorStore() {
           ];
         }
 
-        const markdownStr = markdownValueForBlockId?.value || '';
+        let markdownStr = markdownValueForBlockId?.value || '';
+        const mdTrimmed = markdownStr.trim();
+        let restoreTailPlaceholder = false;
+        if (mdTrimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        } else if (mdTrimmed === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        }
         sBlocks.push({ type: 'text', markdown: markdownStr });
 
         const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
@@ -411,6 +424,7 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
+                ...(restoreTailPlaceholder ? { tailPlaceholder: true } : {}),
               },
             },
           ];
@@ -446,13 +460,21 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        const paragraphLooksLikePopulatedLine = (t: string) =>
+          !t.startsWith('/') || t.startsWith('//');
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
+          node.content.some(
+            child => child.type !== 'text' || (child.text && paragraphLooksLikePopulatedLine(child.text))
+          );
+        const isTailPlaceholderParagraph =
+          node.type === 'paragraph' &&
+          Boolean(node.attrs && 'tailPlaceholder' in node.attrs && node.attrs.tailPlaceholder);
 
-        return isNonParagraph || isParagraphWithContent;
+        return isNonParagraph || isParagraphWithContent || isTailPlaceholderParagraph;
       });
 
       const newBlocks = populatedContent.map(node => {

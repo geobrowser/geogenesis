@@ -76,10 +76,24 @@
 }
 
 /* Focused empty paragraph: switch from "Add content..." to the slash hint.
-   ParagraphNode renders <NodeViewWrapper><div class="paragraph-node"><p/></div></NodeViewWrapper>,
-   so we scope via .paragraph-node to avoid leaking onto other focused-empty NodeView wrappers. */
-.ProseMirror .is-empty.has-focus:has(> .paragraph-node)::before {
+   Exclude `.paragraph-tail-placeholder` so the profile bio tail keeps TipTap’s placeholder
+   (grey “Type / for commands…”) like `placeholder:text-grey-03` on inputs — not this slash line. */
+.ProseMirror .is-empty.has-focus:not(.paragraph-tail-placeholder):has(> .paragraph-node)::before {
   content: '/ to select content block or write some content...';
+}
+
+/* Profile bio tail: same grey as table title placeholders; ::before is non-interactive — clicks focus <p> / caret; typing removes `is-empty` so grey disappears. */
+.ProseMirror .paragraph-tail-placeholder.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+
+  @apply text-body text-grey-03;
+}
+
+.ProseMirror .paragraph-tail-placeholder {
+  cursor: text;
 }
 
 .ProseMirror:focus {
@@ -117,6 +131,11 @@
 
 .ProseMirror strong {
   @apply font-semibold;
+}
+
+.ProseMirror u {
+  text-decoration-line: underline;
+  text-underline-offset: 2px;
 }
 
 .ProseMirror img {

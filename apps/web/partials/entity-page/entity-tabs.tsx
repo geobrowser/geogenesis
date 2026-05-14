@@ -5,7 +5,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -23,6 +24,7 @@ type EntityTabsProps = {
 
 export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities }: EntityTabsProps) {
   const { editable } = useEditable();
+  const { entity } = useQueryEntity({ id: entityId, spaceId });
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -48,6 +50,10 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
     for (const v of liveNameValues) map.set(v.entity.id, v.value);
     return map;
   }, [liveNameValues]);
+
+  if (entityHasOnlyPostType(entity)) {
+    return null;
+  }
 
   const sortedTabEntities = sortedTabRelations.map(r => {
     const base = tabEntityMap.get(r.toEntity.id) ?? { id: r.toEntity.id, name: r.toEntity.name };

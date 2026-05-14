@@ -23,6 +23,8 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
+import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
+import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
 
@@ -90,6 +92,10 @@ export default async function ProfileLayout(props: Props) {
           </div>
 
           <Spacer height={40} />
+
+          <PersonalProfileSuggestedTaskSync entityId={entityId} spaceId={spaceId} />
+          <PersonalProfileSuggestedCard spaceId={spaceId} entityId={entityId} />
+
           <React.Suspense fallback={null}>
             <EntityTabs
               entityId={entityId}

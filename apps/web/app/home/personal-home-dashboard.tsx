@@ -23,6 +23,7 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
+import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 
 import {
   type GovernanceHomeReviewCategory,
@@ -70,6 +71,7 @@ type PersonalHomeDashboardProps = {
   governanceFilters: GovernanceFilters;
   editorSpaceOptions: { id: string; name: string; image: string | null }[];
   myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
+  personalOnboarding?: { spaceId: string; entityId: string } | null;
 };
 
 function GovernanceTabsRow({
@@ -141,6 +143,7 @@ export function PersonalHomeDashboard({
   governanceFilters,
   editorSpaceOptions,
   myProposalSpaceOptions,
+  personalOnboarding,
 }: PersonalHomeDashboardProps) {
   const spaceOptions = governanceTab === 'review' ? editorSpaceOptions : myProposalSpaceOptions;
 
@@ -160,6 +163,11 @@ export function PersonalHomeDashboard({
 
   return (
     <>
+      {personalOnboarding ? (
+        <div className="mt-8">
+          <PersonalProfileSuggestedCard spaceId={personalOnboarding.spaceId} entityId={personalOnboarding.entityId} />
+        </div>
+      ) : null}
       <React.Suspense fallback={<div className="mt-8 h-8" />}>
         <GovernanceTabsRow governanceTab={governanceTab} filterState={filterState} />
       </React.Suspense>

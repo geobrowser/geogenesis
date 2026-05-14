@@ -10,6 +10,7 @@ import Link from '@tiptap/extension-link';
 import { BulletList, ListItem } from '@tiptap/extension-list';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
+import Underline from '@tiptap/extension-underline';
 
 import { describe, expect, it } from 'vitest';
 
@@ -29,6 +30,7 @@ const testExtensions = [
   Heading,
   Bold,
   Italic,
+  Underline,
   Code,
   CodeBlock,
   Link,
@@ -65,6 +67,11 @@ describe('markdown-adapter', () => {
     it('bold and italic', () => {
       expect(roundTrip('**bold text**')).toBe('**bold text**');
       expect(roundTrip('*italic text*')).toBe('*italic text*');
+    });
+
+    it('underline via ++ (TipTap underline markdown)', () => {
+      expect(roundTrip('++underlined++')).toBe('++underlined++');
+      expect(roundTrip('say ++Geo++ here')).toBe('say ++Geo++ here');
     });
 
     it('inline code', () => {

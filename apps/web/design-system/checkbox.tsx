@@ -42,6 +42,22 @@ export const getChecked = (value: string | null | undefined) => {
   }
 };
 
+export function CheckboxVisual({ checked, className = '' }: { checked: boolean | null; className?: string }) {
+  const icon = getIcon(checked);
+
+  return (
+    <span
+      className={cx(
+        'relative box-border inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-text bg-white *:size-3',
+        className
+      )}
+      aria-hidden
+    >
+      {icon}
+    </span>
+  );
+}
+
 const getIcon = (checked: boolean | null) => {
   switch (checked) {
     case true:

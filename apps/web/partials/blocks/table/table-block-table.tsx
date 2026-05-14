@@ -106,7 +106,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
     const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
-
     const cellData = getValue<Cell | undefined>();
 
     // Currently relations (rollup) blocks aren't editable.
@@ -124,7 +123,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
-    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
+    const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;

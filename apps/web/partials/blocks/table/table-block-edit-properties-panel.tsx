@@ -22,7 +22,7 @@ import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
 
-import { Checkbox } from '~/design-system/checkbox';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
 import { EntitySmall } from '~/design-system/icons/entity-small';
@@ -271,7 +271,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
           <MenuItem key={p.id} onClick={() => onSelectProperty(p)}>
             <div className="flex w-full items-center justify-between">
               <span className="text-button text-grey-04">{p.name}</span>
-              <Checkbox checked={isSelected} />
+              <CheckboxVisual checked={isSelected} />
             </div>
           </MenuItem>
         );

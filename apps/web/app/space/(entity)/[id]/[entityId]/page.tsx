@@ -2,8 +2,11 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
+
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
+import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
 
 interface Props {
@@ -23,6 +26,12 @@ export default async function EntityTemplateStrategy(props: Props) {
 
   if (result?.entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} searchParams={searchParams} />;
+  }
+
+  const isPostEntity = entityHasOnlyPostType(result?.entity);
+
+  if (isPostEntity) {
+    return <PostEntityPage params={params} searchParams={searchParams} />;
   }
 
   return <DefaultEntityPage params={params} searchParams={searchParams} />;

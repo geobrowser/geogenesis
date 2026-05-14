@@ -1,5 +1,10 @@
 import type { Extensions } from '@tiptap/core';
 import type { JSONContent } from '@tiptap/core';
+
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from '~/core/state/editor/profile-overview-tail-placeholder';
 import { generateJSON } from '@tiptap/html';
 
 import katex from 'katex';
@@ -131,8 +136,18 @@ function serializeNode(node: JSONContent): string {
   switch (node.type) {
     case 'doc':
       return (node.content ?? []).map(serializeNode).join('\n');
-    case 'paragraph':
-      return serializeInlineContent(node.content ?? []) + '\n';
+    case 'paragraph': {
+      const body = serializeInlineContent(node.content ?? []);
+      const trimmed = body.trim();
+      if (node.attrs?.tailPlaceholder) {
+        if (trimmed === '' || trimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+          return `${PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL}\n`;
+        }
+      } else if (trimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+        return `${PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL}\n`;
+      }
+      return body + '\n';
+    }
     case 'heading': {
       const level = node.attrs?.level ?? 1;
       const prefix = '#'.repeat(level);
@@ -205,7 +220,13 @@ function serializeInlineNode(node: JSONContent): string {
     let text = node.text ?? '';
     const marks = node.marks ?? [];
 
-    for (const mark of marks) {
+    const orderedMarks = [...marks].sort((a, z) => {
+      if (a.type === 'underline' && z.type !== 'underline') return 1;
+      if (z.type === 'underline' && a.type !== 'underline') return -1;
+      return 0;
+    });
+
+    for (const mark of orderedMarks) {
       switch (mark.type) {
         case 'code':
           return serializeInlineCode(text);
@@ -214,6 +235,9 @@ function serializeInlineNode(node: JSONContent): string {
           break;
         case 'italic':
           text = `*${text}*`;
+          break;
+        case 'underline':
+          text = `++${text}++`;
           break;
         case 'link': {
           // Handle graph:// links (entity mentions) and other standard links

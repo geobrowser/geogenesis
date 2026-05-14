@@ -1,5 +1,10 @@
 import Paragraph from '@tiptap/extension-paragraph';
-import { NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
+import {
+  NodeViewRendererProps,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  mergeAttributes,
+} from '@tiptap/react';
 
 import * as React from 'react';
 
@@ -14,6 +19,22 @@ export const ParagraphNode = Paragraph.extend({
   defining: true,
   content: 'inline*',
   code: false,
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tailPlaceholder: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-tail-placeholder') === 'true',
+        renderHTML: attributes => {
+          if (!attributes.tailPlaceholder) {
+            return {};
+          }
+          return { 'data-tail-placeholder': 'true' };
+        },
+      },
+    };
+  },
 
   parseHTML() {
     return [
@@ -33,12 +54,13 @@ export const ParagraphNode = Paragraph.extend({
   },
 });
 
-function ParagraphNodeComponent() {
+function ParagraphNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId } = useEditorInstance();
   const isEditable = useUserIsEditing(spaceId);
+  const tailPlaceholder = Boolean(node.attrs.tailPlaceholder);
 
   return (
-    <NodeViewWrapper>
+    <NodeViewWrapper className={tailPlaceholder ? 'paragraph-tail-placeholder' : undefined}>
       <div className="paragraph-node">
         <Content as="p" contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
       </div>

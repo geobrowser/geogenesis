@@ -21,6 +21,7 @@ import { useTabId } from '~/core/state/editor/use-editor';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
+
 import { getTabSlug } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';

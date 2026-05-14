@@ -64,15 +64,16 @@ function countRenderableProperty(renderedProperties: string[]): number {
   return count;
 }
 
-export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
+export function useReadableEntityHasContent(entityId: string, spaceId: string): boolean {
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
+  return countRenderableProperty(Object.keys(renderedProperties)) > 0;
+}
+
+export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
 
-  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
-    return null;
-  }
-
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
+    <>
       {Object.entries(renderedProperties)
         .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
         .map(([propertyId, property]) => {
@@ -84,6 +85,20 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 
           return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
         })}
+    </>
+  );
+}
+
+export function ReadableEntityPage({ id, spaceId }: Props) {
+  const hasContent = useReadableEntityHasContent(id, spaceId);
+
+  if (!hasContent) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
+      <ReadableEntityProperties id={id} spaceId={spaceId} />
     </div>
   );
 }

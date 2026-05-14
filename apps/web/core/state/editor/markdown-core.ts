@@ -105,9 +105,42 @@ export function mathPlugin(md: MarkdownIt) {
   });
 }
 
+export function tiptapUnderlinePlusPlugin(md: MarkdownIt) {
+  md.inline.ruler.after('emphasis', 'tiptap_underline_plus', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x2b /* + */) return false;
+    if (state.src.charCodeAt(state.pos + 1) !== 0x2b) return false;
+
+    const contentStart = state.pos + 2;
+    if (contentStart >= state.posMax) return false;
+
+    let i = contentStart;
+    while (i < state.posMax - 1) {
+      if (state.src.charCodeAt(i) === 0x0a /* \n */) return false;
+      if (state.src.charCodeAt(i) === 0x2b && state.src.charCodeAt(i + 1) === 0x2b) {
+        if (i === contentStart) return false;
+        if (!silent) {
+          const token = state.push('tiptap_underline_plus', '', 0);
+          token.content = state.src.slice(contentStart, i);
+          token.markup = '++';
+        }
+        state.pos = i + 2;
+        return true;
+      }
+      i++;
+    }
+    return false;
+  });
+
+  md.renderer.rules.tiptap_underline_plus = (tokens, idx) => {
+    const content = tokens[idx].content;
+    return `<u>${md.utils.escapeHtml(content)}</u>`;
+  };
+}
+
 export function createMarkdownIt(): MarkdownIt {
   const md = new MarkdownIt({ html: false });
   md.use(mathPlugin);
+  md.use(tiptapUnderlinePlusPlugin);
   return md;
 }
 

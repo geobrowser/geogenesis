@@ -51,7 +51,12 @@ import {
   isBountyTypeRelation,
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
-import { editorContentVersionAtom } from '~/atoms';
+import {
+  editorContentVersionAtom,
+  clearPersonalProfileSessionDismissStorage,
+  personalProfileSuggestedDismissAtom,
+  personalProfileSuggestedTasksAtom,
+} from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
 
@@ -73,6 +78,8 @@ export const ReviewChanges = () => {
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
+  const resetSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
+  const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -656,6 +663,9 @@ export const ReviewChanges = () => {
     store.clearLocalChangesForSpace(activeSpace);
     // Force the TipTap editor to recreate with fresh server content.
     bumpEditorContentVersion(v => v + 1);
+    resetSuggestedTasks({ bio: false, work: false, education: false, skills: false, post: false });
+    resetSuggestedDismiss({ forever: false, softDismissCount: 0 });
+    clearPersonalProfileSessionDismissStorage();
   };
 
   React.useEffect(() => {

@@ -7,14 +7,12 @@ import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
-import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityTabs } from '~/partials/entity-page/entity-tabs';
-import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { TogglePostEntityPage } from '~/partials/entity-page/toggle-post-entity-page';
 
 import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
@@ -29,7 +27,7 @@ interface Props {
   notice?: React.ReactNode;
 }
 
-export default async function DefaultEntityPage({
+export default async function PostEntityPage({
   params,
   searchParams = {},
   showCover = true,
@@ -69,32 +67,18 @@ export default async function DefaultEntityPage({
               serverRelations={props.relationEntityRelations}
             />
             <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <EntityTabs
-                entityId={props.id}
-                spaceId={props.spaceId}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-              />
-            </React.Suspense>
             {notice}
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
+            <TogglePostEntityPage id={props.id} spaceId={props.spaceId} />
             <AutomaticModeToggle />
             <Spacer height={40} />
-            {/*
-               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-               boundary. We don't want to show any referenced by loading states but do want to
-               stream it in
-            */}
             <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
               <React.Suspense fallback={<div />}>
                 <BacklinksServerContainer entityId={params.entityId} />
               </React.Suspense>
             </TrackedErrorBoundary>
-            <CommentSection entityId={params.entityId} spaceId={props.spaceId} />
           </EntityPageContentContainer>
         </EditorProvider>
       </EntityStoreProvider>
