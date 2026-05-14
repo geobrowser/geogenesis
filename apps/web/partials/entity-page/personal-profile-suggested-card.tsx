@@ -147,7 +147,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const pillSizing = '!h-7 !px-2.5 !gap-1.5 !rounded-full';
 
   const pillClass =
-    `border-transparent ${pillSizing} !bg-[#151515E6] !text-white hover:!bg-[#151515] focus-visible:!border-text [&]:shadow-none`;
+    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white hover:!bg-white hover:!text-text hover:!border-text focus-visible:!border-text [&]:shadow-none`;
 
   const donePillClass =
     `border-transparent ${pillSizing} !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
@@ -297,7 +297,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           <SmallButton
             variant="secondary"
             className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
-            icon={tasks.bio ? <Check color="white" /> : <CreateSmall color="white" />}
+            icon={tasks.bio ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.bio}
             onClick={tasks.bio ? undefined : onAddBio}
           >
@@ -306,7 +306,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           <SmallButton
             variant="secondary"
             className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
-            icon={tasks.skills ? <Check color="white" /> : <CreateSmall color="white" />}
+            icon={tasks.skills ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.skills}
             onClick={tasks.skills ? undefined : onAddSkills}
           >
@@ -315,7 +315,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           <SmallButton
             variant="secondary"
             className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}`}
-            icon={tasks.post ? <Check color="white" /> : <CreateSmall color="white" />}
+            icon={tasks.post ? <Check color="white" /> : <CreateSmall />}
             aria-busy={createPostPending && !tasks.post}
             disabled={tasks.post}
             onClick={tasks.post ? undefined : () => void onCreatePost()}
