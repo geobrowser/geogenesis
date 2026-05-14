@@ -18,8 +18,8 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
+import { CreateSmall } from '~/design-system/icons/create-small';
 import { Menu, MenuItem } from '~/design-system/menu';
-import { Text } from '~/design-system/text';
 
 import {
   clearPersonalProfileSessionDismissStorage,
@@ -51,6 +51,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
+  const setSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const pathname = usePathname();
   const canEdit = useUserIsEditing(spaceId);
   const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
@@ -141,14 +142,15 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     );
   }, [pathname, spaceId, entityId]);
 
-  const suggestedActionPillTypography = '!text-[16px] !leading-5';
+  const suggestedActionPillTypography = '!text-[16px] !leading-[13px] !tracking-[-0.25px] !font-normal';
 
-  // Dark fills at rest; on hover only lighten the background so `secondary`’s `hover:text-text` stays readable.
+  const pillSizing = '!h-7 !px-2.5 !gap-1.5 !rounded-full';
+
   const pillClass =
-    'border-transparent !rounded-[50px] !bg-text !text-white hover:!bg-bg focus-visible:!border-text [&]:shadow-none';
+    `border-transparent ${pillSizing} !bg-[#151515E6] !text-white hover:!bg-[#151515] focus-visible:!border-text [&]:shadow-none`;
 
   const donePillClass =
-    'border-transparent !rounded-[50px] !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default';
+    `border-transparent ${pillSizing} !bg-[#15151580] !text-white hover:!bg-[#15151580] hover:!text-white hover:!border-transparent active:!bg-[#15151580] focus-visible:!border-transparent focus-visible:!bg-[#15151580] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
@@ -171,7 +173,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
       setSkillsRowIntent({
         entityId,
         spaceId,
-        focusFindCreateInput: false,
+        focusFindCreateInput: true,
         pendingEnableEdit: true,
       });
       try {
@@ -198,7 +200,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     setSkillsRowIntent({
       entityId,
       spaceId,
-      focusFindCreateInput: false,
+      focusFindCreateInput: true,
       pendingEnableEdit: true,
     });
   }, [canEdit, entityId, onProfileOverviewSurface, router, setSkillsRowIntent, spaceId]);
@@ -236,6 +238,21 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     spaceId,
   ]);
 
+  const enterProfileEditMode = React.useCallback(() => {
+    if (onProfileOverviewSurface) {
+      setEditable(true);
+      return;
+    }
+    try {
+      const nav = router.push(NavUtils.toEntity(spaceId, entityId, true), { scroll: false }) as void | Promise<unknown>;
+      if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
+        void (nav as Promise<unknown>).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [entityId, onProfileOverviewSurface, router, setEditable, spaceId]);
+
   const onCreatePost = React.useCallback(async () => {
     if (createPostLockedRef.current) return;
     createPostLockedRef.current = true;
@@ -246,6 +263,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         profileEntityId: entityId,
         authorDisplayName: displayName,
       });
+      setSuggestedTasks(t => ({ ...t, post: true }));
       router.push(NavUtils.toEntity(spaceId, postEntityId, true));
     } catch (e) {
       console.error('[PersonalProfileSuggestedCard] create post failed', e);
@@ -253,7 +271,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
       createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [displayName, entityId, router, spaceId]);
+  }, [displayName, entityId, router, setSuggestedTasks, spaceId]);
 
   if (!visible) {
     return null;
@@ -261,66 +279,80 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   return (
     <div
-      className="relative mt-6 mb-6 overflow-hidden rounded-xl border border-grey-02 bg-cover bg-center bg-no-repeat shadow-button"
-      style={{ backgroundImage: `url('/placeholder-cover.png')` }}
+      className="relative mt-6 mb-6 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
+      style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white via-white/95 to-emerald-50/80" />
+      <div className="absolute right-6 top-6 z-20">
+        <Menu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          asChild
+          trigger={
+            <SquareButton
+              icon={<span className="text-[1.125rem] leading-none text-text">⋯</span>}
+              aria-label="Suggested card menu"
+            />
+          }
+        >
+          <MenuItem onClick={onDismissSession}>Dismiss</MenuItem>
+          {showDismissForeverInMenu ? <MenuItem onClick={onDismissForever}>Dismiss forever</MenuItem> : null}
+        </Menu>
+      </div>
 
-      <div className="relative z-10 flex flex-col gap-3 p-4 pt-4 pr-14 sm:pr-16">
-        <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4">
-          <Menu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            asChild
-            trigger={
-              <SquareButton
-                icon={<span className="text-[1.125rem] leading-none text-text">⋯</span>}
-                aria-label="Suggested card menu"
-              />
-            }
-          >
-            <MenuItem onClick={onDismissSession}>Dismiss</MenuItem>
-            {showDismissForeverInMenu ? <MenuItem onClick={onDismissForever}>Dismiss forever</MenuItem> : null}
-          </Menu>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <Text as="h2" variant="smallTitle" className="text-text !text-[24px] !leading-[28px]">
-            Suggested for you
-          </Text>
-          <Text as="p" variant="metadata" className="mt-1 text-grey-04 !text-[14px] !leading-[18px]">
+      <div className="relative z-10 flex h-full flex-col p-6">
+        <div className="flex flex-col gap-2">
+          <h2 className="font-calibre text-[24px] font-semibold leading-[29px] tracking-[-0.75px] text-[#151515]">
+            Get started
+          </h2>
+          <p className="font-calibre text-[16px] font-normal leading-[13px] tracking-[-0.25px] text-[#151515]">
             Kick things off with these quick setup actions.
-          </Text>
-          <div className="mt-[98px] flex flex-wrap gap-2">
-            <SmallButton
-              variant="secondary"
-              className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
-              icon={tasks.bio ? <Check color="white" /> : undefined}
-              disabled={tasks.bio}
-              onClick={tasks.bio ? undefined : onAddBio}
-            >
-              {tasks.bio ? 'Add bio' : '+ Add bio'}
-            </SmallButton>
-            <SmallButton
-              variant="secondary"
-              className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
-              icon={tasks.skills ? <Check color="white" /> : undefined}
-              disabled={tasks.skills}
-              onClick={tasks.skills ? undefined : onAddSkills}
-            >
-              {tasks.skills ? 'Add skills' : '+ Add skills'}
-            </SmallButton>
-            <SmallButton
-              variant="secondary"
-              className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}${createPostPending && !tasks.post ? '' : ''}`}
-              icon={tasks.post ? <Check color="white" /> : undefined}
-              aria-busy={createPostPending && !tasks.post}
-              disabled={tasks.post}
-              onClick={tasks.post ? undefined : () => void onCreatePost()}
-            >
-              {tasks.post ? 'Create post' : '+ Create post'}
-            </SmallButton>
-          </div>
+          </p>
+        </div>
+        <div className="mt-12 flex flex-wrap gap-2">
+          <SmallButton
+            variant="secondary"
+            className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
+            icon={tasks.bio ? <Check color="white" /> : <CreateSmall color="white" />}
+            disabled={tasks.bio}
+            onClick={tasks.bio ? undefined : onAddBio}
+          >
+            Add bio
+          </SmallButton>
+          <SmallButton
+            variant="secondary"
+            className={`${suggestedActionPillTypography} ${pillClass}`}
+            icon={<CreateSmall color="white" />}
+            onClick={enterProfileEditMode}
+          >
+            Add work history
+          </SmallButton>
+          <SmallButton
+            variant="secondary"
+            className={`${suggestedActionPillTypography} ${pillClass}`}
+            icon={<CreateSmall color="white" />}
+            onClick={enterProfileEditMode}
+          >
+            Add education
+          </SmallButton>
+          <SmallButton
+            variant="secondary"
+            className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
+            icon={tasks.skills ? <Check color="white" /> : <CreateSmall color="white" />}
+            disabled={tasks.skills}
+            onClick={tasks.skills ? undefined : onAddSkills}
+          >
+            Add skills
+          </SmallButton>
+          <SmallButton
+            variant="secondary"
+            className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}`}
+            icon={tasks.post ? <Check color="white" /> : <CreateSmall color="white" />}
+            aria-busy={createPostPending && !tasks.post}
+            disabled={tasks.post}
+            onClick={tasks.post ? undefined : () => void onCreatePost()}
+          >
+            Create post
+          </SmallButton>
         </div>
       </div>
     </div>
