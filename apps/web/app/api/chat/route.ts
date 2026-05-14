@@ -2,6 +2,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import {
   type ModelMessage,
+  type StreamTextTransform,
+  type TextStreamPart,
   type ToolSet,
   type UIMessage,
   convertToModelMessages,
@@ -27,26 +29,27 @@ import {
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import {
+  CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
   GUEST_SYSTEM_PROMPT,
   MEMBER_SYSTEM_PROMPT,
+  OPENER_SYSTEM_PROMPT,
   type PreloadedEntityForPrompt,
   renderCurrentContextSection,
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
-import { FOLLOW_UPS_MODEL, MAIN_MODEL } from './models';
-import { anonHourlyLimit, ipCeilingHourlyLimit, loggedInHourlyLimit } from './rate-limit';
+import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
+import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { buildNavTools } from './tools/nav';
-import { readTools } from './tools/read';
+import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// Tool calls consume output tokens; a chained edit turn can exceed 2k. 6k leaves headroom.
-const MAX_OUTPUT_TOKENS = 6_000;
-const MAX_TOOL_STEPS = 6;
+const MAX_OUTPUT_TOKENS = 8_000;
+const MAX_TOOL_STEPS = 10;
 
 const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 
@@ -54,11 +57,8 @@ const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 // anything that could break out of the code span or smuggle control chars.
 const SAFE_PATHNAME = /^\/[^\s`\x00-\x1f\x7f]*$/;
 
-// The preload is supplied by the client and only ever scopes the system turn
-// for *this user's* conversation, so we don't need the same anti-forgery
-// enforcement as the wallet cookie. We do however require entity + space ids
-// to match the validated currentContext — otherwise a stale or mismatched
-// preload would silently mislead the model.
+// Preload must match validated currentContext or a stale entity could silently
+// mislead the model.
 function validatePreloadedEntity(
   input: unknown,
   expectedEntityId: string | null,
@@ -112,9 +112,7 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (isEditMode != null && typeof isEditMode !== 'boolean') {
     return null;
   }
-  // personalSpaceId is ignored here; resolved server-side from membership so a
-  // forged context can't redirect navigation.
-
+  // personalSpaceId resolved server-side from membership; ignore client value.
   return {
     currentSpaceId: typeof currentSpaceId === 'string' ? currentSpaceId : null,
     currentEntityId: typeof currentEntityId === 'string' ? currentEntityId : null,
@@ -130,14 +128,10 @@ function getClientIp(req: Request): string {
   }
   const real = req.headers.get('x-real-ip');
   if (real) return real;
-  // No proxy headers — random key per request avoids false-positive 429s from
-  // a shared `unknown` bucket. Vercel always sets x-forwarded-for so this is
-  // unreachable in prod.
+  // No proxy headers (only hit in local dev); random key avoids a shared bucket.
   return `noip:${crypto.randomUUID()}`;
 }
 
-// httpOnly + sameSite=lax means script can't forge this cookie, but we still
-// validate shape to fall back to the guest prompt on a malformed value.
 function parseWalletCookie(raw: string | undefined): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase();
@@ -178,9 +172,8 @@ function rateLimitResponse(reset: number) {
 
 type LimitProbe = { success: boolean; reset: number };
 
-// Take `reset` only from the limiters that actually rejected — taking max
-// across both would let a tripped short window surface a longer Retry-After
-// from a different window that happens to reset later.
+// Only consider limiters that actually rejected; taking max across all of them
+// would surface a longer Retry-After from a window that didn't trip.
 function failedLimiterReset(probes: LimitProbe[]): number {
   let max = 0;
   for (const probe of probes) {
@@ -190,17 +183,34 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
-const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
-// Navigation turns: text-empty turns containing only these skip follow-up generation.
-const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
-// Browser executes these against the merged store; the route returns no tool
-// result for them.
-const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces']);
+// Strip text deltas from the executor's stream. Its text is still present in
+// response.messages so the closer can read Sonnet's analysis, just not user-
+// facing — the opener and closer own all visible text.
+function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
+  return () =>
+    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+      transform(chunk, controller) {
+        switch (chunk.type) {
+          case 'text-start':
+          case 'text-delta':
+          case 'text-end':
+            return;
+          default:
+            controller.enqueue(chunk);
+        }
+      },
+    });
+}
 
-// With client-executed tool flows the assistant turn that triggers 'edit'
-// framing isn't always the one that originally emitted the write call — the
-// same conversation may contain a resubmit cycle: assistant(call) →
-// tool(result) → assistant(text). Walk every message since the last user turn.
+const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
+// Text-empty turns containing only these skip follow-up generation.
+const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
+// Client-executed read tools; the server registers them schema-only.
+const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research']);
+
+// Edit/client tools resolve via resubmit, so the assistant turn that triggers
+// 'edit' framing isn't always the one that emitted the call. Walk every
+// message since the last user turn.
 function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' | 'client-pending' {
   let userIdx = -1;
   for (let i = allMessages.length - 1; i >= 0; i--) {
@@ -212,8 +222,7 @@ function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' 
   const turn = allMessages.slice(userIdx + 1);
   if (turn.length === 0) return 'default';
 
-  // Pair tool-calls with tool-results across the turn so we know which client
-  // calls are still pending.
+  // Pair tool-calls with tool-results so we know which client calls are pending.
   const callsByName = new Map<string, string>();
   const resultIds = new Set<string>();
   for (const message of turn) {
@@ -239,7 +248,6 @@ function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' 
 
   if (hasPendingClientCall) return 'client-pending';
 
-  // Inspect the most recent assistant message for the skip / nav-only branch.
   const lastAssistant = [...turn].reverse().find(m => m.role === 'assistant');
   let hasText = false;
   let onlyNavLike = true;
@@ -269,8 +277,8 @@ function lastUserMessageLength(uiMessages: UIMessage[]): number {
   return 0;
 }
 
-// Reject any role other than user/assistant so a caller can't smuggle a
-// second `system` turn in after the real prompt.
+// Reject any role other than user/assistant so a caller can't smuggle in a
+// second `system` turn after the real prompt.
 function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   for (const msg of input) {
@@ -279,7 +287,6 @@ function validateUIMessages(input: unknown): UIMessage[] | null {
     if (role !== 'user' && role !== 'assistant') return null;
     const parts = (msg as { parts?: unknown }).parts;
     if (!Array.isArray(parts)) return null;
-    // Shallow check: null or shape-bogus parts would crash convertToModelMessages.
     for (const part of parts) {
       if (!part || typeof part !== 'object') return null;
       if (typeof (part as { type?: unknown }).type !== 'string') return null;
@@ -299,13 +306,13 @@ export async function POST(req: Request) {
   const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
   const identityKey = wallet ?? ip;
-  const identityHourly = isLoggedIn ? loggedInHourlyLimit : anonHourlyLimit;
+  const identityLimiter = isLoggedIn ? loggedInLimit : anonLimit;
 
   try {
-    const [hourly, ipHourly] = await Promise.all([identityHourly.limit(identityKey), ipCeilingHourlyLimit.limit(ip)]);
+    const [identity, ipCeiling] = await Promise.all([identityLimiter.limit(identityKey), ipCeilingLimit.limit(ip)]);
 
-    if (!hourly.success || !ipHourly.success) {
-      return rateLimitResponse(failedLimiterReset([hourly, ipHourly]));
+    if (!identity.success || !ipCeiling.success) {
+      return rateLimitResponse(failedLimiterReset([identity, ipCeiling]));
     }
   } catch (err) {
     console.error('[chat] rate limiter unavailable', err);
@@ -356,7 +363,63 @@ export async function POST(req: Request) {
     return jsonError(413, HISTORY_FULL_MESSAGE);
   }
 
-  const converted = await convertToModelMessages(uiMessages);
+  const rawConverted = await convertToModelMessages(uiMessages);
+
+  // Dedup tool-call / tool-result blocks: Anthropic 400s on repeated
+  // `tool_use_id`s, and the SDK's multi-step + resubmit accumulation can
+  // replay an earlier step's call in every later slice. Keep the first
+  // occurrence; track kept calls so we can drop orphan results whose
+  // matching call we deduped away. Calls and results need separate `seen`
+  // sets because they share ids across different block kinds.
+  const keptToolCalls = new Set<string>();
+  const seenToolResults = new Set<string>();
+  const droppedToolCallIds: string[] = [];
+  const converted: ModelMessage[] = [];
+  for (const m of rawConverted) {
+    if (!Array.isArray(m.content)) {
+      converted.push(m);
+      continue;
+    }
+    const filtered = m.content.filter(part => {
+      if (part.type === 'tool-call') {
+        const id = (part as { toolCallId?: unknown }).toolCallId;
+        if (typeof id !== 'string') return true;
+        if (keptToolCalls.has(id)) {
+          droppedToolCallIds.push(`tool-call#${id}`);
+          return false;
+        }
+        keptToolCalls.add(id);
+        return true;
+      }
+      if (part.type === 'tool-result') {
+        const id = (part as { toolCallId?: unknown }).toolCallId;
+        if (typeof id !== 'string') return true;
+        if (!keptToolCalls.has(id)) {
+          droppedToolCallIds.push(`tool-result#${id}-orphan`);
+          return false;
+        }
+        if (seenToolResults.has(id)) {
+          droppedToolCallIds.push(`tool-result#${id}-dup`);
+          return false;
+        }
+        seenToolResults.add(id);
+        return true;
+      }
+      return true;
+    });
+    if (filtered.length === 0) continue;
+    if (filtered.length === m.content.length) {
+      converted.push(m);
+    } else {
+      converted.push({ ...m, content: filtered } as ModelMessage);
+    }
+  }
+  if (droppedToolCallIds.length > 0) {
+    console.warn(
+      `[chat:srv] dropped ${droppedToolCallIds.length} duplicate tool-call/result blocks from converted history`,
+      droppedToolCallIds.slice(0, 12)
+    );
+  }
 
   const writeContext = buildWriteContext({ walletAddress: wallet });
 
@@ -399,10 +462,6 @@ export async function POST(req: Request) {
     }),
   };
 
-  // The AI SDK's multi-step loop only continues when a step has tool calls to
-  // respond to, so a single streamText with forced toolChoice either skips
-  // the text or skips the tool. Chain two streamTexts manually: (1) text
-  // reply, then (2) forced suggestFollowUps that sees the completed turn.
   const navTools = buildNavTools(
     {
       resolvePersonalSpaceId: () =>
@@ -410,31 +469,198 @@ export async function POST(req: Request) {
     },
     writeContext
   );
-  // Schema-only writes for members: authorization (member + edit rate limit)
-  // happens via /api/chat/authorize-write and graph-state validation runs in
-  // useEditDispatcher. Guests don't see the catalog at all.
+  // Members-only, schema-only here; dispatchers handle auth + execution.
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
+  const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
+
+  const debug = process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1';
+  const debugLog = (event: string, data?: unknown) => {
+    if (!debug) return;
+    if (data === undefined) {
+      console.log(`[chat:srv] ${event}`);
+    } else {
+      try {
+        console.log(`[chat:srv] ${event}`, JSON.stringify(data, null, 2));
+      } catch {
+        console.log(`[chat:srv] ${event}`, data);
+      }
+    }
+  };
+  debugLog('begin', {
+    isLoggedIn,
+    messageCount: uiMessages.length,
+    toolKeys: [
+      ...Object.keys(readTools),
+      ...Object.keys(navTools),
+      ...Object.keys(memberWriteTools),
+      ...Object.keys(memberResearchTools),
+    ],
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    maxToolSteps: MAX_TOOL_STEPS,
+  });
+  if (debug) {
+    const summary = converted.map((m, idx) => {
+      let blocks: unknown;
+      if (typeof m.content === 'string') {
+        blocks = `text(${m.content.length})`;
+      } else if (Array.isArray(m.content)) {
+        blocks = m.content.map((c: { type?: unknown; toolCallId?: unknown; toolName?: unknown }) => {
+          const t = typeof c.type === 'string' ? c.type : '?';
+          const id = typeof c.toolCallId === 'string' ? c.toolCallId.slice(0, 24) : undefined;
+          const name = typeof c.toolName === 'string' ? c.toolName : undefined;
+          return name ? `${t}(${name}#${id ?? ''})` : t;
+        });
+      }
+      return { idx, role: m.role, blocks };
+    });
+    debugLog('converted-messages', summary);
+  }
+
+  // Three-stage pipeline: Haiku opener → Sonnet executor (text-suppressed) →
+  // Haiku closer. Closer is skipped on `skip` / `client-pending` so the SDK can
+  // resubmit after a client dispatcher resolves pending tools.
+  //
+  // The SDK wraps tool-result blocks in a `user`-role message on continuation
+  // requests, so a naive last-role check misfires. A trailing user message
+  // with no tool-result block means this is a fresh user turn.
+  const isFirstRequestOfTurn = ((): boolean => {
+    for (let i = converted.length - 1; i >= 0; i--) {
+      const m = converted[i];
+      if (m.role === 'assistant') return false;
+      if (m.role === 'user') {
+        if (typeof m.content === 'string') return true;
+        if (Array.isArray(m.content)) {
+          const hasToolResult = m.content.some(part => (part as { type?: string }).type === 'tool-result');
+          return !hasToolResult;
+        }
+      }
+    }
+    return true;
+  })();
 
   const stream = createUIMessageStream({
+    // Reuse the assistant message id on continuation requests so the SDK
+    // merges new parts into the same UIMessage instead of rendering a fresh
+    // one per resubmit (which duplicates the opener text).
+    originalMessages: uiMessages,
     execute: async ({ writer }) => {
-      const textResult = streamText({
+      // Stage A: opener (Haiku). One-sentence ack; skipped on continuation.
+      if (isFirstRequestOfTurn) {
+        const openerResult = streamText({
+          model: anthropic(OPENER_MODEL),
+          system: OPENER_SYSTEM_PROMPT,
+          messages: converted,
+          maxOutputTokens: 80,
+          onError: err => {
+            console.error('[chat:srv] opener stream error', err);
+          },
+        });
+        writer.merge(
+          openerResult.toUIMessageStream({
+            sendReasoning: false,
+            sendFinish: false,
+          })
+        );
+        // Drain before starting the executor so the executor's tool parts
+        // don't interleave with the opener's text-end chunk.
+        await openerResult.response;
+      }
+
+      // Stage B: executor (Sonnet).
+      const execResult = streamText({
         model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        tools: { ...readTools, ...navTools, ...memberWriteTools },
+        tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
         toolChoice: 'auto',
+        // Serial tool use matches the prompt's "searchGraph first, then
+        // research / writes" ordering and avoids client-tool resubmit races.
+        providerOptions: {
+          anthropic: { disableParallelToolUse: true },
+        },
         stopWhen: stepCountIs(MAX_TOOL_STEPS),
+        experimental_transform: suppressAllText(),
+        onChunk: debug
+          ? ({ chunk }) => {
+              const summary: Record<string, unknown> = { type: chunk.type };
+              if ('toolName' in chunk) summary.toolName = chunk.toolName;
+              if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
+              if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
+              if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
+              debugLog('chunk', summary);
+            }
+          : undefined,
+        onStepFinish: debug
+          ? step => {
+              debugLog('step-finish', {
+                finishReason: step.finishReason,
+                toolCalls: step.toolCalls?.map(tc => ({
+                  toolName: tc.toolName,
+                  toolCallId: tc.toolCallId,
+                  providerExecuted: tc.providerExecuted,
+                  dynamic: tc.dynamic,
+                })),
+                toolResults: step.toolResults?.map(tr => ({
+                  toolName: tr.toolName,
+                  toolCallId: tr.toolCallId,
+                  providerExecuted: tr.providerExecuted,
+                })),
+                hasText: (step.text?.length ?? 0) > 0,
+              });
+            }
+          : undefined,
+        onError: err => {
+          console.error('[chat:srv] executor stream error', err);
+        },
       });
-      writer.merge(textResult.toUIMessageStream({ sendReasoning: false, sendFinish: false }));
+      writer.merge(
+        execResult.toUIMessageStream({
+          sendReasoning: false,
+          // Opener already emitted message-start; don't duplicate it.
+          sendStart: !isFirstRequestOfTurn,
+          sendFinish: false,
+        })
+      );
 
-      const firstStreamMessages = (await textResult.response).messages;
+      const execMessages = (await execResult.response).messages;
 
-      const turnKind = classifyTurn([...messages, ...firstStreamMessages]);
+      const turnKind = classifyTurn([...messages, ...execMessages]);
+      debugLog('executor-finished', {
+        turnKind,
+        execMessages: execMessages.map(m => ({
+          role: m.role,
+          contentTypes: Array.isArray(m.content)
+            ? m.content.map(c => (typeof c === 'string' ? 'string' : c.type))
+            : typeof m.content,
+        })),
+      });
 
       if (turnKind === 'skip' || turnKind === 'client-pending') {
         return;
       }
 
+      // Stage C: closer (Haiku). Writes the user-facing summary from the
+      // executor's tool calls + results.
+      const closerResult = streamText({
+        model: anthropic(CLOSER_MODEL),
+        system: CLOSER_SYSTEM_PROMPT,
+        messages: [...converted, ...execMessages],
+        maxOutputTokens: 400,
+        onError: err => {
+          console.error('[chat:srv] closer stream error', err);
+        },
+      });
+      writer.merge(
+        closerResult.toUIMessageStream({
+          sendReasoning: false,
+          sendStart: false,
+          sendFinish: false,
+        })
+      );
+
+      const closerMessages = (await closerResult.response).messages;
+
+      // Stage D: follow-ups (Haiku, forced tool).
       const followUpInstruction =
         turnKind === 'edit'
           ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
@@ -444,7 +670,8 @@ export async function POST(req: Request) {
         model: anthropic(FOLLOW_UPS_MODEL),
         messages: [
           ...messages,
-          ...firstStreamMessages,
+          ...execMessages,
+          ...closerMessages,
           {
             role: 'user',
             content: followUpInstruction,
@@ -452,14 +679,13 @@ export async function POST(req: Request) {
         ],
         tools: followUpTools,
         toolChoice: { type: 'tool', toolName: 'suggestFollowUps' },
-        // 100 tokens is plenty for 3 short strings; lower cap = faster finish.
         maxOutputTokens: 100,
       });
       writer.merge(followUpResult.toUIMessageStream({ sendReasoning: false, sendStart: false }));
     },
     onError: err => {
       console.error('[chat] stream error', err);
-      // Coarse classification lets the client show a sharper error message.
+      // Coarse classification so the client can show a sharper message.
       const message = err instanceof Error ? err.message : '';
       if (message.toLowerCase().includes('rate')) return 'rate_limited';
       if (message.toLowerCase().includes('overload') || message.toLowerCase().includes('timeout')) {

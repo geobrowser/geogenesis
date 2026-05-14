@@ -1,13 +1,6 @@
-// POST /api/chat/authorize-write
-//
-// Auth gate the client-side write dispatcher hits before applying any write
-// intent: guest rejection, membership check, per-wallet edit rate limit.
-// `toggleEditMode` skips the rate limit because it's a UI-only mutation.
-//
-// Graph-state validation (does the property/entity exist? what's its dataType?
-// is the relation already there?) lives in core/chat/write-validators.ts —
-// running it client-side is what lets locally-minted properties/entities/blocks
-// be addressable from the assistant.
+// POST /api/chat/authorize-write — auth gate before the client dispatcher
+// applies a write intent. Graph-state validation lives client-side in
+// core/chat/write-validators.ts so locally-minted entities are addressable.
 import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES, type EditToolFailure, notAuthorized, notSignedIn, rateLimited } from '~/core/chat/edit-types';
@@ -57,14 +50,12 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof toolName !== 'string' || !WRITE_TOOL_NAMES.has(toolName)) {
     return jsonResponse(400, { ok: false, error: 'invalid_input', message: 'unknown toolName' });
   }
-  // toggleEditMode is space-agnostic — the only write tool that takes no
-  // spaceId. Every other tool must pass a valid space id.
+  // toggleEditMode is the only space-agnostic write tool.
   if (toolName !== 'toggleEditMode') {
     if (typeof spaceId !== 'string' || !ENTITY_ID_RE.test(spaceId)) {
       return jsonResponse(400, { ok: false, error: 'invalid_input', message: 'spaceId is required' });
     }
   }
-  // Cross-space tools require membership in the target too — checked below.
   const isCrossSpaceTool = toolName === 'moveEntityToSpace' || toolName === 'cloneEntityToSpace';
   if (isCrossSpaceTool) {
     if (typeof targetSpaceId !== 'string' || !ENTITY_ID_RE.test(targetSpaceId)) {
@@ -86,8 +77,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!isMember) return jsonResponse(200, notAuthorized(normalizedSpaceId) satisfies AuthorizeOutput);
     if (isCrossSpaceTool) {
       const normalizedTargetSpaceId = (targetSpaceId as string).replace(/-/g, '').toLowerCase();
-      // Same-space "move" is a no-op; reject up front rather than letting it
-      // through as a non-mutation that the user can't easily explain.
+      // Same-space "move" is a no-op — reject up front.
       if (normalizedTargetSpaceId === normalizedSpaceId) {
         return jsonResponse(200, {
           ok: false,
@@ -102,12 +92,8 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  if (toolName === 'toggleEditMode') {
-    // UI toggle bypasses the edit rate-limit axis (matches the carve-out
-    // previously inside tools/write/toggle-edit-mode.ts).
-    return jsonResponse(200, { ok: true } satisfies AuthorizeOutput);
-  }
-
+  // Rate-limit every write tool, including toggleEditMode (otherwise the UI
+  // toggle becomes a free heartbeat for any wallet-shaped cookie).
   const limit = await context.checkEditRateLimit();
   if (!limit.ok) return jsonResponse(200, rateLimited(limit.retryAfter) satisfies AuthorizeOutput);
 

@@ -1,8 +1,8 @@
 'use client';
 
-import * as React from 'react';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as React from 'react';
 
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -27,7 +27,7 @@ export function useGlobalSearchSpaceIds(): string[] {
   const sidebarQueryKey = browseSidebarDataQueryKey(personalSpaceId);
   const { data: browseSidebarData = null } = useQuery<BrowseSidebarData | null>({
     queryKey: sidebarQueryKey,
-    enabled: false,
+    queryFn: skipToken,
     placeholderData: () => queryClient.getQueryData<BrowseSidebarData>(sidebarQueryKey) ?? null,
   });
 

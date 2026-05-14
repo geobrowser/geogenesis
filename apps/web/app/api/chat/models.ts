@@ -1,4 +1,8 @@
+// Haiku for opener/closer/follow-ups (latency); Sonnet for the executor.
+export const OPENER_MODEL = 'claude-haiku-4-5';
 export const MAIN_MODEL = 'claude-sonnet-4-6';
+export const CLOSER_MODEL = 'claude-haiku-4-5';
 
-// Haiku: ~3-4× faster than Sonnet for the single forced follow-up call; keeps pill latency low.
 export const FOLLOW_UPS_MODEL = 'claude-haiku-4-5';
+
+export const RESEARCH_MODEL = 'claude-haiku-4-5';

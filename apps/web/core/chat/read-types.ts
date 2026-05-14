@@ -83,3 +83,16 @@ export type ListSpaceEntry = {
 };
 
 export type ListSpacesOutput = { spaces: ListSpaceEntry[] } | { error: 'lookup_failed' };
+
+export type ResearchInput = {
+  query: string;
+};
+
+export type ResearchSource = {
+  url: string;
+  title: string | null;
+};
+
+export type ResearchOutput =
+  | { summary: string; sources: ResearchSource[] }
+  | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
