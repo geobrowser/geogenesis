@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -20,6 +21,11 @@ export function CreateEntityDropdown() {
 
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
   const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+  const { smartAccount } = useSmartAccount();
+
+  if (!smartAccount?.account.address) {
+    return null;
+  }
 
   return (
     <Menu
