@@ -316,6 +316,8 @@ export async function runPersonalPostCreationFlow(args: PersonalPostFlowArgs): P
     throw new Error('[PersonalPostFlow] Missing "Authors" relation property for Post type in this space');
   }
 
+  storage.entities.name.set(postEntityId, spaceId, 'My first post');
+
   setPostTypeAndAuthors(postEntityId, spaceId, profileEntityId, authorDisplayName, authorsProperty.id);
 
   const publishProp = pickPublishDateProperty(schema);
