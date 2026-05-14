@@ -15,6 +15,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 
 import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
@@ -68,7 +69,9 @@ export default async function DefaultEntityPage({
               spaceId={props.spaceId}
               serverRelations={props.relationEntityRelations}
             />
-            <Spacer height={40} />
+            <Spacer height={24} />
+            <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />
+            <Spacer height={16} />
             <React.Suspense fallback={null}>
               <EntityTabs
                 entityId={props.id}
@@ -81,6 +84,7 @@ export default async function DefaultEntityPage({
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+            <Spacer height={24} />
             <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
             <AutomaticModeToggle />
             <Spacer height={40} />
