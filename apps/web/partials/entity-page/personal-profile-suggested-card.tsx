@@ -264,7 +264,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   return (
     <div
-      className="relative mt-6 mb-6 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
+      className="relative mb-10 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
       style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
       <div className="absolute right-6 top-6 z-20">
