@@ -67,7 +67,7 @@ export function TableBlockQuerySetupTypeFilters({
               className="flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-grey-02 hover:text-text disabled:pointer-events-none disabled:opacity-30"
               onClick={() => removeType(t.id)}
             >
-              <CloseSmall color="currentColor" />
+              <CloseSmall color="current" />
             </button>
           </span>
         ))}
