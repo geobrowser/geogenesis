@@ -387,6 +387,7 @@ function RelationPropertyWithDelete({
   propertyId,
   entityId,
   spaceId,
+  property,
   isSchemaProperty,
   hideActions = false,
 }: RelationPropertyWithDeleteProps) {
