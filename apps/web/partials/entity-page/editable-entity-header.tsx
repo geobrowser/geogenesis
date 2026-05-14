@@ -10,7 +10,6 @@ import Link from 'next/link';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { NavUtils } from '~/core/utils/utils';
@@ -29,7 +28,6 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
-import { EntityPageMetadataHeader } from './entity-page-metadata-header';
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { values } = useSyncEngine();
@@ -61,40 +59,31 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
     storage.entities.name.set(entityId, spaceId, value);
   };
 
-  const relations = useRelationEntityRelations(entityId, spaceId);
-  const isRelationPage = relations.length > 0;
-
   return (
     <>
       <div className="relative flex items-center justify-between gap-4">
-        {!isRelationPage ? (
-          <>
-            {isEditing ? (
-              <div className="min-w-0 flex-1 text-text">
-                <PageStringField
-                  variant="mainPage"
-                  placeholder="Entity name..."
-                  value={name ?? ''}
-                  onChange={onNameChange}
-                />
-                {/* Manual spacing to match the <Text /> height and avoid layout shift */}
-                <Spacer height={3.5} />
-              </div>
-            ) : (
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center justify-between">
-                  <Truncate maxLines={3} shouldTruncate>
-                    <Text as="h1" variant="mainPage">
-                      {name ?? ZERO_WIDTH_SPACE}
-                    </Text>
-                  </Truncate>
-                </div>
-                <Spacer height={12} />
-              </div>
-            )}
-          </>
+        {isEditing ? (
+          <div className="min-w-0 flex-1 text-text">
+            <PageStringField
+              variant="mainPage"
+              placeholder="Entity name..."
+              value={name ?? ''}
+              onChange={onNameChange}
+            />
+            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
+            <Spacer height={3.5} />
+          </div>
         ) : (
-          <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center justify-between">
+              <Truncate maxLines={3} shouldTruncate>
+                <Text as="h1" variant="mainPage">
+                  {name ?? ZERO_WIDTH_SPACE}
+                </Text>
+              </Truncate>
+            </div>
+            <Spacer height={12} />
+          </div>
         )}
 
         <div className="flex shrink-0 items-center gap-5">
