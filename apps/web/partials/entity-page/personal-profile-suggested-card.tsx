@@ -147,7 +147,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const pillSizing = '!h-7 !px-2.5 !gap-1.5 !rounded-full';
 
   const pillClass =
-    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white hover:!bg-[#151515] hover:!text-white focus-visible:!border-text [&]:shadow-none`;
+    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white [&:hover]:!bg-[#151515E6] [&:hover]:!text-white [&:hover]:!border-transparent focus-visible:!border-text [&]:shadow-none`;
 
   const donePillClass =
     `${pillSizing} !border-transparent !bg-[#8A8A8A] !text-white hover:!bg-[#8A8A8A] hover:!text-white hover:!border-transparent active:!bg-[#8A8A8A] focus-visible:!border-transparent focus-visible:!bg-[#8A8A8A] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
