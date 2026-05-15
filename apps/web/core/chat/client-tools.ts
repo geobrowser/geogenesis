@@ -15,6 +15,7 @@ export const CLIENT_EXECUTED_TOOL_TYPES = new Set<string>([
   'tool-searchGraph',
   'tool-listSpaces',
   'tool-research',
+  'tool-webFetch',
   ...EDIT_TOOL_NAMES.map(name => `tool-${name}`),
 ]);
 
@@ -36,4 +37,19 @@ export function shouldResubmitAfterClientExecution({ messages }: { messages: UIM
   if (!hasClientExecuted) return false;
 
   return lastStepTools.every(part => part.state === 'output-available' || part.state === 'output-error');
+}
+
+// True while any client-executed tool on the latest assistant message is
+// awaiting its result. Used alongside `status` so the stop button stays put
+// during the gap between the server's stream finishing and the SDK firing the
+// auto-resubmit — that gap shows as status='ready' but the agent is still working.
+export function hasPendingClientToolCall(messages: UIMessage[]): boolean {
+  const message = messages[messages.length - 1];
+  if (!message || message.role !== 'assistant') return false;
+  for (const part of message.parts) {
+    if (!isToolUIPart(part)) continue;
+    if (!CLIENT_EXECUTED_TOOL_TYPES.has(part.type)) continue;
+    if (part.state === 'input-streaming' || part.state === 'input-available') return true;
+  }
+  return false;
 }

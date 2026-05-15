@@ -5,6 +5,12 @@ export const isChatOpenAtom = atom(false);
 
 export const hasSeenAssistantAtom = atomWithStorage('geo:has-seen-assistant', false);
 
+export type AssistantSeed = { mode: 'ingestion'; url: string };
+
+export const assistantSeedAtom = atom<AssistantSeed | null>(null);
+
+export const addDataPanelExpandedAtom = atomWithStorage('geo:add-data-panel-expanded', true);
+
 export type ChatSize = { width: number; height: number };
 
 export const DEFAULT_CHAT_SIZE: ChatSize = { width: 320, height: 450 };

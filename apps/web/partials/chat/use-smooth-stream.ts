@@ -5,9 +5,9 @@ import * as React from 'react';
 // Paces Anthropic's bursty SSE deltas into a steady reveal via rAF so the
 // final-text reply flows in instead of popping in chunks. When `animate` is
 // true, displayed starts empty and drips up to target — used for the latest
-// assistant message which mounts post-cover-lift with target already at full
-// text. When false, displayed tracks target without animating (older messages
-// render statically in full).
+// assistant message so the closer's summary streams in smoothly. When false,
+// displayed tracks target without animating (older messages render statically
+// in full).
 export function useSmoothStream(target: string, animate: boolean): string {
   const [displayed, setDisplayed] = React.useState(() => (animate ? '' : target));
   const displayedRef = React.useRef<string>(animate ? '' : target);

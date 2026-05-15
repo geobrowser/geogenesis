@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 
 import { ReviewState } from '~/core/types';
@@ -67,7 +69,10 @@ export function useStatusBar() {
  */
 export function useReportError() {
   const dispatch = useSetAtom(statusBarDispatchAtom);
-  return (message: string, retry?: Retry) => {
-    dispatch({ type: 'ERROR', payload: message, retry });
-  };
+  return React.useCallback(
+    (message: string, retry?: Retry) => {
+      dispatch({ type: 'ERROR', payload: message, retry });
+    },
+    [dispatch]
+  );
 }

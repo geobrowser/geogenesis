@@ -8,6 +8,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
@@ -171,6 +172,8 @@ export async function POST(req: Request) {
         anthropic: { disableParallelToolUse: true },
       },
     });
+
+    logCallCost('research', RESEARCH_MODEL, result.totalUsage);
 
     const summary = clampSummary(result.text ?? '');
     if (summary.length === 0) {

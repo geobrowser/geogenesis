@@ -27,14 +27,16 @@ type Props = {
   messages: UIMessage[];
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   error?: Error;
-  isFull: boolean;
+  isBusy: boolean;
   input: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
+  onStop: () => void;
   onSuggestion: (text: string, source: 'welcome' | 'follow_up') => void;
-  onRetry: () => void;
   onNewChat: () => void;
   onClose: () => void;
+  // A seeded first message is about to auto-send; don't flash the welcome screen.
+  suppressWelcome?: boolean;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -43,19 +45,19 @@ export function ChatPanel({
   messages,
   status,
   error,
-  isFull,
+  isBusy,
   input,
   onInputChange,
   onSend,
+  onStop,
   onSuggestion,
-  onRetry,
   onNewChat,
   onClose,
+  suppressWelcome,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
-  const isBusy = status === 'submitted' || status === 'streaming';
   const hasMessages = messages.length > 0;
   const isAtDefault = size.width === DEFAULT_CHAT_SIZE.width && size.height === DEFAULT_CHAT_SIZE.height;
 
@@ -201,47 +203,29 @@ export function ChatPanel({
           messages={messages}
           status={status}
           error={error}
-          isFull={isFull}
-          onRetry={onRetry}
           onSuggestion={text => onSuggestion(text, 'follow_up')}
-          disabled={isBusy || isFull}
+          disabled={isBusy}
         />
+      ) : suppressWelcome ? (
+        <div className="flex-1" />
       ) : (
-        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isFull} />
+        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy} />
       )}
 
-      {isFull ? (
-        <ConversationFullNotice onNewChat={onNewChat} />
-      ) : (
-        <ChatInput
-          value={input}
-          onChange={onInputChange}
-          onSubmit={onSend}
-          disabled={isBusy}
-          placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
-        />
-      )}
+      <ChatInput
+        value={input}
+        onChange={onInputChange}
+        onSubmit={onSend}
+        onStop={onStop}
+        isBusy={isBusy}
+        placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
+      />
     </motion.div>
   );
 }
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max);
-}
-
-function ConversationFullNotice({ onNewChat }: { onNewChat: () => void }) {
-  return (
-    <div className="flex flex-col items-start gap-2 border-t border-grey-02 p-3">
-      <div className="text-chat text-grey-04">This conversation is full. Start a new chat to keep going.</div>
-      <button
-        type="button"
-        onClick={onNewChat}
-        className="rounded-full border border-grey-02 px-2 pt-2 pb-2.5 text-chat leading-4 text-text transition-colors hover:border-text"
-      >
-        Start a new chat
-      </button>
-    </div>
-  );
 }
 
 function formatTranscript(messages: UIMessage[]): string {
