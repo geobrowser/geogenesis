@@ -32,11 +32,17 @@ export function ClaimTopicButton({ entityId, spaceId, coverUrl }: Props) {
       name,
       image: coverUrl ?? '',
       governanceType: 'DAO',
-      // 'default' is the Blank DAO template — no presumed entity types, just SPACE +
-      // PROJECT. Skips the template-picker step so the user lands directly on
-      // "Space for {topic name}" with a Create Space button.
+      // 'default' is the Blank DAO template — no presumed entity types, just
+      // SPACE + PROJECT. Combined with step='create-space' + autoRun, the
+      // dialog fires the deploy immediately on open, skipping both the
+      // template picker and the profile-entry confirmation.
       spaceType: 'default',
-      step: 'enter-profile',
+      step: 'create-space',
+      autoRun: true,
+      // Replicate this topic's content (values + relations + blocks) into the
+      // new space's home page entity — same flow as "Clone to new space" in
+      // the entity-page context menu.
+      cloneFromEntity: { entityId, sourceSpaceId: spaceId },
     });
   };
 

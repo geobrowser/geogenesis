@@ -95,18 +95,17 @@ export function EditableHeading({
           </div>
         )}
 
-        <div className="flex shrink-0 flex-col items-end gap-3">
+        <div className="flex shrink-0 items-center gap-5">
           {topRightSlot}
-          <div className="flex items-center gap-5">
-            {isEditing && (
-              <Link
-                href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-              >
-                <Create />
-              </Link>
-            )}
-            <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+          {isEditing && (
+            <Link
+              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+            >
+              <Create />
+            </Link>
+          )}
+          <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
             {allVersions.map((v, index) => (
               <EntityVersionItem
@@ -138,8 +137,7 @@ export function EditableHeading({
               </div>
             )}
           </HistoryPanel>
-            <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
-          </div>
+          <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
         </div>
       </div>
 
