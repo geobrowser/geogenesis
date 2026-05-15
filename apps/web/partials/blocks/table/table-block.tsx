@@ -16,6 +16,7 @@ import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -31,6 +32,7 @@ import { getPaginationPages } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
@@ -44,7 +46,6 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
-import { TableBlockQuerySetupTypeFilters } from './table-block-query-setup-type-filters';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -57,6 +58,7 @@ import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pi
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
+import { QuerySetupTypesSelectEntityPopover, type QuerySetupTypePick } from './query-setup-types-select-entity-popover';
 
 interface Props {
   spaceId: string;
@@ -326,7 +328,19 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const { filterState, setFilterState } = useFilters(canEdit);
   const { source, setSource } = useSource({ filterState, setFilterState });
-  const [setupTypePicks, setSetupTypePicks] = React.useState<{ id: string; name: string | null }[]>([]);
+  const [setupTypePicks, setSetupTypePicks] = React.useState<QuerySetupTypePick[]>([]);
+
+  const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
+    propertyId: SystemIds.TYPES_PROPERTY,
+    spaceId,
+    relationValueTypes: undefined,
+  });
+  const canPickTypes = !waitForFilterTypes && Boolean(allowedTargetTypes?.length);
+  const selectedTypeCount = setupTypePicks.length;
+  const typeTriggerLabel =
+    selectedTypeCount > 0
+      ? `Select types ${selectedTypeCount} selected`
+      : 'Select types · Optional';
 
   const handleConfirmQuerySetup = React.useCallback(() => {
     const withoutTypes = filterState.filter(f => f.columnId !== SystemIds.TYPES_PROPERTY);
@@ -335,7 +349,8 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
       columnName: 'Types',
       valueType: 'RELATION',
       value: t.id,
-      valueName: t.name,
+      valueName: [t.name, t.spaceName].filter((x): x is string => Boolean(x)).join(' · ') || t.name,
+      ...(t.spaceId ? { typesRelationSpaceId: t.spaceId } : {}),
     }));
     const mergedFilters = [...withoutTypes, ...typeFilters];
     setSource(source, { filterStateOverride: mergedFilters });
@@ -361,10 +376,43 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
         </div>
       </div>
 
-      <div className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-lg bg-grey-01 px-4 py-5">
+      <div
+        className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-lg bg-grey-01 px-4 py-5"
+        onMouseDown={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
+      >
         <p className="max-w-md text-center text-metadata text-text">Where do you want to query data from?</p>
-        <div className="flex w-[132px] max-w-full items-center justify-start gap-2 overflow-visible">
+        <div
+          className="flex max-w-full flex-wrap items-center justify-center gap-1.5 overflow-visible"
+          onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+        >
           <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
+          <QuerySetupTypesSelectEntityPopover
+            spaceId={spaceId}
+            disabled={!canEdit || !canPickTypes}
+            selectedTypes={setupTypePicks}
+            onChangeSelectedTypes={setSetupTypePicks}
+            allowedTargetTypes={allowedTargetTypes}
+            trigger={
+              <button
+                type="button"
+                onMouseDown={e => e.stopPropagation()}
+                onPointerDown={e => e.stopPropagation()}
+                className="inline-flex h-6 max-w-[min(100%,260px)] min-w-0 shrink-0 items-center justify-start gap-1.5 rounded border border-grey-02 bg-white px-1.5 text-metadata leading-none text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+                aria-label={
+                  selectedTypeCount > 0
+                    ? `Select types, ${selectedTypeCount} selected`
+                    : 'Select types (optional)'
+                }
+              >
+                <span className="min-w-0 flex-1 truncate text-left">{typeTriggerLabel}</span>
+                <span className="inline-flex shrink-0">
+                  <ChevronDownSmall color="grey-04" />
+                </span>
+              </button>
+            }
+          />
           <button
             type="button"
             onClick={handleConfirmQuerySetup}
@@ -375,12 +423,15 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
             <Check color="grey-04" />
           </button>
         </div>
-        <TableBlockQuerySetupTypeFilters
-          spaceId={spaceId}
-          selectedTypes={setupTypePicks}
-          onChangeSelectedTypes={setSetupTypePicks}
-          disabled={!canEdit}
-        />
+        <div className="flex w-full max-w-lg flex-col items-center gap-2">
+          {waitForFilterTypes ? (
+            <p className="text-center text-footnote text-grey-04">Loading types…</p>
+          ) : !allowedTargetTypes?.length ? (
+            <p className="text-center text-footnote text-grey-04">
+              Type list unavailable; you can add type filters later.
+            </p>
+          ) : null}
+        </div>
       </div>
     </motion.div>
   );

@@ -632,6 +632,17 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
       return { spaces: [{ equals: f.value }] };
     }
     if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
+      if (f.typesRelationSpaceId) {
+        return {
+          relations: [
+            {
+              typeOf: { id: { equals: SystemIds.TYPES_PROPERTY } },
+              toEntity: { id: { equals: f.value } },
+              space: { equals: f.typesRelationSpaceId },
+            },
+          ],
+        };
+      }
       return { types: [{ id: { equals: f.value } }] };
     }
     if (f.isBacklink || f.columnName === 'Backlink') {
