@@ -5,16 +5,10 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
-import { Effect } from 'effect';
-
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useSpace } from '~/core/hooks/use-space';
-import { getProperty } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { DataType, Property } from '~/core/types';
-import { mapPropertyType } from '~/core/utils/property/properties';
 import { GeoNumber } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -28,7 +22,7 @@ import { Text } from '~/design-system/text';
 
 import type { UnresolvedImportCell } from './atoms';
 import { parseCheckboxValue } from './checkbox-parse';
-import { hydrateRelationValueTypes } from './import-generation';
+import { PropertyMappingPopover } from './property-mapping-popover';
 import { splitRelationCell } from './relation-cell';
 
 const ROW_HEIGHT_ESTIMATE = 56;
@@ -218,85 +212,6 @@ export type ColumnConfig = {
   /** ICU-style number format pattern, for INTEGER/FLOAT/DECIMAL formatting */
   format?: string | null;
 };
-
-function PropertyMappingPopover({
-  spaceId,
-  csvColumnIndex,
-  onSelectProperty,
-  onCreateProperty,
-  trigger,
-  initialQuery,
-  selectedEntityId,
-}: {
-  spaceId: string;
-  csvColumnIndex: number;
-  onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
-  onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
-  trigger: React.ReactNode;
-  initialQuery?: string;
-  selectedEntityId?: string;
-}) {
-  const { store } = useSyncEngine();
-  const { createProperty } = useCreateProperty(spaceId);
-
-  return (
-    <SelectEntityAsPopover
-      trigger={
-        <span
-          data-jump-property={csvColumnIndex}
-          className="mt-0.5 flex cursor-pointer items-center gap-1.5 rounded hover:bg-grey-02/50"
-        >
-          {trigger}
-        </span>
-      }
-      spaceId={spaceId}
-      relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-      placeholder="Find or create property..."
-      advanced={false}
-      showIDs={false}
-      initialQuery={initialQuery}
-      selectedEntityId={selectedEntityId}
-      onDone={async result => {
-        let property: Property | null = store.getProperty(result.id);
-        if (!property) {
-          property = await Effect.runPromise(getProperty(result.id));
-        }
-        if (!property) {
-          property = { id: result.id, name: result.name, dataType: 'TEXT' };
-        }
-
-        property = await hydrateRelationValueTypes(property);
-
-        onSelectProperty(csvColumnIndex, result.id, property);
-      }}
-      onCreateEntity={result => {
-        const propertyType = result.renderableType || 'TEXT';
-        const propertyId = createProperty({
-          name: result.name || '',
-          propertyType,
-        });
-
-        const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
-        const initial: Property = store.getProperty(propertyId) ?? {
-          id: propertyId,
-          name: result.name,
-          dataType: baseDataType,
-          renderableType: renderableTypeId,
-        };
-        // Ensure dataType reflects the just-created property even if the store
-        // hasn't synced yet (fixes relation columns not rendering as relations).
-        const seeded: Property =
-          initial.dataType === baseDataType
-            ? initial
-            : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
-
-        void hydrateRelationValueTypes(seeded).then(hydrated => {
-          onCreateProperty?.(csvColumnIndex, propertyId, hydrated);
-        });
-      }}
-    />
-  );
-}
 
 function isImageUrl(value: string): boolean {
   if (!value) return false;
