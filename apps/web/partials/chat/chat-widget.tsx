@@ -167,6 +167,8 @@ export function ChatWidget() {
   const reportedErrorRef = React.useRef<Error | null>(null);
   const regenerateRef = React.useRef(regenerate);
   regenerateRef.current = regenerate;
+  const sendMessageRef = React.useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
   React.useEffect(() => {
     if (!error) {
       reportedErrorRef.current = null;
@@ -397,12 +399,14 @@ export function ChatWidget() {
     if (isBusy) return;
     modeRef.current = seed.mode;
     stoppedRef.current = false;
+    // Drop any stale error so the StatusBar retry doesn't regenerate the previous failed turn.
+    clearError();
     // Backtick-wrap the URL so markdown doesn't mangle special chars.
     const text = `Please ingest this URL into this space and stage the entities: \`${seed.url}\``;
     trackAssistantMessage(text, 'typed');
-    sendMessage({ text });
+    sendMessageRef.current({ text });
     setSeed(null);
-  }, [seed, isBusy, sendMessage, setSeed, trackAssistantMessage]);
+  }, [seed, isBusy, clearError, setSeed, trackAssistantMessage]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

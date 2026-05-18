@@ -13,15 +13,45 @@ export type ParsedUrl = {
 // fetch path must not be steered at loopback / RFC1918 / link-local hosts.
 export function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost')) return true;
-  if (host === '0.0.0.0' || host === '::' || host === '[::]') return true;
-  if (host === '::1' || host === '[::1]') return true;
-  if (/^10\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
-  if (/^127\./.test(host)) return true;
-  if (/^169\.254\./.test(host)) return true;
-  if (/^fc[0-9a-f]{2}:|^fd[0-9a-f]{2}:|^fe80:/i.test(host)) return true;
+  // Strip surrounding brackets so `[::1]` and `::1` are treated identically.
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (bare === 'localhost' || bare.endsWith('.localhost')) return true;
+  if (bare === '0.0.0.0') return true;
+  if (/^10\./.test(bare)) return true;
+  if (/^192\.168\./.test(bare)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(bare)) return true;
+  if (/^127\./.test(bare)) return true;
+  if (/^169\.254\./.test(bare)) return true;
+  // IPv6 loopback / unspecified, including the unabbreviated form.
+  if (bare === '::' || bare === '::1' || bare === '0:0:0:0:0:0:0:0' || bare === '0:0:0:0:0:0:0:1') return true;
+  // Unique-local (fc00::/7) and link-local (fe80::/10).
+  if (/^fc[0-9a-f]{2}:|^fd[0-9a-f]{2}:|^fe80:/i.test(bare)) return true;
+  // IPv4-mapped IPv6 (::ffff:a.b.c.d / ::ffff:7f00:1) — re-check the embedded address.
+  const mapped = bare.match(/^::ffff:([0-9a-f.:]+)$/i);
+  if (mapped) {
+    const inner = mapped[1];
+    if (/^[0-9.]+$/.test(inner)) return isPrivateHost(inner);
+    // Hex form (::ffff:7f00:1) — decode the last two groups to dotted-quad.
+    const groups = inner.split(':');
+    if (groups.length === 2) {
+      const hi = parseInt(groups[0], 16);
+      const lo = parseInt(groups[1], 16);
+      if (Number.isFinite(hi) && Number.isFinite(lo)) {
+        const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+        return isPrivateHost(dotted);
+      }
+    }
+  }
+  // 6to4 (2002::/16) embeds the IPv4 address in the next 32 bits.
+  const sixtofour = bare.match(/^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})/i);
+  if (sixtofour) {
+    const hi = parseInt(sixtofour[1], 16);
+    const lo = parseInt(sixtofour[2], 16);
+    if (Number.isFinite(hi) && Number.isFinite(lo)) {
+      const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+      if (isPrivateHost(dotted)) return true;
+    }
+  }
   return false;
 }
 
@@ -43,7 +73,8 @@ export function validateUrl(input: unknown): ParsedUrl | null {
   const host = url.hostname.toLowerCase();
   if (X_HOSTS.has(host)) {
     // Path shape: /<user>/status/<id>(/...)? — fxtwitter needs both parts.
-    const match = url.pathname.match(/^\/([^/]+)\/status\/(\d+)(?:\/|$)/i);
+    // Handles are 1–15 chars, alphanumeric + underscore.
+    const match = url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)(?:\/|$)/);
     if (match) {
       return { url, isXPost: true, xPath: { user: match[1], statusId: match[2] } };
     }

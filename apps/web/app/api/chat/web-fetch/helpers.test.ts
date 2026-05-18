@@ -24,6 +24,16 @@ describe('isPrivateHost', () => {
     ['fd12::abcd'],
     ['fe80::1'],
     ['FE80::1'],
+    ['0:0:0:0:0:0:0:1'],
+    ['[0:0:0:0:0:0:0:1]'],
+    ['0:0:0:0:0:0:0:0'],
+    ['::ffff:127.0.0.1'],
+    ['[::ffff:127.0.0.1]'],
+    ['::ffff:10.0.0.1'],
+    ['::ffff:7f00:1'],
+    ['::FFFF:C0A8:0001'],
+    ['2002:7f00:0001::'],
+    ['2002:c0a8:0001::'],
   ])('blocks %s', host => {
     expect(isPrivateHost(host)).toBe(true);
   });
@@ -38,6 +48,8 @@ describe('isPrivateHost', () => {
     ['11.0.0.1'],
     ['192.169.0.1'],
     ['2606:4700:4700::1111'],
+    ['::ffff:8.8.8.8'],
+    ['2002:0808:0808::'],
   ])('allows %s', host => {
     expect(isPrivateHost(host)).toBe(false);
   });
@@ -132,6 +144,22 @@ describe('validateUrl', () => {
     const result = validateUrl('https://x.com/jack/status/notanid');
     expect(result!.isXPost).toBe(true);
     expect(result!.xPath).toBeNull();
+  });
+
+  it('rejects status paths whose handle is malformed (X handles are [A-Za-z0-9_]{1,15})', () => {
+    for (const handle of ['user@bad', 'user%20', 'user.dot', 'has-dash', 'sixteen_chars_xx']) {
+      const result = validateUrl(`https://x.com/${handle}/status/123`);
+      expect(result!.isXPost).toBe(true);
+      expect(result!.xPath).toBeNull();
+    }
+  });
+
+  it('accepts the legal handle edge sizes (1 char and 15 chars)', () => {
+    expect(validateUrl('https://x.com/a/status/1')!.xPath).toEqual({ user: 'a', statusId: '1' });
+    expect(validateUrl('https://x.com/abcdefghij12345/status/1')!.xPath).toEqual({
+      user: 'abcdefghij12345',
+      statusId: '1',
+    });
   });
 });
 

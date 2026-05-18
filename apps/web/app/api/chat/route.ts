@@ -48,8 +48,9 @@ const MAX_OUTPUT_TOKENS = 8_000;
 // stops a runaway loop.
 const MAX_TOOL_STEPS = 100;
 
-// Accumulates per-stage cost across the resubmit chain a single user message
-// triggers. Keyed by wallet/IP. Logged + cleared on the chain's final request.
+// Best-effort, dev-only aggregation of per-stage cost across a resubmit chain.
+// Module-local, so in serverless deploys chain requests can land on different
+// instances and log separately. Not for correctness — debug logging only.
 const chainCosts = new Map<string, CostStage[]>();
 const MAX_TRACKED_CHAINS = 50;
 
@@ -57,12 +58,10 @@ const MAX_TRACKED_CHAINS = 50;
 // streamText.onError — that's the user pressing stop, not a real failure.
 function isAbortError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
-  const name = (err as { name?: unknown }).name;
-  const message = (err as { message?: unknown }).message;
-  if (typeof name === 'string' && (name === 'AbortError' || name === 'ResponseAborted' || /abort/i.test(name))) {
-    return true;
-  }
-  if (typeof message === 'string' && /aborted/i.test(message)) return true;
+  const { name, code } = err as { name?: unknown; code?: unknown };
+  if (name === 'AbortError' || name === 'ResponseAborted') return true;
+  // Some runtimes surface aborts as DOMException with code 20.
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException && code === 20) return true;
   return false;
 }
 
@@ -329,10 +328,8 @@ export async function POST(req: Request) {
       return rateLimitResponse(failedLimiterReset([identity, ipCeiling]));
     }
   } catch (err) {
-    console.error('[chat] rate limiter unavailable', err);
-    if (process.env.NODE_ENV === 'production') {
-      return jsonError(503, 'Service temporarily unavailable. Please try again in a moment.');
-    }
+    console.error('[chat] rate limiter unavailable; failing closed', err);
+    return jsonError(503, 'Service temporarily unavailable. Please try again in a moment.');
   }
 
   let uiMessages: UIMessage[];

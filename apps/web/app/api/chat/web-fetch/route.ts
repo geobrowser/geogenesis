@@ -243,10 +243,8 @@ export async function POST(req: Request) {
       return rateLimitResponse(reset);
     }
   } catch (err) {
-    console.error('[chat/web-fetch] rate limiter unavailable', err);
-    if (process.env.NODE_ENV === 'production') {
-      return jsonError(503, 'Service temporarily unavailable.');
-    }
+    console.error('[chat/web-fetch] rate limiter unavailable; failing closed', err);
+    return jsonError(503, 'Service temporarily unavailable.');
   }
 
   let parsed: ParsedUrl;
