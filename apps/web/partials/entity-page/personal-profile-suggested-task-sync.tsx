@@ -167,18 +167,30 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
     };
   }, [skillsIntent, entityId, spaceId, canEdit, setSkillsIntent]);
 
+  const skillsDone = React.useMemo(() => {
+    for (const prop of Object.values(rendered)) {
+      if (propertyIsSkillsProperty(prop.id)) return true;
+    }
+    return false;
+  }, [rendered]);
+
+  const bioDone = React.useMemo(
+    () => stripProfileOverviewMarkdownNoise(overviewTextMarkdownJoined).length > 0,
+    [overviewTextMarkdownJoined]
+  );
+
+  // Debounced sync: the underlying reactive store can briefly emit transient states
+  // while local edits resettle (e.g. after deleting a freshly-added overview block).
+  // Writing eagerly causes the persisted atom to flip back and forth, which renders
+  // as a check/plus flicker on the Get Started pills. Coalesce into one write after
+  // the computed values have been stable for a short window.
+  const tasksRef = React.useRef(tasks);
+  tasksRef.current = tasks;
+  const setTasksRef = React.useRef(setTasks);
+  setTasksRef.current = setTasks;
+
   React.useEffect(() => {
     if (dismissForever) return;
-
-    const bioDone = stripProfileOverviewMarkdownNoise(overviewTextMarkdownJoined).length > 0;
-
-    let skillsDone = false;
-    for (const prop of Object.values(rendered)) {
-      if (propertyIsSkillsProperty(prop.id)) {
-        skillsDone = true;
-        break;
-      }
-    }
 
     const next = {
       bio: bioDone,
@@ -188,29 +200,23 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
       post: hasPostAuthoredByProfile,
     };
 
+    const current = tasksRef.current;
     if (
-      next.bio !== tasks.bio ||
-      next.skills !== tasks.skills ||
-      next.post !== tasks.post ||
-      next.work !== tasks.work ||
-      next.education !== tasks.education
+      next.bio === current.bio &&
+      next.skills === current.skills &&
+      next.post === current.post &&
+      next.work === current.work &&
+      next.education === current.education
     ) {
-      setTasks(next);
+      return;
     }
-  }, [
-    dismissForever,
-    entityId,
-    hasPostAuthoredByProfile,
-    rendered,
-    overviewTextMarkdownJoined,
-    setTasks,
-    spaceId,
-    tasks.bio,
-    tasks.education,
-    tasks.post,
-    tasks.skills,
-    tasks.work,
-  ]);
+
+    const timeoutId = window.setTimeout(() => {
+      setTasksRef.current(next);
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [dismissForever, bioDone, skillsDone, hasPostAuthoredByProfile]);
 
 
   return null;
