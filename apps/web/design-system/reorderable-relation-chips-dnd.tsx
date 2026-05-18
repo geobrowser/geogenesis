@@ -70,16 +70,29 @@ const inlineWrappedSortingStrategy: SortingStrategy = () => ({
   scaleY: 1,
 });
 
+function pointerClientPosition(event: Event): { x: number; y: number } | null {
+  if (!('clientX' in event) || !('clientY' in event)) {
+    return null;
+  }
+  const { clientX, clientY } = event as Event & { clientX: number; clientY: number };
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') {
+    return null;
+  }
+  return { x: clientX, y: clientY };
+}
+
 const snapCenterToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
-  if (!draggingNodeRect || !activatorEvent || !('clientX' in activatorEvent)) {
+  if (!draggingNodeRect || !activatorEvent) {
     return transform;
   }
-  const x = activatorEvent.clientX as number;
-  const y = activatorEvent.clientY as number;
+  const pointer = pointerClientPosition(activatorEvent);
+  if (!pointer) {
+    return transform;
+  }
   return {
     ...transform,
-    x: transform.x + x - draggingNodeRect.left - draggingNodeRect.width / 2,
-    y: transform.y + y - draggingNodeRect.top - draggingNodeRect.height / 2,
+    x: transform.x + pointer.x - draggingNodeRect.left - draggingNodeRect.width / 2,
+    y: transform.y + pointer.y - draggingNodeRect.top - draggingNodeRect.height / 2,
   };
 };
 
@@ -99,12 +112,13 @@ type DragPointerEvent = {
 
 function pointerFromDragEvent(event: DragPointerEvent): { x: number; y: number } | null {
   const activator = event.activatorEvent;
-  if (activator && 'clientX' in activator && typeof activator.clientX === 'number') {
+  const pointer = activator ? pointerClientPosition(activator) : null;
+  if (pointer) {
     const deltaX = event.delta?.x ?? 0;
     const deltaY = event.delta?.y ?? 0;
     return {
-      x: activator.clientX + deltaX,
-      y: activator.clientY + deltaY,
+      x: pointer.x + deltaX,
+      y: pointer.y + deltaY,
     };
   }
 
