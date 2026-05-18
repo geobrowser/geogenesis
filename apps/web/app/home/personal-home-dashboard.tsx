@@ -2,10 +2,7 @@
 
 import * as React from 'react';
 
-import { cva } from 'class-variance-authority';
 import { motion } from 'framer-motion';
-import { useAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { useSearchParams } from 'next/navigation';
 
 import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
@@ -15,7 +12,6 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
 import { Member } from '~/design-system/icons/member';
@@ -199,7 +195,6 @@ export function PersonalHomeDashboard({
       </div>
       <div className="mt-4 flex gap-8">
         <div className="w-2/3">
-          <Notices />
           {proposalsList}
         </div>
         <div className="w-1/3">
@@ -275,88 +270,6 @@ function GovernanceFilterMenu({
     </Menu>
   );
 }
-
-const Notices = () => {
-  return (
-    <div className="mb-2 space-y-2">
-      <Notice
-        id="welcomeToGovernanceHome"
-        color="grey"
-        title="Welcome to your governance home"
-        description="Your area to see any proposals, member requests, and editor requests across the spaces you are involved in."
-        media={
-          <div className="relative h-[102px] w-[128px] shrink-0 overflow-hidden sm:h-[108px] sm:w-[136px]" aria-hidden>
-            <img
-              src="/home.png"
-              alt=""
-              className="pointer-events-none block h-[calc(100%+21px)] min-h-0 w-full min-w-0 -translate-y-[21px] object-cover object-left object-top select-none sm:h-[calc(100%+24px)] sm:-translate-y-6"
-            />
-          </div>
-        }
-      />
-    </div>
-  );
-};
-
-type NoticeProps = {
-  id: string;
-  color: 'grey' | 'blue' | 'green' | 'orange' | 'purple';
-  title: string;
-  description: string;
-  element?: React.ReactNode;
-  media?: React.ReactNode;
-};
-
-const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', []);
-
-const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
-
-  const classNames = cva('relative flex items-start gap-4 overflow-clip rounded-lg px-4 pt-4', {
-    variants: {
-      color: {
-        grey: 'bg-gradient-grey',
-        blue: 'bg-gradient-blue',
-        green: 'bg-gradient-green',
-        orange: 'bg-gradient-orange',
-        purple: 'bg-gradient-purple',
-      },
-    },
-  });
-
-  const handleDismissNotice = React.useCallback(() => {
-    setDismissedNotices([...dismissedNotices, id]);
-  }, [id, dismissedNotices, setDismissedNotices]);
-
-  if (dismissedNotices.includes(id)) return null;
-
-  return (
-    <div id={id} className={`${classNames({ color })} ${media ? 'pb-6' : 'pb-4'}`}>
-      <div className="min-w-0 flex-1">
-        {media ? (
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-smallTitle">{title}</div>
-              <div className="mt-2">{description}</div>
-            </div>
-            <div className="shrink-0 leading-none">{media}</div>
-          </div>
-        ) : (
-          <>
-            <div className="text-smallTitle">{title}</div>
-            <div className="mt-2">{description}</div>
-          </>
-        )}
-        {element && <div className="mt-2">{element}</div>}
-      </div>
-      <div className="shrink-0">
-        <button type="button" onClick={handleDismissNotice} className="rounded border p-1">
-          <Close />
-        </button>
-      </div>
-    </div>
-  );
-};
 
 type SidebarProps = {
   counts?: SidebarCounts;
