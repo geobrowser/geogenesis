@@ -2,6 +2,10 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { useState } from 'react';
+
+import cx from 'classnames';
+
 import { Source } from '~/core/blocks/data/source';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
@@ -57,6 +61,7 @@ export function TableBlockBulletedListItem({
       ?.value ?? null;
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
+  const [isNameHovered, setIsNameHovered] = useState(false);
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -128,12 +133,21 @@ export function TableBlockBulletedListItem({
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
         {source.type !== 'COLLECTION' ? (
-          <div className="relative pr-9">
-            <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
+          <div
+            className="relative min-w-0"
+            onMouseEnter={() => setIsNameHovered(true)}
+            onMouseLeave={() => setIsNameHovered(false)}
+          >
+            <Link
+              entityId={rowEntityId}
+              spaceId={currentSpaceId}
+              href={href}
+              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9')}
+            >
               {name}
             </Link>
-            {!isPlaceholder && (
-              <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
+            {!isPlaceholder && isNameHovered && (
+              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center">
                 <DataBlockOpenSidePanelButton
                   entityId={rowEntityId}
                   entitySpaceId={nameCell?.space ?? currentSpaceId}
@@ -143,8 +157,7 @@ export function TableBlockBulletedListItem({
             )}
           </div>
         ) : (
-          <div className="relative pr-9">
-            <CollectionMetadata
+          <CollectionMetadata
               view="BULLETED_LIST"
               isEditing={false}
               name={name}
@@ -158,11 +171,10 @@ export function TableBlockBulletedListItem({
               showSidePanel={!isPlaceholder}
               openedWithMainViewEditing={isEditing}
             >
-              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
+              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="min-w-0 flex-1 text-body">
                 {name}
               </Link>
             </CollectionMetadata>
-          </div>
         )}
       </div>
       <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
