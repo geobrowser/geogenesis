@@ -177,6 +177,32 @@ describe('stripHtml', () => {
     expect(stripHtml('<p>&quot;hi&quot; she said &#39;hello&#39;</p>')).toBe('"hi" she said \'hello\'');
   });
 
+  it('decodes common typographic named entities', () => {
+    expect(stripHtml('<p>he said&hellip;</p>')).toBe('he said…');
+    expect(stripHtml('<p>1990&ndash;2000 &mdash; an era</p>')).toBe('1990–2000 — an era');
+    expect(stripHtml('<p>It&rsquo;s &lsquo;here&rsquo;</p>')).toBe('It’s ‘here’');
+    expect(stripHtml('<p>&ldquo;quoted&rdquo;</p>')).toBe('“quoted”');
+    expect(stripHtml('<p>&copy; 2026 &reg; &trade;</p>')).toBe('© 2026 ® ™');
+  });
+
+  it('replaces &nbsp; with a regular space', () => {
+    expect(stripHtml('<p>a&nbsp;b</p>')).toBe('a b');
+  });
+
+  it('decodes numeric and hex character references', () => {
+    expect(stripHtml('<p>It&#8217;s fine &#x2014; really</p>')).toBe('It’s fine — really');
+    expect(stripHtml('<p>&#x2019;&#8216;</p>')).toBe('’‘');
+  });
+
+  it('leaves unknown entities intact rather than dropping them', () => {
+    expect(stripHtml('<p>&zzz; and &#xZZ;</p>')).toBe('&zzz; and &#xZZ;');
+  });
+
+  it('preserves literal entity references when written as &amp;...', () => {
+    // Single-pass decode: `&amp;lt;` is the literal "&lt;", not "<".
+    expect(stripHtml('<p>&amp;lt;tag&amp;gt;</p>')).toBe('&lt;tag&gt;');
+  });
+
   it('collapses runs of consecutive line breaks to a single newline', () => {
     // /\s+\n/g eats trailing whitespace including the preceding newlines.
     expect(stripHtml('a<br><br><br><br>b')).toBe('a\nb');

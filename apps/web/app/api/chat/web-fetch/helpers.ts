@@ -92,17 +92,43 @@ export function clampSummary(text: string): string {
   return `${trimmed.slice(0, MAX_SUMMARY_CHARS - 1).trimEnd()}…`;
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+};
+
 // oEmbed's `html` field wraps tweet text in <blockquote><p>; strip tags to
-// recover plain text.
+// recover plain text. Single-pass entity decode so `&amp;lt;` correctly stays
+// as the literal `&lt;` (the old chained-replace did `&lt;` → `<`).
 export function stripHtml(html: string): string {
   const withBreaks = html.replace(/<br\s*\/?>/gi, '\n');
   const stripped = withBreaks.replace(/<[^>]*>/g, '');
   return stripped
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, body: string) => {
+      if (body.startsWith('#x') || body.startsWith('#X')) {
+        const code = Number.parseInt(body.slice(2), 16);
+        return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : match;
+      }
+      if (body.startsWith('#')) {
+        const code = Number.parseInt(body.slice(1), 10);
+        return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : match;
+      }
+      return NAMED_ENTITIES[body.toLowerCase()] ?? match;
+    })
     .replace(/\s+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
