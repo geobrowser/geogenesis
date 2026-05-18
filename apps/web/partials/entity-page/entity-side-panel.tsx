@@ -5,12 +5,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
+import { usePathname } from 'next/navigation';
+
 import { motion, useAnimation } from 'framer-motion';
+import { RemoveScroll } from 'react-remove-scroll';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntitySidePanelEditModeProvider, EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
@@ -119,10 +123,12 @@ function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnima
 function EntitySidePanelModeToggle() {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
   const controls = useAnimation();
+  const { smartAccount } = useSmartAccount();
+  const isLoggedIn = Boolean(smartAccount?.account.address);
 
   const { canEdit: canEditSpace } = useAccessControl(panelCtx?.spaceId ?? '');
 
-  if (!panelCtx) {
+  if (!panelCtx || !isLoggedIn) {
     return null;
   }
 
@@ -179,11 +185,11 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-grey-02 px-4 py-2.5 sm:px-5">
+    <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 sm:px-5">
       <button
         type="button"
         onClick={() => closeSidePanel()}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01"
         aria-label="Close side panel"
       >
         <CloseSidePanel color="grey-04" />
@@ -191,7 +197,7 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
 
       <Link
         href={NavUtils.toSpace(entitySpaceId)}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-1 hover:bg-grey-01"
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-1"
       >
         <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage
@@ -215,10 +221,6 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
         spaceId={entitySpaceId}
         className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text"
         aria-label="Open entity full page"
-        onClick={e => {
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-          closeSidePanel();
-        }}
       >
         Open
         <Fullscreen />
@@ -439,22 +441,43 @@ function EntitySidePanelSurface({
 
   return (
     <EntitySidePanelEditModeProvider entitySpaceId={effectiveSpaceId} openedWithMainViewEditing={openedWithMainViewEditing}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+      <div className="flex min-h-0 flex-1 flex-col">
         <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} />
-        <EntitySidePanelBody
-          key={`${effectiveSpaceId}:${entityId}`}
-          entityId={entityId}
-          entitySpaceId={effectiveSpaceId}
-          entity={entity}
-          isLoadingEntity={isLoading}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <EntitySidePanelBody
+            key={`${effectiveSpaceId}:${entityId}`}
+            entityId={entityId}
+            entitySpaceId={effectiveSpaceId}
+            entity={entity}
+            isLoadingEntity={isLoading}
+          />
+        </div>
       </div>
     </EntitySidePanelEditModeProvider>
   );
 }
 
 export function EntitySidePanel() {
+  const pathname = usePathname();
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
+  const pathnameWhenOpenedRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!sidePanelTarget) {
+      pathnameWhenOpenedRef.current = null;
+      return;
+    }
+
+    if (pathnameWhenOpenedRef.current === null) {
+      pathnameWhenOpenedRef.current = pathname;
+      return;
+    }
+
+    if (pathnameWhenOpenedRef.current !== pathname) {
+      pathnameWhenOpenedRef.current = null;
+      closeSidePanel();
+    }
+  }, [pathname, sidePanelTarget, closeSidePanel]);
 
   if (!sidePanelTarget) {
     return null;
@@ -467,21 +490,23 @@ export function EntitySidePanel() {
   const { entityId, spaceId, openedWithMainViewEditing } = sidePanelTarget;
 
   return createPortal(
-    <>
-      <button
-        type="button"
-        aria-label="Close side panel backdrop"
-        className="fixed inset-0 z-[200] bg-grey-03/40"
-        onClick={() => closeSidePanel()}
-      />
-      <aside className="fixed inset-y-0 right-0 z-[210] flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl">
-        <EntitySidePanelSurface
-          entityId={entityId}
-          requestedSpaceId={spaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
+    <RemoveScroll>
+      <div className="fixed inset-0 z-[200]">
+        <button
+          type="button"
+          aria-label="Close side panel backdrop"
+          className="absolute inset-0 bg-grey-03/40"
+          onClick={() => closeSidePanel()}
         />
-      </aside>
-    </>,
+        <aside className="absolute inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl">
+          <EntitySidePanelSurface
+            entityId={entityId}
+            requestedSpaceId={spaceId}
+            openedWithMainViewEditing={openedWithMainViewEditing}
+          />
+        </aside>
+      </div>
+    </RemoveScroll>,
     document.body
   );
 }
