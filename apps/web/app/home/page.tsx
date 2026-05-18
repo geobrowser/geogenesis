@@ -85,9 +85,6 @@ export default async function PersonalHomePage(props: Props) {
     myProposalSpaceOptions = mapAndSortGovernanceSpaceOptions(mySpaces);
   }
 
-  const personalOnboarding =
-    person?.spaceId && person?.id ? { spaceId: person.spaceId, entityId: person.id } : null;
-
   return (
     <Component
       header={<GovernanceHomeHeader />}
@@ -95,7 +92,6 @@ export default async function PersonalHomePage(props: Props) {
       sidebarCounts={sidebarCounts}
       connectedAddress={connectedAddress}
       connectedSpaceId={person?.spaceId}
-      personalOnboarding={personalOnboarding}
       governanceTab={tab}
       governanceFilters={{
         spaceId: governanceSpaceId,
