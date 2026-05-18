@@ -6,8 +6,10 @@ import { useState } from 'react';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 import { normalizeSpaceId } from '~/core/access/space-access';
 
@@ -141,6 +143,10 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const { open: openSignInPrompt } = useSignInPrompt();
+  const isLoggedIn = !!smartAccount;
+  const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
 
@@ -246,7 +252,11 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
       <div id="entity-comments" className="flex w-full flex-col pt-10">
         <div className="text-mediumTitle">Comments ({totalCount})</div>
         <Spacer height={16} />
-        <TopLevelCommentInput onSubmit={handleCreateComment} />
+        <TopLevelCommentInput
+          onSubmit={handleCreateComment}
+          isLoggedIn={isLoggedIn}
+          onSignInRequired={requireSignInToComment}
+        />
         {totalCount > 0 && (
           <>
             <Spacer height={16} />
@@ -279,6 +289,8 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
                 isThreadCollapsed={isThreadCollapsed}
                 toggleThreadCollapsed={toggleThreadCollapsed}
                 sortReplies={sortWithSessionPinned}
+                isLoggedIn={isLoggedIn}
+                onSignInRequired={requireSignInToComment}
               />
             </>
           )
@@ -354,13 +366,27 @@ function CommentFilters({
 }
 
 /** Top-level pill-style input matching the design ("Start the discussion...") */
-function TopLevelCommentInput({ onSubmit }: { onSubmit: (text: string) => void }) {
+function TopLevelCommentInput({
+  onSubmit,
+  isLoggedIn,
+  onSignInRequired,
+}: {
+  onSubmit: (text: string) => void;
+  isLoggedIn: boolean;
+  onSignInRequired: () => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!isExpanded) {
     return (
       <button
-        onClick={() => setIsExpanded(true)}
+        onClick={() => {
+          if (!isLoggedIn) {
+            onSignInRequired();
+            return;
+          }
+          setIsExpanded(true);
+        }}
         className="w-full rounded-lg border border-grey-02 px-4 py-3 text-left text-body text-grey-04 hover:border-text"
       >
         Start the discussion...
@@ -482,6 +508,8 @@ function CommentList({
   isThreadCollapsed,
   toggleThreadCollapsed,
   sortReplies,
+  isLoggedIn,
+  onSignInRequired,
   depth = 0,
   ancestors = [],
   parentCommentId,
@@ -496,6 +524,8 @@ function CommentList({
   isThreadCollapsed: (commentId: string) => boolean;
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
+  isLoggedIn: boolean;
+  onSignInRequired: () => void;
   depth?: number;
   ancestors?: Array<{ id: string; spaceId: string }>;
   parentCommentId?: string;
@@ -518,6 +548,8 @@ function CommentList({
             isThreadCollapsed={isThreadCollapsed}
             toggleThreadCollapsed={toggleThreadCollapsed}
             sortReplies={sortReplies}
+            isLoggedIn={isLoggedIn}
+            onSignInRequired={onSignInRequired}
             isLast={index === comments.length - 1}
             depth={depth}
             ancestors={ancestors}
@@ -688,6 +720,8 @@ function CommentList({
               isThreadCollapsed={isThreadCollapsed}
               toggleThreadCollapsed={toggleThreadCollapsed}
               sortReplies={sortReplies}
+              isLoggedIn={isLoggedIn}
+              onSignInRequired={onSignInRequired}
               isLast={index === comments.length - 1}
               depth={depth}
               ancestors={ancestors}
@@ -710,6 +744,8 @@ function CommentItem({
   isThreadCollapsed,
   toggleThreadCollapsed,
   sortReplies,
+  isLoggedIn,
+  onSignInRequired,
   isLast,
   depth,
   ancestors,
@@ -724,6 +760,8 @@ function CommentItem({
   isThreadCollapsed: (commentId: string) => boolean;
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
+  isLoggedIn: boolean;
+  onSignInRequired: () => void;
   isLast: boolean;
   depth: number;
   ancestors: Array<{ id: string; spaceId: string }>;
@@ -899,7 +937,16 @@ function CommentItem({
             </button>
           )}
           <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
-          <button onClick={() => setIsReplying(!isReplying)} className="text-smallButton text-grey-04 hover:text-text">
+          <button
+            onClick={() => {
+              if (!isLoggedIn) {
+                onSignInRequired();
+                return;
+              }
+              setIsReplying(!isReplying);
+            }}
+            className="text-smallButton text-grey-04 hover:text-text"
+          >
             Reply
           </button>
           {isOwnComment && (
@@ -940,6 +987,8 @@ function CommentItem({
             isThreadCollapsed={isThreadCollapsed}
             toggleThreadCollapsed={toggleThreadCollapsed}
             sortReplies={sortReplies}
+            isLoggedIn={isLoggedIn}
+            onSignInRequired={onSignInRequired}
             depth={depth + 1}
             ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
             parentCommentId={comment.id}

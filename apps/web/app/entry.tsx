@@ -30,6 +30,11 @@ const OnboardingDialog = dynamic(
   { ssr: false }
 );
 
+const SignInPrompt = dynamic(
+  () => import('~/partials/sign-in-prompt/sign-in-prompt').then(m => ({ default: m.SignInPrompt })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -80,6 +85,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <ClientOnly>
         <OnboardingDialog />
         <CreateSpaceDialog />
+        <SignInPrompt />
         <Toast />
         <GovernanceReopenEditLoadingBar />
         <FlowBar />
