@@ -518,6 +518,7 @@ export async function POST(req: Request) {
         chainCosts.set(chainKey, []);
       }
       const chainStages = chainCosts.get(chainKey)!;
+      req.signal.addEventListener('abort', () => chainCosts.delete(chainKey), { once: true });
 
       const recordCost = async (
         stage: string,

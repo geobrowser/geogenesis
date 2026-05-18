@@ -100,7 +100,8 @@ export function useResearchDispatcher(
           }
           const signal = (abortRef.current ??= new AbortController()).signal;
           const output = await fetchResearch({ query }, signal);
-          if (cancelledRef.current) return;
+          // StrictMode's second mount resets cancelledRef before in-flight aborts settle.
+          if (signal.aborted) return;
           addToolResultRef.current?.({ tool: 'research', toolCallId, output });
         });
       }

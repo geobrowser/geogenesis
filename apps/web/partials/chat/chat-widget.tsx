@@ -174,7 +174,10 @@ export function ChatWidget() {
     }
     if (reportedErrorRef.current === error) return;
     reportedErrorRef.current = error;
-    reportError(describeChatError(error), () => regenerateRef.current());
+    reportError(describeChatError(error), () => {
+      stoppedRef.current = false;
+      regenerateRef.current();
+    });
   }, [error, reportError]);
 
   addToolResultRef.current = addToolResult as unknown as (args: {
@@ -394,7 +397,8 @@ export function ChatWidget() {
     if (isBusy) return;
     modeRef.current = seed.mode;
     stoppedRef.current = false;
-    const text = `Please ingest this URL into this space and stage the entities: ${seed.url}`;
+    // Backtick-wrap the URL so markdown doesn't mangle special chars.
+    const text = `Please ingest this URL into this space and stage the entities: \`${seed.url}\``;
     trackAssistantMessage(text, 'typed');
     sendMessage({ text });
     setSeed(null);

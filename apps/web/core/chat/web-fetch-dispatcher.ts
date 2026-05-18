@@ -106,7 +106,8 @@ export function useWebFetchDispatcher(
           }
           const signal = (abortRef.current ??= new AbortController()).signal;
           const output = await fetchWebFetch({ url }, signal);
-          if (cancelledRef.current) return;
+          // StrictMode's second mount resets cancelledRef before in-flight aborts settle.
+          if (signal.aborted) return;
           addToolResultRef.current?.({ tool: 'webFetch', toolCallId, output });
         });
       }

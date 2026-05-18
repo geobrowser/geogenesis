@@ -43,6 +43,8 @@ export function shouldResubmitAfterClientExecution({ messages }: { messages: UIM
 // awaiting its result. Used alongside `status` so the stop button stays put
 // during the gap between the server's stream finishing and the SDK firing the
 // auto-resubmit — that gap shows as status='ready' but the agent is still working.
+// Last-message only: an unresolved input-available part blocks the next step,
+// so in-flight tools always live on the trailing assistant message.
 export function hasPendingClientToolCall(messages: UIMessage[]): boolean {
   const message = messages[messages.length - 1];
   if (!message || message.role !== 'assistant') return false;
