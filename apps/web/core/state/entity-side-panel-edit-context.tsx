@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
+import { entitySidePanelWantsEditAtom } from '~/atoms';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 
 export type EntitySidePanelEditContextValue = {
@@ -22,7 +25,13 @@ export function EntitySidePanelEditModeProvider({
   children: React.ReactNode;
 }) {
   const [panelWantsEdit, setPanelWantsEdit] = React.useState(openedWithMainViewEditing);
+  const setGlobalPanelWantsEdit = useSetAtom(entitySidePanelWantsEditAtom);
   const { canEdit, isLoading } = useAccessControl(entitySpaceId);
+
+  React.useEffect(() => {
+    setGlobalPanelWantsEdit(panelWantsEdit);
+    return () => setGlobalPanelWantsEdit(false);
+  }, [panelWantsEdit, setGlobalPanelWantsEdit]);
 
   React.useEffect(() => {
     setPanelWantsEdit(openedWithMainViewEditing);

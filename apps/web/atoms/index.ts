@@ -13,6 +13,8 @@ export type EntitySidePanelTarget = {
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
+export const entitySidePanelWantsEditAtom = atom(false);
+
 export const editorHasContentAtom = atom<boolean>(false);
 
 // Bumped to force the TipTap editor to recreate with fresh content.

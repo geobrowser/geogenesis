@@ -2,12 +2,14 @@
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
 import cx from 'classnames';
 import { Array as A, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { entitySidePanelWantsEditAtom } from '~/atoms';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
@@ -22,6 +24,8 @@ export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
+  const sidePanelWantsEdit = useAtomValue(entitySidePanelWantsEditAtom);
+  const isEditing = editable || sidePanelWantsEdit;
   const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
 
   const allValues = useValues({
@@ -49,7 +53,7 @@ export const FlowBar = () => {
 
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
-  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const hideFlowbar = opsCount === 0 || !isEditing || toast || statusBarState.reviewState !== 'idle';
 
   // Publish the flow-bar's footprint as `--app-bottom-inset` while it's visible
   // so dropdowns (placement hook, table-filter results, etc.) can avoid sliding
