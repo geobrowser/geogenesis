@@ -339,7 +339,7 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   const selectedTypeCount = setupTypePicks.length;
   const typeTriggerLabel =
     selectedTypeCount > 0
-      ? `Select types ${selectedTypeCount} selected`
+      ? `${selectedTypeCount} ${selectedTypeCount === 1 ? 'type' : 'types'} selected`
       : 'Select types · Optional';
 
   const handleConfirmQuerySetup = React.useCallback(() => {
@@ -402,7 +402,7 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
                 className="inline-flex h-6 max-w-[min(100%,260px)] min-w-0 shrink-0 items-center justify-start gap-1.5 rounded border border-grey-02 bg-white px-1.5 text-metadata leading-none text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
                 aria-label={
                   selectedTypeCount > 0
-                    ? `Select types, ${selectedTypeCount} selected`
+                    ? `${selectedTypeCount} ${selectedTypeCount === 1 ? 'type' : 'types'} selected`
                     : 'Select types (optional)'
                 }
               >

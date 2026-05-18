@@ -150,15 +150,10 @@ export function QuerySetupTypesSelectEntityPopover({
       if (!isResultPickable(result)) return;
       const id = result.id;
       const name = result.name;
-      const multiSpace = (result.spaces ?? []).length > 1;
       const prev = draftRef.current;
       const exists = prev.some(p => ID.equals(p.id, id));
       if (exists) {
         setDraft(prev => prev.filter(p => !ID.equals(p.id, id)));
-        return;
-      }
-      if (multiSpace) {
-        setPendingSpacePick(result);
         return;
       }
       setDraft(prev => [...prev, { id, name, ...primarySpaceFields(result) }]);
@@ -514,12 +509,6 @@ export function QuerySetupTypesSelectEntityPopover({
                                                     </p>
                                                   </Truncate>
                                                 )}
-                                                {multiSpace ? (
-                                                  <div className="mt-1 text-[0.875rem] text-grey-04">
-                                                    {(result.spaces ?? []).length}{' '}
-                                                    {pluralize('space', (result.spaces ?? []).length)}
-                                                  </div>
-                                                ) : null}
                                               </div>
                                               {isDraftSelected ? (
                                                 <span className="shrink-0 self-start pt-0.5">
