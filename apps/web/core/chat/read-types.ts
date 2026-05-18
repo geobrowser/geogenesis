@@ -96,3 +96,15 @@ export type ResearchSource = {
 export type ResearchOutput =
   | { summary: string; sources: ResearchSource[] }
   | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
+
+export type WebFetchInput = {
+  url: string;
+};
+
+// Same shape as ResearchOutput so the UI source-pill row picks it up via the
+// same selector. `not_accessible` (page reachable but unextractable) is
+// separate from `lookup_failed` (generic) so the model can surface the right
+// reason to the user.
+export type WebFetchOutput =
+  | { summary: string; sources: ResearchSource[] }
+  | { error: 'not_signed_in' | 'rate_limited' | 'invalid_url' | 'not_accessible' | 'lookup_failed' };

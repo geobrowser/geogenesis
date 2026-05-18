@@ -17,29 +17,24 @@ import {
 import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
-import {
-  ENTITY_ID_REGEX,
-  HISTORY_FULL_MESSAGE,
-  MAX_HISTORY_CHARS,
-  MAX_LAST_MESSAGE_CHARS,
-  MAX_MESSAGES,
-  MAX_PATH_CHARS,
-  MESSAGE_TOO_LONG_MESSAGE,
-} from '~/core/chat/limits';
+import { ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import {
   CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
-  GUEST_SYSTEM_PROMPT,
-  MEMBER_SYSTEM_PROMPT,
+  DEFAULT_GUEST_SYSTEM_PROMPT,
+  DEFAULT_MEMBER_SYSTEM_PROMPT,
+  INGESTION_SYSTEM_PROMPT,
   OPENER_SYSTEM_PROMPT,
   type PreloadedEntityForPrompt,
   renderCurrentContextSection,
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
+import { type CostStage, formatTurnCost } from './cost';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
+import { sanitizeModelMessages } from './sanitize-model-messages';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -49,7 +44,26 @@ const anthropic = createAnthropic({
 });
 
 const MAX_OUTPUT_TOKENS = 8_000;
-const MAX_TOOL_STEPS = 10;
+// High because rate limits + context window are the real ceiling; this just
+// stops a runaway loop.
+const MAX_TOOL_STEPS = 100;
+
+// Best-effort, dev-only aggregation of per-stage cost across a resubmit chain.
+// Module-local, so in serverless deploys chain requests can land on different
+// instances and log separately. Not for correctness — debug logging only.
+const chainCosts = new Map<string, CostStage[]>();
+const MAX_TRACKED_CHAINS = 50;
+
+// `req.signal` aborts surface as ResponseAborted / AbortError through every
+// streamText.onError — that's the user pressing stop, not a real failure.
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const { name, code } = err as { name?: unknown; code?: unknown };
+  if (name === 'AbortError' || name === 'ResponseAborted') return true;
+  // Some runtimes surface aborts as DOMException with code 20.
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException && code === 20) return true;
+  return false;
+}
 
 const UUID_OR_DASHLESS = ENTITY_ID_REGEX;
 
@@ -119,6 +133,14 @@ function validateClientContext(input: unknown): ChatClientContext | null {
     currentPath: typeof currentPath === 'string' ? currentPath : null,
     isEditMode: typeof isEditMode === 'boolean' ? isEditMode : false,
   };
+}
+
+export type ChatMode = 'default' | 'ingestion';
+
+function validateChatMode(input: unknown): ChatMode | null {
+  if (input === undefined || input === null) return 'default';
+  if (input === 'default' || input === 'ingestion') return input;
+  return null;
 }
 
 function getClientIp(req: Request): string {
@@ -206,7 +228,7 @@ const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
 // Text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
 // Client-executed read tools; the server registers them schema-only.
-const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research']);
+const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research', 'webFetch']);
 
 // Edit/client tools resolve via resubmit, so the assistant turn that triggers
 // 'edit' framing isn't always the one that emitted the call. Walk every
@@ -268,15 +290,6 @@ function classifyTurn(allMessages: ModelMessage[]): 'skip' | 'edit' | 'default' 
   return 'default';
 }
 
-function lastUserMessageLength(uiMessages: UIMessage[]): number {
-  for (let i = uiMessages.length - 1; i >= 0; i--) {
-    if (uiMessages[i]?.role === 'user') {
-      return JSON.stringify(uiMessages[i]).length;
-    }
-  }
-  return 0;
-}
-
 // Reject any role other than user/assistant so a caller can't smuggle in a
 // second `system` turn after the real prompt.
 function validateUIMessages(input: unknown): UIMessage[] | null {
@@ -315,15 +328,14 @@ export async function POST(req: Request) {
       return rateLimitResponse(failedLimiterReset([identity, ipCeiling]));
     }
   } catch (err) {
-    console.error('[chat] rate limiter unavailable', err);
-    if (process.env.NODE_ENV === 'production') {
-      return jsonError(503, 'Service temporarily unavailable. Please try again in a moment.');
-    }
+    console.error('[chat] rate limiter unavailable; failing closed', err);
+    return jsonError(503, 'Service temporarily unavailable. Please try again in a moment.');
   }
 
   let uiMessages: UIMessage[];
   let clientContext: ChatClientContext | null = null;
   let preloadedEntity: PreloadedEntityForPrompt | null = null;
+  let chatMode: ChatMode = 'default';
   try {
     const body = await req.json();
     const validated = validateUIMessages(body?.messages);
@@ -347,76 +359,23 @@ export async function POST(req: Request) {
         clientContext?.currentSpaceId ?? null
       );
     }
+
+    if (body?.mode !== undefined) {
+      const parsedMode = validateChatMode(body.mode);
+      if (parsedMode === null) {
+        return jsonError(400, 'Invalid request body');
+      }
+      chatMode = parsedMode;
+    }
   } catch {
     return jsonError(400, 'Invalid request body');
   }
 
-  if (uiMessages.length > MAX_MESSAGES) {
-    return jsonError(413, HISTORY_FULL_MESSAGE);
-  }
-
-  if (lastUserMessageLength(uiMessages) > MAX_LAST_MESSAGE_CHARS) {
-    return jsonError(413, MESSAGE_TOO_LONG_MESSAGE);
-  }
-
-  if (JSON.stringify(uiMessages).length > MAX_HISTORY_CHARS) {
-    return jsonError(413, HISTORY_FULL_MESSAGE);
-  }
-
   const rawConverted = await convertToModelMessages(uiMessages);
-
-  // Dedup tool-call / tool-result blocks: Anthropic 400s on repeated
-  // `tool_use_id`s, and the SDK's multi-step + resubmit accumulation can
-  // replay an earlier step's call in every later slice. Keep the first
-  // occurrence; track kept calls so we can drop orphan results whose
-  // matching call we deduped away. Calls and results need separate `seen`
-  // sets because they share ids across different block kinds.
-  const keptToolCalls = new Set<string>();
-  const seenToolResults = new Set<string>();
-  const droppedToolCallIds: string[] = [];
-  const converted: ModelMessage[] = [];
-  for (const m of rawConverted) {
-    if (!Array.isArray(m.content)) {
-      converted.push(m);
-      continue;
-    }
-    const filtered = m.content.filter(part => {
-      if (part.type === 'tool-call') {
-        const id = (part as { toolCallId?: unknown }).toolCallId;
-        if (typeof id !== 'string') return true;
-        if (keptToolCalls.has(id)) {
-          droppedToolCallIds.push(`tool-call#${id}`);
-          return false;
-        }
-        keptToolCalls.add(id);
-        return true;
-      }
-      if (part.type === 'tool-result') {
-        const id = (part as { toolCallId?: unknown }).toolCallId;
-        if (typeof id !== 'string') return true;
-        if (!keptToolCalls.has(id)) {
-          droppedToolCallIds.push(`tool-result#${id}-orphan`);
-          return false;
-        }
-        if (seenToolResults.has(id)) {
-          droppedToolCallIds.push(`tool-result#${id}-dup`);
-          return false;
-        }
-        seenToolResults.add(id);
-        return true;
-      }
-      return true;
-    });
-    if (filtered.length === 0) continue;
-    if (filtered.length === m.content.length) {
-      converted.push(m);
-    } else {
-      converted.push({ ...m, content: filtered } as ModelMessage);
-    }
-  }
+  const { messages: converted, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
   if (droppedToolCallIds.length > 0) {
     console.warn(
-      `[chat:srv] dropped ${droppedToolCallIds.length} duplicate tool-call/result blocks from converted history`,
+      `[chat:srv] dropped ${droppedToolCallIds.length} tool-call/result blocks from converted history`,
       droppedToolCallIds.slice(0, 12)
     );
   }
@@ -425,7 +384,12 @@ export async function POST(req: Request) {
 
   const serverPersonalSpaceId = writeContext.kind === 'member' ? await writeContext.personalSpaceId() : null;
 
-  const basePrompt = isLoggedIn ? MEMBER_SYSTEM_PROMPT : GUEST_SYSTEM_PROMPT;
+  const basePrompt =
+    chatMode === 'ingestion' && isLoggedIn
+      ? INGESTION_SYSTEM_PROMPT
+      : isLoggedIn
+        ? DEFAULT_MEMBER_SYSTEM_PROMPT
+        : DEFAULT_GUEST_SYSTEM_PROMPT;
   const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId);
   const preloadSection = renderPreloadedEntitySection(preloadedEntity);
   const systemContent = [basePrompt, contextSection, preloadSection].filter(Boolean).join('\n');
@@ -473,9 +437,12 @@ export async function POST(req: Request) {
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
   const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
 
+  // `debug` → one tight line per stage/step (default in dev).
+  // `verbose` → also dump per-chunk and full message/state objects.
   const debug = process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1';
+  const verbose = process.env.CHAT_VERBOSE === '1';
   const debugLog = (event: string, data?: unknown) => {
-    if (!debug) return;
+    if (!verbose) return;
     if (data === undefined) {
       console.log(`[chat:srv] ${event}`);
     } else {
@@ -486,19 +453,12 @@ export async function POST(req: Request) {
       }
     }
   };
-  debugLog('begin', {
-    isLoggedIn,
-    messageCount: uiMessages.length,
-    toolKeys: [
-      ...Object.keys(readTools),
-      ...Object.keys(navTools),
-      ...Object.keys(memberWriteTools),
-      ...Object.keys(memberResearchTools),
-    ],
-    maxOutputTokens: MAX_OUTPUT_TOKENS,
-    maxToolSteps: MAX_TOOL_STEPS,
-  });
   if (debug) {
+    console.log(
+      `[chat] turn begin (${isLoggedIn ? 'member' : 'guest'}, ${uiMessages.length} msg${uiMessages.length === 1 ? '' : 's'}${chatMode === 'ingestion' ? ', ingestion' : ''})`
+    );
+  }
+  if (verbose) {
     const summary = converted.map((m, idx) => {
       let blocks: unknown;
       if (typeof m.content === 'string') {
@@ -544,6 +504,36 @@ export async function POST(req: Request) {
     // one per resubmit (which duplicates the opener text).
     originalMessages: uiMessages,
     execute: async ({ writer }) => {
+      const chainKey = wallet ?? ip;
+      if (isFirstRequestOfTurn) {
+        chainCosts.set(chainKey, []);
+        if (chainCosts.size > MAX_TRACKED_CHAINS) {
+          const oldest = chainCosts.keys().next().value;
+          if (oldest !== undefined) chainCosts.delete(oldest);
+        }
+      } else if (!chainCosts.has(chainKey)) {
+        chainCosts.set(chainKey, []);
+      }
+      const chainStages = chainCosts.get(chainKey)!;
+      req.signal.addEventListener('abort', () => chainCosts.delete(chainKey), { once: true });
+
+      const recordCost = async (
+        stage: string,
+        model: string,
+        result: { totalUsage: PromiseLike<CostStage['usage']> }
+      ) => {
+        if (!debug) return;
+        try {
+          chainStages.push({ stage, model, usage: await result.totalUsage });
+        } catch (err) {
+          debugLog(`cost-usage-failed:${stage}`, String(err));
+        }
+      };
+      const logChainCost = () => {
+        if (debug && chainStages.length > 0) console.log(formatTurnCost(chainStages));
+        chainCosts.delete(chainKey);
+      };
+
       // Stage A: opener (Haiku). One-sentence ack; skipped on continuation.
       if (isFirstRequestOfTurn) {
         const openerResult = streamText({
@@ -551,8 +541,9 @@ export async function POST(req: Request) {
           system: OPENER_SYSTEM_PROMPT,
           messages: converted,
           maxOutputTokens: 80,
+          abortSignal: req.signal,
           onError: err => {
-            console.error('[chat:srv] opener stream error', err);
+            if (!isAbortError(err)) console.error('[chat:srv] opener stream error', err);
           },
         });
         writer.merge(
@@ -564,6 +555,7 @@ export async function POST(req: Request) {
         // Drain before starting the executor so the executor's tool parts
         // don't interleave with the opener's text-end chunk.
         await openerResult.response;
+        await recordCost('opener', OPENER_MODEL, openerResult);
       }
 
       // Stage B: executor (Sonnet).
@@ -571,6 +563,7 @@ export async function POST(req: Request) {
         model: anthropic(MAIN_MODEL),
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
+        abortSignal: req.signal,
         tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
         toolChoice: 'auto',
         // Serial tool use matches the prompt's "searchGraph first, then
@@ -580,7 +573,7 @@ export async function POST(req: Request) {
         },
         stopWhen: stepCountIs(MAX_TOOL_STEPS),
         experimental_transform: suppressAllText(),
-        onChunk: debug
+        onChunk: verbose
           ? ({ chunk }) => {
               const summary: Record<string, unknown> = { type: chunk.type };
               if ('toolName' in chunk) summary.toolName = chunk.toolName;
@@ -592,25 +585,17 @@ export async function POST(req: Request) {
           : undefined,
         onStepFinish: debug
           ? step => {
-              debugLog('step-finish', {
-                finishReason: step.finishReason,
-                toolCalls: step.toolCalls?.map(tc => ({
-                  toolName: tc.toolName,
-                  toolCallId: tc.toolCallId,
-                  providerExecuted: tc.providerExecuted,
-                  dynamic: tc.dynamic,
-                })),
-                toolResults: step.toolResults?.map(tr => ({
-                  toolName: tr.toolName,
-                  toolCallId: tr.toolCallId,
-                  providerExecuted: tr.providerExecuted,
-                })),
-                hasText: (step.text?.length ?? 0) > 0,
-              });
+              const tools =
+                step.toolCalls
+                  ?.map(tc => tc.toolName)
+                  .filter(Boolean)
+                  .join(', ') ?? '';
+              const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
+              console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
             }
           : undefined,
         onError: err => {
-          console.error('[chat:srv] executor stream error', err);
+          if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
         },
       });
       writer.merge(
@@ -623,19 +608,32 @@ export async function POST(req: Request) {
       );
 
       const execMessages = (await execResult.response).messages;
+      await recordCost('executor', MAIN_MODEL, execResult);
 
       const turnKind = classifyTurn([...messages, ...execMessages]);
-      debugLog('executor-finished', {
-        turnKind,
-        execMessages: execMessages.map(m => ({
-          role: m.role,
-          contentTypes: Array.isArray(m.content)
-            ? m.content.map(c => (typeof c === 'string' ? 'string' : c.type))
-            : typeof m.content,
-        })),
-      });
+      if (debug) {
+        console.log(
+          `[chat] executor done (turnKind=${turnKind}, ${execMessages.length} msg${execMessages.length === 1 ? '' : 's'})`
+        );
+      }
+      if (verbose) {
+        debugLog('executor-finished', {
+          turnKind,
+          execMessages: execMessages.map(m => ({
+            role: m.role,
+            contentTypes: Array.isArray(m.content)
+              ? m.content.map(c => (typeof c === 'string' ? 'string' : c.type))
+              : typeof m.content,
+          })),
+        });
+      }
 
-      if (turnKind === 'skip' || turnKind === 'client-pending') {
+      if (turnKind === 'client-pending') {
+        // More requests coming in this chain — don't log yet.
+        return;
+      }
+      if (turnKind === 'skip') {
+        logChainCost();
         return;
       }
 
@@ -646,8 +644,9 @@ export async function POST(req: Request) {
         system: CLOSER_SYSTEM_PROMPT,
         messages: [...converted, ...execMessages],
         maxOutputTokens: 400,
+        abortSignal: req.signal,
         onError: err => {
-          console.error('[chat:srv] closer stream error', err);
+          if (!isAbortError(err)) console.error('[chat:srv] closer stream error', err);
         },
       });
       writer.merge(
@@ -659,6 +658,7 @@ export async function POST(req: Request) {
       );
 
       const closerMessages = (await closerResult.response).messages;
+      await recordCost('closer', CLOSER_MODEL, closerResult);
 
       // Stage D: follow-ups (Haiku, forced tool).
       const followUpInstruction =
@@ -680,10 +680,14 @@ export async function POST(req: Request) {
         tools: followUpTools,
         toolChoice: { type: 'tool', toolName: 'suggestFollowUps' },
         maxOutputTokens: 100,
+        abortSignal: req.signal,
       });
       writer.merge(followUpResult.toUIMessageStream({ sendReasoning: false, sendStart: false }));
+      await recordCost('follow-ups', FOLLOW_UPS_MODEL, followUpResult);
+      logChainCost();
     },
     onError: err => {
+      if (isAbortError(err)) return 'cancelled';
       console.error('[chat] stream error', err);
       // Coarse classification so the client can show a sharper message.
       const message = err instanceof Error ? err.message : '';
