@@ -1,7 +1,8 @@
 'use client';
 
+import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
-import type { RecentlyClaimedSpace, RootTopicChip } from '~/core/io/subgraph/fetch-root-topics';
+import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 

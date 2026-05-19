@@ -1,6 +1,6 @@
 'use client';
 
-import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-root-topics';
+import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';

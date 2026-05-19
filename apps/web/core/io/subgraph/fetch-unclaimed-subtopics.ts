@@ -9,7 +9,7 @@ import {
 } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
-import type { RootTopicChip } from './fetch-root-topics';
+import type { RootTopicChip } from './fetch-first-level-subtopics';
 import { graphql } from './graphql';
 import {
   AVATAR_PROPERTY_ID,

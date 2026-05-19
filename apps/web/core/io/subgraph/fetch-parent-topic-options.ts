@@ -17,9 +17,9 @@ import {
   type SpaceImageRelationNode,
   resolveSpaceImage,
 } from './space-image';
+import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 
 const PARENT_TOPIC_OPTIONS_PAGE_SIZE = 100;
-const PLACEHOLDER_PARENT_TOPIC_NAME = 'Untitled topic';
 
 export interface ParentTopicOption {
   id: string;
@@ -103,7 +103,7 @@ export async function fetchParentTopicOptions(): Promise<ParentTopicOption[]> {
     .filter(node => (node.subtopicProbe?.nodes ?? []).length > 0)
     .map<ParentTopicOption>(node => ({
       id: node.id,
-      name: node.name?.trim() ? node.name : PLACEHOLDER_PARENT_TOPIC_NAME,
+      name: node.name?.trim() ? node.name : PLACEHOLDER_TOPIC_NAME,
       image: resolveSpaceImage(node.relationsList ?? []),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));

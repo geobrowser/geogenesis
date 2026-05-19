@@ -4,9 +4,13 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
-import { type RootTopicsData, fetchRootTopics } from '~/core/io/subgraph/fetch-root-topics';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
+import {
+  type RecentlyClaimedSpace,
+  fetchRecentlyClaimedSpaces,
+} from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
@@ -26,23 +30,27 @@ export default async function ExploreRoutePage() {
     memberSpaceId = null;
   }
 
-  // Kick off every fetch that depends only on `memberSpaceId` in parallel.
-  // Each branch handles its own failure so one degraded indexer call doesn't
-  // drop the whole page.
+  // Fire every fetch in parallel. Each branch handles its own failure so one
+  // degraded indexer call doesn't drop the whole page.
+  //
+  // - recentlyClaimedPromise: spaces that recently claimed a curated topic.
+  // - firstLevelSubtopicsPromise: powers "Any topic" — a parent → subtopic
+  //   traversal that's not bounded by the global curated-topics page size.
+  // - parentTopicOptionsPromise: dropdown options.
   const browsePromise = fetchBrowseSidebarData(memberSpaceId).catch(() =>
     fetchBrowseSidebarData(null).catch(() => null)
   );
-  const rootTopicsPromise = fetchRootTopics().catch(
-    () => ({ unclaimed: [], recentlyClaimed: [] }) as RootTopicsData
-  );
+  const recentlyClaimedPromise = fetchRecentlyClaimedSpaces().catch(() => [] as RecentlyClaimedSpace[]);
+  const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
   const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
 
-  const [browseRaw, rootTopics, parentTopicOptions, governance] = await Promise.all([
+  const [browseRaw, recentlyClaimedSpaces, firstLevelSubtopics, parentTopicOptions, governance] = await Promise.all([
     browsePromise,
-    rootTopicsPromise,
+    recentlyClaimedPromise,
+    firstLevelSubtopicsPromise,
     parentTopicOptionsPromise,
     governancePromise,
   ]);
@@ -65,9 +73,9 @@ export default async function ExploreRoutePage() {
   // have an active ADD_MEMBER proposal so the Join button can render "Membership
   // pending" without a client roundtrip.
   let pendingMembershipSpaceIds: string[] = [];
-  if (memberSpaceId && rootTopics.recentlyClaimed.length > 0) {
+  if (memberSpaceId && recentlyClaimedSpaces.length > 0) {
     const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
-    const candidates = rootTopics.recentlyClaimed.filter(s => !memberOrEditorSet.has(normId(s.spaceId)));
+    const candidates = recentlyClaimedSpaces.filter(s => !memberOrEditorSet.has(normId(s.spaceId)));
     const checks = await Promise.all(
       candidates.map(async s => {
         try {
@@ -93,8 +101,8 @@ export default async function ExploreRoutePage() {
   return (
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
-      unclaimedTopics={rootTopics.unclaimed}
-      recentlyClaimedSpaces={rootTopics.recentlyClaimed}
+      unclaimedTopics={firstLevelSubtopics}
+      recentlyClaimedSpaces={recentlyClaimedSpaces}
       parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}

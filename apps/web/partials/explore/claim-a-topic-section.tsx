@@ -4,8 +4,8 @@ import * as React from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 
+import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
-import type { RootTopicChip } from '~/core/io/subgraph/fetch-root-topics';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dropdown } from '~/design-system/dropdown';

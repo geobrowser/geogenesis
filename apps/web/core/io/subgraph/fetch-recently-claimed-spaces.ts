@@ -1,12 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect, Either } from 'effect';
 
-import {
-  CURATED_TOPIC_TAG_ID,
-  SUBTOPIC_RELATION_TYPE_ID,
-  TAG_PROPERTY_ID,
-  TOPIC_TYPE_ID,
-} from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
@@ -25,17 +20,10 @@ import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 // Both filters are required — Topic type alone surfaces ~40k arbitrary
 // knowledge nodes; the curated tag scopes to the editorially-approved set.
 
-// Cap how many curated topics we fetch per request. Testnet has ~1,860 curated
-// topics — 200 is plenty for the panel and keeps the response small.
-const ROOT_TOPICS_PAGE_SIZE = 200;
-
-export interface RootTopicChip {
-  id: string;
-  name: string;
-  image: string;
-  /** Spaces this topic entity lives in — drives client-side chip filtering. */
-  spaceIds: string[];
-}
+// Cap how many curated topics we scan for claim rows per request. Testnet has
+// ~1,860 curated topics — 200 is plenty for the panel and keeps the response
+// small.
+const PAGE_SIZE = 200;
 
 export interface RecentlyClaimedSpace {
   spaceId: string;
@@ -43,11 +31,6 @@ export interface RecentlyClaimedSpace {
   name: string;
   image: string;
   memberCount: number;
-}
-
-export interface RootTopicsData {
-  unclaimed: RootTopicChip[];
-  recentlyClaimed: RecentlyClaimedSpace[];
 }
 
 interface SpaceNode {
@@ -60,25 +43,15 @@ interface SpaceNode {
   members: { totalCount: number } | null;
 }
 
-interface TopicSpaceInNode {
-  id: string;
-}
-
 interface TopicEntityNode {
   id: string;
   name: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-  relationsList: SpaceImageRelationNode[];
   spacesByTopicIdConnection: {
     totalCount: number;
     nodes: SpaceNode[];
   };
-  spacesInConnection: {
-    nodes: TopicSpaceInNode[];
-  };
-  /** Presence check: at least one incoming SUBTOPIC relation = this is a subtopic of some parent. */
-  subtopicParentProbe: Array<{ typeId: string }>;
 }
 
 interface NetworkResult {
@@ -87,9 +60,6 @@ interface NetworkResult {
   };
 }
 
-// Returns the curated Topic entities themselves. Each entity carries:
-//   - `spacesByTopicIdConnection` → spaces that have claimed it (for "Recently claimed").
-//   - `spacesInConnection` → spaces the entity lives in (for client-side chip filtering).
 const QUERY = `
   {
     entitiesConnection(
@@ -100,22 +70,13 @@ const QUERY = `
         ]
       },
       orderBy: [CREATED_AT_DESC],
-      first: ${ROOT_TOPICS_PAGE_SIZE}
+      first: ${PAGE_SIZE}
     ) {
       nodes {
         id
         name
         createdAt
         updatedAt
-        relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-          typeId
-          toEntity {
-            valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-              propertyId
-              text
-            }
-          }
-        }
         spacesByTopicIdConnection(first: 1) {
           totalCount
           nodes {
@@ -138,12 +99,6 @@ const QUERY = `
             }
           }
         }
-        spacesInConnection {
-          nodes { id }
-        }
-        subtopicParentProbe: backlinksList(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }, first: 1) {
-          typeId
-        }
       }
     }
   }
@@ -160,7 +115,11 @@ function resolveTopicName(name: string | null | undefined): string {
   return name;
 }
 
-export async function fetchRootTopics(): Promise<RootTopicsData> {
+/**
+ * Returns the spaces that have recently claimed a curated topic, sorted by
+ * the topic entity's `updatedAt` (claiming a topic bumps it).
+ */
+export async function fetchRecentlyClaimedSpaces(): Promise<RecentlyClaimedSpace[]> {
   const queryEffect = graphql<NetworkResult>({
     query: QUERY,
     endpoint: Environment.getConfig().api,
@@ -171,54 +130,30 @@ export async function fetchRootTopics(): Promise<RootTopicsData> {
   if (Either.isLeft(resultOrError)) {
     const error = resultOrError.left;
     if (error._tag === 'AbortError') throw error;
-    console.error(`${error._tag}: Unable to fetch root topics`);
-    return { unclaimed: [], recentlyClaimed: [] };
+    console.error(`${error._tag}: Unable to fetch recently claimed spaces`);
+    return [];
   }
 
   const nodes = resultOrError.right?.entitiesConnection?.nodes ?? [];
 
-  type UnclaimedRow = { chip: RootTopicChip; sortSec: number };
-  type ClaimedRow = { space: RecentlyClaimedSpace; sortSec: number };
-
-  const unclaimedById = new Map<string, UnclaimedRow>();
-  const claimedBySpaceId = new Map<string, ClaimedRow>();
+  type Row = { space: RecentlyClaimedSpace; sortSec: number };
+  const rowsBySpaceId = new Map<string, Row>();
 
   for (const entity of nodes) {
     const spaceCount = entity.spacesByTopicIdConnection?.totalCount ?? 0;
+    if (spaceCount === 0) continue;
+
     const name = resolveTopicName(entity.name);
-    const image = resolveSpaceImage(entity.relationsList ?? []);
-
-    if (spaceCount === 0) {
-      // "Any topic" surfaces the union of immediate subtopics across all
-      // parent topics, restricted to unclaimed entries. Skip curated topics
-      // that are themselves top-level (no incoming SUBTOPIC backlinks) — those
-      // belong in the parent-topic dropdown, not the chip list.
-      const isSubtopic = (entity.subtopicParentProbe?.length ?? 0) > 0;
-      if (!isSubtopic) continue;
-
-      const spaceIds = (entity.spacesInConnection?.nodes ?? []).map(s => s.id);
-      // Skip topics with no containing space — we'd have nowhere to link the
-      // chip to, and pointing at ROOT_SPACE would trigger SpaceRedirect's
-      // history-replacing client redirect.
-      if (spaceIds.length === 0) continue;
-      unclaimedById.set(entity.id, {
-        chip: { id: entity.id, name, image, spaceIds },
-        sortSec: toUnixSec(entity.createdAt),
-      });
-      continue;
-    }
-
-    // Spaces exist for this topic — surface each as a "recently claimed" row.
     // Sort key is the topic entity's updatedAt: when a space claims a topic it
     // adds new relations to the entity, which bumps updatedAt. Falls back to
     // createdAt for topics with no recorded update.
     const sortSec = toUnixSec(entity.updatedAt) || toUnixSec(entity.createdAt);
 
     for (const space of entity.spacesByTopicIdConnection.nodes ?? []) {
-      if (claimedBySpaceId.has(space.id)) continue;
+      if (rowsBySpaceId.has(space.id)) continue;
       const spaceName = space.page?.name?.trim() ? space.page.name : name;
       const spaceImage = resolveSpaceImage(space.page?.relationsList ?? [], space.id);
-      claimedBySpaceId.set(space.id, {
+      rowsBySpaceId.set(space.id, {
         space: {
           spaceId: space.id,
           topicId: entity.id,
@@ -231,13 +166,7 @@ export async function fetchRootTopics(): Promise<RootTopicsData> {
     }
   }
 
-  const unclaimed = Array.from(unclaimedById.values())
-    .sort((a, b) => b.sortSec - a.sortSec)
-    .map(row => row.chip);
-
-  const recentlyClaimed = Array.from(claimedBySpaceId.values())
+  return Array.from(rowsBySpaceId.values())
     .sort((a, b) => b.sortSec - a.sortSec)
     .map(row => row.space);
-
-  return { unclaimed, recentlyClaimed };
 }
