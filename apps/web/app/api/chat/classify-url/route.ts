@@ -5,11 +5,14 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateObject, jsonSchema } from 'ai';
+import { cookies } from 'next/headers';
 
 import type { ClassifyUrlResponse, InjectType } from '~/core/chat/inject-types';
+import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
+import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
@@ -99,11 +102,30 @@ function isSameOrigin(req: Request): boolean {
   }
 }
 
-function jsonError(status: number, message: string) {
+function parseWalletCookie(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
+}
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  const real = req.headers.get('x-real-ip');
+  if (real) return real;
+  return `noip:${crypto.randomUUID()}`;
+}
+
+function jsonError(status: number, message: string, extraHeaders?: Record<string, string>) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
+}
+
+function rateLimitResponse(reset: number) {
+  const retryAfter = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+  return jsonError(429, 'Rate limit exceeded.', { 'Retry-After': retryAfter.toString() });
 }
 
 function jsonOk(body: ClassifyUrlResponse) {
@@ -144,6 +166,12 @@ export async function POST(req: Request) {
     return jsonError(403, 'Forbidden');
   }
 
+  const cookieStore = await cookies();
+  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  if (!wallet) {
+    return jsonError(401, 'Sign in to import URLs.');
+  }
+
   let rawUrl: string;
   try {
     const body = await req.json();
@@ -167,6 +195,20 @@ export async function POST(req: Request) {
   const direct = deterministicMatch(parsed);
   if (direct !== null) {
     return jsonOk({ route: 'inject', type: direct });
+  }
+
+  // Only the LLM fallback below incurs model cost, so gate it (not the free
+  // deterministic path above) behind the rate limiter.
+  const ip = getClientIp(req);
+  try {
+    const [identity, ipCeiling] = await Promise.all([loggedInLimit.limit(wallet), ipCeilingLimit.limit(ip)]);
+    if (!identity.success || !ipCeiling.success) {
+      const reset = Math.max(identity.success ? 0 : identity.reset, ipCeiling.success ? 0 : ipCeiling.reset);
+      return rateLimitResponse(reset);
+    }
+  } catch (err) {
+    console.error('[chat/classify-url] rate limiter unavailable; failing closed', err);
+    return jsonError(503, 'Service temporarily unavailable.');
   }
 
   try {

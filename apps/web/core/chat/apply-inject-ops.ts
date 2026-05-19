@@ -6,7 +6,7 @@ import { ID } from '~/core/id';
 import { storage } from '~/core/sync/use-mutate';
 import type { DataType, Relation, RenderableEntityType, Value, ValueOptions } from '~/core/types';
 
-import type { SerializedOp, SerializedValue } from './inject-types';
+import type { SerializedOp, SerializedPropertyValue, SerializedValue } from './inject-types';
 
 type ConvertedScalar = {
   stringValue: string;
@@ -95,9 +95,7 @@ function convertSerializedValue(v: SerializedValue): ConvertedScalar | null {
   }
 }
 
-function findEntityName(
-  values: SerializedOp extends { type: 'createEntity'; values: infer V } ? V : never
-): string | null {
+function findEntityName(values: SerializedPropertyValue[]): string | null {
   for (const pv of values) {
     if (pv.property === SystemIds.NAME_PROPERTY && pv.value.type === 'text') {
       return pv.value.value;

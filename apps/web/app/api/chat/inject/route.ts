@@ -10,6 +10,7 @@ import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const INJECT_SPACE = 'world-affairs' as const;
 const VALID_TYPES: ReadonlySet<InjectType> = new Set(['news-story-single', 'post', 'tweet']);
+const INJECT_FETCH_TIMEOUT_MS = 15_000;
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
@@ -57,15 +58,21 @@ function injectBase(): string | null {
 async function postToInject(path: string, body: unknown, apiKey: string) {
   const base = injectBase();
   if (!base) throw new Error('INJECT_BASE not configured');
-  const res = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  return res;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), INJECT_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function POST(req: Request) {
@@ -127,6 +134,9 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     console.error('[chat/inject] proxy fetch failed', err);
+    if (err instanceof Error && err.name === 'AbortError') {
+      return jsonError(504, 'Inject service timed out.');
+    }
     return jsonError(502, 'Inject service unreachable.');
   }
 

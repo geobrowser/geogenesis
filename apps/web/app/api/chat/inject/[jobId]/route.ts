@@ -18,6 +18,8 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ipCeilingLimit, loggedInLimit } from '../../rate-limit';
 
+const INJECT_FETCH_TIMEOUT_MS = 15_000;
+
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
   const host = req.headers.get('host');
@@ -71,10 +73,17 @@ function injectBase(): string | null {
 async function getFromInject(path: string, apiKey: string) {
   const base = injectBase();
   if (!base) throw new Error('INJECT_BASE not configured');
-  return fetch(`${base}${path}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), INJECT_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(`${base}${path}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Lowercase 32-char hex string with no dashes. Matches geogenesis' canonical
@@ -306,6 +315,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ jobId: string }
     }
   } catch (err) {
     console.error('[chat/inject/poll] proxy fetch failed', err);
+    if (err instanceof Error && err.name === 'AbortError') {
+      return jsonError(504, 'Inject service timed out.');
+    }
     return jsonError(502, 'Inject service unreachable.');
   }
 
