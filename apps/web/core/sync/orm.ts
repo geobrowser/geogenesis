@@ -112,9 +112,18 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
   const deletedRelationIds = new Set(locallyDeleted.map(r => r.id));
   const deletedRelationKeys = new Set(locallyDeleted.map(relationKey));
 
+  const localViewFromEntityIds = new Set(
+    localRelations
+      .filter(r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted)
+      .map(r => r.fromEntity.id)
+  );
+
   const remoteRelationsThatWerentDeleted = remoteRelations.filter(r => {
     if (deletedRelationIds.has(r.id)) return false;
     if (deletedRelationKeys.has(relationKey(r))) return false;
+    if (r.type.id === SystemIds.VIEW_PROPERTY && localViewFromEntityIds.has(r.fromEntity.id)) {
+      return false;
+    }
     return true;
   });
 

@@ -30,19 +30,24 @@ export function useView() {
   });
 
   const { blockRelations, initialBlockEntities } = useEditorStoreLite();
-  const newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
+  const blocksRelationEntityId =
+    relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
 
-  const initialBlockRelation = initialBlockEntities.find(b => b.id === newRelationId) ?? null;
+  const initialBlockRelation = initialBlockEntities.find(b => b.id === blocksRelationEntityId) ?? null;
 
   const { entity: blockRelation } = useQueryEntity({
-    spaceId: spaceId,
-    id: newRelationId,
+    spaceId,
+    id: blocksRelationEntityId,
+    enabled: Boolean(blocksRelationEntityId),
   });
 
   const blockRelationRelations = blockRelation?.relations ?? initialBlockRelation?.relations ?? [];
   const blockRelationName = blockRelation?.name ?? initialBlockRelation?.name ?? null;
 
-  const viewRelation = blockRelationRelations.find(r => r.type.id === SystemIds.VIEW_PROPERTY);
+  const viewRelation = React.useMemo(
+    () => selectViewRelation(blockRelationRelations),
+    [blockRelationRelations]
+  );
 
   const shownColumnRelations = blockRelationRelations.filter(
     // We fall back to an old property used to render shown columns.
@@ -73,46 +78,37 @@ export function useView() {
     return generated ?? undefined;
   }, [shownColumnRelations]);
 
-  const setView = async (newView: DataBlockViewDetails) => {
-    const isCurrentView = newView.value === view;
+  const setView = React.useCallback(
+    async (newView: DataBlockViewDetails) => {
+      console.log('isCurrentView123', newView, view, blocksRelationEntityId);
+      if (newView.value === view || !blocksRelationEntityId) return;
 
-    if (!isCurrentView) {
-      if (!viewRelation) {
-        const newRelation: Relation = {
-          id: IdUtils.generate(),
-          // @TODO(migration): Reuse existing entity?
-          entityId: IdUtils.generate(),
-          spaceId: spaceId,
-          position: Position.generate(),
-          renderableType: 'RELATION',
-          type: {
-            id: SystemIds.VIEW_PROPERTY,
-            name: 'View',
-          },
-          fromEntity: {
-            id: newRelationId,
-            name: blockEntity?.name ?? null,
-          },
-          toEntity: {
+      const activeViewRelations = blockRelationRelations.filter(
+        r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted
+      );
+      const primary = selectViewRelation(blockRelationRelations);
+
+      for (const rel of activeViewRelations) {
+        if (rel.id !== primary?.id) {
+          storage.relations.delete(rel);
+        }
+      }
+
+      if (primary) {
+        storage.relations.update(primary, draft => {
+          draft.toEntity = {
             id: newView.id,
             name: newView.name,
             value: newView.id,
-          },
-        };
-
-        storage.relations.set(newRelation);
+          };
+        });
         return;
       }
 
-      // Delete the existing view relation and create a new one rather than
-      // updating in place. GRC-20 createRelation ops don't overwrite existing
-      // relations with the same id, so reusing the id would be a no-op on the server.
-      storage.relations.delete(viewRelation);
-
-      const newRelation: Relation = {
+      storage.relations.set({
         id: IdUtils.generate(),
         entityId: IdUtils.generate(),
-        spaceId: spaceId,
+        spaceId,
         position: Position.generate(),
         renderableType: 'RELATION',
         type: {
@@ -120,19 +116,18 @@ export function useView() {
           name: 'View',
         },
         fromEntity: {
-          id: newRelationId,
-          name: blockEntity?.name ?? null,
+          id: blocksRelationEntityId,
+          name: null,
         },
         toEntity: {
           id: newView.id,
           name: newView.name,
           value: newView.id,
         },
-      };
-
-      storage.relations.set(newRelation);
-    }
-  };
+      });
+    },
+    [blockRelationRelations, blocksRelationEntityId, spaceId, storage, view]
+  );
 
   const toggleProperty = (newColumn: Column, selector?: string) => {
     const isShown = shownColumnRelations.map(relation => relation.toEntity.id).includes(EntityId(newColumn.id));
@@ -235,7 +230,7 @@ export function useView() {
           name: 'Properties',
         },
         fromEntity: {
-          id: newRelationId,
+          id: blocksRelationEntityId,
           name: blockRelationName,
         },
         toEntity: {
@@ -295,30 +290,30 @@ export function useView() {
 
 export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST';
 
+function selectViewRelation(relations: Relation[]): Relation | undefined {
+  const views = relations.filter(r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted);
+  if (views.length === 0) return undefined;
+
+  const pool = views.some(r => r.isLocal) ? views.filter(r => r.isLocal) : views;
+
+  return pool.reduce<Relation | undefined>((best, relation) => {
+    if (!best) return relation;
+    const bestTs = best.timestamp ?? '';
+    const nextTs = relation.timestamp ?? '';
+    return nextTs >= bestTs ? relation : best;
+  }, undefined);
+}
+
 const getView = (viewRelation: Relation | undefined): DataBlockView => {
-  let view: DataBlockView = 'TABLE';
+  if (!viewRelation) return 'TABLE';
 
-  if (viewRelation) {
-    switch (viewRelation?.toEntity.id.toString()) {
-      case SystemIds.TABLE_VIEW:
-        view = 'TABLE';
-        break;
-      case SystemIds.LIST_VIEW:
-        view = 'LIST';
-        break;
-      case SystemIds.GALLERY_VIEW:
-        view = 'GALLERY';
-        break;
-      case SystemIds.BULLETED_LIST_VIEW:
-        view = 'BULLETED_LIST';
-        break;
-      default:
-        // We default to TABLE above
-        break;
-    }
-  }
+  const targetId = viewRelation.toEntity.id;
+  if (ID.equals(targetId, SystemIds.TABLE_VIEW)) return 'TABLE';
+  if (ID.equals(targetId, SystemIds.LIST_VIEW)) return 'LIST';
+  if (ID.equals(targetId, SystemIds.GALLERY_VIEW)) return 'GALLERY';
+  if (ID.equals(targetId, SystemIds.BULLETED_LIST_VIEW)) return 'BULLETED_LIST';
 
-  return view;
+  return 'TABLE';
 };
 
 const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
