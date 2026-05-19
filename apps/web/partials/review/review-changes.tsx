@@ -41,6 +41,8 @@ import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
+import { ProposalNameTip, useProposalNameTip } from '~/partials/onboarding/proposal-name-tip';
+
 import {
   BountyLinkingPanel,
   buildBounties,
@@ -397,12 +399,19 @@ export const ReviewChanges = () => {
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
+  const proposalNameSectionRef = React.useRef<HTMLDivElement>(null);
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
   const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  const isProposalReview =
+    !activeSpaceMetadata || activeSpaceMetadata.type === 'DAO';
+  const { open: proposalNameTipOpen, dismiss: dismissProposalNameTip } = useProposalNameTip({
+    enabled: isReviewOpen && isProposalReview && hasRemainingSpaces,
+  });
   const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -704,6 +713,7 @@ export const ReviewChanges = () => {
   }));
 
   return (
+    <>
     <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
       <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
         <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
@@ -771,7 +781,10 @@ export const ReviewChanges = () => {
           {hasRemainingSpaces ? (
             <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
               <div className="px-2">
-                <div className="rounded-lg border border-grey-02 bg-white px-6 py-10">
+                <div
+                  ref={proposalNameSectionRef}
+                  className="rounded-lg border border-grey-02 bg-white px-6 py-10"
+                >
                   <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -871,5 +884,11 @@ export const ReviewChanges = () => {
         </div>
       </div>
     </SlideUp>
+    <ProposalNameTip
+      open={proposalNameTipOpen}
+      dismiss={dismissProposalNameTip}
+      anchorRef={proposalNameSectionRef}
+    />
+    </>
   );
 };

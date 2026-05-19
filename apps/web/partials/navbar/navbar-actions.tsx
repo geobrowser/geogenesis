@@ -30,7 +30,14 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import {
+  editModeToggleTipDismissedAtom,
+  proposalNameTipDismissedAtom,
+  reviewEditsTipDismissedAtom,
+} from '~/atoms/product-onboarding';
+
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
+import { EditModeToggleTip, useEditModeToggleTip } from '../onboarding/edit-mode-toggle-tip';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -46,6 +53,9 @@ function useResetOnboarding() {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setEditModeTipDismissed = useSetAtom(editModeToggleTipDismissedAtom);
+  const setReviewEditsTipDismissed = useSetAtom(reviewEditsTipDismissedAtom);
+  const setProposalNameTipDismissed = useSetAtom(proposalNameTipDismissedAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -53,6 +63,9 @@ function useResetOnboarding() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    setEditModeTipDismissed(false);
+    setReviewEditsTipDismissed(false);
+    setProposalNameTipDismissed(false);
   };
 
   return resetOnboarding;
@@ -196,6 +209,8 @@ function ModeToggle() {
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
+  const toggleRef = React.useRef<HTMLButtonElement>(null);
+  const { open: editModeTipOpen, dismiss: dismissEditModeTip, isActive: editModeTipActive } = useEditModeToggleTip();
 
   const onToggle = React.useCallback(() => {
     if (!spaceId) {
@@ -220,7 +235,7 @@ function ModeToggle() {
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
-      if (attemptCount > 0) {
+      if (attemptCount > 0 && !editModeTipActive) {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
@@ -233,7 +248,7 @@ function ModeToggle() {
         browseModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
       }
     }
-  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl]);
+  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl, editModeTipActive]);
 
   const memoizedShortcuts = React.useMemo(
     () => [
@@ -254,11 +269,13 @@ function ModeToggle() {
   }
 
   return (
-    <button
-      onClick={onToggle}
-      data-testid="edit-toggle"
-      className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
-    >
+    <>
+      <button
+        ref={toggleRef}
+        onClick={onToggle}
+        data-testid="edit-toggle"
+        className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+      >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {!editable && <AnimatedTogglePill controls={controls} />}
         <motion.div
@@ -307,7 +324,9 @@ function ModeToggle() {
           </Popover.Portal>
         </Popover.Root>
       </div>
-    </button>
+      </button>
+      <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
+    </>
   );
 }
 

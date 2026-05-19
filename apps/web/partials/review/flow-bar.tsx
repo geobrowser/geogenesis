@@ -18,6 +18,8 @@ import { Relation, Value } from '~/core/types';
 
 import { Divider } from '~/design-system/divider';
 
+import { ReviewEditsTip, useReviewEditsTip } from '../onboarding/review-edits-tip';
+
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
@@ -50,6 +52,10 @@ export const FlowBar = () => {
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const reviewEditsButtonRef = React.useRef<HTMLButtonElement>(null);
+  const { open: reviewEditsTipOpen, dismiss: dismissReviewEditsTip } = useReviewEditsTip({
+    flowBarVisible: !hideFlowbar,
+  });
 
   // Publish the flow-bar's footprint as `--app-bottom-inset` while it's visible
   // so dropdowns (placement hook, table-filter results, etc.) can avoid sliding
@@ -83,7 +89,9 @@ export const FlowBar = () => {
               RemoveScroll.classNames.fullWidth
             )}
           >
-            <div className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg">
+            <div
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
+            >
               <div className="inline-flex h-full items-center justify-center">
                 <p className="inline-flex items-center px-3">
                   <span>{pluralize('edit', opsCount, true)}</span>
@@ -98,6 +106,7 @@ export const FlowBar = () => {
                 </p>
               </div>
               <button
+                ref={reviewEditsButtonRef}
                 onClick={() => {
                   bumpReviewVersion();
                   setIsReviewOpen(true);
@@ -110,6 +119,11 @@ export const FlowBar = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      <ReviewEditsTip
+        open={reviewEditsTipOpen}
+        dismiss={dismissReviewEditsTip}
+        anchorRef={reviewEditsButtonRef}
+      />
     </>
   );
 };
