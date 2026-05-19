@@ -50,6 +50,11 @@ type TipPosition = {
   arrowLeft: number;
 };
 
+function isAnchorVisibleInViewport(anchor: HTMLElement): boolean {
+  const rect = anchor.getBoundingClientRect();
+  return rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
+}
+
 function computeTipPosition(anchor: HTMLElement): TipPosition {
   const rect = anchor.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
@@ -80,7 +85,7 @@ export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipPro
 
   const updatePosition = React.useCallback(() => {
     const anchor = anchorRef.current;
-    if (!anchor) return;
+    if (!anchor || !isAnchorVisibleInViewport(anchor)) return;
     setPosition(computeTipPosition(anchor));
   }, [anchorRef]);
 
@@ -113,7 +118,9 @@ export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipPro
     const retryUntilAnchored = () => {
       if (cancelled) return;
       measure();
-      if (!anchorRef.current && retryCount < maxRetries) {
+      const anchor = anchorRef.current;
+      const isReady = anchor && isAnchorVisibleInViewport(anchor);
+      if (!isReady && retryCount < maxRetries) {
         retryCount += 1;
         rafId = requestAnimationFrame(retryUntilAnchored);
       }

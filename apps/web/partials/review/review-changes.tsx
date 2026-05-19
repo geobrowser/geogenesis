@@ -407,10 +407,8 @@ export const ReviewChanges = () => {
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
-  const isProposalReview =
-    !activeSpaceMetadata || activeSpaceMetadata.type === 'DAO';
   const { open: proposalNameTipOpen, dismiss: dismissProposalNameTip } = useProposalNameTip({
-    enabled: isReviewOpen && isProposalReview && hasRemainingSpaces,
+    enabled: isReviewOpen && hasRemainingSpaces,
   });
   const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
 
