@@ -15,13 +15,15 @@ import { ID } from '~/core/id';
 import { getProperty } from '~/core/io/queries';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Property, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { Property, SearchResult, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
+import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
-import { Tag } from '~/design-system/tag';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { Search } from '~/design-system/icons/search';
 
 import { createTypeRelationForNewEntity } from '~/partials/blocks/table/change-entry';
 import { TYPE_ICONS } from '~/partials/entity-page/type-icons';
@@ -102,7 +104,7 @@ export function PropertyMappingPopover({
         <Popover.Content
           sideOffset={4}
           align="start"
-          className="z-1001 w-[320px] overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
+          className="z-1001 w-[440px] overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
           collisionPadding={10}
           avoidCollisions
           onOpenAutoFocus={event => {
@@ -173,8 +175,10 @@ export function PropertyMappingPopover({
 function TypePickerView({ onSelect }: { onSelect: (type: SwitchableRenderableType) => void }) {
   return (
     <div>
-      <div className="border-b border-grey-02 px-3 py-2.5 text-resultTitle text-text">Select property type</div>
-      <div className="max-h-[360px] overflow-y-auto py-1">
+      <div className="border-b border-grey-02 px-3 py-2.5 text-metadata text-text">Select property type</div>
+      {/* Height is intentionally fractional so the last visible row is clipped
+          mid-height. Without this, users can't tell the list scrolls. */}
+      <div className="max-h-[270px] overflow-y-auto py-1">
         {PROPERTY_TYPE_ORDER.map(type => {
           const Icon = TYPE_ICONS[type];
           return (
@@ -201,19 +205,53 @@ function TypePickerView({ onSelect }: { onSelect: (type: SwitchableRenderableTyp
 // Shared header used by all subsequent steps
 // ---------------------------------------------------------------------------
 
-function StepHeader({ onBack, title }: { onBack: () => void; title: string }) {
+function StepHeader({
+  onBack,
+  rightContent,
+  title,
+}: {
+  onBack: () => void;
+  rightContent: React.ReactNode;
+  title?: string;
+}) {
   return (
-    <div className="flex items-center gap-1.5 border-b border-grey-02 px-2 py-1.5">
-      <button
-        type="button"
-        onClick={onBack}
-        className="rounded p-1 text-grey-04 transition-colors duration-100 hover:bg-grey-01 hover:text-text"
-        aria-label="Back"
-      >
-        <ArrowLeft color="grey-04" />
-      </button>
-      <span className="truncate text-resultTitle text-text">{title}</span>
+    <div>
+      <div className="flex items-center justify-between gap-2 border-b border-grey-02 px-3 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-button text-grey-04 transition-colors duration-100 hover:text-text"
+        >
+          <ArrowLeft color="grey-04" />
+          <span>Back</span>
+        </button>
+        <div className="flex min-w-0 items-center gap-1.5 text-button text-grey-04">{rightContent}</div>
+      </div>
+      {title && <div className="border-b border-grey-02 px-3 py-2.5 text-resultTitle text-text">{title}</div>}
     </div>
+  );
+}
+
+/** Right-side header chip: type icon + label, with optional `→ name` suffix. */
+function TypeChip({
+  propertyType,
+  arrowTo,
+}: {
+  propertyType: SwitchableRenderableType;
+  arrowTo?: string | null;
+}) {
+  const Icon = TYPE_ICONS[propertyType];
+  return (
+    <>
+      <Icon color="grey-04" />
+      <span className="truncate">{SWITCHABLE_RENDERABLE_TYPE_LABELS[propertyType]}</span>
+      {arrowTo && (
+        <>
+          <RightArrowLongSmall color="grey-04" />
+          <span className="truncate">{arrowTo}</span>
+        </>
+      )}
+    </>
   );
 }
 
@@ -287,7 +325,7 @@ function FindOrCreatePropertyView({
 
   return (
     <div>
-      <StepHeader onBack={onBack} title={`Find or create ${typeLabel.toLowerCase()} property`} />
+      <StepHeader onBack={onBack} rightContent={<TypeChip propertyType={propertyType} />} />
       <SearchBlock
         query={query}
         onQueryChange={onQueryChange}
@@ -337,7 +375,11 @@ function FindOrCreateToTypeView({
 
   return (
     <div>
-      <StepHeader onBack={onBack} title="Select to-entity type" />
+      <StepHeader
+        onBack={onBack}
+        rightContent={<TypeChip propertyType="RELATION" />}
+        title="What type of entities are in this column?"
+      />
       <SearchBlock
         query={query}
         onQueryChange={onQueryChange}
@@ -427,7 +469,11 @@ function FindOrCreateRelationPropertyView({
 
   return (
     <div>
-      <StepHeader onBack={onBack} title={`Find or create ${toTypeName} relation`} />
+      <StepHeader
+        onBack={onBack}
+        rightContent={<TypeChip propertyType="RELATION" arrowTo={toTypeName} />}
+        title="Select a relation type"
+      />
       <SearchBlock
         query={query}
         onQueryChange={onQueryChange}
@@ -446,15 +492,11 @@ function FindOrCreateRelationPropertyView({
 // ---------------------------------------------------------------------------
 // Unified search block — owns input, keyboard navigation, results, and the
 // create footer. Used by every step that has a search-and-create pattern.
+// Results render via the shared design-system `ResultContent` so each row
+// shows the space breadcrumb + type chips that the rest of the app uses.
 // ---------------------------------------------------------------------------
 
-type SearchResultLike = {
-  id: string;
-  name: string | null;
-  types?: { id: string; name: string | null }[];
-};
-
-function SearchBlock<R extends SearchResultLike>({
+function SearchBlock({
   query,
   onQueryChange,
   isLoading,
@@ -469,14 +511,14 @@ function SearchBlock<R extends SearchResultLike>({
   onQueryChange: (next: string) => void;
   isLoading: boolean;
   isEmpty: boolean;
-  results: R[];
+  results: SearchResult[];
   selectedEntityId?: string;
   placeholder: string;
-  onSelect: (result: R) => void;
+  onSelect: (result: SearchResult) => void;
   onCreate: (name: string) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const itemRefs = React.useRef<Array<HTMLDivElement | null>>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
 
   const resultsKey = results.map(r => r.id).join(',');
@@ -527,18 +569,23 @@ function SearchBlock<R extends SearchResultLike>({
 
   return (
     <>
-      <div className="border-b border-grey-02 p-2">
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={e => onQueryChange(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          spellCheck={false}
-          className="w-full bg-transparent text-button text-text placeholder:text-grey-03 focus:outline-hidden"
-        />
+      <div className="p-2">
+        <div className="relative">
+          <div className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2">
+            <Search />
+          </div>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => onQueryChange(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            spellCheck={false}
+            className="w-full rounded-md border border-grey-02 bg-white py-2 pr-3 pl-9 text-button text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+          />
+        </div>
       </div>
-      <ResultsList
+      <ResultsArea
         isLoading={isLoading}
         isEmpty={isEmpty}
         query={query}
@@ -549,12 +596,12 @@ function SearchBlock<R extends SearchResultLike>({
         itemRefs={itemRefs}
         onSelect={onSelect}
       />
-      <div className="flex items-center justify-end border-t border-grey-02 px-3 py-1.5">
+      <div className="flex items-center justify-center border-t border-grey-02 py-2.5">
         <button
           type="button"
           disabled={!canCreate}
           onClick={() => onCreate(trimmed)}
-          className="text-resultLink text-ctaHover disabled:text-grey-03"
+          className="text-button text-ctaHover transition-colors duration-100 hover:text-ctaPrimary disabled:text-grey-03"
         >
           Create new
         </button>
@@ -563,7 +610,13 @@ function SearchBlock<R extends SearchResultLike>({
   );
 }
 
-function ResultsList<R extends SearchResultLike>({
+/**
+ * Renders the search results using the design-system `ResultContent` (the same
+ * row used in `SelectEntityAsPopover`, autocomplete search, etc.). The
+ * fractional `max-h-[340px]` on `ResultsList` clips the last visible row mid-
+ * height, giving the user a visual cue that the list scrolls.
+ */
+function ResultsArea({
   isLoading,
   isEmpty,
   query,
@@ -577,12 +630,12 @@ function ResultsList<R extends SearchResultLike>({
   isLoading: boolean;
   isEmpty: boolean;
   query: string;
-  results: R[];
+  results: SearchResult[];
   selectedEntityId?: string;
   selectedIndex: number;
   onHoverIndex: (index: number) => void;
-  itemRefs: React.MutableRefObject<Array<HTMLButtonElement | null>>;
-  onSelect: (result: R) => void;
+  itemRefs: React.MutableRefObject<Array<HTMLDivElement | null>>;
+  onSelect: (result: SearchResult) => void;
 }) {
   if (!query) {
     return <div className="px-3 py-3 text-metadata text-grey-04">Start typing to search…</div>;
@@ -597,39 +650,24 @@ function ResultsList<R extends SearchResultLike>({
   }
 
   return (
-    <div className="max-h-[320px] divide-y divide-divider overflow-y-auto">
-      {results.map((result, index) => {
-        const isFocused = index === selectedIndex;
-        return (
-          <button
-            key={result.id}
-            ref={el => {
-              itemRefs.current[index] = el;
-            }}
-            type="button"
-            onMouseEnter={() => onHoverIndex(index)}
+    <ResultsList className="divide-y divide-divider">
+      {results.map((result, index) => (
+        <div
+          key={result.id}
+          ref={el => {
+            itemRefs.current[index] = el;
+          }}
+          onMouseEnter={() => onHoverIndex(index)}
+        >
+          <ResultContent
+            result={result}
+            active={index === selectedIndex}
+            alreadySelected={selectedEntityId === result.id}
+            withDescription={false}
             onClick={() => onSelect(result)}
-            className={`flex w-full flex-col items-start gap-1 px-3 py-2 text-left transition-colors duration-100 focus:outline-hidden ${
-              isFocused ? 'bg-grey-01' : ''
-            }`}
-          >
-            <div className="flex w-full items-center gap-1.5">
-              <span className="truncate text-resultTitle text-text">{result.name}</span>
-              {selectedEntityId === result.id && (
-                <span className="shrink-0 text-[0.6875rem] text-purple">Currently selected</span>
-              )}
-            </div>
-            {result.types && result.types.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {result.types.slice(0, 3).map(t => (
-                  <Tag key={t.id}>{t.name ?? 'Untitled'}</Tag>
-                ))}
-                {result.types.length > 3 && <Tag>{`+${result.types.length - 3}`}</Tag>}
-              </div>
-            )}
-          </button>
-        );
-      })}
-    </div>
+          />
+        </div>
+      ))}
+    </ResultsList>
   );
 }
