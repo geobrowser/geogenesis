@@ -1,5 +1,7 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect, Either } from 'effect';
 
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
@@ -17,10 +19,6 @@ import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 //   - tagged with the curated-topic-tag entity via the `tag` property.
 // Both filters are required — Topic type alone surfaces ~40k arbitrary
 // knowledge nodes; the curated tag scopes to the editorially-approved set.
-const TYPES_PROPERTY_ID = '8f151ba4de204e3c9cb499ddf96f48f1';
-const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
-const TAG_PROPERTY_ID = '257090341ba5406f94e4d4af90042fba';
-const CURATED_TOPIC_TAG_ID = '7f796eb5bfc5449c98649bf7d996a2ca';
 
 // Cap how many curated topics we fetch per request. Testnet has ~1,860 curated
 // topics — 200 is plenty for the panel and keeps the response small.
@@ -85,21 +83,13 @@ interface NetworkResult {
 // Returns the curated Topic entities themselves. Each entity carries:
 //   - `spacesByTopicIdConnection` → spaces that have claimed it (for "Recently claimed").
 //   - `spacesInConnection` → spaces the entity lives in (for client-side chip filtering).
-//
-// When `spaceId` is supplied the result is scoped to topics that live in that
-// space, so callers can re-run for a single space without being bounded by the
-// global page-size cap.
-function buildQuery(spaceId?: string): string {
-  const spaceFilter = spaceId
-    ? `, { spaceIds: { anyEqualTo: ${JSON.stringify(spaceId)} } }`
-    : '';
-  return `
+const QUERY = `
   {
     entitiesConnection(
       filter: {
         and: [
-          { relations: { some: { typeId: { is: ${JSON.stringify(TYPES_PROPERTY_ID)} }, toEntityId: { is: ${JSON.stringify(TOPIC_TYPE_ID)} } } } },
-          { relations: { some: { typeId: { is: ${JSON.stringify(TAG_PROPERTY_ID)} }, toEntityId: { is: ${JSON.stringify(CURATED_TOPIC_TAG_ID)} } } } }${spaceFilter}
+          { relations: { some: { typeId: { is: ${JSON.stringify(SystemIds.TYPES_PROPERTY)} }, toEntityId: { is: ${JSON.stringify(TOPIC_TYPE_ID)} } } } },
+          { relations: { some: { typeId: { is: ${JSON.stringify(TAG_PROPERTY_ID)} }, toEntityId: { is: ${JSON.stringify(CURATED_TOPIC_TAG_ID)} } } } }
         ]
       },
       orderBy: [CREATED_AT_DESC],
@@ -148,7 +138,6 @@ function buildQuery(spaceId?: string): string {
     }
   }
 `;
-}
 
 function toUnixSec(value: string | null | undefined): number {
   if (!value) return 0;
@@ -161,9 +150,9 @@ function resolveTopicName(name: string | null | undefined): string {
   return name;
 }
 
-export async function fetchRootTopics(opts?: { spaceId?: string }): Promise<RootTopicsData> {
+export async function fetchRootTopics(): Promise<RootTopicsData> {
   const queryEffect = graphql<NetworkResult>({
-    query: buildQuery(opts?.spaceId),
+    query: QUERY,
     endpoint: Environment.getConfig().api,
   });
 

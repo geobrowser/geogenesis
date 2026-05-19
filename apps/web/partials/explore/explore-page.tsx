@@ -1,7 +1,7 @@
 'use client';
 
+import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import type { RecentlyClaimedSpace, RootTopicChip } from '~/core/io/subgraph/fetch-root-topics';
-import type { TopicSpaceOption } from '~/core/io/subgraph/fetch-topic-space-options';
 
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
@@ -11,7 +11,7 @@ type Props = {
   initialSpaceOptions: SpaceOption[];
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
-  topicSpaceOptions: TopicSpaceOption[];
+  parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
 };
@@ -20,7 +20,7 @@ export function ExplorePage({
   initialSpaceOptions,
   unclaimedTopics,
   recentlyClaimedSpaces,
-  topicSpaceOptions,
+  parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
 }: Props) {
@@ -37,7 +37,7 @@ export function ExplorePage({
       <ExploreSidePanel
         unclaimedTopics={unclaimedTopics}
         recentlyClaimedSpaces={recentlyClaimedSpaces}
-        topicSpaceOptions={topicSpaceOptions}
+        parentTopicOptions={parentTopicOptions}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
       />

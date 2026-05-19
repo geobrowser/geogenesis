@@ -4,9 +4,9 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
 import { type RootTopicsData, fetchRootTopics } from '~/core/io/subgraph/fetch-root-topics';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
-import { type TopicSpaceOption, fetchTopicSpaceOptions } from '~/core/io/subgraph/fetch-topic-space-options';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
@@ -35,15 +35,15 @@ export default async function ExploreRoutePage() {
   const rootTopicsPromise = fetchRootTopics().catch(
     () => ({ unclaimed: [], recentlyClaimed: [] }) as RootTopicsData
   );
-  const topicSpaceOptionsPromise = fetchTopicSpaceOptions().catch(() => [] as TopicSpaceOption[]);
+  const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
 
-  const [browseRaw, rootTopics, topicSpaceOptions, governance] = await Promise.all([
+  const [browseRaw, rootTopics, parentTopicOptions, governance] = await Promise.all([
     browsePromise,
     rootTopicsPromise,
-    topicSpaceOptionsPromise,
+    parentTopicOptionsPromise,
     governancePromise,
   ]);
 
@@ -95,7 +95,7 @@ export default async function ExploreRoutePage() {
       initialSpaceOptions={initialSpaceOptions}
       unclaimedTopics={rootTopics.unclaimed}
       recentlyClaimedSpaces={rootTopics.recentlyClaimed}
-      topicSpaceOptions={topicSpaceOptions}
+      parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
     />

@@ -1,12 +1,10 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect, Either } from 'effect';
 
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
-
-// Keep these in sync with fetch-root-topics.ts.
-const TYPES_PROPERTY_ID = '8f151ba4de204e3c9cb499ddf96f48f1';
-const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
 
 export interface TopicClaimEligibility {
   isTopic: boolean;
@@ -24,7 +22,7 @@ interface NetworkResult {
 const buildQuery = (entityId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
-      types: relationsList(filter: { typeId: { is: ${JSON.stringify(TYPES_PROPERTY_ID)} }, toEntityId: { is: ${JSON.stringify(TOPIC_TYPE_ID)} } }) {
+      types: relationsList(filter: { typeId: { is: ${JSON.stringify(SystemIds.TYPES_PROPERTY)} }, toEntityId: { is: ${JSON.stringify(TOPIC_TYPE_ID)} } }) {
         toEntityId
       }
       spacesByTopicIdConnection {

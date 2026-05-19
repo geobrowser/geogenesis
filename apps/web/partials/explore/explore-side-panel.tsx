@@ -1,7 +1,7 @@
 'use client';
 
+import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import type { RecentlyClaimedSpace, RootTopicChip } from '~/core/io/subgraph/fetch-root-topics';
-import type { TopicSpaceOption } from '~/core/io/subgraph/fetch-topic-space-options';
 
 import { ClaimATopicSection } from './claim-a-topic-section';
 import { RecentlyClaimedSection } from './recently-claimed-section';
@@ -9,7 +9,7 @@ import { RecentlyClaimedSection } from './recently-claimed-section';
 export type ExploreSidePanelProps = {
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
-  topicSpaceOptions: TopicSpaceOption[];
+  parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
 };
@@ -21,7 +21,7 @@ function normId(id: string): string {
 export function ExploreSidePanel({
   unclaimedTopics,
   recentlyClaimedSpaces,
-  topicSpaceOptions,
+  parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
 }: ExploreSidePanelProps) {
@@ -42,7 +42,7 @@ export function ExploreSidePanel({
     <aside className="sticky top-11 flex h-[calc(100dvh-4.75rem)] w-[360px] shrink-0 flex-col self-start lg:hidden">
       <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <div className="flex flex-col gap-8 pb-6">
-          <ClaimATopicSection topics={unclaimedTopics} spaceOptions={topicSpaceOptions} />
+          <ClaimATopicSection topics={unclaimedTopics} parentTopicOptions={parentTopicOptions} />
           <RecentlyClaimedSection
             spaces={recentlyClaimedSpaces}
             pendingMembershipSpaceIds={pendingSet}

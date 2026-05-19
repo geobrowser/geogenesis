@@ -4,8 +4,8 @@ import * as React from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { RootTopicChip, RootTopicsData } from '~/core/io/subgraph/fetch-root-topics';
-import type { TopicSpaceOption } from '~/core/io/subgraph/fetch-topic-space-options';
+import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
+import type { RootTopicChip } from '~/core/io/subgraph/fetch-root-topics';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dropdown } from '~/design-system/dropdown';
@@ -13,68 +13,69 @@ import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 type Props = {
-  /** SSR-supplied topics for the "Any space" case. */
   topics: RootTopicChip[];
-  spaceOptions: TopicSpaceOption[];
+  parentTopicOptions: ParentTopicOption[];
 };
 
 const INITIAL_VISIBLE_COUNT = 12;
-const ANY_SPACE_VALUE = 'all';
-const ANY_SPACE_LABEL = 'Any space';
+const ANY_TOPIC_VALUE = 'all';
+const ANY_TOPIC_LABEL = 'Any topic';
 
-async function fetchTopicsForSpace(spaceId: string): Promise<RootTopicChip[]> {
-  const res = await fetch(`/api/explore/topics?spaceId=${encodeURIComponent(spaceId)}`);
-  if (!res.ok) throw new Error('Failed to load topics');
-  const data = (await res.json()) as RootTopicsData;
-  return data.unclaimed;
+async function fetchSubtopicsForParent(parentId: string): Promise<RootTopicChip[]> {
+  const res = await fetch(`/api/explore/topics?parentId=${encodeURIComponent(parentId)}`);
+  if (!res.ok) throw new Error('Failed to load subtopics');
+  const data = (await res.json()) as { topics: RootTopicChip[] };
+  return data.topics;
 }
 
-export function ClaimATopicSection({ topics, spaceOptions }: Props) {
+export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
   const [showAll, setShowAll] = React.useState(false);
-  const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>(ANY_SPACE_VALUE);
+  const [selectedParentId, setSelectedParentId] = React.useState<string>(ANY_TOPIC_VALUE);
 
-  // When a specific space is selected, re-run the topics query scoped to that
-  // space so we surface topics that fell outside the global page-size cap.
-  const scopedQuery = useQuery({
-    queryKey: ['explore-topics', selectedSpaceId],
-    queryFn: () => fetchTopicsForSpace(selectedSpaceId),
-    enabled: selectedSpaceId !== ANY_SPACE_VALUE,
+  // Per-parent fetch: the SSR `topics` list is capped at the 200 most-recent
+  // unclaimed curated topics globally, so client-side filtering by parent ID
+  // could miss subtopics that fall outside that window. Hitting the API gives
+  // us the full set for the selected parent.
+  const subtopicsQuery = useQuery({
+    queryKey: ['explore-subtopics', selectedParentId],
+    queryFn: () => fetchSubtopicsForParent(selectedParentId),
+    enabled: selectedParentId !== ANY_TOPIC_VALUE,
     staleTime: 30_000,
   });
 
-  const isLoading = selectedSpaceId !== ANY_SPACE_VALUE && scopedQuery.isFetching && !scopedQuery.data;
+  const isLoading = selectedParentId !== ANY_TOPIC_VALUE && subtopicsQuery.isFetching && !subtopicsQuery.data;
 
   const visibleTopics = React.useMemo(() => {
-    if (selectedSpaceId === ANY_SPACE_VALUE) return topics;
-    return scopedQuery.data ?? [];
-  }, [selectedSpaceId, topics, scopedQuery.data]);
+    if (selectedParentId === ANY_TOPIC_VALUE) return topics;
+    return subtopicsQuery.data ?? [];
+  }, [selectedParentId, topics, subtopicsQuery.data]);
 
-  if (topics.length === 0 && spaceOptions.length === 0) return null;
+  if (topics.length === 0 && parentTopicOptions.length === 0) return null;
 
   const visible = showAll ? visibleTopics : visibleTopics.slice(0, INITIAL_VISIBLE_COUNT);
   const hasMore = visibleTopics.length > INITIAL_VISIBLE_COUNT;
 
   const selectedLabel =
-    selectedSpaceId === ANY_SPACE_VALUE
-      ? ANY_SPACE_LABEL
-      : (spaceOptions.find(o => o.id === selectedSpaceId)?.name ?? ANY_SPACE_LABEL);
+    selectedParentId === ANY_TOPIC_VALUE
+      ? ANY_TOPIC_LABEL
+      : (parentTopicOptions.find(o => o.id === selectedParentId)?.name ?? ANY_TOPIC_LABEL);
 
   const dropdownOptions = [
     {
-      label: ANY_SPACE_LABEL,
-      value: ANY_SPACE_VALUE,
+      label: ANY_TOPIC_LABEL,
+      value: ANY_TOPIC_VALUE,
       disabled: false,
       onClick: () => {
-        setSelectedSpaceId(ANY_SPACE_VALUE);
+        setSelectedParentId(ANY_TOPIC_VALUE);
         setShowAll(false);
       },
     },
-    ...spaceOptions.map(option => ({
+    ...parentTopicOptions.map(option => ({
       label: option.name,
       value: option.id,
       disabled: false,
       onClick: () => {
-        setSelectedSpaceId(option.id);
+        setSelectedParentId(option.id);
         setShowAll(false);
       },
     })),
@@ -82,11 +83,14 @@ export function ClaimATopicSection({ topics, spaceOptions }: Props) {
 
   return (
     <section className="flex flex-col gap-4">
-      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-divider bg-white pt-1 pb-3">
+      {/* z-30 keeps the dropdown popover above the Recently Claimed sticky header
+          (z-20) which sits later in DOM order. Without this, the popover gets
+          painted over when its menu extends past the section boundary. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-divider bg-white pt-1 pb-3">
         <h2 className="text-[16px] leading-[20px] font-semibold tracking-[-0.02em] text-text">
           Available topics to claim
         </h2>
-        {spaceOptions.length > 0 && (
+        {parentTopicOptions.length > 0 && (
           <Dropdown
             align="end"
             scrollableList
@@ -100,14 +104,14 @@ export function ClaimATopicSection({ topics, spaceOptions }: Props) {
         {isLoading ? (
           <span className="text-[13px] leading-[14px] text-grey-04">Loading topics…</span>
         ) : visible.length === 0 ? (
-          <span className="text-[13px] leading-[14px] text-grey-04">No topics in this space yet.</span>
+          <span className="text-[13px] leading-[14px] text-grey-04">No unclaimed topics under this parent yet.</span>
         ) : (
           visible.map(topic => {
             // Pick one of the topic's actual spaces as the link context — using
             // a space the entity doesn't live in triggers SpaceRedirect's
             // history-replacing client redirect and traps the user. Topics
-            // without any containing space are filtered upstream in
-            // fetch-root-topics, so this access is safe in practice.
+            // without any containing space are filtered upstream, so this
+            // access is safe in practice.
             const linkSpaceId = topic.spaceIds[0];
             return (
               <Link
