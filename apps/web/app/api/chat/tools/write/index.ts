@@ -14,6 +14,7 @@ import { deleteEntity } from './delete-entity';
 import { deleteProperty } from './delete-property';
 import { cloneEntityToSpace, moveEntityToSpace } from './move-entity-to-space';
 import { moveBlock, moveRelation } from './reorder';
+import { setEntityImage } from './set-entity-image';
 import { deleteEntityRelation, setEntityRelation } from './set-entity-relation';
 import { addPropertyToEntity, deleteEntityValue, setEntityValue } from './set-entity-value';
 import { createTab, renameTab } from './tabs';
@@ -35,6 +36,7 @@ export const writeTools = {
   changePropertyDataType,
   setEntityRelation,
   deleteEntityRelation,
+  setEntityImage,
   createEntity,
   deleteEntity,
   moveEntityToSpace,

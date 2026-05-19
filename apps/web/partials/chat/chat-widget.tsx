@@ -17,6 +17,7 @@ import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-type
 import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
+import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { useSpace } from '~/core/hooks/use-space';
 import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
@@ -295,6 +296,7 @@ export function ChatWidget() {
   useReadDispatcher(messages, addToolResultRef);
   useResearchDispatcher(messages, addToolResultRef);
   useWebFetchDispatcher(messages, addToolResultRef);
+  useSearchImagesDispatcher(messages, addToolResultRef);
 
   // Bridge the gap between status='ready' and the SDK's auto-resubmit firing —
   // otherwise the input flips back to "send" between successive tool calls.

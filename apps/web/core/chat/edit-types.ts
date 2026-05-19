@@ -53,6 +53,15 @@ export type EditIntent =
       toEntityId: string;
     }
   | {
+      kind: 'setEntityImage';
+      entityId: string;
+      entityName: string | null;
+      spaceId: string;
+      propertyId: string;
+      propertyName: string | null;
+      sourceUrl: string;
+    }
+  | {
       kind: 'createProperty';
       propertyId: string;
       spaceId: string;
@@ -274,6 +283,7 @@ export const EDIT_TOOL_NAMES = [
   'changePropertyDataType',
   'setEntityRelation',
   'deleteEntityRelation',
+  'setEntityImage',
   'createEntity',
   'deleteEntity',
   'moveEntityToSpace',
