@@ -6,7 +6,7 @@ import type { ListSpacesInput } from '~/core/chat/read-types';
 // merged view picks up locally-created spaces alongside the published list.
 export const listSpaces = tool({
   description:
-    'List spaces in the Geo knowledge graph. When `query` is provided, searches space names — this reliably finds a match even when it is not in the first page of results. When omitted, returns a generic sample of spaces.',
+    'List spaces in the Geo knowledge graph. When `query` is provided, searches space names — this reliably finds a match even when it is not in the first page of results. When omitted, returns a generic sample of spaces. Each result returns `id` (the space id, used for navigation and `spaceId` args) and `homeEntityId` (the entity id of the space\'s home/topic entity — use this when targeting the space\'s "front page" as an entity, e.g. as a relation target or for setEntityImage).',
   inputSchema: jsonSchema<ListSpacesInput>({
     type: 'object',
     properties: {

@@ -228,7 +228,14 @@ const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
 // Text-empty turns containing only these skip follow-up generation.
 const NAV_LIKE_TOOL_NAMES = new Set<string>(['navigate', 'openReviewPanel']);
 // Client-executed read tools; the server registers them schema-only.
-const CLIENT_READ_TOOL_NAMES = new Set<string>(['searchGraph', 'getEntity', 'listSpaces', 'research', 'webFetch']);
+const CLIENT_READ_TOOL_NAMES = new Set<string>([
+  'searchGraph',
+  'getEntity',
+  'listSpaces',
+  'research',
+  'webFetch',
+  'searchImages',
+]);
 
 // Edit/client tools resolve via resubmit, so the assistant turn that triggers
 // 'edit' framing isn't always the one that emitted the call. Walk every
