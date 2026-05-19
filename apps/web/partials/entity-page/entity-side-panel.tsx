@@ -195,7 +195,11 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
         <CloseSidePanel color="grey-04" />
       </button>
 
-      <div className="flex min-w-0 max-w-[min(100%,14rem)] shrink items-center gap-1.5 px-1 py-1">
+      <Link
+        href={NavUtils.toSpace(entitySpaceId)}
+        spaceId={entitySpaceId}
+        className="flex min-w-0 max-w-[min(100%,14rem)] shrink items-center gap-1.5 rounded-sm px-1 py-1"
+      >
         <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage
             value={space?.entity?.image || PLACEHOLDER_SPACE_IMAGE}
@@ -208,7 +212,7 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
         <Truncate shouldTruncate variant="breadcrumb" maxLines={1} className="min-w-0 font-medium">
           {displayName}
         </Truncate>
-      </div>
+      </Link>
 
       <div className="min-w-0 flex-1" aria-hidden />
 
