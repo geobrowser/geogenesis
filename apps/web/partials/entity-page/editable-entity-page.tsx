@@ -797,7 +797,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       : 'image/png,image/jpeg';
 
   return (
-    <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 pr-1">
+    <motion.div className="flex w-full max-w-full min-w-0 flex-wrap items-start gap-1 pr-1">
       {/* Hidden file input for upload */}
       <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 
@@ -987,7 +987,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           propertyType={propertyId}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
 
