@@ -448,6 +448,12 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
 
 // Locally-created spaces surface above the remote list so the agent can
 // reference a space the user just spun up.
+function resolveSpaceHomeEntityId(space: { topicId: string | null; entity: { id: string } }): string | null {
+  const raw = space.topicId ?? space.entity.id ?? '';
+  if (!raw) return null;
+  return normalizeEntityId(raw);
+}
+
 function localSpaceMatches(query: string | undefined, store: GeoStore): Entity[] {
   const matches: Entity[] = [];
   for (const entity of store.getEntities()) {
@@ -518,6 +524,7 @@ export async function executeListSpaces(input: ListSpacesInput, ctx: ReadCtx): P
           id: normalizeEntityId(space.id),
           name: space.entity.name,
           description: space.entity.description ? truncateText(space.entity.description) : null,
+          homeEntityId: resolveSpaceHomeEntityId(space),
         }));
       }
     } else {
@@ -531,6 +538,7 @@ export async function executeListSpaces(input: ListSpacesInput, ctx: ReadCtx): P
         id: normalizeEntityId(space.id),
         name: space.entity.name,
         description: space.entity.description ? truncateText(space.entity.description) : null,
+        homeEntityId: resolveSpaceHomeEntityId(space),
       }));
     }
 
@@ -545,6 +553,10 @@ export async function executeListSpaces(input: ListSpacesInput, ctx: ReadCtx): P
         id,
         name: candidate.name,
         description: candidate.description ? truncateText(candidate.description) : null,
+        // Local space matches are the topic entity itself, so the id IS the
+        // home entity id — best-effort, mirroring how the existing code
+        // already treats `candidate.id` as the space id.
+        homeEntityId: id,
       });
       if (merged.length >= effectiveLimit) break;
     }

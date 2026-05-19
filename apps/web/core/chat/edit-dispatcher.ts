@@ -142,6 +142,104 @@ async function applyDeleteRelation(intent: Extract<EditIntent, { kind: 'deleteRe
   return { ok: true };
 }
 
+// Mints an Image entity from a source URL and writes the link relation via
+// the same `storage.images.createAndLink` helper the in-page editor uses for
+// file uploads. http(s) URLs go through /api/chat/proxy-image (CORS); ipfs://
+// URLs short-circuit since they're already pinned.
+async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntityImage' }>): Promise<ApplyResult> {
+  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl } = intent;
+
+  // Replace, don't stack: tombstone any existing same-property image relations
+  // on this entity in this space first. Mirrors the in-page editor's behavior
+  // (see image-node `handleChange`). Without this, useRelation returns the
+  // first match — typically the published one — and the gallery / cover hook
+  // ignores the new local relation entirely.
+  const existing = await resolveEntity(entityId, spaceId);
+  const oldImageRelations = (existing?.relations ?? []).filter(
+    r => r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId && !r.isDeleted
+  );
+  for (const old of oldImageRelations) {
+    storage.relations.delete(old);
+  }
+
+  if (sourceUrl.toLowerCase().startsWith('ipfs://')) {
+    // Already pinned — mint an Image entity that reuses the existing CID and
+    // link it. We can't pass an ipfs:// URL into Graph.createImage because the
+    // SDK does a browser fetch on `{ url }`, which doesn't speak ipfs.
+    const imageEntityId = IdUtils.generate();
+    storage.values.set({
+      spaceId,
+      entity: { id: imageEntityId, name: null },
+      property: {
+        id: SystemIds.IMAGE_URL_PROPERTY,
+        name: 'Image URL',
+        dataType: 'TEXT',
+        renderableType: 'URL',
+      },
+      value: sourceUrl,
+    });
+    storage.relations.set({
+      id: IdUtils.generate(),
+      entityId: IdUtils.generate(),
+      spaceId,
+      position: Position.generate(),
+      renderableType: 'RELATION',
+      type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+      fromEntity: { id: imageEntityId, name: null },
+      toEntity: { id: SystemIds.IMAGE_TYPE, name: 'Image', value: SystemIds.IMAGE_TYPE },
+    });
+    storage.relations.set({
+      id: IdUtils.generate(),
+      entityId: IdUtils.generate(),
+      spaceId,
+      position: Position.generate(),
+      renderableType: 'IMAGE',
+      type: { id: propertyId, name: propertyName },
+      fromEntity: { id: entityId, name: entityName },
+      toEntity: { id: imageEntityId, name: null, value: imageEntityId },
+    });
+    return { ok: true };
+  }
+
+  // Proxy through /api/chat/proxy-image — direct browser fetch is CORS-blocked
+  // on most public image hosts (Wikimedia, IMDb, TMDb).
+  let blob: Blob;
+  try {
+    const response = await fetch('/api/chat/proxy-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: sourceUrl }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const reason =
+        body && typeof body === 'object' && 'error' in body ? String(body.error) : `HTTP ${response.status}`;
+      return applyFailed(`image fetch failed: ${reason}; try a different URL`);
+    }
+    blob = await response.blob();
+  } catch (err) {
+    console.error('[chat/edit-dispatcher] image proxy fetch failed', err);
+    return applyFailed('image fetch failed; the proxy was unreachable');
+  }
+  const ext = blob.type.split('/')[1] || 'png';
+  const file = new File([blob], `image.${ext}`, { type: blob.type });
+
+  try {
+    await storage.images.createAndLink({
+      file,
+      fromEntityId: entityId,
+      fromEntityName: entityName,
+      relationPropertyId: propertyId,
+      relationPropertyName: propertyName,
+      spaceId,
+    });
+  } catch (err) {
+    console.error('[chat/edit-dispatcher] image upload failed', err);
+    return applyFailed('image upload failed; try a different URL');
+  }
+  return { ok: true };
+}
+
 function applyCreateProperty(intent: Extract<EditIntent, { kind: 'createProperty' }>): ApplyResult {
   storage.properties.create({
     entityId: intent.propertyId,
@@ -167,6 +265,73 @@ async function nextBlockPosition(parentEntityId: string, spaceId: string): Promi
   return Position.generateBetween(last, null);
 }
 
+// Scan the parent page's existing blocks for one whose IMAGE_URL_PROPERTY
+// matches the URL we're about to add. Returns the matching block id when
+// found, null otherwise. Used as a defense against double-fires of createBlock
+// for the same image (e.g. retry-on-stream-error landing twice). Image and
+// video blocks share the IMAGE_URL_PROPERTY slot at the graph level.
+async function findExistingMediaBlock(parentEntityId: string, spaceId: string, url: string): Promise<string | null> {
+  const parent = await resolveEntity(parentEntityId, spaceId);
+  const childBlockIds = (parent?.relations ?? [])
+    .filter(r => r.fromEntity.id === parentEntityId && r.type.id === SystemIds.BLOCKS && !r.isDeleted)
+    .map(r => r.toEntity.id);
+  if (childBlockIds.length === 0) return null;
+
+  const blocks = await Promise.all(childBlockIds.map(id => resolveEntity(id, spaceId)));
+  for (const block of blocks) {
+    if (!block) continue;
+    const urlValue = block.values.find(
+      v => v.property.id === SystemIds.IMAGE_URL_PROPERTY && v.spaceId === spaceId && !v.isDeleted
+    );
+    if (urlValue?.value === url) {
+      return block.id;
+    }
+  }
+  return null;
+}
+
+// Verify that a URL actually loads as an image in a browser `<img>` tag
+// before we stage an image block with it. The model can hallucinate plausible-
+// looking URLs (Wikipedia thumbnails, CDN paths) that don't resolve — without
+// this, the page renders the broken-image placeholder and the user blames the
+// upload. We use a transient `<img>` element rather than `fetch()` because
+// image rendering bypasses CORS for cross-origin URLs that `fetch()` would
+// reject: this catches truly broken URLs while still allowing legitimate
+// CORS-restricted hosts (Wikipedia, IMDb) that render fine inline.
+const IMAGE_PREFLIGHT_TIMEOUT_MS = 8_000;
+function preflightImageUrl(url: string): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') return Promise.resolve(true);
+  const lower = url.toLowerCase();
+  // ipfs:// URLs aren't loadable by `<img>` directly — the renderer translates
+  // them to a gateway. Trust them and let the gateway handle errors at render.
+  if (lower.startsWith('ipfs://')) return Promise.resolve(true);
+  return new Promise(resolve => {
+    let settled = false;
+    const img = new Image();
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      img.src = '';
+      resolve(false);
+    }, IMAGE_PREFLIGHT_TIMEOUT_MS);
+    img.onload = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // naturalWidth/Height=0 happens when the host returned HTML or an empty
+      // body that the decoder treated as "loaded but unrenderable".
+      resolve(img.naturalWidth > 0 && img.naturalHeight > 0);
+    };
+    img.onerror = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
+
 function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId: string) {
   switch (content.kind) {
     case 'text':
@@ -185,10 +350,11 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
       break;
     }
     case 'image': {
+      const name = content.title?.trim() ? content.title.trim() : 'Image';
       storage.relations.set(getRelationForBlockType(blockId, SystemIds.IMAGE_TYPE, spaceId));
       storage.values.set({
         spaceId,
-        entity: { id: blockId, name: content.title ?? null },
+        entity: { id: blockId, name },
         property: {
           id: SystemIds.IMAGE_URL_PROPERTY,
           name: 'IPFS URL',
@@ -197,16 +363,17 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
         },
         value: content.url,
       });
-      if (content.title) {
-        storage.entities.name.set(blockId, spaceId, content.title);
-      }
+      // Always seed a name — leaving the block entity nameless rendered as a
+      // bare URL pill in the editor.
+      storage.entities.name.set(blockId, spaceId, name);
       break;
     }
     case 'video': {
+      const name = content.title?.trim() ? content.title.trim() : 'Video';
       storage.relations.set(getRelationForBlockType(blockId, SystemIds.VIDEO_TYPE, spaceId));
       storage.values.set({
         spaceId,
-        entity: { id: blockId, name: content.title ?? null },
+        entity: { id: blockId, name },
         property: {
           id: SystemIds.IMAGE_URL_PROPERTY,
           name: 'IPFS URL',
@@ -215,9 +382,7 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
         },
         value: content.url,
       });
-      if (content.title) {
-        storage.entities.name.set(blockId, spaceId, content.title);
-      }
+      storage.entities.name.set(blockId, spaceId, name);
       break;
     }
     case 'data': {
@@ -240,6 +405,30 @@ function writeBlockTypeRelations(blockId: string, content: BlockContent, spaceId
 
 async function applyCreateBlock(intent: Extract<EditIntent, { kind: 'createBlock' }>): Promise<ApplyResult> {
   const { blockId, parentEntityId, spaceId, content } = intent;
+
+  // Image / video blocks store the URL directly. Guard against two failure
+  // modes the model is prone to:
+  //   1. The same image URL already lives on this page — re-running the same
+  //      tool call (after a retry / re-stream) would silently duplicate the
+  //      block. Refuse same-URL re-adds so the page doesn't end up with two
+  //      identical media blocks stacked on top of each other.
+  //   2. The URL is broken / returns HTML / 0×0 — preflight via <img> tag.
+  if (content.kind === 'image' || content.kind === 'video') {
+    const duplicate = await findExistingMediaBlock(parentEntityId, spaceId, content.url);
+    if (duplicate) {
+      return applyFailed(
+        `a ${content.kind} block with this URL is already on the page (block id: ${duplicate}); skip the duplicate or use updateBlock if you meant to change the existing one.`
+      );
+    }
+  }
+  if (content.kind === 'image') {
+    const ok = await preflightImageUrl(content.url);
+    if (!ok) {
+      return applyFailed(
+        `image URL didn't load as an image; try a different URL or run searchImages to find one. (failing url: ${content.url})`
+      );
+    }
+  }
 
   writeBlockTypeRelations(blockId, content, spaceId);
 
@@ -1013,6 +1202,8 @@ export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<Ap
       return applySetRelation(intent);
     case 'deleteRelation':
       return applyDeleteRelation(intent);
+    case 'setEntityImage':
+      return applySetEntityImage(intent);
     case 'createProperty':
       return applyCreateProperty(intent);
     case 'createEntity':

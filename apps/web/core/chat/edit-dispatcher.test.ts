@@ -316,6 +316,101 @@ describe('createProperty', () => {
   });
 });
 
+describe('createBlock — same-URL idempotency', () => {
+  // The chat orchestrator can land createBlock twice (retry on stream error, or
+  // a duplicate tool call after a verifier reset). We catch the second hit by
+  // scanning the parent's existing blocks for IMAGE_URL_PROPERTY === url before
+  // staging a new block — preventing two identical image blocks from stacking
+  // on the page.
+  const PARENT = 'parent1';
+  const EXISTING_BLOCK = 'existing-block-1';
+  const URL = 'https://example.com/cover.jpg';
+
+  function setupParentWithImageBlock(url: string) {
+    const blocksEdge = makeRelation({
+      id: 'r-existing-blocks',
+      fromEntity: { id: PARENT, name: null },
+      type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+      toEntity: { id: EXISTING_BLOCK, name: null, value: EXISTING_BLOCK },
+      spaceId: 'space1',
+    });
+    const parent = makeEntity({ id: PARENT, relations: [blocksEdge] });
+    const blockUrlValue = makeValue({
+      id: 'v-image-url',
+      entity: { id: EXISTING_BLOCK, name: null },
+      property: { id: SystemIds.IMAGE_URL_PROPERTY, name: 'IPFS URL', dataType: 'TEXT' },
+      value: url,
+    });
+    const existingBlock = makeEntity({ id: EXISTING_BLOCK, values: [blockUrlValue] });
+    findOne.mockImplementation(async ({ id }) => {
+      if (id === PARENT) return parent;
+      if (id === EXISTING_BLOCK) return existingBlock;
+      return null;
+    });
+  }
+
+  it('returns apply_failed when an image block with the same URL is already on the parent', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        content: { kind: 'image', url: URL, title: null },
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect(storage.values.set).not.toHaveBeenCalled();
+    expect(storage.relations.set).not.toHaveBeenCalled();
+  });
+
+  it('treats video blocks the same — same URL on the parent rejects', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        content: { kind: 'video', url: URL, title: null },
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect(storage.values.set).not.toHaveBeenCalled();
+    expect(storage.relations.set).not.toHaveBeenCalled();
+  });
+
+  it('does not flag a different-URL block on the same parent', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        // Video — skips the preflight branch that depends on a working <img>
+        // loader (jsdom does not fire onload/onerror), so the test exercises
+        // the no-duplicate path without hanging on the 8s preflight timeout.
+        content: { kind: 'video', url: 'https://example.com/different.mp4', title: null },
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    // BLOCKS edge + type relation + value all written for the new block.
+    expect(storage.values.set).toHaveBeenCalled();
+    expect(storage.relations.set).toHaveBeenCalled();
+  });
+});
+
 describe('deleteBlock', () => {
   it('tombstones block values, outgoing relations, and the parent BLOCKS edge', async () => {
     const blockValue = makeValue({ id: 'v-block-md', entity: { id: 'block1', name: null } });
