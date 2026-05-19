@@ -142,6 +142,23 @@ async function applyDeleteRelation(intent: Extract<EditIntent, { kind: 'deleteRe
   return { ok: true };
 }
 
+// Allow-list — `blob.type.split('/')[1]` would yield `svg+xml`, which trips
+// downstream uploaders.
+const MIME_TO_EXTENSION: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/svg+xml': 'svg',
+};
+
+function extensionForMime(mime: string): string {
+  const normalized = mime.split(';')[0].trim().toLowerCase();
+  return MIME_TO_EXTENSION[normalized] ?? 'png';
+}
+
 // Mints an Image entity from a source URL and writes the link relation via
 // the same `storage.images.createAndLink` helper the in-page editor uses for
 // file uploads. http(s) URLs go through /api/chat/proxy-image (CORS); ipfs://
@@ -221,7 +238,7 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
     console.error('[chat/edit-dispatcher] image proxy fetch failed', err);
     return applyFailed('image fetch failed; the proxy was unreachable');
   }
-  const ext = blob.type.split('/')[1] || 'png';
+  const ext = extensionForMime(blob.type);
   const file = new File([blob], `image.${ext}`, { type: blob.type });
 
   try {

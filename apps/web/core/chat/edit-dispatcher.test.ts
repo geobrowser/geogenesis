@@ -31,6 +31,9 @@ const storage = {
       set: vi.fn(),
     },
   },
+  images: {
+    createAndLink: vi.fn(),
+  },
 };
 
 vi.mock('~/core/sync/use-mutate', () => ({ storage }));
@@ -243,6 +246,209 @@ describe('setRelation', () => {
       fromEntity: { id: 'from1', name: 'From' },
       toEntity: { id: 'to1', name: 'To', value: 'to1' },
     });
+  });
+});
+
+describe('setEntityImage', () => {
+  const IMAGE_ENTITY = 'imageEntity1';
+  const IMAGE_PROPERTY = 'imageProp1';
+
+  function mockProxyFetch(impl: (init?: RequestInit) => Promise<Response>) {
+    const fn = vi.fn(async (_url: string, init?: RequestInit) => impl(init));
+    globalThis.fetch = fn as unknown as typeof fetch;
+    return fn;
+  }
+
+  function makeBlob(type = 'image/jpeg', size = 16) {
+    return new Blob([new Uint8Array(size)], { type });
+  }
+
+  it('ipfs:// short-circuits: tombstones old relations and writes value + types + image relations without fetching', async () => {
+    const oldRelation = makeRelation({
+      fromEntity: { id: IMAGE_ENTITY, name: 'Movie' },
+      type: { id: IMAGE_PROPERTY, name: 'Cover' },
+      spaceId: 'space1',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [oldRelation] }));
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'ipfs://bafyimagecid',
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(storage.relations.delete).toHaveBeenCalledWith(oldRelation);
+    const valueWrites = storage.values.set.mock.calls.map(c => c[0]);
+    expect(valueWrites).toHaveLength(1);
+    expect(valueWrites[0]).toMatchObject({ value: 'ipfs://bafyimagecid' });
+    const relationWrites = storage.relations.set.mock.calls.map(c => c[0]);
+    expect(relationWrites).toHaveLength(2);
+    expect(relationWrites.some(r => r.renderableType === 'IMAGE' && r.fromEntity.id === IMAGE_ENTITY)).toBe(true);
+    expect(storage.images.createAndLink).not.toHaveBeenCalled();
+  });
+
+  it('http(s) URL: proxy-fetches then delegates to storage.images.createAndLink', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    const blob = makeBlob('image/png');
+    const proxyFetch = mockProxyFetch(async () => {
+      return {
+        ok: true,
+        status: 200,
+        blob: async () => blob,
+        json: async () => ({}),
+      } as Response;
+    });
+    storage.images.createAndLink.mockResolvedValueOnce(undefined);
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://cdn.example.com/poster.png',
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(proxyFetch).toHaveBeenCalledTimes(1);
+    expect(proxyFetch.mock.calls[0][0]).toBe('/api/chat/proxy-image');
+    expect(storage.images.createAndLink).toHaveBeenCalledTimes(1);
+    const arg = storage.images.createAndLink.mock.calls[0][0];
+    expect(arg).toMatchObject({
+      fromEntityId: IMAGE_ENTITY,
+      fromEntityName: 'Movie',
+      relationPropertyId: IMAGE_PROPERTY,
+      relationPropertyName: 'Cover',
+      spaceId: 'space1',
+    });
+    expect(arg.file.name).toBe('image.png');
+  });
+
+  it('normalizes svg+xml MIME to a safe .svg extension', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => makeBlob('image/svg+xml'),
+          json: async () => ({}),
+        }) as Response
+    );
+    storage.images.createAndLink.mockResolvedValueOnce(undefined);
+
+    await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Brand',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Logo',
+        sourceUrl: 'https://example.com/logo.svg',
+      },
+      ctx
+    );
+
+    expect(storage.images.createAndLink.mock.calls[0][0].file.name).toBe('image.svg');
+  });
+
+  it('returns apply_failed with a model-readable reason when the proxy returns non-ok', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: false,
+          status: 502,
+          blob: async () => makeBlob(),
+          json: async () => ({ error: 'Upstream returned 404' }),
+        }) as Response
+    );
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://broken.example/missing.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('Upstream returned 404');
+    expect(storage.images.createAndLink).not.toHaveBeenCalled();
+  });
+
+  it('returns apply_failed when the proxy throws (network unreachable)', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://example.com/poster.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('proxy was unreachable');
+  });
+
+  it('returns apply_failed when storage.images.createAndLink rejects', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => makeBlob(),
+          json: async () => ({}),
+        }) as Response
+    );
+    storage.images.createAndLink.mockRejectedValueOnce(new Error('IPFS pin failed'));
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://example.com/poster.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('image upload failed');
   });
 });
 

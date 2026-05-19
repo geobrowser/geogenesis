@@ -445,6 +445,156 @@ describe('planWriteTool: setEntityRelation', () => {
   });
 });
 
+describe('planWriteTool: setEntityImage', () => {
+  const VALID_URL = 'https://example.com/poster.jpg';
+
+  it('emits a setEntityImage intent for a valid RELATION+IMAGE property', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Matrix' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({
+      ok: true,
+      intent: {
+        kind: 'setEntityImage',
+        entityId: ENTITY,
+        entityName: 'Matrix',
+        spaceId: SPACE,
+        propertyId: PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: VALID_URL,
+      },
+    });
+  });
+
+  it('passes through when renderableTypeStrict is unset (legacy image properties)', async () => {
+    localStore.getProperty.mockReturnValue({ id: PROPERTY, name: 'Avatar', dataType: 'RELATION' });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'User' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: true, intent: { kind: 'setEntityImage' } });
+  });
+
+  it('rejects with invalid when sourceUrl is empty', async () => {
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: '   ' },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects with invalid when sourceUrl is over 4096 chars', async () => {
+    const longUrl = `https://example.com/${'a'.repeat(4_100)}.jpg`;
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: longUrl },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+  });
+
+  it.each([
+    ['ftp://example.com/x.jpg'],
+    ['file:///etc/passwd'],
+    ['javascript:alert(1)'],
+    ['data:image/png;base64,abc'],
+  ])('rejects non-http/ipfs scheme: %s', async badUrl => {
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: badUrl },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+  });
+
+  it('accepts ipfs:// URLs (already-pinned fast-path)', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Matrix' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      {
+        entityId: ENTITY,
+        spaceId: SPACE,
+        propertyId: PROPERTY,
+        sourceUrl: 'ipfs://bafybeigdyrztktx5jpr3evnpzqpkk4tlxbmnpzqtttttttttttttttttttttt',
+      },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: true, intent: { kind: 'setEntityImage' } });
+  });
+
+  it('rejects with wrong_type when propertyId is not a RELATION', async () => {
+    localStore.getProperty.mockReturnValue({ id: PROPERTY, name: 'Title', dataType: 'TEXT' });
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'wrong_type' });
+  });
+
+  it('rejects with wrong_type when renderableTypeStrict is set but not IMAGE', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Director',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'RELATION',
+    });
+    findOne.mockResolvedValueOnce(makeEntity());
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'wrong_type' });
+  });
+
+  it('rejects with not_found when entityId is a space id whose home entity differs', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Space record' }));
+    getSpaceMock.mockReturnValue(
+      Effect.succeed({
+        id: ENTITY,
+        topicId: null,
+        entity: { id: 'b68d8bdbe2054856a9b2575a236c1da3' },
+      })
+    );
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({
+      ok: false,
+      error: 'not_found',
+      message: expect.stringContaining('b68d8bdbe2054856a9b2575a236c1da3'),
+    });
+  });
+});
+
 describe('planWriteTool: deleteEntityValue', () => {
   it('emits a deleteValue intent with no graph lookup', async () => {
     const out = await planWriteTool(

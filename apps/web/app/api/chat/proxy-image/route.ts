@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
-import { isPrivateHost } from '../web-fetch/helpers';
+import { SsrfBlockedError, isPrivateHost, safeFetch } from '../web-fetch/helpers';
 
 const MAX_URL_CHARS = 2_000;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -104,16 +104,18 @@ export async function POST(req: Request) {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let upstream: Response;
   try {
-    upstream = await fetch(url.toString(), {
+    upstream = await safeFetch(url.toString(), {
       signal: controller.signal,
       headers: {
         'User-Agent': PROXY_USER_AGENT,
         Accept: 'image/*',
       },
-      redirect: 'follow',
     });
   } catch (err) {
     clearTimeout(timer);
+    if (err instanceof SsrfBlockedError) {
+      return jsonError(400, 'Redirect target rejected');
+    }
     console.error('[chat/proxy-image] upstream fetch failed', err);
     return jsonError(502, 'Upstream fetch failed');
   }

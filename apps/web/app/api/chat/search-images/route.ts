@@ -14,6 +14,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
+import { safeFetch } from '../web-fetch/helpers';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
@@ -231,7 +232,7 @@ async function fetchImageForVerification(candidate: ImageEntry): Promise<Fetched
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), VERIFY_FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(candidate.url, {
+    const res = await safeFetch(candidate.url, {
       signal: controller.signal,
       headers: {
         // Wikimedia / IMDb reject requests without a real-looking UA.

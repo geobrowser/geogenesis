@@ -55,6 +55,40 @@ export function isPrivateHost(hostname: string): boolean {
   return false;
 }
 
+// Re-checks isPrivateHost on every redirect hop — input-side validation alone
+// lets a 302 to 127.0.0.1 / 169.254.x.x sneak past.
+export class SsrfBlockedError extends Error {
+  constructor(public readonly host: string) {
+    super(`refusing to fetch private host: ${host}`);
+    this.name = 'SsrfBlockedError';
+  }
+}
+
+export async function safeFetch(initialUrl: string, init: RequestInit = {}, maxRedirects = 5): Promise<Response> {
+  let currentUrl = initialUrl;
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    let parsed: URL;
+    try {
+      parsed = new URL(currentUrl);
+    } catch {
+      throw new Error(`invalid URL after redirect: ${currentUrl}`);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`unsupported protocol after redirect: ${parsed.protocol}`);
+    }
+    if (isPrivateHost(parsed.hostname)) {
+      throw new SsrfBlockedError(parsed.hostname);
+    }
+    const res = await fetch(currentUrl, { ...init, redirect: 'manual' });
+    if (res.status < 300 || res.status >= 400) return res;
+    const location = res.headers.get('location');
+    if (!location) return res;
+    await res.body?.cancel().catch(() => {});
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+  throw new Error(`too many redirects (>${maxRedirects})`);
+}
+
 const X_HOSTS = new Set(['x.com', 'twitter.com', 'mobile.twitter.com', 'www.x.com', 'www.twitter.com']);
 
 export function validateUrl(input: unknown): ParsedUrl | null {
